@@ -358,6 +358,43 @@ function Write-CleanResult {
     foreach ($c in $caveats) { Write-Output "  ! $c" }
 }
 
+# Contraparte del vector de `%TEMP%`: un archivo que llega por `move` trae ACE
+# marcados como HEREDADOS que su padre nunca le dio. Como estan marcados
+# heredados, `RemoveAccessRuleSpecific` no los toca; y como no vienen del padre,
+# corregir el padre tampoco los limpia. La unica via es reinstalar la herencia
+# del objeto, que es lo que hace `icacls /reset`.
+function Repair-StaleInherited {
+    param([object[]]$Findings)
+
+    $reseteados = 0
+    $omitidos = @()
+    # Padres antes que hijos: resetear un directorio re-propaga a lo que cuelga.
+    $porObjeto = $Findings | Group-Object Path | Sort-Object { $_.Name.Length }
+
+    foreach ($g in $porObjeto) {
+        $path = $g.Name
+        # Si tiene algun hallazgo EXPLICITO, no es este caso: lo resuelve el paso normal.
+        if (@($g.Group | Where-Object { -not $_.IsInherited }).Count -gt 0) { continue }
+
+        # `/reset` descarta TODO ACE explicito del objeto. Solo es seguro cuando no
+        # tiene ninguno: si lo tuviera, se estaria borrando un permiso legitimo.
+        $acl = Get-Dacl -TargetPath $path
+        if (@($acl.Access | Where-Object { -not $_.IsInherited }).Count -gt 0) {
+            $omitidos += $path
+            continue
+        }
+
+        icacls $path /reset /Q | Out-Null
+        if ($LASTEXITCODE -eq 0) { $reseteados++ } else { $omitidos += $path }
+    }
+
+    Write-Output "  herencia reinstalada en $reseteados objeto(s) con ACE heredados obsoletos"
+    if ($omitidos.Count -gt 0) {
+        Write-Output "  $($omitidos.Count) objeto(s) OMITIDOS por tener ACE explicitos propios (no se borran a ciegas):"
+        $omitidos | Select-Object -First 10 | ForEach-Object { Write-Output "    $_" }
+    }
+}
+
 function Write-Finding {
     param([object[]]$Findings)
     foreach ($f in $Findings) {
@@ -416,6 +453,16 @@ Write-Output "Corrigiendo:"
 Repair-HookAcl -RootPath $Path
 
 $after = @(Invoke-Audit -RootPath $Path)
+
+# Lo que sobrevive a la correccion del origen son los ACE heredados obsoletos que
+# entraron por `move`. Se atacan solo si quedaron: cuesta una auditoria extra.
+if ($after.Count -gt 0 -and -not $RootOnly) {
+    Write-Output ""
+    Write-Output "Sobrevivieron ACE que el padre ya no otorga (llegaron por move):"
+    Repair-StaleInherited -Findings $after
+    $after = @(Invoke-Audit -RootPath $Path)
+}
+
 Write-Output ""
 if ($after.Count -eq 0) {
     Write-CleanResult "ya no otorga escritura fuera de la keep-list."
