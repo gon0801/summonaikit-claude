@@ -1,0 +1,4 @@
+Turno que cierra limpio pero con una edicion de codigo DESPUES del reviewer.
+El parche local SAIKIT-REVIEW-NOTICE lo detecta: no bloquea (no agrega nada a
+los gates faltantes) y avisa por dos canales, el systemMessage del mismo turno
+y un archivo pendiente que lee el proximo turno armado.

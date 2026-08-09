@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0009","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"cat tsconfig.json","description":"Mira la config"},"tool_response":{"stdout":"compilerOptions vacio","stderr":"","interrupted":false,"isImage":false}}

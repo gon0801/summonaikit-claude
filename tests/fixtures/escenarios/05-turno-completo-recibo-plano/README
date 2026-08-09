@@ -1,0 +1,8 @@
+Turno completo y bien hecho: implementer -> verifier -> reviewer, una edicion,
+una corrida de tests y un recibo con las 6 etiquetas.
+HALLAZGO que este escenario deja grabado: NO alcanza. En un transcript real las
+etiquetas del recibo quedan pegadas al salto de linea ESCAPADO del JSON, y
+has_receipt_label exige un caracter NO alfabetico antes de la etiqueta: el que
+hay es la n de la secuencia escapada. El gate reclama las 6 etiquetas aunque el
+recibo este escrito. El escenario 06 es el mismo turno con el recibo en
+vinetas: ahi si pasa.

@@ -1,0 +1,4 @@
+Defecto A2, grabado: la pausa se busca en el tail del transcript entero, que
+incluye resultados de herramientas. Aca la cadena de pausa aparece SOLO adentro
+del resultado de un Read: el asistente nunca la escribio, y sin embargo el gate
+deja pasar el turno sin pedir nada.

@@ -1,0 +1,6 @@
+Target cursor, turno completo de punta a punta.
+Dos cosas que solo se ven aca:
+  1) el SessionStart real NO trae el sentinel, asi que en cursor el contrato
+     NO se inyecta nunca por esa via (el escenario 04 ejercita la otra rama);
+  2) el gate fallido de cursor sale por followup_message y exit 0, no por
+     decision:block y exit 2 como en claude.

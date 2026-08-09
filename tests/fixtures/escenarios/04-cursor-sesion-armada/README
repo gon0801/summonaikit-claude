@@ -1,0 +1,5 @@
+Unica via por la que cursor recibe el contrato: un payload de SessionStart
+que contenga el sentinel. Declarado como lo que es: el payload esta
+CONSTRUIDO para cubrir esa rama. En la practica no ocurre (escenario 03), y
+esa diferencia entre "la rama existe" y "la rama se alcanza" es justamente lo
+que la linea base deja escrito.

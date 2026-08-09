@@ -1,0 +1,4 @@
+Sin las variables de entorno del registro (target y phase): el hook deriva la
+fase del hook_event_name del propio payload y trata el target como no-cursor.
+Es el camino que corre si alguien registra el hook sin el prefijo de variables,
+y hace falta saber que asi tambien gatea.

@@ -1,0 +1,3 @@
+Prompt CON el sentinel: se arma y se inyecta el contrato de 71 lineas.
+Es la salida mas grande del hook y la que la Phase 2 tiene que reproducir
+byte a byte al pasar el archivo al repo.

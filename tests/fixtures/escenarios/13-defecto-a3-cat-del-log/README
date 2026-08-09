@@ -1,0 +1,4 @@
+Defecto A3, grabado: TEST_RUNNER_RE no tiene fronteras de palabra. Mirar el log
+de una corrida vieja (cat pytest.log) marca el turno como verificado por el
+fragmento pytest, y mirar la config (cat tsconfig.json) hace lo mismo por el
+fragmento tsc. Ninguno de los dos corrio nada.

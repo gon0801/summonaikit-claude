@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0010","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"python -m pytest -q","description":"bateria"},"tool_response":{"stdout":"12 passed in 1.20s","stderr":"","interrupted":false,"isImage":false}}

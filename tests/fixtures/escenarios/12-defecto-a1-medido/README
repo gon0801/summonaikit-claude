@@ -1,0 +1,18 @@
+Defecto A1, MEDIDO — y el spec lo describe mal. Los dos pasos son la medicion.
+
+Paso 02: se LEE un archivo cuyo contenido menciona subagent_type reviewer. El
+spec dice que eso satisface el gate de revision. NO lo satisface: adentro del
+payload el contenido del archivo viene con las comillas escapadas, y el sed de
+json_string_field pide una comilla literal. El rol no se registra.
+Lo que ese mismo paso SI hace es marcar implemented=1, porque esa deteccion
+mira el payload entero y ahi aparece file_path. Leer documentacion deja el
+turno marcado como implementado.
+
+Paso 03: el defecto real. Cuando subagent_type aparece como CLAVE JSON de
+verdad en cualquier parte del payload que no sea tool_input, el hook la lee y
+anota el rol. Ningun subagente corrio. El payload esta construido para dejar
+esa rama grabada.
+
+Consecuencia para la Task 3.1: el vector que hay que cerrar es "clave JSON en
+cualquier nivel", no "contenido de archivo". Su DoD, escrito como esta, ya pasa
+sin arreglar nada.

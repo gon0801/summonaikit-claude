@@ -1,0 +1,4 @@
+El presupuesto de revision, medido: tres Stop seguidos sobre el mismo turno.
+ciclo 1/2 bloquea, ciclo 2/2 bloquea, y el tercero ya no bloquea: sale por
+continue:false con exit 0. La diferencia entre "bloqueo" y "presupuesto
+agotado" se ve en el exit code, no solo en el texto.

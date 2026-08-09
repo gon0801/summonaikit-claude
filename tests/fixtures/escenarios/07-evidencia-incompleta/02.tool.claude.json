@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0005","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"C:\dev\demo\src\sesiones.ts","old_string":"x","new_string":"y"},"tool_response":{"filePath":"C:\dev\demo\src\sesiones.ts","userModified":false,"replaceAll":false}}

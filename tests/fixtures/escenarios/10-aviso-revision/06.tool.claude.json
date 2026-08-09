@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0007","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"C:\dev\demo\src\sesiones.ts","old_string":"const limite = 25","new_string":"const limite = 50"},"tool_response":{"filePath":"C:\dev\demo\src\sesiones.ts","userModified":false,"replaceAll":false}}

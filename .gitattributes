@@ -6,3 +6,10 @@
 *.sh text eol=lf
 
 # Los `.ps1` los consume PowerShell en Windows: se dejan como estan.
+
+# Fixtures y linea base del arnes de salida dorada: se comparan BYTE A BYTE.
+# Con CRLF el payload cambia de tamano y el `task_hash` (que es un cksum del
+# prompt) da otro numero: la linea base marcaria divergencia en una maquina y
+# no en otra, que es la peor forma de romperse.
+tests/fixtures/** text eol=lf
+tests/golden/**   text eol=lf

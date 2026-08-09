@@ -1,0 +1,1072 @@
+# summonaikit-claude — linea base de salida dorada (Task 1.2)
+#
+# Generada por `bash tools/golden-harness.sh --record`. NO editar a mano:
+# es una GRABACION del comportamiento del hook, no una especificacion de
+# como deberia comportarse. Cuando cambie a proposito, se regraba y el
+# diff del commit es la declaracion de que cambio.
+#
+# La comparacion de `--check` empieza en la primera linea `=== escenario `:
+# la identidad de aca abajo es informativa (ver decision 2 en el arnes).
+#
+# hook_sha256: 0ec5dc045017e9809667a66bfdea5c11e5fd11074bd3464cc132c487103b6130
+# hook_bytes: 40333
+# hook_lineas: 746
+# escenarios: 15
+#
+# Normalizaciones aplicadas (lo unico que cambia entre corridas):
+#   <SANDBOX>      la raiz temporal de cada escenario
+#   <PROJECT_KEY>  el cksum de la ruta del proyecto que llavea el estado
+#   <TS>           timestamps UTC del log de evidencia
+# `bytes` es el tamano del stream YA normalizado; un stream sin salto de
+# linea final se distingue por ahi (las lineas se muestran con prefijo "| ").
+
+=== escenario 01-sin-armar
+# Prompt SIN el sentinel -saikit: el gate no se arma.
+# Lo que se graba: que no emite nada, que no bloquea, y sobre todo que NO crea
+# archivo de estado — si lo creara, el Stop gate se activaria solo en turnos
+# que nadie pidio (Core Rule 3).
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 01
+(sin estado)
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+--- paso 03  phase=stop target=claude  payload=03.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+
+=== escenario 02-armado-contrato
+# Prompt CON el sentinel: se arma y se inyecta el contrato de 71 lineas.
+# Es la salida mas grande del hook y la que la Phase 2 tiene que reproducir
+# byte a byte al pasar el archivo al repo.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes)
+| {"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- The person giving you this task is non-technical (a founder, marketer, product manager, designer, or operator). They cannot read code and did not write any. They own WHAT gets built and WHY; you own HOW.\n- Talk to them only in plain language: no code, no file names, no library/tool/jargon words in anything you say to them. If a technical detail matters, first explain what it means in one plain sentence.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Run the full cycle once they reply.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a non-technical user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain language a non-technical user can follow):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or skipped with a concrete reason.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}}
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+
+=== escenario 03-cursor-sin-armar-y-gate
+# Target cursor, turno completo de punta a punta.
+# Dos cosas que solo se ven aca:
+#   1) el SessionStart real NO trae el sentinel, asi que en cursor el contrato
+#      NO se inyecta nunca por esa via (el escenario 04 ejercita la otra rama);
+#   2) el gate fallido de cursor sale por followup_message y exit 0, no por
+#      decision:block y exit 2 como en claude.
+--- paso 01  phase=session target=cursor  payload=01.session.cursor.json
+exit 0
+stdout (sha ca3d163bab055381, 3 bytes)
+| {}
+stderr <vacio>
+--- estado tras el paso 01
+(sin estado)
+--- paso 02  phase=prompt target=cursor  payload=02.prompt.cursor.json
+exit 0
+stdout (sha eec0ac849c9efe79, 18 bytes)
+| {"continue":true}
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 03  phase=tool target=cursor  payload=03.tool.cursor.json
+exit 0
+stdout (sha ca3d163bab055381, 3 bytes) identico a 03-cursor-sin-armar-y-gate/paso 01
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=
+--- paso 04  phase=stop target=cursor  payload=04.stop.cursor.json
+exit 0
+stdout (sha cdf374571f939e37, 1658 bytes)
+| {"followup_message":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=1
+| verified=0
+| agents_seen=
+
+=== escenario 04-cursor-sesion-armada
+# Unica via por la que cursor recibe el contrato: un payload de SessionStart
+# que contenga el sentinel. Declarado como lo que es: el payload esta
+# CONSTRUIDO para cubrir esa rama. En la practica no ocurre (escenario 03), y
+# esa diferencia entre "la rama existe" y "la rama se alcanza" es justamente lo
+# que la linea base deja escrito.
+--- paso 01  phase=session target=cursor  payload=01.session.cursor.json
+exit 0
+stdout (sha 83d58dd367fbec46, 8696 bytes)
+| {"additional_context":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- The person giving you this task is non-technical (a founder, marketer, product manager, designer, or operator). They cannot read code and did not write any. They own WHAT gets built and WHY; you own HOW.\n- Talk to them only in plain language: no code, no file names, no library/tool/jargon words in anything you say to them. If a technical detail matters, first explain what it means in one plain sentence.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Run the full cycle once they reply.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a non-technical user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain language a non-technical user can follow):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or skipped with a concrete reason.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 3919635926
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=3919635926
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+
+=== escenario 05-turno-completo-recibo-plano
+# Turno completo y bien hecho: implementer -> verifier -> reviewer, una edicion,
+# una corrida de tests y un recibo con las 6 etiquetas.
+# HALLAZGO que este escenario deja grabado: NO alcanza. En un transcript real las
+# etiquetas del recibo quedan pegadas al salto de linea ESCAPADO del JSON, y
+# has_receipt_label exige un caracter NO alfabetico antes de la etiqueta: el que
+# hay es la n de la secuencia escapada. El gate reclama las 6 etiquetas aunque el
+# recibo este escrito. El escenario 06 es el mismo turno con el recibo en
+# vinetas: ahi si pasa.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+| agent: verifier
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=4
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=5
+| last_code_edit=2
+| last_review=5
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+--- paso 07  phase=stop target=claude  payload=07.stop.claude.json
+exit 2
+stdout (sha e32581988cda0b2b, 1558 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha c4d7ec1297aa6c92, 1497 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 07
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=5
+| last_code_edit=2
+| last_review=5
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+
+=== escenario 06-turno-completo-recibo-vinetas
+# El MISMO turno que el escenario 05, con una sola diferencia: el recibo esta
+# escrito en vinetas. Ahi cada etiqueta queda precedida por un espacio en vez de
+# por la n de la secuencia escapada, has_receipt_label la reconoce, y el turno
+# cierra limpio: permite, borra el estado y borra el log de evidencia.
+# Que el veredicto dependa de si el asistente uso vinetas es un hecho del hook de
+# hoy, no una decision de diseno. Queda grabado para que la Phase 3 lo pueda
+# cambiar a proposito y se vea en el diff.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+| agent: verifier
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=4
+| last_code_edit=2
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: python -m pytest -q
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=5
+| last_code_edit=2
+| last_review=5
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+--- paso 07  phase=stop target=claude  payload=07.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 07
+(sin estado)
+
+=== escenario 07-evidencia-incompleta
+# Turno armado que termina sin recibo, sin subagentes y sin verificacion.
+# Es el bloqueo completo: las 6 etiquetas, la evidencia de verificacion y los
+# tres subagentes, todo en el mismo mensaje de gate, con exit 2.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=
+--- paso 03  phase=stop target=claude  payload=03.stop.claude.json
+exit 2
+stdout (sha e701d43801d39e06, 1893 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool).\\n- Missing verifier subagent run (delegate verification via the Task tool).\\n- Missing reviewer subagent run (delegate review via the Task tool).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 478d373614cd00f0, 1827 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing SUMMONAIKIT HARNESS RECEIPT.\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing verification evidence or explicit skipped-check reason.\n- Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=1
+| verified=0
+| agents_seen=
+
+=== escenario 08-ciclos-y-presupuesto
+# El presupuesto de revision, medido: tres Stop seguidos sobre el mismo turno.
+# ciclo 1/2 bloquea, ciclo 2/2 bloquea, y el tercero ya no bloquea: sale por
+# continue:false con exit 0. La diferencia entre "bloqueo" y "presupuesto
+# agotado" se ve en el exit code, no solo en el texto.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=stop target=claude  payload=02.stop.claude.json
+exit 2
+stdout (sha e701d43801d39e06, 1893 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha 478d373614cd00f0, 1827 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 03  phase=stop target=claude  payload=03.stop.claude.json
+exit 2
+stdout (sha c9af1ec96f03e1a4, 1893 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool).\\n- Missing verifier subagent run (delegate verification via the Task tool).\\n- Missing reviewer subagent run (delegate review via the Task tool).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 2/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 3681c424e376fa02, 1827 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing SUMMONAIKIT HARNESS RECEIPT.\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing verification evidence or explicit skipped-check reason.\n- Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 2/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=2
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 04  phase=stop target=claude  payload=04.stop.claude.json
+exit 0
+stdout (sha d21e5bbc3094849a, 1412 bytes)
+| {"continue":false,"stopReason":"SUMMONAIKIT HARNESS REVISION BUDGET EXHAUSTED\n\nThe harness gate failed after 2 structured revision cycles.\n\nStill missing:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool).\\n- Missing verifier subagent run (delegate verification via the Task tool).\\n- Missing reviewer subagent run (delegate review via the Task tool).\\n\n\nStop now, report the failed gates, and ask the user before another retry."}
+stderr (sha 9bb753cc5f81caef, 1360 bytes)
+| SUMMONAIKIT HARNESS REVISION BUDGET EXHAUSTED
+| 
+| The harness gate failed after 2 structured revision cycles.
+| 
+| Still missing:
+| - Missing SUMMONAIKIT HARNESS RECEIPT.\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing verification evidence or explicit skipped-check reason.\n- Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
+| 
+| Stop now, report the failed gates, and ask the user before another retry.
+estado sin cambios
+
+=== escenario 09-pausa-declarada
+# El asistente termina el turno preguntandole al usuario, con la linea de pausa
+# que el contrato mismo le indica escribir. El gate no reclama recibo: permite.
+# Es la unica salida limpia que NO exige la ceremonia completa.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=stop target=claude  payload=02.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+
+=== escenario 10-aviso-revision
+# Turno que cierra limpio pero con una edicion de codigo DESPUES del reviewer.
+# El parche local SAIKIT-REVIEW-NOTICE lo detecta: no bloquea (no agrega nada a
+# los gates faltantes) y avisa por dos canales, el systemMessage del mismo turno
+# y un archivo pendiente que lee el proximo turno armado.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: python -m pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: python -m pytest -q
+| agent: reviewer
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=5
+| last_code_edit=5
+| last_review=4
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+--- paso 07  phase=stop target=claude  payload=07.stop.claude.json
+exit 0
+stdout (sha 31e7f4e3de42dbf0, 282 bytes)
+| {"systemMessage":"SAIKIT REVIEW NOTICE: code was edited after the reviewer subagent last ran in this turn; those edits were not re-reviewed. The next -saikit turn on this project will see this notice too. (Tool-name signal only -- edits made via shell commands are not detected.)"}
+stderr <vacio>
+--- estado tras el paso 07
+hooks/state/<PROJECT_KEY>/review-notice-pending.log
+| SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed.
+
+=== escenario 11-orden-invertido
+# Los tres subagentes corrieron, pero al reves: reviewer, verifier, implementer.
+# Todo lo demas esta bien, recibo en vinetas y verificacion incluidos. Queda un
+# solo gate faltante, el del orden, y con ese alcanza para bloquear.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=1
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=reviewer
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: reviewer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=1
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=reviewer,verifier
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: reviewer
+| agent: verifier
+| agent: implementer
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=1
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=reviewer,verifier,implementer
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: reviewer
+| agent: verifier
+| agent: implementer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=1
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=reviewer,verifier,implementer
+--- paso 06  phase=stop target=claude  payload=06.stop.claude.json
+exit 2
+stdout (sha 661ec8c2eadb0424, 811 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha b6c9d070f8d41686, 755 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| agent: reviewer
+| agent: verifier
+| agent: implementer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=1
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=1
+| agents_seen=reviewer,verifier,implementer
+
+=== escenario 12-defecto-a1-medido
+# Defecto A1, MEDIDO — y el spec lo describe mal. Los dos pasos son la medicion.
+# 
+# Paso 02: se LEE un archivo cuyo contenido menciona subagent_type reviewer. El
+# spec dice que eso satisface el gate de revision. NO lo satisface: adentro del
+# payload el contenido del archivo viene con las comillas escapadas, y el sed de
+# json_string_field pide una comilla literal. El rol no se registra.
+# Lo que ese mismo paso SI hace es marcar implemented=1, porque esa deteccion
+# mira el payload entero y ahi aparece file_path. Leer documentacion deja el
+# turno marcado como implementado.
+# 
+# Paso 03: el defecto real. Cuando subagent_type aparece como CLAVE JSON de
+# verdad en cualquier parte del payload que no sea tool_input, el hook la lee y
+# anota el rol. Ningun subagente corrio. El payload esta construido para dejar
+# esa rama grabada.
+# 
+# Consecuencia para la Task 3.1: el vector que hay que cerrar es "clave JSON en
+# cualquier nivel", no "contenido de archivo". Su DoD, escrito como esta, ya pasa
+# sin arreglar nada.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\docs\ejemplo-payload.md
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\docs\ejemplo-payload.md
+| agent: reviewer
+| implemented: C:\dev\demo\docs\ejemplo-payload.md
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=2
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=reviewer
+
+=== escenario 13-defecto-a3-cat-del-log
+# Defecto A3, grabado: TEST_RUNNER_RE no tiene fronteras de palabra. Mirar el log
+# de una corrida vieja (cat pytest.log) marca el turno como verificado por el
+# fragmento pytest, y mirar la config (cat tsconfig.json) hace lo mismo por el
+# fragmento tsc. Ninguno de los dos corrio nada.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| verified: cat pytest.log
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| verified: cat pytest.log
+| verified: cat tsconfig.json
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=
+
+=== escenario 14-defecto-a2-pausa-en-resultado
+# Defecto A2, grabado: la pausa se busca en el tail del transcript entero, que
+# incluye resultados de herramientas. Aca la cadena de pausa aparece SOLO adentro
+# del resultado de un Read: el asistente nunca la escribio, y sin embargo el gate
+# deja pasar el turno sin pedir nada.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=stop target=claude  payload=02.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+
+=== escenario 15-fase-derivada-del-payload
+# Sin las variables de entorno del registro (target y phase): el hook deriva la
+# fase del hook_event_name del propio payload y trata el target como no-cursor.
+# Es el camino que corre si alguien registra el hook sin el prefijo de variables,
+# y hace falta saber que asi tambien gatea.
+--- paso 01  phase=auto target=auto  payload=01.auto.auto.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=

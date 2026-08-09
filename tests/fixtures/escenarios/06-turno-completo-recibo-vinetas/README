@@ -1,0 +1,7 @@
+El MISMO turno que el escenario 05, con una sola diferencia: el recibo esta
+escrito en vinetas. Ahi cada etiqueta queda precedida por un espacio en vez de
+por la n de la secuencia escapada, has_receipt_label la reconoce, y el turno
+cierra limpio: permite, borra el estado y borra el log de evidencia.
+Que el veredicto dependa de si el asistente uso vinetas es un hecho del hook de
+hoy, no una decision de diseno. Queda grabado para que la Phase 3 lo pueda
+cambiar a proposito y se vea en el diff.

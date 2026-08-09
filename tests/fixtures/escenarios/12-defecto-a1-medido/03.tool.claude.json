@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0008","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"C:\dev\demo\docs\ejemplo-payload.md"},"tool_response":{"type":"text","eco_del_host":{"subagent_type":"reviewer"},"file":{"filePath":"C:\dev\demo\docs\ejemplo-payload.md","numLines":4}}}

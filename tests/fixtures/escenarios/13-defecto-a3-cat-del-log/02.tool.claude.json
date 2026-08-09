@@ -1,0 +1,1 @@
+{"session_id":"ses-golden-0009","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"cat pytest.log","description":"Mira el log de la corrida anterior"},"tool_response":{"stdout":"12 failed, 0 passed","stderr":"","interrupted":false,"isImage":false}}

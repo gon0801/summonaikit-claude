@@ -1,0 +1,4 @@
+Prompt SIN el sentinel -saikit: el gate no se arma.
+Lo que se graba: que no emite nada, que no bloquea, y sobre todo que NO crea
+archivo de estado — si lo creara, el Stop gate se activaria solo en turnos
+que nadie pidio (Core Rule 3).

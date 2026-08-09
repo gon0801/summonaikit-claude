@@ -1,0 +1,3 @@
+Turno armado que termina sin recibo, sin subagentes y sin verificacion.
+Es el bloqueo completo: las 6 etiquetas, la evidencia de verificacion y los
+tres subagentes, todo en el mismo mensaje de gate, con exit 2.

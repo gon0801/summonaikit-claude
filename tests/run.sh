@@ -43,6 +43,13 @@ fi
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/saikit-run-XXXXXX")"
 trap 'rm -rf "$run_root"' EXIT
 
+# La ruta del hook VIVO se resuelve ACA, con el HOME del invocador, y se pasa a
+# los tests como referencia. Adentro del test el HOME ya es el del sandbox, asi
+# que `$HOME/.claude/hooks/...` no lo encontraria — y el arnes de salida dorada
+# (Task 1.2) justamente necesita leerlo. Leerlo, no escribirle: lo copia a su
+# propio tmpdir antes de correrlo (Core Rule 4).
+hook_vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
+
 shopt -s nullglob
 for t in "$repo_root"/tests/test_*.sh; do
   nombre="$(basename "$t" .sh)"
@@ -57,6 +64,7 @@ for t in "$repo_root"/tests/test_*.sh; do
   antes="$(manifiesto "$repo_root")"
   if env HOME="$caja/home" USERPROFILE="$caja_userprofile" \
          TMPDIR="$caja/tmp" TMP="$caja/tmp" TEMP="$caja/tmp" \
+         SAIKIT_HOOK_VIVO="$hook_vivo" \
          bash "$t"; then
     echo "PASS: $nombre"
   else
