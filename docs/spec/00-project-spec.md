@@ -78,6 +78,22 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 A7 es anterior e independiente del plan: se corrige primero porque es el único
 que no depende de ninguna decisión de diseño.
 
+**Medición de A7 al corregirlo (2026-08-08, Task 0.1).** El otorgamiento no
+estaba en `hooks/`: está **explícito en `~/.claude`** con herencia `(OI)(CI)`, y
+el árbol de hooks lo heredaba entero — 16 ACE de escritura sobre 8 objetos.
+Consecuencias medidas, más amplias que como estaba redactado A7:
+
+- **El alcance real es todo `~/.claude`**, no el hook. `settings.json` sigue
+  siendo escribible por esas identidades: quien puede reescribirlo puede
+  *desregistrar* el hook, que es exactamente el modo de falla silencioso que la
+  Task 0.2 existe para detectar. Fuera del 事前確認 de la Task 0.1; pendiente.
+- **Es un patrón, no un incidente.** El fixture aislado en `%TEMP%` mostró el
+  mismo `CodexSandboxUsers:Modify` más **cinco** SID huérfanos adicionales. El
+  instalador del sandbox de Codex parece re-otorgar en cada corrida y dejar un
+  ACE muerto por cada cuenta reciclada. Es reversible por el mismo instalador:
+  por eso la corrección corta la herencia y el modo auditoría queda como
+  detector permanente de la reaparición.
+
 ### El contrato inyectado
 
 Las 71 líneas de `HARNESS_CONTEXT` son el producto del vendor. **Consecuencia de
