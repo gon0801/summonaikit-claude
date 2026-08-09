@@ -92,6 +92,23 @@ function Test-SidResolvable {
     }
 }
 
+# `Get-Acl`/`Set-Acl` leen y persisten TODAS las secciones del descriptor, SACL
+# incluida, y escribir la SACL exige `SeSecurityPrivilege` — que un usuario con
+# Full Control igual no tiene. Medido: `Set-Acl` falla con PrivilegeNotHeldException
+# aunque el cambio sea puramente de DACL. Pidiendo solo la seccion Access, el
+# persist se limita a esa seccion y no toca auditoria ni duenio.
+function Get-Dacl {
+    param([string]$TargetPath)
+    $item = Get-Item -LiteralPath $TargetPath -Force
+    return $item.GetAccessControl([System.Security.AccessControl.AccessControlSections]::Access)
+}
+
+function Set-Dacl {
+    param([string]$TargetPath, $Acl)
+    $item = Get-Item -LiteralPath $TargetPath -Force
+    $item.SetAccessControl($Acl)
+}
+
 function Get-KeepListSid {
     param([string]$RootPath)
     $keep = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -121,11 +138,14 @@ function Get-HookAclTarget {
 function Get-AclFinding {
     param(
         [string]$TargetPath,
-        [System.Collections.Generic.HashSet[string]]$KeepSids
+        [System.Collections.Generic.HashSet[string]]$KeepSids,
+        $Acl
     )
     $findings = @()
-    $acl = Get-Acl -LiteralPath $TargetPath
-    foreach ($rule in $acl.Access) {
+    # Quien va a MUTAR el descriptor tiene que pasar el suyo: las reglas que se
+    # remueven deben salir del mismo objeto que despues se persiste.
+    if ($null -eq $Acl) { $Acl = Get-Dacl -TargetPath $TargetPath }
+    foreach ($rule in $Acl.Access) {
         if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
 
         $sid = ConvertTo-SidValue $rule.IdentityReference
@@ -187,9 +207,12 @@ function Restore-AclBackup {
             Write-Warning "Ya no existe, se omite: $target"
             continue
         }
-        $acl = Get-Acl -LiteralPath $target
-        $acl.SetSecurityDescriptorSddlForm($prop.Value)
-        Set-Acl -LiteralPath $target -AclObject $acl
+        # Solo la DACL: el backup guarda el SDDL completo, pero devolver duenio o
+        # SACL exigiria privilegios que este script no necesita y no cambio nada.
+        $acl = Get-Dacl -TargetPath $target
+        $acl.SetSecurityDescriptorSddlForm($prop.Value,
+            [System.Security.AccessControl.AccessControlSections]::Access)
+        Set-Dacl -TargetPath $target -Acl $acl
         Write-Output "  restaurado: $target"
     }
 }
@@ -199,10 +222,10 @@ function Repair-HookAcl {
 
     # 1) Cortar la herencia conservando copias explicitas. El otorgamiento vive en
     #    `~/.claude`; sin este corte, corregir aca adentro no dura.
-    $acl = Get-Acl -LiteralPath $RootPath
+    $acl = Get-Dacl -TargetPath $RootPath
     if (-not $acl.AreAccessRulesProtected) {
         $acl.SetAccessRuleProtection($true, $true)
-        Set-Acl -LiteralPath $RootPath -AclObject $acl
+        Set-Dacl -TargetPath $RootPath -Acl $acl
         Write-Output "  herencia cortada en $RootPath (ACE heredados copiados a explicitos)"
     } else {
         Write-Output "  herencia ya estaba cortada en $RootPath"
@@ -211,8 +234,8 @@ function Repair-HookAcl {
     $keep = Get-KeepListSid -RootPath $RootPath
 
     # 2) Corregir la raiz. Los hijos con herencia activa se actualizan solos.
-    $acl = Get-Acl -LiteralPath $RootPath
-    $rootFindings = Get-AclFinding -TargetPath $RootPath -KeepSids $keep
+    $acl = Get-Dacl -TargetPath $RootPath
+    $rootFindings = @(Get-AclFinding -TargetPath $RootPath -KeepSids $keep -Acl $acl)
     foreach ($f in $rootFindings) {
         [void]$acl.RemoveAccessRuleSpecific($f.Rule)
         if ($f.Resolvable) {
@@ -229,20 +252,21 @@ function Repair-HookAcl {
         }
     }
     if ($rootFindings.Count -gt 0) {
-        Set-Acl -LiteralPath $RootPath -AclObject $acl
+        Set-Dacl -TargetPath $RootPath -Acl $acl
     }
 
     # 3) Hijos con ACE EXPLICITOS de mas (los heredados ya quedaron corregidos).
     foreach ($t in (Get-HookAclTarget -RootPath $RootPath)) {
         if ($t -eq $RootPath) { continue }
-        $childFindings = @(Get-AclFinding -TargetPath $t -KeepSids $keep | Where-Object { -not $_.IsInherited })
+        $childAcl = Get-Dacl -TargetPath $t
+        $childFindings = @(Get-AclFinding -TargetPath $t -KeepSids $keep -Acl $childAcl |
+                           Where-Object { -not $_.IsInherited })
         if ($childFindings.Count -eq 0) { continue }
-        $childAcl = Get-Acl -LiteralPath $t
         foreach ($f in $childFindings) {
             [void]$childAcl.RemoveAccessRuleSpecific($f.Rule)
             Write-Output "  explicito removido en $($t): $($f.Identity) ($($f.Rights))"
         }
-        Set-Acl -LiteralPath $t -AclObject $childAcl
+        Set-Dacl -TargetPath $t -Acl $childAcl
     }
 }
 
