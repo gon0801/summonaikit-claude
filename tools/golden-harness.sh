@@ -222,8 +222,12 @@ generar() {
     pasos="$work/.pasos"
     find "$esc" -mindepth 1 -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort > "$pasos"
     if [ ! -s "$pasos" ]; then
-      printf '# (escenario sin pasos)\n'
-      continue
+      # Un escenario sin pasos no corre NADA y aun asi ocupa un bloque en la
+      # linea base: cobertura fantasma, la misma trampa que el caso de "cero
+      # escenarios". Se rompe la corrida en vez de dejar un comentario.
+      printf 'golden-harness: el escenario %s no tiene ningun paso (*.json).\n' "$nombre" >&2
+      printf '                Un escenario vacio pasaria el --check sin ejecutar nada.\n' >&2
+      return 2
     fi
 
     while IFS= read -r paso; do
@@ -314,19 +318,43 @@ if [ -n "$sha_base" ] && [ "$sha_base" != "$sha_ahora" ]; then
   printf '       La comparacion de abajo es de COMPORTAMIENTO, no de bytes.\n'
 fi
 
+# El nombre del escenario se usa como NOMBRE DE ARCHIVO al partir el registro.
+# La linea base es un archivo de texto: uno manipulado con `../` en ese nombre
+# haria que `--check` anexara contenido fuera de su tmpdir. No es el ataque mas
+# probable del mundo, pero un verificador que escribe donde le digan deja de
+# ser un verificador.
+nombre_de_escenario_valido() {
+  case "$1" in
+    ''|.|..)             return 1 ;;
+    *[!A-Za-z0-9._-]*)   return 1 ;;
+  esac
+  return 0
+}
+
 partir() {
   # Parte un registro en un archivo por escenario, para poder decir cual
   # diverge en vez de tirar un diff de 2000 lineas.
   origen="$1"; destino="$2"
   mkdir -p "$destino"
+
+  nombres="$work/.nombres"
+  sed -n 's/^=== escenario //p' "$origen" > "$nombres"
+  while IFS= read -r n; do
+    if ! nombre_de_escenario_valido "$n"; then
+      printf 'golden-harness: nombre de escenario invalido en %s: "%s"\n' "$origen" "$n" >&2
+      printf '                Se usa como nombre de archivo; no se aceptan rutas.\n' >&2
+      return 2
+    fi
+  done < "$nombres"
+
   awk -v out="$destino" '
     /^=== escenario /{ f = out "/" $3 }
     f { print >> f }
   ' "$origen"
 }
 
-partir "$BASELINE" "$work/base"
-partir "$registro" "$work/ahora"
+partir "$BASELINE" "$work/base" || exit 2
+partir "$registro" "$work/ahora" || exit 2
 
 divergentes=""
 faltantes=""

@@ -40,6 +40,11 @@ bash tools/capture-payloads.sh --instalar <repo-descartable>
 bash tools/capture-payloads.sh --cosechar <repo-descartable>
 ```
 
+Eso no es una sugerencia suelta: es la **Task 1.4** del plan. Mientras siga
+abierta, la línea base describe el comportamiento del hook contra payloads
+reconstruidos, y esa es la diferencia entre "medido" y "medido con lo que el
+host manda de verdad".
+
 Dos payloads están **construidos a propósito** y lo declaran en su README: el
 `SessionStart` con sentinel del escenario 04 y el paso 03 del escenario 12. Los
 dos existen para dejar grabada una rama del hook que en la práctica no se

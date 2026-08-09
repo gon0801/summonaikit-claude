@@ -112,6 +112,29 @@ caso "directorio de escenarios inexistente => falla"
 correr "$SANDBOX/noesc.txt" --hook "$hook_falso" --scenarios "$SANDBOX/no-existe-dir" --print
 [ "$rc" -ne 0 ] || malo "un directorio de escenarios inexistente NO puede salir 0"
 
+# Hallazgo de la revision cruzada (2026-08-09, codex): un escenario SIN pasos
+# ocupaba un bloque en la linea base sin ejecutar nada. Cobertura fantasma:
+# `--check` lo comparaba contra si mismo y decia que todo bien.
+caso "un escenario sin ningun paso => falla y lo nombra, no cuenta como cubierto"
+mkdir -p "$esc_falsos/03-vacio"
+correr "$SANDBOX/escvacio.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
+[ "$rc" -ne 0 ] || malo "un escenario sin pasos NO puede pasar como cubierto"
+grep -q '03-vacio' "$SANDBOX/escvacio.txt" || malo "no nombra el escenario vacio: $(cat "$SANDBOX/escvacio.txt")"
+rmdir "$esc_falsos/03-vacio"
+
+# Hallazgo de la revision cruzada (2026-08-09, codex): el nombre del escenario
+# que trae la linea base se usaba como ruta sin mirarlo. Una linea base
+# manipulada podia hacer que `--check` escribiera fuera de su tmpdir.
+caso "nombre de escenario con ../ en la linea base => se rechaza, no se escribe fuera"
+base_maliciosa="$SANDBOX/base-maliciosa.txt"
+blanco="$SANDBOX/blanco-fuera.txt"
+: > "$blanco"
+{ printf '# hook_sha256: 0\n'; printf '=== escenario ../blanco-fuera.txt\n'; printf 'basura\n'; } > "$base_maliciosa"
+correr "$SANDBOX/traversal.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base_maliciosa" --check
+[ "$rc" -eq 2 ] || malo "un nombre con ruta es 'no se puede mirar' (exit 2), dio $rc"
+grep -qi 'invalido' "$SANDBOX/traversal.txt" || malo "no dice que el nombre es invalido: $(cat "$SANDBOX/traversal.txt")"
+[ ! -s "$blanco" ] || malo "TRAVERSAL: escribio en un archivo fuera del directorio de trabajo"
+
 # ------------------------------------------- 6-bis) basura del entorno
 # Medido: el tooling del entorno deja directorios `.claude` vacios adentro de
 # cualquier arbol donde se trabaje. Uno de esos colandose como "escenario"
