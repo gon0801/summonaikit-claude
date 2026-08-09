@@ -67,13 +67,14 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 
 | # | Defecto | Efecto | Fase |
 |---|---|---|---|
-| A1 | `json_string_field` es greedy (`.*` inicial) y lee el payload CRUDO, que incluye `tool_response` | Un archivo del repo que contenga `"subagent_type": "reviewer"` satisface el gate de revisión sin que corra ningún reviewer | 3 |
+| A1 | `json_string_field` es greedy (`.*` inicial) y lee el payload CRUDO, que incluye `tool_response` | Cualquier `subagent_type` que aparezca como **clave JSON** fuera de `tool_input` registra el rol sin que corra ningún subagente; con varias ocurrencias gana la ÚLTIMA. **El efecto como estaba escrito acá —"un archivo del repo que contenga ese texto"— NO reproduce**: ver § Mediciones de la línea base | 3 |
 | A2 | El recibo y la pausa se buscan en el tail del transcript entero | Un archivo con `SUMMONAIKIT HARNESS PAUSED`, o con las 6 etiquetas, deja pasar cualquier turno | 3 |
 | A3 | `TEST_RUNNER_RE` sin fronteras de palabra | `cat pytest.log` cuenta como verificación (mismo hallazgo 6 ya corregido en el port de Kimi) | 3 |
 | A4 | Estado llaveado por proyecto y sin revalidar el sentinel | Un turno `-saikit` abandonado sigue cobrando recibo a turnos que no lo pidieron (reproducido en vivo el 2026-08-08) | 3 |
 | A5 | `command_text` crudo persiste en `harness-evidence.log` | Un comando con credenciales en la línea queda en claro en disco hasta el cierre limpio | 3 |
 | A6 | `transcript_path` sale del payload y se hace `tail` sin acotar | Primitiva de lectura de archivo arbitrario controlada por payload | 3 |
 | A7 | ACL: `CodexSandboxUsers` tiene `Modify` sobre el hook y su directorio de estado | Una identidad *aislada* puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen` y anular el gate | 0 |
+| A8 | `has_receipt_label` exige un carácter no alfabético antes de la etiqueta, y en un transcript real el que hay es la `n` del salto de línea escapado | Un recibo correcto escrito como texto corrido no satisface NINGUNA de las 6 etiquetas: el turno se bloquea hasta agotar el presupuesto. El mismo recibo en viñetas sí pasa | sin task asignada |
 
 A7 es anterior e independiente del plan: se corrige primero porque es el único
 que no depende de ninguna decisión de diseño.
@@ -128,6 +129,33 @@ Consecuencias para el alcance:
    posible.
 3. Queda un vector residual aceptado: los archivos que lleguen desde `%TEMP%`
    traerán `CodexSandboxUsers:Modify`. Se detecta, no se previene.
+
+### Mediciones de la línea base (2026-08-09, Task 1.2)
+
+Grabar el comportamiento del archivo vivo contra 15 escenarios corrigió tres
+cosas que estaban escritas de otra manera. Cada una vive grabada en el escenario
+que la mide (`tests/golden/baseline.txt`), no solo acá.
+
+1. **A8 es nuevo y no estaba en la tabla.** `has_receipt_label` busca
+   `(^|[^[:alpha:]])(Etiqueta)[[:space:]]*:`. En un transcript real el texto del
+   asistente va en una línea JSON con los saltos escapados, así que antes de
+   `Understand:` el carácter que hay es la `n` de esa secuencia — alfabético.
+   Medido: un recibo completo y correcto, escrito como texto corrido, falla las
+   6 etiquetas (escenario 05); el mismo recibo en viñetas las satisface
+   (escenario 06). O sea que hoy el veredicto del gate depende de cómo el
+   asistente formateó el recibo, no de si lo escribió.
+2. **A1 reproduce por otra vía que la escrita.** El contenido de un archivo
+   llega al payload con las comillas escapadas (`\"subagent_type\"`), y el `sed`
+   pide una comilla literal: leer un archivo del repo que mencione el campo
+   **no** registra el rol. Lo que sí lo registra es `subagent_type` como clave
+   JSON real en cualquier nivel del payload fuera de `tool_input` (escenario 12,
+   los dos pasos son la medición).
+3. **Marcar `implemented` es laxo pero hoy inerte.** Cualquier payload con
+   `file_path` — un `Read` de documentación, por ejemplo — deja `implemented=1`.
+   No cambia ningún veredicto: `stop_gate` lee el campo y lo reescribe, pero
+   nunca lo mete en `$missing`. Queda anotado para no "arreglarlo" creyendo que
+   cierra un agujero que no existe, y para que se note si algún día empieza a
+   pesar.
 
 ### El contrato inyectado
 
