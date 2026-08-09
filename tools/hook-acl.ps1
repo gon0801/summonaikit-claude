@@ -33,6 +33,21 @@
 .PARAMETER BackupRoot
   Directorio donde se guarda el backup (SDDL por ruta + volcado `icacls`).
 
+.PARAMETER OrphansOnly
+  Acota la clase de hallazgo a SID no resolubles (cuentas borradas). No toca a
+  ningun principal vivo y no corta la herencia. Es el modo para rutas donde
+  alguien tiene escritura LEGITIMA que no se le puede quitar: en `%TEMP%` el
+  sandbox de Codex si escribe, asi que ahi solo se barren los ACE muertos.
+  Los ACE heredados no se remueven aca — se limpian corriendo la herramienta
+  sobre el ancestro que los tiene explicitos, y la propagacion baja sola.
+
+.PARAMETER RootOnly
+  No recorre descendientes. Obligatorio en `%TEMP%` / `AppData`, que tienen
+  cientos de miles de objetos volatiles. Lo que contamina a un archivo NUEVO es
+  la ACL efectiva de la carpeta, no la de los temporales ya existentes.
+  Con este switch el resultado limpio se reporta como ALCANCE ACOTADO: los
+  descendientes quedan `unknown`, nunca "limpios" (Core Rule 2).
+
 .PARAMETER Restore
   Ruta a un `acl-backup.json` generado por una corrida previa con `-Fix`.
   Devuelve las ACL exactamente al estado guardado.
@@ -56,7 +71,9 @@ param(
     [switch]$Fix,
     [string]$BackupRoot = (Join-Path $env:USERPROFILE '.claude\hooks-acl-backup'),
     [string]$Restore,
-    [switch]$Detailed
+    [switch]$Detailed,
+    [switch]$OrphansOnly,
+    [switch]$RootOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -131,6 +148,10 @@ function Get-KeepListSid {
 function Get-HookAclTarget {
     param([string]$RootPath)
     $targets = @($RootPath)
+    # `%TEMP%` y `AppData` tienen cientos de miles de objetos volatiles: recorrerlos
+    # es inviable y ademas inutil, porque lo que contamina a un archivo nuevo es la
+    # ACL EFECTIVA de la carpeta, no la de los temporales que ya estaban ahi.
+    if ($script:RootOnly) { return $targets }
     $targets += (Get-ChildItem -LiteralPath $RootPath -Recurse -Force |
                  Select-Object -ExpandProperty FullName)
     return $targets
@@ -173,6 +194,12 @@ function Invoke-Audit {
     $all = @()
     foreach ($t in (Get-HookAclTarget -RootPath $RootPath)) {
         $all += Get-AclFinding -TargetPath $t -KeepSids $keep
+    }
+    # `-OrphansOnly` acota la CLASE de hallazgo que cuenta: solo cuentas borradas.
+    # Se usa donde un principal vivo tiene escritura legitima y quitarsela romperia
+    # algo — `%TEMP%`, donde el sandbox de Codex si escribe.
+    if ($script:OrphansOnly) {
+        $all = @($all | Where-Object { -not $_.Resolvable })
     }
     return $all
 }
@@ -226,13 +253,18 @@ function Repair-HookAcl {
 
     # 1) Cortar la herencia conservando copias explicitas. El otorgamiento vive en
     #    `~/.claude`; sin este corte, corregir aca adentro no dura.
-    $acl = Get-Dacl -TargetPath $RootPath
-    if (-not $acl.AreAccessRulesProtected) {
-        $acl.SetAccessRuleProtection($true, $true)
-        Set-Dacl -TargetPath $RootPath -Acl $acl
-        Write-Output "  herencia cortada en $RootPath (ACE heredados copiados a explicitos)"
-    } else {
-        Write-Output "  herencia ya estaba cortada en $RootPath"
+    # Con `-OrphansOnly` NO se corta la herencia: los ACE a remover son explicitos
+    # en cada nivel, y proteger `%TEMP%` o `AppData` los congelaria respecto de su
+    # padre sin necesidad. Se toca lo minimo.
+    if (-not $OrphansOnly) {
+        $acl = Get-Dacl -TargetPath $RootPath
+        if (-not $acl.AreAccessRulesProtected) {
+            $acl.SetAccessRuleProtection($true, $true)
+            Set-Dacl -TargetPath $RootPath -Acl $acl
+            Write-Output "  herencia cortada en $RootPath (ACE heredados copiados a explicitos)"
+        } else {
+            Write-Output "  herencia ya estaba cortada en $RootPath"
+        }
     }
 
     $keep = Get-KeepListSid -RootPath $RootPath
@@ -240,6 +272,12 @@ function Repair-HookAcl {
     # 2) Corregir la raiz. Los hijos con herencia activa se actualizan solos.
     $acl = Get-Dacl -TargetPath $RootPath
     $rootFindings = @(Get-AclFinding -TargetPath $RootPath -KeepSids $keep -Acl $acl)
+    if ($OrphansOnly) {
+        # Heredado excluido a proposito: no se puede remover de un objeto sin romper
+        # su herencia. Se limpia corriendo esta misma herramienta sobre el ancestro
+        # que lo tiene explicito, y la propagacion hace el resto.
+        $rootFindings = @($rootFindings | Where-Object { -not $_.Resolvable -and -not $_.IsInherited })
+    }
     foreach ($f in $rootFindings) {
         [void]$acl.RemoveAccessRuleSpecific($f.Rule)
         if ($f.Resolvable) {
@@ -295,6 +333,31 @@ function Write-FindingSummary {
     }
 }
 
+# Core Rule 2: `not_observed != absent`. Cuando el alcance se acota, decir "limpio"
+# a secas seria afirmar ausencia sobre lo que ni se miro. El exito se sigue
+# reportando con exit 0, pero nombrando lo que quedo sin observar.
+function Get-ScopeCaveat {
+    $partes = @()
+    if ($script:RootOnly) {
+        $partes += "solo se observo la raiz; los descendientes quedan 'unknown', NO 'limpios'"
+    }
+    if ($script:OrphansOnly) {
+        $partes += "solo se evaluaron SID no resolubles; un principal vivo con escritura NO se reporta"
+    }
+    return $partes
+}
+
+function Write-CleanResult {
+    param([string]$Mensaje)
+    $caveats = @(Get-ScopeCaveat)
+    if ($caveats.Count -eq 0) {
+        Write-Output "OK: $Mensaje"
+        return
+    }
+    Write-Output "OK (ALCANCE ACOTADO): $Mensaje"
+    foreach ($c in $caveats) { Write-Output "  ! $c" }
+}
+
 function Write-Finding {
     param([object[]]$Findings)
     foreach ($f in $Findings) {
@@ -322,7 +385,7 @@ $before = @(Invoke-Audit -RootPath $Path)
 
 Write-Output "Arbol auditado: $Path"
 if ($before.Count -eq 0) {
-    Write-Output "OK: ningun principal fuera de la keep-list tiene escritura."
+    Write-CleanResult "ningun principal fuera de la keep-list tiene escritura."
     exit 0
 }
 
@@ -355,7 +418,7 @@ Repair-HookAcl -RootPath $Path
 $after = @(Invoke-Audit -RootPath $Path)
 Write-Output ""
 if ($after.Count -eq 0) {
-    Write-Output "OK: el arbol de hooks ya no otorga escritura fuera de la keep-list."
+    Write-CleanResult "ya no otorga escritura fuera de la keep-list."
     Write-Output "Revertir con: -Restore `"$backupJson`""
     exit 0
 }
