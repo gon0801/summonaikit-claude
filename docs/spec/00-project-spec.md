@@ -162,6 +162,50 @@ que la mide (`tests/golden/baseline.txt`), no solo acá.
    cierra un agujero que no existe, y para que se note si algún día empieza a
    pesar.
 
+### Semántica atada por la suite de comportamiento (2026-08-09, Task 1.3)
+
+La línea base de la 1.2 **detecta** que el hook cambió; no dice **qué**. La suite
+de la 1.3 lo dice: `tests/lib/gate_cases.sh` afirma la semántica ACTUAL de cada
+gate, con un caso que deja pasar y uno que bloquea por gate.
+
+| Gate | Deja pasar | Bloquea / no arma |
+|---|---|---|
+| Armado por sentinel | `g1_arma_con_sentinel` | `g1_no_arma_sin_sentinel`, `g1_sentinel_con_frontera` |
+| Evidencia de verificación | `g2_runner_marca_verificado`, `g2_excusa_declarada_no_reclama` | `g2_runner_fallido_no_marca`, `g2_falta_evidencia_reclama` |
+| Secuencia de roles | `g3_turno_completo_por_eventos_permite` | `g3_falta_reviewer_bloquea`, `g3_fuera_de_orden_bloquea` |
+| Recibo | `g4_recibo_en_vinetas_pasa`, `g4_pausa_permite` | `g4_sin_recibo_bloquea`, `g4_falta_una_etiqueta_bloquea` |
+| Presupuesto de 2 ciclos | `g5_ciclo_consumido_no_impide_cerrar` | `g5_ciclos_cuentan_y_bloquean`, `g5_presupuesto_agotado` |
+| Salidas por target | `g6_permiso_por_target`, `g6_armado_por_target` | `g6_bloqueo_por_target` |
+
+**El mutation-test no es una promesa escrita: es una batería.** Una suite entera
+en verde describe igual de bien a una que no prueba nada. Por eso
+`tests/test_gate_mutations.sh` rompe *la condición* de cada gate en una copia del
+hook y exige que algún caso se dé cuenta; su corrida imprime la declaración de
+qué condición se rompió y qué caso la atrapó. Y como esa batería también diría
+"OK" si fuera incapaz de ponerse en rojo,
+`tests/test_gate_mutations_guards.sh` le pone las cuatro situaciones que debe
+rechazar — mutación inexistente, `sed` obsoleto, hook mutado que no parsea, y una
+mutación real que ningún caso del gate detecta.
+
+**Dos casos graban comportamiento que ya sabemos defectuoso**, con el número al
+lado: `g4_recibo_corrido_bloquea_a8` (A8) y `g4_pausa_permite` (la mitad buena de
+A2). La Task 3.2 los invierte a propósito y ese diff es la declaración de qué
+cambió. No se los escribe ya "corregidos": una suite que espera el arreglo no
+detecta nada el día que se arregla.
+
+**Fuera de alcance, declarado:** A1 y A3 (los cierran la 3.1 y la 3.3, cada una
+con su propio test de reversión) y el aviso post-revisión, que es advisory. Los
+tres quedan cubiertos por la línea base de la 1.2 (escenarios 12, 13 y 10):
+cualquier cambio ahí da divergencia aunque no haya un caso que lo afirme.
+
+**Medición nueva.** Bajo el parche del sentinel quedó código muerto en el archivo
+vivo: `is_engineering_task`, `is_trivial_task` (y por lo tanto `SUBSTANTIVE_RE` y
+`TRIVIAL_RE`, que solo usa la segunda) y `json_number_field` están definidos y
+**nunca se llaman** — el sentinel reemplazó la condición de armado y el vendor
+nunca usó el lector de números. Son ~25 líneas que la Task 2.1 se lleva puestas
+al adoptar el archivo byte a byte. Se anota acá para que su remoción sea una
+decisión declarada y no un descubrimiento a mitad de la Phase 3.
+
 ### El contrato inyectado
 
 Las 71 líneas de `HARNESS_CONTEXT` son el producto del vendor. **Consecuencia de
