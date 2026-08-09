@@ -77,6 +77,14 @@ out="$(HOME="$SANDBOX/senuelo-home" bash "$run_sh" "$SANDBOX/homeleak" 2>&1)"; r
 [ ! -e "$SANDBOX/senuelo-home/.claude/hooks/plantado.sh" ] \
   || malo "CONTENCION ROTA: el test escribio en el HOME del invocador"
 
+# --------------------------------------------- 7) raiz inexistente != verde
+# Un runner apuntado a una raiz que no existe no tiene NADA que correr. Salir 0
+# ahi es reportar "todo verde" con cobertura cero, el mismo modo de falla que
+# `check_syntax` cuida cuando `find` no puede recorrer el arbol.
+caso "raiz inexistente => falla, no pasa como verde con cobertura cero"
+out="$(bash "$run_sh" "$SANDBOX/no-existe" 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "una raiz inexistente NO puede salir 0: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2
   exit 1
