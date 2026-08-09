@@ -19,7 +19,8 @@ diseño. Si el plan se cancelara entero, esta fase igual debe correr.
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
 | 0.1 | `[Guardrail]` `[lane:gate]` `[tdd:skip:system-acl-not-unit-testable]` Quitar `Modify` de `CodexSandboxUsers` y del SID huérfano `S-1-5-21-…-2159037359` sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`. Hoy una identidad **aislada** puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen=implementer,verifier,reviewer` y anular el gate | `icacls` sobre ambas rutas ya no lista `Modify` para esas identidades; `Gon\ehven`, `SYSTEM` y `Administrators` conservan su acceso; Claude Code arranca y un turno normal corre sin error tras el cambio | - | cc:完了 [d9057b0] |
-| 0.2 | `[Guardrail]` `[lane:fast]` `[tdd:required]` El heal verifica el **REGISTRO**, no solo el contenido: si `settings.json` deja de apuntar al hook, el archivo puede estar perfecto y el gate no existir. Es el modo de falla más silencioso del sistema y hoy nada lo detecta | Fixture con `settings.json` sin la ruta del harness ⇒ el heal lo reporta fuerte y sale 0 (fail-open); fixture con el registro presente ⇒ silencio | - | cc:TODO |
+| 0.2 | `[Guardrail]` `[lane:gate]` `[tdd:skip:system-acl-not-unit-testable]` Quitar `Modify` de `CodexSandboxUsers` y del SID huérfano sobre **`~/.claude` la raíz**: ahí está el otorgamiento explícito `(OI)(CI)` que midió la 0.1 — en `hooks/` solo se heredaba. Mientras siga, esas identidades escriben `settings.json` y **desregistran** el hook: el gate desaparece sin tocar el archivo, el mismo efecto que la 0.1 cerró por la otra vía | `tools/hook-acl.ps1 -Path "$HOME/.claude"` sale 0; `settings.json` y `settings.local.json` dejan de ser escribibles por esas identidades; un turno normal corre sin error; y una tarea delegada al sandbox (`codex-companion.sh`) sigue funcionando — si resulta que necesita escribir en algún subárbol de `~/.claude`, se declara esa excepción acotada en vez de devolverle el permiso a todo | 0.1 | cc:TODO |
+| 0.3 | `[Guardrail]` `[lane:fast]` `[tdd:required]` El heal verifica el **REGISTRO**, no solo el contenido: si `settings.json` deja de apuntar al hook, el archivo puede estar perfecto y el gate no existir. Es el modo de falla más silencioso del sistema y hoy nada lo detecta | Fixture con `settings.json` sin la ruta del harness ⇒ el heal lo reporta fuerte y sale 0 (fail-open); fixture con el registro presente ⇒ silencio | - | cc:TODO |
 
 ## Phase 1: Red de seguridad antes de tocar nada
 
@@ -43,7 +44,7 @@ roto o sin gate.
 | 2.1 | `[Feature]` `[lane:gate]` `[tdd:required]` La fuente del repo es el archivo vivo, byte a byte, más un **marcador de identidad** en línea fija (`# SAIKIT-CLAUDE-OWNED <repo> <version>`). Sin el marcador no hay forma de distinguir "nuestro" de "del vendor" salvo por hash del archivo entero, que cambia con cada edición legítima | El arnés de 1.2 da salida idéntica entre la fuente del repo y el archivo vivo en TODOS los escenarios; el marcador está presente y es detectable por `grep` de una línea | 1.3 | cc:TODO |
 | 2.2 | `[Setup]` `[lane:gate]` `[tdd:required]` Instalador por reemplazo con **tres estados**: *nuestro* ⇒ verificar/reparar; *vendor conocido* (hash en manifiesto) ⇒ archivar y reemplazar; *desconocido* ⇒ NO tocar y reportar fuerte. Escritura atómica: `bash -n` sobre temporal y recién ahí `mv`. Backup fechado | Destino desconocido ⇒ exit ≠ 0 sin escribir; destino vendor ⇒ backup + reemplazo; destino nuestro e idéntico ⇒ no reescribe (mtime intacto); un temporal inválido nunca llega al destino; 2 corridas dejan el archivo byte-idéntico | 2.1 | cc:TODO |
 | 2.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` `quality-kit`: saltear cualquier archivo que lleve el marcador de propiedad, **mergeado ANTES** de instalar lo nuestro. Dos escritores en `SessionStart` sobre la misma ruta con modelos distintos (ancla vs reemplazo) pueden dejar un archivo doblemente parcheado o truncado | Fixture con marcador ⇒ `saikit-gate-heal.ps1` lo saltea y lo dice; fixture sin marcador (`.codex`/`.cursor`/`.agents`) ⇒ se parchea igual que hoy; la batería existente sigue verde | 2.2 | cc:TODO |
-| 2.4 | `[Setup]` `[lane:gate]` `[tdd:required]` Puesta en producción en dos pasos: primero staging por **override de proyecto** (`<repo>/.claude/hooks/`, que la registración ya prefiere sobre el global) en un repo descartable; después install global con `--restore-vendor` de un comando | El staging gatea turnos reales sin tocar el archivo global; `--restore-vendor` devuelve el estado previo y se prueba ANTES de instalar; tras el install global, un turno `-saikit` real bloquea y uno pelado no | 2.3, 0.2 | cc:TODO |
+| 2.4 | `[Setup]` `[lane:gate]` `[tdd:required]` Puesta en producción en dos pasos: primero staging por **override de proyecto** (`<repo>/.claude/hooks/`, que la registración ya prefiere sobre el global) en un repo descartable; después install global con `--restore-vendor` de un comando | El staging gatea turnos reales sin tocar el archivo global; `--restore-vendor` devuelve el estado previo y se prueba ANTES de instalar; tras el install global, un turno `-saikit` real bloquea y uno pelado no | 2.3, 0.3 | cc:TODO |
 
 ## Phase 3: Cerrar los agujeros
 
@@ -115,7 +116,11 @@ aunque todo lo demás se cancele; el 2 y el 3 son el objetivo.
   scope: Phase 0 / Task 0.1
 - 事項: lectura de `~/.claude/settings.json` y `~/.claude/settings.local.json`
   理由: verificar que el hook sigue registrado (modo de falla silencioso) y el cableado del heal
-  scope: Phase 0 / Task 0.2, Phase 2 / Task 2.4
+  scope: Phase 0 / Task 0.3, Phase 2 / Task 2.4
+- 事項: escritura de ACLs sobre `~/.claude` (la RAÍZ del perfil, no solo `hooks/`)
+  理由: ahí vive el otorgamiento explícito medido en la 0.1; mientras siga, el hook
+  se puede desregistrar desde `settings.json` sin tocar el archivo
+  scope: Phase 0 / Task 0.2
 - 事項: escritura sobre `~/.claude/hooks/summonaikit-harness.sh` (el archivo que gatea cada turno)
   理由: la adopción por reemplazo es el objetivo de la Phase 2
   scope: Phase 2 / Task 2.4
