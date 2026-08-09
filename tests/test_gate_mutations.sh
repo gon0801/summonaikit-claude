@@ -64,7 +64,11 @@ mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SE
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
-mut_sin_guardia_de_falla()   { sed 's/exitCode\[/exitCodeNUNCA[/'; }
+# Se rompe la clausula `command not found`, no la de `exitCode`: contra payloads
+# reales esa segunda ya esta muerta (el tool_response de Bash no trae el campo,
+# medido 59 de 59 en la Task 1.4). Mutar codigo muerto no prueba nada — la
+# mutacion tiene que caer sobre la condicion que hoy DECIDE algo.
+mut_sin_guardia_de_falla()   { sed 's/command not found/command not found NUNCA/'; }
 mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_allow; fi/if false; then emit_allow; fi/'; }
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }

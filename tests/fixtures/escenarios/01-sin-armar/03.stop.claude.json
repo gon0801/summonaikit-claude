@@ -1,1 +1,1 @@
-{"session_id":"ses-golden-0001","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"Stop","stop_hook_active":false}
+{"session_id": "026bb162-e553-42f2-84be-52b6582434f7", "transcript_path": "__TRANSCRIPT__", "cwd": "C:\\dev\\demo", "prompt_id": "6a70f885-fd00-4610-86f4-1ecea858f275", "permission_mode": "auto", "effort": {"level": "xhigh"}, "hook_event_name": "Stop", "stop_hook_active": false, "last_assistant_message": "Listo: subi el limite de intentos a 5 y corri la bateria.", "background_tasks": [], "session_crons": []}

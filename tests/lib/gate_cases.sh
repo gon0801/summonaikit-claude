@@ -17,14 +17,18 @@
 # ---------------------------------------------------------------------------
 # ESTO GRABA LO QUE EL HOOK HACE HOY, NO LO QUE DEBERIA HACER.
 #
-# Dos casos afirman comportamiento que ya sabemos DEFECTUOSO, con el numero de
-# defecto y la task que lo corrige escritos al lado:
+# Cuatro casos afirman comportamiento que ya sabemos DEFECTUOSO, con el numero
+# de defecto y la task que lo corrige escritos al lado:
 #
 #   caso_g4_recibo_corrido_bloquea_a8   A8 — un recibo correcto en texto
 #                                       corrido no satisface ninguna etiqueta.
 #   caso_g4_pausa_permite               la mitad buena de A2: la pausa se busca
 #                                       grepeando el texto crudo, asi que el
 #                                       mismo grep la encuentra donde no debe.
+#   caso_g3_agent_type_no_cuenta        A9 — el rol del subagente viaja en
+#                                       `agent_type` y el hook no lo mira.
+#   caso_g2_runner_fallido_forma_real   A11 — el guardia de fallas busca un
+#                                       `exitCode` que el payload real no trae.
 #
 # Cuando la Task 3.2 los arregle, estos casos CAMBIAN DE EXPECTATIVA a proposito
 # y ese diff es la declaracion de que cambio. No se los "arregla" antes: una
@@ -143,11 +147,11 @@ caso_g1_sentinel_con_frontera() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_fallido_no_marca caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   _igual "verified" "$(lab_estado verified)" "1"
@@ -155,23 +159,40 @@ caso_g2_runner_marca_verificado() {
 
 caso_g2_sin_runner_no_marca() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash 'cat README.md' 0)"
+  lab_run tool claude "$(lab_payload_bash 'cat README.md')"
   _igual "verified" "$(lab_estado verified)" "0"
 }
 
-# La evidencia se acredita por el COMANDO, pero un comando que fallo no cuenta:
-# el hook mira la senal de falla en el payload entero (el exit code vive en el
-# resultado de la herramienta, no en la linea de comando).
-caso_g2_runner_fallido_no_marca() {
+# La evidencia se acredita por el COMANDO, y un comando que ni existe no cuenta.
+# Esta es la UNICA mitad del guardia de fallas que sigue viva contra payloads
+# reales: la otra mitad busca `exitCode`, un campo que el tool_response real de
+# Bash no trae (ver el caso de abajo).
+caso_g2_runner_no_encontrado_no_marca() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash 'pytest -q' 1)"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' 'bash: pytest: command not found')"
   _igual "verified" "$(lab_estado verified)" "0"
+}
+
+# DEFECTO A11, medido con la captura de la Task 1.4 y grabado a proposito.
+#
+# El guardia de fallas del hook busca `exitCode[^0-9]*[1-9]` en el payload. El
+# tool_response real de Bash NO TIENE ese campo: su forma es
+# stdout/stderr/interrupted/isImage/noOutputExpected, medida en 59 de 59
+# payloads. O sea que la bateria puede fallar en rojo y el gate igual la acredita
+# como verificacion, salvo que el texto del error diga justo una de las tres
+# frases que quedan ("command not found", "permission_denied", "failure_type").
+#
+# Una bateria que falla con un assert normal no dice ninguna de las tres.
+caso_g2_runner_fallido_forma_real() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'npm test' 'AssertionError: expected true to equal false')"
+  _igual "verified pese a que la bateria fallo (A11)" "$(lab_estado verified)" "1"
 }
 
 # Sin turno armado NO se crea estado: si se creara con task_hash=unknown, el
 # Stop gate se activaria solo en cualquier edicion y el sentinel no serviria.
 caso_g2_sin_armar_no_crea_estado() {
-  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un evento de herramienta sin turno armado no debe crear estado"; fi
@@ -182,14 +203,14 @@ caso_g2_sin_armar_no_crea_estado() {
 # de verificacion, que es lo que este gate decide.
 caso_g2_falta_evidencia_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 caso_g2_evidencia_presente_no_reclama() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
@@ -197,17 +218,17 @@ caso_g2_evidencia_presente_no_reclama() {
 
 caso_g2_excusa_declarada_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO_SALTEADO")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_SALTEADO")"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "stdout" "$LAB_OUT" '"decision":"block"'
   _contiene "motivo" "$LAB_OUT" 'Missing reviewer subagent run'
@@ -217,7 +238,7 @@ caso_g3_falta_reviewer_bloquea() {
 
 caso_g3_fuera_de_orden_bloquea() {
   lab_sembrar 123456 0 1 1 "reviewer,implementer,verifier"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Subagents ran out of order'
 }
@@ -226,7 +247,7 @@ caso_g3_fuera_de_orden_bloquea() {
 # el mismo estado cierra limpio: el gate no la exige.
 caso_g3_cursor_no_exige_secuencia() {
   lab_sembrar 123456 0 1 1 ""
-  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop cursor "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _igual "stdout" "$LAB_OUT" '{}'
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -236,10 +257,28 @@ caso_g3_cursor_no_exige_secuencia() {
 # satisfaria un gate sin que corriera el subagente que corresponde.
 caso_g3_agente_generico_no_cuenta() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_task 'general-purpose')"
+  lab_run tool claude "$(lab_payload_agent 'general-purpose')"
   _igual "agents_seen tras general-purpose" "$(lab_estado agents_seen)" ""
-  lab_run tool claude "$(lab_payload_task 'Explore')"
+  lab_run tool claude "$(lab_payload_agent 'Explore')"
   _igual "agents_seen tras Explore" "$(lab_estado agents_seen)" ""
+}
+
+# DEFECTO A9, medido con la captura de la Task 1.4 y grabado a proposito.
+#
+# Los eventos de ADENTRO de un subagente llevan el rol en `agent_type` de primer
+# nivel (281 de 303 payloads reales). El hook busca `subagent_type`, asi que no
+# lo ve: el implementer puede correr, editar archivos y dejar su rastro en cada
+# payload, y el gate igual reclama que no corrio.
+#
+# Va junto con lo otro que midio la captura: la herramienta que INVOCA
+# subagentes se llama `Agent`, y el matcher registrado nombra `Task`, asi que
+# esos eventos no llegan nunca. Entre las dos cosas, el gate de secuencia no
+# tiene forma de satisfacerse. El escenario 16 de la linea base graba el turno
+# completo; este caso graba la pieza suelta.
+caso_g3_agent_type_no_cuenta() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_en_subagente 'implementer' 'npm test')"
+  _igual "agents_seen con agent_type=implementer (A9)" "$(lab_estado agents_seen)" ""
 }
 
 # El gate mapea por FUNCION, no por una lista fija por host: los agentes
@@ -247,9 +286,9 @@ caso_g3_agente_generico_no_cuenta() {
 # delegado con esos nombres tiene que satisfacerlo igual.
 caso_g3_nombres_del_host_mapean() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_task 'backend-engineer')"
-  lab_run tool claude "$(lab_payload_task 'test-engineer')"
-  lab_run tool claude "$(lab_payload_task 'code-reviewer')"
+  lab_run tool claude "$(lab_payload_agent 'backend-engineer')"
+  lab_run tool claude "$(lab_payload_agent 'test-engineer')"
+  lab_run tool claude "$(lab_payload_agent 'code-reviewer')"
   _igual "agents_seen" "$(lab_estado agents_seen)" "implementer,verifier,reviewer"
 }
 
@@ -258,14 +297,14 @@ caso_g3_nombres_del_host_mapean() {
 # seria probar contra una ficcion.
 caso_g3_turno_completo_por_eventos_permite() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
-  lab_run tool claude "$(lab_payload_task 'implementer')"
-  lab_run tool claude "$(lab_payload_task 'verifier')"
-  lab_run tool claude "$(lab_payload_task 'reviewer')"
-  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
   _igual "agents_seen" "$(lab_estado agents_seen)" "implementer,verifier,reviewer"
   _igual "verified"    "$(lab_estado verified)"    "1"
 
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   _vacio "stderr" "$LAB_ERR"
@@ -273,11 +312,11 @@ caso_g3_turno_completo_por_eventos_permite() {
 }
 
 # ================================================================ G4 — recibo
-CASOS_G4="caso_g4_pausa_permite caso_g4_recibo_corrido_bloquea_a8 caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa"
+CASOS_G4="caso_g4_pausa_permite caso_g4_recibo_corrido_bloquea_a8 caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_solo_en_transcript_pasa"
 
 caso_g4_falta_una_etiqueta_bloquea() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
@@ -286,7 +325,7 @@ caso_g4_falta_una_etiqueta_bloquea() {
 
 caso_g4_sin_recibo_bloquea() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
   for etiqueta in Understand Implement Verify Review Close Retro; do
@@ -296,7 +335,7 @@ caso_g4_sin_recibo_bloquea() {
 
 caso_g4_recibo_en_vinetas_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -311,7 +350,7 @@ caso_g4_recibo_en_vinetas_pasa() {
 # etiquetas no. La Task 3.2 invierte este caso.
 caso_g4_recibo_corrido_bloquea_a8() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_CORRIDO")"
   _igual "exit code" "$LAB_RC" "2"
   _no_contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
   for etiqueta in Understand Implement Verify Review Close Retro; do
@@ -326,10 +365,27 @@ caso_g4_recibo_corrido_bloquea_a8() {
 # adentro del resultado de una herramienta — la cierra la Task 3.2.
 caso_g4_pausa_permite() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_PAUSA")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
+}
+
+# El recibo tiene DOS canales y los dos cuentan: el payload del Stop trae
+# `last_assistant_message` (por donde entra en los casos de arriba) y ademas el
+# hook lee el tail del transcript. Aca el payload dice cualquier cosa y el recibo
+# esta solo en el transcript.
+#
+# No es un detalle: que el tail del transcript CRUDO tambien cuente es la raiz de
+# A2 — por ahi entra tambien lo que aparece adentro del resultado de una
+# herramienta, que el asistente no escribio. El escenario 14 de la linea base lo
+# graba; este caso ata la mitad legitima.
+caso_g4_recibo_solo_en_transcript_pasa() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
@@ -340,7 +396,7 @@ CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_
 # al usuario, en vez de mandar al agente a otra vuelta.
 caso_g5_presupuesto_agotado() {
   lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "0"
   _contiene "stdout" "$LAB_OUT" '"continue":false'
   _contiene "stdout" "$LAB_OUT" '"stopReason"'
@@ -351,12 +407,12 @@ caso_g5_presupuesto_agotado() {
 
 caso_g5_ciclos_cuentan_y_bloquean() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code del ciclo 1" "$LAB_RC" "2"
   _contiene "motivo del ciclo 1" "$LAB_OUT" 'Current revision cycle: 1/2'
   _igual "cycle tras el primer bloqueo" "$(lab_estado cycle)" "1"
 
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code del ciclo 2" "$LAB_RC" "2"
   _contiene "motivo del ciclo 2" "$LAB_OUT" 'Current revision cycle: 2/2'
   _igual "cycle tras el segundo bloqueo" "$(lab_estado cycle)" "2"
@@ -367,7 +423,7 @@ caso_g5_ciclos_cuentan_y_bloquean() {
 # presupuesto solo decide QUE se hace cuando ademas falta algo.
 caso_g5_ciclo_consumido_no_impide_cerrar() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado aunque haya ciclos gastados"; fi
@@ -381,13 +437,13 @@ CASOS_G6="caso_g6_bloqueo_por_target caso_g6_permiso_por_target caso_g6_presupue
 # mensaje de seguimiento, y un exit 2 ahi seria un error de hook.
 caso_g6_bloqueo_por_target() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code en claude" "$LAB_RC" "2"
   _contiene "stdout en claude" "$LAB_OUT" '"decision":"block"'
   _no_vacio "stderr en claude" "$LAB_ERR"
 
   _sembrar_turno_completo
-  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop cursor "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code en cursor" "$LAB_RC" "0"
   _contiene "stdout en cursor" "$LAB_OUT" '"followup_message"'
   _no_contiene "stdout en cursor" "$LAB_OUT" '"decision"'
@@ -403,13 +459,13 @@ caso_g6_permiso_por_target() {
   lab_run prompt cursor "$(lab_payload_prompt 'un prompt sin sentinel')"
   _igual "stdout en cursor, fase prompt" "$LAB_OUT" '{"continue":true}'
 
-  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop cursor "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "stdout en cursor, fase stop" "$LAB_OUT" '{}'
 }
 
 caso_g6_presupuesto_agotado_por_target() {
   lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
-  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  lab_run stop cursor "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "0"
   _contiene "stdout" "$LAB_OUT" '"followup_message"'
   _contiene "stdout" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'

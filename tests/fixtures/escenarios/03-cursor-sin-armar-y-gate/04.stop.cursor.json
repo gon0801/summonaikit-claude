@@ -1,1 +1,1 @@
-{"session_id":"ses-golden-0002","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"stop"}
+{"session_id": "c0f9b565-77a0-4033-8e37-15d27f26f427", "transcript_path": "__TRANSCRIPT__", "cwd": "C:\\dev\\demo", "prompt_id": "2b5b8192-fcd7-4a84-8668-77d9db152d64", "permission_mode": "auto", "effort": {"level": "xhigh"}, "hook_event_name": "stop", "last_assistant_message": "Cambie el archivo de sesiones.", "background_tasks": [], "session_crons": []}

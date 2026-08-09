@@ -1,1 +1,1 @@
-{"session_id":"ses-golden-0004","transcript_path":"__TRANSCRIPT__","cwd":"C:\dev\demo","hook_event_name":"Stop","stop_hook_active":false}
+{"session_id": "79516afe-4c53-4052-86f7-cc0d2a8f3eb3", "transcript_path": "__TRANSCRIPT__", "cwd": "C:\\dev\\demo", "prompt_id": "2a5ee9e2-b707-45d8-8e75-888ca48f666c", "permission_mode": "auto", "effort": {"level": "xhigh"}, "hook_event_name": "Stop", "stop_hook_active": false, "last_assistant_message": "Ya lo cambie.", "background_tasks": [], "session_crons": []}

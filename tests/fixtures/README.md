@@ -27,29 +27,60 @@ prefijo numérico es el que manda.
 
 ## Procedencia de los payloads — dicho sin adornos
 
-Los payloads siguen la forma real de los eventos de Claude Code y sus campos
-(`tool_input` / `tool_response`) están calcados de registros reales de
-transcripts de este mismo repo. **No son una captura cruda de stdin.** Capturar
-el stdin de verdad exige registrar un hook de captura y arrancar una sesión
-nueva — Claude Code fotografía los hooks al arrancar, así que un hook agregado
-a mitad de sesión no corre. Queda como refresco explícito, no como supuesto:
+**Task 1.4, hecha:** se capturaron 308 payloads crudos de stdin en un turno
+`-saikit` real (repo descartable, sesión nueva), y los fixtures se llevaron a
+esa forma: mismos campos, mismo orden de claves, mismos nombres de herramienta.
+Los **valores** siguen siendo sintéticos — un fixture no lleva texto ni rutas de
+una sesión real — pero la **forma** ya no es una reconstrucción.
+
+Lo que la captura corrigió, y que no se veía sin ella:
+
+- Los 54 fixtures **no eran JSON válido** (`C:\dev\demo` con barra simple; el
+  real escapa `C:\\dev\\demo`). El hook grepea texto crudo: eso cambia lo que
+  ven sus greps.
+- Faltaban `prompt_id`, `effort`, `tool_use_id`, `duration_ms` y, en el `Stop`,
+  **`last_assistant_message`**: el texto final del asistente viaja en el propio
+  payload. El recibo y la pausa tienen dos canales, no uno.
+- La herramienta de subagentes se llama **`Agent`**, no `Task`.
+- El `tool_response` de `Bash` **no trae `exitCode`** (59 de 59).
+- `permission_mode` real es `auto` / `dontAsk`, nunca `default`.
+
+Para refrescarla cuando el host cambie de forma:
 
 ```bash
 bash tools/capture-payloads.sh --instalar <repo-descartable>
-# ...arrancar una sesión ahí y hacer un turno -saikit completo...
+# ...arrancar una sesión NUEVA ahí y hacer un turno -saikit completo...
 bash tools/capture-payloads.sh --cosechar <repo-descartable>
 ```
 
-Eso no es una sugerencia suelta: es la **Task 1.4** del plan. Mientras siga
-abierta, la línea base describe el comportamiento del hook contra payloads
-reconstruidos, y esa es la diferencia entre "medido" y "medido con lo que el
-host manda de verdad".
+Sigue reconstruido, declarado: la fase `SessionStart` (el capturador registra
+las 3 fases que nombra la DoD de la 1.4) y todos los payloads de `cursor`, que
+no salen de una sesión de Claude.
 
-Dos payloads están **construidos a propósito** y lo declaran en su README: el
-`SessionStart` con sentinel del escenario 04 y el paso 03 del escenario 12. Los
-dos existen para dejar grabada una rama del hook que en la práctica no se
-alcanza sola; confundir "la rama existe" con "la rama ocurre" es justamente lo
-que esta línea base evita.
+Tres escenarios están **construidos a propósito** y lo declaran en su README: el
+`SessionStart` con sentinel del 04, el paso 03 del 12 y el turno entero del 16.
+Existen para dejar grabada una rama del hook que en la práctica no se alcanza
+sola; confundir "la rama existe" con "la rama ocurre" es justamente lo que esta
+línea base evita.
+
+La captura de la 1.4 le puso número a esa distinción para el escenario 12: de
+308 payloads reales, los únicos que traen la clave `subagent_type` son los 8 del
+`Agent`, todos adentro de `tool_input`. **El vector de A1 no aparece solo en el
+corpus observado** — el escenario lo construye, y eso ahora está medido, no
+supuesto.
+
+## Lo que la captura real dejó medido (Task 1.4)
+
+- **El gate de secuencia no se puede satisfacer** (escenario 16). Los eventos
+  que invocan subagentes (`tool_name: Agent`) no llegan al hook porque el
+  matcher registrado nombra `Task`; los que sí llegan traen el rol en
+  `agent_type`, y el hook busca `subagent_type`. Tres subagentes corren y
+  `agents_seen` queda vacío. Defecto A9.
+- **Ningún veredicto de la línea base se movió** al pasar a la forma real. Lo
+  único que cambió es el escapado de rutas en el log de evidencia y el
+  `task_hash` del escenario 04 (`SessionStart` no trae campo `prompt`, así que
+  el hash sale del payload entero). Eso es la declaración que pedía la DoD:
+  los 15 veredictos grabados con payloads reconstruidos se sostienen.
 
 ## Lo que la línea base dejó medido (y contradice al spec)
 

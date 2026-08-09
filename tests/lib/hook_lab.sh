@@ -154,34 +154,51 @@ lab_log() {
 }
 
 # ------------------------------------------------------- payloads y transcripts
-# Forma tomada de payloads reales de Claude Code. El hook no parsea JSON (usa
-# `sed` sobre el texto crudo), asi que lo que importa es que los campos existan
-# con la forma real, no que el JSON sea estricto.
+# Forma CALCADA de la captura de la Task 1.4 (308 payloads reales): mismos
+# campos, mismo orden de claves, mismos nombres de herramienta. El hook no
+# parsea JSON — usa `sed` sobre el texto crudo — asi que la forma no es un
+# detalle cosmetico: de ella dependen los greps de todos los gates.
 lab_payload_prompt() {
-  printf '{"session_id":"ses-13","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","permission_mode":"default","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
 }
 
 # El payload de SessionStart NO trae campo `prompt`: el hook cae al INPUT entero
 # como texto del prompt. Por eso el sentinel, si aparece, aparece en otro campo
 # (un resumen de sesion reanudada, por ejemplo).
+# Declarado: esta fase NO se capturo en la Task 1.4 (el capturador registra las
+# 3 fases que nombra su DoD), asi que su forma sigue siendo reconstruida.
 lab_payload_session() {
-  printf '{"session_id":"ses-13","hook_event_name":"SessionStart","source":"resume","cwd":"/proyecto","summary":"%s"}' "$1"
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","hook_event_name":"SessionStart","source":"resume","cwd":"/proyecto","summary":"%s"}' "$1"
 }
 
-lab_payload_task() {
-  printf '{"session_id":"ses-13","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Task","tool_input":{"subagent_type":"%s","description":"paso del harness","prompt":"hace lo tuyo"},"tool_response":{"content":"listo"}}' "$1"
+# La herramienta que invoca subagentes se llama `Agent`, no `Task` (medido: los
+# 8 payloads reales con subagent_type son todos tool_name=Agent).
+lab_payload_agent() {
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"paso del harness","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01a1b2c3d4e5f60718293a4b","duration_ms":4200}' "$1" "$1"
 }
 
+# El tool_response real de Bash NO trae exitCode (0 de 59 payloads): la unica
+# senal de falla posible es el TEXTO de stdout/stderr. El segundo argumento es
+# ese stderr.
 lab_payload_bash() {
-  printf '{"session_id":"ses-13","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exitCode":%s,"stdout":"salida"}}' "$1" "$2"
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
+}
+
+# Un evento de ADENTRO de un subagente: el rol viaja en `agent_type` de primer
+# nivel. 281 de 303 payloads reales son de esta forma.
+lab_payload_bash_en_subagente() {
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_id":"a11111111impleme","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c3d4e5f60718293a4b5c6d","duration_ms":1200}' "$1" "$2"
 }
 
 lab_payload_edit() {
-  printf '{"session_id":"ses-13","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b"},"tool_response":{"filePath":"%s","userModified":false}}' "$1" "$1"
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"filePath":"%s","oldString":"a","newString":"b","originalFile":"a","structuredPatch":[],"userModified":false,"replaceAll":false},"tool_use_id":"toolu_01d4e5f60718293a4b5c6d7e","duration_ms":1200}' "$1" "$1"
 }
 
+# El Stop real trae `last_assistant_message`: el texto final del asistente viaja
+# en el PROPIO payload, no solo en el transcript. O sea que el recibo y la pausa
+# tienen DOS canales, y el gate mira los dos (INPUT + tail del transcript).
 lab_payload_stop() {
-  printf '{"session_id":"ses-13","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"Stop","stop_hook_active":false}'
+  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
 }
 
 # Una linea de transcript con texto del asistente. Los saltos van escapados

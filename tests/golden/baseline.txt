@@ -11,7 +11,7 @@
 # hook_sha256: 0ec5dc045017e9809667a66bfdea5c11e5fd11074bd3464cc132c487103b6130
 # hook_bytes: 40333
 # hook_lineas: 746
-# escenarios: 15
+# escenarios: 16
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -96,7 +96,7 @@ stderr <vacio>
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
@@ -115,7 +115,7 @@ stderr <vacio>
 --- estado tras el paso 04
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
@@ -140,9 +140,9 @@ stdout (sha 83d58dd367fbec46, 8696 bytes)
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/harness-evidence.log
-| prompt task started: 3919635926
+| prompt task started: 3850401611
 hooks/state/<PROJECT_KEY>/harness-state.env
-| task_hash=3919635926
+| task_hash=3850401611
 | cycle=0
 | implemented=0
 | verified=0
@@ -196,7 +196,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=2
 | last_code_edit=2
@@ -215,7 +215,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=3
@@ -235,7 +235,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
@@ -256,7 +256,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 | agent: reviewer
@@ -303,7 +303,7 @@ stderr (sha c4d7ec1297aa6c92, 1497 bytes)
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 | agent: reviewer
@@ -365,7 +365,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=2
 | last_code_edit=2
@@ -384,7 +384,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=3
@@ -404,7 +404,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
@@ -425,7 +425,7 @@ stderr <vacio>
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 | agent: reviewer
@@ -470,7 +470,7 @@ stderr <vacio>
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
@@ -513,7 +513,7 @@ stderr (sha 478d373614cd00f0, 1827 bytes)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
@@ -739,7 +739,7 @@ hooks/state/<PROJECT_KEY>/harness-evidence.log
 | agent: verifier
 | verified: python -m pytest -q
 | agent: reviewer
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=5
 | last_code_edit=5
@@ -940,7 +940,7 @@ stderr <vacio>
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\docs\ejemplo-payload.md
+| implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
@@ -958,9 +958,9 @@ stderr <vacio>
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\docs\ejemplo-payload.md
+| implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
 | agent: reviewer
-| implemented: C:\dev\demo\docs\ejemplo-payload.md
+| implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
@@ -1069,4 +1069,139 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | cycle=0
 | implemented=0
 | verified=0
+| agents_seen=
+
+=== escenario 16-eventos-dentro-de-subagente
+# Los eventos de adentro de un subagente llevan el rol en `agent_type`, y el gate
+# no lo mira. Medido en la captura de la Task 1.4: de 303 PostToolUse reales, 281
+# traen `agent_id` y `agent_type` en el primer nivel, con valores implementer,
+# verifier y reviewer.
+# 
+# Lo que este escenario deja grabado es la combinacion que hace inerte al gate de
+# secuencia:
+# 
+# - La herramienta que INVOCA subagentes se llama `Agent`, y el matcher registrado
+#   es `Bash|Edit|Write|apply_patch|Task`: esos eventos NUNCA llegan al hook. Los 8
+#   payloads reales con `subagent_type` son todos `tool_name: Agent`.
+# - Los eventos de ADENTRO del subagente (Bash, Edit, Write) SI llegan, y traen el
+#   rol en `agent_type` — pero el hook busca `subagent_type`, asi que no lo ve.
+# 
+# Resultado: tres subagentes corrieron, el hook recibio 3 eventos suyos, y
+# `agents_seen` queda vacio. El Stop reclama los tres roles que si corrieron.
+# 
+# Defecto A9. El arreglo tiene dos caminos posibles y este escenario mide el
+# segundo: agregar `Agent` al matcher (cambia la registracion) o leer `agent_type`
+# del payload que el hook YA recibe (cambia solo el hook).
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: npm test
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=2
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: npm test
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=
+--- paso 05  phase=stop target=claude  payload=05.stop.claude.json
+exit 2
+stdout (sha 7410c50ecb7676ba, 947 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing implementer subagent run (delegate the change via the Task tool).\\n- Missing verifier subagent run (delegate verification via the Task tool).\\n- Missing reviewer subagent run (delegate review via the Task tool).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha ac0be7ba32eb19a8, 889 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+| implemented: C:\dev\demo\src\sesiones.ts
+| verified: npm test
+hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+| counter=3
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=1
+| verified=1
 | agents_seen=
