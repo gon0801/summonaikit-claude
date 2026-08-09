@@ -74,7 +74,7 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 | A5 | `command_text` crudo persiste en `harness-evidence.log` | Un comando con credenciales en la línea queda en claro en disco hasta el cierre limpio | 3 |
 | A6 | `transcript_path` sale del payload y se hace `tail` sin acotar | Primitiva de lectura de archivo arbitrario controlada por payload | 3 |
 | A7 | ACL: `CodexSandboxUsers` tiene `Modify` sobre el hook y su directorio de estado | Una identidad *aislada* puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen` y anular el gate | 0 |
-| A8 | `has_receipt_label` exige un carácter no alfabético antes de la etiqueta, y en un transcript real el que hay es la `n` del salto de línea escapado | Un recibo correcto escrito como texto corrido no satisface NINGUNA de las 6 etiquetas: el turno se bloquea hasta agotar el presupuesto. El mismo recibo en viñetas sí pasa | sin task asignada |
+| A8 | `has_receipt_label` exige un carácter no alfabético antes de la etiqueta, y en un transcript real el que hay es la `n` del salto de línea escapado | Un recibo correcto escrito como texto corrido no satisface NINGUNA de las 6 etiquetas: el turno se bloquea hasta agotar el presupuesto. El mismo recibo en viñetas sí pasa | 3 (con A2: misma raíz, un solo arreglo) |
 
 A7 es anterior e independiente del plan: se corrige primero porque es el único
 que no depende de ninguna decisión de diseño.
@@ -143,7 +143,12 @@ que la mide (`tests/golden/baseline.txt`), no solo acá.
    Medido: un recibo completo y correcto, escrito como texto corrido, falla las
    6 etiquetas (escenario 05); el mismo recibo en viñetas las satisface
    (escenario 06). O sea que hoy el veredicto del gate depende de cómo el
-   asistente formateó el recibo, no de si lo escribió.
+   asistente formateó el recibo, no de si lo escribió. **Asignado a la Task
+   3.2**, no a una tarea propia: comparte raíz exacta con A2 — los dos salen de
+   grepear el JSON crudo en vez de decodificarlo y mirar el texto del
+   asistente, y un solo arreglo cierra los dos. Ojo con el orden: A8 hace que
+   el gate exija de más y A2 que exija de menos, así que el arreglo tiene que
+   probar las dos direcciones o corregir una puede tapar la otra.
 2. **A1 reproduce por otra vía que la escrita.** El contenido de un archivo
    llega al payload con las comillas escapadas (`\"subagent_type\"`), y el `sed`
    pide una comilla literal: leer un archivo del repo que mencione el campo
