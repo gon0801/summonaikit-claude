@@ -55,7 +55,8 @@ param(
     [string]$Path = (Join-Path $env:USERPROFILE '.claude\hooks'),
     [switch]$Fix,
     [string]$BackupRoot = (Join-Path $env:USERPROFILE '.claude\hooks-acl-backup'),
-    [string]$Restore
+    [string]$Restore,
+    [switch]$Detailed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -177,20 +178,23 @@ function Invoke-Audit {
 }
 
 function Save-AclBackup {
-    param([string]$RootPath, [string]$Destination)
+    param([string]$RootPath, [string]$Destination, [string[]]$Target)
 
     if (-not (Test-Path -LiteralPath $Destination)) {
         New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     }
+    # Se respalda SOLO lo que se va a modificar. Respaldar el arbol entero es
+    # inviable en `~/.claude` (>22k objetos) y ademas no aporta: lo heredado se
+    # reconstruye solo cuando se restaura el ACE de su origen.
     $map = @{}
-    foreach ($t in (Get-HookAclTarget -RootPath $RootPath)) {
+    foreach ($t in $Target) {
         $map[$t] = (Get-Acl -LiteralPath $t).Sddl
     }
     $jsonPath = Join-Path $Destination 'acl-backup.json'
     ($map | ConvertTo-Json -Depth 3) | Out-File -FilePath $jsonPath -Encoding utf8
 
-    # Volcado legible, para poder auditar el backup sin PowerShell.
-    icacls $RootPath /T | Out-File -FilePath (Join-Path $Destination 'icacls-before.txt') -Encoding utf8
+    # Volcado legible del punto de partida. Sin `/T` por lo mismo de arriba.
+    icacls $RootPath | Out-File -FilePath (Join-Path $Destination 'icacls-before.txt') -Encoding utf8
     return $jsonPath
 }
 
@@ -270,6 +274,27 @@ function Repair-HookAcl {
     }
 }
 
+# En `~/.claude` hay ~45k ACE sobre ~22k objetos: listarlos uno por uno no es
+# un reporte, es ruido. Lo unico accionable son los EXPLICITOS — normalmente uno
+# solo, en la raiz — porque al corregir ese origen lo heredado cae con el.
+function Write-FindingSummary {
+    param([object[]]$Findings)
+
+    $objetos = @($Findings | Select-Object -ExpandProperty Path -Unique).Count
+    Write-Output "HALLAZGOS: $($Findings.Count) ACE con escritura fuera de la keep-list, sobre $objetos objeto(s)."
+    Write-Output "Accionable = EXPLICITO; lo heredado cae solo al corregir su origen."
+
+    foreach ($heredado in @($false, $true)) {
+        $sel = @($Findings | Where-Object { $_.IsInherited -eq $heredado })
+        if ($sel.Count -eq 0) { continue }
+        $etiqueta = if ($heredado) { 'heredado ' } else { 'explicito' }
+        $sel | Group-Object Identity | Sort-Object Count -Descending | ForEach-Object {
+            $huerfano = if ($_.Group[0].Resolvable) { '' } else { '  [SID huerfano]' }
+            Write-Output ("  {0}  {1,-50} {2,6} objeto(s){3}" -f $etiqueta, $_.Name, $_.Count, $huerfano)
+        }
+    }
+}
+
 function Write-Finding {
     param([object[]]$Findings)
     foreach ($f in $Findings) {
@@ -301,20 +326,28 @@ if ($before.Count -eq 0) {
     exit 0
 }
 
-Write-Output "HALLAZGOS: $($before.Count) ACE con escritura fuera de la keep-list."
-Write-Finding -Findings $before
+Write-FindingSummary -Findings $before
+if ($Detailed) {
+    Write-Output ""
+    Write-Finding -Findings $before
+}
 
 if (-not $Fix) {
     Write-Output ""
-    Write-Output "Modo auditoria (read-only). Correr con -Fix para corregir."
+    Write-Output "Modo auditoria (read-only). Correr con -Fix para corregir, -Detailed para el listado completo."
     exit 1
 }
+
+# Se respalda exactamente lo que `Repair-HookAcl` va a tocar: la raiz (se le
+# corta la herencia) mas cualquier hijo con ACE explicito propio.
+$aTocar = @(@($Path) + @($before | Where-Object { -not $_.IsInherited } |
+                         Select-Object -ExpandProperty Path) | Select-Object -Unique)
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupDir = Join-Path $BackupRoot $stamp
 Write-Output ""
-Write-Output "Backup en: $backupDir"
-$backupJson = Save-AclBackup -RootPath $Path -Destination $backupDir
+Write-Output "Backup en: $backupDir ($($aTocar.Count) objeto(s) a modificar)"
+$backupJson = Save-AclBackup -RootPath $Path -Destination $backupDir -Target $aTocar
 
 Write-Output "Corrigiendo:"
 Repair-HookAcl -RootPath $Path
@@ -327,7 +360,7 @@ if ($after.Count -eq 0) {
     exit 0
 }
 
-Write-Output "FALLO: quedaron $($after.Count) ACE con escritura."
-Write-Finding -Findings $after
+Write-Output "FALLO: quedaron ACE con escritura."
+Write-FindingSummary -Findings $after
 Write-Output "Revertir con: -Restore `"$backupJson`""
 exit 1
