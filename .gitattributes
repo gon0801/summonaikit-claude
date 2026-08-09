@@ -1,0 +1,8 @@
+# El producto de este repo es un script que corre en CADA turno de Claude Code.
+# Con `core.autocrlf=true` (el de esta maquina) un `.sh` se clona con CRLF, y
+# ahi el resultado depende de que bash lo ejecute: el cygwin local lo tolera,
+# el de Git for Windows falla con `$'\r': command not found` en la primera
+# linea. Un hook que no arranca rompe todos los turnos, no solo su propio test.
+*.sh text eol=lf
+
+# Los `.ps1` los consume PowerShell en Windows: se dejan como estan.
