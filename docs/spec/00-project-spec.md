@@ -75,6 +75,9 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 | A6 | `transcript_path` sale del payload y se hace `tail` sin acotar | Primitiva de lectura de archivo arbitrario controlada por payload | 3 |
 | A7 | ACL: `CodexSandboxUsers` tiene `Modify` sobre el hook y su directorio de estado | Una identidad *aislada* puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen` y anular el gate | 0 |
 | A8 | `has_receipt_label` exige un carácter no alfabético antes de la etiqueta, y en un transcript real el que hay es la `n` del salto de línea escapado | Un recibo correcto escrito como texto corrido no satisface NINGUNA de las 6 etiquetas: el turno se bloquea hasta agotar el presupuesto. El mismo recibo en viñetas sí pasa | 3 (con A2: misma raíz, un solo arreglo) |
+| A9 | La herramienta que invoca subagentes se llama **`Agent`**, y el matcher registrado nombra `Task`; los eventos de adentro del subagente sí llegan, pero llevan el rol en **`agent_type`** y el hook busca `subagent_type` | **El gate de secuencia no se puede satisfacer.** Los tres subagentes corren, el hook recibe sus eventos, y `agents_seen` queda vacío | 3 |
+| A10 | El hook no ve `SUMMONAIKIT_HOOK_TARGET=claude` en la corrida real, pese a estar en el comando registrado. Mecanismo **`unknown`**: medido el efecto, no la causa | La rama exclusiva de Claude (toda la exigencia de secuencia) no corre nunca. Enmascara a A9: por eso hoy los turnos cierran limpios en vez de bloquear | 3 |
+| A11 | El guardia de fallas busca `exitCode` en el payload, y el `tool_response` real de `Bash` **no tiene ese campo** (medido 59 de 59) | Una batería que falla se acredita como verificación, salvo que su salida diga literalmente `command not found`, `permission_denied` o `failure_type` | 3 |
 
 A7 es anterior e independiente del plan: se corrige primero porque es el único
 que no depende de ninguna decisión de diseño.
@@ -161,6 +164,57 @@ que la mide (`tests/golden/baseline.txt`), no solo acá.
    nunca lo mete en `$missing`. Queda anotado para no "arreglarlo" creyendo que
    cierra un agujero que no existe, y para que se note si algún día empieza a
    pesar.
+
+### La captura real (2026-08-09, Task 1.4): el gate de ceremonia es inerte
+
+Se capturaron **308 payloads crudos** de un turno `-saikit` real en un repo
+descartable (3 `UserPromptSubmit`, 303 `PostToolUse`, 2 `Stop`). La 1.2 había
+grabado el comportamiento contra payloads *reconstruidos*; esta es la medición
+contra los que el host manda de verdad. Cambió menos de lo temido en la forma y
+mucho más de lo esperado en el fondo.
+
+**Lo que la forma corrigió** (ningún veredicto de la línea base se movió):
+
+- Los 54 fixtures **no eran JSON válido**: escapaban `C:\dev\demo` con barra
+  simple. El real escapa `C:\\dev\\demo`. El hook grepea texto crudo, así que
+  eso cambia lo que ven todos sus greps (se nota en el log de evidencia).
+- Faltaban campos que el payload real siempre trae: `prompt_id`, `effort`,
+  `tool_use_id`, `duration_ms`, y en el `Stop` **`last_assistant_message`** —
+  o sea que el texto final del asistente viaja en el propio payload, no solo en
+  el transcript. El recibo y la pausa tienen **dos canales**, y el gate mira los
+  dos.
+- `permission_mode` real es `auto` / `dontAsk`, nunca `default`.
+
+**Lo que la captura destapó** — tres defectos, dos de ellos suficientes por sí
+solos para volver decorativo el gate de secuencia:
+
+1. **A9.** Los 8 payloads con `subagent_type` son todos `tool_name: "Agent"`, y
+   el matcher registrado es `Bash|Edit|Write|apply_patch|Task`: **no llegan
+   nunca**. Los que sí llegan son los 281 eventos de adentro de los subagentes,
+   que traen el rol en `agent_type` de primer nivel — un campo que el hook no
+   mira. Escenario 16 de la línea base: tres subagentes corren, el hook recibe
+   sus eventos, `agents_seen` queda vacío y el Stop reclama los tres roles.
+2. **A10.** El turno real **cerró limpio**. Con `TARGET=claude` eso es
+   imposible: replicando los payloads capturados con la variable puesta, el Stop
+   bloquea; sin la variable, cierra limpio — exactamente lo observado (estado
+   borrado, cero `SUMMONAIKIT HARNESS GATE` en el transcript, hook ejecutado
+   según el `stop_hook_summary`). El comando registrado sí lleva el prefijo
+   `SUMMONAIKIT_HOOK_TARGET=claude`. Se declara el **efecto** medido; la
+   **causa** queda `unknown` (Core Rule 2). El experimento que la resolvería:
+   un hook que imprima su entorno, en una sesión nueva.
+3. **A11.** El `tool_response` de `Bash` no trae `exitCode` en ninguna forma
+   (59 de 59). De las cuatro señales de falla que busca el hook, tres son texto
+   y una es ese campo: una batería que falla con un assert normal no dice
+   ninguna, y queda acreditada como verificación.
+
+**Orden de corrección, que importa:** A10 enmascara a A9. Arreglar A9 solo no
+cambia nada mientras el `TARGET` no llegue; arreglar A10 solo hace que *todos*
+los turnos empiecen a bloquear, porque A9 sigue vaciando `agents_seen`. Van
+juntos o el gate pasa de inerte a inservible.
+
+**Lo que sigue reconstruido, declarado:** la fase `SessionStart` (el capturador
+registra las 3 fases que nombra la DoD de la 1.4) y todos los payloads de
+`cursor`, que no salen de una sesión de Claude.
 
 ### Semántica atada por la suite de comportamiento (2026-08-09, Task 1.3)
 
