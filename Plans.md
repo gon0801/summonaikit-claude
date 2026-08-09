@@ -19,7 +19,7 @@ diseño. Si el plan se cancelara entero, esta fase igual debe correr.
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
 | 0.1 | `[Guardrail]` `[lane:gate]` `[tdd:skip:system-acl-not-unit-testable]` Quitar `Modify` de `CodexSandboxUsers` y del SID huérfano `S-1-5-21-…-2159037359` sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`. Hoy una identidad **aislada** puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen=implementer,verifier,reviewer` y anular el gate | `icacls` sobre ambas rutas ya no lista `Modify` para esas identidades; `Gon\ehven`, `SYSTEM` y `Administrators` conservan su acceso; Claude Code arranca y un turno normal corre sin error tras el cambio | - | cc:完了 [d9057b0] |
-| 0.2 | `[Guardrail]` `[lane:gate]` `[tdd:skip:system-acl-not-unit-testable]` Quitar `Modify` de `CodexSandboxUsers` y del SID huérfano sobre **`~/.claude` la raíz**: ahí está el otorgamiento explícito `(OI)(CI)` que midió la 0.1 — en `hooks/` solo se heredaba. Mientras siga, esas identidades escriben `settings.json` y **desregistran** el hook: el gate desaparece sin tocar el archivo, el mismo efecto que la 0.1 cerró por la otra vía | `tools/hook-acl.ps1 -Path "$HOME/.claude"` sale 0; `settings.json` y `settings.local.json` dejan de ser escribibles por esas identidades; un turno normal corre sin error; y una tarea delegada al sandbox (`codex-companion.sh`) sigue funcionando — si resulta que necesita escribir en algún subárbol de `~/.claude`, se declara esa excepción acotada en vez de devolverle el permiso a todo | 0.1 | cc:TODO |
+| 0.2 | `[Guardrail]` `[lane:gate]` `[tdd:skip:system-acl-not-unit-testable]` Quitar `Modify` de `CodexSandboxUsers` y del SID huérfano sobre **`~/.claude` la raíz**: ahí está el otorgamiento explícito `(OI)(CI)` que midió la 0.1 — en `hooks/` solo se heredaba. Mientras siga, esas identidades escriben `settings.json` y **desregistran** el hook: el gate desaparece sin tocar el archivo, el mismo efecto que la 0.1 cerró por la otra vía | `tools/hook-acl.ps1 -Path "$HOME/.claude"` sale 0 **al terminar la corrección**; `settings.json` y `settings.local.json` dejan de ser escribibles por esas identidades; ningún SID no resoluble conserva ACE en `~/.claude`, `AppData`, `AppData\Local` ni `%TEMP%`; un archivo creado en `%TEMP%` y movido a `~/.claude/state/` NO arrastra cuentas borradas (prueba directa del vector A7-bis); un turno normal corre sin error y una tarea delegada al sandbox (`codex-companion.sh`) sigue funcionando. **No se exige que la auditoría se MANTENGA en 0**: A7-bis lo vuelve imposible de garantizar — ese vector se detecta, no se previene | 0.1 | cc:TODO |
 | 0.3 | `[Guardrail]` `[lane:fast]` `[tdd:required]` El heal verifica el **REGISTRO**, no solo el contenido: si `settings.json` deja de apuntar al hook, el archivo puede estar perfecto y el gate no existir. Es el modo de falla más silencioso del sistema y hoy nada lo detecta | Fixture con `settings.json` sin la ruta del harness ⇒ el heal lo reporta fuerte y sale 0 (fail-open); fixture con el registro presente ⇒ silencio | - | cc:TODO |
 
 ## Phase 1: Red de seguridad antes de tocar nada
@@ -117,6 +117,12 @@ aunque todo lo demás se cancele; el 2 y el 3 son el objetivo.
 - 事項: lectura de `~/.claude/settings.json` y `~/.claude/settings.local.json`
   理由: verificar que el hook sigue registrado (modo de falla silencioso) y el cableado del heal
   scope: Phase 0 / Task 0.3, Phase 2 / Task 2.4
+- 事項: remoción de ACE de cuentas BORRADAS (SID no resoluble) en `~/AppData`,
+  `~/AppData/Local` y `%TEMP%` — aprobado en sesión 2026-08-08
+  理由: A7-bis — `%TEMP%` re-contamina `~/.claude` por `move`, y los 5 SID
+  huérfanos estaban explícitos repartidos en esos tres niveles. NO se toca
+  `CodexSandboxUsers`, que ahí sí escribe legítimamente
+  scope: Phase 0 / Task 0.2
 - 事項: escritura de ACLs sobre `~/.claude` (la RAÍZ del perfil, no solo `hooks/`)
   理由: ahí vive el otorgamiento explícito medido en la 0.1; mientras siga, el hook
   se puede desregistrar desde `settings.json` sin tocar el archivo
