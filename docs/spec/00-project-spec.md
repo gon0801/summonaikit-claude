@@ -93,6 +93,41 @@ Consecuencias medidas, más amplias que como estaba redactado A7:
   ACE muerto por cada cuenta reciclada. Es reversible por el mismo instalador:
   por eso la corrección corta la herencia y el modo auditoría queda como
   detector permanente de la reaparición.
+- **Origen del otorgamiento (log del sandbox, 2026-06-30T05:07:15):** no fue
+  dirigido a `.claude`. El instalador otorgó `write` sobre ~90 rutas del perfil
+  de una pasada — `.claude`, `.claude.json`, `.cursor`, `.kimi`, `AppData`,
+  `Documents`, `NTUSER.DAT`. `.claude` cayó en una barrida.
+- **El sandbox nunca escribió en `~/.claude`:** ningún objeto de los ~21k es
+  propiedad de `CodexSandboxOnline`/`Offline`, y sus logs solo lo muestran
+  leyendo (`plugins\cache`). Por eso bajarlo a `ReadAndExecute` es seguro.
+
+### A7-bis: `%TEMP%` re-contamina por *move*, y eso invalida "corregir la raíz alcanza"
+
+Medido 2026-08-08 durante la Task 0.2. Corregir `~/.claude` limpió los ~21k
+objetos por re-propagación — la auditoría posterior dio 0. Minutos después,
+`state/tooling-policy.json` volvió a tener `Modify` para el sandbox y **cinco**
+SID huérfanos, marcados como heredados aunque su directorio padre ya estaba
+limpio.
+
+Mecanismo: un `move`/`rename` dentro del mismo volumen **conserva la ACL del
+origen**. Los procesos que escriben a un temporal y lo mueven al destino traen
+consigo la ACL de `%TEMP%`. La evidencia es exacta: `%TEMP%` otorga
+`(M,DC)` — `DeleteSubdirectoriesAndFiles`, un derecho que ninguna otra ruta
+concede — al SID `…448487282`, y el archivo re-contaminado apareció con ese
+mismo `(M,DC)`. Explica además los 4112 objetos afectados en `plugins\cache` y
+los de `projects\`: llegan por descarga a temporal y move.
+
+Consecuencias para el alcance:
+
+1. **Ninguna limpieza de `~/.claude` es durable por sí sola.** El modo auditoría
+   deja de ser una red de seguridad opcional y pasa a ser el control.
+2. **`%TEMP%` NO admite la misma receta.** Ahí el sandbox sí escribe
+   legítimamente (`granting write ACE to …\AppData\Local\Temp`, 2026-03-10);
+   bajarlo a `ReadAndExecute` rompe Codex. Lo que sí es removible sin
+   consecuencia son los cinco SID huérfanos: cuentas borradas, sin consumidor
+   posible.
+3. Queda un vector residual aceptado: los archivos que lleguen desde `%TEMP%`
+   traerán `CodexSandboxUsers:Modify`. Se detecta, no se previene.
 
 ### El contrato inyectado
 
