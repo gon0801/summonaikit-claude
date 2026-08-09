@@ -1,0 +1,447 @@
+#!/usr/bin/env bash
+# gate_cases.sh — la semantica ACTUAL del gate, caso por caso (Task 1.3).
+#
+# QUE ES: un corpus de casos ejecutables sobre `$HOOK_BAJO_PRUEBA`. Cada caso
+# afirma una cosa puntual y devuelve verde/rojo. Lo consumen DOS baterias con
+# veredictos opuestos, y por eso vive en una lib y no adentro de un test:
+#
+#   tests/test_gate_behavior.sh   los corre contra el hook VIVO: todos verdes.
+#   tests/test_gate_mutations.sh  los corre contra copias del hook con la
+#                                 condicion de un gate rota: al menos uno rojo.
+#
+# La segunda es la que le da valor a la primera. Un caso que sigue verde con el
+# gate roto no esta probando el gate: esta mirando para otro lado. Esa es la
+# declaracion de mutation-test que pide la DoD de la Task 1.3, y esta escrita
+# como codigo que corre, no como una frase en un reporte.
+#
+# ---------------------------------------------------------------------------
+# ESTO GRABA LO QUE EL HOOK HACE HOY, NO LO QUE DEBERIA HACER.
+#
+# Dos casos afirman comportamiento que ya sabemos DEFECTUOSO, con el numero de
+# defecto y la task que lo corrige escritos al lado:
+#
+#   caso_g4_recibo_corrido_bloquea_a8   A8 — un recibo correcto en texto
+#                                       corrido no satisface ninguna etiqueta.
+#   caso_g4_pausa_permite               la mitad buena de A2: la pausa se busca
+#                                       grepeando el texto crudo, asi que el
+#                                       mismo grep la encuentra donde no debe.
+#
+# Cuando la Task 3.2 los arregle, estos casos CAMBIAN DE EXPECTATIVA a proposito
+# y ese diff es la declaracion de que cambio. No se los "arregla" antes: una
+# suite que ya espera el comportamiento corregido no detecta nada el dia que se
+# corrige.
+# ---------------------------------------------------------------------------
+#
+# Convenciones:
+#   - Un caso NUNCA corre en subshell: marca su veredicto en $CASO_ROJO.
+#   - El driver limpia el estado antes de cada caso (turno nuevo).
+#   - Los casos se listan en $CASOS_<GATE>, del mas barato al mas caro: la
+#     bateria de mutaciones corta en el primer rojo, y en Windows cada corrida
+#     del hook cuesta ~2 segundos.
+
+# --------------------------------------------------------------- afirmaciones
+CASO_ROJO=0
+
+_mal()      { printf '      FAIL: %s\n' "$1"; CASO_ROJO=1; }
+_igual()    { if [ "$2" != "$3" ]; then _mal "$1: esperaba [$3], dio [$2]"; fi; }
+_vacio()    { if [ -n "$2" ]; then _mal "$1: esperaba vacio, dio [$(printf '%s' "$2" | head -c 200)]"; fi; }
+_no_vacio() { if [ -z "$2" ]; then _mal "$1: esperaba algo, quedo vacio"; fi; }
+
+_contiene() {
+  if ! printf '%s' "$2" | grep -Fq "$3"; then
+    _mal "$1: no contiene [$3]"
+  fi
+}
+
+_no_contiene() {
+  if printf '%s' "$2" | grep -Fq "$3"; then
+    _mal "$1: NO deberia contener [$3]"
+  fi
+}
+
+# Corre un caso y devuelve su veredicto como exit code. No usar dentro de
+# `$(...)`: el caso marca $CASO_ROJO y en un subshell esa marca se perderia.
+correr_caso() {
+  CASO_ROJO=0
+  lab_limpiar_estado
+  "$1"
+  return "$CASO_ROJO"
+}
+
+# ------------------------------------------------------------------- fixtures
+# Los saltos van escapados (\n) porque asi los guarda un JSONL real. Ese detalle
+# no es cosmetico: de ahi sale A8.
+_RECIBO_VINETAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+_RECIBO_CORRIDO='SUMMONAIKIT HARNESS RECEIPT\nUnderstand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.'
+
+_RECIBO_SIN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
+
+# Igual al anterior pero declarando que la verificacion no se corrio. El gate
+# acepta esa declaracion como sustituto de la evidencia.
+_RECIBO_SIN_RETRO_SALTEADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: skipped, este repo no tiene bateria propia.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
+
+_TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
+_TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
+
+# Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
+_sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
+
+# ============================================================== LAB (auto-test)
+# El banco siembra estado escribiendo en la ruta que descubrio al arrancar. Si
+# esa ruta dejara de ser la que el hook usa, TODOS los casos sembrados pasarian
+# a probar nada y quedarian verdes por vacio. Este caso es el que lo impide.
+CASOS_LAB="caso_lab_ruta_de_estado_es_la_que_usa_el_hook"
+
+caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit un turno cualquiera')"
+  real="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+  _no_vacio "estado tras armar" "$real"
+  _igual "ruta de estado del banco" "$LAB_ESTADO_PATH" "$real"
+}
+
+# ================================================== G1 — armado por el sentinel
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera"
+
+# El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
+# contiene "ui", asi que su regex de palabras clave armaba el harness solo.
+caso_g1_no_arma_sin_sentinel() {
+  lab_run prompt claude "$(lab_payload_prompt 'arregla cualquier bug del login y corre los tests')"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "sin sentinel NO se debe crear estado (el Stop gate se activaria solo)"; fi
+}
+
+caso_g1_arma_con_sentinel() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stderr" "$LAB_ERR"
+  _contiene "stdout" "$LAB_OUT" '"hookSpecificOutput"'
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
+  if lab_hay_estado; then
+    _igual "cycle"       "$(lab_estado cycle)"       "0"
+    _igual "implemented" "$(lab_estado implemented)" "0"
+    _igual "verified"    "$(lab_estado verified)"    "0"
+    _igual "agents_seen" "$(lab_estado agents_seen)" ""
+  else
+    _mal "con sentinel se debe crear el estado del turno"
+  fi
+}
+
+# El sentinel pide fronteras a los dos lados. Sin ellas, cualquier archivo o
+# flag que lleve el texto adentro armaria el harness.
+caso_g1_sentinel_con_frontera() {
+  lab_run prompt claude "$(lab_payload_prompt 'nombra el archivo x-saikit.md')"
+  _vacio "stdout con frontera izquierda rota" "$LAB_OUT"
+  if lab_hay_estado; then _mal "x-saikit no debe armar (frontera izquierda)"; fi
+
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'el flag es -saikitx')"
+  _vacio "stdout con frontera derecha rota" "$LAB_OUT"
+  if lab_hay_estado; then _mal "-saikitx no debe armar (frontera derecha)"; fi
+}
+
+# ============================================ G2 — evidencia de verificacion
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_fallido_no_marca caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama"
+
+caso_g2_runner_marca_verificado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _igual "verified" "$(lab_estado verified)" "1"
+}
+
+caso_g2_sin_runner_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cat README.md' 0)"
+  _igual "verified" "$(lab_estado verified)" "0"
+}
+
+# La evidencia se acredita por el COMANDO, pero un comando que fallo no cuenta:
+# el hook mira la senal de falla en el payload entero (el exit code vive en el
+# resultado de la herramienta, no en la linea de comando).
+caso_g2_runner_fallido_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' 1)"
+  _igual "verified" "$(lab_estado verified)" "0"
+}
+
+# Sin turno armado NO se crea estado: si se creara con task_hash=unknown, el
+# Stop gate se activaria solo en cualquier edicion y el sentinel no serviria.
+caso_g2_sin_armar_no_crea_estado() {
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un evento de herramienta sin turno armado no debe crear estado"; fi
+}
+
+# Los tres casos que siguen usan un recibo al que le falta la linea Retro: el
+# turno se bloquea igual, y eso permite LEER el motivo y afirmar sobre la linea
+# de verificacion, que es lo que este gate decide.
+caso_g2_falta_evidencia_reclama() {
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+caso_g2_evidencia_presente_no_reclama() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+caso_g2_excusa_declarada_no_reclama() {
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO_SALTEADO")"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# ============================================== G3 — secuencia de subagentes
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
+
+caso_g3_falta_reviewer_bloquea() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "stdout" "$LAB_OUT" '"decision":"block"'
+  _contiene "motivo" "$LAB_OUT" 'Missing reviewer subagent run'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing implementer subagent run'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verifier subagent run'
+}
+
+caso_g3_fuera_de_orden_bloquea() {
+  lab_sembrar 123456 0 1 1 "reviewer,implementer,verifier"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Subagents ran out of order'
+}
+
+# La secuencia es una primitiva de Claude Code (Task/subagent_type). En cursor
+# el mismo estado cierra limpio: el gate no la exige.
+caso_g3_cursor_no_exige_secuencia() {
+  lab_sembrar 123456 0 1 1 ""
+  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _igual "stdout" "$LAB_OUT" '{}'
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Los agentes genericos no llevan rol: si contaran, un Explore cualquiera
+# satisfaria un gate sin que corriera el subagente que corresponde.
+caso_g3_agente_generico_no_cuenta() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_task 'general-purpose')"
+  _igual "agents_seen tras general-purpose" "$(lab_estado agents_seen)" ""
+  lab_run tool claude "$(lab_payload_task 'Explore')"
+  _igual "agents_seen tras Explore" "$(lab_estado agents_seen)" ""
+}
+
+# El gate mapea por FUNCION, no por una lista fija por host: los agentes
+# globales de Claude Code tienen otros nombres que los del kit y un turno bien
+# delegado con esos nombres tiene que satisfacerlo igual.
+caso_g3_nombres_del_host_mapean() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_task 'backend-engineer')"
+  lab_run tool claude "$(lab_payload_task 'test-engineer')"
+  lab_run tool claude "$(lab_payload_task 'code-reviewer')"
+  _igual "agents_seen" "$(lab_estado agents_seen)" "implementer,verifier,reviewer"
+}
+
+# El unico caso que maneja el turno ENTERO por eventos reales. Es el que ata que
+# los eventos PRODUCEN el estado que los demas casos siembran: sin el, sembrar
+# seria probar contra una ficcion.
+caso_g3_turno_completo_por_eventos_permite() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
+  lab_run tool claude "$(lab_payload_task 'implementer')"
+  lab_run tool claude "$(lab_payload_task 'verifier')"
+  lab_run tool claude "$(lab_payload_task 'reviewer')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' 0)"
+  _igual "agents_seen" "$(lab_estado agents_seen)" "implementer,verifier,reviewer"
+  _igual "verified"    "$(lab_estado verified)"    "1"
+
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _vacio "stderr" "$LAB_ERR"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# ================================================================ G4 — recibo
+CASOS_G4="caso_g4_pausa_permite caso_g4_recibo_corrido_bloquea_a8 caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa"
+
+caso_g4_falta_una_etiqueta_bloquea() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_SIN_RETRO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing Close gate summary'
+}
+
+caso_g4_sin_recibo_bloquea() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  for etiqueta in Understand Implement Verify Review Close Retro; do
+    _contiene "motivo" "$LAB_OUT" "Missing $etiqueta gate summary"
+  done
+}
+
+caso_g4_recibo_en_vinetas_pasa() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# DEFECTO A8, grabado a proposito. El MISMO recibo del caso de arriba, escrito
+# en texto corrido en vez de viñetas, no satisface NINGUNA de las 6 etiquetas:
+# en el JSONL el salto va escapado y el caracter que precede a la etiqueta es la
+# `n` de `\n`, que es alfabetico. O sea que hoy el veredicto depende de como el
+# asistente formateo el recibo, no de si lo escribio.
+# La huella exacta: la CABECERA si se encuentra (no lleva esa exigencia) y las 6
+# etiquetas no. La Task 3.2 invierte este caso.
+caso_g4_recibo_corrido_bloquea_a8() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _no_contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  for etiqueta in Understand Implement Verify Review Close Retro; do
+    _contiene "motivo" "$LAB_OUT" "Missing $etiqueta gate summary"
+  done
+}
+
+# La pausa declarada es una forma valida de terminar el turno: el agente
+# pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
+# Nota grabada: por esta via el estado NO se borra (el turno sigue abierto a
+# proposito). Es la mitad buena de A2; la mitad mala — que la pausa se encuentre
+# adentro del resultado de una herramienta — la cierra la Task 3.2.
+caso_g4_pausa_permite() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_PAUSA")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
+}
+
+# ================================================ G5 — presupuesto de 2 ciclos
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar"
+
+# Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
+# exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
+# al usuario, en vez de mandar al agente a otra vuelta.
+caso_g5_presupuesto_agotado() {
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" '"continue":false'
+  _contiene "stdout" "$LAB_OUT" '"stopReason"'
+  _contiene "stdout" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
+  _no_contiene "stdout" "$LAB_OUT" '"decision":"block"'
+  _no_vacio "stderr" "$LAB_ERR"
+}
+
+caso_g5_ciclos_cuentan_y_bloquean() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code del ciclo 1" "$LAB_RC" "2"
+  _contiene "motivo del ciclo 1" "$LAB_OUT" 'Current revision cycle: 1/2'
+  _igual "cycle tras el primer bloqueo" "$(lab_estado cycle)" "1"
+
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code del ciclo 2" "$LAB_RC" "2"
+  _contiene "motivo del ciclo 2" "$LAB_OUT" 'Current revision cycle: 2/2'
+  _igual "cycle tras el segundo bloqueo" "$(lab_estado cycle)" "2"
+}
+
+# El lado que deja pasar: haber gastado un ciclo no es en si mismo un motivo de
+# bloqueo. Un turno que ya fallo una vez y ahora esta completo cierra limpio; el
+# presupuesto solo decide QUE se hace cuando ademas falta algo.
+caso_g5_ciclo_consumido_no_impide_cerrar() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado aunque haya ciclos gastados"; fi
+}
+
+# ========================================== G6 — salidas por target y por fase
+CASOS_G6="caso_g6_bloqueo_por_target caso_g6_permiso_por_target caso_g6_presupuesto_agotado_por_target caso_g6_armado_por_target"
+
+# El mismo estado, el mismo veredicto, dos contratos de salida distintos: en
+# claude el host lee el exit code 2 y el JSON de decision; en cursor solo lee un
+# mensaje de seguimiento, y un exit 2 ahi seria un error de hook.
+caso_g6_bloqueo_por_target() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code en claude" "$LAB_RC" "2"
+  _contiene "stdout en claude" "$LAB_OUT" '"decision":"block"'
+  _no_vacio "stderr en claude" "$LAB_ERR"
+
+  _sembrar_turno_completo
+  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code en cursor" "$LAB_RC" "0"
+  _contiene "stdout en cursor" "$LAB_OUT" '"followup_message"'
+  _no_contiene "stdout en cursor" "$LAB_OUT" '"decision"'
+  _vacio "stderr en cursor" "$LAB_ERR"
+}
+
+# Dejar pasar tambien tiene forma: en claude es silencio; en cursor hay que
+# emitir JSON, y ademas cambia segun la fase.
+caso_g6_permiso_por_target() {
+  lab_run prompt claude "$(lab_payload_prompt 'un prompt sin sentinel')"
+  _vacio "stdout en claude" "$LAB_OUT"
+
+  lab_run prompt cursor "$(lab_payload_prompt 'un prompt sin sentinel')"
+  _igual "stdout en cursor, fase prompt" "$LAB_OUT" '{"continue":true}'
+
+  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "stdout en cursor, fase stop" "$LAB_OUT" '{}'
+}
+
+caso_g6_presupuesto_agotado_por_target() {
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  lab_run stop cursor "$(lab_payload_stop)" "$(lab_transcript_asistente "$_TEXTO_LLANO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" '"followup_message"'
+  _contiene "stdout" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
+  _no_contiene "stdout" "$LAB_OUT" '"continue":false'
+}
+
+# Armar tambien cambia de forma por target Y por fase. Asimetria grabada: en
+# cursor el contrato se entrega SOLO en la fase de sesion; en la fase de prompt
+# el turno se arma (queda estado) pero el contrato no se inyecta.
+caso_g6_armado_por_target() {
+  lab_run session cursor "$(lab_payload_session 'continuar la tarea -saikit del turno anterior')"
+  _contiene "stdout en cursor, fase session" "$LAB_OUT" '"additional_context"'
+  _contiene "stdout en cursor, fase session" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+
+  lab_limpiar_estado
+  lab_run prompt cursor "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
+  _igual "stdout en cursor, fase prompt" "$LAB_OUT" '{"continue":true}'
+  if ! lab_hay_estado; then _mal "en cursor el turno se arma igual aunque el contrato no se inyecte"; fi
+
+  lab_limpiar_estado
+  lab_run session claude "$(lab_payload_session 'continuar la tarea -saikit del turno anterior')"
+  _contiene "stdout en claude, fase session" "$LAB_OUT" '"hookEventName":"UserPromptSubmit"'
+}
+
+# --------------------------------------------------------------------- indice
+# Un caso que no este en ninguna lista NO CORRE. La bateria de comportamiento
+# verifica que no haya huerfanos; sin ese chequeo, un caso podria quedar fuera
+# por un dedazo y nadie se enteraria.
+GATES="LAB G1 G2 G3 G4 G5 G6"
+
+casos_de_gate() { eval "printf '%s' \"\${CASOS_$1}\""; }
+
+todos_los_casos() {
+  for g in $GATES; do casos_de_gate "$g"; printf ' '; done
+}
