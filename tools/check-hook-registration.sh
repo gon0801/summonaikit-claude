@@ -24,11 +24,31 @@ HOOK_NAME='summonaikit-harness.sh'
 SETTINGS="${HOME:-}/.claude/settings.json"
 LOCAL_SETTINGS=''
 
+reportar() { printf '%s\n' "$*"; }
+
+# Un flag sin valor hacia fallar `shift 2` SIN consumir nada, y el `while`
+# giraba para siempre: medido con `timeout`, rc=124 (Task 0.4). No era un exit
+# code equivocado — era un cuelgue, en un script que corre en cada SessionStart.
+#
+# Se sale con 0 y no con error a proposito: el contrato de este archivo es salir
+# 0 SIEMPRE (fail-open, Core Rule 1) y comunicar por texto, y sus dos llamadores
+# —el instalador y el heal— lo asumen. Una invocacion que no se pudo atender es
+# exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings)       SETTINGS="${2:-}"; shift 2 ;;
-    --local-settings) LOCAL_SETTINGS="${2:-}"; shift 2 ;;
-    --hook-name)      HOOK_NAME="${2:-}"; shift 2 ;;
+    --settings|--local-settings|--hook-name)
+      if [ $# -lt 2 ]; then
+        reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
+        reportar "              No se afirma que el registro falte: no se pudo mirar."
+        exit 0
+      fi
+      case "$1" in
+        --settings)       SETTINGS="$2" ;;
+        --local-settings) LOCAL_SETTINGS="$2" ;;
+        --hook-name)      HOOK_NAME="$2" ;;
+      esac
+      shift 2
+      ;;
     -h|--help)        sed -n '2,20p' "$0"; exit 0 ;;
     *)                shift ;;
   esac
@@ -40,8 +60,6 @@ done
 if [ -z "$LOCAL_SETTINGS" ]; then
   LOCAL_SETTINGS="$(dirname "$SETTINGS")/settings.local.json"
 fi
-
-reportar() { printf '%s\n' "$*"; }
 
 python_bin=''
 for c in python3 python py; do
@@ -55,9 +73,38 @@ if [ -z "$python_bin" ]; then
 fi
 
 resultado="$("$python_bin" - "$SETTINGS" "$LOCAL_SETTINGS" "$HOOK_NAME" <<'PY' 2>/dev/null
-import json, sys
+import json, re, shlex, sys
 
 settings, local, hook = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Nombrar el hook no es ejecutarlo: `echo summonaikit-harness.sh` contaba como
+# registro y el verificador callaba aunque el gate no corriera en ninguna fase
+# (Task 0.4). Se descarta el comando cuyo programa solo IMPRIME.
+#
+# Limite declarado: esto NO parsea shell. Lo que este archivo verifica es el
+# REGISTRO —que el settings nombre el hook donde corresponde—, no que el
+# comando vaya a ejecutarlo de verdad; un comando suficientemente retorcido que
+# lo mencione sin correrlo puede seguir contando. Cubrir eso pedia interpretar
+# shell, que es mas riesgo del que evita.
+SOLO_IMPRIMEN = {"echo", "printf", "true", "false", ":", "#", "rem"}
+ASIGNACION = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+def ejecuta(comando, hook):
+    if hook not in comando:
+        return False
+    try:
+        tokens = shlex.split(comando, posix=True)
+    except ValueError:
+        # Comillas sin cerrar: no se pudo tokenizar. Se cuenta igual, que es la
+        # postura de siempre — ante lo que no se pudo mirar, no se acusa.
+        return True
+    i = 0
+    while i < len(tokens) and ASIGNACION.match(tokens[i]):
+        i += 1
+    if i >= len(tokens):
+        return True
+    programa = tokens[i].replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return programa not in SOLO_IMPRIMEN
 # Las fases que el gate necesita para funcionar. Si falta cualquiera, el hook
 # existe pero deja de correr en ese punto del turno.
 ESPERADAS = ["UserPromptSubmit", "PostToolUse", "Stop"]
@@ -86,7 +133,7 @@ for path in (settings, local):
             for entrada in grupo.get("hooks", []) or []:
                 if not isinstance(entrada, dict):
                     continue
-                if hook in str(entrada.get("command", "")):
+                if ejecuta(str(entrada.get("command", "")), hook):
                     registradas.add(fase)
 
 faltantes = [f for f in ESPERADAS if f not in registradas]
@@ -125,8 +172,19 @@ if [ -z "$faltantes" ]; then
   exit 0
 fi
 
+# Faltan fases, pero hubo algo que NO se pudo leer: esas fases podrian estar
+# registradas justo ahi. Afirmar que el gate no corre seria exactamente la
+# alarma falsa que entrena al operador a ignorar el aviso (Core Rule 2,
+# Task 0.4). Solo se puede afirmar ausencia cuando se leyo TODO.
+if [ -n "$ilegibles" ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta(n) $faltantes en lo que SI se pudo leer,"
+  reportar "              pero hay settings ilegible(s) que podrian registrarlas: $ilegibles"
+  reportar "              No se afirma que el gate deje de correr: esa parte no se pudo mirar."
+  reportar "              revisar: $SETTINGS"
+  exit 0
+fi
+
 reportar "[summonaikit] REGISTRO DEL HOOK INCOMPLETO — el gate NO corre en: $faltantes"
 reportar "              El archivo del hook puede estar perfecto: esto es el registro, no el contenido."
 reportar "              revisar: $SETTINGS"
-[ -n "$ilegibles" ] && reportar "              ademas, settings ilegible(s) (unknown): $ilegibles"
 exit 0

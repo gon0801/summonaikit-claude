@@ -15,7 +15,9 @@ set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tool="$here/../tools/check-hook-registration.sh"
-tmp="$(mktemp -d)"
+# Comprobado: sin `tmp` los fixtures se escribirian en `/completo.json` y los
+# casos pasarian por el motivo equivocado (Task 0.4).
+tmp="$(mktemp -d)" || { echo "test_hook_registration: FAIL (mktemp)" >&2; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 
 fail=0
@@ -94,6 +96,83 @@ escribir_settings_completo "$tmp/local-completo.json"
 out="$(bash "$tool" --settings "$tmp/base-vacia.json" --local-settings "$tmp/local-completo.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 [ -z "$out" ] || malo "el registro en el local cuenta; esperaba silencio, imprimio: $out"
+
+# ============================================================================
+# Task 0.4 — los tres defectos de la revision cruzada de la Phase 0 (2026-08-10)
+# ============================================================================
+
+# ------------------------------------------- 7) invocacion mal formada: no gira
+caso "un flag SIN valor no cuelga (medido: giraba para siempre)"
+# `timeout` es el unico que puede afirmar esto: el defecto original no era un
+# exit code equivocado, era que el `while` no terminaba nunca. Sin el tope, este
+# caso colgaria la bateria entera en vez de reportar.
+out="$(timeout 5 bash "$tool" --settings 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "sigue colgado: el bucle de argumentos no termina"
+[ "$rc" -eq 0 ] || malo "fail-open roto: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' \
+  || malo "una invocacion que no se pudo atender es unknown, no silencio: $out"
+
+caso "un flag desconocido tampoco gira"
+out="$(timeout 5 bash "$tool" --no-existe-este-flag 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "un flag desconocido cuelga el bucle"
+
+# ------------------------------- 8) mencionar el hook no es tenerlo registrado
+caso "un comando que solo NOMBRA el hook sin ejecutarlo NO cuenta como registro"
+cat > "$tmp/mencion.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "echo summonaikit-harness.sh" } ] } ],
+    "PostToolUse":      [ { "hooks": [ { "type": "command", "command": "printf '%s' summonaikit-harness.sh" } ] } ],
+    "Stop":             [ { "hooks": [ { "type": "command", "command": "echo summonaikit-harness.sh" } ] } ]
+  }
+}
+JSON
+out="$(bash "$tool" --settings "$tmp/mencion.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -n "$out" ] || malo "un settings que solo menciona el hook quedo en SILENCIO: el gate no corre en ninguna fase"
+printf '%s' "$out" | grep -qi 'UserPromptSubmit' || malo "no nombra UserPromptSubmit, que solo se menciona"
+
+caso "el registro REAL, con env vars por delante y bash -c, sigue contando"
+# Guardia contra el arreglo de arriba: la forma que usa el settings de verdad
+# lleva asignaciones de entorno antes del programa y el hook adentro de un
+# `bash -c '...'`. Si el arreglo la rompiera, el verificador gritaria en cada
+# arranque sobre un registro que SI existe -- una alarma falsa perpetua.
+escribir_settings_completo "$tmp/real.json"
+out="$(bash "$tool" --settings "$tmp/real.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "el registro real dejo de contar como registro: $out"
+
+# ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
+caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"
+python - "$tmp/completo.json" "$tmp/parcial2.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+del d['hooks']['Stop']
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+printf '{ "hooks": { roto\n' > "$tmp/local-roto.json"
+out="$(bash "$tool" --settings "$tmp/parcial2.json" --local-settings "$tmp/local-roto.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' \
+  || malo "Core Rule 2: con un settings ilegible, la fase faltante podria estar ahi => unknown"
+printf '%s' "$out" | grep -qi 'el gate NO corre' \
+  && malo "afirma ausencia sobre una fase que podria vivir en el archivo que no se pudo leer"
+
+# --------------- 10) el reporte distingue ausencia OBSERVADA de no observada
+# Sin esto, un mutante que llame `unknown` a todo --o que reporte todo como
+# INCOMPLETO-- pasaria los casos de arriba: los dos dicen algo, y hasta ahora
+# los asserts solo miraban que dijeran ALGO.
+caso "ausencia OBSERVADA (todo legible) se afirma, y no se disfraza de unknown"
+out="$(bash "$tool" --settings "$tmp/vacio.json" 2>&1)"
+printf '%s' "$out" | grep -qi 'el gate NO corre' \
+  || malo "con todo legible SI se puede afirmar la ausencia, y hay que afirmarla"
+printf '%s' "$out" | grep -qi 'unknown' \
+  && malo "una ausencia observada no es unknown"
+
+caso "no observado (settings inexistente) NO se reporta como incompleto"
+out="$(bash "$tool" --settings "$tmp/no-existe.json" 2>&1)"
+printf '%s' "$out" | grep -qi 'el gate NO corre' \
+  && malo "no se afirma que el gate no corre a partir de un archivo que no se pudo mirar"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

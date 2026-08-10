@@ -424,6 +424,27 @@ Los confirmados son las Tasks **0.4**, **0.5** y **1.5**; los siete sin
 verificar quedan escritos dentro de esas tareas, marcados como tales, para que
 nadie los cuente entre lo demostrado.
 
+#### Lo corregido en la Task 0.4 (`check-hook-registration.sh`)
+
+- **El cuelgue sale `unknown` con exit 0, no con error.** Podría haber salido
+  `!= 0`, pero el contrato de este archivo es salir 0 *siempre* y comunicar por
+  texto, y sus dos llamadores —el instalador y el heal— lo asumen. Una
+  invocación que no se pudo atender *es* `unknown`: no se miró nada.
+- **Mencionar el hook ya no es ejecutarlo**: se descarta el comando cuyo
+  programa sólo imprime (`echo`, `printf`, …), saltando las asignaciones de
+  entorno que el registro real lleva por delante. **Límite declarado**: esto no
+  parsea shell. Lo que se verifica es el *registro* —que el settings nombre el
+  hook—, no que el comando vaya a ejecutarlo; un comando suficientemente
+  retorcido puede seguir contando. Cubrir eso pedía interpretar shell, más
+  riesgo del que evita.
+- **Sólo se afirma ausencia cuando se leyó todo.** Con un settings ilegible
+  presente, las fases que faltan se reportan `unknown`: podrían estar
+  registradas justo en el archivo que no se pudo abrir.
+
+**Medido**: 3 mutaciones, 3 atrapadas (2 asertos cada una); contra el
+`settings.json` real el verificador sigue en silencio, así que el arreglo no
+convirtió un registro válido en alarma.
+
 ### Convivencia con quality-kit
 
 `saikit-gate-heal.ps1` aplica los dos parches a 4 perfiles (`.claude`, `.codex`,
