@@ -400,6 +400,90 @@ La costura es **por host**: quality-kit saltea cualquier archivo que lleve el
 marcador de propiedad. Un condicional. `.codex`/`.cursor`/`.agents` no cambian.
 Ese cambio se mergea ANTES de instalar lo nuestro.
 
+### La costura (2026-08-10, Task 2.3): vive en `saikit-gate-heal.ps1`
+
+**El criterio del skip es a propósito más ancho que el del instalador.** El
+instalador exige el marcador en la **línea 2 exacta** y trata cualquier otra
+posición como *desconocido*; el heal saltea ante el marcador en **cualquier
+línea**. No es una inconsistencia: los dos convergen en *no escribir*, que es lo
+único que hace falta para que no se pisen. Para el escritor por anclas, una
+señal de propiedad ambigua no habilita a parchear — abstenerse es la única
+opción segura, y es la que el fixture del marcador fuera de la línea 2 fija.
+
+**El skip corta antes de evaluar anclas.** Un archivo nuestro no tiene por qué
+traer las anclas del vendor: evaluarlas primero reportaría `ANCLAS-CAMBIARON`
+en cada arranque sobre un archivo que jamás se va a parchear ahí — una alarma
+falsa perpetua, que es exactamente cómo se entrena a un operador a ignorar los
+avisos.
+
+**El salto se dice, y con `-Quiet` no.** Es una decisión declarada: la línea del
+marcador es el dato diagnóstico y `Format-Table` la recortaría, así que va como
+línea propia; pero una vez instalado lo nuestro el salto es el estado NORMAL de
+cada arranque, y repetirlo en cada `SessionStart` (que corre con `-Quiet`) sería
+ruido perpetuo. Lo que **no** depende de `-Quiet` es un parche sin aplicar: eso
+sigue gritando como hoy.
+
+**No se pierde gate al saltear**: la fuente de este repo trae el sentinel y el
+aviso de revisión ya adentro, byte a byte (Task 2.1).
+
+**Cuándo entra en efecto.** Medido hoy: el hook vivo **todavía no lleva el
+marcador** (0 ocurrencias), así que el heal sigue parcheando exactamente como
+siempre. La costura empieza a actuar recién cuando la Task 2.4 instale — que es
+justo el orden que esta tarea pedía: mergear el skip *antes* de instalar.
+
+### El registro, cableado al heal (Task 0.3 + 2.3)
+
+`tools/check-hook-registration.sh` se conecta al final de `saikit-gate-heal.ps1`,
+el único script propio que ya corre en cada `SessionStart`. Advisory puro: nunca
+mueve el exit code, que sigue siendo 0 siempre.
+
+- **Se corre sólo si hay `settings.json` o `settings.local.json`** en el perfil.
+  Sin ninguno de los dos no hay registro que verificar: no es un perfil con el
+  gate desregistrado, es un perfil que no existe.
+- **Su salida se imprime tal cual, también con `-Quiet`.** El verificador ya
+  trae su propia política de ruido —calla cuando el registro está completo— así
+  que cuando habla es porque el gate no corre en alguna fase, y eso no es ruido
+  de éxito.
+- **Sin verificador o sin `bash` ⇒ `unknown`**, nunca "el registro falta"
+  (Core Rule 2). Ese aviso sí queda bajo `-Quiet`.
+- La ruta sale de `-RegistrationCheck`, o del primer candidato que exista entre
+  `~/.claude/hooks/` y el repo (`SAIKIT_CLAUDE_REPO`, por defecto
+  `C:\dev\summonaikit-claude`).
+
+Medido contra el `settings.json` real: el registro está completo en las 3 fases,
+así que el cableado **no agrega una sola línea** al arranque de verdad.
+
+### Cómo quedó cubierto, y qué no
+
+La batería de `quality-kit` pasa de 416 a **443 asertos** (grupos `3n` y `3o`).
+Del lado de este repo, `tests/test_quality_kit_skip.sh` mira los **dos
+artefactos reales a la vez** —nuestra fuente y el heal— porque el marcador es de
+acá: si un día cambia su prefijo, la batería del kit seguiría verde con su
+propio literal y la costura se rompería en silencio.
+
+**Lo que la medición demostró**, en este orden:
+
+1. **Rojo previo**: sin la implementación caen **17 asertos** de los nuevos, con
+   los 416 preexistentes intactos.
+2. **Mutación del criterio** (`cualquier línea` ⇒ `sólo la línea 2`): mata los 3
+   asertos del marcador fuera de posición.
+3. **Mutación de la guarda de settings** (correr el verificador siempre): mata
+   el caso "sin settings no hay registro que verificar".
+
+**Defecto propio, encontrado por la mutación 2 y corregido.** El fixture del
+marcador fuera de la línea 2 lo insertaba **adentro del ancla B**, así que
+sobrevivía a esa mutación por el motivo equivocado —el ancla rota, no el skip—.
+Movido a la línea en blanco entre las anclas A y B, el caso mata la mutación. Es
+la razón por la que la batería de mutación existe: un caso verde no dice por qué
+está verde.
+
+**Lo que NO está sostenido por medición, declarado.** Que el skip se evalúe
+*antes* del chequeo de anclas es una afirmación sostenida por lectura: mover el
+bloque después no cambia la salida observable, porque en ambos órdenes el estado
+que se reporta para ese hook es el del skip. Lo que sí está medido es su
+consecuencia —un archivo salteado nunca aparece como `ANCLAS-CAMBIARON`—, y esa
+la mata la mutación del criterio.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
