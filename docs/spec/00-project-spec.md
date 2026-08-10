@@ -389,6 +389,41 @@ del CRLF es un tercero de la misma clase:
 Las tres son afirmaciones del código sostenidas por lectura, no por medición. Se
 escriben acá para que nadie las cuente entre lo que la batería demostró.
 
+### Revisión cruzada de las Phases 0 y 1 (Codex, 2026-08-10)
+
+Una ronda por fase, con el repo como directorio de trabajo en solo lectura.
+**16 hallazgos; 8 confirmados, 1 descartado, 7 sin verificar a fondo.** Ninguno
+se tomó al pie de la letra: lo que sigue es lo que quedó tras comprobarlo.
+
+**Confirmado midiendo:**
+
+- `check-hook-registration.sh` **se cuelga** con un flag sin valor (`shift 2`
+  falla y el `while` gira): `rc=124` con `timeout`. Corre en cada
+  `SessionStart` desde la Task 2.3.
+- **5 fixtures no son JSON válido** (los 4 del escenario 16 y una línea del
+  transcript del 14): `"cwd": "C:\dev\demo"` — `\d` no es escape válido. La
+  Task 1.4 declaró haber corregido exactamente esto. Hoy pasan porque el hook
+  trata el payload como texto opaco; las Tasks 3.1 y 3.2 lo cambian por un
+  parser real y ahí dejan de parsear.
+- **`run.sh` publica `PASS` sobre `unknown`.** Los tests declaran bien
+  `unknown — no se pudo mirar`; el runner colapsa eso en `PASS` y `OK`, así que
+  una máquina sin el hook vivo queda entera en verde. El defecto está en el
+  reporte, no en los tests.
+
+**Confirmado leyendo el código** (`tools/hook-acl.ps1`, el único código
+destructivo del repo): `Test-SidResolvable` devuelve `false` ante *cualquier*
+excepción y eso borra el ACE —Core Rule 2 violada donde más caro sale—;
+`-OrphansOnly` filtra la raíz pero no los descendientes; y un principal
+resoluble se *degrada* en la raíz pero se *elimina* en los hijos.
+
+**Descartado:** que `python3` resolviera al alias de WindowsApps y volviera todo
+`unknown`. Ejecuta bien, y el verificador da silencio contra el `settings.json`
+real.
+
+Los confirmados son las Tasks **0.4**, **0.5** y **1.5**; los siete sin
+verificar quedan escritos dentro de esas tareas, marcados como tales, para que
+nadie los cuente entre lo demostrado.
+
 ### Convivencia con quality-kit
 
 `saikit-gate-heal.ps1` aplica los dos parches a 4 perfiles (`.claude`, `.codex`,
