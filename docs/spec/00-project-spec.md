@@ -331,6 +331,57 @@ Por REEMPLAZO, no por anclas. Requisitos, cada uno por un modo de falla real:
   apuntar al hook, el archivo puede estar perfecto y el gate no existir. Ese es
   el modo de falla más silencioso del sistema y hoy nada lo detecta.
 
+### El instalador (2026-08-09, Task 2.2): `tools/install-hook.sh`
+
+Los tres estados se deciden por **dos preguntas baratas y en ese orden**, no por
+una heurística: ¿la línea 2 es el marcador declarado? Si sí, es *nuestro* y
+`cmp` contra la fuente dice si hay que reparar. Si no, ¿su sha256 figura en
+`hooks/vendor-manifest.sha256`? Si sí es *vendor conocido*; si no, *desconocido*
+y no se toca. Un archivo que lleve el marcador **fuera** de la línea 2 cuenta
+como desconocido: puede ser una versión futura u otra herramienta, y ninguna de
+las dos habilita a pisarlo.
+
+**El manifiesto es una decisión, no un trámite.** Cada línea afirma "este
+contenido exacto ya lo miramos y archivarlo no destruye nada". Hoy tiene una
+sola entrada, el archivo vivo medido (`0ec5dc04…6130`, 40333 bytes), y una
+corrida `--dry-run` contra el destino real confirma que clasifica como *vendor
+conocido* — o sea que el manifiesto describe la máquina, no una suposición.
+
+**Falla CERRADO, y es la excepción declarada a la Core Rule 1.** Exit `3`
+destino desconocido, `4` no observable, `5` la escritura no se pudo completar,
+`2` invocación o fuente inválida. Cualquier código != 0 significa lo mismo para
+el operador: *el destino quedó intacto*. Y `unknown` no se confunde con
+"desconocido": no haber podido leer el manifiesto no es haber visto que el hash
+falta (Core Rule 2), así que ese caso reporta `unknown` y no acusa al destino.
+
+**Lo que el instalador se niega a hacer**, cada cosa por un modo de falla real:
+
+- No reescribe un destino ya idéntico. Un `mv` gratis cambia el mtime, que es la
+  única señal barata de cuándo cambió de verdad el archivo que gatea cada turno.
+- No instala una fuente sin marcador: lo que se instale hoy sin identidad se
+  clasifica *desconocido* mañana y el próximo install se planta.
+- No valida la fuente sino **el temporal**, que es el archivo que va a quedar:
+  `bash -n` más `cmp` byte a byte contra la fuente. El temporal se crea en el
+  mismo directorio del destino a propósito — `mv` solo es atómico dentro del
+  mismo sistema de archivos.
+
+**Backups**: `<destdir>/saikit-backups/<nombre>.<vendor|nuestro>.<YYYYmmdd-HHMMSS>.bak`,
+con desempate numérico si dos corridas caen en el mismo segundo. Es el contrato
+que consume el `--restore-vendor` de la Task 2.4.
+
+**Lo que la suite NO puede falsificar, declarado.** La batería de mutación
+(9 mutaciones, 7 atrapadas) dejó dos guardias en pie que ningún caso mata:
+
+1. El `cmp` del temporal contra la fuente. Para que falle habría que lograr que
+   la copia transforme bytes, y `cat` no lo hace por pedido: el guardia existe
+   por el CRLF que el spec advierte, no porque un test lo pueda inducir.
+2. La atomicidad del `mv`. Mover el temporal fuera del directorio del destino no
+   rompe ningún caso: la pérdida solo se observa con una interrupción a mitad de
+   escritura, que la suite no inyecta.
+
+Las dos son afirmaciones del código sostenidas por lectura, no por medición. Se
+escriben acá para que nadie las cuente entre lo que la batería demostró.
+
 ### Convivencia con quality-kit
 
 `saikit-gate-heal.ps1` aplica los dos parches a 4 perfiles (`.claude`, `.codex`,

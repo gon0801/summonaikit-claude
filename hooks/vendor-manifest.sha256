@@ -1,0 +1,16 @@
+# Manifiesto de destinos CONOCIDOS — Task 2.2.
+#
+# Que afirma cada linea: "este contenido exacto ya lo miramos, sabemos de donde
+# viene, y archivarlo y reemplazarlo no destruye nada". Es el unico permiso que
+# el instalador acepta para sobrescribir un archivo que NO lleva el marcador de
+# propiedad. Todo lo que no este aca se trata como DESCONOCIDO: se reporta y no
+# se toca, porque "no es nuestro => sobrescribir" es como se destruye en
+# silencio el cambio legitimo de otro.
+#
+# NO es una lista de versiones del vendor puro: son estados medidos del archivo
+# vivo, parches locales incluidos. Agregar una linea aca es una decision, no un
+# tramite: exige haber comparado el archivo y saber que se pierde al archivarlo.
+#
+# Formato: <sha256>  <etiqueta>.  Lineas vacias y `#` se ignoran.
+
+0ec5dc045017e9809667a66bfdea5c11e5fd11074bd3464cc132c487103b6130  archivo vivo 2026-08-09: bash del vendor + parches locales de quality-kit (SAIKIT-SENTINEL-GATE v1, SAIKIT-REVIEW-NOTICE v1). 40333 bytes, LF puro. Es la fuente byte a byte que adopto la Task 2.1
