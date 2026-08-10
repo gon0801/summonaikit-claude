@@ -677,6 +677,112 @@ Lo corregido:
 Cada uno tiene su caso en la batería (`TEST GROUP 3p`), incluido el del
 verificador colgado —que se mata y se reporta— y el del `unknown` bajo `-Quiet`.
 
+### La puesta en producción (2026-08-10, Task 2.4): el staging, y la vuelta atrás
+
+**El override de proyecto no es una preferencia del host.** Es el propio comando
+registrado en `settings.json` el que lo hace, y esto se midió, no se supuso:
+
+```
+h="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/hooks/summonaikit-harness.sh"
+[ -f "$h" ] || h="$HOME/.claude/hooks/summonaikit-harness.sh"
+```
+
+Tres consecuencias que fijan el diseño del staging:
+
+1. **Corre UN solo hook por turno**, no dos. No es que el del proyecto se sume
+   al del perfil: el comando elige uno.
+2. **El estado también queda aislado.** El hook deriva `STATE_ROOT` de su propia
+   ubicación (`$(dirname "$0")/state`), así que el staging escribe en
+   `<repo>/.claude/hooks/state/` y no toca el estado del perfil.
+3. **Hace falta un repo git.** La ruta la resuelve `git rev-parse
+   --show-toplevel`; en un directorio suelto el archivo quedaría puesto y no
+   correría nunca — un staging que miente. `tools/stage-override.sh` lo rechaza.
+
+**La herramienta no lee el registro para creerle: lo ejecuta.** Un `settings.json`
+al que le sacaron el fallback al proyecto se ve igual de bien en una lectura
+superficial y convierte el staging en una ilusión (el archivo puesto, el turno
+gateado por el global). La medición corre el comando registrado con el repo como
+cwd y un **`HOME` desechable**, donde el fallback del perfil apunta a un archivo
+que no existe: si algo corrió, fue el override. De paso ningún estado puede caer
+en el perfil real. Lo que la medición dejó se borra: el turno real tiene que
+arrancar con el estado en cero.
+
+**`--restore-vendor` vive en el instalador y no en un script aparte**, porque la
+vuelta atrás tiene los mismos modos de falla que la ida. Lo que se le exige:
+
+- **Elige por el sello del nombre, no por orden alfabético.** El desempate `-N`
+  del mismo segundo cae *antes* que el que no lo lleva (`-` es 0x2D y `.` es
+  0x2E), así que un `sort` a secas restaura el más VIEJO de los dos en silencio.
+  Medido con una mutación: restaura `MEDIO` donde correspondía `NUEVO`.
+- **Archiva el destino antes de pisarlo.** Si no, deshacer es un camino de una
+  sola dirección y el que se arrepiente no tiene a qué volver.
+- **No pisa un destino DESCONOCIDO.** Que el comando se llame "restaurar" no lo
+  habilita a destruir el cambio de otro.
+- **Exit 6 ≠ exit 4.** "Se miró y no hay backup" es un hecho observado; "no se
+  pudo listar el directorio" es `unknown` (Core Rule 2). Confundirlos deja al
+  operador sin saber si buscar el archivo o arreglar permisos.
+- **Idempotente, y la comparación va antes de clasificar**: si el destino ya es
+  byte a byte el backup, no hay nada que decidir. Sin ese orden, una segunda
+  restauración clasificaría como DESCONOCIDO el vendor que ella misma dejó (no
+  lleva marcador y su hash no tiene por qué estar en el manifiesto) y abortaría
+  acusando a su propio resultado.
+
+La ida y la vuelta comparten `preparar_temporal` / `archivar_destino` /
+`publicar_temporal`. No es estilo: dos copias de la misma política divergen en
+silencio, que es exactamente lo que la Task 0.5 encontró en `hook-acl.ps1`.
+
+**El ensayo, sobre los archivos reales y ANTES de tocar el global** (repo
+descartable `C:\dev\saikit-staging`): se puso ahí una copia del hook vivo, el
+instalador lo clasificó *vendor conocido* y lo reemplazó archivándolo, y
+`--restore-vendor` lo devolvió **byte a byte** (`cmp` contra el vivo). O sea que
+la vuelta atrás se probó con el mismo archivo, el mismo manifiesto y el mismo
+código que iban a correr sobre el perfil.
+
+**Lo que el staging midió del gate** (comando registrado real, `HOME` desechable):
+un prompt sin sentinel **no crea estado**; uno con `-saikit` arma; y el `Stop` de
+ese turno armado **bloquea** (`decision: block`) con y sin `SUMMONAIKIT_HOOK_TARGET`.
+
+**El install global, verificado punto por punto.** El destino clasificó *vendor
+conocido* y quedó archivado en
+`~/.claude/hooks/saikit-backups/summonaikit-harness.sh.vendor.20260810-161037.bak`.
+La afirmación fuerte: `sed '2d'` del archivo vivo reproduce ese backup byte a
+byte — o sea que **el único cambio en el archivo que gatea cada turno es la línea
+del marcador**. Una segunda corrida dice `YA AL DIA` y no reescribe; el
+verificador del registro calla (las 3 fases siguen registradas); y
+`--restore-vendor --dry-run` confirma que la vuelta atrás está disponible sin
+ejecutarla.
+
+**La costura de la Task 2.3 entró en efecto, y se midió el día que correspondía.**
+Aquella tarea dejó declarado que el heal seguiría parcheando hasta que la 2.4
+instalara. Corrido después del install, `saikit-gate-heal.ps1 -Check` reporta
+`saltado-propiedad` en los dos parches sobre `~\.claude\hooks\...` y
+`ya-parchado` en los otros tres perfiles: la convivencia funciona en la máquina
+real, no sólo en fixtures.
+
+**Un test de la Task 2.1 se puso rojo por haber cumplido su propósito**, y el
+arreglo es parte de esta tarea. `test_hook_source.sh` afirmaba que `sed '2d'` de
+la fuente devuelve el archivo vivo — cierto mientras el vivo fuera el del vendor,
+falso desde el install. El archivo vivo tiene ahora **dos estados sanos** y el
+test distingue cuál corresponde: sin marcador ⇒ la resta del marcador lo
+reproduce (la afirmación original de la 2.1); con marcador ⇒ es la fuente entera,
+sin restar nada. Lo que sigue siendo FAIL, y no una nota, es un vivo que se
+declare nuestro y difiera de la fuente: ahí el perfil quedó desincronizado y hay
+que correr el instalador. Las tres ramas se verificaron por separado (vivo real,
+backup del vendor, y un archivo con marcador pero distinto).
+
+**Lo que NO se puede medir sin una sesión nueva, declarado.** Claude Code
+fotografía los hooks al arrancar, así que "gatea turnos reales" en vivo es un
+paso con persona adelante, igual que la captura de la Task 1.4.
+`tools/stage-override.sh` imprime el procedimiento al terminar.
+
+**Y una mitad de la DoD es incumplible hoy, por A10.** La tarea pedía que tras el
+install global "un turno `-saikit` real bloquee". Con recibo y evidencia
+presentes eso depende de la rama exclusiva de Claude, que es justo la que A10
+impide que corra: el turno real medido en la 1.4 **cerró limpio**. Lo que sí
+queda afirmado es que el gate CORRE y que bloquea cuando falta el recibo — la
+exigencia de secuencia de roles vuelve a ser alcanzable recién con la Task 3.7,
+que arregla A9 y A10 juntos.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

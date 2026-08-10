@@ -86,10 +86,35 @@ n_marcador="$(awk -v p="^$MARCADOR_PREFIJO" '$0 ~ p { n++ } END { print n+0 }' "
 [ "$n_marcador" = "1" ] || malo "esperaba exactamente 1 marcador, hay $n_marcador"
 
 # ------------------------------------- 3) byte a byte contra el archivo vivo
+#
+# El archivo vivo tiene DOS estados sanos, y cual corresponde depende de si la
+# Task 2.4 ya instalo:
+#
+#   - todavia el del vendor (sin marcador) => `sed '2d'` de la fuente lo devuelve
+#     byte a byte. Es la afirmacion con que la Task 2.1 adopto el archivo.
+#   - ya instalado el nuestro (con marcador) => la fuente y el vivo son el MISMO
+#     archivo, sin quitarle nada.
+#
+# Escribirlo con un solo caso era correcto hasta el dia del install, y ese dia se
+# puso rojo por haber cumplido su proposito. Lo que NO es sano —y por eso sigue
+# siendo un FAIL y no una nota— es un vivo que lleve el marcador y difiera de la
+# fuente: ahi el perfil quedo desincronizado y hay que correr el instalador.
 if [ ! -r "$vivo" ]; then
   echo "test_hook_source: unknown — el hook vivo no esta en esta maquina ($vivo)."
   echo "                  No se afirma que la fuente lo reproduzca byte a byte:"
   echo "                  no se pudo mirar. El caso de comportamiento sigue corriendo."
+elif grep -q "^$MARCADOR_PREFIJO" "$vivo"; then
+  # Criterio ANCHO (marcador en cualquier linea), el mismo que usa el skip de
+  # quality-kit: si el vivo se declara nuestro de cualquier forma, lo que
+  # corresponde exigir es igualdad total, no la resta del marcador.
+  caso "el vivo ya es el nuestro (Task 2.4 instalada) => identico a la fuente, sin restar nada"
+  if ! cmp -s "$fuente" "$vivo"; then
+    malo "el hook vivo se declara nuestro pero NO es la fuente del repo: el perfil quedo desincronizado"
+    printf '      vivo:   %s bytes\n' "$(wc -c < "$vivo" | tr -d ' ')" >&2
+    printf '      fuente: %s bytes\n' "$(wc -c < "$fuente" | tr -d ' ')" >&2
+    diff -u "$vivo" "$fuente" 2>/dev/null | head -n 20 >&2
+    printf '      se arregla con: bash tools/install-hook.sh\n' >&2
+  fi
 else
   caso "quitarle el marcador devuelve el archivo vivo, byte a byte"
   sin_marcador="$tmp/sin-marcador.sh"
