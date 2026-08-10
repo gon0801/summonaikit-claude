@@ -154,12 +154,21 @@ else
   if [ -z "$dest_sha" ]; then
     estado='NO_OBSERVABLE'
     detalle="no se pudo calcular el sha256 del destino"
+  # El `\r` se saca antes de comparar: en un checkout Windows el manifiesto
+  # puede llegar con CRLF, y ahi una linea que tenga SOLO el hash dejaria el
+  # `\r` pegado al campo 1. El vendor conocido pasaria a "desconocido" y el
+  # instalador se plantaria en una maquina y no en otra — la peor forma de
+  # romperse. `.gitattributes` ya lo fuerza a LF; esto cubre el archivo que
+  # llegue editado por otra herramienta.
   elif awk -v h="$dest_sha" '
+         { sub(/\r$/, "") }
          /^[[:space:]]*(#|$)/ { next }
          $1 == h { found = 1; exit }
          END { exit found ? 0 : 1 }' "$MANIFEST"; then
     estado='VENDOR_CONOCIDO'
-    detalle="$(awk -v h="$dest_sha" '$1 == h { $1 = ""; sub(/^[[:space:]]+/, ""); print; exit }' "$MANIFEST")"
+    detalle="$(awk -v h="$dest_sha" '
+         { sub(/\r$/, "") }
+         $1 == h { $1 = ""; sub(/^[[:space:]]+/, ""); print; exit }' "$MANIFEST")"
   else
     estado='DESCONOCIDO'
     detalle="sha256 $dest_sha, que no figura en el manifiesto"

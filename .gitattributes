@@ -13,3 +13,9 @@
 # no en otra, que es la peor forma de romperse.
 tests/fixtures/** text eol=lf
 tests/golden/**   text eol=lf
+
+# El manifiesto de destinos conocidos se parsea por campos: con CRLF, una linea
+# que tenga SOLO el hash deja el `\r` pegado al campo 1 y el vendor conocido
+# pasa a clasificarse "desconocido". El instalador ya tolera el `\r`, pero el
+# archivo no tiene por que llegar sucio.
+*.sha256 text eol=lf

@@ -214,6 +214,28 @@ out="$(bash "$tool" --dest "$dest" --source "$fuente" --manifest "$tmp/no-existe
 printf '%s' "$out" | grep -qi 'unknown' \
   || malo "Core Rule 2: sin manifiesto es unknown, no una acusacion al destino: $out"
 
+# ------------------------------------------- 8-bis) el manifiesto con CRLF
+# La maquina de este repo clona con `core.autocrlf=true`, y un manifiesto en
+# CRLF deja el `\r` pegado al ULTIMO campo: una linea con solo el hash pasaria a
+# ser `<hash>\r` y el vendor conocido se clasificaria DESCONOCIDO — el
+# instalador plantandose en una maquina y no en otra.
+#
+# DECLARADO: este caso pasa CON y SIN el `sub(/\r$/, "")` del instalador. El
+# gawk 5.4 de esta maquina ya descarta el `\r` al partir campos (medido), asi
+# que aca el guardia es portabilidad hacia los awk que no lo hacen (mawk,
+# busybox) y no un defecto corregido. El caso queda igual porque afirma el
+# REQUISITO —un manifiesto CRLF tiene que reconocerse— y ese requisito seguiria
+# valiendo el dia que cambie el awk. Quien lea "13 de 13" en esta bateria no
+# debe contar esta linea entre lo demostrado.
+caso "manifiesto con CRLF y una linea de solo hash => sigue reconociendo el vendor"
+nuevo_destino
+cp "$vendor" "$dest"
+mani_crlf="$tmp/manifiesto-crlf.sha256"
+printf '# comentario\r\n%s\r\n' "$vendor_sha" > "$mani_crlf"
+out="$(bash "$tool" --dest "$dest" --source "$fuente" --manifest "$mani_crlf" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un manifiesto en CRLF hizo fallar el reconocimiento (exit $rc): $out"
+cmp -s "$dest" "$fuente" || malo "no reemplazo el vendor listado en un manifiesto CRLF"
+
 # --------------------------------------------------------------- 9) dry-run
 caso "--dry-run clasifica y no escribe nada"
 nuevo_destino

@@ -370,7 +370,8 @@ con desempate numérico si dos corridas caen en el mismo segundo. Es el contrato
 que consume el `--restore-vendor` de la Task 2.4.
 
 **Lo que la suite NO puede falsificar, declarado.** La batería de mutación
-(9 mutaciones, 7 atrapadas) dejó dos guardias en pie que ningún caso mata:
+(9 mutaciones, 7 atrapadas) dejó dos guardias en pie que ningún caso mata, y el
+del CRLF es un tercero de la misma clase:
 
 1. El `cmp` del temporal contra la fuente. Para que falle habría que lograr que
    la copia transforme bytes, y `cat` no lo hace por pedido: el guardia existe
@@ -378,8 +379,14 @@ que consume el `--restore-vendor` de la Task 2.4.
 2. La atomicidad del `mv`. Mover el temporal fuera del directorio del destino no
    rompe ningún caso: la pérdida solo se observa con una interrupción a mitad de
    escritura, que la suite no inyecta.
+3. El `sub(/\r$/, "")` con que el manifiesto tolera CRLF. El caso que lo
+   ejercita pasa **con y sin** el arreglo: el gawk 5.4 de esta máquina ya
+   descarta el `\r` al partir campos (medido). El guardia es portabilidad hacia
+   los awk que no lo hacen; el caso afirma el requisito, no el guardia. La
+   protección que sí es efectiva acá es `*.sha256 text eol=lf` en
+   `.gitattributes`, que evita que el archivo llegue con CRLF.
 
-Las dos son afirmaciones del código sostenidas por lectura, no por medición. Se
+Las tres son afirmaciones del código sostenidas por lectura, no por medición. Se
 escriben acá para que nadie las cuente entre lo que la batería demostró.
 
 ### Convivencia con quality-kit
