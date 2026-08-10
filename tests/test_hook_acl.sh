@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Task 0.5 — la CLASIFICACION de `tools/hook-acl.ps1`, que es el unico codigo
+# destructivo del repo.
+#
+# Que se prueba y que no. Escribir ACL de verdad no es unit-testable (mismo
+# motivo declarado en las Tasks 0.1 y 0.2), pero la parte que decide QUE se
+# borra si lo es: es logica pura sobre un SID. Ahi es donde estaban los tres
+# defectos que rindio la revision cruzada, asi que ahi van los casos. Lo que
+# queda del lado no testeable se afirma con la auditoria sin `-Fix`, que
+# muestra que tocaria sin tocar nada.
+#
+# El script termina en `exit`, asi que no se puede dot-sourcear tal cual: con
+# SAIKIT_HOOKACL_LIB_ONLY=1 devuelve el control despues de definir sus
+# funciones y antes de ejecutar nada.
+#
+# Core Rule 4: jamas se corre contra `~/.claude`. Todo va contra un tmpdir.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+tool="$here/../tools/hook-acl.ps1"
+
+fail=0
+caso() { printf '  caso: %s\n' "$1"; }
+malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
+
+pwsh_bin=''
+for c in powershell.exe powershell pwsh; do
+  if command -v "$c" >/dev/null 2>&1; then pwsh_bin="$c"; break; fi
+done
+if [ -z "$pwsh_bin" ]; then
+  echo "  SKIP: no hay powershell en esta maquina."
+  echo "test_hook_acl: OK (skip declarado)"
+  exit 0
+fi
+
+tmp="$(mktemp -d)" || { echo "test_hook_acl: FAIL (mktemp)" >&2; exit 1; }
+trap 'rm -rf "$tmp"' EXIT
+
+if command -v cygpath >/dev/null 2>&1; then
+  tool_win="$(cygpath -w "$tool")"
+else
+  tool_win="$tool"
+fi
+
+# Corre un fragmento de PowerShell con las funciones del script ya cargadas.
+con_lib() {
+  SAIKIT_HOOKACL_LIB_ONLY=1 "$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -Command "
+    \$ErrorActionPreference = 'Stop'
+    . '$tool_win'
+    $1
+  " 2>&1
+}
+
+# ------------------------------------------------- 1) el modo biblioteca existe
+caso "el script se puede cargar sin ejecutar nada"
+out="$(con_lib "Write-Output 'cargado'")"
+printf '%s' "$out" | grep -q 'cargado' \
+  || malo "no se pudo cargar solo las funciones: $out"
+
+# --------------------------------- 2) resoluble / no resoluble / NO SE PUDO SABER
+# El defecto: `Test-SidResolvable` devolvia \$false ante CUALQUIER excepcion, y
+# ese \$false BORRA el ACE. Un fallo transitorio de resolucion (un controlador de
+# dominio que no contesta) alcanzaba para borrarle el acceso a una cuenta viva.
+caso "un SID vivo se clasifica resoluble"
+out="$(con_lib "Write-Output ([string](Test-SidResolvable 'S-1-5-18'))")"
+printf '%s' "$out" | grep -qi 'true' \
+  || malo "SYSTEM (S-1-5-18) tiene que ser resoluble: $out"
+
+caso "un SID bien formado que NO existe se clasifica no resoluble"
+out="$(con_lib "Write-Output ([string](Test-SidResolvable 'S-1-5-21-1111111111-2222222222-3333333333-4444'))")"
+printf '%s' "$out" | grep -qi 'false' \
+  || malo "una cuenta borrada tiene que dar False: $out"
+
+caso "lo que NO se pudo determinar no es 'no resoluble' (Core Rule 2)"
+# Se distingue por TIPO: IdentityNotMappedException es haber mirado y no
+# encontrar; cualquier otra excepcion es no haber podido mirar. El segundo caso
+# tiene que devolver \$null (unknown), no \$false.
+out="$(con_lib "
+  \$r = Test-SidResolvable 'esto-no-es-un-sid'
+  if (\$null -eq \$r) { Write-Output 'UNKNOWN' } else { Write-Output ('VALOR:' + [string]\$r) }
+")"
+printf '%s' "$out" | grep -q 'UNKNOWN' \
+  || malo "un SID que no se pudo evaluar debe dar unknown, no False: $out"
+
+# ------------------------------------- 3) la politica de reparacion es una sola
+# El defecto: en la raiz un principal resoluble se DEGRADABA a ReadAndExecute y
+# en los hijos se ELIMINABA entero. Y `-OrphansOnly` filtraba la raiz pero no
+# los descendientes, asi que borraba ACE de cuentas VIVAS.
+caso "la decision por hallazgo es unica: degradar / eliminar / no tocar"
+out="$(con_lib "
+  foreach (\$c in @(
+      @{ n='resoluble';  r=\$true  },
+      @{ n='huerfano';   r=\$false },
+      @{ n='unknown';    r=\$null  })) {
+    \$f = [pscustomobject]@{ Resolvable = \$c.r }
+    Write-Output (\$c.n + '=' + (Get-AclRepairAction -Finding \$f))
+  }
+")"
+printf '%s' "$out" | grep -q 'resoluble=degradar' || malo "un principal vivo se degrada, no se elimina: $out"
+printf '%s' "$out" | grep -q 'huerfano=eliminar'  || malo "una cuenta borrada se elimina: $out"
+printf '%s' "$out" | grep -q 'unknown=no-tocar'   || malo "ante lo que no se pudo determinar NO se toca: $out"
+
+caso "-OrphansOnly usa el MISMO criterio en la raiz y en los descendientes"
+out="$(con_lib "
+  \$vivo     = [pscustomobject]@{ Resolvable = \$true;  IsInherited = \$false }
+  \$huerfano = [pscustomobject]@{ Resolvable = \$false; IsInherited = \$false }
+  \$unknown  = [pscustomobject]@{ Resolvable = \$null;  IsInherited = \$false }
+  \$sel = @(Select-RepairableFinding -Findings @(\$vivo, \$huerfano, \$unknown) -OrphansOnlyMode)
+  Write-Output ('seleccionados=' + \$sel.Count)
+  foreach (\$s in \$sel) { Write-Output ('resolvable=' + [string]\$s.Resolvable) }
+")"
+printf '%s' "$out" | grep -q 'seleccionados=1' \
+  || malo "con -OrphansOnly solo entra el huerfano, ni el vivo ni el unknown: $out"
+printf '%s' "$out" | grep -qi 'resolvable=False' \
+  || malo "el unico seleccionado tiene que ser el no resoluble: $out"
+
+# ------------------------------------------------ 4) la auditoria no escribe
+caso "la auditoria sin -Fix sobre un arbol de prueba no toca nada"
+mkdir -p "$tmp/arbol/sub"
+printf 'x\n' > "$tmp/arbol/sub/archivo.txt"
+if command -v cygpath >/dev/null 2>&1; then
+  arbol_win="$(cygpath -w "$tmp/arbol")"
+else
+  arbol_win="$tmp/arbol"
+fi
+antes="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$arbol_win" >/dev/null 2>&1
+despues="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
+[ "$antes" = "$despues" ] || malo "la auditoria modifico el arbol"
+
+if [ "$fail" -ne 0 ]; then
+  echo "test_hook_acl: FAIL" >&2
+  exit 1
+fi
+echo "test_hook_acl: OK"

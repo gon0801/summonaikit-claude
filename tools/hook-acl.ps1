@@ -99,15 +99,57 @@ function ConvertTo-SidValue {
     }
 }
 
+# TRES estados, no dos (Task 0.5). Antes cualquier excepcion devolvia $false, y
+# ese $false BORRA el ACE: un fallo transitorio de resolucion --un controlador de
+# dominio que no contesta-- alcanzaba para quitarle el acceso a una cuenta VIVA.
+# Es la Core Rule 2 aplicada donde mas caro sale, porque este es el unico codigo
+# destructivo del repo.
+#
+#   $true   la cuenta existe
+#   $false  se miro y NO existe (IdentityNotMappedException): cuenta borrada
+#   $null   no se pudo determinar. No es lo mismo que no existir, y no se toca.
 function Test-SidResolvable {
     param([string]$SidValue)
     try {
         $sid = New-Object System.Security.Principal.SecurityIdentifier($SidValue)
         [void]$sid.Translate([System.Security.Principal.NTAccount])
         return $true
-    } catch {
+    } catch [System.Security.Principal.IdentityNotMappedException] {
         return $false
+    } catch {
+        # Incluye el SID mal formado: si no se pudo ni construir, tampoco se
+        # observo que la cuenta no exista.
+        return $null
     }
+}
+
+# La politica de reparacion, en UN solo lugar. Antes vivia duplicada: la raiz
+# degradaba a los principales vivos y los descendientes los eliminaban enteros
+# (Task 0.5). Dos copias de una decision son dos oportunidades de que diverjan,
+# y divergieron.
+function Get-AclRepairAction {
+    param($Finding)
+    if ($Finding.Resolvable -eq $true)  { return 'degradar' }
+    if ($Finding.Resolvable -eq $false) { return 'eliminar' }
+    return 'no-tocar'
+}
+
+# El filtro que decide QUE hallazgos entran a la correccion, tambien en un solo
+# lugar: `-OrphansOnly` acotaba la raiz pero NO los descendientes, asi que
+# `-OrphansOnly -Fix` sin `-RootOnly` borraba ACE explicitos de cuentas vivas.
+#
+# Lo heredado se excluye siempre: no se puede remover de un objeto sin romperle
+# la herencia. Se limpia corrigiendo el ancestro que lo tiene explicito.
+function Select-RepairableFinding {
+    param([object[]]$Findings, [switch]$OrphansOnlyMode, [switch]$IncludeInherited)
+    $sel = @($Findings | Where-Object { (Get-AclRepairAction -Finding $_) -ne 'no-tocar' })
+    if (-not $IncludeInherited) {
+        $sel = @($sel | Where-Object { -not $_.IsInherited })
+    }
+    if ($OrphansOnlyMode) {
+        $sel = @($sel | Where-Object { $_.Resolvable -eq $false })
+    }
+    return $sel
 }
 
 # `Get-Acl`/`Set-Acl` leen y persisten TODAS las secciones del descriptor, SACL
@@ -199,7 +241,9 @@ function Invoke-Audit {
     # Se usa donde un principal vivo tiene escritura legitima y quitarsela romperia
     # algo — `%TEMP%`, donde el sandbox de Codex si escribe.
     if ($script:OrphansOnly) {
-        $all = @($all | Where-Object { -not $_.Resolvable })
+        # `-eq $false` y no `-not`: con el tri-estado, `-not $null` daria $true y
+        # un hallazgo que NO se pudo evaluar se contaria como cuenta borrada.
+        $all = @($all | Where-Object { $_.Resolvable -eq $false })
     }
     return $all
 }
@@ -272,15 +316,13 @@ function Repair-HookAcl {
     # 2) Corregir la raiz. Los hijos con herencia activa se actualizan solos.
     $acl = Get-Dacl -TargetPath $RootPath
     $rootFindings = @(Get-AclFinding -TargetPath $RootPath -KeepSids $keep -Acl $acl)
-    if ($OrphansOnly) {
-        # Heredado excluido a proposito: no se puede remover de un objeto sin romper
-        # su herencia. Se limpia corriendo esta misma herramienta sobre el ancestro
-        # que lo tiene explicito, y la propagacion hace el resto.
-        $rootFindings = @($rootFindings | Where-Object { -not $_.Resolvable -and -not $_.IsInherited })
-    }
+    # En la raiz lo heredado SI puede entrar cuando no se pidio -OrphansOnly: es
+    # el unico lugar donde cortar la herencia (mas arriba) ya lo volvio explicito.
+    $rootFindings = @(Select-RepairableFinding -Findings $rootFindings `
+                        -OrphansOnlyMode:$OrphansOnly -IncludeInherited:(-not $OrphansOnly))
     foreach ($f in $rootFindings) {
         [void]$acl.RemoveAccessRuleSpecific($f.Rule)
-        if ($f.Resolvable) {
+        if ((Get-AclRepairAction -Finding $f) -eq 'degradar') {
             $downgraded = New-Object System.Security.AccessControl.FileSystemAccessRule(
                 $f.Rule.IdentityReference,
                 [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
@@ -301,12 +343,27 @@ function Repair-HookAcl {
     foreach ($t in (Get-HookAclTarget -RootPath $RootPath)) {
         if ($t -eq $RootPath) { continue }
         $childAcl = Get-Dacl -TargetPath $t
-        $childFindings = @(Get-AclFinding -TargetPath $t -KeepSids $keep -Acl $childAcl |
-                           Where-Object { -not $_.IsInherited })
+        # MISMO filtro y MISMA politica que la raiz: aca `-OrphansOnly` no se
+        # aplicaba, asi que borraba ACE explicitos de cuentas vivas, y ademas
+        # eliminaba entero lo que la raiz solo degradaba (Task 0.5).
+        $childFindings = @(Select-RepairableFinding `
+                             -Findings (Get-AclFinding -TargetPath $t -KeepSids $keep -Acl $childAcl) `
+                             -OrphansOnlyMode:$OrphansOnly)
         if ($childFindings.Count -eq 0) { continue }
         foreach ($f in $childFindings) {
             [void]$childAcl.RemoveAccessRuleSpecific($f.Rule)
-            Write-Output "  explicito removido en $($t): $($f.Identity) ($($f.Rights))"
+            if ((Get-AclRepairAction -Finding $f) -eq 'degradar') {
+                $downgraded = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    $f.Rule.IdentityReference,
+                    [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+                    $f.Rule.InheritanceFlags,
+                    $f.Rule.PropagationFlags,
+                    [System.Security.AccessControl.AccessControlType]::Allow)
+                $childAcl.AddAccessRule($downgraded)
+                Write-Output "  explicito en $($t): $($f.Identity) $($f.Rights) -> ReadAndExecute"
+            } else {
+                Write-Output "  explicito removido en $($t): $($f.Sid) (SID no resoluble, cuenta borrada)"
+            }
         }
         Set-Dacl -TargetPath $t -Acl $childAcl
     }
@@ -405,6 +462,13 @@ function Write-Finding {
 }
 
 # ---------------------------------------------------------------------------
+
+# Modo biblioteca: devuelve el control despues de definir las funciones y ANTES
+# de ejecutar nada. Existe para que la bateria pueda probar la clasificacion
+# --que es donde se decide que se borra-- sin tocar una sola ACL. Es un `return`
+# de nivel superior, asi que el script queda dot-sourceado con sus funciones
+# disponibles; el `exit` de mas abajo mataria la sesion que lo carga.
+if ($env:SAIKIT_HOOKACL_LIB_ONLY -eq '1') { return }
 
 if ($Restore) {
     Write-Output "Restaurando ACL desde: $Restore"

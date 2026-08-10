@@ -445,6 +445,36 @@ nadie los cuente entre lo demostrado.
 `settings.json` real el verificador sigue en silencio, así que el arreglo no
 convirtió un registro válido en alarma.
 
+#### Lo corregido en la Task 0.5 (`hook-acl.ps1`)
+
+- **`Test-SidResolvable` pasa a tres estados**: `$true` la cuenta existe,
+  `$false` se miró y no existe (`IdentityNotMappedException`), `$null` **no se
+  pudo determinar**. Sólo el `$false` habilita a borrar. Antes cualquier
+  excepción —un controlador de dominio que no contesta— devolvía `$false`, y ese
+  `$false` borra el ACE: la Core Rule 2 violada donde más caro sale, porque este
+  es el único código destructivo del repo.
+- **Una sola política de reparación** (`Get-AclRepairAction`) y **un solo
+  filtro** (`Select-RepairableFinding`), compartidos por la raíz y los
+  descendientes. Las dos copias que había divergieron: `-OrphansOnly` acotaba la
+  raíz pero no los hijos, y un principal vivo se *degradaba* arriba pero se
+  *eliminaba* abajo.
+
+**Se pudo hacer con TDD, contra lo que la tarea asumía.** Estaba marcada
+`[tdd:skip:system-acl-not-unit-testable]`, y escribir ACLs efectivamente no lo
+es — pero *clasificar cuál se borra* es lógica pura. Un modo biblioteca
+(`SAIKIT_HOOKACL_LIB_ONLY=1`, un `return` antes del cuerpo ejecutable) permite
+cargar las funciones sin tocar una sola ACL, así que los tres defectos tienen
+caso propio en `tests/test_hook_acl.sh`: **3 mutaciones, 3 atrapadas**.
+
+**Evidencia sobre el perfil real** (auditoría sin `-Fix`, que no escribe): los
+7 ACE que quedan son de `Gon\CodexSandboxUsers`, una cuenta **viva**, y
+`-OrphansOnly` no selecciona ninguno — que es justo la distinción que antes no
+se hacía en los descendientes.
+
+**Sigue sin verificar** el punto que la tarea listaba como tal: el backup
+excluye los objetos que `Repair-StaleInherited` modifica después, así que el
+comando anunciado como restauración podría no revertir todo. No se tocó.
+
 ### Convivencia con quality-kit
 
 `saikit-gate-heal.ps1` aplica los dos parches a 4 perfiles (`.claude`, `.codex`,
