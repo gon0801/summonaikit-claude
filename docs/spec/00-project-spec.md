@@ -475,6 +475,47 @@ se hacía en los descendientes.
 excluye los objetos que `Repair-StaleInherited` modifica después, así que el
 comando anunciado como restauración podría no revertir todo. No se tocó.
 
+#### Lo corregido en la Task 1.5 (la red de seguridad)
+
+**Los 5 fixtures**, con su guardia: `tests/test_fixtures_json.sh` exige que los
+62 `.json` y los 15 `.jsonl` parseen con un parser real. Es el test que habría
+atrapado esto en la 1.4 —y el que impide que vuelva—, y por eso incluye un caso
+que falla si el árbol de fixtures desaparece: "0 archivos, 0 malos" no es lo
+mismo que "todos válidos".
+
+**El diff de la línea base, declarado**: cambió **un solo escenario**
+(`16-eventos-dentro-de-subagente`), **4 líneas**, todas la misma ruta en el log
+de evidencia — `C:\dev\demo\src\sesiones.ts` pasa a `C:\\dev\\demo\\src\\sesiones.ts`
+porque el payload ya es JSON válido y el hook de hoy registra el texto crudo sin
+decodificar escapes. **Ningún veredicto se movió**: la línea base anterior
+describía un payload que el host nunca emite.
+
+**`unknown` deja de publicarse como `PASS`.** Los tests que no pueden verificar
+salen `3`; `run.sh` los cuenta aparte, los nombra `UNKNOWN`, dice cuántos hubo
+en el resumen, y **no cierra `OK` si todos lo fueron** — verde entero sin haber
+probado nada es la afirmación más falsa que ese runner puede emitir. Un fallo
+real sigue mandando sobre un `unknown`.
+
+**Y antes de rendirse, se prueba lo que hay.** Desde la Task 2.1 la fuente vive
+en el repo y es el archivo vivo byte a byte más el marcador, así que cuando el
+hook vivo no está las baterías de semántica caen a ella y lo dicen;
+`unknown` queda para cuando no hay ninguno de los dos. Resolverlo en un solo
+lugar (`tests/lib/hook_bajo_prueba.sh`) es lo que evita que las cuatro copias
+vuelvan a divergir.
+
+**Error propio en el camino, declarado**: el primer intento de escapar los
+fixtures usó un regex que también duplicó los `\\` ya válidos —al no coincidir
+en la primera barra, el motor probaba en la segunda— y dejó *más* archivos
+inválidos que al empezar. Lo atrapó el test recién escrito, en la corrida
+siguiente. Se revirtió con `git checkout` y se rehizo consumiendo el par
+completo de cada escape.
+
+**Sin verificar y sin tocar**, tal como la tarea los listaba: el guard de fugas
+sólo inventaría archivos regulares (ciego a symlinks y directorios vacíos);
+`mktemp`/`mkdir` sin comprobar en `run.sh`; el driver de mutación no exige las
+13 mutaciones únicas; y `capture-payloads.sh` no reserva su nombre de archivo de
+forma atómica.
+
 ### Convivencia con quality-kit
 
 `saikit-gate-heal.ps1` aplica los dos parches a 4 perfiles (`.claude`, `.codex`,

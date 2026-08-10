@@ -1112,7 +1112,7 @@ stderr <vacio>
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
@@ -1130,7 +1130,7 @@ stderr <vacio>
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=2
@@ -1149,7 +1149,7 @@ stderr <vacio>
 --- estado tras el paso 04
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=3
@@ -1193,7 +1193,7 @@ stderr (sha ac0be7ba32eb19a8, 889 bytes)
 --- estado tras el paso 05
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| implemented: C:\dev\demo\src\sesiones.ts
+| implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=3

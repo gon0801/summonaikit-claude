@@ -43,6 +43,40 @@ out="$(bash "$run_sh" "$SANDBOX/verde" 2>&1)"; rc=$?
 printf '%s' "$out" | grep -q 'PASS: test_verde' || malo "no reporta el PASS: $out"
 
 # ------------------------------------------------------------ 4) test rojo
+# --------------------------------------------------------------- Task 1.5
+# Un test que no pudo verificar nada salia 0 y se publicaba como PASS, asi que
+# una maquina sin el archivo bajo prueba quedaba ENTERA en verde sin haber
+# probado una sola linea de semantica (revision cruzada de la Phase 1).
+caso "un test que sale 3 se reporta UNKNOWN, no PASS"
+mkdir -p "$SANDBOX/unk/tests"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk/tests/test_no_observado.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/unk/tests/test_verde.sh"
+out="$(bash "$run_sh" "$SANDBOX/unk" 2>&1)"; rc=$?
+printf '%s' "$out" | grep -q 'UNKNOWN: test_no_observado' || malo "no lo reporta como UNKNOWN: $out"
+printf '%s' "$out" | grep -q 'PASS: test_no_observado'    && malo "un unknown NO puede publicarse como PASS: $out"
+printf '%s' "$out" | grep -q 'PASS: test_verde'           || malo "el test que si verifico sigue siendo PASS: $out"
+[ "$rc" -eq 0 ] || malo "con al menos un test verificando, la corrida cierra 0: dio $rc"
+printf '%s' "$out" | grep -q '1 de 2 en unknown' || malo "el resumen no dice cuantos quedaron sin verificar: $out"
+
+caso "si TODOS los tests son unknown, la corrida NO cierra OK"
+# Es la afirmacion mas falsa que este runner puede emitir: verde entero sin
+# haber probado nada.
+mkdir -p "$SANDBOX/todo-unk/tests"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/todo-unk/tests/test_a.sh"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/todo-unk/tests/test_b.sh"
+out="$(bash "$run_sh" "$SANDBOX/todo-unk" 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "cerro OK sin haber verificado nada: $out"
+printf '%s' "$out" | grep -qi 'unknown' || malo "no declara que no se pudo mirar: $out"
+printf '%s' "$out" | grep -q 'run.sh: OK' && malo "no puede decir OK: $out"
+
+caso "un unknown NO tapa un fallo real"
+mkdir -p "$SANDBOX/unk-y-rojo/tests"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk-y-rojo/tests/test_no_observado.sh"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$SANDBOX/unk-y-rojo/tests/test_rojo.sh"
+out="$(bash "$run_sh" "$SANDBOX/unk-y-rojo" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "un fallo real manda sobre el unknown: esperaba 1, dio $rc"
+printf '%s' "$out" | grep -q 'FAIL: test_rojo' || malo "no nombra el test que fallo: $out"
+
 caso "un test que falla => rompe la corrida y lo nombra"
 mkdir -p "$SANDBOX/rojo/tests"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$SANDBOX/rojo/tests/test_rojo.sh"

@@ -28,6 +28,12 @@ else
   repo_root="$(cd "$script_dir/.." && pwd)"
 fi
 fail=0
+unknown=0
+corridos=0
+# Mismo codigo que usan los tests para "no se pudo verificar" (ver
+# `tests/lib/hook_bajo_prueba.sh`). Se define aca tambien porque el runner no
+# carga esa lib: la cargan los tests, en sus propios procesos.
+SAIKIT_EXIT_UNKNOWN_RUNNER=3
 
 # Huella del arbol: rutas + checksum. Detecta creado, borrado y modificado.
 #
@@ -77,15 +83,22 @@ for t in "$repo_root"/tests/test_*.sh; do
   fi
 
   antes="$(manifiesto "$repo_root")"
-  if env HOME="$caja/home" USERPROFILE="$caja_userprofile" \
-         TMPDIR="$caja/tmp" TMP="$caja/tmp" TEMP="$caja/tmp" \
-         SAIKIT_HOOK_VIVO="$hook_vivo" \
-         bash "$t"; then
-    echo "PASS: $nombre"
-  else
-    echo "FAIL: $nombre" >&2
-    fail=1
-  fi
+  env HOME="$caja/home" USERPROFILE="$caja_userprofile" \
+      TMPDIR="$caja/tmp" TMP="$caja/tmp" TEMP="$caja/tmp" \
+      SAIKIT_HOOK_VIVO="$hook_vivo" \
+      bash "$t"
+  rc=$?
+  # Exit 3 = `unknown`: el test no fallo, pero tampoco verifico nada. Antes
+  # esto salia 0 y se publicaba como PASS, asi que una maquina sin el archivo
+  # bajo prueba quedaba ENTERA en verde sin haber probado una sola linea de
+  # semantica (revision cruzada de la Phase 1, Task 1.5). Contarlo aparte es lo
+  # que vuelve visible la diferencia entre verificado y no observado.
+  case "$rc" in
+    0) echo "PASS: $nombre" ;;
+    3) echo "UNKNOWN: $nombre — no se pudo verificar (no es PASS)"; unknown=$((unknown + 1)) ;;
+    *) echo "FAIL: $nombre" >&2; fail=1 ;;
+  esac
+  corridos=$((corridos + 1))
   despues="$(manifiesto "$repo_root")"
 
   if [ "$antes" != "$despues" ]; then
@@ -99,4 +112,18 @@ if [ "$fail" -ne 0 ]; then
   echo "tests/run.sh: FAIL" >&2
   exit 1
 fi
-echo "tests/run.sh: OK"
+
+# Un `unknown` NO es un OK. Se dice cuantos hubo, siempre, para que el resumen
+# no afirme mas de lo que se midio.
+if [ "$unknown" -gt 0 ]; then
+  if [ "$unknown" -ge "$corridos" ]; then
+    # Nada se verifico: cerrar con OK seria la afirmacion mas falsa que este
+    # runner puede emitir — verde entero sin haber probado nada.
+    echo "tests/run.sh: UNKNOWN — $unknown de $corridos tests no pudieron verificar nada." >&2
+    echo "              No se afirma que el repo este sano: no se pudo mirar." >&2
+    exit "$SAIKIT_EXIT_UNKNOWN_RUNNER"
+  fi
+  echo "tests/run.sh: OK con $unknown de $corridos en unknown (ver arriba cuales)"
+  exit 0
+fi
+echo "tests/run.sh: OK ($corridos tests)"

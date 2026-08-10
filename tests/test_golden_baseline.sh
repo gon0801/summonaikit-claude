@@ -23,7 +23,13 @@ repo="$(cd "$here/.." && pwd)"
 arnes="$repo/tools/golden-harness.sh"
 base="$repo/tests/golden/baseline.txt"
 escenarios="$repo/tests/fixtures/escenarios"
-vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
+. "$here/lib/hook_bajo_prueba.sh"
+# Puede resolver a la fuente del repo si el vivo no esta. La linea base se grabo
+# contra el vivo, y la Task 2.1 midio que la fuente es ese mismo archivo byte a
+# byte mas el marcador de la linea 2 — asi que comparar contra ella sigue
+# afirmando lo mismo. El aviso de cual se uso lo emite el resolvedor.
+vivo="$(resolver_hook_bajo_prueba "$repo" "test_golden_baseline")" \
+  || exit "$SAIKIT_EXIT_UNKNOWN"
 
 fail=0
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
@@ -55,13 +61,6 @@ fi
 estado_vivo="$(dirname "$vivo")/state"
 listar_estado_vivo() { find "$estado_vivo" -type f 2>/dev/null | sort; }
 antes_vivo="$(listar_estado_vivo)"
-
-if [ ! -r "$vivo" ]; then
-  echo "test_golden_baseline: unknown — el hook vivo no esta en esta maquina ($vivo)."
-  echo "                      No se afirma que la linea base sea correcta: no se pudo mirar."
-  [ "$fail" -eq 0 ] || { echo "test_golden_baseline: FAIL" >&2; exit 1; }
-  exit 0
-fi
 
 salida="$(bash "$arnes" --hook "$vivo" --scenarios "$escenarios" --baseline "$base" --check 2>&1)"
 rc=$?

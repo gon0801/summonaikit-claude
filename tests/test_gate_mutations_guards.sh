@@ -19,12 +19,9 @@ set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 driver="$here/test_gate_mutations.sh"
 
-vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
-if [ ! -r "$vivo" ]; then
-  echo "test_gate_mutations_guards: unknown — el hook vivo no esta en esta maquina ($vivo)."
-  echo "                            El driver no corre sin el; no se pudo mirar."
-  exit 0
-fi
+. "$here/lib/hook_bajo_prueba.sh"
+vivo="$(resolver_hook_bajo_prueba "$here/.." "test_gate_mutations_guards")" \
+  || exit "$SAIKIT_EXIT_UNKNOWN"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/saikit-mutg-XXXXXX")" || exit 1
 trap 'rm -rf "$tmp"' EXIT
