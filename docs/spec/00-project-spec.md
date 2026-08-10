@@ -444,8 +444,14 @@ mueve el exit code, que sigue siendo 0 siempre.
   trae su propia política de ruido —calla cuando el registro está completo— así
   que cuando habla es porque el gate no corre en alguna fase, y eso no es ruido
   de éxito.
-- **Sin verificador o sin `bash` ⇒ `unknown`**, nunca "el registro falta"
-  (Core Rule 2). Ese aviso sí queda bajo `-Quiet`.
+- **Todo lo que no se pudo mirar ⇒ `unknown`**, nunca "el registro falta"
+  (Core Rule 2): sin verificador, sin `bash`, si no se lo pudo lanzar, si no
+  respondió en 15 s, o si salió con código ≠ 0. **Ningún `unknown` se calla bajo
+  `-Quiet`** — ver abajo.
+- **Tope de 15 s sobre el verificador.** Es el único proceso externo que el heal
+  lanza, y corre en cada `SessionStart` (cuyo propio timeout son 30 s). Los
+  parches ya están escritos cuando se llega ahí, así que cortar no pierde
+  trabajo.
 - La ruta sale de `-RegistrationCheck`, o del primer candidato que exista entre
   `~/.claude/hooks/` y el repo (`SAIKIT_CLAUDE_REPO`, por defecto
   `C:\dev\summonaikit-claude`).
@@ -483,6 +489,43 @@ bloque después no cambia la salida observable, porque en ambos órdenes el esta
 que se reporta para ese hook es el del skip. Lo que sí está medido es su
 consecuencia —un archivo salteado nunca aparece como `ANCLAS-CAMBIARON`—, y esa
 la mata la mutación del criterio.
+
+### Revisión cruzada (Codex, 2026-08-10): una política aplicada donde no iba
+
+Una ronda con Codex sobre el commit de `quality-kit`. Tres hallazgos, **los tres
+aceptados**, y los tres con la misma raíz: el cableado del registro podía fallar
+en silencio **justo en el modo con el que corre de verdad**.
+
+La regla "no repetir avisos en cada arranque" es correcta para el **skip por
+propiedad** —que ocurre en cada arranque *sano*— y equivocada para los `unknown`
+del verificador, que sólo aparecen cuando algo *ya se rompió*. Silenciarlos bajo
+`-Quiet` volvía "no se pudo mirar" indistinguible de "todo bien": la Core Rule 2
+violada en el único modo que importa. Se aplicó la misma política a dos casos de
+frecuencia opuesta.
+
+Lo corregido:
+
+1. Ningún `unknown` del verificador se calla bajo `-Quiet`. El skip por
+   propiedad sí sigue callado, y ahora por una razón que distingue los casos.
+2. **Tope de tiempo.** Antes de este cambio el heal no lanzaba ningún proceso
+   externo; ahora lanza `bash`, que lanza `python`. Un cuelgue se comía el
+   arranque. Mismo motivo por el que `cross-review.ps1` tiene `-TimeoutSec`
+   desde un cuelgue real de 2026-07-05. **Lo que el tope alcanza, medido:** el
+   heal deja de esperar, lo dice y sale. **Lo que no alcanza, también medido:**
+   un `sleep` lanzado por el `bash` de Git for Windows queda *huérfano* —su
+   padre ya no existe cuando llega el kill, porque MSYS2 interpone su propia
+   capa— así que ningún barrido por parentesco lo alcanza, y sigue reteniendo el
+   handle de stdout que heredó: quien *lee* esa salida puede esperar igual. Eso
+   queda acotado por el timeout del propio `SessionStart` (30 s). Cerrarlo del
+   todo pedía Job Objects vía P/Invoke, y ese costo no se paga en un script que
+   corre en cada arranque para cubrir el cuelgue de un chequeo que tarda menos
+   de un segundo.
+3. **Exit code.** Un `!= 0` de un ejecutable nativo no lanza excepción en
+   PowerShell: con `&` y `try/catch`, un verificador que moría sin decir nada se
+   perdía entero. Ahora se mira, y es `unknown`.
+
+Cada uno tiene su caso en la batería (`TEST GROUP 3p`), incluido el del
+verificador colgado —que se mata y se reporta— y el del `unknown` bajo `-Quiet`.
 
 ## Non-Goals
 
