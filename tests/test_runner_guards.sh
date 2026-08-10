@@ -63,6 +63,36 @@ out="$(bash "$run_sh" "$SANDBOX/fuga" 2>&1)"; rc=$?
 printf '%s' "$out" | grep -q 'LEAK' || malo "no reporta la fuga: $out"
 printf '%s' "$out" | grep -q 'PASS: test_fuga' || malo "el test paso; el runner deberia decirlo igual: $out"
 
+# --------------------------- 5-bis) el churn del tooling del host NO es fuga
+# Medido el 2026-08-09 durante la Task 2.1: `.claude/state/session.json`,
+# `.claude/state/session-events.jsonl` y `out/progress-snapshot.html` los
+# reescribe el tooling del host mientras la suite corre, y hacian fallar la
+# corrida entera con las 11 baterias en PASS. Las delatadas eran siempre las dos
+# mas lentas — las unicas con ventana lo bastante larga — o sea que el guard
+# acusaba al test que mas tardaba, no al que escribia.
+#
+# El caso 5 de arriba es el control positivo: una fuga en ruta versionada TIENE
+# que seguir rompiendo la corrida. Este solo afirma que lo ignorado no cuenta.
+caso "escritura del tooling del host en .claude/ y out/ NO se reporta como fuga"
+mkdir -p "$SANDBOX/churn/tests" "$SANDBOX/churn/.claude/state" "$SANDBOX/churn/out" \
+         "$SANDBOX/churn/tests/fixtures/.claude"
+printf 'antes\n' > "$SANDBOX/churn/.claude/state/session.json"
+printf 'antes\n' > "$SANDBOX/churn/out/progress-snapshot.html"
+printf 'antes\n' > "$SANDBOX/churn/tests/fixtures/.claude/anidado.json"
+cat > "$SANDBOX/churn/tests/test_churn.sh" <<'SH'
+#!/usr/bin/env bash
+raiz="$(cd "$(dirname "$0")/.." && pwd)"
+# Modificado, y tambien creado: el manifiesto detecta las dos cosas.
+printf 'despues, con otro tamano\n' > "$raiz/.claude/state/session.json"
+printf 'despues\n'                  > "$raiz/out/progress-snapshot.html"
+printf 'despues\n'                  > "$raiz/tests/fixtures/.claude/anidado.json"
+printf 'nuevo\n'                    > "$raiz/.claude/state/nuevo.json"
+exit 0
+SH
+out="$(bash "$run_sh" "$SANDBOX/churn" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "el churn de .claude/ y out/ no deberia romper la corrida: $out"
+printf '%s' "$out" | grep -q 'LEAK' && malo "reporto fuga por el tooling del host: $out"
+
 # ------------------------------------- 6) contencion del HOME (Core Rule 4)
 caso "test que escribe en \$HOME => queda contenido, no toca el HOME del invocador"
 mkdir -p "$SANDBOX/homeleak/tests" "$SANDBOX/senuelo-home"

@@ -260,6 +260,49 @@ nunca usó el lector de números. Son ~25 líneas que la Task 2.1 se lleva puest
 al adoptar el archivo byte a byte. Se anota acá para que su remoción sea una
 decisión declarada y no un descubrimiento a mitad de la Phase 3.
 
+### La adopción (2026-08-09, Task 2.1): la fuente vive en el repo
+
+`hooks/summonaikit-harness.sh` es el archivo vivo **byte a byte** más una sola
+línea: el marcador de identidad, en la **línea 2** — la 1 es el shebang, y un
+marcador antes de él rompería la ejecución.
+
+```
+# SAIKIT-CLAUDE-OWNED summonaikit-claude 1.0.0
+```
+
+Posición fija y una sola ocurrencia, por dos consumidores concretos: el
+instalador de la 2.2 elige entre sus tres estados leyendo esa línea, y el skip
+de quality-kit (2.3) tiene que poder mirarla sin parsear el archivo. Dos
+marcadores volverían ambigua la versión que el archivo declara.
+
+**Cómo quedó verificada la equivalencia**, en dos mitades que se necesitan:
+
+- `sed '2d'` sobre la fuente devuelve el archivo vivo byte a byte (`cmp`). Es la
+  afirmación más fuerte posible: mismos bytes, ningún margen para que el
+  comportamiento difiera.
+- El arnés de la 1.2 con `--check` da la salida grabada en los 16 escenarios y
+  además **avisa del cambio de identidad**. Ese aviso es parte de lo afirmado:
+  confirma que el marcador está y que el veredicto se dio por comportamiento, no
+  por hash (decisión 2 del arnés, escrita en la 1.2 justo para este caso).
+
+La transitividad hacia el vivo la cierra `test_golden_baseline.sh`, que ya
+compara la línea base contra el archivo vivo. Correr el arnés dos veces —una por
+hook— costaría 1.6 min más y no agregaría ninguna afirmación que el `cmp` no dé
+ya, más fuerte.
+
+**El código muerto se adoptó; no se removió.** Las ~25 líneas medidas en la 1.3
+(`is_engineering_task`, `is_trivial_task`, `SUBSTANTIVE_RE`, `TRIVIAL_RE`,
+`json_number_field`) siguen en la fuente. Es deliberado, y es la decisión
+declarada que esa medición pedía: borrarlas en esta misma tarea destruiría la
+propiedad byte a byte que vuelve verificable la adopción entera. Su remoción es
+un cambio de bytes real con comportamiento nulo, así que le corresponde su
+propia tarea y su propia declaración, con el arnés probando la inercia.
+
+**Dato para el instalador (2.2):** el archivo vivo es **LF puro** (medido, no
+supuesto: 40333 bytes con y sin `\r`), y `.gitattributes` ya fuerza
+`*.sh text eol=lf`. El instalador tiene que escribir LF; con CRLF rompería la
+igualdad byte a byte en la primera corrida.
+
 ### El contrato inyectado
 
 Las 71 líneas de `HARNESS_CONTEXT` son el producto del vendor. **Consecuencia de

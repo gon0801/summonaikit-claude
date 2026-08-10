@@ -30,9 +30,24 @@ fi
 fail=0
 
 # Huella del arbol: rutas + checksum. Detecta creado, borrado y modificado.
+#
+# Se podan los directorios que NO son contenido del repo: `.git` y los que el
+# `.gitignore` ya declara ajenos (`.claude`, `out`, `sandbox`, `node_modules`),
+# la misma lista que usa `lib/check_syntax.sh`. El tooling del host los
+# reescribe solo mientras la suite corre — el tablero de progreso, el registro
+# de eventos de la sesion — y sin podarlos las dos baterias mas largas
+# reportaban fuga con TODOS sus casos en verde. Un guard que grita en falso
+# entrena al operador a ignorarlo, que es exactamente lo que este guard existe
+# para evitar.
+#
+# Se poda por NOMBRE y solo si es directorio: por ruta exacta solo taparia la
+# raiz (hay un `.claude/` anidado en el arbol de fixtures), y sin `-type d` un
+# archivo que se llamara `out` dejaria de vigilarse.
 manifiesto() {
   ( cd "$1" 2>/dev/null || return 0
-    find . -path './.git' -prune -o -type f -print0 2>/dev/null \
+    find . -type d \( -name .git -o -name .claude -o -name out \
+                      -o -name sandbox -o -name node_modules \) -prune -o \
+           -type f -print0 2>/dev/null \
       | sort -z | xargs -0 -r cksum 2>/dev/null )
 }
 
