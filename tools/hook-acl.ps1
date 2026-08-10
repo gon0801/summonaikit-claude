@@ -384,7 +384,16 @@ function Write-FindingSummary {
         if ($sel.Count -eq 0) { continue }
         $etiqueta = if ($heredado) { 'heredado ' } else { 'explicito' }
         $sel | Group-Object Identity | Sort-Object Count -Descending | ForEach-Object {
-            $huerfano = if ($_.Group[0].Resolvable) { '' } else { '  [SID huerfano]' }
+            # Tres estados tambien ACA, no solo en la decision: con truthiness,
+            # un $null (no se pudo evaluar) caia en el else y se imprimia como
+            # cuenta borrada. Esta salida es la evidencia que declara la Task
+            # 0.5, asi que confundir ahi los dos casos es la misma Core Rule 2
+            # rota un piso mas arriba.
+            $huerfano = switch ($_.Group[0].Resolvable) {
+                $true   { '' }
+                $false  { '  [SID huerfano]' }
+                default { '  [no se pudo determinar]' }
+            }
             Write-Output ("  {0}  {1,-50} {2,6} objeto(s){3}" -f $etiqueta, $_.Name, $_.Count, $huerfano)
         }
     }
@@ -455,7 +464,12 @@ function Repair-StaleInherited {
 function Write-Finding {
     param([object[]]$Findings)
     foreach ($f in $Findings) {
-        $kind = if ($f.Resolvable) { 'principal' } else { 'SID huerfano' }
+        # Mismos tres estados que Write-FindingSummary, por el mismo motivo.
+        $kind = switch ($f.Resolvable) {
+            $true   { 'principal' }
+            $false  { 'SID huerfano' }
+            default { 'no se pudo determinar' }
+        }
         $src  = if ($f.IsInherited) { 'heredado' } else { 'explicito' }
         Write-Output ("  [{0}] {1} -> {2} ({3}, {4})" -f $kind, $f.Identity, $f.Rights, $src, $f.Path)
     }

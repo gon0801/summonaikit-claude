@@ -48,8 +48,10 @@ for p in sorted(raiz.rglob("*.json")):
 PY
 )"
 if [ -n "$malos_json" ]; then
-  printf '%s\n' "$malos_json" | while IFS= read -r l; do malo "$l"; done
-  fail=1
+  # Here-string y no pipe: el `while` de un pipeline corre en SUBSHELL, asi que
+  # el `fail=1` de `malo` se perderia y haria falta re-asignarlo afuera. Funciona
+  # igual, pero es una trampa para la proxima edicion.
+  while IFS= read -r l; do malo "$l"; done <<< "$malos_json"
 fi
 
 caso "todo *.jsonl de fixtures parsea linea por linea"
@@ -67,8 +69,58 @@ for p in sorted(raiz.rglob("*.jsonl")):
 PY
 )"
 if [ -n "$malos_jsonl" ]; then
-  printf '%s\n' "$malos_jsonl" | while IFS= read -r l; do malo "$l"; done
-  fail=1
+  while IFS= read -r l; do malo "$l"; done <<< "$malos_jsonl"
+fi
+
+# Parsear no alcanza: un fixture puede ser JSON VALIDO y aun asi describir algo
+# que el host jamas emite. Medido (revision de la Task 1.5): al escapar
+# `C:\dev\demo\notas.txt` quedo `C:\\dev\\demo\notas.txt` — el `\d` se doblo
+# bien, pero `\n` YA era un escape valido, asi que sobrevivio y el valor
+# decodifica a una ruta con un SALTO DE LINEA adentro. Parseable, y falso.
+#
+# Este es el assert que ese error pedia: en los campos que son RUTAS no puede
+# haber caracteres de control. Se limita a esas claves a proposito — un `\n` en
+# un campo de texto (el contenido de un mensaje, por ejemplo) es legitimo.
+caso "ningun campo de ruta decodifica a un caracter de control"
+rutas_malas="$("$python_bin" - "$fixtures" <<'PY'
+import json, pathlib, sys
+
+CLAVES_RUTA = {"file_path", "filePath", "cwd", "transcript_path", "path",
+               "notebook_path", "project_root"}
+CONTROL = set(chr(c) for c in range(0x20)) | {chr(0x7f)}
+
+def revisar(nodo, origen, salida):
+    if isinstance(nodo, dict):
+        for k, v in nodo.items():
+            if k in CLAVES_RUTA and isinstance(v, str):
+                malos = sorted({repr(c) for c in v if c in CONTROL})
+                if malos:
+                    salida.append(f"{origen}: {k}={v!r} trae {', '.join(malos)}")
+            revisar(v, origen, salida)
+    elif isinstance(nodo, list):
+        for v in nodo:
+            revisar(v, origen, salida)
+
+salida = []
+raiz = pathlib.Path(sys.argv[1])
+for p in sorted(raiz.rglob("*.json")):
+    try:
+        revisar(json.loads(p.read_text(encoding="utf-8")), p, salida)
+    except Exception:
+        continue  # su invalidez ya la reporta el caso de arriba
+for p in sorted(raiz.rglob("*.jsonl")):
+    for n, linea in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        if not linea.strip():
+            continue
+        try:
+            revisar(json.loads(linea), f"{p}:{n}", salida)
+        except Exception:
+            continue
+print("\n".join(salida))
+PY
+)"
+if [ -n "$rutas_malas" ]; then
+  while IFS= read -r l; do malo "$l"; done <<< "$rutas_malas"
 fi
 
 # Sin esto, borrar el arbol de fixtures dejaria el test en verde con cobertura

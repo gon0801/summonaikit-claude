@@ -92,8 +92,19 @@ ASIGNACION = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 def ejecuta(comando, hook):
     if hook not in comando:
         return False
+    # Por SEGMENTO, no por comando entero: mirar solo el primer token dejaba
+    # `echo algo && bash .../summonaikit-harness.sh` como NO registrado, que es
+    # la direccion peligrosa del error — una alarma falsa en cada SessionStart
+    # sobre un registro que si existe. Basta con que UN segmento lo ejecute.
+    segmentos = re.split(r"&&|\|\||;|\|", comando)
+    return any(_segmento_ejecuta(s, hook) for s in segmentos)
+
+
+def _segmento_ejecuta(segmento, hook):
+    if hook not in segmento:
+        return False
     try:
-        tokens = shlex.split(comando, posix=True)
+        tokens = shlex.split(segmento, posix=True)
     except ValueError:
         # Comillas sin cerrar: no se pudo tokenizar. Se cuenta igual, que es la
         # postura de siempre — ante lo que no se pudo mirar, no se acusa.

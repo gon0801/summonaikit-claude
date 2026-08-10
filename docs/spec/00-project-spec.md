@@ -458,6 +458,14 @@ convirtió un registro válido en alarma.
   descendientes. Las dos copias que había divergieron: `-OrphansOnly` acotaba la
   raíz pero no los hijos, y un principal vivo se *degradaba* arriba pero se
   *eliminaba* abajo.
+- **Corrección: el tri-estado también en el REPORTE.** La primera pasada lo
+  implementó en la decisión pero dejó `if ($f.Resolvable)` en las dos líneas que
+  imprimen, y con `$null` eso cae en el `else`: un SID que **no se pudo
+  evaluar** salía como `[SID huerfano]`. Como esta tarea declara la auditoría
+  sin `-Fix` como *su* evidencia, la superficie que el operador lee para decidir
+  era justo la que confundía "se miró y no existe" con "no se pudo mirar" — la
+  misma Core Rule 2, un piso más arriba. No borraba de más (`Get-AclRepairAction`
+  ya decía `no-tocar`); era de reporte. Ahora hay tres etiquetas, con su caso.
 
 **Se pudo hacer con TDD, contra lo que la tarea asumía.** Estaba marcada
 `[tdd:skip:system-acl-not-unit-testable]`, y escribir ACLs efectivamente no lo
@@ -482,6 +490,21 @@ comando anunciado como restauración podría no revertir todo. No se tocó.
 atrapado esto en la 1.4 —y el que impide que vuelva—, y por eso incluye un caso
 que falla si el árbol de fixtures desaparece: "0 archivos, 0 malos" no es lo
 mismo que "todos válidos".
+
+**Corrección: la primera pasada cerró 4 de 5, y el guardia no podía verlo.** La
+revisión de esta misma tarea encontró que el fixture del escenario 14 pasó de
+*inválido ruidoso* a **válido y silenciosamente falso**: al escapar
+`C:\dev\demo\notas.txt`, el `\d` se dobló bien pero `\n` **ya era un escape JSON
+legal**, así que sobrevivió y el valor decodificaba a `C:\dev\demo` + un salto de
+línea + `otas.txt`. Ningún host emite eso. Es el mismo error que la 1.4 declaró
+cerrado, un nivel más adentro — y el guardia recién escrito era **ciego por
+construcción**, porque sólo comprobaba parseabilidad.
+
+Por eso el guardia ahora exige además **fidelidad**: ningún campo de ruta
+(`file_path`, `cwd`, `transcript_path`, …) puede decodificar a un carácter de
+control. Se limita a esas claves a propósito — un `\n` dentro de un campo de
+texto es legítimo. Verificado que el caso se pone rojo con el fixture viejo, y
+que la línea base **no se movió** con la corrección.
 
 **El diff de la línea base, declarado**: cambió **un solo escenario**
 (`16-eventos-dentro-de-subagente`), **4 líneas**, todas la misma ruta en el log

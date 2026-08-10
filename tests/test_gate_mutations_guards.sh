@@ -19,6 +19,10 @@ set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 driver="$here/test_gate_mutations.sh"
 
+if [ ! -r "$here/lib/hook_bajo_prueba.sh" ]; then
+  echo "test_gate_mutations_guards: unknown — falta tests/lib/hook_bajo_prueba.sh; no se pudo resolver que archivo probar." >&2
+  exit 3
+fi
 . "$here/lib/hook_bajo_prueba.sh"
 vivo="$(resolver_hook_bajo_prueba "$here/.." "test_gate_mutations_guards")" \
   || exit "$SAIKIT_EXIT_UNKNOWN"

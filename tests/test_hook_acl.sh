@@ -114,6 +114,34 @@ printf '%s' "$out" | grep -q 'seleccionados=1' \
 printf '%s' "$out" | grep -qi 'resolvable=False' \
   || malo "el unico seleccionado tiene que ser el no resoluble: $out"
 
+# ------------------------------- 3-bis) el REPORTE tambien distingue los tres
+# La Task 0.5 declara la auditoria sin `-Fix` como LA evidencia de la mitad que
+# no es unit-testable. Si esa salida llama "SID huerfano" a un principal que no
+# se pudo evaluar, la superficie que el operador lee para decidir confunde
+# exactamente lo que la tarea vino a arreglar. Decidir bien no alcanza: hay que
+# decirlo bien.
+caso "un finding que no se pudo evaluar NO se imprime como huerfano"
+out="$(con_lib "
+  \$unknown = [pscustomobject]@{
+    Path = 'C:\\x'; Identity = 'S-1-5-21-9-9-9-9'; Sid = 'S-1-5-21-9-9-9-9'
+    Rights = 'Modify'; IsInherited = \$false; Resolvable = \$null; Rule = \$null }
+  Write-FindingSummary -Findings @(\$unknown)
+")"
+printf '%s' "$out" | grep -qi 'huerfano' \
+  && malo "un SID que no se pudo evaluar se reporta como cuenta borrada: $out"
+printf '%s' "$out" | grep -qi 'no se pudo' \
+  || malo "el reporte no dice que no se pudo determinar: $out"
+
+caso "el reporte sigue nombrando huerfano al que SI se midio ausente"
+out="$(con_lib "
+  \$huerfano = [pscustomobject]@{
+    Path = 'C:\\x'; Identity = 'S-1-5-21-9-9-9-9'; Sid = 'S-1-5-21-9-9-9-9'
+    Rights = 'Modify'; IsInherited = \$false; Resolvable = \$false; Rule = \$null }
+  Write-FindingSummary -Findings @(\$huerfano)
+")"
+printf '%s' "$out" | grep -qi 'huerfano' \
+  || malo "una cuenta borrada SI se nombra huerfana: $out"
+
 # ------------------------------------------------ 4) la auditoria no escribe
 caso "la auditoria sin -Fix sobre un arbol de prueba no toca nada"
 mkdir -p "$tmp/arbol/sub"

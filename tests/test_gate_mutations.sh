@@ -31,6 +31,10 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/lib/hook_lab.sh"
 . "$here/lib/gate_cases.sh"
 
+if [ ! -r "$here/lib/hook_bajo_prueba.sh" ]; then
+  echo "test_gate_mutations: unknown — falta tests/lib/hook_bajo_prueba.sh; no se pudo resolver que archivo probar." >&2
+  exit 3
+fi
 . "$here/lib/hook_bajo_prueba.sh"
 vivo="$(resolver_hook_bajo_prueba "$here/.." "test_gate_mutations")" \
   || exit "$SAIKIT_EXIT_UNKNOWN"

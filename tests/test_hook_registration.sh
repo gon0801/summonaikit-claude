@@ -132,6 +132,23 @@ out="$(bash "$tool" --settings "$tmp/mencion.json" 2>&1)"; rc=$?
 [ -n "$out" ] || malo "un settings que solo menciona el hook quedo en SILENCIO: el gate no corre en ninguna fase"
 printf '%s' "$out" | grep -qi 'UserPromptSubmit' || malo "no nombra UserPromptSubmit, que solo se menciona"
 
+caso "un comando COMPUESTO que ejecuta el hook despues de un echo SI cuenta"
+# La direccion peligrosa del filtro anterior: miraba solo el primer token, asi
+# que esto quedaba como NO registrado y gritaba en cada arranque sobre un
+# registro que si existe.
+cat > "$tmp/compuesto.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "echo armando && bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
+    "PostToolUse":      [ { "hooks": [ { "type": "command", "command": "echo x; bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
+    "Stop":             [ { "hooks": [ { "type": "command", "command": "true || bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ]
+  }
+}
+JSON
+out="$(bash "$tool" --settings "$tmp/compuesto.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "un comando compuesto que SI ejecuta el hook debe contar como registro: $out"
+
 caso "el registro REAL, con env vars por delante y bash -c, sigue contando"
 # Guardia contra el arreglo de arriba: la forma que usa el settings de verdad
 # lleva asignaciones de entorno antes del programa y el hook adentro de un

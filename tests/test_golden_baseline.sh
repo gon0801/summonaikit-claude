@@ -23,6 +23,10 @@ repo="$(cd "$here/.." && pwd)"
 arnes="$repo/tools/golden-harness.sh"
 base="$repo/tests/golden/baseline.txt"
 escenarios="$repo/tests/fixtures/escenarios"
+if [ ! -r "$here/lib/hook_bajo_prueba.sh" ]; then
+  echo "test_golden_baseline: unknown — falta tests/lib/hook_bajo_prueba.sh; no se pudo resolver que archivo probar." >&2
+  exit 3
+fi
 . "$here/lib/hook_bajo_prueba.sh"
 # Puede resolver a la fuente del repo si el vivo no esta. La linea base se grabo
 # contra el vivo, y la Task 2.1 midio que la fuente es ese mismo archivo byte a
