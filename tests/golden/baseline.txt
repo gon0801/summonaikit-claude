@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 436ba6b1e3469ec6e69ca9e61149551244a4eabe1ef715663b452fe8f1adaecd
-# hook_bytes: 51882
-# hook_lineas: 988
+# hook_sha256: 2f34cba65b1005670c54b6c9793e0a1e85f595a3a287944db9e2f63292aa90d2
+# hook_bytes: 56486
+# hook_lineas: 1079
 # escenarios: 16
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -52,9 +52,9 @@ stdout (sha 276d03d398bab3e3, 8753 bytes)
 | {"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- The person giving you this task is non-technical (a founder, marketer, product manager, designer, or operator). They cannot read code and did not write any. They own WHAT gets built and WHY; you own HOW.\n- Talk to them only in plain language: no code, no file names, no library/tool/jargon words in anything you say to them. If a technical detail matters, first explain what it means in one plain sentence.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Run the full cycle once they reply.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a non-technical user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain language a non-technical user can follow):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or skipped with a concrete reason.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}}
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -81,9 +81,9 @@ stdout (sha eec0ac849c9efe79, 18 bytes)
 | {"continue":true}
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -94,14 +94,14 @@ exit 0
 stdout (sha ca3d163bab055381, 3 bytes) identico a 03-cursor-sin-armar-y-gate/paso 01
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -113,14 +113,14 @@ stdout (sha cdf374571f939e37, 1658 bytes)
 | {"followup_message":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=1
@@ -139,9 +139,9 @@ stdout (sha 83d58dd367fbec46, 8696 bytes)
 | {"additional_context":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- The person giving you this task is non-technical (a founder, marketer, product manager, designer, or operator). They cannot read code and did not write any. They own WHAT gets built and WHY; you own HOW.\n- Talk to them only in plain language: no code, no file names, no library/tool/jargon words in anything you say to them. If a technical detail matters, first explain what it means in one plain sentence.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Run the full cycle once they reply.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a non-technical user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain language a non-technical user can follow):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or skipped with a concrete reason.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/762bb571-1858-449b-8513-cdc8a39798b9/harness-evidence.log
 | prompt task started: 3850401611
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/762bb571-1858-449b-8513-cdc8a39798b9/harness-state.env
 | task_hash=3850401611
 | cycle=0
 | implemented=0
@@ -162,9 +162,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -175,14 +175,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -193,15 +193,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
 | counter=2
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -212,16 +212,16 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
 | counter=3
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -232,17 +232,17 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
 | counter=4
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -253,18 +253,18 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 06
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 | agent: reviewer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
 | counter=5
 | last_code_edit=2
 | last_review=5
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -290,9 +290,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -303,14 +303,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -321,15 +321,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state-review-notice.env
 | counter=2
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -340,16 +340,16 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state-review-notice.env
 | counter=3
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -360,17 +360,17 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state-review-notice.env
 | counter=4
 | last_code_edit=2
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -381,18 +381,18 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 06
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: python -m pytest -q
 | agent: verifier
 | agent: reviewer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state-review-notice.env
 | counter=5
 | last_code_edit=2
 | last_review=5
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -414,9 +414,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -427,14 +427,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -470,14 +470,14 @@ stderr (sha 478d373614cd00f0, 1827 bytes)
 | Close: ...
 | Retro: ...
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=1
@@ -494,9 +494,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -507,9 +507,9 @@ exit 2
 stdout (sha e701d43801d39e06, 1893 bytes) identico a 07-evidencia-incompleta/paso 03
 stderr (sha 478d373614cd00f0, 1827 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=0
@@ -545,9 +545,9 @@ stderr (sha 3681c424e376fa02, 1827 bytes)
 | Close: ...
 | Retro: ...
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | task_hash=2415293084
 | cycle=2
 | implemented=0
@@ -566,7 +566,8 @@ stderr (sha 9bb753cc5f81caef, 1360 bytes)
 | - Missing SUMMONAIKIT HARNESS RECEIPT.\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing verification evidence or explicit skipped-check reason.\n- Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
 | 
 | Stop now, report the failed gates, and ask the user before another retry.
-estado sin cambios
+--- estado tras el paso 04
+(sin estado)
 
 === escenario 09-pausa-declarada
 # El asistente termina el turno preguntandole al usuario, con la linea de pausa
@@ -577,9 +578,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/35dec07e-7489-421b-8ac3-071deda35fff/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/35dec07e-7489-421b-8ac3-071deda35fff/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -601,9 +602,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -614,14 +615,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -632,15 +633,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | agent: verifier
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -651,16 +652,16 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | agent: verifier
 | verified: python -m pytest -q
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state-review-notice.env
 | counter=3
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -671,17 +672,17 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | agent: verifier
 | verified: python -m pytest -q
 | agent: reviewer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state-review-notice.env
 | counter=4
 | last_code_edit=
 | last_review=4
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -692,18 +693,18 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 06
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
 | prompt task started: 2415293084
 | agent: implementer
 | agent: verifier
 | verified: python -m pytest -q
 | agent: reviewer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state-review-notice.env
 | counter=5
 | last_code_edit=5
 | last_review=4
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -727,9 +728,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -740,14 +741,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
 | agent: reviewer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=1
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -758,15 +759,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
 | agent: reviewer
 | agent: verifier
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
 | last_review=1
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -777,16 +778,16 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
 | agent: reviewer
 | agent: verifier
 | agent: implementer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state-review-notice.env
 | counter=3
 | last_code_edit=
 | last_review=1
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -797,17 +798,17 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
 | agent: reviewer
 | agent: verifier
 | agent: implementer
 | verified: python -m pytest -q
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state-review-notice.env
 | counter=4
 | last_code_edit=
 | last_review=1
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -843,17 +844,17 @@ stderr (sha b6c9d070f8d41686, 755 bytes)
 | Close: ...
 | Retro: ...
 --- estado tras el paso 06
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
 | prompt task started: 2415293084
 | agent: reviewer
 | agent: verifier
 | agent: implementer
 | verified: python -m pytest -q
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state-review-notice.env
 | counter=4
 | last_code_edit=
 | last_review=1
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=0
@@ -893,9 +894,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -906,14 +907,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -924,15 +925,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
 | implemented: C:\\dev\\demo\\docs\\ejemplo-payload.md
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -953,9 +954,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -966,13 +967,13 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -983,13 +984,13 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -1006,9 +1007,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -1019,9 +1020,9 @@ exit 2
 stdout (sha e701d43801d39e06, 1893 bytes) identico a 07-evidencia-incompleta/paso 03
 stderr (sha 478d373614cd00f0, 1827 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=0
@@ -1038,9 +1039,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -1073,9 +1074,9 @@ exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
@@ -1086,14 +1087,14 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=1
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -1104,15 +1105,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 03
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=2
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -1123,15 +1124,15 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 04
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=3
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
@@ -1167,15 +1168,15 @@ stderr (sha ac0be7ba32eb19a8, 889 bytes)
 | Close: ...
 | Retro: ...
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/harness-evidence.log
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 | verified: npm test
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=3
 | last_code_edit=1
 | last_review=
-hooks/state/<PROJECT_KEY>/harness-state.env
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=1
 | implemented=1

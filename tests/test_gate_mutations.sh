@@ -44,6 +44,9 @@ vivo="$(resolver_hook_bajo_prueba "$here/.." "test_gate_mutations")" \
 MUTACIONES="
 G1|sentinel_acepta_cualquier_prompt|el sentinel pasa a matchear cualquier texto
 G1|sentinel_sin_guardia|se arma sin llegar a consultar el sentinel
+G1|session_sin_llave|el estado se vuelve a llavear solo por proyecto (sin sesion)
+G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sentinel
+G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
@@ -62,6 +65,7 @@ G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del 
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
 G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
+G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
 "
 
@@ -71,6 +75,29 @@ G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
 
 mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SENTINEL_RE='.*'/"; }
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
+
+# Las dos mutaciones del arreglo de A4 (Task 3.4, clausulas 1 y 2). Cada una
+# neutraliza una clausula y tiene que quedar acreditada a SU caso en la
+# declaracion que emite la corrida.
+#
+# session_sin_llave ataca la asignacion UNICA de STATE_DIR por sesion (volver a
+# PROJECT_DIR colapsa dos sesiones del mismo repo al mismo slot = A4). Si en
+# cambio se cachea LAB_ESTADO_PATH desde el hook sano (como lab_hook_swap hacia
+# antes del arreglo de la CORRECCION 4), la ruta descubierta queda apuntando al
+# hoyo y el credito se lo roba caso_g1_arma_con_sentinel; por eso el lab
+# re-descubre la ruta tras cada swap.
+mut_session_sin_llave()        { sed 's#STATE_DIR="\$PROJECT_DIR/\$SESSION_KEY"#STATE_DIR="$PROJECT_DIR"#'; }
+# desarmar_quita_borrado neutraliza la CONDICION unica de E2 (no borra el rm): el
+# if interno de E2 tiene SOLO el rm como cuerpo, asi que borrarlo deja
+# `if ...; then fi` vacio, que `bash -n` rechaza (guardia 3 de esta bateria).
+# Cambiar la condicion a `false` deja el rm inerte y el if con cuerpo. La
+# condicion de E2 es unica (PHASE=prompt && -f STATE_PATH); E4 no la comparte.
+mut_desarmar_quita_borrado()   { sed 's/if \[ "\$PHASE" = "prompt" \] && \[ -f "\$STATE_PATH" \]; then/if false; then/'; }
+# session_id_greedy es el gemelo de mut_subagent_type_greedy para session_id:
+# volver al lector greedy del payload crudo tomaba la ULTIMA ocurrencia de la
+# clave (un session_id anidado en session_crons) y re-llaveaba la ruta a mitad
+# de turno. Hallazgo [media] de la cross-review codex sobre la 3.4.
+mut_session_id_greedy()         { sed 's/json_top_level_string session_id/json_string_field session_id/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
@@ -108,6 +135,13 @@ mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"
 mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
+# Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A
+# diferencia de E2, a E4 si se le puede borrar el rm directo: su if tambien lleva
+# `emit_budget_exhausted`, asi que borrar el rm no deja el if vacio (que bash -n
+# rechazaria). Se ancla al comentario inline `# A4-c4 presupuesto` porque las tres
+# lineas rm son casi identicas; sin el ancla el sed se llevaria la de E2 o la del
+# cierre limpio de :959.
+mut_presupuesto_no_limpia() { sed '/rm -f.*RN_ORDER_PATH.*# A4-c4 presupuesto/d'; }
 
 mut_cursor_no_se_distingue() { sed 's/if \[ "\$TARGET" = "cursor" \]; then/if false; then/'; }
 

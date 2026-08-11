@@ -33,14 +33,11 @@ if command -v git >/dev/null 2>&1; then
   if [ -n "$GIT_ROOT" ]; then PROJECT_ROOT="$GIT_ROOT"; fi
 fi
 
-# Keep gate state isolated per project. A single user-level hook must not share
-# one state file across repos (that would cross-contaminate the implement ->
-# verify -> review cycle between projects), so key the state dir by project path.
-STATE_ROOT="$HOOK_DIR/state"
-PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
-STATE_DIR="$STATE_ROOT/$PROJECT_KEY"
-STATE_PATH="$STATE_DIR/harness-state.env"
-LOG_PATH="$STATE_DIR/harness-evidence.log"
+# PROJECT_ROOT se resuelve arriba; el state-path (PROJECT_DIR + SESSION_KEY por
+# sesion) se resuelve MAS ABAJO, tras los lectores json_*field, porque necesita
+# leer session_id del payload (Task 3.4 / A4). Definirlo aca era llamar a
+# json_string_field antes de que existiera — bash no hoistea funciones, y el
+# bloque quedaba inerte (ver CORRECCION 1 del plan de la 3.4).
 
 # Language/framework-agnostic test, type-check, and lint runners. Used both to
 # mark verification evidence on a tool event and to credit a verification claim in
@@ -76,6 +73,84 @@ json_number_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p" | head -n 1
 }
+
+# Lee un campo de string de PRIMER NIVEL del payload, y solo de ahi. Es el gemelo
+# de json_tool_input_string (que acota a tool_input, depth 2) para campos como
+# session_id, que viajan al ras del objeto raiz. Cierra el costado de A4 (Task
+# 3.4, CORRECCION 2 del plan): json_string_field (el lector sed greedy) NO sirve
+# para esto — su `.*` inicial sobre el payload crudo es justamente el defecto A1,
+# y session_id puede aparecer como clave JSON real en otra parte del payload de
+# Stop (background_tasks, session_crons), con lo que el estado se llavearia a
+# mitad de turno con un valor que el turno no escribio.
+#
+# Mismo escaner char por char de la 3.1 (depth + in-string + escape), cambiando
+# solo la condicion de match: clave == want a depth == 1. No decodifica escapes:
+# un session_id escapado no mapea a ningun UUID real, y el saneamiento posterior
+# (SESSION_KEY) lo neutraliza igual.
+json_top_level_string() {
+  field="$1"
+  case "$INPUT" in
+    *"\"$field\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk -v want="$field" '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; clave = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") {
+            ins = 0
+            txt = substr(buf, ini, i - ini)
+            if (espera) {
+              if (depth == 1 && clave == want) { print txt; exit }
+              espera = 0
+            }
+            ultima = txt
+          }
+          continue
+        }
+        if (c == "\"")                 { ins = 1; ini = i + 1 }
+        else if (c == ":")             { clave = ultima; espera = 1 }
+        else if (c == "{" || c == "[") { depth++; espera = 0 }
+        else if (c == "}" || c == "]") { depth--; espera = 0 }
+        else if (c == ",")             { espera = 0 }
+      }
+    }'
+}
+
+# Keep gate state isolated per project AND per session (Task 3.4 / A4). Antes el
+# estado se llaveaba solo por proyecto, asi que dos sesiones del mismo repo
+# compartian harness-state.env y un turno -saikit abandonado en una cobraba
+# recibo a la otra. session_id viaja en cada payload (medido Task 1.4), asi que
+# se llavea por proyecto Y sesion. Patron calcado de la variante .codex
+# (resolve_state_paths, ver comentario REVIEW-NOTICE de mas abajo).
+#
+# El valor de session_id viene del payload y NO se mete crudo en una ruta: es
+# una primitiva de escritura descontrolada (familia de A6, Task 3.6). Se SANEA
+# (no se hashea): un session_id real es un UUID, asi que el directorio queda
+# legible (descubrible a mano), sin colisiones y sin traversal. Hashear con
+# cksum (CRC32) es colisionable y su modo de falla es reapertura de A4. PROJECT
+# si se hashea porque su ruta trae `:` y `\` (ilegales en un nombre de dir).
+STATE_ROOT="$HOOK_DIR/state"
+PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
+PROJECT_DIR="$STATE_ROOT/$PROJECT_KEY"
+SESSION_ID="$(json_top_level_string session_id)"
+if [ -z "$SESSION_ID" ]; then
+  # session_id ausente -> slot nombrado y descubrible, no un slot unico que
+  # colapsaria todo y reintroduciria A4. Edge case: session_id SIEMPRE viene en
+  # payloads reales (medido Task 1.4).
+  SESSION_ID="sin-session"
+fi
+SESSION_KEY="$(printf '%s' "$SESSION_ID" | sed 's/[^A-Za-z0-9_-]/_/g' | cut -c1-64)"
+STATE_DIR="$PROJECT_DIR/$SESSION_KEY"
+STATE_PATH="$STATE_DIR/harness-state.env"
+LOG_PATH="$STATE_DIR/harness-evidence.log"
 
 # Lee un campo de string del objeto `tool_input` de PRIMER NIVEL, y solo de ahi.
 # Cierra el defecto A1 (Task 3.1).
@@ -325,8 +400,10 @@ read_state_value() {
 # ANTES de llegar aqui) -- sin esto, dos sesiones de Codex concurrentes en el
 # mismo proyecto compartirian un solo contador y se contaminarian entre si.
 #
-# RN_PENDING_PATH, en cambio, va por PROYECTO a proposito (STATE_DIR, sin
-# sufijo de sesion). Llavearlo por sesion perdia el aviso en silencio en la
+# RN_PENDING_PATH, en cambio, va por PROYECTO a proposito (PROJECT_DIR, sin
+# sufijo de sesion — ojo: STATE_DIR ya NO sirve para esto desde la Task 3.4,
+# porque ahora lleva sufijo de sesion). Llavearlo por sesion perdia el aviso en
+# silencio en la
 # variante .codex: el Stop lo escribia bajo la clave de SU sesion y el turno
 # siguiente (otra session_id -- otra corrida de la CLI, u otro id del host)
 # lo buscaba bajo otra clave y no lo encontraba jamas (fallo observado en la
@@ -338,7 +415,7 @@ read_state_value() {
 # de otra (el elif de mas abajo) -- para una senal advisory, preferible a
 # perder la entrega entre sesiones.
 RN_ORDER_PATH="${STATE_PATH%.env}-review-notice.env"
-RN_PENDING_PATH="$STATE_DIR/review-notice-pending.log"
+RN_PENDING_PATH="$PROJECT_DIR/review-notice-pending.log"
 
 rn_read_order() {
   rn_key="$1"
@@ -572,6 +649,15 @@ start_harness() {
   # con -saikit pero sin palabras en ingles siguiera durmiendo. Si lo escribiste,
   # lo quieres. Aplica igual a la fase session, cuyo payload nunca trae sentinel.
   if ! printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_SENTINEL_RE"; then
+    # Sin sentinel: si habia estado armado para ESTA sesion, desarmar (borrar).
+    # Antes no se tocaba y un turno -saikit abandonado segui cobrando recibo a
+    # turnos que no lo pidieron (A4). La correccion al vuelo (prompt CON -saikit)
+    # no pasa por aca: re-arma mas abajo y conserva el estado. Acotado a
+    # PHASE=prompt: un SessionStart sin sentinel no debe limpiar estado (cursor
+    # arma en session con -saikit en el texto, ver caso_g6_armado_por_target).
+    if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ]; then
+      rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
+    fi
     emit_allow
   fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
@@ -961,6 +1047,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   fi
 
   if [ "$cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
+    # Presupuesto agotado limpia el estado de ESTA sesion (STATE_PATH/LOG_PATH/
+    # RN_ORDER_PATH). RN_PENDING_PATH queda (per-project, ver comentario
+    # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
+    # cobrando recibo despues de declararse agotado (A4).
+    rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
     emit_budget_exhausted "$missing"
   fi
 

@@ -112,7 +112,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta"
 
 # El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
 # contiene "ui", asi que su regex de palabras clave armaba el harness solo.
@@ -151,6 +151,76 @@ caso_g1_sentinel_con_frontera() {
   lab_run prompt claude "$(lab_payload_prompt 'el flag es -saikitx')"
   _vacio "stdout con frontera derecha rota" "$LAB_OUT"
   if lab_hay_estado; then _mal "-saikitx no debe armar (frontera derecha)"; fi
+}
+
+# DEFECTO A4 (clausula 1) — cerrado por la Task 3.4. Antes el estado se llaveaba
+# solo por proyecto, asi que dos sesiones del mismo repo compartian un solo
+# harness-state.env: un turno -saikit abandonado en una cobraba recibo a la otra.
+# Ahora se llavea por proyecto Y sesion (session_id viaja en cada payload).
+#
+# DOS mitades, como pide la revision (CORRECCION 10): no basta con "B no ve el
+# estado de A" — un hook que borrara TODO pasaria esa sola mitad. La otra ata que
+# el estado de A sobrevive intacto al turno de B.
+caso_g1_dos_sesiones_no_comparten_estado() {
+  # A arma con la sesion por defecto del banco. LAB_ESTADO_PATH queda apuntando a
+  # la ruta de A; las aserciones sobre A la leen ahi aunque cambiemos de sesion.
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tarea de la sesion A')"
+  ruta_A="$LAB_ESTADO_PATH"
+  _no_vacio "ruta de estado de A tras armar" "$ruta_A"
+
+  # B es OTRA sesion del mismo repo: le cambio el session_id al payload. El hook
+  # deriva otra ruta, no encuentra estado y deja pasar.
+  LAB_SESSION_ID="b2b20000-2222-4333-8444-555566667777"
+  lab_run stop claude "$(lab_payload_stop 'cierre de la sesion B')"
+  # Mitad 1: B no bloquea por el estado de A (no lo ve).
+  _igual "Stop de B sin su propio estado — no bloquea por A (A4 c.1)" "$LAB_RC" "0"
+  # Mitad 2: el estado de A sobrevive intacto al turno de B.
+  [ -f "$ruta_A" ] || _mal "el estado de A se borro al correr un turno de B (A4 c.1, mitad 2)"
+  _igual "cycle de A intacto tras el turno de B (A4 c.1, mitad 2)" \
+         "$(grep '^cycle=' "$ruta_A" | tail -n 1 | cut -d= -f2-)" "0"
+  # Restaurar la sesion por defecto para los casos siguientes.
+  LAB_SESSION_ID=""
+}
+
+# DEFECTO A4 (clausula 2) — cerrado por la Task 3.4. Antes un prompt sin sentinel
+# no tocaba el estado, asi que un turno -saikit abandonado segui cobrando recibo a
+# turnos que no lo pidieron. Ahora desarma: borra el estado de ESTA sesion, y el
+# Stop siguiente no bloquea. Acotado a PHASE=prompt (un SessionStart sin sentinel
+# no toca el estado — cursor arma ahi con -saikit en el texto).
+caso_g1_prompt_sin_sentinel_desarma() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt 'un prompt sin sentinel a mitad de turno')"
+  if lab_hay_estado; then _mal "un prompt sin sentinel debe desarmar (borrar el estado) — A4 c.2"; fi
+  lab_run stop claude "$(lab_payload_stop 'cierre sin estar armado')"
+  _igual "Stop tras desarme no bloquea (A4 c.2)" "$LAB_RC" "0"
+  _vacio "stdout del Stop tras desarme" "$LAB_OUT"
+}
+
+# DEFECTO A4 (clausula 3) — correccion al vuelo. Bajo el diseño confirmado
+# ("re-armar resetea cycle a 0"), el camino de armado pisa exactamente lo que el
+# desarme borraba (STATE_PATH/LOG_PATH/RN_ORDER_PATH), asi que "no desarmar" y
+# "desarmar y volver a armar" dejan estado byte a byte identico. Por eso este caso
+# es GUARDIA DE REGRESION: hoy da verde con el hook sano Y con uno que desarme
+# igual, y ninguna mutacion lo puede atrapar (declarado en docs/task-3.4-plan.md,
+# CORRECCION 3, opcion A). El dia que alguien vuelva parcial el camino de armado,
+# el caso empieza a discriminar. Se conserva para eso, no como prueba de hoy.
+caso_g1_correccion_al_vuelo_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit correccion al vuelo del turno')"
+  if ! lab_hay_estado; then _mal "una correccion al vuelo (prompt con -saikit) no desarma — A4 c.3 (guardia)"; fi
+}
+
+# DEFECTO A4 (costado de la CORRECCION 2 del plan) — session_id anidado. El
+# payload de Stop puede traer session_crons con su PROPIO session_id (depth>1).
+# json_top_level_string lo ignora (exige depth==1); el lector greedy
+# json_string_field tomaba la ULTIMA ocurrencia y re-llaveaba la ruta a mitad de
+# turno: el Stop buscaba estado en la ruta del intruso, no lo encontraba y dejaba
+# pasar. Gemelo de caso_g3_eco_fuera_de_tool_input_no_cuenta para session_id.
+# Hallazgo [media] de la cross-review codex sobre la 3.4.
+caso_g1_session_id_anidado_no_reescribe_ruta() {
+  lab_sembrar 123456 0 0 0 ""   # estado armado e incompleto (missing) bajo ESTA sesion
+  lab_run stop claude "$(lab_payload_stop_con_cron_intruso 'cierre con cron intruso')"
+  _igual "Stop con session_id anidado sigue viendo el estado de ESTA sesion (A4/C2)" "$LAB_RC" "2"
 }
 
 # ============================================ G2 — evidencia de verificacion
@@ -536,7 +606,7 @@ caso_g4_recibo_solo_en_transcript_pasa() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar"
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
@@ -574,6 +644,19 @@ caso_g5_ciclo_consumido_no_impide_cerrar() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado aunque haya ciclos gastados"; fi
+}
+
+# DEFECTO A4 (clausula 4) — cerrado por la Task 3.4. Antes el presupuesto agotado
+# dejaba el estado (cycle=MAX) en disco: el turno seguia cobrando recibo despues
+# de declararse agotado. Ahora lo limpia. Sibling de caso_g5_presupuesto_agotado
+# (que ata el contrato de salida); este ata la limpieza, para no mover la
+# declaracion del caso existente.
+caso_g5_agotado_limpia_estado() {
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
+  _igual "exit code del presupuesto agotado" "$LAB_RC" "0"
+  _contiene "stdout del presupuesto agotado" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
+  if lab_hay_estado; then _mal "presupuesto agotado debe limpiar el estado — A4 c.4"; fi
 }
 
 # ========================================== G6 — salidas por target y por fase

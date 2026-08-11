@@ -24,10 +24,14 @@
 # de extremo a extremo (`caso_g3_turno_completo_por_eventos_permite`), que si lo
 # maneja todo por eventos.
 #
-# La ruta del estado NO se recalcula (es un cksum de la ruta del proyecto): se
-# DESCUBRE armando un turno en `lab_init` y mirando donde quedo. Recalcularla
-# seria adivinar — si el hook cambiara de esquema, los casos sembrados
-# escribirian en un archivo que nadie lee y quedarian verdes por vacio.
+# La ruta del estado NO se recalcula: se DESCUBRE armando un turno y mirando donde
+# quedo. Hoy depende del proyecto Y de la sesion (Task 3.4 / A4), asi que dos
+# sesiones del mismo repo dejan estado en rutas distintas — pero el banco sigue
+# sin asumir el esquema: lo probea. Recalcularla seria adivinar — si el hook
+# cambiara de esquema, los casos sembrados escribirian en un archivo que nadie lee
+# y quedarian verdes por vacio. Por eso `lab_init` Y `lab_hook_swap` re-descubren
+# la ruta despues de cada cambio de hook (sin eso, un mutante que aplana la ruta
+# deja el LAB_ESTADO_PATH cacheado apuntando al hoyo y acredita el caso equivocado).
 #
 # API:
 #   lab_init [HOOK]      crea el banco y copia el hook (def: $HOOK_BAJO_PRUEBA)
@@ -81,11 +85,24 @@ lab_init() {
   lab_limpiar_estado
 }
 
-# Cambia el archivo bajo prueba conservando el banco (y por lo tanto la ruta de
-# estado ya descubierta, que depende solo de la ruta del proyecto). Lo usa la
-# bateria de mutaciones, que ejercita decenas de copias del mismo hook.
+# Cambia el archivo bajo prueba conservando el banco, y RE-DESCUBRE la ruta de
+# estado para el hook recien puesto. Lo usa la bateria de mutaciones: un mutante
+# puede cambiar el esquema de la ruta (p.ej. `mut_session_sin_llave` la aplana un
+# nivel), y si el banco conservara la ruta cacheada del hook sano, `lab_hay_estado`
+# miraria al hoyo y el caso se pondria rojo por la razon equivocada — acreditando
+# la mutacion a un caso anterior en vez del suyo. Re-descubrir lo arregla.
+#
+# Si el probe no halla estado (un mutante que rompe el armado del todo, que los
+# hay) NO se aborta como hace `lab_init`: se conserva la ruta anterior y se deja
+# que el caso se ponga rojo, que es justo lo que la bateria viene a comprobar.
 lab_hook_swap() {
   cp "$1" "$LAB/hooks/summonaikit-harness.sh" || return 1
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit descubrimiento de ruta tras swap')"
+  _swap_path="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+  if [ -n "$_swap_path" ]; then
+    LAB_ESTADO_PATH="$_swap_path"
+  fi
   lab_limpiar_estado
 }
 
@@ -106,7 +123,8 @@ lab_run() {
   fi
 
   lab_entrada="$LAB/entrada/paso-$LAB_PASO.json"
-  printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g" > "$lab_entrada"
+  lab_sid="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g; s|__SESSION_ID__|$lab_sid|g" > "$lab_entrada"
 
   lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            HOME="$LAB/home" USERPROFILE="$LAB/home")
@@ -158,8 +176,15 @@ lab_log() {
 # campos, mismo orden de claves, mismos nombres de herramienta. El hook no
 # parsea JSON — usa `sed` sobre el texto crudo — asi que la forma no es un
 # detalle cosmetico: de ella dependen los greps de todos los gates.
+#
+# session_id va como marcador __SESSION_ID__ y lo sustituye `lab_run` (mismo
+# mecanismo que __TRANSCRIPT__). Un caso puede correr dos sesiones del mismo
+# repo cambiando LAB_SESSION_ID entre llamadas (Task 3.4 / A4: dos sesiones no
+# comparten estado). El default es el UUID que usaba el lab antes del cambio,
+# para que los casos existentes sigan sin saber nada de sesiones.
+LAB_SESION_DEF="c1a70000-1111-4222-8333-444455556666"
 lab_payload_prompt() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
 }
 
 # El payload de SessionStart NO trae campo `prompt`: el hook cae al INPUT entero
@@ -168,13 +193,13 @@ lab_payload_prompt() {
 # Declarado: esta fase NO se capturo en la Task 1.4 (el capturador registra las
 # 3 fases que nombra su DoD), asi que su forma sigue siendo reconstruida.
 lab_payload_session() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","hook_event_name":"SessionStart","source":"resume","cwd":"/proyecto","summary":"%s"}' "$1"
+  printf '{"session_id":"__SESSION_ID__","hook_event_name":"SessionStart","source":"resume","cwd":"/proyecto","summary":"%s"}' "$1"
 }
 
 # La herramienta que invoca subagentes se llama `Agent`, no `Task` (medido: los
 # 8 payloads reales con subagent_type son todos tool_name=Agent).
 lab_payload_agent() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"paso del harness","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01a1b2c3d4e5f60718293a4b","duration_ms":4200}' "$1" "$1"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"paso del harness","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01a1b2c3d4e5f60718293a4b","duration_ms":4200}' "$1" "$1"
 }
 
 # DEFECTO A1 — el vector MEDIDO (escenario 12, paso 03): `subagent_type` como
@@ -184,38 +209,49 @@ lab_payload_agent() {
 # archivo que mencione el campo llega con las comillas escapadas, y ahi no hay
 # clave que leer.
 lab_payload_eco_subagent_type() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"/proyecto/docs/nota.md"},"tool_response":{"type":"text","eco_del_host":{"subagent_type":"%s"}},"tool_use_id":"toolu_01e5f60718293a4b5c6d7e8f","duration_ms":1200}' "$1"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"/proyecto/docs/nota.md"},"tool_response":{"type":"text","eco_del_host":{"subagent_type":"%s"}},"tool_use_id":"toolu_01e5f60718293a4b5c6d7e8f","duration_ms":1200}' "$1"
 }
 
 # Las dos ocurrencias a la vez, y el eco DESPUES de `tool_input`: es la forma
 # exacta en que el lector greedy pierde. Su `sed` arranca con `.*`, asi que se
 # queda con la ULTIMA — no solo inventa un rol, BORRA el legitimo.
 lab_payload_agent_con_eco() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"paso del harness","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","eco_del_host":{"subagent_type":"%s"},"resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01f60718293a4b5c6d7e8f90","duration_ms":4200}' "$1" "$1" "$2"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"paso del harness","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","eco_del_host":{"subagent_type":"%s"},"resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01f60718293a4b5c6d7e8f90","duration_ms":4200}' "$1" "$1" "$2"
 }
 
 # El tool_response real de Bash NO trae exitCode (0 de 59 payloads): la unica
 # senal de falla posible es el TEXTO de stdout/stderr. El segundo argumento es
 # ese stderr.
 lab_payload_bash() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
 }
 
 # Un evento de ADENTRO de un subagente: el rol viaja en `agent_type` de primer
 # nivel. 281 de 303 payloads reales son de esta forma.
 lab_payload_bash_en_subagente() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_id":"a11111111impleme","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c3d4e5f60718293a4b5c6d","duration_ms":1200}' "$1" "$2"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_id":"a11111111impleme","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c3d4e5f60718293a4b5c6d","duration_ms":1200}' "$1" "$2"
 }
 
 lab_payload_edit() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"filePath":"%s","oldString":"a","newString":"b","originalFile":"a","structuredPatch":[],"userModified":false,"replaceAll":false},"tool_use_id":"toolu_01d4e5f60718293a4b5c6d7e","duration_ms":1200}' "$1" "$1"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"filePath":"%s","oldString":"a","newString":"b","originalFile":"a","structuredPatch":[],"userModified":false,"replaceAll":false},"tool_use_id":"toolu_01d4e5f60718293a4b5c6d7e","duration_ms":1200}' "$1" "$1"
 }
 
 # El Stop real trae `last_assistant_message`: el texto final del asistente viaja
 # en el PROPIO payload, no solo en el transcript. O sea que el recibo y la pausa
 # tienen DOS canales, y el gate mira los dos (INPUT + tail del transcript).
 lab_payload_stop() {
-  printf '{"session_id":"c1a70000-1111-4222-8333-444455556666","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
+}
+
+# Un Stop cuya session_crons trae su PROPIO session_id (anidado, depth>1), distinto
+# del de primer nivel. Caso de regresion para la proteccion depth==1 de
+# json_top_level_string (Task 3.4 / A4, CORRECCION 2): una vuelta al lector greedy
+# `.*` tomaria el anidado como el de la sesion y re-llavearia la ruta a mitad de
+# turno, con lo que el Stop buscaba estado en otra ruta y dejaba pasar. No esta
+# confirmado en la captura de la 1.4 que session_crons traiga session_id; el caso
+# ATA la proteccion preventiva, igual que los casos A1 atan la de tool_input.
+lab_payload_stop_con_cron_intruso() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[{"id":"cron-x","session_id":"intruso-NO-es-la-sesion"}]}' "${1:-cierre.}"
 }
 
 # Una linea de transcript con texto del asistente. Los saltos van escapados
