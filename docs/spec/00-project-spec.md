@@ -980,6 +980,47 @@ herramienta, que es texto que el turno no escribió. Y la laxitud de
 medida como inerte en la § Mediciones de la línea base, y arreglarla no es parte
 de este renglón.
 
+#### Revisión cruzada de la Task 3.1 (Codex, 2026-08-10): 1 hallazgo, aceptado con el arreglo corregido
+
+Una ronda, sobre un worktree aparte con el diff de la tarea sin commitear
+(`hooks/` + `tests/`, 22 224 caracteres — bien por debajo de los 44 k que
+hicieron timeout en la retro de 2026-07-09). **Un solo hallazgo, severidad baja**,
+y no se tomó al pie de la letra:
+
+> `tests/golden/baseline.txt:927` agrega whitespace final; `git diff --check`
+> falla con exit 2 y puede romper controles de higiene o CI.
+
+**El hecho es cierto y la corrección obvia habría estado mal.** Lo que la
+verificación agregó:
+
+1. **Es preexistente, no una regresión de la 3.1.** Ya había 30 líneas así antes
+   del cambio (ahora 31), y `git diff --check` ya salía 2 en `3421ad0`, el commit
+   con que la Task 1.2 grabó la línea base por primera vez.
+2. **23 de las 31 son contenido GRABADO**, no suciedad: líneas vacías del stdout
+   del hook, que el arnés muestra con prefijo `| `. Ahí el espacio final es
+   fidelidad — quitarlo falsificaría la grabación, y el propio `--check` del
+   arnés marcaría divergencia contra su generador. Las otras 8 son `# `, del
+   prefijado de los README. O sea que arreglar el generador —la lectura natural
+   del hallazgo— **no habría alcanzado el objetivo**: las 23 seguirían ahí.
+3. **La línea base es el único archivo versionado del repo con whitespace final**
+   (medido sobre `git ls-files` entero). El resto cumple la disciplina al 100%.
+
+Por eso el arreglo va en `.gitattributes` y no en el artefacto ni en el
+generador: `tests/golden/** -whitespace` exime al path del chequeo, deja
+`git diff --check` en 0, no toca un archivo que su propia cabecera declara "NO
+editar a mano", y **no se derrama** al resto del repo (verificado con
+`git check-attr`: `unset` sólo ahí, `unspecified` en el código). `text eol=lf`
+sigue vigente para el path, que es lo que sostiene la comparación byte a byte
+entre máquinas.
+
+**Declarado y no corregido**: el generador sigue emitiendo `# ` al prefijar una
+línea en blanco de un README. Con el path ya exento no cambia nada observable, y
+corregirlo obligaría a regrabar la línea base entera —30 líneas de ruido— dentro
+de la tarea cuya evidencia es justamente que el diff fueron 4 líneas y un solo
+escenario.
+
+**Sin hallazgos residuales.** Una sola ronda, como manda la política.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

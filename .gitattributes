@@ -14,6 +14,20 @@
 tests/fixtures/** text eol=lf
 tests/golden/**   text eol=lf
 
+# La linea base es una GRABACION, y su whitespace final es FIEL, no suciedad:
+# 23 de sus 31 lineas con espacio al final son `| ` — lineas vacias del stdout
+# del hook, que el arnes muestra con ese prefijo. Quitarlas a mano falsificaria
+# la grabacion, y el propio `--check` marcaria divergencia contra el generador.
+# (Las otras 8 son `# `, del prefijado de los README; cosmeticas, no se tocan
+# para no obligar a regrabar el archivo entero por un espacio.)
+#
+# Sin este atributo `git diff --check` sale 2 sobre cualquier commit que toque
+# el archivo — medido, ya pasaba desde que la Task 1.2 lo grabo por primera vez
+# (3421ad0). Se acota al path del artefacto a proposito: medido tambien, es el
+# UNICO archivo versionado del repo con whitespace final, asi que el resto sigue
+# bajo la disciplina que hoy cumple al 100%.
+tests/golden/** -whitespace
+
 # El manifiesto de destinos conocidos se parsea por campos: con CRLF, una linea
 # que tenga SOLO el hash deja el `\r` pegado al campo 1 y el vendor conocido
 # pasa a clasificarse "desconocido". El instalador ya tolera el `\r`, pero el
