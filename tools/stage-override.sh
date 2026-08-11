@@ -130,9 +130,13 @@ global_antes="$(huella_global)"
 decir "[summonaikit] staging por override de proyecto"
 decir "              repo:    $REPO"
 decir "              destino: $DEST"
-if ! bash "$INSTALADOR" --dest "$DEST" --source "$SOURCE" --manifest "$MANIFEST" --no-registration-check; then
-  rc=$?
-  decir "[summonaikit] staging: el instalador no dejo el archivo (exit $rc). No se toco nada mas."
+bash "$INSTALADOR" --dest "$DEST" --source "$SOURCE" --manifest "$MANIFEST" --no-registration-check
+rc_inst=$?
+# El `$?` se captura DIRECTO y no adentro de un `if ! …`: ahi el `$?` de la rama
+# es el del `!`, o sea 0, y todo fallo del instalador se anunciaba como "exit 0"
+# — un exit code que nunca paso (revision cruzada, Codex 2026-08-10).
+if [ "$rc_inst" -ne 0 ]; then
+  decir "[summonaikit] staging: el instalador no dejo el archivo (exit $rc_inst). No se toco nada mas."
   exit 5
 fi
 
@@ -150,10 +154,16 @@ decir "[summonaikit] el hook global quedo intacto (medido antes y despues)."
 # No se lee el comando para creerle: se lo EJECUTA con el repo como cwd y se mira
 # cual de los dos hooks corrio. Un settings con el fallback borrado se ve igual
 # de bien en una lectura superficial y deja el staging sin efecto.
-python_bin=''
-for c in python3 python py; do
-  if command -v "$c" >/dev/null 2>&1; then python_bin="$c"; break; fi
-done
+# `SAIKIT_PYTHON` es la costura que permite inyectar un interprete que falle y
+# exigir que este script lo trate como `unknown`. Sin ella ese camino no se puede
+# poner en rojo desde la suite, y un guardia que ningun caso mata es una promesa
+# escrita, no una bateria.
+python_bin="${SAIKIT_PYTHON:-}"
+if [ -z "$python_bin" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1; then python_bin="$c"; break; fi
+  done
+fi
 if [ -z "$python_bin" ]; then
   decir "[summonaikit] unknown — no hay interprete python para leer el settings."
   decir "              El archivo quedo instalado; lo que no se pudo es medir si el registro lo prefiere."
@@ -181,16 +191,34 @@ PY
 )"
 rc_cmd=$?
 
-if [ "$rc_cmd" -eq 1 ]; then
-  decir "[summonaikit] unknown — no se pudo leer el settings: $SETTINGS"
-  decir "              No se afirma que el registro prefiera (ni que no prefiera) el override."
-  exit 4
-fi
-if [ "$rc_cmd" -ne 0 ] || [ -z "$comando" ]; then
-  decir "[summonaikit] EL HOOK NO ESTA REGISTRADO en UserPromptSubmit: $SETTINGS"
-  decir "              Sin registro no hay turno que gatear, ni en el repo ni en el perfil."
-  exit 3
-fi
+# Los tres desenlaces son distintos y se mapean explicitamente. Antes cualquier
+# rc != 1 que no fuera 0 caia en "no esta registrado": afirmar la ausencia del
+# registro a partir de un interprete que murio es exactamente la Core Rule 2 al
+# reves (revision cruzada, Codex 2026-08-10).
+case "$rc_cmd" in
+  0)
+    if [ -z "$comando" ]; then
+      decir "[summonaikit] unknown — el lector del settings dijo que si pero no devolvio comando."
+      decir "              settings: $SETTINGS"
+      exit 4
+    fi
+    ;;
+  2)
+    decir "[summonaikit] EL HOOK NO ESTA REGISTRADO en UserPromptSubmit: $SETTINGS"
+    decir "              Sin registro no hay turno que gatear, ni en el repo ni en el perfil."
+    exit 3
+    ;;
+  1)
+    decir "[summonaikit] unknown — no se pudo leer el settings: $SETTINGS"
+    decir "              No se afirma que el registro prefiera (ni que no prefiera) el override."
+    exit 4
+    ;;
+  *)
+    decir "[summonaikit] unknown — el lector del settings fallo (exit $rc_cmd): $SETTINGS"
+    decir "              No se afirma nada sobre el registro: no se pudo mirar."
+    exit 4
+    ;;
+esac
 
 # El HOME desechable es lo que vuelve inequivoca la medicion: ahi el fallback
 # global apunta a un archivo que NO existe, asi que si el comando corre algo, fue
@@ -202,16 +230,71 @@ medicion_home="$(mktemp -d "${TMPDIR:-/tmp}/saikit-stage-home-XXXXXX")" || {
 mkdir -p "$medicion_home/.claude/hooks"
 
 estado_dir="$REPO/.claude/hooks/state"
-# Dos huellas y no una: la de CONTENIDO decide si el hook corrio, y la de NOMBRES
-# dice que limpiar. Comparar solo los nombres daba un falso "no prefiere el
-# override" en la segunda corrida sobre el mismo staging: ahi el hook re-arma
-# sobre los archivos que ya estaban, la lista no cambia, y la herramienta habria
-# concluido que no corrio nada. El log de evidencia lleva TIMESTAMP, asi que el
-# contenido si cambia.
-estado_contenido() { find "$estado_dir" -type f -print0 2>/dev/null | sort -z | xargs -0 -r cksum 2>/dev/null; }
-estado_nombres()   { find "$estado_dir" -type f 2>/dev/null | sort; }
-estado_antes="$(estado_contenido)"
-nombres_antes="$(estado_nombres)"
+
+# El estado que ya estaba se APARTA entero antes de medir, y se devuelve despues.
+# Comparar huellas no alcanzaba: el turno de prueba ARMA el harness, asi que
+# reescribe `harness-state.env` y agrega lineas al log del estado que encuentre.
+# Conservar los archivos y no su contenido dejaba el proximo turno REAL de ese
+# repo armado por una medicion — el defecto A4 reproducido a mano por la
+# herramienta que venia a ayudar (revision cruzada, Codex 2026-08-10).
+#
+# Apartarlo tiene ademas una ventaja de metodo: la medicion corre sobre un estado
+# vacio, asi que "aparecio algo" es una senal limpia y no una diferencia de
+# huellas que hay que interpretar.
+estado_guardado=''
+# Dos banderas, y las dos hacen falta. `medicion_corrida` es la UNICA licencia
+# para borrar `$estado_dir` entero: solo despues de que el turno de prueba corrio
+# sobre un directorio vacio se puede afirmar que todo lo que hay adentro es de la
+# medicion. Sin esa condicion, una salida temprana con el trap ya instalado
+# borraria el estado del operador — el trap que existe para protegerlo.
+estado_apartado=0
+medicion_corrida=0
+# Devolver NUNCA puede perder lo apartado en silencio: si el borrado de lo que
+# creo la medicion falla, o si el `mv` de vuelta falla, se dice DONDE quedo. Un
+# "no se pudo" a gritos es recuperable; un borrado callado no.
+devolver_estado() {
+  if [ "$medicion_corrida" -eq 1 ]; then rm -rf "$estado_dir" 2>/dev/null; fi
+  # Idempotente a proposito: esta funcion corre una vez explicita (para poder
+  # imprimir despues) y otra por el trap. Sin apagar la bandera, la segunda
+  # pasada borraba el estado que la primera acababa de devolver.
+  medicion_corrida=0
+  [ "$estado_apartado" -eq 1 ] || return 0
+  estado_apartado=0
+  if [ -e "$estado_dir" ]; then
+    decir "[summonaikit] ALERTA: no se pudo limpiar $estado_dir tras la medicion."
+    decir "              El estado que habia quedo INTACTO en $estado_guardado/state"
+    estado_guardado=''
+    return 0
+  fi
+  if mv "$estado_guardado/state" "$estado_dir" 2>/dev/null; then
+    rmdir "$estado_guardado" 2>/dev/null
+  else
+    decir "[summonaikit] ALERTA: el estado previo no se pudo devolver a su lugar."
+    decir "              Quedo INTACTO en $estado_guardado/state — moverlo a mano a $estado_dir"
+  fi
+  estado_guardado=''
+}
+limpiar_medicion() {
+  devolver_estado
+  [ -n "${medicion_home:-}" ] && rm -rf "$medicion_home"
+  medicion_home=''
+}
+# Todo lo que hay que deshacer se deshace en UN solo lugar: si el script muere
+# entre el apartado y la devolucion, el operador perderia el estado de su repo, y
+# cada `exit` intermedio se olvidaria del temporal.
+trap 'limpiar_medicion' EXIT INT TERM
+
+if [ -d "$estado_dir" ]; then
+  if ! estado_guardado="$(mktemp -d "${TMPDIR:-/tmp}/saikit-stage-estado-XXXXXX")" \
+     || ! mv "$estado_dir" "$estado_guardado/state"; then
+    decir "[summonaikit] unknown — no se pudo apartar el estado previo para medir sin pisarlo."
+    decir "              No se midio nada: medir hubiera reescrito el estado de este repo."
+    [ -n "$estado_guardado" ] && rmdir "$estado_guardado" 2>/dev/null
+    estado_guardado=''
+    exit 4
+  fi
+  estado_apartado=1
+fi
 
 payload="$(printf '{"session_id":"stage-override","transcript_path":"","cwd":"%s","hook_event_name":"UserPromptSubmit","permission_mode":"auto","prompt":"medicion del staging -saikit"}' \
   "$(printf '%s' "$REPO" | sed 's/\\/\\\\/g')")"
@@ -219,21 +302,26 @@ payload="$(printf '{"session_id":"stage-override","transcript_path":"","cwd":"%s
 salida="$(cd "$REPO" && printf '%s' "$payload" \
   | env HOME="$medicion_home" USERPROFILE="$medicion_home" bash -c "$comando" 2>&1)"
 rc_medicion=$?
+# Desde aca, y solo desde aca, lo que haya en $estado_dir es de la medicion.
+medicion_corrida=1
 
-estado_despues="$(estado_contenido)"
-nombres_despues="$(estado_nombres)"
-rm -rf "$medicion_home"
+# La medicion corrio sobre un estado VACIO, asi que cualquier cosa que haya
+# aparecido la escribio el hook del proyecto. Es una senal limpia y no una
+# diferencia de huellas que haya que interpretar.
+corrio_el_override=0
+[ -n "$(find "$estado_dir" -type f 2>/dev/null | head -n 1)" ] && corrio_el_override=1
 
-if [ "$estado_antes" != "$estado_despues" ]; then
+if [ "$corrio_el_override" -eq 1 ]; then
   decir "[summonaikit] MEDIDO: el registro prefiere el override del proyecto."
   decir "              El turno de prueba armo el harness en $estado_dir"
-  # Se limpia lo que la medicion creo, y SOLO eso: se compara contra los nombres
-  # de antes, no contra la huella de contenido. El estado que ya estaba no es de
-  # la prueba y no le corresponde a esta herramienta borrarlo.
-  printf '%s\n' "$nombres_despues" | while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    printf '%s\n' "$nombres_antes" | grep -qxF "$f" || rm -f "$f"
-  done
+  # El estado de la prueba se borra ENTERO —es todo suyo— y el que habia vuelve a
+  # su lugar. El operador tiene que empezar su turno real como estaba.
+  if [ "$rc_medicion" -ne 0 ]; then
+    # No mueve el veredicto: lo que se afirma es que corrio el hook del proyecto,
+    # y eso ya quedo demostrado. Pero callarlo seria esconder un dato del turno.
+    decir "              (nota: el comando registrado termino con exit $rc_medicion)"
+  fi
+  limpiar_medicion
   decir "              (el estado de la medicion se borro; el staging arranca limpio)"
   decir ""
   decir "Ahora, el turno REAL — es el unico paso que no se puede hacer desde aca,"
@@ -247,6 +335,7 @@ if [ "$estado_antes" != "$estado_despues" ]; then
   exit 0
 fi
 
+limpiar_medicion
 decir "[summonaikit] EL REGISTRO NO PREFIERE EL OVERRIDE — el staging seria una ilusion."
 decir "              settings: $SETTINGS"
 decir "              El turno de prueba no armo nada en $estado_dir (exit $rc_medicion)."

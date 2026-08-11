@@ -110,15 +110,29 @@ caso "una segunda corrida sobre estado preexistente sigue midiendo bien"
 # y el caso pasaria sin discriminar nada — asi quedo escrito la primera vez.
 proj_real="$(cd "$repo_stage" && git rev-parse --show-toplevel)"
 key_real="$(printf '%s' "$proj_real" | cksum | cut -d ' ' -f 1)"
-mkdir -p "$repo_stage/.claude/hooks/state/$key_real"
-printf 'HARNESS_ARMED=1\n' > "$repo_stage/.claude/hooks/state/$key_real/harness-state.env"
-printf 'evidencia de un turno anterior\n' > "$repo_stage/.claude/hooks/state/$key_real/harness-evidence.log"
+estado_previo="$repo_stage/.claude/hooks/state/$key_real"
+mkdir -p "$estado_previo"
+printf 'HARNESS_ARMED=1\n' > "$estado_previo/harness-state.env"
+printf 'evidencia de un turno anterior\n' > "$estado_previo/harness-evidence.log"
+sha_estado="$(sha256sum < "$estado_previo/harness-state.env")"
+sha_log="$(sha256sum < "$estado_previo/harness-evidence.log")"
 out="$(bash "$tool" "$repo_stage" --source "$fuente" --manifest "$manifiesto" --settings "$settings" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "la segunda corrida deberia seguir midiendo el override, dio $rc: $out"
 printf '%s' "$out" | grep -qi 'MEDIDO' || malo "no midio la preferencia con estado preexistente: $out"
-[ -f "$repo_stage/.claude/hooks/state/$key_real/harness-state.env" ] \
-  || malo "borro estado que no era de la medicion"
-rm -rf "$repo_stage/.claude/hooks/state/$key_real"
+[ -f "$estado_previo/harness-state.env" ] || malo "borro estado que no era de la medicion"
+
+# Hallazgo de la revision cruzada (Codex, 2026-08-10): conservar el ARCHIVO no
+# alcanza. El turno de prueba arma el harness, y si eso reescribe el estado que
+# ya estaba, el siguiente turno REAL de ese repo arranca armado por una medicion
+# — el defecto A4 reproducido a mano por la herramienta que venia a ayudar.
+caso "la medicion no altera el CONTENIDO del estado preexistente"
+[ -f "$estado_previo/harness-state.env" ] \
+  && [ "$(sha256sum < "$estado_previo/harness-state.env")" = "$sha_estado" ] \
+  || malo "la medicion piso el contenido de harness-state.env"
+[ -f "$estado_previo/harness-evidence.log" ] \
+  && [ "$(sha256sum < "$estado_previo/harness-evidence.log")" = "$sha_log" ] \
+  || malo "la medicion dejo su rastro en harness-evidence.log"
+rm -rf "$estado_previo"
 
 caso "el turno de prueba no dejo nada en el perfil"
 [ -e "$HOME/.claude/hooks/state" ] && [ -n "$(find "$HOME/.claude/hooks/state" -type f 2>/dev/null)" ] \
@@ -151,6 +165,62 @@ printf '%s' "$out" | grep -qi 'unknown' \
   || malo "Core Rule 2: no poder mirar el settings no es 'el registro no lo prefiere': $out"
 cmp -s "$repo_stage/.claude/hooks/summonaikit-harness.sh" "$fuente" \
   || malo "no dejo el archivo instalado pese a que lo unico que fallo fue la medicion"
+
+# ------------------------------ 5-bis) lo que el instalador ya dijo, no se pierde
+# Hallazgo de la revision cruzada: con `if ! bash …; then rc=$?`, el `$?` de
+# adentro de la rama es el del `!` — o sea 0 — asi que TODO fallo del instalador
+# se anunciaba como "exit 0". El operador leia un exit code que no habia pasado.
+caso "si el instalador falla, se reporta SU exit code y no un 0 inventado"
+nuevo_repo
+inst_falla="$tmp/instalador-que-falla.sh"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$inst_falla"
+out="$(bash "$tool" "$repo_stage" --source "$fuente" --manifest "$manifiesto" --settings "$settings" --installer "$inst_falla" 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "esperaba exit 5 cuando el instalador falla, dio $rc: $out"
+printf '%s' "$out" | grep -q 'exit 3' \
+  || malo "no nombra el exit code real del instalador (3): $out"
+
+# ------------------------------- 5-ter) un settings raro tampoco acusa al registro
+# Core Rule 2: el script que lee el settings distingue "lo lei y el hook no esta"
+# (rc 2) de "no lo pude leer" (rc 1). Cualquier OTRO fallo — un python roto, un
+# crash del interprete — es tambien no-poder-mirar, y antes caia en la rama que
+# afirma que el hook no esta registrado.
+caso "settings que parsea pero no es un objeto => 'unknown', no 'no esta registrado'"
+nuevo_repo
+settings_raro="$tmp/settings-raro.json"
+printf '[]\n' > "$settings_raro"
+out="$(bash "$tool" "$repo_stage" --source "$fuente" --manifest "$manifiesto" --settings "$settings_raro" 2>&1)"; rc=$?
+[ "$rc" -eq 4 ] || malo "esperaba exit 4 (unknown) con un settings que no es un objeto, dio $rc: $out"
+printf '%s' "$out" | grep -qi 'unknown' || malo "no lo reporta como unknown: $out"
+
+# El caso que el hallazgo pedia y que sin costura no se podia construir: un
+# interprete que muere con un codigo cualquiera. Antes caia en la rama que
+# AFIRMA que el hook no esta registrado.
+caso "un interprete que muere con un rc cualquiera => 'unknown', no una acusacion"
+nuevo_repo
+py_roto="$tmp/python-roto.sh"
+printf '#!/usr/bin/env bash\nexit 42\n' > "$py_roto"
+chmod +x "$py_roto"
+out="$(SAIKIT_PYTHON="$py_roto" bash "$tool" "$repo_stage" --source "$fuente" --manifest "$manifiesto" --settings "$settings" 2>&1)"; rc=$?
+[ "$rc" -eq 4 ] || malo "esperaba exit 4 (unknown) con un interprete que sale 42, dio $rc: $out"
+printf '%s' "$out" | grep -qi 'unknown' || malo "no lo reporta como unknown: $out"
+printf '%s' "$out" | grep -qi 'NO ESTA REGISTRADO' \
+  && malo "afirma que el hook no esta registrado sin haber podido mirar (Core Rule 2): $out"
+
+# El estado previo tiene que volver a su lugar TAMBIEN por el camino de fallo:
+# apartarlo y no devolverlo seria perder el estado del operador justo cuando la
+# herramienta ya le esta diciendo que algo anda mal.
+caso "el estado previo vuelve a su lugar aunque la medicion concluya que no anda"
+nuevo_repo
+proj2="$(cd "$repo_stage" && git rev-parse --show-toplevel)"
+key2="$(printf '%s' "$proj2" | cksum | cut -d ' ' -f 1)"
+mkdir -p "$repo_stage/.claude/hooks/state/$key2"
+printf 'HARNESS_ARMED=1\n' > "$repo_stage/.claude/hooks/state/$key2/harness-state.env"
+sha2="$(sha256sum < "$repo_stage/.claude/hooks/state/$key2/harness-state.env")"
+out="$(bash "$tool" "$repo_stage" --source "$fuente" --manifest "$manifiesto" --settings "$settings_malo" 2>&1)"; rc=$?
+[ "$rc" -eq 3 ] || malo "esperaba exit 3 con el registro sin override, dio $rc"
+[ -f "$repo_stage/.claude/hooks/state/$key2/harness-state.env" ] \
+  && [ "$(sha256sum < "$repo_stage/.claude/hooks/state/$key2/harness-state.env")" = "$sha2" ] \
+  || malo "perdio el estado previo por el camino de fallo"
 
 # --------------------------------- 6) el registro REAL sigue teniendo esta forma
 # Sin este caso la bateria quedaria verde contra su propio literal el dia que

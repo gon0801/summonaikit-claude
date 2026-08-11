@@ -129,6 +129,53 @@ sha_de() {
   esac
 }
 
+# La consulta al manifiesto, en UN solo lugar, porque la usan las dos
+# direcciones: clasificar el destino antes de instalar, y decidir si el backup
+# que se va a restaurar es algo que alguien miro alguna vez.
+#
+#   0 = el hash figura (etiqueta en $detalle_manifiesto)
+#   1 = se miro y NO figura
+#   2 = no se pudo mirar (Core Rule 2: eso no es lo mismo que 1)
+#
+# El `\r` se saca antes de comparar: en un checkout Windows el manifiesto puede
+# llegar con CRLF, y ahi una linea que tenga SOLO el hash dejaria el `\r` pegado
+# al campo 1. El vendor conocido pasaria a "desconocido" y el instalador se
+# plantaria en una maquina y no en otra — la peor forma de romperse.
+# `.gitattributes` ya lo fuerza a LF; esto cubre el archivo que llegue editado
+# por otra herramienta.
+detalle_manifiesto=''
+motivo_manifiesto=''
+hash_en_manifiesto() {
+  local archivo="$1" sha
+  detalle_manifiesto=''
+  motivo_manifiesto=''
+  if [ -z "$sha_bin" ]; then
+    motivo_manifiesto="no hay sha256sum ni shasum para comparar contra el manifiesto"
+    return 2
+  fi
+  if [ ! -r "$MANIFEST" ]; then
+    motivo_manifiesto="el manifiesto no se puede leer: $MANIFEST"
+    return 2
+  fi
+  sha="$(sha_de "$archivo")" || sha=''
+  if [ -z "$sha" ]; then
+    motivo_manifiesto="no se pudo calcular el sha256 de $archivo"
+    return 2
+  fi
+  if awk -v h="$sha" '
+        { sub(/\r$/, "") }
+        /^[[:space:]]*(#|$)/ { next }
+        $1 == h { found = 1; exit }
+        END { exit found ? 0 : 1 }' "$MANIFEST"; then
+    detalle_manifiesto="$(awk -v h="$sha" '
+        { sub(/\r$/, "") }
+        $1 == h { $1 = ""; sub(/^[[:space:]]+/, ""); print; exit }' "$MANIFEST")"
+    return 0
+  fi
+  detalle_manifiesto="sha256 $sha, que no figura en el manifiesto"
+  return 1
+}
+
 # ------------------------------------------------------- clasificar el destino
 dest_dir="$(dirname "$DEST")"
 
@@ -157,38 +204,15 @@ elif grep -q "^$MARCADOR_PREFIJO" "$DEST"; then
   # habilita a pisarlo.
   estado='DESCONOCIDO'
   detalle="tiene el marcador fuera de la linea $MARCADOR_LINEA o con otro formato"
-elif [ -z "$sha_bin" ]; then
-  estado='NO_OBSERVABLE'
-  detalle="no hay sha256sum ni shasum para comparar contra el manifiesto"
-elif [ ! -r "$MANIFEST" ]; then
-  # Core Rule 2: no poder consultar el manifiesto NO es haber visto que el hash
-  # falta. El destino no queda acusado de nada.
-  estado='NO_OBSERVABLE'
-  detalle="el manifiesto no se puede leer: $MANIFEST"
 else
-  dest_sha="$(sha_de "$DEST")" || dest_sha=''
-  if [ -z "$dest_sha" ]; then
-    estado='NO_OBSERVABLE'
-    detalle="no se pudo calcular el sha256 del destino"
-  # El `\r` se saca antes de comparar: en un checkout Windows el manifiesto
-  # puede llegar con CRLF, y ahi una linea que tenga SOLO el hash dejaria el
-  # `\r` pegado al campo 1. El vendor conocido pasaria a "desconocido" y el
-  # instalador se plantaria en una maquina y no en otra — la peor forma de
-  # romperse. `.gitattributes` ya lo fuerza a LF; esto cubre el archivo que
-  # llegue editado por otra herramienta.
-  elif awk -v h="$dest_sha" '
-         { sub(/\r$/, "") }
-         /^[[:space:]]*(#|$)/ { next }
-         $1 == h { found = 1; exit }
-         END { exit found ? 0 : 1 }' "$MANIFEST"; then
-    estado='VENDOR_CONOCIDO'
-    detalle="$(awk -v h="$dest_sha" '
-         { sub(/\r$/, "") }
-         $1 == h { $1 = ""; sub(/^[[:space:]]+/, ""); print; exit }' "$MANIFEST")"
-  else
-    estado='DESCONOCIDO'
-    detalle="sha256 $dest_sha, que no figura en el manifiesto"
-  fi
+  # Core Rule 2: no poder consultar el manifiesto NO es haber visto que el hash
+  # falta. En ese caso el destino no queda acusado de nada.
+  hash_en_manifiesto "$DEST"
+  case $? in
+    0) estado='VENDOR_CONOCIDO'; detalle="$detalle_manifiesto" ;;
+    1) estado='DESCONOCIDO';     detalle="$detalle_manifiesto" ;;
+    *) estado='NO_OBSERVABLE';   detalle="$motivo_manifiesto" ;;
+  esac
 fi
 
 # --------------------------------------------- escritura atomica y archivado
@@ -345,6 +369,35 @@ if [ "$RESTORE" -eq 1 ]; then
     decir "              backup: $elegido"
     exit 4
   fi
+
+  # El backup tambien tiene que ser CONOCIDO, y va antes que todo lo demas.
+  # Hallazgo de la revision cruzada (Codex, 2026-08-10): el instalador se niega a
+  # tocar un destino desconocido y su vuelta atras instalaba cualquier archivo
+  # que llevara el nombre correcto y parseara. Lo que se escribe es la ruta que
+  # gatea CADA turno, asi que "no lo miramos, no lo escribimos" vale para las dos
+  # direcciones. Un backup legitimo siempre pasa: solo se etiqueta `vendor` lo
+  # que el instalador ya habia clasificado como vendor conocido.
+  hash_en_manifiesto "$elegido"
+  case $? in
+    0) : ;;
+    1)
+      decir "[summonaikit] BACKUP DESCONOCIDO — no se restauro nada."
+      decir "              backup: $elegido"
+      decir "              $detalle_manifiesto"
+      decir "              Lleva el nombre de un backup del vendor, pero su contenido no es ninguno"
+      decir "              de los que este repo ya miro. Restaurarlo instalaria en la ruta que gatea"
+      decir "              cada turno un archivo que nadie reviso: revisalo, y si corresponde agrega"
+      decir "              su sha256 a $MANIFEST con una etiqueta que diga que es."
+      exit 3
+      ;;
+    *)
+      decir "[summonaikit] unknown — no se pudo comprobar el backup contra el manifiesto."
+      decir "              backup: $elegido"
+      decir "              $motivo_manifiesto"
+      decir "              No se afirma que el backup sea desconocido: no se pudo mirar (Core Rule 2)."
+      exit 4
+      ;;
+  esac
 
   # Idempotencia, y va ANTES de juzgar el destino: si ya es byte a byte el backup
   # que ibamos a poner, no hay nada que pisar ni nada que decidir. Sin esto, una

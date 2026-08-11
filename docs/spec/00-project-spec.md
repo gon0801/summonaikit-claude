@@ -775,6 +775,62 @@ fotografía los hooks al arrancar, así que "gatea turnos reales" en vivo es un
 paso con persona adelante, igual que la captura de la Task 1.4.
 `tools/stage-override.sh` imprime el procedimiento al terminar.
 
+#### Revisión cruzada de la Task 2.4 (Codex, 2026-08-10): 5 hallazgos, 4 aceptados y 1 a medias
+
+Una ronda. La cadena `auto` empezó por kimi, que **se colgó a los 600 s** —
+intentó correr la suite entera, que tarda ~18 min — y siguió con Codex. Ninguno
+se tomó al pie de la letra.
+
+1. **`--restore-vendor` no comprobaba el backup contra el manifiesto.** Aceptado,
+   con la severidad matizada: no agrega superficie de escritura (quien pueda
+   plantar un backup en `saikit-backups/` ya puede escribir el hook), pero es una
+   **incoherencia real** — el instalador se niega a tocar un destino desconocido
+   y su vuelta atrás instalaba en la ruta que gatea cada turno cualquier archivo
+   que llevara el nombre correcto y parseara. Por construcción todo backup
+   `.vendor.` legítimo tiene su hash en el manifiesto (sólo se etiqueta así lo
+   que el instalador ya clasificó como vendor conocido), así que exigirlo no
+   rompe ningún flujo. De paso, la consulta al manifiesto quedó en **una sola
+   función** que comparten la ida y la vuelta.
+2. **La medición del staging pisaba el CONTENIDO del estado preexistente.**
+   Aceptado, y era el peor: el turno de prueba *arma* el harness, así que
+   reescribía `harness-state.env` y el log del estado que encontrara. Conservar
+   los archivos y no su contenido dejaba el siguiente turno REAL de ese repo
+   armado por una medición — **A4 reproducido a mano** por la herramienta que
+   venía a ayudar. El caso que lo tapaba era propio y comprobaba que el archivo
+   existiera, no que no hubiera cambiado. Arreglo: el estado se **aparta entero**
+   antes de medir y se devuelve después; la medición corre sobre un directorio
+   vacío, así que "apareció algo" es una señal limpia en vez de una diferencia de
+   huellas que interpretar.
+3. **`MEDIDO` ignoraba el exit code del comando.** Aceptado a medias: lo que se
+   afirma es que corrió el hook del proyecto, y eso queda demostrado aunque el
+   comando termine mal — mezclarlos confundiría dos afirmaciones distintas. Pero
+   callarlo escondía un dato del turno, así que ahora se dice como nota, sin
+   mover el veredicto.
+4. **`rc=$?` dentro de `if ! bash …` siempre vale 0.** Aceptado: todo fallo del
+   instalador se anunciaba como "exit 0", un código que nunca pasó.
+5. **Cualquier fallo del lector del settings distinto de rc 1 se reportaba como
+   "no está registrado".** Aceptado, y es lo más grave de los tres bajos:
+   afirmar la ausencia del registro porque el intérprete murió es la Core Rule 2
+   al revés. Ahora los tres desenlaces se mapean explícitamente y el catch-all es
+   `unknown`.
+
+**Lo que la corrección de estos hallazgos dejó, además de los arreglos**: dos
+defectos propios que aparecieron al implementarlos y que ningún revisor había
+visto — `limpiar_medicion` no era idempotente (corre explícita y por trap, y la
+segunda pasada borraba el estado que la primera acababa de devolver), y el
+borrado de lo que crea la medición necesitaba una bandera propia
+(`medicion_corrida`), porque sin ella una salida temprana con el trap ya
+instalado habría borrado el estado del operador — el trap que existe para
+protegerlo. Los dos los encontró la propia batería.
+
+**Costura nueva y declarada**: `SAIKIT_PYTHON` permite inyectar un intérprete que
+muera con un código cualquiera. Sin ella el hallazgo 5 no se podía poner en rojo
+desde la suite, y un guardia que ningún caso mata es una promesa escrita, no una
+batería.
+
+**Total tras la ronda: 17 mutaciones dirigidas, 17 atrapadas.** Una sola ronda,
+como manda la política; no quedaron hallazgos residuales sin cerrar.
+
 **Y una mitad de la DoD es incumplible hoy, por A10.** La tarea pedía que tras el
 install global "un turno `-saikit` real bloquee". Con recibo y evidencia
 presentes eso depende de la rama exclusiva de Claude, que es justo la que A10
