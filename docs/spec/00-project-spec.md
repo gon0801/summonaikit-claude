@@ -1021,6 +1021,65 @@ escenario.
 
 **Sin hallazgos residuales.** Una sola ronda, como manda la política.
 
+### El segundo host: zcode (GLM) — premisas medidas 2026-08-10
+
+`zcode` es el CLI propio de Z.ai (paquete npm `zcode-app-cli`, config en
+`~/.zcode/`). **No confundirlo con el launcher `glm`**, que es otra cosa medida
+el mismo día: `glm` hace `exec claude` con `ANTHROPIC_BASE_URL` apuntando a Z.ai
+y sin tocar `CLAUDE_CONFIG_DIR`, así que una sesión `glm` **ya está gateada hoy**
+por este hook — los hooks los ejecuta el CLI, no el modelo, y el comando
+registrado no nombra modelo ni proveedor (verificado con
+`tools/check-hook-registration.sh` contra el settings real).
+
+Lo medido de zcode, leyendo su config real y el bundle del CLI (incluida su
+propia guía `zcode-guide-plugin/skills/diagnosing-hooks`):
+
+1. **Tiene sistema de hooks, con el mismo contrato.** Config en
+   `~/.zcode/cli/config.json`, forma
+   `{enabled, timeoutMs, maxOutputBytes, events: {<Evento>: [{matcher, hooks:[{type,command,timeout}]}]}}`.
+   El wrapper difiere del de Claude (`hooks.events.X` contra `hooks.X`); **el
+   array interno es idéntico**.
+2. **Los 7 eventos incluyen los 3 que este hook necesita**: `UserPromptSubmit`,
+   `PostToolUse`, `Stop` (más `SessionStart`, `PreToolUse`, `PermissionRequest`,
+   `PostToolUseFailure`). No soporta `SubagentStop` ni `PreCompact`.
+3. **El payload y el contrato de salida usan el mismo vocabulario**: en el
+   bundle aparecen `hook_event_name`, `tool_name`, `tool_input`,
+   `transcript_path`, `session_id`, `hookSpecificOutput`, `additionalContext`,
+   `stopReason`, `subagent_type` y `agent_type`.
+4. **El operador YA corre hooks de Claude dentro de zcode**, apuntando a
+   `$HOME/.claude/hooks/...` (`cbm-session-reminder`,
+   `cbm-code-discovery-gate`). Es evidencia de compatibilidad práctica, no
+   teórica — y la raíz del defecto que la Task 5.3 cierra.
+5. **Override de workspace**: `<repo>/.zcode/config.json`, o sea que el staging
+   de la Task 2.4 tiene equivalente.
+
+Y cuatro diferencias que fijan el diseño de la fase, todas declaradas por la
+guía del propio CLI:
+
+- **El matcher tiene alias `Task` ↔ `Agent`** (y `Write`/`Edit` ← `ApplyPatch`).
+  En Claude eso es media A9: el matcher registrado nombra `Task` y la
+  herramienta se llama `Agent`, así que esos eventos no llegan nunca. En zcode
+  el alias los haría llegar. **Medirlo es parte de la Task 5.1**, no darlo por
+  hecho.
+- **El stdout se valida con esquema ESTRICTO: una clave extra invalida la
+  salida entera** y su efecto se descarta. El hook emite hoy cuatro formas
+  distintas y ninguna está verificada contra ese validador (Task 5.2).
+- **`exit 2` = block, pero la guía lo nombra sólo para
+  `PreToolUse`/`PermissionRequest`**; de `Stop` dice que puede "pedir
+  continuación". Si el 2 del Stop no bloquea, el gate es decorativo en zcode.
+  Es la medición que más pesa de toda la fase.
+- **El matcher de `UserPromptSubmit` se prueba contra el TEXTO DEL PROMPT** y el
+  de `Stop` contra la vista previa de la respuesta, no contra un nombre de
+  herramienta. Un matcher copiado del registro de Claude no matchearía nunca.
+  Además, los hooks de archivo **no corren sin `hooks.enabled: true`** (hoy está
+  en `true`), y `timeout` va en **segundos**.
+
+**Lo que NO está medido, y por eso la fase empieza capturando:** que los payloads
+*reales* de zcode tengan la misma estructura anidada, y en qué campo viaja el rol
+del subagente. Los nombres están en el bundle; los valores sólo los da una
+captura. Es exactamente la lección de la Task 1.4, donde payloads reconstruidos
+con la forma correcta escondían tres defectos.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

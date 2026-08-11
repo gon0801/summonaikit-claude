@@ -77,12 +77,42 @@ Purpose: retirar lo que quedó duplicado y dejar declarado lo que cambió de due
 | 4.2 | `[Docs]` `[lane:fast]` `[tdd:skip:docs-only]` Declarar el cambio de dueño del contrato: el hook de Kimi extrae su contrato de `$HOME/.claude/hooks/summonaikit-harness.sh`, o sea de este repo. Deja de ser cierto que "Kimi sigue al vendor" — sigue a este repo. Actualizar el spec del port de Kimi y su detector de drift | El spec de `summonaikit-kimi` declara la nueva fuente; su detector de drift apunta a lo correcto; ningún documento sigue afirmando que el contrato se sigue del vendor | 2.4 | cc:TODO |
 | 4.3 | `[Docs]` `[lane:fast]` `[tdd:skip:docs-only]` README: instalación, staging por override, `--restore-vendor`, y la declaración explícita de que el gate es **advisory** y no un control de seguridad (aun corregidos A1 y A2, quien controla el texto del turno puede influirlo) | Las 4 secciones existen, ningún archivo citado falta, y la limitación del gate está escrita sin eufemismos | 4.1, 4.2 | cc:TODO |
 
+## Phase 5: El segundo host — zcode (GLM)
+
+Purpose: `zcode` (CLI propio de Z.ai, paquete `zcode-app-cli`) tiene un sistema
+de hooks **con el mismo contrato que Claude Code**, y el operador ya corre ahí
+hooks escritos para Claude apuntando a `$HOME/.claude/hooks/`. Esta fase mide si
+el hook de este repo sirve tal cual y, si sirve, lo pone a gatear el segundo
+host. **Premisas medidas 2026-08-10 en `docs/spec/00-project-spec.md`** (§ El
+segundo host); si alguna cae, la fase se re-planifica como port propio al estilo
+de `summonaikit-kimi`, que es lo que costó cuando el contrato NO era compatible.
+
+**Orden recomendado, y el costo de no seguirlo:** 5.1 y 5.2 son medición con
+persona adelante y se pueden hacer ya. La 5.5 (línea base del target) conviene
+grabarla **después de la Phase 3**: cada defecto que la Phase 3 corrige cambia el
+comportamiento del hook, así que grabarla antes obliga a regrabarla siete veces.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| 5.1 | `[Test]` `[lane:gate]` `[tdd:skip:captura-manual-con-persona-adelante]` **PRIMER PASO OBLIGATORIO: capturar payloads reales de zcode**, mismo criterio que la Task 1.4 — de ahí salieron A9, A10 y A11, ninguno visible en payloads reconstruidos. `tools/capture-payloads.sh` ya existe; lo que cambia es el registro (formato de zcode) y el repo descartable | Payloads crudos de las 3 fases capturados en un turno `-saikit` real de zcode, en un repo descartable; queda escrito el **diff de forma contra los payloads de Claude** (campos presentes/ausentes, anidamiento); se declara **cómo se llama la herramienta de subagentes y en qué campo viaja el rol** (`tool_input.subagent_type` vs `agent_type` de primer nivel); se mide si el alias `Task` ↔ `Agent` del matcher hace que los eventos de delegación SÍ lleguen —la mitad de A9 que en Claude no llega nunca—; si la captura contradice alguna premisa del spec, se re-redacta la fase antes de escribir una línea | 2.4 | cc:TODO |
+| 5.2 | `[Test]` `[lane:gate]` `[tdd:required]` **El contrato de SALIDA, medido y no supuesto.** La guía del propio zcode declara que el stdout se parsea con **esquema ESTRICTO: cualquier clave extra invalida la salida entera** y el efecto se descarta. El hook emite hoy cuatro formas distintas (`hookSpecificOutput.additionalContext`, `decision:block`, `continue:false`+`stopReason`, y `systemMessage` del aviso de revisión), ninguna verificada contra ese validador. Además la guía dice `exit 2` = block **nombrando sólo `PreToolUse`/`PermissionRequest`**, y para `Stop` habla de "request continuation": si el 2 del Stop no bloquea, el gate entero es decorativo en zcode | Cada una de las 4 formas de salida tiene un veredicto MEDIDO en zcode (aceptada / rechazada por el esquema / ignorada), y el rechazo se distingue del silencio; `exit 2` en `Stop` tiene medido si bloquea, si continúa o si cuenta como error; el resultado decide si `TARGET=claude` alcanza o hace falta un `TARGET=zcode` propio, y esa decisión queda declarada con su evidencia. **Se puede medir en la MISMA sesión que la 5.1** | 5.1 | cc:TODO |
+| 5.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Aislar el estado por host — defecto nuevo, medido hoy por lectura de la config real.** Los hooks que el operador ya corre en zcode apuntan a `$HOME/.claude/hooks/...`. Si el harness se registrara igual, `STATE_ROOT` sale de `dirname $0` y los dos hosts escribirían **el mismo `harness-state.env`** del mismo proyecto: un turno de zcode podría cerrar o pisar el turno de Claude. Es A4 en versión cross-host, y ninguna tarea existente lo cubre | Un turno de zcode y uno de Claude sobre el MISMO repo no comparten estado, medido antes y después (no "no lo escribimos a propósito"); el mecanismo queda declarado —copia propia bajo `~/.zcode/hooks/`, que el `dirname $0` ya separa, o llaveado explícito por host— y se elige con su razón; el caso que lo habría atrapado existe | 5.2 | cc:TODO |
+| 5.4 | `[Setup]` `[lane:gate]` `[tdd:required]` **Registro e instalación en zcode.** El wrapper difiere del de Claude (`hooks.events.<Evento>[]` con `{enabled,timeoutMs,maxOutputBytes}` alrededor, contra `hooks.<Evento>[]`), y hay tres trampas declaradas por la guía del CLI: los hooks de archivo **están desactivados salvo `hooks.enabled:true`**; el matcher de `UserPromptSubmit` se prueba contra **el texto del prompt** y el de `Stop` contra **la vista previa de la respuesta**, así que un matcher copiado del registro de Claude no matchearía nunca; y `timeout` va en **segundos** | El hook queda registrado en las 3 fases de `~/.zcode/cli/config.json` sin matcher donde el match value no es el nombre de la herramienta; `hooks.enabled` verificado en `true`; `tools/install-hook.sh` y `tools/check-hook-registration.sh` aprenden la SEGUNDA forma de registro sin perder la primera (mismo criterio de tres estados y de `unknown` ≠ ausente); un registro con matcher equivocado se reporta fuerte en vez de darse por bueno | 5.3 | cc:TODO |
+| 5.5 | `[Test]` `[lane:gate]` `[tdd:required]` **Línea base y casos del target zcode**, y la puesta en producción. Se graba DESPUÉS de la Phase 3 a propósito: cada defecto corregido allá cambia el comportamiento, y grabarla antes obliga a regrabarla siete veces | Los escenarios de zcode tienen su bloque en la línea base y `--check` es reproducible; cada gate tiene al menos un caso que pasa y uno que bloquea **en este target**; staging por `<repo>/.zcode/config.json` (el override de workspace que la guía del CLI declara) verificado ejecutando el registro, no leyéndolo —igual que la 2.4—; un turno `-saikit` real en zcode arma, y uno pelado no | 5.4, 3.8 | cc:TODO |
+
 ---
 
 ## Clasificación del alcance
 
 **Required** — Phases 0 a 3. El 0 es urgente e independiente; el 1 tiene valor
 aunque todo lo demás se cancele; el 2 y el 3 son el objetivo.
+
+**Condicional (Phase 5)** — el alcance de la fase lo decide su propia primera
+tarea. 5.1 y 5.2 son medición y valen aunque el resto se cancele: dicen si el
+hook sirve tal cual en zcode. Si dicen que sí, 5.3-5.5 son trabajo chico. Si
+dicen que no, la fase se reemplaza por un port propio al estilo de
+`summonaikit-kimi` —un repo entero, no cinco tareas— y esa decisión se toma con
+la medición adelante, no antes.
 
 **Recommended (fuera de este plan, independientes):**
 - Prueba real de Kimi con un turno `-saikit` en vivo: 24 tareas hechas y **cero
