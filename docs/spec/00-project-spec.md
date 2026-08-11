@@ -831,13 +831,60 @@ batería.
 **Total tras la ronda: 17 mutaciones dirigidas, 17 atrapadas.** Una sola ronda,
 como manda la política; no quedaron hallazgos residuales sin cerrar.
 
-**Y una mitad de la DoD es incumplible hoy, por A10.** La tarea pedía que tras el
-install global "un turno `-saikit` real bloquee". Con recibo y evidencia
-presentes eso depende de la rama exclusiva de Claude, que es justo la que A10
-impide que corra: el turno real medido en la 1.4 **cerró limpio**. Lo que sí
-queda afirmado es que el gate CORRE y que bloquea cuando falta el recibo — la
-exigencia de secuencia de roles vuelve a ser alcanzable recién con la Task 3.7,
-que arregla A9 y A10 juntos.
+#### El turno real (2026-08-10, operador adelante): pasó, y corrigió una conclusión propia
+
+El paso manual se ejecutó el mismo día, en `C:\dev\saikit-staging`. Las dos
+mitades de la DoD quedaron medidas en vivo:
+
+- **El staging gatea turnos reales.** Un prompt con `-saikit` armó el harness y
+  dejó estado en `<staging>/.claude/hooks/state/2257410127/`; uno sin sentinel no
+  creó nada.
+- **Sin tocar el archivo global.** El hook del perfil siguió byte a byte igual a
+  la fuente y en `~/.claude/hooks/state/` no apareció ninguna clave nueva.
+
+**Y el estado que dejó ese turno contradice el efecto medido de A9:**
+
+```
+task_hash=2939555692
+cycle=0
+implemented=1
+verified=0
+agents_seen=implementer,verifier,reviewer
+```
+
+A9 afirma que `agents_seen` **queda vacío**. Acá tiene los tres roles, en orden,
+y el log de evidencia los registra uno por uno (`agent: implementer`,
+`agent: verifier`, `agent: reviewer`). El transcript de esa sesión explica por
+qué: la herramienta de subagentes efectivamente se llama **`Agent`** (3
+invocaciones, ninguna `Task` — esa mitad de A9 sigue en pie), pero el rol viajó
+en **`subagent_type`** (3 ocurrencias) y `agent_type` no aparece ni una vez — o
+sea en el campo que el hook SÍ lee.
+
+**Lo que esto cambia, y lo que no:**
+
+1. **La conclusión "el gate de ceremonia es inerte" no reproduce hoy.** El turno
+   no bloqueó, pero no por falta de gate: bloqueó nada porque **se cumplieron
+   todos** — los tres roles en orden y el recibo con sus 6 etiquetas.
+2. **La Task 3.7 tiene que RE-MEDIR antes de arreglar.** Su plan es hacer que un
+   evento con `agent_type` de primer nivel registre el rol; si hoy el rol llega
+   por `subagent_type` y funciona, ese arreglo tocaría algo que no está roto.
+   Queda anotado en su DoD.
+3. **Lo que NO se probó en vivo es un turno real que FALLE.** Que el gate bloquee
+   cuando falta el recibo está medido sintéticamente (payload de `Stop` con el
+   comando registrado real), no con una sesión que se porte mal a propósito.
+4. `verified=0` pese a que el verifier corrió `python -m pre_commit` y `wc -c`:
+   coherente con A3 —`TEST_RUNNER_RE` no nombra `pre-commit`— y sin efecto en el
+   veredicto, porque el recibo declara la verificación y el `Stop` la acredita
+   por esa vía.
+
+**Lo que quedó declarado antes de este turno, y por qué se corrige.** Al cerrar
+la tarea se escribió que la cláusula "un turno `-saikit` real bloquea" era
+incumplible por A10, apoyándose en la medición de la 1.4 (el turno real de aquel
+día cerró limpio con `agents_seen` vacío). La corrida de hoy mide otra cosa sobre
+el mismo host, así que la conclusión se corrige acá en vez de dejarla en pie: lo
+que sigue sin resolverse es **A10** —no se sabe si el `TARGET` llega, porque este
+turno satisfizo todos los gates y por lo tanto no distingue las dos ramas— y lo
+que caducó es el efecto de **A9**.
 
 ## Non-Goals
 
