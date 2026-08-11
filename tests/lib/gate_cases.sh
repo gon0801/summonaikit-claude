@@ -224,7 +224,7 @@ caso_g2_excusa_declarada_no_reclama() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -279,6 +279,37 @@ caso_g3_agent_type_no_cuenta() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash_en_subagente 'implementer' 'npm test')"
   _igual "agents_seen con agent_type=implementer (A9)" "$(lab_estado agents_seen)" ""
+}
+
+# DEFECTO A1 — cerrado por la Task 3.1. Los dos casos que siguen son las dos
+# mitades del vector medido en el escenario 12 de la linea base, y hasta la 3.1
+# los dos estaban en ROJO contra el hook vivo.
+#
+# El lector de campos del hook arrancaba con `.*` greedy sobre el payload CRUDO,
+# que incluye `tool_response` — texto que el turno NO escribio. De ahi salen las
+# dos afirmaciones: que una clave fuera de `tool_input` no acredite nada, y que
+# cuando estan las dos gane la de `tool_input` y no la ultima.
+#
+# La primera es la que mide el dano real: el greedy no solo INVENTABA un rol,
+# BORRABA el legitimo — con `tool_input.subagent_type=implementer` y un eco
+# `reviewer` mas adelante, el hook anotaba reviewer y perdia al implementer.
+#
+# El orden entre los dos no es cosmetico: van en este porque cada uno atrapa una
+# mutacion DISTINTA (la bateria de mutaciones corta en el primer rojo). El de
+# abajo atrapa que el lector vuelva a ser greedy; el de arriba, que el escaner
+# deje de acotarse a `tool_input`. Invertirlos dejaria una de las dos mutaciones
+# sin caso propio en la declaracion.
+caso_g3_gana_el_de_tool_input_no_el_ultimo() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_agent_con_eco 'implementer' 'reviewer')"
+  _igual "gana el subagent_type de tool_input, no la ultima ocurrencia (A1)" \
+         "$(lab_estado agents_seen)" "implementer"
+}
+
+caso_g3_eco_fuera_de_tool_input_no_cuenta() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_eco_subagent_type 'reviewer')"
+  _igual "agents_seen con subagent_type fuera de tool_input (A1)" "$(lab_estado agents_seen)" ""
 }
 
 # El gate mapea por FUNCION, no por una lista fija por host: los agentes

@@ -50,6 +50,8 @@ G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
+G3|subagent_type_greedy|el rol se vuelve a leer con el lector greedy del payload crudo
+G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_input
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
 G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
@@ -75,6 +77,11 @@ mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_al
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
 mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'/'implementer|verifier|reviewer'/"; }
 mut_secuencia_tambien_en_cursor() { sed 's/if \[ "\$TARGET" = "claude" \]; then/if true; then/'; }
+# Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
+# lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
+# cualquier objeto en vez de solo en `tool_input` de primer nivel.
+mut_subagent_type_greedy()   { sed 's/json_tool_input_string subagent_type/json_string_field subagent_type/'; }
+mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\& clave == want/clave == want/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }

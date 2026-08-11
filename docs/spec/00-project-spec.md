@@ -67,7 +67,7 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 
 | # | Defecto | Efecto | Fase |
 |---|---|---|---|
-| A1 | `json_string_field` es greedy (`.*` inicial) y lee el payload CRUDO, que incluye `tool_response` | Cualquier `subagent_type` que aparezca como **clave JSON** fuera de `tool_input` registra el rol sin que corra ningún subagente; con varias ocurrencias gana la ÚLTIMA. **El efecto como estaba escrito acá —"un archivo del repo que contenga ese texto"— NO reproduce**: ver § Mediciones de la línea base | 3 |
+| A1 | `json_string_field` es greedy (`.*` inicial) y lee el payload CRUDO, que incluye `tool_response` | Cualquier `subagent_type` que aparezca como **clave JSON** fuera de `tool_input` registra el rol sin que corra ningún subagente; con varias ocurrencias gana la ÚLTIMA. **El efecto como estaba escrito acá —"un archivo del repo que contenga ese texto"— NO reproduce**: ver § Mediciones de la línea base | 3 — **CERRADO** (Task 3.1) |
 | A2 | El recibo y la pausa se buscan en el tail del transcript entero | Un archivo con `SUMMONAIKIT HARNESS PAUSED`, o con las 6 etiquetas, deja pasar cualquier turno | 3 |
 | A3 | `TEST_RUNNER_RE` sin fronteras de palabra | `cat pytest.log` cuenta como verificación (mismo hallazgo 6 ya corregido en el port de Kimi) | 3 |
 | A4 | Estado llaveado por proyecto y sin revalidar el sentinel | Un turno `-saikit` abandonado sigue cobrando recibo a turnos que no lo pidieron (reproducido en vivo el 2026-08-08) | 3 |
@@ -885,6 +885,100 @@ el mismo host, así que la conclusión se corrige acá en vez de dejarla en pie:
 que sigue sin resolverse es **A10** —no se sabe si el `TARGET` llega, porque este
 turno satisfizo todos los gates y por lo tanto no distingue las dos ramas— y lo
 que caducó es el efecto de **A9**.
+
+### A1 cerrado (2026-08-10, Task 3.1): el rol se lee de `tool_input`, y de ahí solo
+
+**Primero se midió dónde viaja el campo de verdad**, sobre los 308 payloads
+crudos de la captura de la Task 1.4 (los mismos que sostienen A9 y A10):
+
+| ruta JSON | payloads |
+|---|---|
+| `.tool_input.subagent_type` | 8 |
+| `.tool_response.agentType` | 8 |
+| `.agent_type` (primer nivel) | 281 |
+
+`subagent_type` **nunca** aparece en el primer nivel: 8 de 8 vienen dentro de
+`tool_input`. Esa medición es lo que vuelve seguro el arreglo restrictivo —
+acotar la lectura a `tool_input` no toca ninguna vía por la que hoy llegue un
+rol legítimo. (`.agent_type` es A9 y se lo lleva la Task 3.7, que tiene su propio
+mandato de re-medir; acá no se tocó.)
+
+**El defecto, con su huella exacta.** `json_string_field` arranca con `.*`
+greedy sobre el payload CRUDO — que incluye `tool_response`, o sea texto que el
+turno no escribió. Con `tool_input.subagent_type=implementer` y otro
+`subagent_type` como clave JSON más adelante, el hook anotaba **reviewer**: no
+solo inventaba un rol, **borraba el legítimo**. Los dos casos nuevos separan
+esas dos mitades, y los dos estaban en rojo antes del arreglo.
+
+**El arreglo es un escáner, no un parser JSON**, y la distinción importa:
+recorre el payload carácter por carácter llevando dos cosas — si está adentro de
+una string (respetando la barra de escape) y a qué profundidad de llaves está —
+y con eso contesta la única pregunta que hace falta: *¿esta clave está adentro
+del `tool_input` de primer nivel?*. No valida el documento, no entiende números
+ni literales, y **no decodifica escapes**.
+
+**Cero dependencias nuevas, y es una decisión declarada.** El renglón autorizaba
+`python` con fallback declarado o leer sólo `tool_input`; se eligió lo segundo,
+en `awk`, por dos razones: `awk` ya es dependencia dura del hook (lo usan
+`json_escape` y el `task_hash`, así que si faltara el hook ya estaría roto antes
+de llegar acá), y un primario-con-fallback son dos políticas que divergen en
+silencio — exactamente lo que la Task 0.5 encontró en `hook-acl.ps1`. La Task
+3.2 decide por su cuenta: decodificar el transcript es otro problema (texto
+multilínea, no extracción de un campo) y puede pedir otra herramienta.
+
+**Los escapes se dejan crudos a propósito.** Un valor escapado no mapea a ningún
+rol en `canonical_agent_role`, así que el error cae del lado seguro: no se
+acredita un subagente que no se pudo leer limpio. Decodificar acá abriría la
+puerta a que un nombre con escapes unicode acredite un rol que no dice.
+
+**Postura de fallo, declarada:** si el escáner no devuelve nada no se registra
+rol — el mismo desenlace que un payload sin el campo. Es el lado estricto del
+gate de secuencia, y es deliberado: inventar un rol para "dejar pasar" *es* A1.
+
+**El diff de la línea base, declarado**: cambió **un solo escenario** (`12`),
+**4 líneas** — desaparece `agent: reviewer` del log, `agents_seen` queda vacío y
+el aviso de revisión deja de fechar una revisión que no ocurrió
+(`last_review` vacío). Los otros 15 escenarios no se movieron, incluidos los
+cuatro turnos completos (05, 06, 10, 11) que delegan por
+`tool_input.subagent_type`: la vía legítima quedó intacta, medida y no supuesta.
+
+**2 mutaciones dirigidas, 2 atrapadas, y cada una por un caso distinto** —
+volver al lector greedy lo atrapa `caso_g3_gana_el_de_tool_input_no_el_ultimo`;
+que el escáner deje de acotarse a `tool_input` lo atrapa
+`caso_g3_eco_fuera_de_tool_input_no_cuenta`. El orden de los dos en `CASOS_G3`
+no es cosmético: la batería corta en el primer rojo, así que invertirlos dejaría
+una de las dos mutaciones sin caso propio en la declaración. Total del hook:
+**15 mutaciones, 15 atrapadas**.
+
+**Un test se puso rojo por haber cumplido su propósito, y el arreglo es parte de
+esta tarea** — el mismo patrón que la Task 2.4 con la mitad byte a byte.
+`test_hook_source.sh` exigía que el arnés **avisara** del cambio de identidad al
+correr contra la fuente. Eso era cierto mientras la línea base viniera del hook
+del vendor; desde que la Phase 3 cambia el comportamiento a propósito, la línea
+base se regraba contra la fuente y ese aviso no puede existir. El caso pasa a
+distinguir los dos estados sanos: línea base grabada contra **otra** identidad ⇒
+se exige el aviso; grabada contra la **fuente misma** ⇒ se exige el silencio (si
+avisara, la línea base estaría describiendo otro archivo). Sin uno de los dos
+shas ⇒ `unknown`, no se inventa el veredicto. La transitividad hacia el vivo no
+se apoyaba en ese aviso: la sostienen `test_golden_baseline.sh` y el `cmp` de la
+mitad byte a byte. **3 mutaciones sobre este caso, 3 atrapadas**, una de ellas
+—mutar el arnés para que avise siempre— dirigida específicamente a la rama nueva,
+porque las dos primeras caían las dos en la rama vieja y no la habrían
+distinguido.
+
+**El install se corrió**, que es lo que lleva el arreglo al archivo que gatea
+cada turno: el destino clasificó *nuestro pero distinto* ⇒ reparado con backup
+(`…/saikit-backups/summonaikit-harness.sh.nuestro.20260810-214244.bak`), y el
+vivo quedó byte a byte igual a la fuente. Sin ese paso el defecto seguiría vivo
+donde importa y las dos baterías que comparan contra el vivo quedarían rojas.
+
+**Lo que NO cierra esta tarea, declarado.** El gate sigue siendo **advisory**:
+quien controla el `tool_input` de un evento de delegación sigue pudiendo nombrar
+el rol que quiera. Lo que A1 cerró es que lo haga desde el *resultado* de una
+herramienta, que es texto que el turno no escribió. Y la laxitud de
+`implemented` (cualquier payload con `file_path` lo enciende) sigue igual: está
+medida como inerte en la § Mediciones de la línea base, y arreglarla no es parte
+de este renglón.
 
 ## Non-Goals
 

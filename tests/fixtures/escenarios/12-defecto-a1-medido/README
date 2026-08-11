@@ -1,18 +1,27 @@
-Defecto A1, MEDIDO — y el spec lo describe mal. Los dos pasos son la medicion.
+Defecto A1, MEDIDO — y el spec lo describia mal. Los dos pasos son la medicion.
+CERRADO por la Task 3.1; lo que este escenario graba ahora es el arreglo.
 
 Paso 02: se LEE un archivo cuyo contenido menciona subagent_type reviewer. El
-spec dice que eso satisface el gate de revision. NO lo satisface: adentro del
-payload el contenido del archivo viene con las comillas escapadas, y el sed de
-json_string_field pide una comilla literal. El rol no se registra.
+spec decia que eso satisface el gate de revision. NO lo satisface, ni antes ni
+ahora: adentro del payload el contenido del archivo viene con las comillas
+escapadas, asi que no hay clave JSON que leer.
 Lo que ese mismo paso SI hace es marcar implemented=1, porque esa deteccion
 mira el payload entero y ahi aparece file_path. Leer documentacion deja el
-turno marcado como implementado.
+turno marcado como implementado. Eso NO lo toca la 3.1: esta declarado inerte
+en el spec (stop_gate lee el campo y nunca lo mete en $missing).
 
-Paso 03: el defecto real. Cuando subagent_type aparece como CLAVE JSON de
-verdad en cualquier parte del payload que no sea tool_input, el hook la lee y
-anota el rol. Ningun subagente corrio. El payload esta construido para dejar
-esa rama grabada.
+Paso 03: el defecto real. Cuando subagent_type aparecia como CLAVE JSON de
+verdad en cualquier parte del payload que no fuera tool_input, el hook la leia y
+anotaba el rol sin que ningun subagente hubiera corrido. El payload esta
+construido para dejar esa rama grabada.
 
-Consecuencia para la Task 3.1: el vector que hay que cerrar es "clave JSON en
-cualquier nivel", no "contenido de archivo". Su DoD, escrito como esta, ya pasa
-sin arreglar nada.
+Lo que cambio con la Task 3.1 (y es todo lo que cambio en los 16 escenarios):
+el paso 03 ya no anota `agent: reviewer`, agents_seen queda vacio y el aviso de
+revision no fecha una revision que no ocurrio (last_review vacio). El rol se lee
+ahora solo de tool_input de primer nivel, que es donde viaja en los 8 payloads
+reales que lo traen (medido sobre la captura de la Task 1.4: 8 de 8).
+
+Lo que este escenario NO mide, y tiene caso propio en tests/lib/gate_cases.sh:
+que con las DOS ocurrencias presentes gane la de tool_input y no la ultima. Es
+la mitad que mide el dano real del lector greedy — no solo inventaba un rol,
+borraba el legitimo.

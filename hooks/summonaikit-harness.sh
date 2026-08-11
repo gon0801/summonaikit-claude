@@ -59,6 +59,73 @@ json_number_field() {
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p" | head -n 1
 }
 
+# Lee un campo de string del objeto `tool_input` de PRIMER NIVEL, y solo de ahi.
+# Cierra el defecto A1 (Task 3.1).
+#
+# Por que json_string_field no alcanza, medido 2026-08-09: su `sed` arranca con
+# `.*` greedy sobre el payload CRUDO, que incluye `tool_response` — texto que el
+# turno no escribio. Cualquier `subagent_type` que aparezca como clave JSON en
+# otro nivel se tomaba como el subagente que corrio, y con varias ocurrencias
+# ganaba la ULTIMA: con `tool_input.subagent_type=implementer` y un eco
+# `reviewer` mas adelante, el hook anotaba reviewer. No solo inventaba un rol,
+# BORRABA el legitimo.
+#
+# Que hace el escaner y que NO hace. Recorre el payload caracter por caracter
+# llevando dos cosas: si esta adentro de una string (respetando la barra de
+# escape) y a que profundidad de llaves/corchetes esta. Con eso alcanza para la
+# unica pregunta que hace falta: "esta clave, esta adentro del tool_input de
+# primer nivel?". NO es un parser JSON — no valida el documento, no entiende
+# numeros ni literales, y no decodifica escapes.
+#
+# Los escapes se dejan CRUDOS a proposito. Un valor escapado no mapea a ningun
+# rol en canonical_agent_role, asi que el error cae del lado seguro: no se
+# acredita un subagente que no se pudo leer limpio. Decodificar aca abriria la
+# puerta a que un nombre con escapes unicode acredite un rol que no dice.
+#
+# Dependencias: NINGUNA nueva. awk ya lo usan json_escape y el task_hash, o sea
+# que si faltara el hook ya estaria roto antes de llegar aca. Si el escaner no
+# devuelve nada no se registra rol: el mismo desenlace que un payload sin el
+# campo. Inventar uno para "dejar pasar" es exactamente A1.
+json_tool_input_string() {
+  field="$1"
+  # Atajo barato y equivalente — el escaner solo puede encontrar lo que este en
+  # el texto. Un turno real son ~300 eventos y solo 8 traen el campo (medido en
+  # la captura de la Task 1.4), asi que esto ahorra el proceso en la mayoria.
+  case "$INPUT" in
+    *"\"$field\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk -v want="$field" '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; clave = ""; clave1 = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") {
+            ins = 0
+            txt = substr(buf, ini, i - ini)
+            if (espera) {
+              if (depth == 2 && clave1 == "tool_input" && clave == want) { print txt; exit }
+              espera = 0
+            }
+            ultima = txt
+          }
+          continue
+        }
+        if (c == "\"")                 { ins = 1; ini = i + 1 }
+        else if (c == ":")             { clave = ultima; if (depth == 1) clave1 = clave; espera = 1 }
+        else if (c == "{" || c == "[") { depth++; espera = 0 }
+        else if (c == "}" || c == "]") { depth--; espera = 0 }
+        else if (c == ",")             { espera = 0 }
+      }
+    }'
+}
+
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN { first = 1 } { gsub(/\r/, ""); if (!first) printf "\\n"; printf "%s", $0; first = 0 }'
 }
@@ -475,10 +542,12 @@ record_tool_evidence() {
   file_path="$(json_string_field file_path)"
   combined="$event_name $tool_name $command_text $file_path $INPUT"
 
-  # Record harness subagent runs (Task tool carries a subagent_type) so the Stop
-  # gate can enforce the implementer -> verifier -> reviewer sequence.
-  subagent="$(json_string_field subagent_type)"
-  if [ -z "$subagent" ]; then subagent="$(json_string_field subagentType)"; fi
+  # Record harness subagent runs (the delegation tool carries a subagent_type in
+  # its tool_input) so the Stop gate can enforce the implementer -> verifier ->
+  # reviewer sequence. Se lee SOLO de `tool_input` de primer nivel: el resto del
+  # payload trae el resultado de la herramienta, que el turno no escribio (A1).
+  subagent="$(json_tool_input_string subagent_type)"
+  if [ -z "$subagent" ]; then subagent="$(json_tool_input_string subagentType)"; fi
   if [ -n "$subagent" ]; then record_agent "$subagent"; fi
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   rn_order_now="$(rn_bump_counter)"

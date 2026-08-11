@@ -136,12 +136,38 @@ else
   rc=$?
   case "$rc" in
     0)
-      # Que el arnes AVISE del cambio de identidad no es ruido: confirma que el
-      # marcador realmente cambio los bytes y que aun asi el veredicto se dio
-      # por comportamiento (decision 2 del arnes). Si no avisara, el caso
-      # estaria pasando con un archivo que no tiene marcador.
-      printf '%s\n' "$salida" | grep -qi 'identidad' \
-        || malo "el arnes deberia avisar que la fuente cambio de identidad y no lo dijo: $salida"
+      # El aviso de identidad del arnes tiene DOS estados sanos, igual que el
+      # `cmp` contra el vivo de mas arriba, y por el mismo motivo: la linea base
+      # se regraba cada vez que la Phase 3 cambia el comportamiento a proposito.
+      #
+      #   - grabada contra OTRA identidad (el vivo del vendor, antes de que la
+      #     Task 2.4 instalara) => el arnes tiene que AVISAR. Ese aviso es parte
+      #     de lo afirmado: confirma que el marcador cambio los bytes y que aun
+      #     asi el veredicto se dio por comportamiento (decision 2 del arnes).
+      #     Sin el, el caso estaria pasando con un archivo sin marcador.
+      #   - grabada contra la FUENTE misma (lo normal desde la Phase 3) => no hay
+      #     cambio de identidad que avisar, y si el arnes avisara la linea base
+      #     estaria describiendo otro archivo.
+      #
+      # Escrito con un solo estado, este caso se ponia rojo en la primera
+      # regrabacion post-adopcion — el mismo modo de falla que la Task 2.4 le
+      # corrigio a la mitad byte a byte. La transitividad hacia el VIVO no se
+      # apoya en este aviso: la sostienen `test_golden_baseline.sh` (la linea
+      # base contra el vivo) y el `cmp` de la mitad 3).
+      sha_base="$(grep -m1 '^# hook_sha256: ' "$base" | sed 's/^# hook_sha256: //')"
+      sha_fuente="$(sha256sum "$fuente" 2>/dev/null | cut -d' ' -f1)"
+      if [ -z "$sha_base" ] || [ -z "$sha_fuente" ]; then
+        # No poder mirar no es haber visto ausencia (Core Rule 2): sin uno de los
+        # dos shas no se sabe cual estado corresponde, y exigir cualquiera de los
+        # dos seria inventar el veredicto.
+        printf '  nota: unknown — no se pudo leer el sha de la linea base o de la fuente;\n'
+        printf '        no se afirma nada sobre el aviso de identidad.\n'
+      elif [ "$sha_base" != "$sha_fuente" ]; then
+        printf '%s\n' "$salida" | grep -qi 'identidad' \
+          || malo "la linea base se grabo contra otro archivo y el arnes no aviso del cambio de identidad: $salida"
+      elif printf '%s\n' "$salida" | grep -qi 'identidad'; then
+        malo "la linea base se grabo contra esta misma fuente y el arnes igual aviso de cambio de identidad: $salida"
+      fi
       ;;
     2)
       printf '%s\n' "$salida" | head -n 20 >&2
