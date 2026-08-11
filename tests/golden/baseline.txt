@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 88c9d0317a18fe63066c30449dd3594a752354c5a092cdaacfbda710bbba3d28
-# hook_bytes: 50794
-# hook_lineas: 970
+# hook_sha256: 436ba6b1e3469ec6e69ca9e61149551244a4eabe1ef715663b452fe8f1adaecd
+# hook_bytes: 51882
+# hook_lineas: 988
 # escenarios: 16
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -940,10 +940,14 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | agents_seen=
 
 === escenario 13-defecto-a3-cat-del-log
-# Defecto A3, grabado: TEST_RUNNER_RE no tiene fronteras de palabra. Mirar el log
-# de una corrida vieja (cat pytest.log) marca el turno como verificado por el
-# fragmento pytest, y mirar la config (cat tsconfig.json) hace lo mismo por el
-# fragmento tsc. Ninguno de los dos corrio nada.
+# Defecto A3, cerrado por la Task 3.3. Antes TEST_RUNNER_RE no tenia fronteras de
+# palabra: mirar el log de una corrida vieja (cat pytest.log) marcaba el turno como
+# verificado por el fragmento pytest, y mirar la config (cat tsconfig.json) hacia
+# lo mismo por el fragmento tsc. Ahora el wrapper TEST_RUNNER_WORD_RE exige que el
+# runner este flanqueado por start/end o un caracter que no forme parte de un
+# nombre de archivo: ni pytest.log ni tsconfig.json cuentan. El escenario sigue
+# grabando los mismos dos comandos, y ahora ambos dejan verified=0 — que es lo que
+# debe pasar cuando nadie corrio nada.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
@@ -964,7 +968,6 @@ stderr <vacio>
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| verified: cat pytest.log
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=1
 | last_code_edit=
@@ -973,7 +976,7 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
-| verified=1
+| verified=0
 | agents_seen=
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
@@ -982,8 +985,6 @@ stderr <vacio>
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/harness-evidence.log
 | prompt task started: 2415293084
-| verified: cat pytest.log
-| verified: cat tsconfig.json
 hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
 | counter=2
 | last_code_edit=
@@ -992,7 +993,7 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=0
-| verified=1
+| verified=0
 | agents_seen=
 
 === escenario 14-defecto-a2-pausa-en-resultado

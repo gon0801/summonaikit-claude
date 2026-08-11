@@ -85,6 +85,13 @@ _RECIBO_SIN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder list
 # acepta esa declaracion como sustituto de la evidencia.
 _RECIBO_SIN_RETRO_SALTEADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: skipped, este repo no tiene bateria propia.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
 
+# Recibo donde Verify termina con "pytest." (punto final de frase). Sin la
+# alternativa de punto-de-frase en TEST_RUNNER_WORD_RE, el punto despues de
+# `pytest` lo excluye y el gate reclama evidencia que esta. Es el test de la
+# CORRECCION 2 del plan de la 3.3: el wrapper se aplica a DOS superficies
+# (comando y prosa) y un punto al final de una oracion NO es una extension.
+_RECIBO_SIN_RETRO_PYTEST_PUNTO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
+
 _TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
 _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
@@ -147,7 +154,7 @@ caso_g1_sentinel_con_frontera() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -219,6 +226,49 @@ caso_g2_evidencia_presente_no_reclama() {
 caso_g2_excusa_declarada_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_SALTEADO")"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# DEFECTO A3, el caso que lo habria atrapado. `cat pytest.log` matchea el
+# fragmento `pytest` y marca verified=1; `cat tsconfig.json` matchea `tsc`.
+# Ninguno corrio nada. Con el wrapper de fronteras, el `.` despues del runner lo
+# excluye (es una extension de archivo, no un separador).
+caso_g2_runner_en_path_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cat pytest.log')"
+  _igual "exit code" "$LAB_RC" "0"
+  _igual "verified con cat pytest.log (A3)" "$(lab_estado verified)" "0"
+  lab_run tool claude "$(lab_payload_bash 'cat tsconfig.json')"
+  _igual "verified con cat tsconfig.json (A3)" "$(lab_estado verified)" "0"
+  # Hallazgo de la revision cruzada (codex, 2026-08-11): la rama del punto-de-frase
+  # original aceptaba pytest._cache, pytest.-old, pytest..bak porque esos chars no
+  # son alfanumericos. Pero SI son validos en nombres de archivo — reabrian A3.
+  lab_run tool claude "$(lab_payload_bash 'cat pytest._cache')"
+  _igual "verified con cat pytest._cache (A3 bis)" "$(lab_estado verified)" "0"
+  lab_run tool claude "$(lab_payload_bash 'cat pytest.-old')"
+  _igual "verified con cat pytest.-old (A3 bis)" "$(lab_estado verified)" "0"
+}
+
+# La via legitima que el wrapper NO debe romper: el runner invocado por ruta
+# (`./node_modules/.bin/vitest run`). Los `.` y `/` del path no son problema
+# porque `vitest` esta flanqueado por `/` (izq) y espacio (der). La DoD del
+# renglon nombra este caso explicitamente.
+caso_g2_runner_con_ruta_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash './node_modules/.bin/vitest run')"
+  _igual "verified con el runner invocado por ruta" "$(lab_estado verified)" "1"
+}
+
+# CORRECCION 2 del plan de la 3.3: el wrapper se aplica a DOS superficies — el
+# comando (:729) y la PROSA del asistente (:870, texto decodificado desde la
+# 3.2). Un punto al final de una oracion (`Verify: se corrio pytest.`) NO es una
+# extension de archivo. Sin la alternativa `\.([^A-Za-z0-9]|$)` en el lado
+# derecho, el gate reclamaria evidencia que esta presente — el mismo daño que
+# A8 acaba de cerrar. Este caso lo separa del wrapper simple.
+caso_g2_excusa_con_punto_final_no_reclama() {
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_PYTEST_PUNTO")"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }

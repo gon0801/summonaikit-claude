@@ -47,6 +47,8 @@ G1|sentinel_sin_guardia|se arma sin llegar a consultar el sentinel
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
+G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
+G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -71,6 +73,11 @@ mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SE
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
+# Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
+# a la lista pelada en ambos greps; la segunda quita la alternativa de
+# punto-de-frase, que es lo que separa `pytest.` (prosa) de `pytest.log` (archivo).
+mut_runner_sin_frontera()    { sed 's/^TEST_RUNNER_WORD_RE=.*/TEST_RUNNER_WORD_RE="$TEST_RUNNER_RE"/'; }
+mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}'; }
 # Se rompe la clausula `command not found`, no la de `exitCode`: contra payloads
 # reales esa segunda ya esta muerta (el tool_response de Bash no trae el campo,
 # medido 59 de 59 en la Task 1.4). Mutar codigo muerto no prueba nada — la

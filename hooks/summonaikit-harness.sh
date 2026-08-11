@@ -49,6 +49,24 @@ LOG_PATH="$STATE_DIR/harness-evidence.log"
 # runner here rather than in two places.
 TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|lint))|npm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|pnpm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|yarn[[:space:]]+(test|typecheck|lint)|deno[[:space:]]+(test|lint|check)|vitest|jest|playwright[[:space:]]+test|cypress[[:space:]]+run|tsc|check-types|typecheck|cargo[[:space:]]+(test|nextest)|go[[:space:]]+test|gotestsum|pytest|unittest|tox|rspec|rake[[:space:]]+(test|spec)|rails[[:space:]]+test|bundle[[:space:]]+exec[[:space:]]+(rspec|rake|cucumber|minitest)|mix[[:space:]]+test|phpunit|pest|artisan[[:space:]]+test|composer[[:space:]]+(test|run[[:space:]]+test)|dotnet[[:space:]]+test|gradle[[:space:]]+(test|check)|gradlew[[:space:]]+(test|check)|mvn[[:space:]]+(test|verify)|swift[[:space:]]+test|ctest|ginkgo|make[[:space:]]+(test|check)'
 
+# Wrapper con fronteras de palabra: el runner debe estar flanqueado por
+# start/end o un caracter que NO forme parte de un nombre de archivo. Cierra A3
+# (Task 3.3): sin esto, `cat pytest.log` matchea el fragmento `pytest` y cuenta
+# como verificacion.
+#
+# El lado derecho acepta un punto que NO va seguido de alfanumerico. No es
+# cosmetico: este regex se aplica a DOS superficies distintas -- el comando de
+# un evento (:729) y la PROSA del asistente (:870, texto decodificado desde la
+# 3.2). Sin esa alternativa, `Verify: se corrio pytest.` deja de contar y el
+# gate exige de mas, que es el dano que la 3.2 acaba de cerrar en A8. Con ella,
+# `pytest.log` sigue sin contar: ahi el punto va seguido de `l`.
+#
+# Limites declarados y medidos: `npm run test-e2e` y `pytest.exe` NO cuentan
+# (sufijo pegado por guion / extension). Cae al lado estricto a proposito: sin
+# credito el gate pide la razon explicita, que es recuperable; acreditar
+# `cat pytest-viejo.log` no lo es.
+TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)'
+
 json_string_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
@@ -726,7 +744,7 @@ record_tool_evidence() {
   # editing vitest.config.ts or reading a Gemfile.lock that names rspec would
   # falsely mark the work verified. The failure-signal guard still consults the
   # full payload, since exit codes live in the tool result, not the command.
-  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_RE"; then
+  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"; then
     if ! printf '%s' "$combined" | grep -Eiq 'exitCode[^0-9]*[1-9]|failure_type|permission_denied|command not found'; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
@@ -867,7 +885,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
     missing="$missing- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
-  if [ "$verified" != "1" ] && ! printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_RE|not run|not executed|skipped|non eseguit|saltat"; then
+  if [ "$verified" != "1" ] && ! printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|not run|not executed|skipped|non eseguit|saltat"; then
     missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
   fi
 

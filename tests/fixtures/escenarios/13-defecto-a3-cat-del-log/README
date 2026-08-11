@@ -1,4 +1,8 @@
-Defecto A3, grabado: TEST_RUNNER_RE no tiene fronteras de palabra. Mirar el log
-de una corrida vieja (cat pytest.log) marca el turno como verificado por el
-fragmento pytest, y mirar la config (cat tsconfig.json) hace lo mismo por el
-fragmento tsc. Ninguno de los dos corrio nada.
+Defecto A3, cerrado por la Task 3.3. Antes TEST_RUNNER_RE no tenia fronteras de
+palabra: mirar el log de una corrida vieja (cat pytest.log) marcaba el turno como
+verificado por el fragmento pytest, y mirar la config (cat tsconfig.json) hacia
+lo mismo por el fragmento tsc. Ahora el wrapper TEST_RUNNER_WORD_RE exige que el
+runner este flanqueado por start/end o un caracter que no forme parte de un
+nombre de archivo: ni pytest.log ni tsconfig.json cuentan. El escenario sigue
+grabando los mismos dos comandos, y ahora ambos dejan verified=0 — que es lo que
+debe pasar cuando nadie corrio nada.
