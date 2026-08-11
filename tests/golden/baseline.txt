@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: fcb401640e43beb873f5454182e1fa41479456919ce7f82b53d6a2c50a64b53b
-# hook_bytes: 43622
-# hook_lineas: 816
+# hook_sha256: 88c9d0317a18fe63066c30449dd3594a752354c5a092cdaacfbda710bbba3d28
+# hook_bytes: 50794
+# hook_lineas: 970
 # escenarios: 16
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -271,52 +271,11 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | verified=1
 | agents_seen=implementer,verifier,reviewer
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
-exit 2
-stdout (sha e32581988cda0b2b, 1558 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha c4d7ec1297aa6c92, 1497 bytes)
-| SUMMONAIKIT HARNESS GATE
-| 
-| Failed gates:
-| - Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n
-| 
-| Structured revision required:
-| 1. Return to the first missing gate.
-| 2. Use real evidence, not a marker file or a claim.
-| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
-| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
-| 
-| Revision loop on failure:
-| - Current revision cycle: 1/2.
-| - Budget: 2 cycles max.
-| - Do not blindly retry.
-| 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
-| SUMMONAIKIT HARNESS RECEIPT
-| Understand: ...
-| Implement: ...
-| Verify: ...
-| Review: ...
-| Close: ...
-| Retro: ...
+exit 0
+stdout <vacio>
+stderr <vacio>
 --- estado tras el paso 07
-hooks/state/<PROJECT_KEY>/harness-evidence.log
-| prompt task started: 2415293084
-| agent: implementer
-| implemented: C:\\dev\\demo\\src\\sesiones.ts
-| verified: python -m pytest -q
-| agent: verifier
-| agent: reviewer
-hooks/state/<PROJECT_KEY>/harness-state-review-notice.env
-| counter=5
-| last_code_edit=2
-| last_review=5
-hooks/state/<PROJECT_KEY>/harness-state.env
-| task_hash=2415293084
-| cycle=1
-| implemented=1
-| verified=1
-| agents_seen=implementer,verifier,reviewer
+(sin estado)
 
 === escenario 06-turno-completo-recibo-vinetas
 # El MISMO turno que el escenario 05, con una sola diferencia: el recibo esta
@@ -1055,10 +1014,18 @@ hooks/state/<PROJECT_KEY>/harness-state.env
 | verified=0
 | agents_seen=
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
-exit 0
-stdout <vacio>
-stderr <vacio>
-estado sin cambios
+exit 2
+stdout (sha e701d43801d39e06, 1893 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha 478d373614cd00f0, 1827 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=
 
 === escenario 15-fase-derivada-del-payload
 # Sin las variables de entorno del registro (target y phase): el hook deriva la

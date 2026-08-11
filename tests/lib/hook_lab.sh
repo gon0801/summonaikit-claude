@@ -225,3 +225,39 @@ lab_payload_stop() {
 lab_transcript_asistente() {
   printf '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_1","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"%s"}]},"uuid":"a2","timestamp":"2026-08-09T12:00:00.000Z"}' "$1"
 }
+
+# DEFECTO A2: texto que NO escribio el asistente no debe contar como pausa. El
+# vector real (pausa dentro del `content` de un `tool_result`, escenario 14 de la
+# linea base) lo prueba la baseline; este caso del banco prueba la CONDICION del
+# walker (role:assistant) con un fixture que la hace mutable. Se pone la pausa en
+# un `type:text` de un mensaje `user` — realista (el usuario escribio texto) y a
+# la profundidad que el walker rastrea. Con el hook sano no se emite (role no es
+# assistant); con la mutacion de role si, y el caso se pone rojo.
+lab_transcript_pausa_en_resultado() {
+  printf '%s\n%s' \
+    '{"parentUuid":"a1","type":"user","message":{"role":"user","content":[{"type":"text","text":"la linea que el kit espera es SUMMONAIKIT HARNESS PAUSED - awaiting your answer"}]},"uuid":"a2","timestamp":"2026-08-09T12:30:00.000Z"}' \
+    '{"parentUuid":"a2","type":"assistant","message":{"id":"msg_51","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"Ya lo cambie."}]},"uuid":"a3","timestamp":"2026-08-09T12:30:10.000Z"}'
+}
+
+# CORRECCION 1 del plan de la 3.2: la pausa en un content item que NO es
+# type:text tampoco cuenta, aunque viva en un mensaje assistant. Se usa un
+# `thinking` (no un tool_use) porque el walker rastrea claves a la profundidad
+# del content item (depth 4), y ahi es donde el `text` del thinking vive. Con
+# un tool_use la pausa iria en `input.command` (depth 5), fuera del alcance del
+# walker — y entonces no habria mutacion de "dejar de exigir type:text" que el
+# caso pudiera atrapar. El thinking lleva el mismo concepto (type != text debe
+# excluirse) en una posicion mutable. El walker tiene que exigir `"type":"text"`
+# exacto, no cualquier content item de mensaje assistant.
+lab_transcript_thinking_con_pausa() {
+  printf '%s' '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_60","role":"assistant","model":"claude-opus-5","content":[{"type":"thinking","text":"Pienso que la linea es SUMMONAIKIT HARNESS PAUSED - awaiting your answer"}]},"uuid":"a2","timestamp":"2026-08-09T12:40:00.000Z"}'
+}
+
+# Hallazgo de la revision cruzada (codex, 2026-08-11): un mensaje assistant con
+# DOS content items type:text se concatenaban sin separador en el walker. Si el
+# primero termina en letra, la etiqueta del segundo no se reconoce por la frontera
+# [^[:alpha:]] de has_receipt_label. Para reproducirlo: la CABECERA del recibo en
+# el primer bloque (termina en "T" de RECEIPT) y las ETIQUETAS en el segundo. Sin
+# el \n entre bloques, "Understand:" queda detras de "T" -> no matchea.
+lab_transcript_dos_bloques_recibo() {
+  printf '%s' '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_70","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"SUMMONAIKIT HARNESS RECEIPT"},{"type":"text","text":"Understand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none."}]},"uuid":"a2","timestamp":"2026-08-09T12:50:00.000Z"}'
+}

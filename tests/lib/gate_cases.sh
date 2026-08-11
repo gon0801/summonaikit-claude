@@ -343,7 +343,91 @@ caso_g3_turno_completo_por_eventos_permite() {
 }
 
 # ================================================================ G4 — recibo
-CASOS_G4="caso_g4_pausa_permite caso_g4_recibo_corrido_bloquea_a8 caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_solo_en_transcript_pasa"
+# ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
+# que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
+# otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa"
+
+# La pausa declarada es una forma valida de terminar el turno: el agente
+# pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
+# Nota grabada: por esta via el estado NO se borra (el turno sigue abierto a
+# proposito). Es la mitad buena de A2; la mitad mala — que la pausa se encuentre
+# adentro del resultado de una herramienta — la cierra la Task 3.2.
+caso_g4_pausa_permite() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
+}
+
+# DEFECTO A2, la mitad mala: la cadena de pausa aparece SOLO adentro del
+# `content` de un `tool_result` en el transcript — un mensaje `user`, no
+# `assistant`. El asistente nunca la escribio; hoy el grep crudo sobre el tail la
+# encuentra y el gate deja pasar. La Task 3.2 cierra esto: el walker ignora todo
+# texto que no sea de un mensaje assistant, y la pausa aqui vive en uno user.
+# Es el caso que habria atrapado A2. Estado NO borrado: el turno sigue abierto.
+caso_g4_pausa_en_resultado_bloquea() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Ya lo cambie.')" "$(lab_transcript_pausa_en_resultado)"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# CORRECCION 1 (plan 3.2): la pausa en un content item que NO es type:text de
+# un mensaje ASSISTANT tampoco cuenta. Es el caso que separa "lo escribio el
+# asistente como respuesta" (type:text) de "lo escribio el asistente pensando o
+# en otra clave". El walker tiene que exigir `"type":"text"` exacto; sin este
+# caso, mutar el walker para que acepte cualquier content[] de assistant
+# pasaria inadvertida. Se usa thinking (no tool_use) porque su `text` vive a la
+# profundidad que el walker rastrea y asi la mutacion type:text es atrapable.
+caso_g4_pausa_en_thinking_no_cuenta() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Ya lo cambie.')" "$(lab_transcript_thinking_con_pausa)"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+}
+
+# Repone el atrapador de mut_etiqueta_sin_frontera que el caso A8 invertido le
+# quito. La palabra `misunderstand` termina en `understand:` — con la frontera
+# sana `(^|[^[:alpha:]])` la `s` alfabetica que precede impide el match y la
+# etiqueta falta; con la mutacion `(^|.)` cuenta y "Missing Understand" desaparece
+# del motivo. Afirma SOLO sobre Understand para no robarle la declaracion a
+# mut_retro_no_se_exige.
+caso_g4_etiqueta_pegada_no_cuenta() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'hubo un misunderstand: aclarar con el usuario.')"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
+}
+
+# DEFECTO A8, INVERTIDO por la Task 3.2. Antes este recibo escrito en texto
+# corrido (sin viñetas) fallaba las 6 etiquetas: en el JSONL el salto va escapado
+# y el caracter que precede a cada etiqueta es la `n` de `\n`, alfabetico, que la
+# frontera `[^[:alpha:]]` rechaza. El arreglo decodifica el texto del asistente
+# antes de evaluar, asi que `\n` se vuelve un salto real y la etiqueta pasa.
+# Verifica ademas que el canal payload (last_assistant_message) decodifica.
+caso_g4_recibo_corrido_pasa_a8() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_CORRIDO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Hallazgo de la revision cruzada (codex, 2026-08-11): un mensaje assistant con
+# DOS content items type:text se concatenaban sin separador. Si el primero
+# termina en letra, la etiqueta del segundo no se reconoce por la frontera
+# [^[:alpha:]] de has_receipt_label. El walker ahora agrega \n al cerrar cada
+# content item. Sin este caso, revertir ese salto pasaria inadvertido.
+caso_g4_recibo_dos_bloques_pasa() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_dos_bloques_recibo)"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
 
 caso_g4_falta_una_etiqueta_bloquea() {
   _sembrar_turno_completo
@@ -372,34 +456,16 @@ caso_g4_recibo_en_vinetas_pasa() {
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
 }
 
-# DEFECTO A8, grabado a proposito. El MISMO recibo del caso de arriba, escrito
-# en texto corrido en vez de viñetas, no satisface NINGUNA de las 6 etiquetas:
-# en el JSONL el salto va escapado y el caracter que precede a la etiqueta es la
-# `n` de `\n`, que es alfabetico. O sea que hoy el veredicto depende de como el
-# asistente formateo el recibo, no de si lo escribio.
-# La huella exacta: la CABECERA si se encuentra (no lleva esa exigencia) y las 6
-# etiquetas no. La Task 3.2 invierte este caso.
-caso_g4_recibo_corrido_bloquea_a8() {
+# Cruce que faltaba: canal transcript x A8 (texto corrido). Con dos
+# decodificadores hay que probar cada canal por separado; el plan original
+# probaba corrido-en-payload y viñetas-en-transcript, dejando esta combinacion
+# sin cubrir. Verifica que el walker del transcript decodifica los `\n`.
+caso_g4_recibo_corrido_solo_en_transcript_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop "$_RECIBO_CORRIDO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _no_contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
-  for etiqueta in Understand Implement Verify Review Close Retro; do
-    _contiene "motivo" "$LAB_OUT" "Missing $etiqueta gate summary"
-  done
-}
-
-# La pausa declarada es una forma valida de terminar el turno: el agente
-# pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
-# Nota grabada: por esta via el estado NO se borra (el turno sigue abierto a
-# proposito). Es la mitad buena de A2; la mitad mala — que la pausa se encuentre
-# adentro del resultado de una herramienta — la cierra la Task 3.2.
-caso_g4_pausa_permite() {
-  lab_sembrar 123456 0 0 0 ""
-  lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
-  if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
 }
 
 # El recibo tiene DOS canales y los dos cuentan: el payload del Stop trae

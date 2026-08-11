@@ -126,6 +126,153 @@ json_tool_input_string() {
     }'
 }
 
+# Extrae el texto decodificado del asistente para el gate del Stop (Task 3.2).
+# Cierra A2 (la pausa/recibo se busca en el tail crudo, que incluye tool_result)
+# y A8 (los saltos escapados del JSONL rompen la frontera [^[:alpha:]] de las
+# etiquetas). Dos canales medidos (Task 1.4): last_assistant_message del payload
+# y los bloques text de message.content con role:"assistant" en el transcript.
+#
+# Por que DOS funciones y no una con fallback, declarado: awk no "falla" con JSON
+# malo — devuelve vacio. Un "si el walker falla, caer a last_assistant_message"
+# no es accionable (nunca se dispara) y ademas no es fail-open: con text vacio el
+# gate reclama las 6 etiquetas y BLOQUEA. Cada canal vive en su funcion; si el
+# transcript no existe o es ilegible, el canal 2 queda vacio y se evalua solo el
+# canal 1 — exactamente lo que hoy pasa con el tail vacio, sin rama especial.
+#
+# Por que esta SI decodifica y la 3.1 (json_tool_input_string) NO: alla un valor
+# escapado no mapea a ningun rol, asi que el error cae del lado seguro. Aca el
+# caso de uso es texto multilinea, y una etiqueta detras de \n TIENE que contar:
+# decodificar \n \" \\ \t es lo que vuelve real el salto que has_receipt_label
+# supone. Los demas escapes (\uXXXX, \/, \b, \f) se dejan crudos: no aparecen en
+# los 308 payloads medidos (Task 1.4), y un escape no manejado no mapea a
+# ninguna etiqueta — cae del mismo lado seguro que en la 3.1.
+#
+# Dependencias: NINGUNA nueva. awk ya es dependencia dura (json_escape,
+# json_tool_input_string, task_hash). Si faltara, el hook estaria roto antes.
+
+# Canal 1: last_assistant_message del payload Stop (clave de primer nivel).
+assistant_text_payload() {
+  case "$INPUT" in
+    *'"last_assistant_message"'*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; c1 = ""; emiti = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc) {
+            if (emiti) {
+              if      (c == "n")  printf "\n"
+              else if (c == "t")  printf "\t"
+              else if (c == "\\") printf "\\"
+              else if (c == "\"") printf "\""
+              else                printf "\\%s", c
+            }
+            esc = 0; continue
+          }
+          if (c == "\\") { esc = 1; continue }
+          if (c == "\"") {
+            ins = 0
+            ultima = substr(buf, ini, i - ini)
+            if (espera && depth == 1 && c1 == "last_assistant_message") { emiti = 0; exit }
+            continue
+          }
+          if (emiti) printf "%s", c
+          continue
+        }
+        if (c == "\"") {
+          ins = 1; ini = i + 1
+          if (espera && depth == 1 && c1 == "last_assistant_message") emiti = 1
+          continue
+        }
+        if (c == ":")                { if (depth == 1) c1 = ultima; espera = 1 }
+        else if (c == "{" || c == "[") { depth++; espera = 0 }
+        else if (c == "}" || c == "]") { depth--; espera = 0 }
+        else if (c == ",")             { espera = 0 }
+      }
+    }'
+}
+
+# Canal 2: bloques {"type":"text","text":...} de message.content con
+# role:"assistant" en el transcript (JSONL, una entrada por linea). Lee de stdin.
+# La decision de que texto cuenta la toma el walker (exige role:assistant +
+# content[].type:text exacto). Un atajo `index($0,"\"assistant\"")` se probo y se
+# saco: era un acelerador declarado NO autoridad, pero en la practica FILTRABA
+# lineas que el walker necesitaba ver (un mensaje user con type:text no contiene
+# la palabra "assistant" y se saltaba entero — la mutacion de role no era
+# atrapable). Sin el atajo el walker es la unica autoridad; el costo se declara
+# en la medicion de la Task 3.2.
+#
+# Premisa del orden, declarada: type viene antes de text en cada content item, y
+# role viene antes de content en cada mensaje (es asi en los 308 payloads medidos
+# y en todos los hosts conocidos). Si vinieran despues, el text no se emitiria —
+# fallo visible (el gate reclama etiquetas), no silencioso. Es consistente con
+# como el hook ya depende del orden de campos para todos sus greps de sed.
+# (Hallazgo [baja] de la revision cruzada codex, 2026-08-11: la premisa de role
+# antes de content no estaba declarada explicitamente.)
+assistant_text_transcript() {
+  awk '
+    {
+      linea = $0; n = length(linea)
+      depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; c1 = ""; c2 = ""; c4 = ""
+      en_assistant = 0; en_text = 0; emiti = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(linea, i, 1)
+        if (ins) {
+          if (esc) {
+            if (espera && en_text && en_assistant && c4 == "text") {
+              if      (c == "n")  { printf "\n"; emiti = 1 }
+              else if (c == "t")  { printf "\t"; emiti = 1 }
+              else if (c == "\\") { printf "\\"; emiti = 1 }
+              else if (c == "\"") { printf "\""; emiti = 1 }
+              else                { printf "\\%s", c; emiti = 1 }
+            }
+            esc = 0; continue
+          }
+          if (c == "\\") { esc = 1; continue }
+          if (c == "\"") {
+            ins = 0
+            ultima = substr(linea, ini, i - ini)
+            if (espera) {
+              if (depth == 2 && c2 == "role" && ultima == "assistant") en_assistant = 1
+              if (depth == 4 && c4 == "type" && ultima == "text") en_text = 1
+              espera = 0
+            }
+            continue
+          }
+          if (espera && en_text && en_assistant && c4 == "text") { printf "%s", c; emiti = 1 }
+          continue
+        }
+        if (c == "\"") { ins = 1; ini = i + 1; continue }
+        if (c == ":")  {
+          if (depth == 1) c1 = ultima
+          if (depth == 2) c2 = ultima
+          if (depth == 4) c4 = ultima
+          espera = 1; continue
+        }
+        if (c == "{" || c == "[") { depth++; if (depth == 4) en_text = 0; espera = 0; continue }
+        if (c == "}" || c == "]") {
+          # Al cerrar un content item (depth 4->3), si emitimos texto, agregar
+          # un salto. Sin esto, dos bloques type:text del mismo mensaje se
+          # concatenan ("prefijo" + "Understand: ..." -> "prefijoUnderstand:")
+          # y la frontera [^[:alpha:]] de has_receipt_label falla. Hallazgo de
+          # la revision cruzada (codex, 2026-08-11).
+          if (depth == 4 && emiti) { printf "\n"; emiti = 0 }
+          depth--; espera = 0; continue
+        }
+        if (c == ",")             { espera = 0; continue }
+      }
+      if (emiti) printf "\n"
+    }
+  '
+}
+
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN { first = 1 } { gsub(/\r/, ""); if (!first) printf "\\n"; printf "%s", $0; first = 0 }'
 }
@@ -671,8 +818,15 @@ stop_gate() {
   if [ -n "$transcript_path" ] && [ -r "$transcript_path" ]; then
     tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
   fi
-  text="$INPUT
-$tail_text"
+  # Task 3.2: $text se arma con SOLO texto del asistente, decodificado, de los
+  # dos canales (last_assistant_message + content[].text role:assistant del tail).
+  # Antes era $INPUT + tail crudo, que incluia tool_result y los \n escapados del
+  # JSONL — raiz de A2 (exige de menos) y A8 (exige de mas). El tail -n 160 se
+  # conserva como recorte: leer el transcript entero agrandaria el hueco (un
+  # recibo de hace 5 turnos satisfaria el gate) y es caro en Windows. Ver
+  # docs/task-3.2-plan.md CORRECCION 2.
+  text="$(assistant_text_payload)
+$(printf '%s' "$tail_text" | assistant_text_transcript)"
 
   # A clarifying pause is a valid way to end the turn: the agent asked the
   # non-technical user a question and is waiting for the answer. Do not demand a

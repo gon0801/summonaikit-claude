@@ -55,6 +55,10 @@ G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_inp
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
 G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
+G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
+G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
+G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
+G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
 "
@@ -86,6 +90,15 @@ mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }
 mut_pausa_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED NUNCA'/"; }
+# Las cuatro mitades del arreglo de A2+A8 (Task 3.2), una mutacion cada una.
+# Las dos primeras mutan la LLAMADA en stop_gate (no el awk interno) porque
+# MSYS2/Git Bash corrompe los backslashes en literales de sed — cambiar la
+# funcion llamada es equivalente para lo que el caso prueba y no tiene ese
+# problema. Las dos ultimas mutan la condicion del walker directamente.
+mut_canal_payload_crudo()    { sed 's/$(assistant_text_payload)/$(json_string_field last_assistant_message)/'; }
+mut_canal_transcript_vacio() { sed 's/| assistant_text_transcript/| true/'; }
+mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"/c2 == "role"/'; }
+mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
 

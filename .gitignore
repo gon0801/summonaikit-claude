@@ -2,3 +2,4 @@ sandbox/
 out/
 *.bak
 .claude/
+.zcode/
