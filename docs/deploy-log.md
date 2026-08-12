@@ -22,3 +22,20 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   `Task`↔`Agent` medido en esta misma task).
 - **Vivo vs master:** cksum idéntico (`3605963032 66538`).
 - **Operador:** Gon (config real restaurada tras `--quitar` en el cierre de 5.1).
+
+## 2026-08-12 — PR #4 / Task 5.2 (merge `b722150`)
+
+- **Mergeado:** PR #4 `feat/5.2-probe-zcode-output` → master — Task 5.2: probe de
+  las 4 formas de stdout + `exit 2` para medir el contrato de salida de zcode
+  (`tools/probe-zcode-output.sh` + tests TDD), `docs/task-5.2-salida.md`
+  (veredictos), spec § segundo host corregido (esquema no estricto + `exit 2` en
+  Stop sí bloquea), cierre de `Plans.md:98`. Decisión: `TARGET=claude` alcanza.
+- **¿Cambió el hook?** **No.** 5.2 sumó un tool de medición + docs;
+  `hooks/summonaikit-harness.sh` intacto.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual a
+  la fuente.` (deploy no-op).
+- **`check-hook-registration.sh`:** registro en las 3 fases OK (exit 0). Mismo
+  advisory conocido de A9 (matcher PostToolUse sin `Agent`).
+- **Vivo vs master:** cksum idéntico (`3605963032 66538`).
+- **Operador:** Gon (config de zcode restaurada tras `--quitar` del probe en el
+  cierre de 5.2; el probe midió en sesiones nuevas sobre repo descartable).
