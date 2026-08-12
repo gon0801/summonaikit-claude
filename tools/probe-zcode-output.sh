@@ -87,6 +87,22 @@ gen_nonce() {
   printf '%s%05d' "$(date +%s 2>/dev/null || echo 0)" "${RANDOM:-0}$$"
 }
 
+# hook_event_name del payload de stdin: snake primero, camel de fallback. zcode
+# emite hook_event_name (snake) Y/O hookEventName (camel) — 5.1 vio ambos; esta
+# medicion vio SOLO camel en Stop. grep -o agarra el PRIMER match (leftmost) y el
+# strip deja el valor. Por que NO sed con .* greedy: en C.UTF-8 con GNU sed 4.9,
+# sobre un responseText con UTF-8 multibyte (acentos/emoji/backticks), el bracket
+# [^"]* cruzaba comillas y capturaba basura ("Stopï\n\nEstoy..." en vez de "Stop")
+# — defecto propio hallado en el auto-test del modo empty. grep -o no padece eso.
+extract_hook_event() {
+  local m
+  m="$(printf '%s' "$1" | grep -o '"hook_event_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1)"
+  [ -n "$m" ] || m="$(printf '%s' "$1" | grep -o '"hookEventName"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1)"
+  [ -n "$m" ] || return 0   # devuelve vacío
+  # m = '"hook_event_name":"Stop"' => valor entre el ': "' y el '"' final.
+  printf '%s' "$m" | sed 's/^.*:[[:space:]]*"//; s/"$//'
+}
+
 # Resolver un bash.exe de Windows para registrar en el user-config de zcode.
 # NUNCA persistir /usr/bin/bash ni la salida cruda de `command -v bash`: en
 # MSYS son rutas virtuales que Node resuelve con ENOENT. (Leccion 5.1.)
@@ -130,15 +146,11 @@ if [ -z "$modo_operacion" ]; then
   nonce="${SAIKIT_PROBE_NONCE:-}"
   [ -n "$nonce" ] || nonce="$(gen_nonce)"
 
-  # Evento del stdin. zcode emite hook_event_name (snake) Y hookEventName (camel);
-  # snake primero (la que el hook lee), camel de fallback (5.1).
+  # Evento del stdin. zcode emite hook_event_name (snake) Y/O hookEventName
+  # (camel); snake primero, camel de fallback (extract_hook_event — ver por que
+  # no sed greedy). stderr diagnostico no entra al esquema.
   payload="$(cat 2>/dev/null)"
-  evento="$(printf '%s' "$payload" \
-    | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  if [ -z "$evento" ]; then
-    evento="$(printf '%s' "$payload" \
-      | sed -n 's/.*"hookEventName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  fi
+  evento="$(extract_hook_event "$payload")"
 
   # probe-ran/ cae junto al mode-file (el dest en produccion); si no hay mode-file,
   # junto al cwd. Ahi vive el side-channel <nonce>.ok.

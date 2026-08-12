@@ -138,6 +138,29 @@ printf '%s' '{"hookEventName":"Stop"}' | SAIKIT_PROBE_NONCE=CAML bash "$tool" --
 [ "$rc" -eq 0 ] || malo "camel: exit $rc"
 stdout_is '{"continue":false,"stopReason":"PROBE-BUDGET-CAML"}'
 
+# ============================================================ REGRESIÓN zcode realista
+# Payload REALISTA de zcode (CLI 3.7.5-11): evento en camelCase (esta medición vio
+# SOLO hookEventName en Stop, 0 snake) + responseText largo con UTF-8 multibyte
+# (acentos, emoji, backticks, \n escapados). Defecto propio hallado en el auto-test
+# del modo empty: el sed con .* greedy + [^"]* cruzaba comillas en C.UTF-8 con
+# GNU sed 4.9 sobre estos bytes (daba "Stopï\n\nEstoy..." en vez de "Stop"), asi
+# que NINGÚN modo Stop emitia. grep -o (leftmost) no tiene ese problema. Este es
+# el test que lo habria atrapado.
+STOP_REAL='{"cwd":"C:\\dev\\demo-repo","hookEventName":"Stop","mode":"yolo","responsePreview":"¡Hola! 👋\n\nEstoy listo para ayudarte con el repositorio. ¿Qué querés hacer? Por ejemplo:\n\n- Implementar o arreglar algo\n- Explorar el código\n- Correr pre-commit\n- Otra cosa\n\nDecime y arrancamos.","responseText":"¡Hola! 👋\n\nEstoy listo para ayudarte con el repositorio. ¿Qué querés hacer? Por ejemplo:\n\n- Implementar o arreglar algo\n- Explorar el código\n- Correr pre-commit\n- Otra cosa\n\nDecime y arrancamos.","stop_hook_active":false}'
+
+caso "REGRESIÓN: budget + payload Stop realista de zcode (UTF-8) => forma 3"
+printf '%s' "$STOP_REAL" | SAIKIT_PROBE_NONCE=REAL1 bash "$tool" --mode budget --mode-file "$mf" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "regresión budget: exit $rc"
+stdout_is '{"continue":false,"stopReason":"PROBE-BUDGET-REAL1"}'
+[ -f "$(ok_of REAL1)" ] || malo "regresión budget: no escribió .ok"
+
+caso "REGRESIÓN: exit2 + payload Stop realista de zcode => exit 2 + .ok + stderr nonce"
+printf '%s' "$STOP_REAL" | SAIKIT_PROBE_NONCE=REAL2 bash "$tool" --mode exit2 --mode-file "$mf" >"$OF" 2>"$EF"; rc=$?
+[ "$rc" -eq 2 ] || malo "regresión exit2: exit $rc (esperaba 2)"
+stdout_is_empty
+grep -q 'PROBE-EXIT2-REAL2' "$EF" || malo "regresión exit2: stderr sin nonce"
+[ -f "$(ok_of REAL2)" ] || malo "regresión exit2: no escribió .ok"
+
 # ============================================================ §A2.7 bash -n
 caso "el probe es bash -n valido"
 bash -n "$tool" 2>/dev/null || malo "bash -n fallo en el probe"
