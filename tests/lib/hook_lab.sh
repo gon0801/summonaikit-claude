@@ -126,10 +126,16 @@ lab_run() {
   lab_sid="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
   printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g; s|__SESSION_ID__|$lab_sid|g" > "$lab_entrada"
 
-  lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
+  lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET -u CLAUDECODE
            HOME="$LAB/home" USERPROFILE="$LAB/home")
   [ "$lab_fase" != "auto" ]   && lab_cmd+=(SUMMONAIKIT_HOOK_PHASE="$lab_fase")
   [ "$lab_target" != "auto" ] && lab_cmd+=(SUMMONAIKIT_HOOK_TARGET="$lab_target")
+  # CLAUDECODE solo lo repone el caso que lo pide (A10/Task 3.7): el default es
+  # ausente, asi el lab es determinista aunque la suite corra adentro de Claude
+  # Code (que setea CLAUDECODE=1). Sin esto, el fallback de A10 resolveria
+  # TARGET=claude en cualquier caso con target=auto y los tests no probarian lo
+  # que creen. Expansion segura bajo set -u (CORRECCION 17 del plan).
+  [ -n "${LAB_CLAUDECODE:-}" ] && lab_cmd+=(CLAUDECODE="$LAB_CLAUDECODE")
 
   ( cd "$LAB/proyecto" && "${lab_cmd[@]}" bash "$LAB/hooks/summonaikit-harness.sh" ) \
     < "$lab_entrada" > "$LAB/.out" 2> "$LAB/.err"
@@ -230,6 +236,16 @@ lab_payload_bash() {
 # nivel. 281 de 303 payloads reales son de esta forma.
 lab_payload_bash_en_subagente() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_id":"a11111111impleme","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c3d4e5f60718293a4b5c6d","duration_ms":1200}' "$1" "$2"
+}
+
+# Una delegacion ANIDADA: evento Agent (tool_name=Agent) que a la vez trae
+# tool_input.subagent_type (el rol del hijo) y agent_type de primer nivel (el
+# rol del subagente PADRE que lo invoca). Es la forma real de una delegacion
+# dentro de un subagente. Sirve para afirmar que subagent_type gana sobre
+# agent_type cuando ambos estan (A9 es fallback, CORRECCION 6 del plan).
+# Args: $1 = subagent_type (hijo), $2 = agent_type top-level (padre).
+lab_payload_agent_anidado() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"delegacion anidada","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01a7b8c9d0e1f2a3b4c5d6e7","duration_ms":4200}' "$2" "$1" "$1"
 }
 
 lab_payload_edit() {

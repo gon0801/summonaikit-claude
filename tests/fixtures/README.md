@@ -75,7 +75,13 @@ supuesto.
   que invocan subagentes (`tool_name: Agent`) no llegan al hook porque el
   matcher registrado nombra `Task`; los que sí llegan traen el rol en
   `agent_type`, y el hook busca `subagent_type`. Tres subagentes corren y
-  `agents_seen` queda vacío. Defecto A9.
+  `agents_seen` queda vacío. Defecto A9. **CERRADO por la Task 3.7**: el hook
+  ahora lee `agent_type` de primer nivel como fallback (`:831`) y `agents_seen`
+  se puebla; el escenario 16 pasó de bloquear a cerrar limpio. La mitad del
+  matcher sigue: los eventos `Agent` aún no llegan, y un subagente read-only
+  (Read/Grep/Glob) sigue sin registrar su rol — `check-hook-registration.sh` lo
+  reporta. Esta línea es el registro de lo que 1.4 midió; el estado vigente es
+  "cerrado".
 - **Ningún veredicto de la línea base se movió** al pasar a la forma real. Lo
   único que cambió es el escapado de rutas en el log de evidencia y el
   `task_hash` del escenario 04 (`SessionStart` no trae campo `prompt`, así que

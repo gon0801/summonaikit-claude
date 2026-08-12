@@ -21,6 +21,17 @@ fi
 
 INPUT="$(cat)"
 TARGET="$SUMMONAIKIT_HOOK_TARGET"
+# A10 (Task 3.7): el host NO propaga el prefijo VAR=val del comando registrado
+# (medido 2026-08-11), asi que SUMMONAIKIT_HOOK_TARGET llega vacio en produccion
+# y la rama de secuencia (claude) nunca corria -- [ "$TARGET" = "claude" ] era
+# siempre falso. Claude Code setea CLAUDECODE=1 (medido); acierta para Claude y
+# para glm (que hace exec claude). No setea cursor ni zcode, que quedan con
+# TARGET vacio: correcto, la secuencia es una primitiva de Claude. La via
+# "limpia" para cursor/zcode seria exportar TARGET dentro del bash -c del comando
+# registrado, pero eso toca settings.json (que ningun tool de este repo genera) y
+# queda fuera de esta tarea. PHASE no necesita este fallback: ya lo tiene al
+# payload (hook_event_name, ver :1144).
+if [ -z "$TARGET" ] && [ "$CLAUDECODE" = "1" ]; then TARGET="claude"; fi
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
@@ -830,6 +841,18 @@ record_tool_evidence() {
   # payload trae el resultado de la herramienta, que el turno no escribio (A1).
   subagent="$(json_tool_input_string subagent_type)"
   if [ -z "$subagent" ]; then subagent="$(json_tool_input_string subagentType)"; fi
+  # A9 (Task 3.7): los eventos INTERNOS del subagente (los que matchean el
+  # matcher y llegan al gate) llevan el rol en agent_type de PRIMER NIVEL, no en
+  # subagent_type (que solo esta en los eventos Agent, que el matcher no cubre).
+  # Medido en la captura de 3.7 (9 de 12 PostToolUse con agent_type top-level).
+  # Es FALLBACK, no reemplazo: si subagent_type llega, gana. Un agent_type sin rol
+  # (general-purpose, Explore) no registra nada porque canonical_agent_role no lo
+  # mapea. OJO: $subagent tiene un segundo consumidor abajo (rn_mark_review,
+  # bloque :834-839), asi que esto tambien enciende la senal de orden del
+  # review-notice. Es deliberado y esta declarado en el plan (CORRECCION 3):
+  # marcar el ultimo evento interno del reviewer data cuando la revision corrio,
+  # no cuando se pidio.
+  if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
   if [ -n "$subagent" ]; then record_agent "$subagent"; fi
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   rn_order_now="$(rn_bump_counter)"

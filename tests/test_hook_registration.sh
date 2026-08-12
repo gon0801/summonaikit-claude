@@ -24,8 +24,34 @@ fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
-# Registro completo: las 3 fases que el hook necesita.
+# Registro completo: las 3 fases que el hook necesita, con un matcher de
+# PostToolUse SANO (cubre Agent). Desde la Task 3.7 el verificador reporta si el
+# matcher no cubre Agent (CORRECCION 2/14); el fixture "completo/sano" tiene que
+# serlo de verdad, o "registro completo => silencio" dejaria de significar completo.
 escribir_settings_completo() {
+  cat > "$1" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=prompt bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|Edit|Write|apply_patch|Task|Agent",
+        "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=tool bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=stop bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
+    ]
+  }
+}
+JSON
+}
+
+# El matcher REAL que usa el operador hoy (sin Agent). Es el fixture del caso
+# "registro real" y de los casos de matcher: cuenta las 3 fases (el hook corre)
+# pero el verificador tiene que advertir el hueco de Agent. No se hace pasar por
+# "completo/sano".
+escribir_settings_real_sin_agent() {
   cat > "$1" <<'JSON'
 {
   "hooks": {
@@ -149,15 +175,18 @@ out="$(bash "$tool" --settings "$tmp/compuesto.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 [ -z "$out" ] || malo "un comando compuesto que SI ejecuta el hook debe contar como registro: $out"
 
-caso "el registro REAL, con env vars por delante y bash -c, sigue contando"
-# Guardia contra el arreglo de arriba: la forma que usa el settings de verdad
-# lleva asignaciones de entorno antes del programa y el hook adentro de un
-# `bash -c '...'`. Si el arreglo la rompiera, el verificador gritaria en cada
-# arranque sobre un registro que SI existe -- una alarma falsa perpetua.
-escribir_settings_completo "$tmp/real.json"
+caso "el registro REAL (matcher sin Agent) advierte el hueco, sin reportar fases"
+# El settings real del operador lleva env vars por delante + bash -c y un matcher
+# de PostToolUse que NO cubre Agent (Bash|Edit|Write|apply_patch|Task). Desde la
+# Task 3.7 el verificador reporta ese hueco (CORRECCION 2). Lo que NO debe hacer
+# es gritar "INCOMPLETO" o "el gate NO corre": las 3 fases SI corren, el hook SI
+# esta registrado; el matcher es un hueco independiente.
+escribir_settings_real_sin_agent "$tmp/real.json"
 out="$(bash "$tool" --settings "$tmp/real.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
-[ -z "$out" ] || malo "el registro real dejo de contar como registro: $out"
+printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "el matcher real sin Agent debe disparar el aviso: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "las 3 fases corren: no debe reportar INCOMPLETO"
+printf '%s' "$out" | grep -qi 'el gate NO corre' && malo "el gate SI corre en las 3 fases"
 
 # ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
 caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"
@@ -190,6 +219,64 @@ caso "no observado (settings inexistente) NO se reporta como incompleto"
 out="$(bash "$tool" --settings "$tmp/no-existe.json" 2>&1)"
 printf '%s' "$out" | grep -qi 'el gate NO corre' \
   && malo "no se afirma que el gate no corre a partir de un archivo que no se pudo mirar"
+
+# ============================================================================
+# Task 3.7 — el matcher de PostToolUse y la herramienta de subagentes (Agent)
+# ============================================================================
+# Un subagente read-only (Read/Grep/Glob) no genera eventos que lleguen al gate
+# si el matcher no cubre Agent; su rol no se registra. El verificador lo REPORTA
+# (fail-open, exit 0); no edita el registro.
+
+caso "matcher de PostToolUse sin Agent => reporta FUERTE y exit 0"
+cat > "$tmp/no-agent.json" <<'JSON'
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash|Edit|Write","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+out="$(bash "$tool" --settings "$tmp/no-agent.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "fail-open: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "debe reportar que el matcher no cubre Agent: $out"
+
+caso "matcher '*' cubre Agent y calla"
+cat > "$tmp/star.json" <<'JSON'
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "matcher '*' cubre todo => silencio: $out"
+
+caso "un matcher cubierto entre varios grupos => calla"
+cat > "$tmp/mix.json" <<'JSON'
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "basta UN grupo que cubra Agent => silencio: $out"
+
+caso "base sin Agent + local con Agent => calla"
+cat > "$tmp/base-noagent.json" <<'JSON'
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+cat > "$tmp/local-agent.json" <<'JSON'
+{ "hooks": { "PostToolUse": [{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+out="$(bash "$tool" --settings "$tmp/base-noagent.json" --local-settings "$tmp/local-agent.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "el local trae Agent => cubre => silencio: $out"
+
+caso "base sin Agent + local ilegible => unknown (no ausencia)"
+printf '{ roto\n' > "$tmp/local-roto2.json"
+out="$(bash "$tool" --settings "$tmp/base-noagent.json" --local-settings "$tmp/local-roto2.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "Core Rule 2: el local ilegible podria tener Agent => unknown"
+printf '%s' "$out" | grep -qi "no cubre 'Agent'" && malo "no afirma ausencia de Agent con un local ilegible"
+
+caso "matcher que no compila como regex => unknown, no ausencia"
+cat > "$tmp/badregex.json" <<'JSON'
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash[","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+JSON
+out="$(bash "$tool" --settings "$tmp/badregex.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "un matcher que no compila es unknown, no ausencia"
+printf '%s' "$out" | grep -qi "no cubre 'Agent'" && malo "no afirma ausencia con un matcher que no se pudo compilar"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

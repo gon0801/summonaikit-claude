@@ -58,6 +58,8 @@ G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
 G3|subagent_type_greedy|el rol se vuelve a leer con el lector greedy del payload crudo
 G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_input
+G3|agent_type_no_se_lee|el rol de los eventos internos (agent_type) deja de leerse
+G3|target_sin_claudecode|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
 G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
@@ -130,6 +132,20 @@ mut_secuencia_tambien_en_cursor() { sed 's/if \[ "\$TARGET" = "claude" \]; then/
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
 mut_subagent_type_greedy()   { sed 's/json_tool_input_string subagent_type/json_string_field subagent_type/'; }
 mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\& clave == want/clave == want/'; }
+# Las dos mitades del arreglo de A9+A10 (Task 3.7), una mutacion cada una y cada
+# una acreditada a su caso. La primera neutraliza el fallback a agent_type
+# top-level: los eventos internos (que llegan al gate) dejan de registrar el
+# rol -- lo atrapa caso_g3_agent_type_cuenta (el invertido), que va antes en
+# CASOS_G3. Deja `subagent="$(true)"`, que bash -n acepta y devuelve vacio.
+# La segunda anula el fallback CLAUDECODE=1 cambiando el valor comparado: asi
+# CLAUDECODE=1 deja de matchear, TARGET vuelve a quedar vacio en produccion y la
+# secuencia no se exige -- lo atrapa caso_g3_target_por_claudecode_fallback. NO
+# se muta a `[ false ]`: `test` con un unico argumento no vacio da VERDADERO, o
+# sea que volveria el fallback incondicional y ningun caso reaccionaria
+# (CORRECCION 4 del plan). Cambiar el valor no toca la estructura de corchetes
+# ni mete backslashes (la trampa de MSYS2 de :128-131).
+mut_agent_type_no_se_lee()   { sed 's/json_top_level_string agent_type/true/'; }
+mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }

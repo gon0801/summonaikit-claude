@@ -254,7 +254,7 @@ generar() {
 
       # `auto` = la variable NO se exporta. Es un caso real: si el registro en
       # settings.json no las pone, el hook deriva la fase del propio payload.
-      cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
+      cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET -u CLAUDECODE
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
       [ "$objetivo" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")

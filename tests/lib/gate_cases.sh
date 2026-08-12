@@ -25,8 +25,12 @@
 #   caso_g4_pausa_permite               la mitad buena de A2: la pausa se busca
 #                                       grepeando el texto crudo, asi que el
 #                                       mismo grep la encuentra donde no debe.
-#   caso_g3_agent_type_no_cuenta        A9 — el rol del subagente viaja en
-#                                       `agent_type` y el hook no lo mira.
+#   caso_g3_agent_type_cuenta            A9 — INVERTIDO por la Task 3.7. Antes
+#                                       `caso_g3_agent_type_no_cuenta` y afirmaba
+#                                       lo opuesto: el rol viaja en `agent_type`
+#                                       de primer nivel y el hook no lo miraba.
+#                                       Ahora el hook lee agent_type (fallback) y
+#                                       el caso afirma que SI cuenta.
 #   caso_g2_runner_fallido_forma_real   A11 — el guardia de fallas busca un
 #                                       `exitCode` que el payload real no trae.
 #
@@ -402,7 +406,7 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -441,22 +445,51 @@ caso_g3_agente_generico_no_cuenta() {
   _igual "agents_seen tras Explore" "$(lab_estado agents_seen)" ""
 }
 
-# DEFECTO A9, medido con la captura de la Task 1.4 y grabado a proposito.
-#
-# Los eventos de ADENTRO de un subagente llevan el rol en `agent_type` de primer
-# nivel (281 de 303 payloads reales). El hook busca `subagent_type`, asi que no
-# lo ve: el implementer puede correr, editar archivos y dejar su rastro en cada
-# payload, y el gate igual reclama que no corrio.
-#
-# Va junto con lo otro que midio la captura: la herramienta que INVOCA
-# subagentes se llama `Agent`, y el matcher registrado nombra `Task`, asi que
-# esos eventos no llegan nunca. Entre las dos cosas, el gate de secuencia no
-# tiene forma de satisfacerse. El escenario 16 de la linea base graba el turno
-# completo; este caso graba la pieza suelta.
-caso_g3_agent_type_no_cuenta() {
+# A9, CERRADO por la Task 3.7. Antes `caso_g3_agent_type_no_cuenta` y afirmaba
+# lo opuesto (el defecto grabado a proposito): el rol de los eventos INTERNOS del
+# subagente viaja en `agent_type` de primer nivel, y el hook solo leia
+# `subagent_type` (que vive en los eventos Agent, que el matcher no cubre) ->
+# agents_seen quedaba vacio con los tres subagentes corridos. Ahora el hook lee
+# agent_type como fallback (:831) y el caso afirma que SI cuenta. El escenario 16
+# de la linea base graba el turno entero; este caso graba la pieza suelta.
+caso_g3_agent_type_cuenta() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash_en_subagente 'implementer' 'npm test')"
-  _igual "agents_seen con agent_type=implementer (A9)" "$(lab_estado agents_seen)" ""
+  _igual "agents_seen con agent_type=implementer (A9 cerrado)" "$(lab_estado agents_seen)" "implementer"
+}
+
+# El canal que abre A9 (agent_type top-level) necesita las MISMAS dos guardias
+# que ya tiene el de subagent_type, y no las hereda gratis (CORRECCION 6 del
+# plan). Dos afirmaciones:
+#   1. un agent_type generico no inventa rol (gemelo de
+#      caso_g3_agente_generico_no_cuenta, que solo cubre subagent_type);
+#   2. es FALLBACK: con los dos presentes gana subagent_type. La forma del
+#      segundo payload es real -- una delegacion ANIDADA trae el agent_type del
+#      subagente padre y el subagent_type del hijo.
+caso_g3_agent_type_generico_no_cuenta() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_en_subagente 'general-purpose' 'ls')"
+  _igual "agent_type generico no inventa rol" "$(lab_estado agents_seen)" ""
+  lab_run tool claude "$(lab_payload_agent_anidado 'implementer' 'reviewer')"
+  _igual "subagent_type gana sobre agent_type (fallback)" "$(lab_estado agents_seen)" "implementer"
+}
+
+# DEFECTO A10, el caso que lo habria atrapado. El host no propaga el prefijo
+# VAR=val del comando registrado (medido 2026-08-11), asi que
+# SUMMONAIKIT_HOOK_TARGET llega vacio y [ "$TARGET" = "claude" ] era siempre
+# falso -> la secuencia nunca se exigi. El arreglo detecta Claude por
+# CLAUDECODE=1 (fallback). Aqui NO se setea SUMMONAIKIT_HOOK_TARGET (target=auto)
+# pero SI CLAUDECODE=1 (via LAB_CLAUDECODE). El RECIBO VA COMPLETO a proposito:
+# es lo unico que hace discriminar al caso (CORRECCION 5 del plan). Con recibo,
+# sin el arreglo el Stop cierra LIMPIO (exit 0, TARGET vacio => la rama de
+# secuencia no corre); con el arreglo bloquea reclamando los tres roles.
+caso_g3_target_por_claudecode_fallback() {
+  lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
+  LAB_CLAUDECODE=1
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  LAB_CLAUDECODE=""
+  _igual "exit code (CLAUDECODE=1 => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
+  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
 # DEFECTO A1 — cerrado por la Task 3.1. Los dos casos que siguen son las dos
