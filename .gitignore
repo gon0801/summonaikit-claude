@@ -3,3 +3,4 @@ out/
 *.bak
 .claude/
 .zcode/
+.harness-mem/
