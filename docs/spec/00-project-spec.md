@@ -1135,6 +1135,30 @@ del subagente. Los nombres están en el bundle; los valores sólo los da una
 captura. Es exactamente la lección de la Task 1.4, donde payloads reconstruidos
 con la forma correcta escondían tres defectos.
 
+### Medido 2026-08-12, Task 5.1 (captura real de zcode)
+
+Captura de un turno `-saikit` real en zcode (CLI 3.7.5-11), 3 fases
+(`UserPromptSubmit`, `PostToolUse`, `Stop`). Detalle y tabla de diff de forma
+en `docs/task-5.1-captura.md`. Veredicto por premisa:
+
+- **Premisa 4 (alias `Task`↔`Agent`): CONFIRMADA, funciona.** El matcher `Task`
+  disparó para un `tool_name=Agent`. Implicancia: el matcher PostToolUse del
+  harness (`Bash|Edit|Write|apply_patch|Task`) atrapa la delegación en zcode
+  sin cambiar — la mitad de A9 que falta en Claude acá llega.
+- **Forma anidada:** zcode emite cada clave en snake_case (la que lee el hook,
+  idéntica a Claude) **y** camelCase duplicada. Compatible.
+- **Rol del subagente:** viaja en `tool_input.subagent_type`; **no** hay
+  `agent_type` top-level. La herramienta se llama `Agent`.
+- **Ninguna premisa tumbada** → Phase 5 sigue como adaptación del hook
+  existente, no como port propio.
+
+Hechos **nuevos** (no en las premisas) que 5.2–5.5 deben resolver: `CLAUDECODE`
+está **ausente** en el env del hook (la detección de target necesita
+`ZCODE_SESSION_ID` / `ZCODE_PROJECT_DIR`); `transcript_path` apunta a un
+**temp efímero**, no al perfil (revisar contención A6 en zcode); y
+`tool_response.exitCode` **sí** viene en eventos Bash (inofensivo hoy, A11
+retiró su uso).
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
