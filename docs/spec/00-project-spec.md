@@ -1120,13 +1120,17 @@ guía del propio CLI:
   herramienta se llama `Agent`, así que esos eventos no llegan nunca. **En
   zcode el alias sí los transporta** (Task 5.1: un `PostToolUse` con matcher
   `Task` llegó para `tool_name=Agent`).
-- **El stdout se valida con esquema ESTRICTO: una clave extra invalida la
-  salida entera** y su efecto se descarta. El hook emite hoy cuatro formas
-  distintas y ninguna está verificada contra ese validador (Task 5.2).
-- **`exit 2` = block, pero la guía lo nombra sólo para
-  `PreToolUse`/`PermissionRequest`**; de `Stop` dice que puede "pedir
-  continuación". Si el 2 del Stop no bloquea, el gate es decorativo en zcode.
-  Es la medición que más pesa de toda la fase.
+- **El stdout NO se valida con esquema estricto: una clave extra NO invalida la
+  salida** (medido Task 5.2: una forma 1 con `"saikitProbe":true` añadido se
+  inyectó al modelo igual que la forma limpia). El esquema de 3.7.5-11 tolera
+  claves extra — coincide con la doc oficial zcode.z.ai, no con la guía
+  `diagnosing-hooks`. Las cuatro formas de salida del hook tienen veredicto
+  MEDIDO en zcode (aceptada/rechazada/ignorada) en `docs/task-5.2-salida.md`.
+- **`exit 2` en Stop SÍ bloquea** (medido Task 5.2: 4 pasadas del modelo antes
+  del tope interno de zcode); también bloquea `{"decision":"block"}` con exit 0.
+  La lectura literal de la guía vieja ("Stop pide continuación, no bloquea") no
+  aplica en 3.7.5-11. Era la medición que más pesaba de la fase y salió a favor
+  del gate.
 - **El matcher de `UserPromptSubmit` se prueba contra el TEXTO DEL PROMPT** y el
   de `Stop` contra la vista previa de la respuesta, no contra un nombre de
   herramienta. Un matcher copiado del registro de Claude no matchearía nunca.
@@ -1134,8 +1138,8 @@ guía del propio CLI:
   en `true`), y `timeout` va en **segundos**.
 
 La forma anidada y el dueño del rol ya no son pregunta: Task 5.1 los midió
-en un turno real (bloque siguiente). Lo que sigue sin medir es el contrato
-de **salida** (Task 5.2).
+en un turno real. El contrato de **salida** tampoco: Task 5.2 midió las cuatro
+formas + `exit 2` y declaró `TARGET=claude` alcanzando (`docs/task-5.2-salida.md`).
 
 ### Medido 2026-08-12, Task 5.1 (captura real de zcode)
 
