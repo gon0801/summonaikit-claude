@@ -37,3 +37,20 @@ es el fork de MSYS, no la logica del hook.
    atrapa — los escenarios usan rutas POSIX del sandbox, asi que WSL daria limpio
    sin divergencia y se pierde cobertura sin enterarse. Si algun dia se usa WSL, es
    por caso especifico POSIX-only con la salvedad declarada, no como atajo general.
+
+## Deploy tras merge
+
+El artefacto de produccion de este repo es el **gate hook** instalado en el
+perfil vivo (`~/.claude/hooks/summonaikit-harness.sh`), no una app. Tras cada
+merge a `master` (cierre de task o PR), **siempre**:
+
+1. Sincronizar master local: `git checkout master && git pull --ff-only`.
+2. **Deployar:** `bash tools/install-hook.sh` (garantiza vivo == master; tres
+   estados, no pisa nada ajeno) y `bash tools/check-hook-registration.sh`
+   (verifica registro en las 3 fases; fail-open, reporta por texto).
+3. **Apuntarlo:** agregar entrada a `docs/deploy-log.md` (fecha, que se mergeo,
+   resultado del deploy, si el hook cambio o fue no-op).
+
+Si el merge NO toco `hooks/summonaikit-harness.sh`, el deploy es no-op ("YA AL
+DIA") — igual se corre y se registra, para no perder la costumbre y detectar
+deriva del vivo respecto a master.
