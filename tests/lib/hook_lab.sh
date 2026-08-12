@@ -254,6 +254,23 @@ lab_payload_stop_con_cron_intruso() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[{"id":"cron-x","session_id":"intruso-NO-es-la-sesion"}]}' "${1:-cierre.}"
 }
 
+# Para el caso A6 (Task 3.6): un payload de Stop cuyo transcript_path es una ruta
+# LITERAL (no el token __TRANSCRIPT__), asi lab_run no la reescribe. Sirve para
+# apuntar el transcript a un archivo fuera del perfil del host y probar que el
+# hook se niega a leerlo (fail-open), o dentro en forma Windows (regresion). El
+# mensaje va antes para que el caso se lea como "stop con este mensaje y esta
+# ruta".
+#
+# La ruta se inserta CRUDA (sin doblar backslashes). json_string_field es un
+# extractor raw sobre bytes entre comillas (no parsea JSON), asi que la forma
+# Windows con backslash simple se extrae y se resuelve por cd+pwd igual (medido).
+# Doblaria perdido ademas: sed 's/\\/\\\\/g' se rompe en MSYS2 (char 8
+# unterminated) y bash ${//} tampoco dobla en esta maquina. La forma cruda es la
+# que el hook sabe leer.
+lab_payload_stop_ruta_literal() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"%s","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "$2" "$1"
+}
+
 # Una linea de transcript con texto del asistente. Los saltos van escapados
 # (`\n`) porque asi los guarda el JSONL real — y ese detalle es justamente el
 # que produce el defecto A8: antes de una etiqueta escrita en texto corrido, el

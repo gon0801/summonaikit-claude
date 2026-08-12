@@ -65,6 +65,8 @@ G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin d
 G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
 G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
+G4|transcript_sin_containment|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
+G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolverla con cd+pwd
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
@@ -141,6 +143,17 @@ mut_canal_payload_crudo()    { sed 's/$(assistant_text_payload)/$(json_string_fi
 mut_canal_transcript_vacio() { sed 's/| assistant_text_transcript/| true/'; }
 mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"/c2 == "role"/'; }
 mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
+# Las dos mitades del arreglo de A6 (Task 3.6), una mutacion cada una y cada una
+# acreditada a su caso. La primera neutraliza la contencion (el hook vuelve a leer
+# cualquier transcript_path); la segunda la deja pero comparando el string crudo
+# en vez de resolverlo con cd+pwd -- que es lo que apaga el canal transcript en
+# toda la produccion Windows (C:\\Users\\ nunca empieza con /c/Users/) y lo que
+# deja pasar un traversal con .. . Ambas dejan el if con cuerpo y bash -n pasa.
+# Sin escapar el `$` (BRE: literal a mitad de patron) ni meter mas backslashes de
+# la cuenta: MSYS2 corrompe los backslashes en literales de sed (documentado en
+# :128-131); la forma del plan con \&\& y \| se probo a mano y muta de verdad.
+mut_transcript_sin_containment() { sed 's/transcript_en_perfil "$transcript_path"/true/'; }
+mut_containment_sin_resolver()   { sed 's|_tp_dir="$(cd "$(dirname "$1")" 2>/dev/null \&\& pwd)" \|\| _tp_dir=""|_tp_dir="$(dirname "$1")"|'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
 # Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A

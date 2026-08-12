@@ -23,6 +23,14 @@ INPUT="$(cat)"
 TARGET="$SUMMONAIKIT_HOOK_TARGET"
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
+# ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
+# reales. Es la raiz de contencion de transcript_path (Task 3.6 / A6): ver
+# transcript_en_perfil. Se deriva con cd+pwd para llegar a la forma canonica de
+# MSYS (en Windows /c/Users/...), la misma a la que cd+pwd lleva cualquier
+# transcript_path del payload (que llega con backslashes dobles literales porque
+# json_string_field no decodifica escapes).
+PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
 # Resolve the project from the WORKING directory, not the script location. This
 # hook is installed at user level (~/.claude/hooks) and shared by every project,
 # so deriving the project from $0 would always point at the home dir. The cwd is
@@ -935,6 +943,55 @@ Stop now, report the failed gates, and ask the user before another retry."
   exit 0
 }
 
+# Decide si una ruta de transcript esta DENTRO del directorio de perfil del host.
+# Cierra A6 (Task 3.6): transcript_path viene del payload, y hacerle tail sin
+# acotar es una primitiva de lectura de archivo arbitrario. El perfil es
+# dirname(HOOK_DIR): en install global ~/.claude, que contiene projects/ donde
+# Claude Code guarda los transcripts reales. Una ruta fuera del perfil se rechaza.
+#
+# Por que el perfil y no "el dir de transcripts": ese dir no es derivable de forma
+# portable (la codificacion de la ruta del proyecto es interna del host; zcode usa
+# otro layout en la Phase 5; el banco escribe en $sb/entrada). El perfil es un
+# superset derivable que igual cierra la lectura arbitraria de /etc/passwd,
+# ~/.ssh/id_rsa, el repo, %APPDATA%, etc.
+#
+# POR QUE cd+pwd Y NO COMPARAR EL STRING (medido, no supuesto): json_string_field
+# NO decodifica escapes, asi que en Windows transcript_path llega como
+# C:\\Users\\...\\x.jsonl (backslashes DOBLES literales) mientras HOOK_DIR llega
+# como /c/Users/... . Comparar prefijos crudos daria FUERA siempre y apagaria el
+# canal transcript en toda la produccion. cd+pwd lleva las dos a la misma forma
+# (/c/Users/ehven/.claude, o /tmp/... en el banco via el mount virtual de MSYS), y
+# de paso normaliza .. y symlinks. El "/" separador del segundo patron evita que
+# ~/.claude haga sombra sobre ~/.claude-otro.
+#
+# Fail-open (Core Rule 2): todo lo que no se puede afirmar como dentro devuelve
+# falso, el transcript se trata como no observado (transcript=unknown) y el gate
+# corre con el otro canal -- mismo desenlace que un archivo ilegible. El guardia
+# de PROFILE_DIR vacio NO se puede colapsar: con la variable vacia el patron
+# "$PROFILE_DIR"/* se vuelve /* y aceptaria CUALQUIER ruta absoluta, o sea la
+# contencion entera abierta.
+#
+# Limites declarados: sigue symlinks (uno bajo el perfil que apunte afuera se
+# resuelve a su destino real y podria quedar fuera); y el STAGING (hook en
+# <repo>/.claude/hooks) deja su transcript en ~/.claude/projects, fuera de
+# <repo>/.claude, asi que en staging el canal transcript queda desactivado y el
+# gate corre solo con last_assistant_message. Es aceptable: el gate es advisory,
+# el recibo en un payload real de Claude viaja por last_assistant_message (medido
+# Task 1.4), y staging es diagnostico. El reporte por stderr se lo dice al
+# operador. Lo que queda adentro del perfil (.credentials.json, history.jsonl,
+# transcripts de otras sesiones) sigue legible: la contencion acota la raiz, no es
+# un permiso por archivo -- declarado en el plan.
+transcript_en_perfil() {
+  if [ -n "$PROFILE_DIR" ]; then
+    _tp_dir="$(cd "$(dirname "$1")" 2>/dev/null && pwd)" || _tp_dir=""
+    case "$_tp_dir" in
+      "$PROFILE_DIR"|"$PROFILE_DIR"/*) return 0 ;;
+    esac
+  fi
+  printf 'summonaikit-harness: transcript_path fuera del perfil del host (%s); se ignora, transcript=unknown (fail-open, no bloquea)\n' "$1" >&2
+  return 1
+}
+
 stop_gate() {
   if [ ! -f "$STATE_PATH" ]; then
     emit_allow
@@ -942,7 +999,7 @@ stop_gate() {
 
   transcript_path="$(json_string_field transcript_path)"
   tail_text=""
-  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ]; then
+  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ] && transcript_en_perfil "$transcript_path"; then
     tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
   fi
   # Task 3.2: $text se arma con SOLO texto del asistente, decodificado, de los

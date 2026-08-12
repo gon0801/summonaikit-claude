@@ -524,7 +524,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -661,6 +661,65 @@ caso_g4_recibo_solo_en_transcript_pasa() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# DEFECTO A6, el caso que lo habria atrapado. transcript_path sale del payload y el
+# hook le hacia tail sin acotar: primitiva de lectura de archivo arbitrario. Un
+# payload con transcript_path apuntando a un transcript falso plantado fuera del
+# perfil del host (aqui, un hermano del banco bajo TMPDIR) entregaba un recibo que
+# el asistente no escribio, y el gate cerraba limpio. El arreglo (Task 3.6) exige
+# que la ruta resuelva DENTRO del perfil (dirname HOOK_DIR); fuera de ahi se ignora
+# (fail-open, transcript=unknown) y el gate corre solo con last_assistant_message.
+caso_g4_transcript_fuera_de_perfil_se_ignora() {
+  _sembrar_turno_completo
+  # Transcript con recibo valido, AFUERA de $LAB. mktemp crea bajo TMPDIR (run.sh
+  # lo apunta a la caja del test); $LAB es un subdirectorio de ahi, asi que este
+  # hermano queda fuera del perfil del hook del banco.
+  _tr_externo="$(mktemp "${TMPDIR:-/tmp}/saikit-a6-XXXXXX.jsonl")" || { _mal "no se pudo crear transcript externo"; return; }
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_externo"
+  # Stop con transcript_path = ruta externa literal y mensaje neutro (sin recibo).
+  lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_externo")"
+  rm -f "$_tr_externo"
+  _igual "exit code (el transcript externo se ignora, A6)" "$LAB_RC" "2"
+  _contiene "motivo (el recibo externo no cuenta)" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _contiene "reporte por stderr (fail-open, A6)" "$LAB_ERR" 'transcript=unknown'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# La otra mitad del arreglo de A6: la contencion NO puede apagar el canal legitimo.
+# Dos vectores que una comparacion de strings crudos manejaria mal:
+#   (a) forma WINDOWS: en produccion transcript_path llega como C:\\Users\\... (el
+#       lector raw no decodifica) y HOOK_DIR como /c/Users/... . Solo cd+pwd las
+#       vuelve comparables; sin eso el canal transcript se apaga en TODA la
+#       produccion y ningun escenario de la linea base lo ve (todos usan rutas POSIX
+#       del sandbox). La ruta entra cruda (backslash simple): json_string_field es un
+#       extractor raw y cd+pwd la resuelve (medido; doblar backslashes se rompe en
+#       MSYS2, ver hook_lab.sh).
+#   (b) TRAVERSAL: una ruta que arranca adentro del perfil y sale con .. tiene el
+#       prefijo crudo correcto y el destino equivocado. cd+pwd la resuelve antes de
+#       mirar.
+caso_g4_transcript_ruta_windows_y_traversal() {
+  # (a) recibo en un transcript ADENTRO del perfil, apuntado en forma Windows.
+  _sembrar_turno_completo
+  _tr_dentro="$LAB/entrada/transcript-a6-win.jsonl"
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_dentro"
+  if command -v cygpath >/dev/null 2>&1; then
+    _tr_win="$(cygpath -w "$_tr_dentro")"
+    lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_win")"
+    _igual "exit code (ruta Windows in-bounds SI se lee)" "$LAB_RC" "0"
+    _vacio "stdout (cierre limpio con el recibo del transcript)" "$LAB_OUT"
+  fi
+  # (b) una ruta que ARRANCA adentro del perfil y sale con ..: el prefijo crudo
+  # matchea, el destino real no. Se re-siembra porque si (a) corrio, cerro limpio
+  # y borro el estado del turno; sin re-sembrar (b) correria contra STATE_PATH
+  # inexistente y stop_gate saldria por emit_allow (verde por vacio).
+  _sembrar_turno_completo
+  _tr_externo="$(mktemp "${TMPDIR:-/tmp}/saikit-a6-XXXXXX.jsonl")" || { _mal "no se pudo crear transcript externo"; return; }
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_externo"
+  lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$LAB/entrada/../../$(basename "$_tr_externo")")"
+  rm -f "$_tr_externo"
+  _igual "exit code (traversal fuera del perfil se ignora)" "$LAB_RC" "2"
+  _contiene "reporte por stderr (traversal)" "$LAB_ERR" 'transcript=unknown'
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
