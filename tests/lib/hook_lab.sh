@@ -227,7 +227,9 @@ lab_payload_agent_con_eco() {
 
 # El tool_response real de Bash NO trae exitCode (0 de 59 payloads): la unica
 # senal de falla posible es el TEXTO de stdout/stderr. El segundo argumento es
-# ese stderr.
+# ese stderr. Desde la Task 3.8 el hook grepea patrones reales de fracaso sobre
+# ese texto (dos regex CI/CS en FAILURE_SIGNAL_RE_*); por eso los casos
+# caso_g2_runner_fallido_* usan stderrs con la forma real de cada runner.
 lab_payload_bash() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
 }

@@ -83,6 +83,43 @@ TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|
 # `cat pytest-viejo.log` no lo es.
 TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)'
 
+# Failure-signal patterns for the verification guard (record_tool_evidence).
+# A11 (medido 59/59, Task 1.4): el tool_response real de Bash NO trae exitCode,
+# asi que la unica forma de detectar que un runner revento es el TEXTO de su
+# stdout/stderr. La rama vieja `exitCode[^0-9]*[1-9]` era codigo muerto y se
+# retiro. Se divide en DOS regex porque -i es global en grep y case-sensitive
+# iria mezclado con CI:
+#
+# CI (case-insensitive, -Eiq):
+# - failure_type|permission_denied|command not found: las 3 originales (rechazo
+#   o ausencia del tool). Se conservan para no romper los casos que ya viven.
+# - AssertionError|AssertionFailedError: Node assert, pytest E-line, JUnit.
+# - Traceback (most recent call last): Python crudo sin pytest.
+# - SyntaxError|TypeError|ReferenceError|RangeError: crashes JS/Python.
+# - error TS[0-9]: tsc en fracaso (su senal especifica, sin la palabra `failed`).
+# - [1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?): pytest
+#   `=== 1 failed ===`, vitest/jest `1 failed`, mocha `1 failing`, rspec
+#   `1 failure`/`2 failures`, pytest `1 error`. La frontera del digito NO-cero
+#   evita matchear `0 failed`, `0 errors` (limites medidos).
+# - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
+#   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
+#   `Failures: 0`.
+FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError|AssertionFailedError|Traceback \(most recent call last\)|SyntaxError|TypeError|ReferenceError|RangeError|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
+# CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
+# positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
+# Cubre los runners cuya senal de fracaso no trae numero inmediato. OJO: $combined
+# es una sola linea (json_string_field colapsa saltos), asi que NO se puede usar
+# `^FAIL`: el `FAIL` de go viaja DENTRO del JSON del payload, precedido por la
+# comilla de `"stderr":"FAIL\t...`. Por eso `FAIL[^a-zA-Z]` sin ancla de inicio.
+# - test result: FAILED. — cargo test.
+# - FAIL[^a-zA-Z] — go test: `FAIL\tpkgname` (el `\` despues de FAIL no es letra).
+#   No choca con `FAILED`/`FAILURES` (FAIL seguido de letra no matchea) ni con
+#   `failed` (case-sensitive). Limite declarado: `test_FAIL.py` en un comando
+#   que pasa seria falso positivo (raro, declarado).
+# - FAILURES! — banner de phpunit.
+# - ---[[:space:]]+FAIL: — go test individual (`--- FAIL: TestX`).
+FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:'
+
 json_string_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
@@ -882,10 +919,15 @@ record_tool_evidence() {
   # Credit verification only when a test/type-check RUNNER appears in the COMMAND
   # (tool_name + command), never in a file path or the raw payload — otherwise
   # editing vitest.config.ts or reading a Gemfile.lock that names rspec would
-  # falsely mark the work verified. The failure-signal guard still consults the
-  # full payload, since exit codes live in the tool result, not the command.
+  # falsely mark the work verified. The failure-signal guard consults the full
+  # payload (command + file_path + tool_response) porque A11 (medido 59/59,
+  # Task 1.4) demostro que el host NO entrega exitCode en el tool_response de
+  # Bash: la unica senal de fracaso disponible es el TEXTO de stdout/stderr del
+  # runner. Dos regex: CI para patrones con digito no-cero y crashes; CS para
+  # frases literales donde -i daria falso positivo en prosa (`0 failures!`).
   if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"; then
-    if ! printf '%s' "$combined" | grep -Eiq 'exitCode[^0-9]*[1-9]|failure_type|permission_denied|command not found'; then
+    if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+           || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi

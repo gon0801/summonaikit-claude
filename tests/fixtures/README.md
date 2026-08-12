@@ -42,7 +42,11 @@ Lo que la captura corrigió, y que no se veía sin ella:
   **`last_assistant_message`**: el texto final del asistente viaja en el propio
   payload. El recibo y la pausa tienen dos canales, no uno.
 - La herramienta de subagentes se llama **`Agent`**, no `Task`.
-- El `tool_response` de `Bash` **no trae `exitCode`** (59 de 59).
+- El `tool_response` de `Bash` **no trae `exitCode`** (59 de 59). A11 (Task 3.8)
+  cerró el costado que eso dejaba abierto: el hook grepea patrones de fracaso
+  del runner en stdout/stderr con dos regex (`FAILURE_SIGNAL_RE_CI` case-
+  insensitive y `FAILURE_SIGNAL_RE_CS` case-sensitive); `exitCode` era código
+  muerto y se retiró.
 - `permission_mode` real es `auto` / `dontAsk`, nunca `default`.
 
 Para refrescarla cuando el host cambie de forma:

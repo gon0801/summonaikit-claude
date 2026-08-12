@@ -31,8 +31,12 @@
 #                                       de primer nivel y el hook no lo miraba.
 #                                       Ahora el hook lee agent_type (fallback) y
 #                                       el caso afirma que SI cuenta.
-#   caso_g2_runner_fallido_forma_real   A11 — el guardia de fallas busca un
-#                                       `exitCode` que el payload real no trae.
+#   caso_g2_runner_fallido_forma_real   A11 — INVERTIDO por la Task 3.8. Antes
+#                                       afirmaba `verified=1` (defecto): el
+#                                       guardia buscaba `exitCode`, campo que
+#                                       el payload real no trae. Ahora el hook
+#                                       grepea patrones reales de fracaso y el
+#                                       caso afirma `verified=0`.
 #
 # Cuando la Task 3.2 los arregle, estos casos CAMBIAN DE EXPECTATIVA a proposito
 # y ese diff es la declaracion de que cambio. No se los "arregla" antes: una
@@ -228,7 +232,7 @@ caso_g1_session_id_anidado_no_reescribe_ruta() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -254,20 +258,69 @@ caso_g2_runner_no_encontrado_no_marca() {
   _igual "verified" "$(lab_estado verified)" "0"
 }
 
-# DEFECTO A11, medido con la captura de la Task 1.4 y grabado a proposito.
-#
-# El guardia de fallas del hook busca `exitCode[^0-9]*[1-9]` en el payload. El
-# tool_response real de Bash NO TIENE ese campo: su forma es
-# stdout/stderr/interrupted/isImage/noOutputExpected, medida en 59 de 59
-# payloads. O sea que la bateria puede fallar en rojo y el gate igual la acredita
-# como verificacion, salvo que el texto del error diga justo una de las tres
-# frases que quedan ("command not found", "permission_denied", "failure_type").
-#
-# Una bateria que falla con un assert normal no dice ninguna de las tres.
+# A11 INVERTIDO por la Task 3.8. Antes este caso afirmaba `verified=1` (defecto):
+# el guardia de fallas buscaba `exitCode[^0-9]*[1-9]`, un campo que el
+# tool_response real de Bash NO trae (medido 59/59 en la Task 1.4). Una bateria
+# que fallaba con un assert normal no decia ninguna de las 3 senales textuales
+# que quedaban (`command not found` / `permission_denied` / `failure_type`) y el
+# gate la acreditaba igual. Ahora el hook grepea patrones reales de fracaso
+# (`AssertionError` entre ellos) y el caso afirma `verified=0`.
 caso_g2_runner_fallido_forma_real() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'npm test' 'AssertionError: expected true to equal false')"
-  _igual "verified pese a que la bateria fallo (A11)" "$(lab_estado verified)" "1"
+  _igual "A11 cerrado: runner que revento por asercion NO acredita" "$(lab_estado verified)" "0"
+}
+
+# Cada uno de los 5 casos siguientes aisla UNA rama del FAILURE_SIGNAL_RE_CI / _CS
+# (definidos en el hook por la Task 3.8). La mutacion correspondiente
+# (mut_falla_*_quitada) neutraliza esa rama y hace que el caso vuelva al defecto
+# (verified=1) -- si eso pasara, el caso da rojo. El sexto caso es NEGATIVO:
+# protege la frontera [1-9] del regex CI para que una mutacion que la afloje a
+# [0-9] (matcheando `0 failed`) se detecte.
+#
+# Los fixtures de phpunit y cargo se recortan a SOLO la senal de la rama que
+# aislan (vía B / CS), sin la señal `N failed` que tambien apareceria en
+# produccion: si trajeran ambas, la mutacion de su rama no aislaria el caso (la
+# otra rama seguiria matcheando) y la bateria de mutaciones no acreditaria. Es
+# el compromiso que pide la regla "una mutacion por caso propio".
+
+caso_g2_runner_fallido_pytest_summary_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' '=== 1 failed in 0.5s ===')"
+  _igual "pytest summary con 1 failed no acredita (vía A)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_tsc_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'tsc --noEmit' 'src/x.ts(3,1): error TS2322: Type string is not assignable to type number.')"
+  _igual "tsc con error TS2322 no acredita" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_phpunit_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'phpunit tests/' 'Failures: 1, Errors: 0.')"
+  _igual "phpunit con Failures: 1 no acredita (vía B)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_cargo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cargo test' 'test result: FAILED.')"
+  _igual "cargo con test result: FAILED no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_go_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'go test ./...' 'FAIL\texample.com/pkg\t0.12s')"
+  _igual "go con FAIL al inicio de linea no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+# Negativo: un runner que PASA con `0 failed` en el log sigue acreditando. Protege
+# la frontera [1-9] del regex CI: una mutacion que la afloje a [0-9] haria que
+# `0 failed` matchee y este caso daria rojo.
+caso_g2_runner_pasa_0_failed_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' '=== 5 passed, 0 failed in 0.5s ===')"
+  _igual "runner que pasa con 0 failed sigue acreditando" "$(lab_estado verified)" "1"
 }
 
 # Sin turno armado NO se crea estado: si se creara con task_hash=unknown, el

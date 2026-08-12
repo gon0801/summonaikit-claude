@@ -49,6 +49,12 @@ G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sent
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
+G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
+G2|falla_failed_quitada|la vía A de failure_signal (digito no-cero antes de failed/failing/failures/errors) se neutraliza
+G2|falla_tsc_quitada|el patron error TS[0-9] deja de detectar fracasos de tsc
+G2|falla_phpunit_quitada|la vía B (failures/errors: N) deja de matchear
+G2|falla_cs_quitada|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
+G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
@@ -117,11 +123,45 @@ mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}';
 # arreglo: movida al call site, el sed no matchea y salta la guardia 2 del
 # driver ("la mutacion no cambio nada del hook").
 mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
-# Se rompe la clausula `command not found`, no la de `exitCode`: contra payloads
-# reales esa segunda ya esta muerta (el tool_response de Bash no trae el campo,
-# medido 59 de 59 en la Task 1.4). Mutar codigo muerto no prueba nada — la
-# mutacion tiene que caer sobre la condicion que hoy DECIDE algo.
+# Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
+# (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
+# cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
+# CASOS_G2 (regla "una mutacion por caso propio"). mut_sin_guardia_de_falla
+# (la original) sigue apuntando a `command not found`: rama viva, DoD exige
+# conservarla, acreditada a caso_g2_runner_no_encontrado_no_marca. Su comentario
+# viejo deca "no se muta exitCode porque es codigo muerto"; tras la 3.8 exitCode
+# ya ni esta en el hook (se retiro), pero la mutacion sigue siendo valida.
 mut_sin_guardia_de_falla()   { sed 's/command not found/command not found NUNCA/'; }
+# falla_assertion_quitada: neutraliza AssertionError|AssertionFailedError del CI.
+# Atrapa caso_g2_runner_fallido_forma_real (el invertido): su stderr es
+# `AssertionError: expected true to equal false`; al quitar esa rama, ninguna
+# otra del CI/CS matchea -> verified vuelve a 1 -> el caso (que espera 0) da rojo.
+mut_falla_assertion_quitada() { sed 's/AssertionError|AssertionFailedError/ZZZ_NUNCA_Z/'; }
+# falla_failed_quitada: afloja la frontera del digito de vía A `[1-9]` a `[A-Z]`
+# (exige una mayuscula antes del digito, imposible en `1 failed`). Atrapa
+# caso_g2_runner_fallido_pytest_summary_no_marca. OJO: sed sin `g` cambia SOLO la
+# primera ocurrencia de `[1-9]` (vía A); vía B (al final del CI) queda intacta,
+# por lo que caso_g2_runner_fallido_phpunit_no_marca no se ve afectado.
+mut_falla_failed_quitada()    { sed 's/\[1-9\]/[A-Z]/'; }
+# falla_tsc_quitada: cambia `error TS[0-9]` por `error TS_NUNCA`. Atrapa
+# caso_g2_runner_fallido_tsc_no_marca.
+mut_falla_tsc_quitada()       { sed 's/error TS\[0-9\]/error TS_NUNCA/'; }
+# falla_phpunit_quitada: cambia el separador `[=:]` de vía B por `[Z]` (imposible
+# en `Failures: 1`, que usa `:`). Atrapa caso_g2_runner_fallido_phpunit_no_marca.
+# NO toca vía A (caso_g2_runner_fallido_pytest_summary_no_marca sigue matcheando).
+mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
+# falla_cs_quitada: neutraliza el segundo grep (CS entero) cambiando el nombre
+# de la constante referenciada. Atrapa caso_g2_runner_fallido_cargo_no_marca
+# (tambien haria rojo al go, pero el driver corta en el primero; cargo va antes
+# en CASOS_G2).
+mut_falla_cs_quitada()        { sed 's/"\$FAILURE_SIGNAL_RE_CS"/"CS_NUNCA_ZZZ"/'; }
+# falla_frontera_aflojada: cambia `[1-9]` a `[0-9]` GLOBALMENTE (con `g`). Así vía A
+# matchea `0 failed` (antes no) y vía B matchea `Failures: 0`. Atrapa
+# caso_g2_runner_pasa_0_failed_sigue_acreditado (el negativo): su stderr
+# `5 passed, 0 failed` pasa a marcar fracaso -> verified=0 -> el caso (que espera
+# 1) da rojo. Los casos que ya matchean con `[1-9]` siguen matcheando; el
+# invertido (AssertionError, sin digitos junto a "failed") no se ve afectado.
+mut_falla_frontera_aflojada() { sed 's/\[1-9\]/[0-9]/g'; }
 mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_allow; fi/if false; then emit_allow; fi/'; }
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
