@@ -1105,17 +1105,21 @@ propia guía `zcode-guide-plugin/skills/diagnosing-hooks`):
    `$HOME/.claude/hooks/...` (`cbm-session-reminder`,
    `cbm-code-discovery-gate`). Es evidencia de compatibilidad práctica, no
    teórica — y la raíz del defecto que la Task 5.3 cierra.
-5. **Override de workspace**: `<repo>/.zcode/config.json`, o sea que el staging
-   de la Task 2.4 tiene equivalente.
+5. **Override de workspace**: la guía y zcode.z.ai documentan
+   `<repo>/.zcode/config.json`. **En este CLI (3.7.5-11) no corre:**
+   `normalizeProjectConfig` (`gri`) saca la clave `hooks` y emite
+   `config_project_hooks_ignored`. El canal que sí dispara es el user-config
+   `~/.zcode/cli/config.json` (medido en el plan de la Task 5.1, no en la
+   captura). La 5.5 no puede copiar el staging de 2.4 a ese override.
 
 Y cuatro diferencias que fijan el diseño de la fase, todas declaradas por la
 guía del propio CLI:
 
 - **El matcher tiene alias `Task` ↔ `Agent`** (y `Write`/`Edit` ← `ApplyPatch`).
   En Claude eso es media A9: el matcher registrado nombra `Task` y la
-  herramienta se llama `Agent`, así que esos eventos no llegan nunca. En zcode
-  el alias los haría llegar. **Medirlo es parte de la Task 5.1**, no darlo por
-  hecho.
+  herramienta se llama `Agent`, así que esos eventos no llegan nunca. **En
+  zcode el alias sí los transporta** (Task 5.1: un `PostToolUse` con matcher
+  `Task` llegó para `tool_name=Agent`).
 - **El stdout se valida con esquema ESTRICTO: una clave extra invalida la
   salida entera** y su efecto se descarta. El hook emite hoy cuatro formas
   distintas y ninguna está verificada contra ese validador (Task 5.2).
@@ -1129,11 +1133,34 @@ guía del propio CLI:
   Además, los hooks de archivo **no corren sin `hooks.enabled: true`** (hoy está
   en `true`), y `timeout` va en **segundos**.
 
-**Lo que NO está medido, y por eso la fase empieza capturando:** que los payloads
-*reales* de zcode tengan la misma estructura anidada, y en qué campo viaja el rol
-del subagente. Los nombres están en el bundle; los valores sólo los da una
-captura. Es exactamente la lección de la Task 1.4, donde payloads reconstruidos
-con la forma correcta escondían tres defectos.
+La forma anidada y el dueño del rol ya no son pregunta: Task 5.1 los midió
+en un turno real (bloque siguiente). Lo que sigue sin medir es el contrato
+de **salida** (Task 5.2).
+
+### Medido 2026-08-12, Task 5.1 (captura real de zcode)
+
+Captura de un turno `-saikit` real en zcode (CLI 3.7.5-11), 3 fases
+(`UserPromptSubmit`, `PostToolUse`, `Stop`). Detalle y tabla de diff de forma
+en `docs/task-5.1-captura.md`. Veredicto por premisa:
+
+- **Premisa 4 (alias `Task`↔`Agent`): CONFIRMADA, funciona.** El matcher `Task`
+  disparó para un `tool_name=Agent`. Implicancia: el matcher PostToolUse del
+  harness (`Bash|Edit|Write|apply_patch|Task`) atrapa la delegación en zcode
+  sin cambiar — la mitad de A9 que falta en Claude acá llega.
+- **Forma anidada:** zcode emite cada clave en snake_case (la que lee el hook,
+  idéntica a Claude) **y** camelCase duplicada. Compatible.
+- **Rol del subagente:** viaja en `tool_input.subagent_type`; **no** hay
+  `agent_type` top-level. La herramienta se llama `Agent`.
+- **Ninguna premisa de forma/rol tumbada** → Phase 5 sigue como adaptación
+  del hook existente, no como port propio. El override de proyecto **ya
+  estaba caído** para este CLI (punto 5); no es hallazgo de la captura.
+
+Hechos **nuevos** (no en las premisas) que 5.2–5.5 deben resolver: `CLAUDECODE`
+está **ausente** en el env del hook (la detección de target necesita
+`ZCODE_SESSION_ID` / `ZCODE_PROJECT_DIR`); `transcript_path` apunta a un
+**temp efímero**, no al perfil (revisar contención A6 en zcode); y
+`tool_response.exitCode` **sí** viene en eventos Bash (inofensivo hoy, A11
+retiró su uso).
 
 ## Non-Goals
 
