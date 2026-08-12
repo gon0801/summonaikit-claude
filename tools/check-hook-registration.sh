@@ -120,7 +120,25 @@ def _segmento_ejecuta(segmento, hook):
 # existe pero deja de correr en ese punto del turno.
 ESPERADAS = ["UserPromptSubmit", "PostToolUse", "Stop"]
 
+# Matcher de PostToolUse (Task 3.7 / CORRECCION 2): un subagente que solo use
+# herramientas fuera del matcher (Read/Grep/Glob) no genera ningun evento para
+# el gate y su rol no se registra, aunque haya corrido. El verificador REPORTA
+# si el matcher no cubre la herramienta de delegacion (`Agent`); no edita el
+# registro (la via de arreglarlo es settings.json, fuera de este tool).
+def _matcher_cubre(m):
+    # PostToolUse sin matcher o "*" => pega a todo (cubre Agent). Cualquier otra
+    # cosa se prueba como regex del host contra el literal "Agent". Si el regex
+    # no compila => (no cubre, no compila) y arriba se vuelve `unknown`.
+    if m is None or m == "" or m == "*":
+        return (True, True)
+    try:
+        return (re.compile(m).search("Agent") is not None, True)
+    except re.error:
+        return (False, False)
+
 registradas, leidos, ilegibles = set(), [], []
+# (matcher_str, cubre, compila) por cada grupo de PostToolUse que ejecuta el hook.
+ptu_matchers = []
 
 for path in (settings, local):
     try:
@@ -141,17 +159,43 @@ for path in (settings, local):
         for grupo in grupos:
             if not isinstance(grupo, dict):
                 continue
+            entrada_ejecuta = False
             for entrada in grupo.get("hooks", []) or []:
                 if not isinstance(entrada, dict):
                     continue
                 if ejecuta(str(entrada.get("command", "")), hook):
+                    entrada_ejecuta = True
                     registradas.add(fase)
+            # El matcher vive en el GRUPO, no en la entrada. Solo importa para
+            # PostToolUse y solo si el grupo ejecuta el hook.
+            if entrada_ejecuta and fase == "PostToolUse":
+                m = grupo.get("matcher", "")
+                if m is None:
+                    m = ""
+                cubre, compila = _matcher_cubre(m)
+                ptu_matchers.append((m, cubre, compila))
 
 faltantes = [f for f in ESPERADAS if f not in registradas]
+
+# Cobertura del matcher de Agent: solo se afirma si PostToolUse esta registrado
+# y se observo al menos un grupo. Si PTU falta, el reporte de fase faltante ya
+# lo cubre y no se apila un segundo diagnostico de matcher.
+if "PostToolUse" in registradas and ptu_matchers:
+    if any(c for _, c, _ in ptu_matchers):
+        matcher_estado = "covered"
+    elif all(k for _, _, k in ptu_matchers) and not ilegibles:
+        matcher_estado = "uncovered"
+    else:
+        matcher_estado = "unknown"
+else:
+    matcher_estado = "sin-ptu"
+
 print(json.dumps({
     "faltantes": faltantes,
     "leidos": leidos,
     "ilegibles": ilegibles,
+    "matcher_estado": matcher_estado,
+    "matchers_obs": [m for m, _, _ in ptu_matchers],
 }))
 PY
 )"
@@ -165,6 +209,27 @@ fi
 faltantes="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin)["faltantes"]))' 2>/dev/null)"
 leidos="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(len(json.load(sys.stdin)["leidos"]))' 2>/dev/null)"
 ilegibles="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin)["ilegibles"]))' 2>/dev/null)"
+matcher_estado="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("matcher_estado","sin-ptu"))' 2>/dev/null)"
+matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("matchers_obs",[])))' 2>/dev/null)"
+
+# Reporta el hueco del matcher de Agent cuando PostToolUse esta registrado pero
+# su matcher no cubre 'Agent' (Task 3.7 / CORRECCION 2): un subagente read-only
+# (Read/Grep/Glob) no generaria ningun evento para el gate. No edita el registro
+# — la via de arreglarlo es settings.json, fuera de este tool. fail-open: exit 0.
+reportar_matcher() {
+  if [ "$matcher_estado" = "uncovered" ]; then
+    reportar "[summonaikit] REGISTRO DEL HOOK: el matcher de PostToolUse no cubre 'Agent'."
+    reportar "              matcher observado: ${matchers_obs:-(sin matcher)}"
+    reportar "              Efecto: un subagente que solo use herramientas fuera del matcher"
+    reportar "              (Read/Grep/Glob) no genera ningun evento para el gate y su rol no"
+    reportar "              se registra, aunque haya corrido. Se arregla en settings.json:"
+    reportar "              agregar 'Agent' al matcher de PostToolUse."
+  elif [ "$matcher_estado" = "unknown" ]; then
+    reportar "[summonaikit] REGISTRO DEL HOOK: unknown — no se pudo determinar si el matcher"
+    reportar "              de PostToolUse cubre 'Agent' (algun matcher no compila como regex o"
+    reportar "              algun settings esta ilegible). No se afirma ausencia."
+  fi
+}
 
 # Ningun archivo legible: no se observo nada. No es lo mismo que estar ausente.
 if [ "${leidos:-0}" = "0" ]; then
@@ -177,9 +242,11 @@ if [ "${leidos:-0}" = "0" ]; then
 fi
 
 if [ -z "$faltantes" ]; then
-  # Registro completo: silencio. Un aviso en cada arranque sin nada que decir
-  # es como se entrena a un operador a ignorarlos.
+  # Registro completo. Silencio salvo el matcher (hueco real cuando PostToolUse
+  # no cubre Agent) o un settings ilegible. Un aviso en cada arranque sin nada
+  # que decir es como se entrena a un operador a ignorarlos.
   [ -n "$ilegibles" ] && reportar "[summonaikit] REGISTRO DEL HOOK: completo, pero hay settings ilegible(s) (unknown): $ilegibles"
+  reportar_matcher
   exit 0
 fi
 
@@ -195,7 +262,12 @@ if [ -n "$ilegibles" ]; then
   exit 0
 fi
 
+# Fase(s) faltante(s) con todo legible: el gate no corre en esas fases. Si
+# PostToolUse SI esta registrado y su matcher no cubre Agent, es un hueco
+# independiente que se reporta tambien (no se apila si PTU es la que falta:
+# ahi matcher_estado es sin-ptu y reportar_matcher no imprime).
 reportar "[summonaikit] REGISTRO DEL HOOK INCOMPLETO — el gate NO corre en: $faltantes"
 reportar "              El archivo del hook puede estar perfecto: esto es el registro, no el contenido."
 reportar "              revisar: $SETTINGS"
+reportar_matcher
 exit 0

@@ -75,9 +75,9 @@ adoptarlo, sus defectos pasan a ser responsabilidad propia. Los conocidos:
 | A6 | `transcript_path` sale del payload y se hace `tail` sin acotar | Primitiva de lectura de archivo arbitrario controlada por payload | 3 |
 | A7 | ACL: `CodexSandboxUsers` tiene `Modify` sobre el hook y su directorio de estado | Una identidad *aislada* puede reescribir el script que corre SIN sandbox en cada turno, o plantar `agents_seen` y anular el gate | 0 |
 | A8 | `has_receipt_label` exige un carácter no alfabético antes de la etiqueta, y en un transcript real el que hay es la `n` del salto de línea escapado | Un recibo correcto escrito como texto corrido no satisface NINGUNA de las 6 etiquetas: el turno se bloquea hasta agotar el presupuesto. El mismo recibo en viñetas sí pasa | 3 (con A2: misma raíz, un solo arreglo) |
-| A9 | La herramienta que invoca subagentes se llama **`Agent`**, y el matcher registrado nombra `Task`; los eventos de adentro del subagente sí llegan, pero llevan el rol en **`agent_type`** y el hook busca `subagent_type` | **El gate de secuencia no se puede satisfacer.** Los tres subagentes corren, el hook recibe sus eventos, y `agents_seen` queda vacío | 3 |
-| A10 | El hook no ve `SUMMONAIKIT_HOOK_TARGET=claude` en la corrida real, pese a estar en el comando registrado. Mecanismo **`unknown`**: medido el efecto, no la causa | La rama exclusiva de Claude (toda la exigencia de secuencia) no corre nunca. Enmascara a A9: por eso hoy los turnos cierran limpios en vez de bloquear | 3 |
-| A11 | El guardia de fallas busca `exitCode` en el payload, y el `tool_response` real de `Bash` **no tiene ese campo** (medido 59 de 59) | Una batería que falla se acredita como verificación, salvo que su salida diga literalmente `command not found`, `permission_denied` o `failure_type` | 3 |
+| A9 | La herramienta que invoca subagentes se llama **`Agent`**, y el matcher registrado nombra `Task`; los eventos de adentro del subagente sí llegan, pero llevan el rol en **`agent_type`** y el hook busca `subagent_type` | **El gate de secuencia no se puede satisfacer.** Los tres subagentes corren, el hook recibe sus eventos, y `agents_seen` queda vacío | 3 — **CERRADO** (Task 3.7) |
+| A10 | El hook no ve `SUMMONAIKIT_HOOK_TARGET=claude` en la corrida real, pese a estar en el comando registrado. Mecanismo **`unknown`**: medido el efecto, no la causa | La rama exclusiva de Claude (toda la exigencia de secuencia) no corre nunca. Enmascara a A9: por eso hoy los turnos cierran limpios en vez de bloquear | 3 — **CERRADO** (Task 3.7): el host no propaga el prefijo `VAR=val` del comando (medido); el hook ahora detecta Claude por `CLAUDECODE=1` (fallback, medido) |
+| A11 | El guardia de fallas busca `exitCode` en el payload, y el `tool_response` real de `Bash` **no tiene ese campo** (medido 59 de 59) | Una batería que falla se acredita como verificación, salvo que su salida diga literalmente `command not found`, `permission_denied` o `failure_type` | 3 — **CERRADO** (Task 3.8): se retiró la rama `exitCode` (código muerto) y el hook grepea dos regex de señales reales de fracaso del runner en stdout/stderr (`FAILURE_SIGNAL_RE_CI` case-insensitive con `[1-9] failed`/`Failures: N`/`AssertionError`/`error TS`/`Traceback`; `FAILURE_SIGNAL_RE_CS` case-sensitive con `test result: FAILED`/`FAIL`/`FAILURES!`/`--- FAIL:`). Postura fail-open conservada; **tsc exitoso silencioso sigue acreditando** (límite declarado); el gate sigue advisory |
 
 A7 es anterior e independiente del plan: se corrige primero porque es el único
 que no depende de ninguna decisión de diseño.
@@ -207,10 +207,65 @@ solos para volver decorativo el gate de secuencia:
    y una es ese campo: una batería que falla con un assert normal no dice
    ninguna, y queda acreditada como verificación.
 
+**Cierre (2026-08-12, Task 3.8) — lo de arriba es historia, no estado vigente.**
+A11 está CERRADO. La rama `exitCode[^0-9]*[1-9]` era código muerto (medido 59/59)
+y se retiró. El guardia ahora grepea DOS regex de señales reales de fracaso del
+runner sobre `combined` (command + file_path + tool_response): `FAILURE_SIGNAL_RE_CI`
+case-insensitive (`failure_type`/`permission_denied`/`command not found` originales
++ `AssertionError`/`AssertionFailedError`/`Traceback`/`SyntaxError`/`TypeError`/
+`error TS[0-9]` + `[1-9] failed`/`failing`/`failures?`/`errors?` con frontera de
+dígito no-cero + `Failures: N`/`failures=N`), y `FAILURE_SIGNAL_RE_CS` case-sensitive
+(`test result: FAILED`/`FAIL[^a-zA-Z]`/`FAILURES!`/`--- FAIL:`). Dos greps porque
+`-i` es global y case-sensitive iría mezclado con falsos positivos en prosa
+(`0 failures!`, `failed to connect`). Cross-review del plan con codex (1 ronda,
+4 hallazgos aceptados) detectó que el primer draft usaba `[[:<:]]FAILED[[:>:]]`
+(invlido en GNU grep 3.0, rc=2) y `\bFAILED\b` con `-i` (matcheaba `0 failed`).
+**Postura: sigue fail-open** (no fail-closed) porque **tsc exitoso no imprime nada**
+y exigir señal positiva rompería la DoD "un runner que pasa sigue acreditando".
+**Límites declarados que siguen**: vitest `×`/jest `✕`/mocha `✗` (iconos sin
+palabra) no se cubren; `test_FAIL.py` en un comando que pasa sería falso positivo
+de la rama `FAIL[^a-zA-Z]` (raro); el gate sigue **advisory**.
+
+**Cross-review del CÓDIGO con codex (1 ronda, 3 hallazgos, 2026-08-12):**
+- **H2 (fix aplicado, `AssertionError:` con `:`)**: el primer arreglo usaba
+  `AssertionError`/`SyntaxError`/`TypeError`/etc. sin `:`, y como `$combined`
+  incluye `command_text`, un runner EXITOSO cuyo comando menciona la excepción
+  (`pytest tests/test_typeerror.py`) matcheaba como si hubiera fracasado →
+  falso positivo. Solución: exigir `:` (los tracebacks reales siempre lo traen;
+  los nombres de archivo no). Verificado: `test_typeerror.py` deja de matchear,
+  `TypeError: cannot read...` sigue. Caso nuevo
+  `caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado` + mutación
+  `mut_falla_excepciones_sin_dospuntos`.
+- **H3 (fix aplicado, `mut_falla_go_quitada`)**: la mutación `mut_falla_cs_quitada`
+  rompía cargo Y go (ambos CS), el driver cortaba en cargo y go quedaba sin
+  mutación propia. Solución: agregar `mut_falla_go_quitada` que neutraliza SÓLO
+  `FAIL[^a-zA-Z]` (rama de go), dejando `test result: FAILED` (cargo) intacta.
+- **H1 (declarado, NO arreglado)**: ctest (`N tests failed`), make (`*** Error`),
+  cargo-compile (`error[E0XXX]`, `error: could not compile`), gradle/mvn
+  (`BUILD FAILURE` sin tests-summary) son runners reconocidos por `TEST_RUNNER_RE`
+  cuyas señales de fracaso NO matchean las regex — incumplimiento parcial de la
+  DoD universal, declarado como límite best-effort (no parser de runners). dotnet
+  SÍ cubierto vía `[FAIL]`, y gradle/mvn CON tests-summary cubiertos vía
+  `Failures: N`.
+
 **Orden de corrección, que importa:** A10 enmascara a A9. Arreglar A9 solo no
 cambia nada mientras el `TARGET` no llegue; arreglar A10 solo hace que *todos*
 los turnos empiecen a bloquear, porque A9 sigue vaciando `agents_seen`. Van
 juntos o el gate pasa de inerte a inservible.
+
+**Cierre (2026-08-12, Task 3.7) — lo de arriba es historia, no estado vigente.**
+A9 y A10 están CERRADOS. La re-medición de 3.7 (captura de payloads + env, no el
+transcript que miró 2.4) confirmó ambas: el rol llega al gate por los eventos
+INTERNOS en `agent_type` top-level (A9), y el host no propaga el prefijo
+`VAR=val` del comando registrado — `PHASE` sobrevive por fallback al payload,
+`TARGET` no tenía fallback y la rama `claude` nunca corría (A10). Arreglo:
+`agent_type` como fallback (`:831`) y detección de Claude por `CLAUDECODE=1`
+(`:23`). La conclusión de 2.4 ("el rol viaja en `subagent_type`") era una
+atribución errónea del transcript; no se reconstruyó qué pobló `agents_seen`
+allí y no hace falta (el arreglo es fallback). **Hueco declarado que sigue**: un
+subagente read-only (Read/Grep/Glob) no genera eventos para el gate; el matcher
+real no cubre `Agent` y `check-hook-registration.sh` lo reporta. Cursor/zcode
+quedan sin detector (`CLAUDECODE` es Claude-only).
 
 **Lo que sigue reconstruido, declarado:** la fase `SessionStart` (el capturador
 registra las 3 fases que nombra la DoD de la 1.4) y todos los payloads de

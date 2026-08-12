@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 2f34cba65b1005670c54b6c9793e0a1e85f595a3a287944db9e2f63292aa90d2
-# hook_bytes: 56486
-# hook_lineas: 1079
+# hook_sha256: 9eebb64df775b94845e200b5ef23f056ce16cb65f79350b58f5e9ca03dcaa230
+# hook_bytes: 63096
+# hook_lineas: 1182
 # escenarios: 16
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -1049,26 +1049,37 @@ hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-state.env
 | agents_seen=
 
 === escenario 16-eventos-dentro-de-subagente
-# Los eventos de adentro de un subagente llevan el rol en `agent_type`, y el gate
-# no lo mira. Medido en la captura de la Task 1.4: de 303 PostToolUse reales, 281
-# traen `agent_id` y `agent_type` en el primer nivel, con valores implementer,
-# verifier y reviewer.
+# Escenario 16 — turno completo con eventos de ADENTRO de subagentes.
 # 
-# Lo que este escenario deja grabado es la combinacion que hace inerte al gate de
-# secuencia:
+# Los eventos internos del subagente (los que matchean el matcher y llegan al gate)
+# llevan el rol en `agent_type` de primer nivel, con valores implementer, verifier
+# y reviewer (medido en las capturas de Task 1.4 y Task 3.7).
 # 
-# - La herramienta que INVOCA subagentes se llama `Agent`, y el matcher registrado
-#   es `Bash|Edit|Write|apply_patch|Task`: esos eventos NUNCA llegan al hook. Los 8
-#   payloads reales con `subagent_type` son todos `tool_name: Agent`.
-# - Los eventos de ADENTRO del subagente (Bash, Edit, Write) SI llegan, y traen el
-#   rol en `agent_type` — pero el hook busca `subagent_type`, asi que no lo ve.
+# DEFECTO A9 — CERRADO por la Task 3.7. Antes el hook solo leia `subagent_type`
+# (que vive en los eventos `Agent`, que el matcher no cubre y no llegan), asi que
+# `agents_seen` quedaba vacio con los tres subagentes corridos y el Stop reclama
+# los tres roles. Ahora el hook lee `agent_type` top-level como fallback (`:831`),
+# los roles se registran y el Stop cierra limpio.
 # 
-# Resultado: tres subagentes corrieron, el hook recibio 3 eventos suyos, y
-# `agents_seen` queda vacio. El Stop reclama los tres roles que si corrieron.
+# Lo que sigue SIN cerrarse, declarado:
 # 
-# Defecto A9. El arreglo tiene dos caminos posibles y este escenario mide el
-# segundo: agregar `Agent` al matcher (cambia la registracion) o leer `agent_type`
-# del payload que el hook YA recibe (cambia solo el hook).
+# - El canal `Agent` (la delegacion del padre) sigue fuera del matcher registrado
+#   (`Bash|Edit|Write|apply_patch|Task`): esos eventos no llegan al gate. No hace
+#   falta para el caso comun, porque los eventos internos ya cargan el rol por
+#   `agent_type`.
+# - Un subagente READ-ONLY (uno que solo use `Read`/`Grep`/`Glob` y devuelva texto)
+#   no produce NINGUN evento que llegue al gate (ninguna de esas herramientas esta
+#   en el matcher), asi que su rol no se registra aunque haya corrido. Es el hueco
+#   que `tools/check-hook-registration.sh` reporta fuerte desde la Task 3.7: el
+#   arreglo es agregar `Agent` al matcher en `settings.json` (edicion del operador,
+#   fuera del alcance del hook).
+# 
+# Va junto con A10 (cerrado por Task 3.7): el host no propaga el prefijo
+# `VAR=val` del comando registrado, asi que `SUMMONAIKIT_HOOK_TARGET` llegaba vacio
+# y la rama de secuencia (`[ "$TARGET" = "claude" ]`) nunca corria en produccion.
+# El hook ahora detecta Claude por `CLAUDECODE=1` (`:23`, fallback). La linea base
+# setea `SUMMONAIKIT_HOOK_TARGET=claude` explicito, asi que este escenario mide el
+# arreglo de A9 puro; el de A10 lo mide `caso_g3_target_por_claudecode_fallback`.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
 stdout (sha 276d03d398bab3e3, 8753 bytes) identico a 02-armado-contrato/paso 01
@@ -1089,6 +1100,7 @@ stderr <vacio>
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
+| agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=1
@@ -1099,7 +1111,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | cycle=0
 | implemented=1
 | verified=0
-| agents_seen=
+| agents_seen=implementer
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -1107,7 +1119,9 @@ stderr <vacio>
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
+| agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
+| agent: verifier
 | verified: npm test
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=2
@@ -1118,7 +1132,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | cycle=0
 | implemented=1
 | verified=1
-| agents_seen=
+| agents_seen=implementer,verifier
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -1126,59 +1140,24 @@ stderr <vacio>
 --- estado tras el paso 04
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
 | prompt task started: 2415293084
+| agent: implementer
 | implemented: C:\\dev\\demo\\src\\sesiones.ts
+| agent: verifier
 | verified: npm test
+| agent: reviewer
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
 | counter=3
 | last_code_edit=1
-| last_review=
+| last_review=3
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | task_hash=2415293084
 | cycle=0
 | implemented=1
 | verified=1
-| agents_seen=
+| agents_seen=implementer,verifier,reviewer
 --- paso 05  phase=stop target=claude  payload=05.stop.claude.json
-exit 2
-stdout (sha 7410c50ecb7676ba, 947 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing implementer subagent run (delegate the change via the Task tool).\\n- Missing verifier subagent run (delegate verification via the Task tool).\\n- Missing reviewer subagent run (delegate review via the Task tool).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha ac0be7ba32eb19a8, 889 bytes)
-| SUMMONAIKIT HARNESS GATE
-| 
-| Failed gates:
-| - Missing implementer subagent run (delegate the change via the Task tool).\n- Missing verifier subagent run (delegate verification via the Task tool).\n- Missing reviewer subagent run (delegate review via the Task tool).\n
-| 
-| Structured revision required:
-| 1. Return to the first missing gate.
-| 2. Use real evidence, not a marker file or a claim.
-| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
-| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
-| 
-| Revision loop on failure:
-| - Current revision cycle: 1/2.
-| - Budget: 2 cycles max.
-| - Do not blindly retry.
-| 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
-| SUMMONAIKIT HARNESS RECEIPT
-| Understand: ...
-| Implement: ...
-| Verify: ...
-| Review: ...
-| Close: ...
-| Retro: ...
+exit 0
+stdout <vacio>
+stderr <vacio>
 --- estado tras el paso 05
-hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
-| prompt task started: 2415293084
-| implemented: C:\\dev\\demo\\src\\sesiones.ts
-| verified: npm test
-hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
-| counter=3
-| last_code_edit=1
-| last_review=
-hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
-| task_hash=2415293084
-| cycle=1
-| implemented=1
-| verified=1
-| agents_seen=
+(sin estado)

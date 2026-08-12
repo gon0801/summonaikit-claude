@@ -21,8 +21,27 @@ fi
 
 INPUT="$(cat)"
 TARGET="$SUMMONAIKIT_HOOK_TARGET"
+# A10 (Task 3.7): el host NO propaga el prefijo VAR=val del comando registrado
+# (medido 2026-08-11), asi que SUMMONAIKIT_HOOK_TARGET llega vacio en produccion
+# y la rama de secuencia (claude) nunca corria -- [ "$TARGET" = "claude" ] era
+# siempre falso. Claude Code setea CLAUDECODE=1 (medido); acierta para Claude y
+# para glm (que hace exec claude). No setea cursor ni zcode, que quedan con
+# TARGET vacio: correcto, la secuencia es una primitiva de Claude. La via
+# "limpia" para cursor/zcode seria exportar TARGET dentro del bash -c del comando
+# registrado, pero eso toca settings.json (que ningun tool de este repo genera) y
+# queda fuera de esta tarea. PHASE no necesita este fallback: ya lo tiene al
+# payload (hook_event_name, ver :1144).
+if [ -z "$TARGET" ] && [ "$CLAUDECODE" = "1" ]; then TARGET="claude"; fi
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
+# ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
+# reales. Es la raiz de contencion de transcript_path (Task 3.6 / A6): ver
+# transcript_en_perfil. Se deriva con cd+pwd para llegar a la forma canonica de
+# MSYS (en Windows /c/Users/...), la misma a la que cd+pwd lleva cualquier
+# transcript_path del payload (que llega con backslashes dobles literales porque
+# json_string_field no decodifica escapes).
+PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
 # Resolve the project from the WORKING directory, not the script location. This
 # hook is installed at user level (~/.claude/hooks) and shared by every project,
 # so deriving the project from $0 would always point at the home dir. The cwd is
@@ -63,6 +82,49 @@ TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|
 # credito el gate pide la razon explicita, que es recuperable; acreditar
 # `cat pytest-viejo.log` no lo es.
 TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)'
+
+# Failure-signal patterns for the verification guard (record_tool_evidence).
+# A11 (medido 59/59, Task 1.4): el tool_response real de Bash NO trae exitCode,
+# asi que la unica forma de detectar que un runner revento es el TEXTO de su
+# stdout/stderr. La rama vieja `exitCode[^0-9]*[1-9]` era codigo muerto y se
+# retiro. Se divide en DOS regex porque -i es global en grep y case-sensitive
+# iria mezclado con CI:
+#
+# CI (case-insensitive, -Eiq):
+# - failure_type|permission_denied|command not found: las 3 originales (rechazo
+#   o ausencia del tool). Se conservan para no romper los casos que ya viven.
+# - AssertionError:|AssertionFailedError: — Node assert, pytest E-line, JUnit.
+#   OJO (H2, cross-review codex 2026-08-12): se exige `:` despues del nombre
+#   porque $combined incluye command_text, y sin el `:` un runner exitoso cuyo
+#   COMANDO menciona la excepcion (p. ej. `pytest tests/test_typeerror.py`)
+#   matcheaba como si hubiera fracasado. Los tracebacks reales siempre traen el
+#   `:` (Exception: mensaje); los nombres de archivo, no.
+# - Traceback (most recent call last): Python crudo sin pytest.
+# - SyntaxError:|TypeError:|ReferenceError:|RangeError: — crashes JS/Python.
+#   Mismo razonamiento del `:` que AssertionError.
+# - error TS[0-9]: tsc en fracaso (su senal especifica, sin la palabra `failed`).
+# - [1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?): pytest
+#   `=== 1 failed ===`, vitest/jest `1 failed`, mocha `1 failing`, rspec
+#   `1 failure`/`2 failures`, pytest `1 error`. La frontera del digito NO-cero
+#   evita matchear `0 failed`, `0 errors` (limites medidos).
+# - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
+#   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
+#   `Failures: 0`.
+FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
+# CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
+# positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
+# Cubre los runners cuya senal de fracaso no trae numero inmediato. OJO: $combined
+# es una sola linea (json_string_field colapsa saltos), asi que NO se puede usar
+# `^FAIL`: el `FAIL` de go viaja DENTRO del JSON del payload, precedido por la
+# comilla de `"stderr":"FAIL\t...`. Por eso `FAIL[^a-zA-Z]` sin ancla de inicio.
+# - test result: FAILED. — cargo test.
+# - FAIL[^a-zA-Z] — go test: `FAIL\tpkgname` (el `\` despues de FAIL no es letra).
+#   No choca con `FAILED`/`FAILURES` (FAIL seguido de letra no matchea) ni con
+#   `failed` (case-sensitive). Limite declarado: `test_FAIL.py` en un comando
+#   que pasa seria falso positivo (raro, declarado).
+# - FAILURES! — banner de phpunit.
+# - ---[[:space:]]+FAIL: — go test individual (`--- FAIL: TestX`).
+FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:'
 
 json_string_field() {
   field="$1"
@@ -822,6 +884,18 @@ record_tool_evidence() {
   # payload trae el resultado de la herramienta, que el turno no escribio (A1).
   subagent="$(json_tool_input_string subagent_type)"
   if [ -z "$subagent" ]; then subagent="$(json_tool_input_string subagentType)"; fi
+  # A9 (Task 3.7): los eventos INTERNOS del subagente (los que matchean el
+  # matcher y llegan al gate) llevan el rol en agent_type de PRIMER NIVEL, no en
+  # subagent_type (que solo esta en los eventos Agent, que el matcher no cubre).
+  # Medido en la captura de 3.7 (9 de 12 PostToolUse con agent_type top-level).
+  # Es FALLBACK, no reemplazo: si subagent_type llega, gana. Un agent_type sin rol
+  # (general-purpose, Explore) no registra nada porque canonical_agent_role no lo
+  # mapea. OJO: $subagent tiene un segundo consumidor abajo (rn_mark_review,
+  # bloque :834-839), asi que esto tambien enciende la senal de orden del
+  # review-notice. Es deliberado y esta declarado en el plan (CORRECCION 3):
+  # marcar el ultimo evento interno del reviewer data cuando la revision corrio,
+  # no cuando se pidio.
+  if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
   if [ -n "$subagent" ]; then record_agent "$subagent"; fi
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   rn_order_now="$(rn_bump_counter)"
@@ -851,10 +925,15 @@ record_tool_evidence() {
   # Credit verification only when a test/type-check RUNNER appears in the COMMAND
   # (tool_name + command), never in a file path or the raw payload — otherwise
   # editing vitest.config.ts or reading a Gemfile.lock that names rspec would
-  # falsely mark the work verified. The failure-signal guard still consults the
-  # full payload, since exit codes live in the tool result, not the command.
+  # falsely mark the work verified. The failure-signal guard consults the full
+  # payload (command + file_path + tool_response) porque A11 (medido 59/59,
+  # Task 1.4) demostro que el host NO entrega exitCode en el tool_response de
+  # Bash: la unica senal de fracaso disponible es el TEXTO de stdout/stderr del
+  # runner. Dos regex: CI para patrones con digito no-cero y crashes; CS para
+  # frases literales donde -i daria falso positivo en prosa (`0 failures!`).
   if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"; then
-    if ! printf '%s' "$combined" | grep -Eiq 'exitCode[^0-9]*[1-9]|failure_type|permission_denied|command not found'; then
+    if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+           || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi
@@ -935,6 +1014,55 @@ Stop now, report the failed gates, and ask the user before another retry."
   exit 0
 }
 
+# Decide si una ruta de transcript esta DENTRO del directorio de perfil del host.
+# Cierra A6 (Task 3.6): transcript_path viene del payload, y hacerle tail sin
+# acotar es una primitiva de lectura de archivo arbitrario. El perfil es
+# dirname(HOOK_DIR): en install global ~/.claude, que contiene projects/ donde
+# Claude Code guarda los transcripts reales. Una ruta fuera del perfil se rechaza.
+#
+# Por que el perfil y no "el dir de transcripts": ese dir no es derivable de forma
+# portable (la codificacion de la ruta del proyecto es interna del host; zcode usa
+# otro layout en la Phase 5; el banco escribe en $sb/entrada). El perfil es un
+# superset derivable que igual cierra la lectura arbitraria de /etc/passwd,
+# ~/.ssh/id_rsa, el repo, %APPDATA%, etc.
+#
+# POR QUE cd+pwd Y NO COMPARAR EL STRING (medido, no supuesto): json_string_field
+# NO decodifica escapes, asi que en Windows transcript_path llega como
+# C:\\Users\\...\\x.jsonl (backslashes DOBLES literales) mientras HOOK_DIR llega
+# como /c/Users/... . Comparar prefijos crudos daria FUERA siempre y apagaria el
+# canal transcript en toda la produccion. cd+pwd lleva las dos a la misma forma
+# (/c/Users/ehven/.claude, o /tmp/... en el banco via el mount virtual de MSYS), y
+# de paso normaliza .. y symlinks. El "/" separador del segundo patron evita que
+# ~/.claude haga sombra sobre ~/.claude-otro.
+#
+# Fail-open (Core Rule 2): todo lo que no se puede afirmar como dentro devuelve
+# falso, el transcript se trata como no observado (transcript=unknown) y el gate
+# corre con el otro canal -- mismo desenlace que un archivo ilegible. El guardia
+# de PROFILE_DIR vacio NO se puede colapsar: con la variable vacia el patron
+# "$PROFILE_DIR"/* se vuelve /* y aceptaria CUALQUIER ruta absoluta, o sea la
+# contencion entera abierta.
+#
+# Limites declarados: sigue symlinks (uno bajo el perfil que apunte afuera se
+# resuelve a su destino real y podria quedar fuera); y el STAGING (hook en
+# <repo>/.claude/hooks) deja su transcript en ~/.claude/projects, fuera de
+# <repo>/.claude, asi que en staging el canal transcript queda desactivado y el
+# gate corre solo con last_assistant_message. Es aceptable: el gate es advisory,
+# el recibo en un payload real de Claude viaja por last_assistant_message (medido
+# Task 1.4), y staging es diagnostico. El reporte por stderr se lo dice al
+# operador. Lo que queda adentro del perfil (.credentials.json, history.jsonl,
+# transcripts de otras sesiones) sigue legible: la contencion acota la raiz, no es
+# un permiso por archivo -- declarado en el plan.
+transcript_en_perfil() {
+  if [ -n "$PROFILE_DIR" ]; then
+    _tp_dir="$(cd "$(dirname "$1")" 2>/dev/null && pwd)" || _tp_dir=""
+    case "$_tp_dir" in
+      "$PROFILE_DIR"|"$PROFILE_DIR"/*) return 0 ;;
+    esac
+  fi
+  printf 'summonaikit-harness: transcript_path fuera del perfil del host (%s); se ignora, transcript=unknown (fail-open, no bloquea)\n' "$1" >&2
+  return 1
+}
+
 stop_gate() {
   if [ ! -f "$STATE_PATH" ]; then
     emit_allow
@@ -942,7 +1070,7 @@ stop_gate() {
 
   transcript_path="$(json_string_field transcript_path)"
   tail_text=""
-  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ]; then
+  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ] && transcript_en_perfil "$transcript_path"; then
     tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
   fi
   # Task 3.2: $text se arma con SOLO texto del asistente, decodificado, de los

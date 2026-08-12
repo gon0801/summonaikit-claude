@@ -49,6 +49,14 @@ G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sent
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
+G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
+G2|falla_failed_quitada|la vía A de failure_signal (digito no-cero antes de failed/failing/failures/errors) se neutraliza
+G2|falla_tsc_quitada|el patron error TS[0-9] deja de detectar fracasos de tsc
+G2|falla_phpunit_quitada|la vía B (failures/errors: N) deja de matchear
+G2|falla_cs_quitada|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
+G2|falla_go_quitada|la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)
+G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
+G2|falla_excepciones_sin_dospuntos|se quita el `:` despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
@@ -58,6 +66,8 @@ G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
 G3|subagent_type_greedy|el rol se vuelve a leer con el lector greedy del payload crudo
 G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_input
+G3|agent_type_no_se_lee|el rol de los eventos internos (agent_type) deja de leerse
+G3|target_sin_claudecode|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
 G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
@@ -65,6 +75,8 @@ G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin d
 G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
 G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
+G4|transcript_sin_containment|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
+G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolverla con cd+pwd
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
@@ -113,11 +125,63 @@ mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}';
 # arreglo: movida al call site, el sed no matchea y salta la guardia 2 del
 # driver ("la mutacion no cambio nada del hook").
 mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
-# Se rompe la clausula `command not found`, no la de `exitCode`: contra payloads
-# reales esa segunda ya esta muerta (el tool_response de Bash no trae el campo,
-# medido 59 de 59 en la Task 1.4). Mutar codigo muerto no prueba nada — la
-# mutacion tiene que caer sobre la condicion que hoy DECIDE algo.
+# Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
+# (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
+# cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
+# CASOS_G2 (regla "una mutacion por caso propio"). mut_sin_guardia_de_falla
+# (la original) sigue apuntando a `command not found`: rama viva, DoD exige
+# conservarla, acreditada a caso_g2_runner_no_encontrado_no_marca. Su comentario
+# viejo deca "no se muta exitCode porque es codigo muerto"; tras la 3.8 exitCode
+# ya ni esta en el hook (se retiro), pero la mutacion sigue siendo valida.
 mut_sin_guardia_de_falla()   { sed 's/command not found/command not found NUNCA/'; }
+# falla_assertion_quitada: neutraliza AssertionError:|AssertionFailedError: del CI.
+# Atrapa caso_g2_runner_fallido_forma_real (el invertido): su stderr es
+# `AssertionError: expected true to equal false`; al quitar esa rama, ninguna
+# otra del CI/CS matchea -> verified vuelve a 1 -> el caso (que espera 0) da rojo.
+# OJO: tras el fix H2 (exigir `:`) los literales en el hook llevan `:`.
+mut_falla_assertion_quitada() { sed 's/AssertionError:|AssertionFailedError:/ZZZ_NUNCA_Z/'; }
+# falla_failed_quitada: afloja la frontera del digito de vía A `[1-9]` a `[A-Z]`
+# (exige una mayuscula antes del digito, imposible en `1 failed`). Atrapa
+# caso_g2_runner_fallido_pytest_summary_no_marca. OJO: sed sin `g` cambia SOLO la
+# primera ocurrencia de `[1-9]` (vía A); vía B (al final del CI) queda intacta,
+# por lo que caso_g2_runner_fallido_phpunit_no_marca no se ve afectado.
+mut_falla_failed_quitada()    { sed 's/\[1-9\]/[A-Z]/'; }
+# falla_tsc_quitada: cambia `error TS[0-9]` por `error TS_NUNCA`. Atrapa
+# caso_g2_runner_fallido_tsc_no_marca.
+mut_falla_tsc_quitada()       { sed 's/error TS\[0-9\]/error TS_NUNCA/'; }
+# falla_phpunit_quitada: cambia el separador `[=:]` de vía B por `[Z]` (imposible
+# en `Failures: 1`, que usa `:`). Atrapa caso_g2_runner_fallido_phpunit_no_marca.
+# NO toca vía A (caso_g2_runner_fallido_pytest_summary_no_marca sigue matcheando).
+mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
+# falla_cs_quitada: neutraliza el segundo grep (CS entero) cambiando el nombre
+# de la constante referenciada. Atrapa caso_g2_runner_fallido_cargo_no_marca
+# (tambien haria rojo al go, pero el driver corta en el primero; cargo va antes
+# en CASOS_G2). H3 (cross-review codex): por eso se agrego mut_falla_go_quitada
+# abajo, que aísla la rama FAIL[^a-zA-Z] del CS para que go tenga SU mutacion.
+mut_falla_cs_quitada()        { sed 's/"\$FAILURE_SIGNAL_RE_CS"/"CS_NUNCA_ZZZ"/'; }
+# falla_go_quitada: neutraliza SOLO la rama FAIL[^a-zA-Z] del CS (la que go usa),
+# sin tocar test result: FAILED (la que cargo usa). Atrapa caso_g2_runner_fallido_go_no_marca.
+# Asi cada caso CS (cargo / go) tiene su mutacion propia, y mut_falla_cs_quitada
+# queda acreditada SOLO a cargo (no compartida con go).
+mut_falla_go_quitada()        { sed 's/FAIL\[\^a-zA-Z\]/FAIL_NUNCA_Z/'; }
+# falla_frontera_aflojada: cambia `[1-9]` a `[0-9]` GLOBALMENTE (con `g`). Así vía A
+# matchea `0 failed` (antes no) y vía B matchea `Failures: 0`. Atrapa
+# caso_g2_runner_pasa_0_failed_sigue_acreditado (el negativo): su stderr
+# `5 passed, 0 failed` pasa a marcar fracaso -> verified=0 -> el caso (que espera
+# 1) da rojo. Los casos que ya matchean con `[1-9]` siguen matcheando; el
+# invertido (AssertionError, sin digitos junto a "failed") no se ve afectado.
+mut_falla_frontera_aflojada() { sed 's/\[1-9\]/[0-9]/g'; }
+# falla_excepciones_sin_dospuntos (H2, cross-review codex): quita el `:` despues
+# de las 6 excepciones (AssertionError:/SyntaxError:/TypeError:/etc.) cambiando
+# `rror:` por `rror`. Atrapa caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado:
+# sin el `:`, el regex CI vuelve a matchear `typeerror` dentro del nombre del
+# archivo en el comando (`test_typeerror.py`), y el runner exitoso pasa a
+# verified=0 -> el caso (que espera 1) da rojo. NO afecta al invertido
+# (`AssertionError: expected...` sigue matcheando `AssertionError` sin `:`,
+# porque el substring sigue presente). `s/rror:/rror/g` es seguro: las unicas
+# ocurrencias de `rror:` en el hook son las 6 excepciones; `error TS[0-9]` lleva
+# espacio despues de `error` y `Traceback (...)` no tiene `rror:`.
+mut_falla_excepciones_sin_dospuntos() { sed 's/rror:/rror/g'; }
 mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_allow; fi/if false; then emit_allow; fi/'; }
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
@@ -128,6 +192,20 @@ mut_secuencia_tambien_en_cursor() { sed 's/if \[ "\$TARGET" = "claude" \]; then/
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
 mut_subagent_type_greedy()   { sed 's/json_tool_input_string subagent_type/json_string_field subagent_type/'; }
 mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\& clave == want/clave == want/'; }
+# Las dos mitades del arreglo de A9+A10 (Task 3.7), una mutacion cada una y cada
+# una acreditada a su caso. La primera neutraliza el fallback a agent_type
+# top-level: los eventos internos (que llegan al gate) dejan de registrar el
+# rol -- lo atrapa caso_g3_agent_type_cuenta (el invertido), que va antes en
+# CASOS_G3. Deja `subagent="$(true)"`, que bash -n acepta y devuelve vacio.
+# La segunda anula el fallback CLAUDECODE=1 cambiando el valor comparado: asi
+# CLAUDECODE=1 deja de matchear, TARGET vuelve a quedar vacio en produccion y la
+# secuencia no se exige -- lo atrapa caso_g3_target_por_claudecode_fallback. NO
+# se muta a `[ false ]`: `test` con un unico argumento no vacio da VERDADERO, o
+# sea que volveria el fallback incondicional y ningun caso reaccionaria
+# (CORRECCION 4 del plan). Cambiar el valor no toca la estructura de corchetes
+# ni mete backslashes (la trampa de MSYS2 de :128-131).
+mut_agent_type_no_se_lee()   { sed 's/json_top_level_string agent_type/true/'; }
+mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }
@@ -141,6 +219,17 @@ mut_canal_payload_crudo()    { sed 's/$(assistant_text_payload)/$(json_string_fi
 mut_canal_transcript_vacio() { sed 's/| assistant_text_transcript/| true/'; }
 mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"/c2 == "role"/'; }
 mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
+# Las dos mitades del arreglo de A6 (Task 3.6), una mutacion cada una y cada una
+# acreditada a su caso. La primera neutraliza la contencion (el hook vuelve a leer
+# cualquier transcript_path); la segunda la deja pero comparando el string crudo
+# en vez de resolverlo con cd+pwd -- que es lo que apaga el canal transcript en
+# toda la produccion Windows (C:\\Users\\ nunca empieza con /c/Users/) y lo que
+# deja pasar un traversal con .. . Ambas dejan el if con cuerpo y bash -n pasa.
+# Sin escapar el `$` (BRE: literal a mitad de patron) ni meter mas backslashes de
+# la cuenta: MSYS2 corrompe los backslashes en literales de sed (documentado en
+# :128-131); la forma del plan con \&\& y \| se probo a mano y muta de verdad.
+mut_transcript_sin_containment() { sed 's/transcript_en_perfil "$transcript_path"/true/'; }
+mut_containment_sin_resolver()   { sed 's|_tp_dir="$(cd "$(dirname "$1")" 2>/dev/null \&\& pwd)" \|\| _tp_dir=""|_tp_dir="$(dirname "$1")"|'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
 # Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A

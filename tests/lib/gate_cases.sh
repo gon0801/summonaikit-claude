@@ -25,10 +25,18 @@
 #   caso_g4_pausa_permite               la mitad buena de A2: la pausa se busca
 #                                       grepeando el texto crudo, asi que el
 #                                       mismo grep la encuentra donde no debe.
-#   caso_g3_agent_type_no_cuenta        A9 — el rol del subagente viaja en
-#                                       `agent_type` y el hook no lo mira.
-#   caso_g2_runner_fallido_forma_real   A11 — el guardia de fallas busca un
-#                                       `exitCode` que el payload real no trae.
+#   caso_g3_agent_type_cuenta            A9 — INVERTIDO por la Task 3.7. Antes
+#                                       `caso_g3_agent_type_no_cuenta` y afirmaba
+#                                       lo opuesto: el rol viaja en `agent_type`
+#                                       de primer nivel y el hook no lo miraba.
+#                                       Ahora el hook lee agent_type (fallback) y
+#                                       el caso afirma que SI cuenta.
+#   caso_g2_runner_fallido_forma_real   A11 — INVERTIDO por la Task 3.8. Antes
+#                                       afirmaba `verified=1` (defecto): el
+#                                       guardia buscaba `exitCode`, campo que
+#                                       el payload real no trae. Ahora el hook
+#                                       grepea patrones reales de fracaso y el
+#                                       caso afirma `verified=0`.
 #
 # Cuando la Task 3.2 los arregle, estos casos CAMBIAN DE EXPECTATIVA a proposito
 # y ese diff es la declaracion de que cambio. No se los "arregla" antes: una
@@ -224,7 +232,7 @@ caso_g1_session_id_anidado_no_reescribe_ruta() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -250,20 +258,82 @@ caso_g2_runner_no_encontrado_no_marca() {
   _igual "verified" "$(lab_estado verified)" "0"
 }
 
-# DEFECTO A11, medido con la captura de la Task 1.4 y grabado a proposito.
-#
-# El guardia de fallas del hook busca `exitCode[^0-9]*[1-9]` en el payload. El
-# tool_response real de Bash NO TIENE ese campo: su forma es
-# stdout/stderr/interrupted/isImage/noOutputExpected, medida en 59 de 59
-# payloads. O sea que la bateria puede fallar en rojo y el gate igual la acredita
-# como verificacion, salvo que el texto del error diga justo una de las tres
-# frases que quedan ("command not found", "permission_denied", "failure_type").
-#
-# Una bateria que falla con un assert normal no dice ninguna de las tres.
+# A11 INVERTIDO por la Task 3.8. Antes este caso afirmaba `verified=1` (defecto):
+# el guardia de fallas buscaba `exitCode[^0-9]*[1-9]`, un campo que el
+# tool_response real de Bash NO trae (medido 59/59 en la Task 1.4). Una bateria
+# que fallaba con un assert normal no decia ninguna de las 3 senales textuales
+# que quedaban (`command not found` / `permission_denied` / `failure_type`) y el
+# gate la acreditaba igual. Ahora el hook grepea patrones reales de fracaso
+# (`AssertionError` entre ellos) y el caso afirma `verified=0`.
 caso_g2_runner_fallido_forma_real() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'npm test' 'AssertionError: expected true to equal false')"
-  _igual "verified pese a que la bateria fallo (A11)" "$(lab_estado verified)" "1"
+  _igual "A11 cerrado: runner que revento por asercion NO acredita" "$(lab_estado verified)" "0"
+}
+
+# Cada uno de los 5 casos siguientes aisla UNA rama del FAILURE_SIGNAL_RE_CI / _CS
+# (definidos en el hook por la Task 3.8). La mutacion correspondiente
+# (mut_falla_*_quitada) neutraliza esa rama y hace que el caso vuelva al defecto
+# (verified=1) -- si eso pasara, el caso da rojo. El sexto caso es NEGATIVO:
+# protege la frontera [1-9] del regex CI para que una mutacion que la afloje a
+# [0-9] (matcheando `0 failed`) se detecte.
+#
+# Los fixtures de phpunit y cargo se recortan a SOLO la senal de la rama que
+# aislan (vía B / CS), sin la señal `N failed` que tambien apareceria en
+# produccion: si trajeran ambas, la mutacion de su rama no aislaria el caso (la
+# otra rama seguiria matcheando) y la bateria de mutaciones no acreditaria. Es
+# el compromiso que pide la regla "una mutacion por caso propio".
+
+caso_g2_runner_fallido_pytest_summary_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' '=== 1 failed in 0.5s ===')"
+  _igual "pytest summary con 1 failed no acredita (vía A)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_tsc_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'tsc --noEmit' 'src/x.ts(3,1): error TS2322: Type string is not assignable to type number.')"
+  _igual "tsc con error TS2322 no acredita" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_phpunit_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'phpunit tests/' 'Failures: 1, Errors: 0.')"
+  _igual "phpunit con Failures: 1 no acredita (vía B)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_cargo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cargo test' 'test result: FAILED.')"
+  _igual "cargo con test result: FAILED no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_go_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'go test ./...' 'FAIL\texample.com/pkg\t0.12s')"
+  _igual "go con FAIL al inicio de linea no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+# Negativo: un runner que PASA con `0 failed` en el log sigue acreditando. Protege
+# la frontera [1-9] del regex CI: una mutacion que la afloje a [0-9] haria que
+# `0 failed` matchee y este caso daria rojo.
+caso_g2_runner_pasa_0_failed_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q' '=== 5 passed, 0 failed in 0.5s ===')"
+  _igual "runner que pasa con 0 failed sigue acreditando" "$(lab_estado verified)" "1"
+}
+
+# Negativo H2 (cross-review del codigo, codex 2026-08-12): un runner que PASA cuyo
+# COMANDO menciona el nombre de una excepcion (`pytest tests/test_typeerror.py`)
+# sigue acreditando. Sin el fix, el regex CI case-insensitive matcheaba `TypeError`
+# dentro del nombre del archivo (combined incluye command_text) y el runner exitoso
+# dejaba de acreditar -- falso positivo. Tras exigir `:` despues del nombre de la
+# excepcion, los tracebacks reales (`TypeError: ...`) siguen matcheando pero los
+# nombres de archivo (`test_typeerror.py`) no.
+caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest tests/test_typeerror.py')"
+  _igual "runner que pasa con TypeError en el nombre del test sigue acreditando (H2)" "$(lab_estado verified)" "1"
 }
 
 # Sin turno armado NO se crea estado: si se creara con task_hash=unknown, el
@@ -402,7 +472,7 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -441,22 +511,51 @@ caso_g3_agente_generico_no_cuenta() {
   _igual "agents_seen tras Explore" "$(lab_estado agents_seen)" ""
 }
 
-# DEFECTO A9, medido con la captura de la Task 1.4 y grabado a proposito.
-#
-# Los eventos de ADENTRO de un subagente llevan el rol en `agent_type` de primer
-# nivel (281 de 303 payloads reales). El hook busca `subagent_type`, asi que no
-# lo ve: el implementer puede correr, editar archivos y dejar su rastro en cada
-# payload, y el gate igual reclama que no corrio.
-#
-# Va junto con lo otro que midio la captura: la herramienta que INVOCA
-# subagentes se llama `Agent`, y el matcher registrado nombra `Task`, asi que
-# esos eventos no llegan nunca. Entre las dos cosas, el gate de secuencia no
-# tiene forma de satisfacerse. El escenario 16 de la linea base graba el turno
-# completo; este caso graba la pieza suelta.
-caso_g3_agent_type_no_cuenta() {
+# A9, CERRADO por la Task 3.7. Antes `caso_g3_agent_type_no_cuenta` y afirmaba
+# lo opuesto (el defecto grabado a proposito): el rol de los eventos INTERNOS del
+# subagente viaja en `agent_type` de primer nivel, y el hook solo leia
+# `subagent_type` (que vive en los eventos Agent, que el matcher no cubre) ->
+# agents_seen quedaba vacio con los tres subagentes corridos. Ahora el hook lee
+# agent_type como fallback (:831) y el caso afirma que SI cuenta. El escenario 16
+# de la linea base graba el turno entero; este caso graba la pieza suelta.
+caso_g3_agent_type_cuenta() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash_en_subagente 'implementer' 'npm test')"
-  _igual "agents_seen con agent_type=implementer (A9)" "$(lab_estado agents_seen)" ""
+  _igual "agents_seen con agent_type=implementer (A9 cerrado)" "$(lab_estado agents_seen)" "implementer"
+}
+
+# El canal que abre A9 (agent_type top-level) necesita las MISMAS dos guardias
+# que ya tiene el de subagent_type, y no las hereda gratis (CORRECCION 6 del
+# plan). Dos afirmaciones:
+#   1. un agent_type generico no inventa rol (gemelo de
+#      caso_g3_agente_generico_no_cuenta, que solo cubre subagent_type);
+#   2. es FALLBACK: con los dos presentes gana subagent_type. La forma del
+#      segundo payload es real -- una delegacion ANIDADA trae el agent_type del
+#      subagente padre y el subagent_type del hijo.
+caso_g3_agent_type_generico_no_cuenta() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_en_subagente 'general-purpose' 'ls')"
+  _igual "agent_type generico no inventa rol" "$(lab_estado agents_seen)" ""
+  lab_run tool claude "$(lab_payload_agent_anidado 'implementer' 'reviewer')"
+  _igual "subagent_type gana sobre agent_type (fallback)" "$(lab_estado agents_seen)" "implementer"
+}
+
+# DEFECTO A10, el caso que lo habria atrapado. El host no propaga el prefijo
+# VAR=val del comando registrado (medido 2026-08-11), asi que
+# SUMMONAIKIT_HOOK_TARGET llega vacio y [ "$TARGET" = "claude" ] era siempre
+# falso -> la secuencia nunca se exigi. El arreglo detecta Claude por
+# CLAUDECODE=1 (fallback). Aqui NO se setea SUMMONAIKIT_HOOK_TARGET (target=auto)
+# pero SI CLAUDECODE=1 (via LAB_CLAUDECODE). El RECIBO VA COMPLETO a proposito:
+# es lo unico que hace discriminar al caso (CORRECCION 5 del plan). Con recibo,
+# sin el arreglo el Stop cierra LIMPIO (exit 0, TARGET vacio => la rama de
+# secuencia no corre); con el arreglo bloquea reclamando los tres roles.
+caso_g3_target_por_claudecode_fallback() {
+  lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
+  LAB_CLAUDECODE=1
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  LAB_CLAUDECODE=""
+  _igual "exit code (CLAUDECODE=1 => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
+  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
 # DEFECTO A1 — cerrado por la Task 3.1. Los dos casos que siguen son las dos
@@ -524,7 +623,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -661,6 +760,65 @@ caso_g4_recibo_solo_en_transcript_pasa() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# DEFECTO A6, el caso que lo habria atrapado. transcript_path sale del payload y el
+# hook le hacia tail sin acotar: primitiva de lectura de archivo arbitrario. Un
+# payload con transcript_path apuntando a un transcript falso plantado fuera del
+# perfil del host (aqui, un hermano del banco bajo TMPDIR) entregaba un recibo que
+# el asistente no escribio, y el gate cerraba limpio. El arreglo (Task 3.6) exige
+# que la ruta resuelva DENTRO del perfil (dirname HOOK_DIR); fuera de ahi se ignora
+# (fail-open, transcript=unknown) y el gate corre solo con last_assistant_message.
+caso_g4_transcript_fuera_de_perfil_se_ignora() {
+  _sembrar_turno_completo
+  # Transcript con recibo valido, AFUERA de $LAB. mktemp crea bajo TMPDIR (run.sh
+  # lo apunta a la caja del test); $LAB es un subdirectorio de ahi, asi que este
+  # hermano queda fuera del perfil del hook del banco.
+  _tr_externo="$(mktemp "${TMPDIR:-/tmp}/saikit-a6-XXXXXX.jsonl")" || { _mal "no se pudo crear transcript externo"; return; }
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_externo"
+  # Stop con transcript_path = ruta externa literal y mensaje neutro (sin recibo).
+  lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_externo")"
+  rm -f "$_tr_externo"
+  _igual "exit code (el transcript externo se ignora, A6)" "$LAB_RC" "2"
+  _contiene "motivo (el recibo externo no cuenta)" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _contiene "reporte por stderr (fail-open, A6)" "$LAB_ERR" 'transcript=unknown'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# La otra mitad del arreglo de A6: la contencion NO puede apagar el canal legitimo.
+# Dos vectores que una comparacion de strings crudos manejaria mal:
+#   (a) forma WINDOWS: en produccion transcript_path llega como C:\\Users\\... (el
+#       lector raw no decodifica) y HOOK_DIR como /c/Users/... . Solo cd+pwd las
+#       vuelve comparables; sin eso el canal transcript se apaga en TODA la
+#       produccion y ningun escenario de la linea base lo ve (todos usan rutas POSIX
+#       del sandbox). La ruta entra cruda (backslash simple): json_string_field es un
+#       extractor raw y cd+pwd la resuelve (medido; doblar backslashes se rompe en
+#       MSYS2, ver hook_lab.sh).
+#   (b) TRAVERSAL: una ruta que arranca adentro del perfil y sale con .. tiene el
+#       prefijo crudo correcto y el destino equivocado. cd+pwd la resuelve antes de
+#       mirar.
+caso_g4_transcript_ruta_windows_y_traversal() {
+  # (a) recibo en un transcript ADENTRO del perfil, apuntado en forma Windows.
+  _sembrar_turno_completo
+  _tr_dentro="$LAB/entrada/transcript-a6-win.jsonl"
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_dentro"
+  if command -v cygpath >/dev/null 2>&1; then
+    _tr_win="$(cygpath -w "$_tr_dentro")"
+    lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_win")"
+    _igual "exit code (ruta Windows in-bounds SI se lee)" "$LAB_RC" "0"
+    _vacio "stdout (cierre limpio con el recibo del transcript)" "$LAB_OUT"
+  fi
+  # (b) una ruta que ARRANCA adentro del perfil y sale con ..: el prefijo crudo
+  # matchea, el destino real no. Se re-siembra porque si (a) corrio, cerro limpio
+  # y borro el estado del turno; sin re-sembrar (b) correria contra STATE_PATH
+  # inexistente y stop_gate saldria por emit_allow (verde por vacio).
+  _sembrar_turno_completo
+  _tr_externo="$(mktemp "${TMPDIR:-/tmp}/saikit-a6-XXXXXX.jsonl")" || { _mal "no se pudo crear transcript externo"; return; }
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_externo"
+  lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$LAB/entrada/../../$(basename "$_tr_externo")")"
+  rm -f "$_tr_externo"
+  _igual "exit code (traversal fuera del perfil se ignora)" "$LAB_RC" "2"
+  _contiene "reporte por stderr (traversal)" "$LAB_ERR" 'transcript=unknown'
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
