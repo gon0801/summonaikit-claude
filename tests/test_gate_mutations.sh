@@ -54,7 +54,9 @@ G2|falla_failed_quitada|la vía A de failure_signal (digito no-cero antes de fai
 G2|falla_tsc_quitada|el patron error TS[0-9] deja de detectar fracasos de tsc
 G2|falla_phpunit_quitada|la vía B (failures/errors: N) deja de matchear
 G2|falla_cs_quitada|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
+G2|falla_go_quitada|la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)
 G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
+G2|falla_excepciones_sin_dospuntos|se quita el `:` despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
@@ -132,11 +134,12 @@ mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
 # viejo deca "no se muta exitCode porque es codigo muerto"; tras la 3.8 exitCode
 # ya ni esta en el hook (se retiro), pero la mutacion sigue siendo valida.
 mut_sin_guardia_de_falla()   { sed 's/command not found/command not found NUNCA/'; }
-# falla_assertion_quitada: neutraliza AssertionError|AssertionFailedError del CI.
+# falla_assertion_quitada: neutraliza AssertionError:|AssertionFailedError: del CI.
 # Atrapa caso_g2_runner_fallido_forma_real (el invertido): su stderr es
 # `AssertionError: expected true to equal false`; al quitar esa rama, ninguna
 # otra del CI/CS matchea -> verified vuelve a 1 -> el caso (que espera 0) da rojo.
-mut_falla_assertion_quitada() { sed 's/AssertionError|AssertionFailedError/ZZZ_NUNCA_Z/'; }
+# OJO: tras el fix H2 (exigir `:`) los literales en el hook llevan `:`.
+mut_falla_assertion_quitada() { sed 's/AssertionError:|AssertionFailedError:/ZZZ_NUNCA_Z/'; }
 # falla_failed_quitada: afloja la frontera del digito de vía A `[1-9]` a `[A-Z]`
 # (exige una mayuscula antes del digito, imposible en `1 failed`). Atrapa
 # caso_g2_runner_fallido_pytest_summary_no_marca. OJO: sed sin `g` cambia SOLO la
@@ -153,8 +156,14 @@ mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?)\[=:\]/(ZZ_NUNCA_ZZ)[Z
 # falla_cs_quitada: neutraliza el segundo grep (CS entero) cambiando el nombre
 # de la constante referenciada. Atrapa caso_g2_runner_fallido_cargo_no_marca
 # (tambien haria rojo al go, pero el driver corta en el primero; cargo va antes
-# en CASOS_G2).
+# en CASOS_G2). H3 (cross-review codex): por eso se agrego mut_falla_go_quitada
+# abajo, que aísla la rama FAIL[^a-zA-Z] del CS para que go tenga SU mutacion.
 mut_falla_cs_quitada()        { sed 's/"\$FAILURE_SIGNAL_RE_CS"/"CS_NUNCA_ZZZ"/'; }
+# falla_go_quitada: neutraliza SOLO la rama FAIL[^a-zA-Z] del CS (la que go usa),
+# sin tocar test result: FAILED (la que cargo usa). Atrapa caso_g2_runner_fallido_go_no_marca.
+# Asi cada caso CS (cargo / go) tiene su mutacion propia, y mut_falla_cs_quitada
+# queda acreditada SOLO a cargo (no compartida con go).
+mut_falla_go_quitada()        { sed 's/FAIL\[\^a-zA-Z\]/FAIL_NUNCA_Z/'; }
 # falla_frontera_aflojada: cambia `[1-9]` a `[0-9]` GLOBALMENTE (con `g`). Así vía A
 # matchea `0 failed` (antes no) y vía B matchea `Failures: 0`. Atrapa
 # caso_g2_runner_pasa_0_failed_sigue_acreditado (el negativo): su stderr
@@ -162,6 +171,17 @@ mut_falla_cs_quitada()        { sed 's/"\$FAILURE_SIGNAL_RE_CS"/"CS_NUNCA_ZZZ"/'
 # 1) da rojo. Los casos que ya matchean con `[1-9]` siguen matcheando; el
 # invertido (AssertionError, sin digitos junto a "failed") no se ve afectado.
 mut_falla_frontera_aflojada() { sed 's/\[1-9\]/[0-9]/g'; }
+# falla_excepciones_sin_dospuntos (H2, cross-review codex): quita el `:` despues
+# de las 6 excepciones (AssertionError:/SyntaxError:/TypeError:/etc.) cambiando
+# `rror:` por `rror`. Atrapa caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado:
+# sin el `:`, el regex CI vuelve a matchear `typeerror` dentro del nombre del
+# archivo en el comando (`test_typeerror.py`), y el runner exitoso pasa a
+# verified=0 -> el caso (que espera 1) da rojo. NO afecta al invertido
+# (`AssertionError: expected...` sigue matcheando `AssertionError` sin `:`,
+# porque el substring sigue presente). `s/rror:/rror/g` es seguro: las unicas
+# ocurrencias de `rror:` en el hook son las 6 excepciones; `error TS[0-9]` lleva
+# espacio despues de `error` y `Traceback (...)` no tiene `rror:`.
+mut_falla_excepciones_sin_dospuntos() { sed 's/rror:/rror/g'; }
 mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_allow; fi/if false; then emit_allow; fi/'; }
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }

@@ -230,6 +230,65 @@ sin `[[:<:]]/[[:>:]]`** (H1+H2 cerrados).
 12. **Install**: `tools/install-hook.sh`.
 13. `git status --short` limpio.
 
+## Post cross-review del código (fix H2 + H3, H1 declarado)
+
+Tras el feat `87247a0`, una segunda ronda de cross-review (codex, sobre el código
+implementado, 2026-08-12) rindió 3 hallazgos. El operador eligió **arreglar H2+H3,
+declarar H1**.
+
+### H2 (fix aplicado) — falso positivo en comandos con nombres de excepción
+
+**Decía:** las excepciones (`AssertionError`/`SyntaxError`/`TypeError`/etc.) estaban en
+el regex CI sin `:`. Como `$combined` incluye `command_text`, un runner EXITOSO cuyo
+comando menciona la excepción (`pytest tests/test_typeerror.py`) matcheaba como si
+hubiera fracasado → el runner exitoso dejaba de acreditar (falso positivo, rompía DoD
+"un runner que pasa sigue acreditando"). Verificado con `/usr/bin/grep`.
+
+**Fix:** exigir `:` después de cada excepción (`AssertionError:`/`SyntaxError:`/etc.).
+Los tracebacks reales siempre traen `Exception: mensaje`; los nombres de archivo, no.
+
+**Tests:** caso nuevo `caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado` (rojo
+con el hook sin fix, verde tras el fix). Mutación nueva `mut_falla_excepciones_sin_dospuntos`
+(`sed 's/rror:/rror/g'`) que revierte el fix → atrapa al caso nuevo. Mutación existente
+`mut_falla_assertion_quitada` actualizada para llevar los `:` del nuevo patrón.
+
+### H3 (fix aplicado) — `mut_falla_cs_quitada` no aislaba go
+
+**Decía:** la mutación neutralizaba CS entero, rompiendo cargo Y go. El driver corta en
+el primer rojo (cargo), dejando a go sin mutación propia — si el caso go se modificara
+mal, no se detectaría.
+
+**Fix:** mutación nueva `mut_falla_go_quitada` que neutraliza SÓLO la rama `FAIL[^a-zA-Z]`
+(del CS), dejando `test result: FAILED` (cargo) intacta. Así `mut_falla_cs_quitada` queda
+acreditada SÓLO a cargo, y `mut_falla_go_quitada` a go.
+
+### H1 (declarado, NO arreglado) — runners reconocidos no cubiertos
+
+`TEST_RUNNER_RE` lista `dotnet`/`gradle`/`mvn`/`make`/`ctest`/`cargo`. Las señales de
+fracaso de algunos NO matchean las regex:
+
+| Runner | Señal de fracaso | Cubierto |
+|---|---|---|
+| dotnet | `Failed!`/`[FAIL]` | ✓ (vía `FAIL[^a-zA-Z]` del `[FAIL]`) |
+| gradle/mvn con tests-summary | `Failures: N, Errors: M` | ✓ (vía B) |
+| gradle/mvn `BUILD FAILURE` solo | `BUILD FAILURE` | ✗ declarado |
+| make | `*** Error 1` | ✗ declarado |
+| ctest | `N tests failed out of M` | ✗ declarado (el `[1-9]...failed` exige dígito inmediato) |
+| cargo (tests fallan) | `test result: FAILED.` | ✓ (vía CS) |
+| cargo (no compila) | `error[E0XXX]`/`error: could not compile` | ✗ declarado |
+
+Es un incumplimiento parcial de la DoD universal "un runner que falla NO acredita".
+Declarado como límite best-effort: el grep es por TEXTO de reporte, no un parser de
+runners; cubrir cada ecosistema agregaría superficie de falsos positivos que el operador
+no pidió. Podría ampliarse en una tarea posterior.
+
+### Conteos finales (post-fix)
+
+- **G2: 15 → 22** (5 casos nuevos del feat + 1 caso negativo + 1 caso nuevo del fix H2).
+- **Mutaciones: 30 → 38 (G2 6 → 14)** — 6 del feat + 2 del fix (go_quitada, excepciones_sin_dospuntos).
+- **Baseline: 0 divergentes** (16 escenarios).
+- **`run.sh`: OK (17 tests).**
+
 ## No entra en esta tarea (límites declarados)
 
 - **Re-captura de payloads** (DoD no la pide; la 59/59 se borró al cerrar 3.7; medición

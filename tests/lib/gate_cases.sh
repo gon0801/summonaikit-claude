@@ -232,7 +232,7 @@ caso_g1_session_id_anidado_no_reescribe_ruta() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -321,6 +321,19 @@ caso_g2_runner_pasa_0_failed_sigue_acreditado() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'pytest -q' '=== 5 passed, 0 failed in 0.5s ===')"
   _igual "runner que pasa con 0 failed sigue acreditando" "$(lab_estado verified)" "1"
+}
+
+# Negativo H2 (cross-review del codigo, codex 2026-08-12): un runner que PASA cuyo
+# COMANDO menciona el nombre de una excepcion (`pytest tests/test_typeerror.py`)
+# sigue acreditando. Sin el fix, el regex CI case-insensitive matcheaba `TypeError`
+# dentro del nombre del archivo (combined incluye command_text) y el runner exitoso
+# dejaba de acreditar -- falso positivo. Tras exigir `:` despues del nombre de la
+# excepcion, los tracebacks reales (`TypeError: ...`) siguen matcheando pero los
+# nombres de archivo (`test_typeerror.py`) no.
+caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest tests/test_typeerror.py')"
+  _igual "runner que pasa con TypeError en el nombre del test sigue acreditando (H2)" "$(lab_estado verified)" "1"
 }
 
 # Sin turno armado NO se crea estado: si se creara con task_hash=unknown, el

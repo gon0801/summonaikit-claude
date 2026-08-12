@@ -93,9 +93,15 @@ TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.
 # CI (case-insensitive, -Eiq):
 # - failure_type|permission_denied|command not found: las 3 originales (rechazo
 #   o ausencia del tool). Se conservan para no romper los casos que ya viven.
-# - AssertionError|AssertionFailedError: Node assert, pytest E-line, JUnit.
+# - AssertionError:|AssertionFailedError: — Node assert, pytest E-line, JUnit.
+#   OJO (H2, cross-review codex 2026-08-12): se exige `:` despues del nombre
+#   porque $combined incluye command_text, y sin el `:` un runner exitoso cuyo
+#   COMANDO menciona la excepcion (p. ej. `pytest tests/test_typeerror.py`)
+#   matcheaba como si hubiera fracasado. Los tracebacks reales siempre traen el
+#   `:` (Exception: mensaje); los nombres de archivo, no.
 # - Traceback (most recent call last): Python crudo sin pytest.
-# - SyntaxError|TypeError|ReferenceError|RangeError: crashes JS/Python.
+# - SyntaxError:|TypeError:|ReferenceError:|RangeError: — crashes JS/Python.
+#   Mismo razonamiento del `:` que AssertionError.
 # - error TS[0-9]: tsc en fracaso (su senal especifica, sin la palabra `failed`).
 # - [1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?): pytest
 #   `=== 1 failed ===`, vitest/jest `1 failed`, mocha `1 failing`, rspec
@@ -104,7 +110,7 @@ TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.
 # - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
 #   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
 #   `Failures: 0`.
-FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError|AssertionFailedError|Traceback \(most recent call last\)|SyntaxError|TypeError|ReferenceError|RangeError|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
+FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
 # CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
 # positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
 # Cubre los runners cuya senal de fracaso no trae numero inmediato. OJO: $combined
