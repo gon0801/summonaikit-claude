@@ -97,10 +97,15 @@ zcode sin cambiar el matcher.
 
 ## Veredicto (§E3): ¿se tumbó alguna premisa?
 
-**Ninguna.** La forma snake_case que lee el hook está presente y es compatible;
-el alias `Task`↔`Agent` funciona; `hooks.enabled:true` en el user-config basta;
-omisión de matcher en `UserPromptSubmit`/`Stop` confirmada (dispararon sin él).
-**Phase 5 sigue como adaptación del hook existente, no como port propio.**
+**Ninguna de forma/rol.** La forma snake_case que lee el hook está presente y
+es compatible; el alias `Task`↔`Agent` funciona; `hooks.enabled:true` en el
+user-config basta; omisión de matcher en `UserPromptSubmit`/`Stop` confirmada
+(dispararon sin él). **Phase 5 sigue como adaptación del hook existente, no
+como port propio.**
+
+El override de proyecto (`<repo>/.zcode/config.json`) **ya estaba caído** en
+este CLI (3.7.5-11, `gri` / `config_project_hooks_ignored`); no es hallazgo
+de esta captura — está en el plan y en el spec.
 
 Hechos **nuevos** (no en las premisas) que 5.2–5.5 tienen que resolver:
 
