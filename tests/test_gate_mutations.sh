@@ -52,6 +52,7 @@ G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
+G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -105,6 +106,13 @@ mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # punto-de-frase, que es lo que separa `pytest.` (prosa) de `pytest.log` (archivo).
 mut_runner_sin_frontera()    { sed 's/^TEST_RUNNER_WORD_RE=.*/TEST_RUNNER_WORD_RE="$TEST_RUNNER_RE"/'; }
 mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}'; }
+# La redaccion de credenciales (Task 3.5 / A5): se revierte en el call site de
+# mark_evidence, de modo que $detail vuelve a escribirse crudo. Sin escapar el
+# `$` (BRE: literal a mitad de patron) ni meter backslashes (la trampa de
+# MSYS2 documentada en :128-131). La mutacion ademas FIJA LA UBICACION del
+# arreglo: movida al call site, el sed no matchea y salta la guardia 2 del
+# driver ("la mutacion no cambio nada del hook").
+mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
 # Se rompe la clausula `command not found`, no la de `exitCode`: contra payloads
 # reales esa segunda ya esta muerta (el tool_response de Bash no trae el campo,
 # medido 59 de 59 en la Task 1.4). Mutar codigo muerto no prueba nada — la

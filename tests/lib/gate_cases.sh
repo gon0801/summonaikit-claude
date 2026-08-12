@@ -224,7 +224,7 @@ caso_g1_session_id_anidado_no_reescribe_ruta() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -341,6 +341,64 @@ caso_g2_excusa_con_punto_final_no_reclama() {
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_PYTEST_PUNTO")"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# DEFECTO A5, el caso que lo habria atrapado. Un comando de test runner que
+# ademas lleva credenciales en la linea (token=, password=, ://user:pass@) se
+# persistia crudo en harness-evidence.log hasta el cierre limpio -- y si el
+# turno no cierra, indefinidamente. El arreglo redacta las tres formas en
+# mark_evidence (el unico punto que escribe al log), preservando el resto del
+# comando, incluido el nombre del runner.
+caso_g2_credenciales_en_comando_se_redactan() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest --db-url postgresql://admin:s3cret@host/db --api-token=sk-12345 --db-password=p4ss')"
+  _igual "verified (el runner pytest sigue contando)" "$(lab_estado verified)" "1"
+  _no_contiene "secreto URL user:pass@ no en log" "$(lab_log)" 'admin:s3cret'
+  _no_contiene "secreto token= no en log" "$(lab_log)" 'sk-12345'
+  _no_contiene "secreto password= no en log" "$(lab_log)" 'p4ss'
+  _contiene "runner preservado en log (utilidad diagnostica)" "$(lab_log)" 'pytest'
+  _contiene "marcador REDACTED presente en log" "$(lab_log)" '[REDACTED]'
+}
+
+# La redaccion es transparente para comandos sin credenciales: el log los
+# conserva tal cual. Sin este caso, un redact_secrets que vaciara todo pasaria
+# la primera asercion (el runner sigue presente) y romperia el log en silencio.
+# Incluye los guardias de las CORRECCIONES 6 y 12: una @ despues del path, o un
+# ?owner=a@, NO son credenciales y no deben disparar la redaccion de URL.
+caso_g2_comando_sin_credenciales_no_se_altera() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'python -m pytest -q')"
+  _contiene "comando sin credenciales, intacto en log" "$(lab_log)" 'python -m pytest -q'
+  _no_contiene "sin marcador REDACTED cuando no hay credenciales" "$(lab_log)" '[REDACTED]'
+  lab_run tool claude "$(lab_payload_bash 'pytest --report https://ci.example.com/runs/owner@corp.com/log')"
+  _contiene "host y path intactos (CORR 6)" "$(lab_log)" 'https://ci.example.com/runs/owner@corp.com/log'
+  lab_run tool claude "$(lab_payload_bash 'pytest --report https://host?owner=a@corp.com')"
+  _contiene "host intacto con query (CORR 12)" "$(lab_log)" 'https://host?owner=a@corp.com'
+}
+
+# La redaccion vive en mark_evidence, no en el call site de la verificacion: el
+# OTRO caller (`:811`, la evidencia de implementacion) tiene que quedar cubierto
+# por el mismo punto. Sin este caso, mover la redaccion al call site de :835
+# dejaria :811 filtrando y la suite no se enteraria.
+caso_g2_credenciales_en_ruta_de_edicion_se_redactan() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_edit 'smb://admin:s3cret@share/src/x.ts')"
+  _igual "implemented (la edicion sigue contando)" "$(lab_estado implemented)" "1"
+  _no_contiene "secreto de la ruta no en log" "$(lab_log)" 'admin:s3cret'
+  _contiene "ruta preservada salvo credenciales" "$(lab_log)" '@share/src/x.ts'
+}
+
+# La cola de un valor entrecomillado tambien es el secreto. Sin la alternativa
+# de comillas en redact_secrets, `password='hunter dos-palabras'` deja
+# `dos-palabras'` en el log (medido). Hallazgo de la revision cruzada con codex.
+# La cola se elige DISTINTIVA a proposito: un needle corto como `two` es
+# subcadena de palabras comunes (`network`) y daria rojo falso.
+caso_g2_credencial_entrecomillada_se_redacta_entera() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash "pytest --db-password='hunter dos-palabras' -q")"
+  _igual "verified (el runner sigue contando)" "$(lab_estado verified)" "1"
+  _no_contiene "la cola del secreto no queda en el log" "$(lab_log)" 'dos-palabras'
+  _contiene "runner preservado" "$(lab_log)" 'pytest'
 }
 
 # ============================================== G3 — secuencia de subagentes

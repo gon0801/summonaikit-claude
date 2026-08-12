@@ -701,6 +701,29 @@ $context"
   exit 0
 }
 
+# Redacta credenciales que viajan en la linea de comandos antes de persistirlas
+# en harness-evidence.log. Cierra A5 (Task 3.5): sin esto, un comando con
+# token=/password=/://user:pass@ queda en claro en disco hasta que el turno
+# cierre -- y una sesion abandonada lo conserva indefinidamente.
+#
+# BEST-EFFORT contra las tres formas que nombra la DoD, NO un scanner de
+# secretos. Postura de fallo: si un patron no matchea, el texto pasa crudo -- el
+# peor caso es que algo no se redacte, NUNCA que se altere la decision del gate
+# (lane:fast: no toca verified/implemented, solo lo que se escribe al log).
+#
+# El valor puede venir entrecomillado: sin la alternativa de comillas, un
+# `password='hunter two'` filtraba su segunda mitad (hallazgo de la revision
+# cruzada con codex). La autoridad de una URI termina en / ? o # (RFC 3986):
+# acotar la clase a eso es lo que preserva el host, que es la clausula 2 de la
+# DoD. `-E` es POSIX Issue 8 y lo soportan GNU/BSD/busybox; la flag `I` NO se
+# usa a proposito (es extension y su fallo es silencioso: sed sale con error y
+# la linea del log queda sin detalle).
+redact_secrets() {
+  printf '%s' "$1" | sed -E \
+    -e "s/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=('[^']*'|\"[^\"]*\"|[^[:space:]]*)/\1=[REDACTED]/g" \
+    -e 's,://[^[:space:]@/?#]*@,://[REDACTED]@,g'
+}
+
 mark_evidence() {
   kind="$1"
   detail="$2"
@@ -717,7 +740,7 @@ mark_evidence() {
   if [ "$kind" = "implemented" ]; then implemented="1"; fi
   if [ "$kind" = "verified" ]; then verified="1"; fi
   write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen"
-  printf '%s: %s\n' "$kind" "$detail" >> "$LOG_PATH" 2>/dev/null || true
+  printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
 }
 
 # Map a host's agent/subagent name onto a canonical harness role
