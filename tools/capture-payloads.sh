@@ -56,7 +56,13 @@ if [ -z "$modo" ]; then
       | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
     [ -n "$evento" ] || evento="sin-evento"
     n="$(find "$salida" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
-    printf '%s' "$crudo" > "$salida/$(printf '%03d' "$((n + 1))")-$evento.json" 2>/dev/null || true
+    base="$(printf '%03d' "$((n + 1))")-$evento"
+    printf '%s' "$crudo" > "$salida/$base.json" 2>/dev/null || true
+    # Dump del entorno del hook (Task 3.7 / A10): responde si el host propaga
+    # el prefijo SUMMONAIKIT_HOOK_TARGET=claude del comando registrado al
+    # ambiente del hook. Se filtra a SAIKIT_* + contexto para no volcar el env
+    # entero (PATH, posibles secretos); alcanza para la pregunta de A10.
+    env | grep -E '^(SUMMONAIKIT|PWD)=' > "$salida/$base.env" 2>/dev/null || true
   } >/dev/null 2>&1
   exit 0
 fi
@@ -110,13 +116,13 @@ case "$modo" in
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "bash \\"$capturador\\"" } ] }
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude bash \\"$capturador\\"" } ] }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "bash \\"$capturador\\"" } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude bash \\"$capturador\\"" } ] }
     ],
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "bash \\"$capturador\\"" } ] }
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude bash \\"$capturador\\"" } ] }
     ]
   }
 }
