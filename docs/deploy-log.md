@@ -39,3 +39,19 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **Vivo vs master:** cksum idéntico (`3605963032 66538`).
 - **Operador:** Gon (config de zcode restaurada tras `--quitar` del probe en el
   cierre de 5.2; el probe midió en sesiones nuevas sobre repo descartable).
+
+## 2026-08-12 — PR #5 / Task 5.3 (merge `053c853`)
+
+- **Mergeado:** PR #5 `feat/5.3-host-state-isolation` → master — Task 5.3:
+  `STATE_ROOT` llavea por host (`claude`/`zcode`/`other`). Un turno de zcode y
+  uno de Claude sobre el mismo `$0` ya no comparten `harness-state.env` ni
+  `RN_PENDING`. Plans.md 5.3 queda `cc:TODO` (STOP vivo pide el registro de 5.4).
+- **¿Cambió el hook?** **Sí.** `PROJECT_DIR` pasa a
+  `STATE_ROOT/$HOST/$PROJECT_KEY`.
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la
+  fuente.` Backup:
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260812-190346.bak`
+- **`check-hook-registration.sh`:** registro en las 3 fases OK (exit 0). Mismo
+  advisory conocido de A9 (matcher PostToolUse sin `Agent`).
+- **Vivo vs master:** cksum idéntico (`4023882360 67915`).
+- **Operador:** Gon.
