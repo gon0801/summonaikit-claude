@@ -1166,6 +1166,35 @@ está **ausente** en el env del hook (la detección de target necesita
 `tool_response.exitCode` **sí** viene en eventos Bash (inofensivo hoy, A11
 retiró su uso).
 
+### Medido 2026-08-12, Task 5.3 (aislamiento de estado cross-host)
+
+Defecto nuevo, medido por lectura de la config real: si el harness se registra
+desde zcode apuntando al **mismo `$0`** que Claude (la forma `cbm-*` que el
+operador ya usa, `$HOME/.claude/hooks/…`), `STATE_ROOT` sale de `dirname $0` y
+los dos hosts escribían **el mismo `harness-state.env`** del mismo proyecto con
+la misma sesión — A4 en versión cross-host. Detalle y mecanismo en
+`docs/task-5.3-aislamiento.md`.
+
+- **Mecanismo: llaveado explícito por host** (no copia del binario). El path pasa
+  a `STATE_ROOT/$HOST/$PROJECT_KEY/$SESSION_KEY/harness-state.env`. `HOST` se
+  elige por señal de env medida (5.1): `zcode` si `ZCODE_SESSION_ID` o
+  `ZCODE_PROJECT_DIR` no vacíos; `claude` si `CLAUDECODE=1`; `other` en cualquier
+  otro caso. `ZCODE_*` gana a `CLAUDECODE`; `other` **nunca** escribe en `claude`
+  ni `zcode` (Core Rule 2). `RN_PENDING_PATH` hereda `HOST` vía `PROJECT_DIR`
+  (un Stop de zcode no puede tomar el aviso pendiente de Claude). No se migra el
+  árbol viejo `state/$PROJECT_KEY/`: queda huérfano.
+- **A6 en zcode = fail-open por temp.** `transcript_path` es un tmp efímero
+  (`%TEMP%/zcode-claude-hook-*`) fuera del perfil; la contención de A6 lo
+  rechaza (`transcript=unknown`) y el gate corre con `last_assistant_message`
+  (presente, 5.1). **No** se agranda la allowlist de A6: leer un tmp plantable
+  es una primitiva nueva, fuera de esta task.
+- **`TARGET` no se toca** (5.2 declaró `TARGET=claude` alcanza; cablear el
+  registro en zcode es 5.4). La medición **viva** (STOP estilo 2.4 sobre el mismo
+  repo con los dos hosts) queda pendiente del operador: necesita registrar el
+  harness en el user-config de zcode, que es alcance de 5.4. Mientras no exista,
+  el lab es la evidencia y la task no se declara `cc:完了` (no se reescribe la
+  DoD en silencio).
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
