@@ -62,6 +62,7 @@ G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
+G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -136,6 +137,9 @@ mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}';
 # arreglo: movida al call site, el sed no matchea y salta la guardia 2 del
 # driver ("la mutacion no cambio nada del hook").
 mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
+# Quita el tramo ES de VERIFY_SKIP_RE. El catch es caso_g2_excusa_espanol_no_reclama
+# (el recibo del vivo zcode). skipped/not run siguen, el resto de G2 no se rompe.
+mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en

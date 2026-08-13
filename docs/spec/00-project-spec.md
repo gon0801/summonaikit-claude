@@ -1254,6 +1254,27 @@ puede pasar la ceremonia.
   #1, verificado contra `zcode.cjs` 3.7.5-11): el parser exige
   `name`+`description`; `skills` es clave oficial; el resto se ignora.
 
+### Medido 2026-08-13, G2 skip en español (vivo zcode)
+
+Un turno `-saikit` con `hola.txt` ya existente corrió implementer →
+verifier → reviewer (5.6) y escribió el recibo. El Stop igual bloqueó
+con `Missing verification evidence or explicit skipped-check reason`:
+el modelo dijo "No corrí los candados" y mostró `od`/`wc`, pero el
+`grep` solo aceptaba `not run` / `not executed` / `skipped` / italiano.
+El contrato UPS decía "or skipped with a concrete reason" sin listar
+los tokens. Soplarle al operador las palabras mágicas no es el
+producto.
+
+- **`VERIFY_SKIP_RE`** acepta también `no corri` / `no se corrio` /
+  `no se corrieron` / `no se ejecuto` / `no se ejecutaron` / `sin tests`
+  (y las formas con acento). **No** acepta `se corrio` suelto: el
+  recibo que afirma que sí corrió la batería sigue exigiendo runner o
+  skip explícito (`caso_g2_falta_evidencia_reclama`).
+- El contrato UPS nombra esas frases. El mensaje de Stop se deja
+  igual para no regrabar la baseline.
+- Catch: `caso_g2_excusa_espanol_no_reclama` (recibo del vivo).
+  Mutación: `mut_skip_sin_espanol`.
+
 **Residuales (Opus 5 max r1, 2026-08-12) — no se parchan, se declaran:**
 
 - `#2` DESCONOCIDO registra el hook: por diseño (el tipo ya existe).

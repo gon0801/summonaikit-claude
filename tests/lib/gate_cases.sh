@@ -93,6 +93,12 @@ _RECIBO_SIN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder list
 # acepta esa declaracion como sustituto de la evidencia.
 _RECIBO_SIN_RETRO_SALTEADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: skipped, este repo no tiene bateria propia.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
 
+# Vivo 2026-08-13 (zcode -saikit): el modelo escribio "No corri los candados"
+# y mostro od/wc. El gate reclamo evidencia porque solo aceptaba
+# not run / skipped / italiano. Este recibo es el catch: sin esas palabras
+# inglesas, con la prosa espanola del turno.
+_RECIBO_SIN_RETRO_NO_CORRI='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un archivo que diga hola.\n- Implement: hola.txt ya existia, no se toco nada.\n- Verify: No corri los candados de commit porque no hay nada nuevo; od -c mostro hola y wc -c dio 5 bytes.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
+
 # Recibo donde Verify termina con "pytest." (punto final de frase). Sin la
 # alternativa de punto-de-frase en TEST_RUNNER_WORD_RE, el punto despues de
 # `pytest` lo excluye y el gate reclama evidencia que esta. Es el test de la
@@ -330,7 +336,7 @@ caso_g1_host_segun_senal() {
 
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -464,6 +470,14 @@ caso_g2_evidencia_presente_no_reclama() {
 caso_g2_excusa_declarada_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_SALTEADO")"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# Catch del vivo zcode: prosa espanola de skip, sin "skipped"/"not run".
+caso_g2_excusa_espanol_no_reclama() {
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_NO_CORRI")"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }

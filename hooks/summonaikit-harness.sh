@@ -110,6 +110,13 @@ TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|
 # `cat pytest-viejo.log` no lo es.
 TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)'
 
+# Skip explicito de verificacion (prosa del recibo). EN+IT de siempre; ES
+# del vivo zcode 2026-08-13 ("No corri los candados"). Las formas con
+# acento van en UTF-8 literal para matchear el payload aunque LANG=C.
+# NO incluir "se corrio" suelto: el recibo que afirma que SI corrio la
+# bateria (_RECIBO_SIN_RETRO) debe seguir pidiendo evidencia.
+VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corrí|no se corrio|no se corrió|no se corrieron|no se ejecuto|no se ejecutó|no se ejecutaron|sin tests'
+
 # Failure-signal patterns for the verification guard (record_tool_evidence).
 # A11 (medido 59/59, Task 1.4): el tool_response real de Bash NO trae exitCode,
 # asi que la unica forma de detectar que un runner revento es el TEXTO de su
@@ -685,7 +692,7 @@ Final receipt required before stopping (write every line in plain language a non
 SUMMONAIKIT HARNESS RECEIPT
 Understand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
-Verify: exact commands/checks run and results, or skipped with a concrete reason.
+Verify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. "No corri los candados" counts; "PASS" or od/wc alone does not.
 Review: findings, risks, or "no findings" with basis.
 Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).
 Retro: harness/codebase-memory improvement, or "none".
@@ -1162,7 +1169,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
     missing="$missing- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
-  if [ "$verified" != "1" ] && ! printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|not run|not executed|skipped|non eseguit|saltat"; then
+  # VERIFY_SKIP_RE: EN+IT historicos + ES natural. Vivo 2026-08-13: zcode
+  # escribio "No corri los candados" y el gate lo rechazo porque solo
+  # aceptaba skipped/not run. "se corrio la bateria" NO matchea (falta "no ").
+  if [ "$verified" != "1" ] && ! printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE"; then
     missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
   fi
 
