@@ -40,6 +40,31 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **Operador:** Gon (config de zcode restaurada tras `--quitar` del probe en el
   cierre de 5.2; el probe midió en sesiones nuevas sobre repo descartable).
 
+## 2026-08-12 — PR #6 / Task 5.4 (merge `fdb875c`)
+
+- **Mergeado:** PR #6 `feat/5.4-zcode-registration` → master — Task 5.4: el harness
+  queda registrado en las 3 fases del user-config de zcode (`hooks.events.*`).
+  `check-hook-registration --zcode-config` y `install-hook --host zcode` aprenden
+  la segunda forma de registro. Hook: `TARGET` por `ZCODE_*` (A10 cerrado en
+  zcode), budget zcode→`exit 2`, `PHASE` lee `hookEventName` (camel). Plans.md 5.4
+  queda `cc:TODO` hasta el STOP vivo (turno `-saikit` real en zcode).
+- **¿Cambió el hook?** **Sí.** TARGET (fallback por `ZCODE_*`), budget (rama zcode
+  `exit 2`), PHASE (lectura camel además de snake).
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la fuente.`
+  Backup: `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260812-212905.bak`
+- **`install-hook.sh --host zcode`:** `REGISTRADO: harness en el user-config de
+  zcode (3 fases, id 5.4).` Backup del config:
+  `~/.zcode/cli/saikit-backups/config.json.zcode.20260812-212918.bak`. Primera task
+  que cablea el harness en el segundo host.
+- **`check-hook-registration.sh --zcode-config`:** **silencio** (registro completo:
+  3 fases, `enabled:true`, sin matcher indebido en UPS/Stop, PTU cubre Agent).
+- **`check-hook-registration.sh` (Claude):** 3 fases OK (exit 0). Advisory conocido
+  de A9 (matcher PostToolUse sin `Agent`); en zcode lo cierra el alias
+  `Task`↔`Agent` (5.1).
+- **Vivo vs master:** cksum idéntico (`1507687064 69327`).
+- **Operador:** Gon. **STOP §D pendiente:** turno `-saikit` real en zcode que arme
+  y deje estado bajo `state/zcode/` (cierra `Plans.md:100`).
+
 ## 2026-08-12 — PR #5 / Task 5.3 (merge `053c853`)
 
 - **Mergeado:** PR #5 `feat/5.3-host-state-isolation` → master — Task 5.3:
