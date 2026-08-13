@@ -57,6 +57,9 @@ MANIFEST="$repo/hooks/vendor-manifest.sha256"
 DRY_RUN=0
 CHECK_REGISTRO=1
 RESTORE=0
+# Task 5.4: --host zcode es append-only al user-config de zcode (no toca DEST).
+HOST=''
+QUITAR_ZCODE=0
 
 # Posicion y formato fijos, como los declara el spec (§ La adopcion). La linea 1
 # es el shebang: un marcador antes de el rompe la ejecucion. Se lee UNA linea,
@@ -73,13 +76,38 @@ while [ $# -gt 0 ]; do
     --dry-run)  DRY_RUN=1; shift ;;
     --restore-vendor) RESTORE=1; shift ;;
     --no-registration-check) CHECK_REGISTRO=0; shift ;;
-    -h|--help)  sed -n '2,48p' "$0"; exit 0 ;;
+    --host)     HOST="${2:-}"; shift 2 ;;
+    --quitar-zcode) QUITAR_ZCODE=1; shift ;;
+    -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
       printf '[summonaikit] instalador: opcion desconocida: %s\n' "$1" >&2
       exit 2
       ;;
   esac
 done
+
+# Task 5.4: --host zcode es la unica forma de --host que existe hoy. Otro valor
+# no se acepta: falla antes de tocar el archivo o el config.
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode" (recibido: %s)\n' "$HOST" >&2
+  exit 2
+fi
+if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
+  printf '[summonaikit] instalador: --quitar-zcode requiere --host zcode\n' >&2
+  exit 2
+fi
+
+# Task 5.4 (hallazgo 6): una sola copia del hook. Un --dest que caiga bajo
+# ~/.zcode crearia la segunda copia que 5.3 prohibio. Se niega, con o sin --host:
+# el estado se separa por HOST (dirname $0 + env), no duplicando el archivo.
+_zc_prefix="$(printf '%s/.zcode' "${HOME:-}")"
+case "$DEST" in
+  "$_zc_prefix"|"$_zc_prefix"/*)
+    printf '[summonaikit] instalador: --dest (%s) cae bajo ~/.zcode: rechazado.\n' "$DEST" >&2
+    printf '             Una sola copia del hook vive en ~/.claude/hooks. 5.3 separa por HOST.\n' >&2
+    exit 2
+    ;;
+esac
 
 decir() { printf '%s\n' "$*"; }
 
@@ -96,6 +124,174 @@ avisar_registro() {
   [ -r "$verificador" ] || return 0
   settings="$(dirname "$(dirname "$DEST")")/settings.json"
   bash "$verificador" --settings "$settings" --hook-name "$(basename "$DEST")" || true
+}
+
+# ----------------------------------------------------------- Task 5.4: zcode
+# La SEGUNDA forma de registro (hooks.events.*) vive en el user-config de zcode
+# (~/.zcode/cli/config.json). --host zcode es append-only a ese archivo: NO toca
+# DEST (el archivo del hook). El archivo se instala antes, con la invocacion sin
+# --host. Asi el contrato "exit != 0 => DEST intacto" se conserva: esta rama no
+# escribe DEST.
+#
+# zcode_bash_win es duplicado intencional de capture-payloads.sh (5.1): aca el
+# command apunta al HARNESS, no al capturador. Extraer a una lib comun es otra
+# task. NUNCA persistir /usr/bin/bash: en MSYS es una ruta virtual que Node
+# resuelve con ENOENT (R2.5 del plan 5.1).
+zcode_bash_win() {
+  local cand b bw
+  for cand in \
+    "C:/Program Files/Git/bin/bash.exe" \
+    "C:/Program Files (x86)/Git/bin/bash.exe" \
+    "C:/Program Files/Git/usr/bin/bash.exe"; do
+    if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
+  done
+  if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && command -v cygpath >/dev/null 2>&1; then
+    bw="$(cygpath -w "$b" 2>/dev/null)" && [ -n "$bw" ] && { printf '%s' "$bw"; return 0; }
+  fi
+  return 1
+}
+
+# El command registrado para el harness en zcode: bash.exe + DEST + marker 5.4.
+# Sin SUMMONAIKIT_HOOK_TARGET (A10: el host no propaga VAR=val; el hook detecta
+# zcode por ZCODE_*). Sin --only-cwd (no es un probe: el gate corre en todos los
+# repos; HOST+proyecto+sesion separan el estado, Task 5.3/3.4).
+zcode_harness_cmd() {  # $1=bash_win
+  printf '"%s" "%s" --saikit-harness-id 5.4' "$1" "$DEST"
+}
+
+zcode_user_config() {
+  printf '%s' "${SAIKIT_ZCODE_USER_CONFIG:-${HOME:-}/.zcode/cli/config.json}"
+}
+
+# Idempotente: para cada fase, si ya existe la entrada canonica (type command +
+# command exacto + timeout 15) la deja; si existe el id pero mal formada la
+# reemplaza; si falta la anyade. r2.2: nivel entrada (el grupo ajeno sobrevive).
+zcode_instalar() {
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --host zcode requiere jq (no encontrado)."; exit 2; }
+  local user_config bash_win canon uc_dir tmp_new bak
+  user_config="$(zcode_user_config)"
+  [ -f "$user_config" ] || {
+    decir "[summonaikit] instalador: no existe el user-config de zcode ($user_config)."
+    decir "              No lo creo de cero: el operador ya tiene uno."; exit 2; }
+  if ! jq -e . "$user_config" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: el user-config de zcode no es JSON valido ($user_config)."; exit 2; fi
+  if ! jq -e '.hooks.enabled == true' "$user_config" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: hooks.enabled no es true en $user_config."
+    decir "              Los hooks de archivo no corren sin enabled:true. No se cablea nada."; exit 2; fi
+  # Preflight (r1.3): DEST tiene que ser NUESTRO_IDENTICO + contener el codigo de
+  # 5.3. No se cablea un dest que solo MENCIONA host: se exige la linea literal.
+  case "$estado" in
+    NUESTRO_IDENTICO) : ;;
+    *)
+      decir "[summonaikit] instalador: el DEST ($DEST) no es nuestro e identico a la fuente ($estado)."
+      decir "              --host zcode NO instala el archivo: instalalo primero (sin --host)."
+      decir "              No se cablea un dest que no se controla."; exit 2 ;;
+  esac
+  if ! grep -q 'PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"' "$DEST" 2>/dev/null; then
+    decir "[summonaikit] instalador: el DEST no tiene el aislamiento por host de 5.3."
+    decir '              Falta: PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY" en '"$DEST"
+    decir "              No se cablea un dest que solo menciona HOST."; exit 2; fi
+
+  bash_win="$(zcode_bash_win)" || {
+    decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command."; exit 2; }
+  canon="$(zcode_harness_cmd "$bash_win")"
+
+  uc_dir="$(dirname "$user_config")"
+  umask 077
+  tmp_new="$(mktemp "$uc_dir/.saikit-zcode-XXXXXX")" || {
+    decir "[summonaikit] instalador: no se pudo crear el temporal en $uc_dir."; exit 5; }
+  bak="$uc_dir/saikit-backups/$(basename "$user_config").zcode.$(date +%Y%m%d-%H%M%S).bak"
+  if ! mkdir -p "$(dirname "$bak")"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo crear el dir de backups."; exit 5; fi
+  if ! cp "$user_config" "$bak"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo respaldar el user-config."; exit 5; fi
+
+  # jq: quitar entradas 5.4 mal formadas (conservar canonicas + ajenas), luego
+  # asegurar las 3 fases con un grupo propio cada una si falta la canonica.
+  # Constructivo (. + {hooks:...}), no path-assign: el .hooks=X dentro de map
+  # anidado en with_entries(.value|=) no se comporta con 2+ fases en jq 1.8.
+  if ! jq --arg canon "$canon" '
+    def canon_entrada: {type: "command", command: $canon, timeout: 15};
+    def limpiar_grupos(arr):
+      [ (arr // [])[] | select(. | type == "object")
+        | . + {hooks: [ (.hooks // [])[] | select(
+            ((.command // "") | test("saikit-harness-id 5[.]4") | not)
+            or (. == canon_entrada) ) ]} ]
+      | map(select((.hooks | length) > 0));
+    def purgar:
+      if (.hooks | type) == "object" and ((.hooks.events // {}) | type) == "object"
+      then .hooks.events = (.hooks.events | with_entries(.value |= limpiar_grupos(.)))
+      else . end;
+    def fase_tiene_canon(fase):
+      any( (.hooks.events[ fase ] // [])[];
+           . as $g | any( ($g.hooks // [])[]; . == canon_entrada ) );
+    def asegurar(fase; matcher):
+      if fase_tiene_canon(fase) then .
+      else .hooks.events[ fase ] = ( ((.hooks.events[ fase ]) // []) +
+        [ (if matcher == "" then {} else {matcher: matcher} end) + {hooks: [canon_entrada]} ] )
+      end;
+    purgar
+    | asegurar("UserPromptSubmit"; "")
+    | asegurar("PostToolUse"; "Bash|Edit|Write|Read|apply_patch|Task|Agent")
+    | asegurar("Stop"; "")
+  ' "$user_config" > "$tmp_new"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: jq fallo al appendear; el config original queda intacto."; exit 5; fi
+  if ! jq -e . "$tmp_new" >/dev/null 2>&1; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el resultado de jq no es JSON valido; config intacto."; exit 5; fi
+  if ! mv -f "$tmp_new" "$user_config"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el mv final fallo; config intacto."; exit 5; fi
+  decir "[summonaikit] REGISTRADO: harness en el user-config de zcode (3 fases, id 5.4)."
+  decir "              config:  $user_config"
+  decir "              backup:  $bak"
+}
+
+# --quitar-zcode: saca TODAS las entradas con saikit-harness-id 5.4 (canonicas o
+# no) y los grupos que quedan vacios. Los grupos ajenos sobreviven (r2.2). NO
+# corre el preflight de DEST/enabled (r3.3): la limpieza tiene que correr aunque
+# el dest ya no exista o enabled este apagado.
+zcode_quitar() {
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --quitar-zcode requiere jq (no encontrado)."; exit 2; }
+  local user_config uc_dir tmp_new bak
+  user_config="$(zcode_user_config)"
+  [ -f "$user_config" ] || {
+    decir "[summonaikit] instalador: no existe el user-config de zcode ($user_config)."; exit 2; }
+  if ! jq -e . "$user_config" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: el user-config no es JSON valido; --quitar-zcode no procede."; exit 2; fi
+  uc_dir="$(dirname "$user_config")"
+  umask 077
+  tmp_new="$(mktemp "$uc_dir/.saikit-zcode-XXXXXX")" || {
+    decir "[summonaikit] instalador: no se pudo crear el temporal en $uc_dir."; exit 5; }
+  bak="$uc_dir/saikit-backups/$(basename "$user_config").zcode.$(date +%Y%m%d-%H%M%S).bak"
+  if ! mkdir -p "$(dirname "$bak")"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo crear el dir de backups."; exit 5; fi
+  if ! cp "$user_config" "$bak"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo respaldar el user-config."; exit 5; fi
+  if ! jq '
+    def quitar_grupos(arr):
+      [ (arr // [])[] | select(. | type == "object")
+        | . + {hooks: [ (.hooks // [])[] | select(
+            ((.command // "") | test("saikit-harness-id 5[.]4") | not) ) ]} ]
+      | map(select((.hooks | length) > 0));
+    if (.hooks | type) == "object" and ((.hooks.events // {}) | type) == "object"
+    then .hooks.events = (.hooks.events | with_entries(.value |= quitar_grupos(.)))
+    else . end
+  ' "$user_config" > "$tmp_new"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: jq fallo al quitar; config intacto."; exit 5; fi
+  if ! jq -e . "$tmp_new" >/dev/null 2>&1; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el resultado de jq no es JSON valido; config intacto."; exit 5; fi
+  if ! mv -f "$tmp_new" "$user_config"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el mv final fallo; config intacto."; exit 5; fi
+  decir "[summonaikit] QUITADO: entradas 5.4 del user-config de zcode."
+  decir "              config:  $user_config"
+  decir "              backup:  $bak"
 }
 
 # ------------------------------------------------------------------ la fuente
@@ -213,6 +409,18 @@ else
     1) estado='DESCONOCIDO';     detalle="$detalle_manifiesto" ;;
     *) estado='NO_OBSERVABLE';   detalle="$motivo_manifiesto" ;;
   esac
+fi
+
+# Task 5.4: --host zcode termina aca. Append-only al user-config de zcode; NO
+# toca DEST (el archivo se instala antes, sin --host). Toda la maquinaria de
+# escritura atomica de DEST que sigue es del flujo Claude y no aplica.
+if [ "$HOST" = "zcode" ]; then
+  if [ "$QUITAR_ZCODE" -eq 1 ]; then
+    zcode_quitar
+    exit $?
+  fi
+  zcode_instalar
+  exit $?
 fi
 
 # --------------------------------------------- escritura atomica y archivado
