@@ -33,3 +33,7 @@ tests/golden/** -whitespace
 # pasa a clasificarse "desconocido". El instalador ya tolera el `\r`, pero el
 # archivo no tiene por que llegar sucio.
 *.sha256 text eol=lf
+
+# Plantillas de subagente de zcode: se comparan byte a byte con lo instalado.
+# CRLF haría que el instalador las viera "distintas" de sí mismas.
+agents/** text eol=lf

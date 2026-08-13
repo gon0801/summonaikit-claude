@@ -1222,6 +1222,50 @@ forma de registro que aprendieron los tools. Detalle en `docs/task-5.4-plan.md`.
   `stop_gate` no corre. El hook lee ambos (con `json_top_level_string`, no el sed
   greedy).
 
+### Medido 2026-08-12, Task 5.6 (perfiles de agente en zcode)
+
+El runtime de zcode 3.7.5-11 solo acepta `subagent_type` registrados. Built-ins:
+`general-purpose` y `Explore`. Carga user-level de `~/.zcode/agents/<name>.md`
+y project-level de `<repo>/.zcode/agents/<name>.md` (Settings → Subagents
+escribe el primero). Sin `implementer`/`verifier`/`reviewer` ahí, el Agent
+tool rechaza el tipo **antes** de que el hook vea el evento, y el Stop no
+puede pasar la ceremonia.
+
+- **`--host zcode` instala los tres perfiles** desde `agents/` del repo a
+  `~/.zcode/agents/` (override: `SAIKIT_ZCODE_AGENTS_DIR` /
+  `SAIKIT_ZCODE_AGENTS_SOURCE`). Detecta `bash.exe` **antes** de escribir
+  perfiles (si no hay bash, exit 2 y el dir queda vacío). Después valida
+  plantillas y escribe; al final appendea el user-config. No toca DEST.
+- **Tres estados**, igual que DEST: `AUSENTE` instala; `NUESTRO_IDENTICO`
+  (marca `saikit_owned: summonaikit-claude` **solo en el primer bloque
+  frontmatter** + `cmp` con la plantilla) no reescribe; `NUESTRO_DISTINTO`
+  repara con backup; `DESCONOCIDO` (sin marca en frontmatter, aunque el
+  body la cite) no se toca y se reporta — el hook igual se registra
+  porque el tipo ya existe.
+- **`--quitar-zcode`** borra solo los que llevan la marca en frontmatter,
+  **archivando antes** (`agents/saikit-backups/`). Un `implementer.md` de
+  otro se queda.
+- **No se copia de `~/.claude/agents`.** Esa ruta es del otro host y
+  lleva `model: sonnet`. La fuente versionada es `agents/*.md` (sin
+  `model:`; heredan GLM del padre).
+- Plantillas **no** cubren `closer`/`retro`: el gate los pide como
+  secciones del recibo, no como tipos del Agent tool.
+- **`saikit_owned` y `skills:` no rompen el loader de zcode** (Opus r1
+  #1, verificado contra `zcode.cjs` 3.7.5-11): el parser exige
+  `name`+`description`; `skills` es clave oficial; el resto se ignora.
+
+**Residuales (Opus 5 max r1, 2026-08-12) — no se parchan, se declaran:**
+
+- `#2` DESCONOCIDO registra el hook: por diseño (el tipo ya existe).
+- `#6` `--host zcode` no honra `--dry-run`: residual de 5.4; no se
+  arregla solo en agentes.
+- `#7` no se instala `<repo>/.zcode/agents`: Settings Beta es user-level.
+- `#8` verifier/reviewer heredan `Edit, Write` del kit Claude; el gate
+  es estructural, no semántico.
+- `#12` backups viven en `agents/saikit-backups/` (subdir, no `*.md`).
+- `#14` dos fuentes (Claude `~/.claude/agents` vs `agents/` del repo):
+  declarado, sin detector de deriva.
+
 La medición **viva** (registro en el config real del operador + un turno
 `-saikit` en zcode que arme y deje estado bajo `state/zcode/`) queda pendiente del
 operador (STOP §D del plan). Mientras no exista, la task no se declara

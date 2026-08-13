@@ -58,6 +58,9 @@ DRY_RUN=0
 CHECK_REGISTRO=1
 RESTORE=0
 # Task 5.4: --host zcode es append-only al user-config de zcode (no toca DEST).
+# Task 5.6: ademas instala implementer/verifier/reviewer en ~/.zcode/agents
+# (el runtime de zcode solo conoce tipos registrados ahi; sin ellos el
+# candado de secuencia es inalcanzable). No toca DEST.
 HOST=''
 QUITAR_ZCODE=0
 
@@ -139,6 +142,15 @@ avisar_registro() {
 # resuelve con ENOENT (R2.5 del plan 5.1).
 zcode_bash_win() {
   local cand b bw
+  # Override de test (Task 5.6 / hallazgo 3): si la variable ESTA seteada,
+  # no se busca en disco. Vacia o ruta inexistente => fallo. Asi se puede
+  # medir "sin bash.exe no se escriben agentes" sin mentir sobre PATH.
+  if [ "${SAIKIT_ZCODE_BASH_WIN+set}" = "set" ]; then
+    if [ -n "$SAIKIT_ZCODE_BASH_WIN" ] && [ -f "$SAIKIT_ZCODE_BASH_WIN" ]; then
+      printf '%s' "$SAIKIT_ZCODE_BASH_WIN"; return 0
+    fi
+    return 1
+  fi
   for cand in \
     "C:/Program Files/Git/bin/bash.exe" \
     "C:/Program Files (x86)/Git/bin/bash.exe" \
@@ -161,6 +173,163 @@ zcode_harness_cmd() {  # $1=bash_win
 
 zcode_user_config() {
   printf '%s' "${SAIKIT_ZCODE_USER_CONFIG:-${HOME:-}/.zcode/cli/config.json}"
+}
+
+# Task 5.6: perfiles de subagente. zcode (3.7.5-11) carga:
+#   {storageRoot}/agents/*.md          → ~/.zcode/agents/<name>.md
+#   {cwd}/.zcode/agents/*.md           → project (Settings Beta no lo edita)
+# Built-ins fijos: general-purpose, Explore. Sin implementer/verifier/reviewer
+# registrados, Agent type 'implementer' not found y el Stop no puede pasar.
+# Fuente = agents/ del repo (no ~/.claude/agents: Core Rule 4). Destino
+# overrideable para tests. Tres estados, igual que DEST: AUSENTE instala,
+# NUESTRO_IDENTICO no reescribe, NUESTRO_DISTINTO repara con backup,
+# DESCONOCIDO no se toca (el tipo ya existe; el hook igual se registra —
+# no es "no se puede satisfacer la ceremonia", es un perfil de otro).
+ZCODE_AGENT_ROLES='implementer verifier reviewer'
+ZCODE_AGENT_MARCA_RE='^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$'
+
+zcode_agents_source() {
+  printf '%s' "${SAIKIT_ZCODE_AGENTS_SOURCE:-$repo/agents}"
+}
+zcode_agents_dir() {
+  printf '%s' "${SAIKIT_ZCODE_AGENTS_DIR:-${HOME:-}/.zcode/agents}"
+}
+
+# Solo el primer bloque --- ... ---. Una marca en el body (ejemplo, cita)
+# no cuenta: seria NUESTRO_DISTINTO y --quitar la borraria (hallazgo 5).
+# tr -d '\r' para que una plantilla CRLF no falle la validacion (hallazgo 11).
+zcode_agente_frontmatter() {
+  awk 'BEGIN{n=0} /^---[[:space:]]*\r?$/{n++; if(n==2) exit; next} n==1{print}' "$1" | tr -d '\r'
+}
+
+zcode_agente_tiene_marca() {
+  zcode_agente_frontmatter "$1" | grep -Eq "$ZCODE_AGENT_MARCA_RE"
+}
+
+zcode_agente_estado() {
+  local dest="$1" fuente="$2"
+  if [ ! -e "$dest" ]; then printf 'AUSENTE'; return 0; fi
+  if [ ! -f "$dest" ] || [ ! -r "$dest" ]; then printf 'NO_OBSERVABLE'; return 0; fi
+  if zcode_agente_tiene_marca "$dest"; then
+    if cmp -s "$dest" "$fuente"; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
+  else
+    printf 'DESCONOCIDO'
+  fi
+}
+
+# Publica una plantilla con la misma disciplina atomica que DEST: temporal
+# en el mismo dir, igualdad byte a byte, luego mv.
+zcode_publicar_agente() {
+  local fuente="$1" dest="$2" dir tmp
+  dir="$(dirname "$dest")"
+  mkdir -p "$dir" || return 1
+  tmp="$(mktemp "$dir/.saikit-agent-XXXXXX")" || return 1
+  if ! cat "$fuente" > "$tmp" || ! cmp -s "$tmp" "$fuente"; then
+    rm -f "$tmp"; return 1
+  fi
+  if ! mv -f "$tmp" "$dest"; then
+    rm -f "$tmp"; return 1
+  fi
+  return 0
+}
+
+zcode_archivar_agente() {
+  local dest="$1" dir backup_dir sello n backup
+  dir="$(dirname "$dest")"
+  backup_dir="$dir/saikit-backups"
+  mkdir -p "$backup_dir" || return 1
+  sello="$(date +%Y%m%d-%H%M%S)"
+  backup="$backup_dir/$(basename "$dest").nuestro.$sello.bak"
+  n=2
+  while [ -e "$backup" ]; do
+    backup="$backup_dir/$(basename "$dest").nuestro.$sello-$n.bak"
+    n=$((n + 1))
+  done
+  cp "$dest" "$backup" || return 1
+  cmp -s "$backup" "$dest" || return 1
+  return 0
+}
+
+# Valida plantillas y aplica los tres estados. Corre DESPUES de encontrar
+# bash.exe y ANTES de appendear el user-config: si faltan las plantillas
+# no se cablea. DESCONOCIDO avisa y sigue (el tipo ya existe en el host;
+# no se aborta el registro — un implementer.md custom sigue siendo el tipo).
+zcode_instalar_agentes() {
+  local src dest_dir rol fuente dest estado
+  src="$(zcode_agents_source)"
+  dest_dir="$(zcode_agents_dir)"
+  for rol in $ZCODE_AGENT_ROLES; do
+    fuente="$src/$rol.md"
+    if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
+      decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
+      decir "              --host zcode no cablea un host sin implementer/verifier/reviewer."
+      exit 2
+    fi
+    if ! zcode_agente_tiene_marca "$fuente"; then
+      decir "[summonaikit] instalador: la plantilla $fuente no lleva saikit_owned."
+      decir "              Instalarla dejaria un archivo que el proximo install no reconoce."
+      exit 2
+    fi
+    if ! zcode_agente_frontmatter "$fuente" | grep -q "^name: ${rol}$"; then
+      decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."
+      exit 2
+    fi
+  done
+  mkdir -p "$dest_dir" || {
+    decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+  for rol in $ZCODE_AGENT_ROLES; do
+    fuente="$src/$rol.md"
+    dest="$dest_dir/$rol.md"
+    estado="$(zcode_agente_estado "$dest" "$fuente")"
+    case "$estado" in
+      AUSENTE)
+        zcode_publicar_agente "$fuente" "$dest" || {
+          decir "[summonaikit] instalador: no se pudo escribir $dest"; exit 5; }
+        decir "[summonaikit] AGENTE ZCODE INSTALADO: $rol"
+        decir "              destino: $dest"
+        ;;
+      NUESTRO_IDENTICO)
+        : ;;
+      NUESTRO_DISTINTO)
+        zcode_archivar_agente "$dest" || {
+          decir "[summonaikit] instalador: no se pudo respaldar $dest"; exit 5; }
+        zcode_publicar_agente "$fuente" "$dest" || {
+          decir "[summonaikit] instalador: no se pudo reparar $dest"; exit 5; }
+        decir "[summonaikit] AGENTE ZCODE REPARADO: $rol"
+        decir "              destino: $dest"
+        ;;
+      DESCONOCIDO)
+        decir "[summonaikit] AGENTE ZCODE DESCONOCIDO: $rol — no se toco."
+        decir "              destino: $dest"
+        decir "              No lleva saikit_owned. Puede ser un cambio legitimo."
+        ;;
+      NO_OBSERVABLE)
+        decir "[summonaikit] instalador: no se pudo clasificar $dest (no es un archivo legible)."
+        exit 5
+        ;;
+    esac
+  done
+}
+
+# Solo borra los que llevan nuestra marca. Un implementer.md de otro se queda.
+zcode_quitar_agentes() {
+  local dest_dir rol dest
+  dest_dir="$(zcode_agents_dir)"
+  [ -d "$dest_dir" ] || return 0
+  for rol in $ZCODE_AGENT_ROLES; do
+    dest="$dest_dir/$rol.md"
+    [ -f "$dest" ] || continue
+    if zcode_agente_tiene_marca "$dest"; then
+      zcode_archivar_agente "$dest" || {
+        decir "[summonaikit] instalador: no se pudo respaldar $dest antes de quitarlo"; exit 5; }
+      rm -f "$dest" || {
+        decir "[summonaikit] instalador: no se pudo borrar $dest"; exit 5; }
+      decir "[summonaikit] AGENTE ZCODE QUITADO: $rol"
+    else
+      decir "[summonaikit] AGENTE ZCODE DESCONOCIDO: $rol — no se quito."
+      decir "              destino: $dest"
+    fi
+  done
 }
 
 # Idempotente: para cada fase, si ya existe la entrada canonica (type command +
@@ -193,8 +362,13 @@ zcode_instalar() {
     decir '              Falta: PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY" en '"$DEST"
     decir "              No se cablea un dest que solo menciona HOST."; exit 2; fi
 
+  # bash.exe ANTES de escribir agentes (hallazgo 3): si no hay bash no
+  # quedan perfiles huerfanos con el hook sin registrar.
   bash_win="$(zcode_bash_win)" || {
     decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command."; exit 2; }
+  # Task 5.6: perfiles ANTES del append al config. Si faltan las plantillas
+  # no se cablea un host que no puede satisfacer implementer→verifier→reviewer.
+  zcode_instalar_agentes
   canon="$(zcode_harness_cmd "$bash_win")"
 
   uc_dir="$(dirname "$user_config")"
@@ -292,6 +466,9 @@ zcode_quitar() {
   decir "[summonaikit] QUITADO: entradas 5.4 del user-config de zcode."
   decir "              config:  $user_config"
   decir "              backup:  $bak"
+  # Task 5.6: despues del config, para que un fallo al borrar agentes no
+  # deje el harness registrado sin poder deshacer el cableado.
+  zcode_quitar_agentes
 }
 
 # ------------------------------------------------------------------ la fuente
@@ -412,7 +589,9 @@ else
 fi
 
 # Task 5.4: --host zcode termina aca. Append-only al user-config de zcode; NO
-# toca DEST (el archivo se instala antes, sin --host). Toda la maquinaria de
+# toca DEST (el archivo se instala antes, sin --host). Task 5.6: ademas
+# instala/quita los perfiles en ~/.zcode/agents (no es DEST; DEST sigue
+# siendo una sola copia en ~/.claude/hooks). Toda la maquinaria de
 # escritura atomica de DEST que sigue es del flujo Claude y no aplica.
 if [ "$HOST" = "zcode" ]; then
   if [ "$QUITAR_ZCODE" -eq 1 ]; then
