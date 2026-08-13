@@ -1302,11 +1302,34 @@ Staging por `<repo>/.zcode/config.json` no aplica (override ignorado,
 Baseline regrabada contra el hook post-G2-skip-ES (contrato UPS nombra
 `no corri`).
 
+### Ampliaciones de host aprobadas — Phases 6 y 7
+
+El contrato de producto se amplía de una fuente compartida por Claude/zcode a
+dos hosts adicionales, sin prometer que ya estén operativos:
+
+- **Phase 6 — Codex CLI 0.147.0:** adopta la copia estructural existente bajo
+  `~/.codex/hooks/`, mantiene wrapper y `hooks.json` ajenos intactos, aísla el
+  estado como `state/codex/` y sólo prende la ceremonia si la captura real 6.1
+  demuestra que el rol llega. El contrato de salida se decide con 6.2.
+- **Phase 7 — Grok Build 1.0.3:** instala una copia propia y un JSON propio bajo
+  `~/.grok/hooks/`, conserva `compat.claude.hooks = false`, aísla el estado como
+  `state/grok/` y adapta el envelope camel sólo según los payloads reales 7.1.
+  La ceremonia y las formas de bloqueo dependen de 7.1/7.2; si no se pueden
+  medir, el host no se publica como gate funcional.
+
+Las mediciones 7.1/7.2 son independientes de Phase 6. Las costuras compartidas
+se serializan: 7.3 después de 6.4, 7.5 después de 6.5 y 7.6 después de 6.6. El
+orden final de identidad es `grok > codex > zcode > claude > other`. Hasta que
+los turnos vivos de 6.6/7.6 cierren, Codex y Grok son **alcance aprobado**, no
+capacidad observada; `not_observed != absent` sigue aplicando.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
-- **No se adoptan los otros 3 perfiles** en este alcance. `.codex` es una
-  variante distinta con parches de otro origen. La divergencia queda declarada.
+- **No se adoptan `.cursor` ni `.agents`** en este alcance. `.codex` se reabre de
+  forma explícita en Phase 6 y Grok (`~/.grok`) entra como host distinto en
+  Phase 7; ninguna de esas ampliaciones autoriza a tocar los dos perfiles que
+  siguen fuera.
 - **No se persigue que el gate sea un control de seguridad.** Es advisory: aun
   corregidos A1 y A2, quien controla el texto del turno puede influirlo. Se
   documenta; no se promete lo contrario.
