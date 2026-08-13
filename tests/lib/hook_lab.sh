@@ -270,6 +270,13 @@ lab_payload_stop() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
 }
 
+# Task 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no
+# hook_event_name (5.1 midio ambos; 5.2 midio camel-only). Para probar que el
+# hook detecta PHASE=stop igual (sin caer a "tool" y perder el stop_gate).
+lab_payload_stop_camel() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hookEventName":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
+}
+
 # Un Stop cuya session_crons trae su PROPIO session_id (anidado, depth>1), distinto
 # del de primer nivel. Caso de regresion para la proteccion depth==1 de
 # json_top_level_string (Task 3.4 / A4, CORRECCION 2): una vuelta al lector greedy

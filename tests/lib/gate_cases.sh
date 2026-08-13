@@ -570,7 +570,7 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -665,6 +665,58 @@ caso_g3_target_por_claudecode_fallback() {
   _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
+# ===================== Task 5.4 — TARGET/budget/PHASE para el segundo host ====
+
+# G3: ZCODE_* es la senal del segundo host. TARGET resuelve a "claude" por ese
+# fallback (no por CLAUDECODE, que zcode no setea). Mismo truco de LAB_ESTADO_PATH
+# que el fallback CLAUDECODE, pero el seed cae en state/zcode/.
+caso_g3_target_por_zcode_fallback() {
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/zcode/|')"
+  lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
+  LAB_ESTADO_PATH="$_ep_backup"
+  LAB_ZCODE_SESSION_ID="sess_lab"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "exit code (ZCODE_* => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
+  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+}
+
+# G5: en zcode continue:false+exit 0 es ignorado (5.2). El corte por presupuesto
+# depende del exit 2 que esta task anade al budget. Sin ZCODE_* sigue exit 0
+# (regresion Claude = caso_g5_presupuesto_agotado).
+caso_g5_presupuesto_zcode_exit2() {
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/zcode/|')"
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  LAB_ESTADO_PATH="$_ep_backup"
+  LAB_ZCODE_SESSION_ID="sess_lab"
+  lab_run stop auto "$(lab_payload_stop "$_TEXTO_LLANO")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "exit code (zcode budget => exit 2)" "$LAB_RC" "2"
+  _no_contiene "stdout (continue:false no se emite en zcode)" "$LAB_OUT" '"continue":false'
+  _contiene "stderr" "$LAB_ERR" 'REVISION BUDGET EXHAUSTED'
+}
+
+# G4: un Stop de zcode trae SOLO hookEventName (camel). Sin leer camel, PHASE cae
+# a "tool" y stop_gate no corre (el Stop no bloquea). Usa CLAUDECODE=1 para aislar
+# el cambio PHASE del cambio TARGET.
+caso_g4_stop_camel_solo_bloquea() {
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/claude/|')"
+  lab_sembrar 123456 0 1 1 ""
+  LAB_ESTADO_PATH="$_ep_backup"
+  LAB_CLAUDECODE=1
+  # fase=auto (NO se pasa SUMMONAIKIT_HOOK_PHASE): el hook tiene que detectar
+  # PHASE del payload. Es justamente lo que este caso prueba — un Stop camel-only
+  # debe resolver PHASE=stop leyendo hookEventName. Con `lab_run stop auto` el env
+  # le daria la fase y el lector camel nunca se ejercitaria (leccion de 5.4).
+  lab_run auto auto "$(lab_payload_stop_camel "$_RECIBO_VINETAS")"
+  LAB_CLAUDECODE=""
+  _igual "exit code (Stop camel-only => PHASE=stop => gate corre)" "$LAB_RC" "2"
+  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+}
+
 # DEFECTO A1 — cerrado por la Task 3.1. Los dos casos que siguen son las dos
 # mitades del vector medido en el escenario 12 de la linea base, y hasta la 3.1
 # los dos estaban en ROJO contra el hook vivo.
@@ -730,7 +782,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -929,7 +981,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado"
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide

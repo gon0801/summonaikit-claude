@@ -262,6 +262,208 @@ out="$(bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" 2
 printf '%s' "$out" | grep -qi 'REGISTRO' \
   || malo "no verifico el registro tras instalar: $out"
 
+# ============================================================================
+# Task 5.4 — --host zcode: append-only al user-config de zcode (no toca DEST)
+# ============================================================================
+# La segunda forma de registro (hooks.events.*) vive en ~/.zcode/cli/config.json.
+# --host zcode appendea las 3 fases ahi; NO instala el archivo (va antes, sin
+# --host). Preflight: config JSON, enabled==true estricto, DEST NUESTRO_IDENTICO
+# + linea de codigo 5.3. --quitar-zcode saca solo las entradas 5.4 (nivel entrada,
+# r2.2) sin ese preflight (r3.3).
+
+n_cfg=0
+zcode_cfg=''
+nuevo_zcode_cfg() {
+  n_cfg=$((n_cfg + 1))
+  local c="$tmp/zcode-cfg-$n_cfg"
+  mkdir -p "$c"
+  zcode_cfg="$c/config.json"
+  # config minimo con enabled:true + vecinos (SessionStart dummy, Stop tokentracker)
+  cat > "$zcode_cfg" <<'JSON'
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "SessionStart": [
+        { "hooks": [ { "type": "command", "command": "echo arranque-dummy" } ] }
+      ],
+      "Stop": [
+        { "hooks": [ { "type": "command", "command": "echo tokentracker-dummy" } ] }
+      ]
+    }
+  }
+}
+JSON
+}
+# DEST listo = copia identica de la fuente (NUESTRO_IDENTICO + lleva la linea 5.3).
+dest_listo() { nuevo_destino; cp "$fuente" "$dest"; }
+
+# --- B3.1) appendea 3 fases, sin matcher UPS/Stop, PTU cubre Task|Agent; no toca DEST
+caso "zcode: --host zcode appendea 3 fases y NO toca DEST"
+dest_listo; nuevo_zcode_cfg
+dest_ck="$(cksum < "$dest")"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ "$dest_ck" = "$(cksum < "$dest")" ] || malo "--host zcode no debe tocar DEST (cksum cambio)"
+python - "$zcode_cfg" <<'PY' || malo "estructura appendeada distinta de la esperada"
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+ev = d["hooks"]["events"]
+def canon(fase, matcher_esperado):
+    for g in ev.get(fase, []):
+        hs = g.get("hooks", [])
+        if len(hs) == 1 and hs[0].get("type") == "command" and hs[0].get("timeout") == 15 \
+           and "saikit-harness-id 5.4" in hs[0].get("command", ""):
+            if matcher_esperado is None:
+                if "matcher" not in g: return True
+            elif g.get("matcher") == matcher_esperado:
+                return True
+    return False
+assert canon("UserPromptSubmit", None), "UPS sin matcher / type command / timeout 15"
+assert canon("PostToolUse", "Bash|Edit|Write|Read|apply_patch|Task|Agent"), "PTU matcher"
+assert canon("Stop", None), "Stop sin matcher"
+assert any("arranque-dummy" in h.get("command","") for g in ev.get("SessionStart",[]) for h in g.get("hooks",[])), "vecino SessionStart borrado"
+PY
+
+# --- B3.2) idempotente + repara malformada
+caso "zcode: segunda vez no duplica (idempotencia por entrada canonica)"
+dest_listo; nuevo_zcode_cfg
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+antes=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+despues=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
+[ "$antes" = "$despues" ] || malo "segunda vez duplico ($antes -> $despues)"
+
+caso "zcode: una entrada 5.4 malformada se repara (r2.3/r3.2: command canonico exacto)"
+dest_listo; nuevo_zcode_cfg
+python - "$zcode_cfg" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding='utf-8'))
+d["hooks"]["events"].setdefault("UserPromptSubmit", []).append(
+  {"hooks": [{"type": "process", "command": 'echo bash.exe DEST --saikit-harness-id 5.4', "timeout": 500}]})
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 reparando, dio $rc: $out"
+python - "$zcode_cfg" <<'PY' || malo "la malformada (type process/timeout 500) no se reparo"
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+for g in d["hooks"]["events"]["UserPromptSubmit"]:
+    for h in g.get("hooks", []):
+        if "saikit-harness-id 5.4" in h.get("command", ""):
+            assert h["type"] == "command" and h["timeout"] == 15, f"sigue malformada: {h}"
+PY
+
+# --- B3.3) parcial (falta Stop) => completa sin tocar las otras
+caso "zcode: parcial (falta Stop) => re-anade solo Stop"
+dest_listo; nuevo_zcode_cfg
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+python - "$zcode_cfg" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["events"]["Stop"]
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+n=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
+[ "$n" = "3" ] || malo "deben quedar 3 entradas 5.4, hay $n"
+
+# --- B3.4) --dest bajo ~/.zcode => exit 2 (una sola copia, hallazgo 6)
+caso "zcode: --dest bajo ~/.zcode => exit 2 (con y sin --host)"
+mkdir -p "$tmp/fake-zc-home/.zcode/hooks"
+bad_dest="$tmp/fake-zc-home/.zcode/hooks/summonaikit-harness.sh"
+out="$(HOME="$tmp/fake-zc-home" bash "$tool" --dest "$bad_dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--dest bajo .zcode (sin --host) debe salir 2, dio $rc"
+dest_listo
+out="$(HOME="$tmp/fake-zc-home" bash "$tool" --host zcode --dest "$bad_dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--dest bajo .zcode (con --host) debe salir 2, dio $rc"
+
+# --- B3.5) enabled != true => exit 2 y config intacto
+for val in 'false' '"yes"' '1'; do
+  caso "zcode: enabled=$val => exit 2 y config byte-igual"
+  dest_listo; nuevo_zcode_cfg
+  python - "$zcode_cfg" "$val" <<'PY'
+import json, sys
+p, val = sys.argv[1], sys.argv[2]
+d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = json.loads(val)
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+  cb="$(cksum < "$zcode_cfg")"
+  out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "enabled=$val debe salir 2, dio $rc"
+  [ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto con enabled=$val"
+done
+caso "zcode: enabled ausente => exit 2"
+dest_listo; nuevo_zcode_cfg
+python - "$zcode_cfg" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["enabled"]
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "enabled ausente debe salir 2, dio $rc"
+
+# --- B3.6) DEST sin controlar (NUESTRO_DISTINTO) => exit 2, config intacto
+caso "zcode: DEST NUESTRO_DISTINTO => exit 2 (preflight r1.3)"
+dest_listo; nuevo_zcode_cfg
+escribir_nuestro_viejo "$dest"   # marcador propio pero contenido != fuente
+cb="$(cksum < "$zcode_cfg")"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "DEST sin controlar debe salir 2, dio $rc: $out"
+[ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto"
+
+# --- B3.7) --quitar-zcode: nivel entrada (r2.2) + sin preflight (r3.3)
+caso "zcode: --quitar-zcode saca 5.4 y deja vecinos, incluido en el MISMO hooks[] (r2.2)"
+dest_listo; nuevo_zcode_cfg
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+python - "$zcode_cfg" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p, encoding='utf-8'))
+for g in d["hooks"]["events"]["UserPromptSubmit"]:
+    hs = g.get("hooks", [])
+    if any("saikit-harness-id 5.4" in h.get("command","") for h in hs):
+        hs.append({"type": "command", "command": "echo vecino-mismo-grupo"})
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --quitar-zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+n=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
+[ "$n" = "0" ] || malo "deben quedar 0 entradas 5.4, hay $n"
+grep -q 'vecino-mismo-grupo' "$zcode_cfg" || malo "r2.2: el vecino del mismo hooks[] fue borrado"
+grep -q 'arranque-dummy' "$zcode_cfg" || malo "vecino SessionStart borrado"
+grep -q 'tokentracker-dummy' "$zcode_cfg" || malo "vecino tokentracker borrado"
+
+caso "zcode: --quitar-zcode corre con enabled:false y DEST ausente (r3.3)"
+dest_listo; nuevo_zcode_cfg
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+python - "$zcode_cfg" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = False
+json.dump(d, open(p, 'w', encoding='utf-8'))
+PY
+rm -f "$dest"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --quitar-zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "quitar debe correr sin preflight (r3.3), dio $rc: $out"
+
+# --- B3.8) --host inventado => exit 2
+caso "zcode: --host inventado => exit 2"
+dest_listo
+out="$(bash "$tool" --host inventado --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--host inventado debe salir 2, dio $rc"
+
+# --- B3.9) regresion: sin --host no toca el user-config; --dest Claude legal OK
+caso "zcode: regresion — sin --host no toca el user-config de zcode"
+dest_listo; nuevo_zcode_cfg
+cb="$(cksum < "$zcode_cfg")"
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" >/dev/null 2>&1
+[ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "sin --host no debe tocar el user-config de zcode"
+
+caso "zcode: regresion — un --dest Claude legal sigue funcionando"
+nuevo_destino; cp "$fuente" "$dest"
+out="$(bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un --dest Claude legal debe seguir funcionando: $rc: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

@@ -1195,6 +1195,38 @@ la misma sesión — A4 en versión cross-host. Detalle y mecanismo en
   el lab es la evidencia y la task no se declara `cc:完了` (no se reescribe la
   DoD en silencio).
 
+### Medido 2026-08-12, Task 5.4 (registro e instalación en zcode)
+
+El harness queda registrado en las 3 fases del user-config de zcode
+(`~/.zcode/cli/config.json`, forma `hooks.events.<Evento>[]`). Es la SEGUNDA
+forma de registro que aprendieron los tools. Detalle en `docs/task-5.4-plan.md`.
+
+- **Registro:** `--host zcode` es append-only al user-config (no instala el
+  archivo, que va antes con la invocación sin `--host`). 3 fases, `type:command`,
+  `timeout:15`; **sin matcher** en `UserPromptSubmit`/`Stop` (el match value ahí
+  es el texto/preview, no el tool name — un matcher copiado de Claude no matchea);
+  `PostToolUse` con `Bash|Edit|Write|Read|apply_patch|Task|Agent` (el alias
+  `Task`↔`Agent` de 5.1 cubre). Idempotente por grupo propio bien formado;
+  `--quitar-zcode` saca solo las entradas `--saikit-harness-id 5.4` (nivel entrada,
+  no grupo). Preflight: `hooks.enabled==true` estricto y DEST `NUESTRO_IDENTICO` +
+  la línea de código del aislamiento 5.3.
+- **A10 cerrado en zcode:** `CLAUDECODE` no llega (zcode no lo setea). El hook
+  resuelve `TARGET=claude` por `ZCODE_SESSION_ID`/`ZCODE_PROJECT_DIR` (la señal
+  que 5.1 midió que el host sí inyecta). La ceremonia implementer→verifier→reviewer
+  corre en el segundo host. No se crea `TARGET=zcode` (5.2 declaró que alcanza).
+- **Budget zcode = exit 2:** `continue:false`+exit 0 es **ignorado** por zcode
+  (5.2). El corte por presupuesto depende de `exit 2`, que en Stop sí bloquea en
+  zcode. Solo se invierte el exit del budget para el segundo host; Claude intacto.
+- **PHASE lee camel:** un Stop realista de zcode trae **solo** `hookEventName`
+  (camel), no `hook_event_name`. Sin leer camel, `PHASE` cae a `tool` y
+  `stop_gate` no corre. El hook lee ambos (con `json_top_level_string`, no el sed
+  greedy).
+
+La medición **viva** (registro en el config real del operador + un turno
+`-saikit` en zcode que arme y deje estado bajo `state/zcode/`) queda pendiente del
+operador (STOP §D del plan). Mientras no exista, la task no se declara
+`cc:完了`.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
