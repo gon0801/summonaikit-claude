@@ -1,0 +1,6 @@
+zcode, G5 pasa (g5_ciclo_consumido_no_impide_cerrar). Un Stop que falla al
+principio (ciclo 0 -> 1, sin recibo ni secuencia) y despues el turno completo
+(implementer -> verifier -> reviewer, runner que pasa, recibo en vinetas). El
+segundo Stop cierra limpio (exit 0, estado borrado) aunque el ciclo ya es 1:
+gastar un ciclo no es motivo de bloqueo. El 21 no lo cubre (cierra en ciclo 0);
+el 23 no lo cubre (solo agota presupuesto).

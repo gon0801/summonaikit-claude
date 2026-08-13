@@ -1,0 +1,6 @@
+Escenario para probar que el arnes entiende el token `zcode` del filename.
+NO exporta SUMMONAIKIT_HOOK_TARGET: en su lugar el arnes pone
+ZCODE_SESSION_ID / ZCODE_PROJECT_DIR (la senal de host de zcode, medida 5.1),
+igual que en produccion. El estado del falso tiene que registrar
+target=<sin-target>, zcode_session=sess_golden_zcode y
+zcode_project=C:/dev/saikit-golden-zcode, y la linea estado_host: zcode.

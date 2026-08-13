@@ -1,0 +1,4 @@
+zcode, G1 arma + G6 inject. Un unico paso: UPS con -saikit. El hook arma y
+deja estado bajo state/zcode/<key>/<sess>/ (el HOST que el fallback de 5.4
+resuelve a partir de ZCODE_*). El stdout es la forma 1 medida (5.2):
+hookSpecificOutput.additionalContext con el contrato. estado_host: zcode.

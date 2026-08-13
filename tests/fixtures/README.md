@@ -15,9 +15,15 @@ escenarios/<NN>-<nombre>/
 ```
 
 - `phase`: `prompt` | `session` | `tool` | `stop` | `auto`
-- `target`: `claude` | `cursor` | `auto`
+- `target`: `claude` | `cursor` | `auto` | `zcode`
 - `auto` significa **no exportar** esa variable de entorno: el hook la deriva
   del payload. Es un camino real (ver escenario 15) y hay que poder ejercitarlo.
+- `zcode` **no** es un valor de `SUMMONAIKIT_HOOK_TARGET`. El arnés, en cambio,
+  exporta `ZCODE_SESSION_ID` / `ZCODE_PROJECT_DIR` (la señal de host de zcode,
+  medida Task 5.1), igual que en producción: así el golden ejercita el camino
+  vivo — `HOST=zcode` + `TARGET=claude` por el fallback de la Task 5.4 — y no un
+  `TARGET=zcode` inventado. Los escenarios 17–25 usan este token; los pasos que
+  dejan estado traen además una línea `estado_host: zcode`.
 - El token `__TRANSCRIPT__` dentro del payload se reemplaza por la ruta real del
   transcript del paso. Sin archivo companion apunta a uno inexistente — que
   también es un caso real: `transcript_path` ilegible ⇒ tail vacío.

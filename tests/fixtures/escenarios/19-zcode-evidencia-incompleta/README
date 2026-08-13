@@ -1,0 +1,4 @@
+zcode, G2 bloquea + G6 block. Armado, pero el turno no corrio runner ni delego
+subagentes y el Stop no trae recibo. El Stop bloquea: exit 2 + decision:block
+(la forma de bloqueo de Claude, que en zcode tambien corta, medido 5.2). Es el
+analogo del 07 en este target.

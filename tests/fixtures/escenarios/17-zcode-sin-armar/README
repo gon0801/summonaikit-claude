@@ -1,0 +1,5 @@
+zcode, G1 no-arma + G6 allow. Un prompt SIN -saikit, una herramienta y un
+Stop: el hook nunca arma (no hay sentinel), asi que los tres pasos salen exit 0
+sin crear estado y sin inyectar contrato. Es el control negativo del armado en
+este target: confirma que un turno pelado en zcode no dispara el gate.
+transcript_path apunta a un tmp inexistente (A6 fail-open en zcode, no reconfirmado aca).
