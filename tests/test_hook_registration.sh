@@ -276,7 +276,164 @@ JSON
 out="$(bash "$tool" --settings "$tmp/badregex.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'unknown' || malo "un matcher que no compila es unknown, no ausencia"
-printf '%s' "$out" | grep -qi "no cubre 'Agent'" && malo "no afirma ausencia con un matcher que no se pudo compilar"
+  printf '%s' "$out" | grep -qi "no cubre 'Agent'" && malo "no afirma ausencia con un matcher que no se pudo compilar"
+
+# ============================================================================
+# Task 5.4 — la SEGUNDA forma de registro: hooks.events.* (user-config de zcode)
+# ============================================================================
+# zcode registra en ~/.zcode/cli/config.json con `hooks.events.<Evento>[]`, con
+# `{matcher?, hooks:[{type,command,timeout}]}` por grupo. Tres diferencias con
+# Claude: (1) `hooks.enabled` debe ser true o los hooks de archivo NO corren;
+# (2) el matcher de UserPromptSubmit/Stop se prueba contra el texto/preview, no
+# contra el nombre de la herramienta -- tener matcher ahi es el error que la DoD
+# nombra; (3) el alias Task<->Agent hace que un matcher 'Task' SÍ cubra Agent.
+
+# Fixture zcode completo y sano: enabled true, 3 fases, UPS/Stop sin matcher,
+# PTU cubriendo Task|Agent. Este fixture es la baseline de "completo => silencio".
+escribir_zcode_completo() {
+  cat > "$1" <<'JSON'
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "UserPromptSubmit": [
+        { "hooks": [ { "type": "command", "command": "bash \"/c/claude/hooks/summonaikit-harness.sh\"", "timeout": 15 } ] }
+      ],
+      "PostToolUse": [
+        { "matcher": "Bash|Edit|Write|Read|apply_patch|Task|Agent",
+          "hooks": [ { "type": "command", "command": "bash \"/c/claude/hooks/summonaikit-harness.sh\"", "timeout": 15 } ] }
+      ],
+      "Stop": [
+        { "hooks": [ { "type": "command", "command": "bash \"/c/claude/hooks/summonaikit-harness.sh\"", "timeout": 15 } ] }
+      ]
+    }
+  }
+}
+JSON
+}
+
+# -------------------------------- A3.1) completo => silencio
+caso "zcode: registro completo (--zcode-config) => SILENCIO y exit 0"
+escribir_zcode_completo "$tmp/zc-completo.json"
+out="$(bash "$tool" --zcode-config "$tmp/zc-completo.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "esperaba silencio, imprimio: $out"
+
+# -------------------------------- A3.2) parcial (falta Stop)
+caso "zcode: sin Stop => INCOMPLETO y nombra solo Stop"
+python - "$tmp/zc-completo.json" "$tmp/zc-sin-stop.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+del d['hooks']['events']['Stop']
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-sin-stop.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'Stop' || malo "no nombra la fase Stop faltante"
+printf '%s' "$out" | grep -qi 'UserPromptSubmit' && malo "reporta UPS que SI esta registrada"
+
+# -------------------------------- A3.3) matcher en UPS/Stop => reporta fuerte
+caso "zcode: UPS con matcher => reporta fuerte (matcher ahi es el error de la DoD)"
+python - "$tmp/zc-completo.json" "$tmp/zc-ups-match.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['events']['UserPromptSubmit'][0]['matcher'] = 'Task'
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-ups-match.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'UserPromptSubmit' || malo "debe nombrar UserPromptSubmit"
+printf '%s' "$out" | grep -qi 'matcher' || malo "debe mencionar el matcher indebido: $out"
+
+caso "zcode: Stop con matcher vacio (\"\") => reporta fuerte igual (r2.4)"
+python - "$tmp/zc-completo.json" "$tmp/zc-stop-empty.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['events']['Stop'][0]['matcher'] = ''
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-stop-empty.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'Stop' || malo "debe nombrar Stop"
+printf '%s' "$out" | grep -qi 'matcher' || malo "la clave matcher presente (aun vacia) es error"
+
+# -------------------------------- A3.4) alias Task<->Agent
+caso "zcode: PTU matcher 'Task' solo => SILENCIO (el alias cubre Agent)"
+python - "$tmp/zc-completo.json" "$tmp/zc-task-only.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['events']['PostToolUse'][0]['matcher'] = 'Task'
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-task-only.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "Task cubre Agent via alias en zcode => silencio: $out"
+
+caso "zcode: PTU matcher 'Bash' solo => reporta (no cubre Task ni Agent)"
+python - "$tmp/zc-completo.json" "$tmp/zc-bash-only.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['events']['PostToolUse'][0]['matcher'] = 'Bash'
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-bash-only.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi "no cubre" || malo "Bash no cubre Agent ni Task => debe reportar: $out"
+
+# -------------------------------- A3.5) enabled estricto + ilegible
+caso "zcode: user-config ilegible => unknown (no INCOMPLETO)"
+printf '{ "hooks": { roto\n' > "$tmp/zc-roto.json"
+out="$(bash "$tool" --zcode-config "$tmp/zc-roto.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "ilegible => unknown"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "ilegible no debe afirmarse como INCOMPLETO"
+
+caso "zcode: enabled=\"yes\" (string) => reporta fuerte (no es JSON true)"
+python - "$tmp/zc-completo.json" "$tmp/zc-yes.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['enabled'] = 'yes'
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-yes.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'enabled' || malo "debe avisar que enabled no es true: $out"
+
+caso "zcode: enabled=1 (numero) => reporta fuerte"
+python - "$tmp/zc-completo.json" "$tmp/zc-one.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+d['hooks']['enabled'] = 1
+json.dump(d, open(sys.argv[2], 'w', encoding='utf-8'))
+PY
+out="$(bash "$tool" --zcode-config "$tmp/zc-one.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'enabled' || malo "1 no es JSON true => debe avisar"
+
+# -------------------------------- A3.6) no se mezclan los modos
+caso "zcode: --zcode-config + --settings juntos => unknown (no se mezclan)"
+escribir_zcode_completo "$tmp/zc-mix.json"
+escribir_settings_completo "$tmp/cl-mix.json"
+out="$(bash "$tool" --zcode-config "$tmp/zc-mix.json" --settings "$tmp/cl-mix.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "mezclar flags => unknown: $out"
+
+caso "zcode: --zcode-config sin valor => unknown (fail-open, leccion 0.4)"
+out="$(timeout 5 bash "$tool" --zcode-config 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "el bucle de argumentos se colgo"
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "flag sin valor => unknown"
+
+# -------------------------------- A3.7) regresion: --settings NO interpreta hooks.events
+caso "zcode: regresion -- un config con FORMA zcode pasado como --settings => INCOMPLETO (no silencio)"
+escribir_zcode_completo "$tmp/zc-como-claude.json"
+out="$(bash "$tool" --settings "$tmp/zc-como-claude.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+# Modo Claude busca hooks.<fase> (no hooks.events): las 3 fases viven bajo events,
+# asi que Claude NO las ve => debe reportar faltantes, no callar. Sin esto, un
+# mutante que leyera hooks.events en modo Claude daria silencio falso.
+printf '%s' "$out" | grep -qi 'UserPromptSubmit' \
+  || malo "modo Claude no debe interpretar hooks.events como registro Claude: $out"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

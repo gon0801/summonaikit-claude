@@ -18,11 +18,18 @@
 # Uso:
 #   bash tools/check-hook-registration.sh
 #   bash tools/check-hook-registration.sh --settings <path> [--local-settings <path>]
+#   bash tools/check-hook-registration.sh --zcode-config <user-config>   (Task 5.4)
 set -u
 
 HOOK_NAME='summonaikit-harness.sh'
 SETTINGS="${HOME:-}/.claude/settings.json"
 LOCAL_SETTINGS=''
+# Task 5.4: la SEGUNDA forma de registro (hooks.events.*) vive en el user-config
+# de zcode y es mutuamente exclusiva con --settings. VIO_* detecta si el operador
+# paso uno, el otro o ambos (ambos => unknown, fail-open: corre en SessionStart).
+ZCODE_USER_CONFIG=''
+VIO_CLAUDE=0
+VIO_ZCODE=0
 
 reportar() { printf '%s\n' "$*"; }
 
@@ -36,28 +43,45 @@ reportar() { printf '%s\n' "$*"; }
 # exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings|--local-settings|--hook-name)
+    --settings|--local-settings|--hook-name|--zcode-config)
       if [ $# -lt 2 ]; then
         reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
         reportar "              No se afirma que el registro falte: no se pudo mirar."
         exit 0
       fi
       case "$1" in
-        --settings)       SETTINGS="$2" ;;
+        --settings)       SETTINGS="$2"; VIO_CLAUDE=1 ;;
         --local-settings) LOCAL_SETTINGS="$2" ;;
         --hook-name)      HOOK_NAME="$2" ;;
+        --zcode-config)   ZCODE_USER_CONFIG="$2"; VIO_ZCODE=1 ;;
       esac
       shift 2
       ;;
-    -h|--help)        sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help)        sed -n '2,22p' "$0"; exit 0 ;;
     *)                shift ;;
   esac
 done
 
+# Task 5.4: --zcode-config y --settings son mutuamente excluyentes (cada host
+# registra en su propio archivo). Mezclarlos no tiene sentido y leer la forma
+# equivocada daria silencio o INCOMPLETO falsos. Fail-open: unknown, exit 0.
+if [ "$VIO_CLAUDE" -gt 0 ] && [ "$VIO_ZCODE" -gt 0 ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --zcode-config y --settings son mutuamente excluyentes."
+  reportar "              Cada host registra en su propio archivo; no se verifico nada."
+  reportar "              No se afirma que el registro falte: no se pudo mirar."
+  exit 0
+fi
+MODO="claude"
+if [ "$VIO_ZCODE" -gt 0 ]; then
+  MODO="zcode"
+  SETTINGS="$ZCODE_USER_CONFIG"
+  LOCAL_SETTINGS=''
+fi
+
 # El local por defecto es HERMANO del settings dado, no el del HOME real: si no,
 # apuntar `--settings` a un fixture igual leeria el settings.local.json de
-# verdad (Core Rule 4).
-if [ -z "$LOCAL_SETTINGS" ]; then
+# verdad (Core Rule 4). En modo zcode no hay local (un solo user-config).
+if [ "$MODO" = "claude" ] && [ -z "$LOCAL_SETTINGS" ]; then
   LOCAL_SETTINGS="$(dirname "$SETTINGS")/settings.local.json"
 fi
 
@@ -72,10 +96,11 @@ if [ -z "$python_bin" ]; then
   exit 0
 fi
 
-resultado="$("$python_bin" - "$SETTINGS" "$LOCAL_SETTINGS" "$HOOK_NAME" <<'PY' 2>/dev/null
+resultado="$("$python_bin" - "$SETTINGS" "$LOCAL_SETTINGS" "$HOOK_NAME" "$MODO" <<'PY' 2>/dev/null
 import json, re, shlex, sys
 
 settings, local, hook = sys.argv[1], sys.argv[2], sys.argv[3]
+modo = sys.argv[4] if len(sys.argv) > 4 else "claude"
 
 # Nombrar el hook no es ejecutarlo: `echo summonaikit-harness.sh` contaba como
 # registro y el verificador callaba aunque el gate no corriera en ninguna fase
@@ -125,20 +150,33 @@ ESPERADAS = ["UserPromptSubmit", "PostToolUse", "Stop"]
 # el gate y su rol no se registra, aunque haya corrido. El verificador REPORTA
 # si el matcher no cubre la herramienta de delegacion (`Agent`); no edita el
 # registro (la via de arreglarlo es settings.json, fuera de este tool).
-def _matcher_cubre(m):
+def _matcher_cubre(m, modo):
     # PostToolUse sin matcher o "*" => pega a todo (cubre Agent). Cualquier otra
     # cosa se prueba como regex del host contra el literal "Agent". Si el regex
     # no compila => (no cubre, no compila) y arriba se vuelve `unknown`.
     if m is None or m == "" or m == "*":
         return (True, True)
     try:
-        return (re.compile(m).search("Agent") is not None, True)
+        rx = re.compile(m)
     except re.error:
         return (False, False)
+    if rx.search("Agent") is not None:
+        return (True, True)
+    # Task 5.4: en zcode el alias Task<->Agent (medido 5.1) hace que un matcher
+    # 'Task' SI vea los eventos de la herramienta Agent. Asi 'Task' solo cubre y
+    # no es alarma falsa. En Claude NO: ahi el matcher literal no tiene alias.
+    if modo == "zcode" and rx.search("Task") is not None:
+        return (True, True)
+    return (False, True)
 
 registradas, leidos, ilegibles = set(), [], []
 # (matcher_str, cubre, compila) por cada grupo de PostToolUse que ejecuta el hook.
 ptu_matchers = []
+# Task 5.4 (modo zcode): enabled != JSON true => los hooks de archivo no corren;
+# y un matcher en el grupo de UserPromptSubmit/Stop es error (el match value ahi
+# es texto/preview, no tool name). Solo se observan si el archivo se leyo.
+enabled_mal = False
+fases_con_matcher = []
 
 for path in (settings, local):
     try:
@@ -150,10 +188,20 @@ for path in (settings, local):
         ilegibles.append(path)
         continue
     leidos.append(path)
-    hooks = data.get("hooks")
-    if not isinstance(hooks, dict):
+    hooks_root = data.get("hooks")
+    if not isinstance(hooks_root, dict):
         continue
-    for fase, grupos in hooks.items():
+    if modo == "zcode":
+        # hooks.enabled debe ser JSON true o los hooks de archivo no corren
+        # (guia del CLI). Solo se afirma si el archivo se leyo: ilegible ya se
+        # fue por la rama de arriba y arriba se reporta unknown, no esto.
+        if hooks_root.get("enabled") is not True:
+            enabled_mal = True
+        events = hooks_root.get("events")
+        iterable = events.items() if isinstance(events, dict) else []
+    else:
+        iterable = hooks_root.items()
+    for fase, grupos in iterable:
         if not isinstance(grupos, list):
             continue
         for grupo in grupos:
@@ -172,8 +220,14 @@ for path in (settings, local):
                 m = grupo.get("matcher", "")
                 if m is None:
                     m = ""
-                cubre, compila = _matcher_cubre(m)
+                cubre, compila = _matcher_cubre(m, modo)
                 ptu_matchers.append((m, cubre, compila))
+            # Task 5.4: en zcode, UPS/Stop con la clave 'matcher' presente (aun
+            # vacia, r2.4) es el error que la DoD nombra: el match value ahi es
+            # el texto del prompt / la preview, no el nombre de la herramienta.
+            if entrada_ejecuta and modo == "zcode" and fase in ("UserPromptSubmit", "Stop"):
+                if "matcher" in grupo:
+                    fases_con_matcher.append(fase)
 
 faltantes = [f for f in ESPERADAS if f not in registradas]
 
@@ -196,6 +250,8 @@ print(json.dumps({
     "ilegibles": ilegibles,
     "matcher_estado": matcher_estado,
     "matchers_obs": [m for m, _, _ in ptu_matchers],
+    "enabled_mal": enabled_mal,
+    "fases_con_matcher": sorted(set(fases_con_matcher)),
 }))
 PY
 )"
@@ -211,6 +267,8 @@ leidos="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(le
 ilegibles="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin)["ilegibles"]))' 2>/dev/null)"
 matcher_estado="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("matcher_estado","sin-ptu"))' 2>/dev/null)"
 matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("matchers_obs",[])))' 2>/dev/null)"
+enabled_mal="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("enabled_mal",False))' 2>/dev/null)"
+fases_con_matcher="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fases_con_matcher",[])))' 2>/dev/null)"
 
 # Reporta el hueco del matcher de Agent cuando PostToolUse esta registrado pero
 # su matcher no cubre 'Agent' (Task 3.7 / CORRECCION 2): un subagente read-only
@@ -231,6 +289,20 @@ reportar_matcher() {
   fi
 }
 
+# Task 5.4 (modo zcode): los hooks de archivo no corren sin hooks.enabled:true.
+reportar_enabled_zcode() {
+  reportar "[summonaikit] REGISTRO DEL HOOK: hooks.enabled no es true en el user-config de zcode."
+  reportar "              Los hooks de archivo no corren sin enabled:true (guia del CLI, medido)."
+}
+
+# Task 5.4 (modo zcode): matcher en el grupo de UserPromptSubmit/Stop es error.
+reportar_matcher_ups_stop() {
+  reportar "[summonaikit] REGISTRO DEL HOOK: $fases_con_matcher lleva 'matcher' en el user-config de zcode."
+  reportar "              El matcher de UserPromptSubmit/Stop se prueba contra el TEXTO del prompt"
+  reportar "              / la preview de la respuesta, no contra el nombre de la herramienta:"
+  reportar "              un matcher ahi nunca matchea como en Claude. Sacarlo (DoD 5.4)."
+}
+
 # Ningun archivo legible: no se observo nada. No es lo mismo que estar ausente.
 if [ "${leidos:-0}" = "0" ]; then
   reportar "[summonaikit] REGISTRO DEL HOOK: unknown — ningun settings legible."
@@ -246,6 +318,8 @@ if [ -z "$faltantes" ]; then
   # no cubre Agent) o un settings ilegible. Un aviso en cada arranque sin nada
   # que decir es como se entrena a un operador a ignorarlos.
   [ -n "$ilegibles" ] && reportar "[summonaikit] REGISTRO DEL HOOK: completo, pero hay settings ilegible(s) (unknown): $ilegibles"
+  [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
+  [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
   exit 0
 fi
@@ -269,5 +343,7 @@ fi
 reportar "[summonaikit] REGISTRO DEL HOOK INCOMPLETO — el gate NO corre en: $faltantes"
 reportar "              El archivo del hook puede estar perfecto: esto es el registro, no el contenido."
 reportar "              revisar: $SETTINGS"
+[ "$enabled_mal" = "True" ] && reportar_enabled_zcode
+[ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
 reportar_matcher
 exit 0
