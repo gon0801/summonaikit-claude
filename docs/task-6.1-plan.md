@@ -285,13 +285,16 @@ out="$(bash "$tool" --instalar "$ajeno" --host codex 2>&1)"; rc=$?
   || malo "PISO el hook del usuario"
 
 caso "la fase entra en el nombre aunque el payload no traiga hook_event_name"
-( cd "$cdx" && SUMMONAIKIT_HOOK_PHASE=stop printf '{"session_id":"x"}' | bash "$shim" )
+# El env va sobre el `bash "$shim"`, NO sobre el printf: en un pipeline el
+# prefijo VAR=val solo alcanza al comando que precede. Ponerlo del lado del
+# printf deja al shim sin la fase — medido: el archivo salia 'sin-fase'.
+( cd "$cdx" && printf '{"session_id":"x"}' | SUMMONAIKIT_HOOK_PHASE=stop bash "$shim" )
 ls "$cdx"/capturas/*stop*.json >/dev/null 2>&1 \
   || malo "sin hook_event_name las 3 fases colisionarian en 'sin-evento': el --tag es lo que las separa"
 
 caso "el env dump contesta la pregunta del TARGET que pide la DoD"
-( cd "$cdx" && SUMMONAIKIT_HOOK_PHASE=prompt SUMMONAIKIT_HOOK_TARGET=codex \
-    printf '{"hook_event_name":"UserPromptSubmit"}' | bash "$shim" )
+( cd "$cdx" && printf '{"hook_event_name":"UserPromptSubmit"}' \
+    | SUMMONAIKIT_HOOK_PHASE=prompt SUMMONAIKIT_HOOK_TARGET=codex bash "$shim" )
 grep -rq 'SUMMONAIKIT_HOOK_TARGET=codex' "$cdx"/capturas/ \
   || malo "el env dump no trae el TARGET; sin eso la DoD no se puede contestar"
 
@@ -385,6 +388,10 @@ codex_instalar() {
     printf '# Shim de captura (Task 6.1). Lo invoca ~/.codex/hooks/summonaikit-harness.ps1,\n'
     printf '# que prefiere esta ruta sobre la del perfil cuando el cwd es un repo git.\n'
     printf '# Fail-open: cualquier problema sale 0 y calla, para no romper el turno.\n'
+    printf '# El fail-open del modo hook NO cubre a este shim: si el repo que lo instalo\n'
+    printf '# se mueve o se borra, `exec` moriria con 127 en CADA fase. El guard de\n'
+    printf '# abajo es lo que hace fail-open al shim POR SI MISMO (hallazgo H-3).\n'
+    printf '[ -f "%s" ] || exit 0\n' "$cap"
     printf 'exec bash "%s" \\\n' "$cap"
     printf '  --tag "${SUMMONAIKIT_HOOK_PHASE:-sin-fase}" \\\n'
     printf '  --capture-dir "%s/capturas" \\\n' "$abs"

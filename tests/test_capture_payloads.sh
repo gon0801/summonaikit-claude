@@ -440,11 +440,21 @@ out="$(bash "$tool" --instalar "$h1" --host '' 2>&1)"; rc=$?
 caso "codex: git ausente se reporta como tal, no como 'no es repo git'"
 sg="$SANDBOX/codex-git-ausente"
 rm -rf "$sg"; mkdir -p "$sg" && ( cd "$sg" && git init -q )   # SI es repo git
-out="$(PATH=/usr/bin bash "$tool" --instalar "$sg" --host codex 2>&1)"; rc=$?
-[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: $out"
-printf '%s' "$out" | grep -qiE 'no encontr|no esta instalado|no se pudo' \
-  || malo "acusa al directorio cuando el problema es que git no esta: $out"
-[ ! -e "$sg/.codex" ] || malo "rechazo pero dejo el arbol puesto"
+# Portabilidad (hallazgo de CodeRabbit en el PR#10): `PATH=/usr/bin` esconde
+# git SOLO donde git vive en otro lado -- en MSYS esta en /mingw64/bin. En una
+# distro Linux tipica git ES /usr/bin/git, y ahi el escenario no se puede
+# montar: `command -v git` acierta, el install sale 0, y el caso fallaria por
+# el motivo equivocado. Eso es "no se pudo medir", no un fallo -- mismo
+# criterio que el caso de los enlaces simbolicos de mas arriba (Core Rule 2).
+if PATH=/usr/bin command -v git >/dev/null 2>&1; then
+  echo "    unknown: git resuelve dentro de /usr/bin en esta maquina; el caso no se pudo montar"
+else
+  out="$(PATH=/usr/bin bash "$tool" --instalar "$sg" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: $out"
+  printf '%s' "$out" | grep -qiE 'no encontr|no esta instalado|no se pudo' \
+    || malo "acusa al directorio cuando el problema es que git no esta: $out"
+  [ ! -e "$sg/.codex" ] || malo "rechazo pero dejo el arbol puesto"
+fi
 
 # H-3: el shim hace `exec bash <ruta absoluta al capturador>`. Si ese repo se
 # mueve o se borra con el shim puesto, el shim muere con exit != 0 en CADA fase

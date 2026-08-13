@@ -53,9 +53,17 @@ Sí, por la vía que importa. El matcher registrado es
 y los eventos internos del subagente llegan como **`Bash`**, que está adentro.
 **No hay que tocar el registro del operador para que el rol llegue.**
 
+**Lo que esta respuesta NO cubre, y hay que leerlo pegado a lo anterior.** La
+pregunta de la DoD, literal, es si el matcher atrapa *la delegación*. La
+respuesta de arriba se acota a **la vía de los eventos internos**. Sobre el
+**despacho** de `spawn_agent` la captura no puede afirmar nada: se observaron
+**0** eventos y no se distinguió "no emite" de "lo filtra el matcher". Queda
+`unknown`. Alcanza para la ceremonia —que es lo único que esta fase necesita—
+y **no** para nada que dependa del evento de despacho.
+
 ### 3. `transcript_path` cae adentro de `~/.codex/sessions/`
 
-**Sí**, en los 4 payloads de la ronda 1 y los 7 de la ronda 2:
+**Sí**, en los 7 payloads de la ronda 1 y los 7 de la ronda 2:
 
 ```
 C:\Users\ehven\.codex\sessions\2026\08\13\rollout-2026-08-13T10-01-23-019ffc12-…jsonl
@@ -149,7 +157,7 @@ rol no se registra. El gate sigue siendo **advisory**.
 | Tarea | Qué cambia con esto |
 |---|---|
 | 6.4 | **D3 se prende**: `case "$TARGET" in claude\|codex)`. D2 se confirma con evidencia medida, no supuesta |
-| 6.5 | **No hay que tocar `~/.codex/hooks.json`**: el matcher ya cubre la vía por la que llega el rol |
+| 6.5 | El matcher ya cubre la vía por la que llega el rol, así que **para la ceremonia** no hay que tocar `~/.codex/hooks.json`. **No** tomar eso como "el registro está completo": el evento de despacho de `spawn_agent` sigue `unknown` |
 | 6.6 | Los escenarios 26+ se construyen desde estos 11 payloads. `agent_type` es el campo que tiene que aparecer en el escenario de ceremonia |
 
 ## Los payloads

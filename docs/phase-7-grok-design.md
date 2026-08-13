@@ -461,8 +461,23 @@ medición pide otro set):
         "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
       }]
     }],
-    "PostToolUseFailure": [{ "matcher": "Bash|run_terminal_command", "hooks": [/* mismo */] }],
-    "SubagentStart": [{ "hooks": [/* mismo; matcher vacío = todos los tipos */] }],
+    "PostToolUseFailure": [{
+      "matcher": "Bash|run_terminal_command",
+      "hooks": [{
+        "type": "command",
+        "command": "<abs>/summonaikit-harness.sh",
+        "timeout": 30,
+        "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+      }]
+    }],
+    "SubagentStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "<abs>/summonaikit-harness.sh",
+        "timeout": 30,
+        "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+      }]
+    }],
     "Stop": [{
       "hooks": [{
         "type": "command",
@@ -475,9 +490,15 @@ medición pide otro set):
 }
 ```
 
-`Stop` timeout 600 s es el default de Grok para gates (*doc*); se pone
-explícito. Matcher en `UserPromptSubmit`/`Stop` no se pone: Grok lo ignora
-con warning (*doc*). `SubagentStop` no se registra: la ceremonia corre en
+**El bloque de arriba es JSON válido a propósito** (salvo el placeholder
+`<abs>`, que va adentro de un string): es la plantilla que la 7.5 va a
+consumir, y un comentario `/* … */` la volvería imparseable en el primer
+`jq`. Por eso las entradas se repiten enteras en vez de abreviarse.
+
+`SubagentStart` va **sin matcher** deliberadamente: vacío significa todos los
+tipos de subagente. `Stop` timeout 600 s es el default de Grok para gates
+(*doc*); se pone explícito. Matcher en `UserPromptSubmit`/`Stop` no se pone:
+Grok lo ignora con warning (*doc*). `SubagentStop` no se registra: la ceremonia corre en
 el lead (Stop del padre), no en el hijo. `SubagentStart` sí, porque es el
 canal limpio del rol.
 
