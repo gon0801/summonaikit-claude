@@ -126,7 +126,8 @@ lab_run() {
   lab_sid="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
   printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g; s|__SESSION_ID__|$lab_sid|g" > "$lab_entrada"
 
-  lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET -u CLAUDECODE
+  lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
+           -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
            HOME="$LAB/home" USERPROFILE="$LAB/home")
   [ "$lab_fase" != "auto" ]   && lab_cmd+=(SUMMONAIKIT_HOOK_PHASE="$lab_fase")
   [ "$lab_target" != "auto" ] && lab_cmd+=(SUMMONAIKIT_HOOK_TARGET="$lab_target")
@@ -136,6 +137,14 @@ lab_run() {
   # TARGET=claude en cualquier caso con target=auto y los tests no probarian lo
   # que creen. Expansion segura bajo set -u (CORRECCION 17 del plan).
   [ -n "${LAB_CLAUDECODE:-}" ] && lab_cmd+=(CLAUDECODE="$LAB_CLAUDECODE")
+  [ -n "${LAB_ZCODE_SESSION_ID:-}" ]  && lab_cmd+=(ZCODE_SESSION_ID="$LAB_ZCODE_SESSION_ID")
+  [ -n "${LAB_ZCODE_PROJECT_DIR:-}" ] && lab_cmd+=(ZCODE_PROJECT_DIR="$LAB_ZCODE_PROJECT_DIR")
+  # Task 5.3: ZCODE_SESSION_ID / ZCODE_PROJECT_DIR son la senal de host de zcode
+  # (medido Task 5.1: las inyecta el host, no el comando registrado). Mismo
+  # determinismo que CLAUDECODE: el lab las unsetea SIEMPRE y solo las repone el
+  # caso que las pide via LAB_ZCODE_*. Sin esto, si la suite corre DENTRO de
+  # zcode, el lado "Claude" (LAB_CLAUDECODE=1) hereda ZCODE_* del env padre y
+  # ambos hosts salen HOST=zcode (cross-review codex r1, hallazgo 1).
 
   ( cd "$LAB/proyecto" && "${lab_cmd[@]}" bash "$LAB/hooks/summonaikit-harness.sh" ) \
     < "$lab_entrada" > "$LAB/.out" 2> "$LAB/.err"
