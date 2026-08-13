@@ -7,6 +7,28 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-12 — PR #7 / Task 5.6 (merge `269802a`)
+
+- **Mergeado:** PR #7 `feat/5.6-zcode-agent-profiles` → master — Task 5.6:
+  `install-hook --host zcode` instala `implementer`/`verifier`/`reviewer` en
+  `~/.zcode/agents/` (tres estados, marca solo en frontmatter, bash.exe
+  antes de escribir, backup al quitar). Spec + `Plans.md` 5.6.
+- **¿Cambió el hook?** **No.** 5.6 tocó el instalador y las plantillas;
+  `hooks/summonaikit-harness.sh` intacto.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual
+  a la fuente.` (deploy no-op del hook).
+- **`install-hook.sh --host zcode`:** `REGISTRADO: harness en el user-config de
+  zcode (3 fases, id 5.4).` Perfiles vivos **IDENTICO** a `agents/*.md`
+  (NUESTRO_IDENTICO, sin reescribir). Backup del config:
+  `~/.zcode/cli/saikit-backups/config.json.zcode.20260812-231448.bak`.
+- **`check-hook-registration.sh --zcode-config`:** **silencio** (registro
+  completo).
+- **`check-hook-registration.sh` (Claude):** 3 fases OK. Advisory conocido de
+  A9 (matcher PostToolUse sin `Agent`).
+- **Vivo vs master:** cksum idéntico (`1507687064 69327`).
+- **Operador:** Gon. Los tres tipos ya están en `~/.zcode/agents/`. Hace falta
+  **sesión zcode nueva** para que Agent los liste (la pausada nació antes).
+
 ## 2026-08-12 — PR #2 / Task 5.1 (merge `2420162`)
 
 - **Mergeado:** PR #2 `feat/5.1-capture-payloads-zcode` → master — Task 5.1:
