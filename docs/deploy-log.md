@@ -7,6 +7,33 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-13 — PR #10 / Phase 6 + Phase 7 + Task 6.1 (merge `454b02a`)
+
+- **Mergeado:** PR #10 `docs/phase-6-codex-design` → master. Diseño de **Phase 6
+  (codex como tercer host)** con D1–D5, diseño de **Phase 7 (Grok Build TUI)**
+  con D1–D8, las 6 filas de Phase 6 en `Plans.md`, y **Task 6.1 medida y
+  cerrada** (`cc:完了`).
+- **¿Cambió el hook?** **No.** Todo el PR es medición, diseño y herramienta de
+  captura; `hooks/summonaikit-harness.sh` no se toca. Codex no se toca hasta
+  la 6.6.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual a
+  la fuente.` (deploy no-op, exit 0).
+- **`check-hook-registration.sh`:** exit 0. Repite el advisory conocido de A9
+  (el matcher de `PostToolUse` no cubre `Agent`), sin cambios respecto de los
+  deploys anteriores.
+- **Vivo vs master:** cksum idéntico (`2628234111 70227`), sha256
+  `ef9a66bf3a51ee5b…`.
+- **Lo que el PR mide, y no vale perder:** el rol del subagente **llega al gate
+  en Codex**, en `agent_type` de primer nivel, y `:927` ya lo lee sin cambios
+  ⇒ D3 se prende en la 6.4. `transcript_path` cae dentro de
+  `~/.codex/sessions/` ⇒ la contención de A6 funciona allá. El perfil de codex
+  del operador **no se tocó** en ninguna de las 3 corridas de captura (los 3
+  cksum idénticos antes y después).
+- **Revisión:** kimi (1 ronda, 5 hallazgos bajos) + **CodeRabbit (6 hallazgos,
+  4 Major, los 4 legítimos)**. Con codex no se pudo — su skill `harness-review`
+  secuestró el prompt; arreglado en `quality-kit` `138fe42`, medido.
+- **Operador:** Gon.
+
 ## 2026-08-13 — PR #9 / Task 5.5 (merge `b401fdd`)
 
 - **Mergeado:** PR #9 `feat/5.5-zcode-golden` → master — escenarios 17–25
