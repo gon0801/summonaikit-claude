@@ -7,6 +7,20 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-12 — PR #8 / G2 skip ES (merge `024e0ec`)
+
+- **Mergeado:** PR #8 `feat/g2-verify-skip-es` → master — `VERIFY_SKIP_RE`
+  acepta `no corri` / `no se corrio` / `sin tests` (el vivo zcode decía
+  "No corrí los candados" y el gate no lo leía). Cierra STOP vivo de
+  5.3 y 5.4 en `Plans.md`.
+- **¿Cambió el hook?** **Sí.** Skip de Verify + contrato UPS nombra las frases.
+- **`install-hook.sh`:** `YA AL DIA` (el vivo se había reparado antes del
+  merge; cksum idéntico `2628234111 70227`).
+- **`check-hook-registration.sh`:** 3 fases OK. Advisory A9 de siempre
+  (matcher PostToolUse sin `Agent`).
+- **Vivo vs master:** cksum idéntico (`2628234111 70227`).
+- **Operador:** Gon. El próximo `-saikit` (sesión nueva) ya usa este hook.
+
 ## 2026-08-12 — PR #7 / Task 5.6 (merge `269802a`)
 
 - **Mergeado:** PR #7 `feat/5.6-zcode-agent-profiles` → master — Task 5.6:
