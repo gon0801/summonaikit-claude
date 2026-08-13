@@ -81,6 +81,9 @@ G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolv
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
+G3|zcode_sin_target|el fallback ZCODE_* se anula y TARGET queda vacio en zcode (la secuencia no se exige)
+G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae a "tool" (stop_gate no corre)
+G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -249,6 +252,20 @@ mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
 mut_presupuesto_no_limpia() { sed '/rm -f.*RN_ORDER_PATH.*# A4-c4 presupuesto/d'; }
 
 mut_cursor_no_se_distingue() { sed 's/if \[ "\$TARGET" = "cursor" \]; then/if false; then/'; }
+
+# Task 5.4 — tres mutaciones, cada una acreditada a su caso. El patron
+# ${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-} aparece en 3 sitios (HOST, TARGET,
+# budget); cada sed acota con contexto unico para no tocar los otros dos.
+# zcode_sin_target: anula la CONDICION del bloque TARGET (lleva `[ -z "$TARGET" ] &&`
+# delante, que HOST/budget no tienen). Caso: caso_g3_target_por_zcode_fallback.
+mut_zcode_sin_target()      { sed 's/\[ -z "$TARGET" \] && \[ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" \]; then/[ -z "$TARGET" ] \&\& false; then/'; }
+# phase_sin_camel: anula la lectura de hookEventName. Caso: caso_g4_stop_camel_solo_bloquea
+# (un Stop camel-only debe llegar a stop_gate; sin camel cae a "tool" y no bloquea).
+mut_phase_sin_camel()       { sed 's/event="$(json_top_level_string hookEventName)"/event=""/'; }
+# budget_zcode_sigue_0: el exit 2 del budget en zcode vuelve a exit 0. Caso:
+# caso_g5_presupuesto_zcode_exit2. {n;} edita la linea DESPUES del comentario 5.4
+# del budget (donde vive el exit 2), sin tocar el exit 2 del gate_failure.
+mut_budget_zcode_sigue_0()  { sed '/saikit-5.4-zcode-budget/s/exit 2/exit 0/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

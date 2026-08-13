@@ -32,6 +32,15 @@ TARGET="$SUMMONAIKIT_HOOK_TARGET"
 # queda fuera de esta tarea. PHASE no necesita este fallback: ya lo tiene al
 # payload (hook_event_name, ver :1144).
 if [ -z "$TARGET" ] && [ "$CLAUDECODE" = "1" ]; then TARGET="claude"; fi
+# A10 en zcode (Task 5.4): CLAUDECODE no llega (zcode no lo setea), asi que la
+# secuencia nunca se exigia en el segundo host. zcode inyecta ZCODE_SESSION_ID /
+# ZCODE_PROJECT_DIR (medido 5.1); con esa senal TARGET resuelve a "claude" y la
+# ceremonia implementer->verifier->reviewer corre. No se crea TARGET=zcode: las
+# formas de salida medidas (5.2) son las mismas que en Claude. glm sigue por
+# CLAUDECODE=1 (exec claude) y no llega aca.
+if [ -z "$TARGET" ] && [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
+  TARGET="claude"
+fi
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
@@ -1032,6 +1041,14 @@ Stop now, report the failed gates, and ask the user before another retry."
   fi
 
   escaped="$(json_escape "$message")"
+  # 5.4: en zcode, continue:false+exit 0 es IGNORADO (medido 5.2). El corte por
+  # presupuesto depende de exit 2, que en Stop SI bloquea en zcode (5.2). Solo se
+  # invierte el exit del budget para el segundo host; Claude sigue intacto. El
+  # JSON de continue:false sobra en zcode (con exit 2 no se parsea): no se emite.
+  if [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
+    printf '%s\n' "$message" >&2
+    exit 2    # saikit-5.4-zcode-budget (mutacion: exit 2 -> exit 0)
+  fi
   printf '{"continue":false,"stopReason":"%s"}\n' "$escaped"
   printf '%s\n' "$message" >&2
   exit 0
@@ -1236,7 +1253,12 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
 }
 
 if [ -z "$PHASE" ]; then
-  event="$(json_string_field hook_event_name)"
+  # 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no
+  # hook_event_name (5.1 midio ambos; 5.2 midio camel-only). Sin leer camel,
+  # PHASE cae a "tool" y stop_gate no corre. json_top_level_string (no el sed
+  # greedy de json_string_field) por el mismo motivo que session_id (3.4).
+  event="$(json_top_level_string hook_event_name)"
+  [ -n "$event" ] || event="$(json_top_level_string hookEventName)"
   case "$event" in
     UserPromptSubmit|beforeSubmitPrompt) PHASE="prompt" ;;
     SessionStart|sessionStart) PHASE="session" ;;
