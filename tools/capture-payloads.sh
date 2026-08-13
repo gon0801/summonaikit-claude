@@ -44,6 +44,7 @@ modo=""
 destino=""
 host=""
 cap_id=""
+dest_id_arg=""
 only_cwd=""
 cap_dir=""
 tag=""
@@ -52,8 +53,21 @@ while [ $# -gt 0 ]; do
     --instalar) modo="instalar"; destino="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
     --cosechar) modo="cosechar"; destino="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
     --quitar)   modo="quitar";   destino="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
-    --host)     host="${2:-}";     [ $# -ge 2 ] && shift 2 || shift ;;
+    # H1 (hallazgo de CodeRabbit en el PR#2, abierto hasta 2026-08-13): con el
+    # flag al final `${2:-}` quedaba vacio y el `host="${host:-claude}"` de mas
+    # abajo lo convertia en 'claude'. Un typo en el flag NO fallaba: capturaba
+    # el host equivocado y se descubria con la captura vacia, o sea quemando una
+    # sesion con el operador adelante. Se exige `-n "$2"` ademas del conteo,
+    # porque `--host ""` volveria a caer en el mismo default.
+    --host)
+      { [ $# -ge 2 ] && [ -n "$2" ]; } || {
+        echo "capture-payloads: --host requiere un valor ('claude', 'zcode' o 'codex')" >&2
+        exit 2; }
+      host="$2"; shift 2 ;;
     --saikit-capture-id) cap_id="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
+    # H2: identificador del destino, para que el config compartido de zcode
+    # distinga instalaciones. El modo hook lo ignora, igual que --saikit-capture-id.
+    --saikit-dest) dest_id_arg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
     --only-cwd) only_cwd="${2:-}";  [ $# -ge 2 ] && shift 2 || shift ;;
     --capture-dir) cap_dir="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
     --tag)      tag="${2:-}";       [ $# -ge 2 ] && shift 2 || shift ;;
@@ -107,18 +121,26 @@ if [ -z "$modo" ]; then
     # Dump del entorno del hook: allowlist CERRADA, nunca prefijo ZCODE/CLAUDE_
     # (R2.1: ese prefijo volcaria ZCODE_API_KEY / *_SECRET / *_TOKEN). Se
     # agrega por NOMBRE si hace falta otra senal de host, no por prefijo.
-    env | grep -E '^(PWD|TERM|CLAUDECODE|SUMMONAIKIT|ZCODE_PROJECT_DIR|ZCODE_SESSION_ID|CLAUDE_PROJECT_DIR|CLAUDE_SESSION_ID)=' \
+    # Task 6.1: SUMMONAIKIT_HOOK_TARGET/PHASE van por NOMBRE. La entrada
+    # `SUMMONAIKIT` que habia solo matcheaba una variable llamada exactamente
+    # asi: el regex ancla el `=` inmediatamente despues, asi que
+    # SUMMONAIKIT_HOOK_TARGET NUNCA se capturaba. En zcode daba igual (ahi el
+    # TARGET no llega, A10); en codex es el dato que la DoD pide medir.
+    env | grep -E '^(PWD|TERM|CLAUDECODE|SUMMONAIKIT|SUMMONAIKIT_HOOK_TARGET|SUMMONAIKIT_HOOK_PHASE|ZCODE_PROJECT_DIR|ZCODE_SESSION_ID|CLAUDE_PROJECT_DIR|CLAUDE_SESSION_ID)=' \
       > "$salida/$base.env" 2>/dev/null || true
   } >/dev/null 2>&1
   exit 0
 fi
 
 # -------------------------------------------------- validar host y destino
+# Se conserva el default para el caso "no se paso el flag"; el flag SIN valor ya
+# murio arriba (H1), asi que este `:-` ya no puede enmascarar un error.
 host="${host:-claude}"
-if [ "$host" != "claude" ] && [ "$host" != "zcode" ]; then
-  echo "capture-payloads: --host solo acepta 'zcode' (dio '$host')" >&2
-  exit 2
-fi
+case "$host" in
+  claude|zcode|codex) ;;
+  *) echo "capture-payloads: --host acepta 'claude', 'zcode' o 'codex' (dio '$host')" >&2
+     exit 2 ;;
+esac
 
 if [ -z "$destino" ]; then
   echo "capture-payloads: falta el repo descartable destino" >&2
@@ -152,6 +174,15 @@ esac
 aqui="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 capturador="$aqui/capture-payloads.sh"
 
+# H2: identificador del destino para el user-config COMPARTIDO de zcode.
+# Es un NUMERO a proposito (cksum del path fisico), no el path: se pasa a jq por
+# --arg, y jq.exe es nativo, asi que MSYS convertiria un path POSIX a forma
+# Windows y el match fallaria en silencio -- la misma trampa que el caso z1
+# documenta al extraer el dest DESDE jq en vez de pasarselo. Un numero no se
+# convierte. Limite declarado: dos destinos que resuelvan al mismo `pwd -P`
+# siguen colisionando; no es alcanzable en la practica y no se cubre.
+dest_id="$(printf '%s' "$destino_real" | cksum | cut -d' ' -f1)"
+
 # ---------------- filtros jq para el user-config de zcode (idempotentes) ----
 # has_tag/add_unless: appendean una entrada solo si su tag no esta ya presente
 # (idempotencia por entrada, no por conteo). ours/strip: --quitar saca solo lo
@@ -159,9 +190,10 @@ capturador="$aqui/capture-payloads.sh"
 # El regex usa 5[.]1 (punto literal) en vez de 5\.1 para no mezclar escapes de
 # bash y de jq: una sola capa, sin backslashes.
 JQ_INSTALL='
+def mine: (.command // "") | contains("--saikit-dest " + $destid + " ");
 def has_tag(ev; t):
   any( (.hooks.events[ev] // [])[] ;
-       any( (.hooks // [])[] ; ((.command // "") | test("saikit-capture-id 5[.]1.*--tag " + t + "$")) ) );
+       any( (.hooks // [])[] ; (mine and ((.command // "") | test("saikit-capture-id 5[.]1.*--tag " + t + "$"))) ) );
 def add_unless(ev; cmd; matcher; t):
   if has_tag(ev; t) then .
   else .hooks.events[ev] = ((.hooks.events[ev] // []) +
@@ -175,7 +207,9 @@ add_unless("UserPromptSubmit"; $ups_cmd;   "";                     "ups")
 | add_unless("Stop";            $stop_cmd;  "";                     "stop")
 '
 JQ_QUITAR='
-def ours: any((.hooks // [])[]; ((.command // "") | test("saikit-capture-id 5[.]1")));
+def ours: any((.hooks // [])[];
+  (((.command // "") | test("saikit-capture-id 5[.]1"))
+   and ((.command // "") | contains("--saikit-dest " + $destid + " "))));
 def strip(arr): ((arr // []) | map(select(ours | not)));
 if ((.hooks // {}) | has("events")) then
   .hooks.events.UserPromptSubmit = strip(.hooks.events.UserPromptSubmit)
@@ -206,8 +240,8 @@ zcode_bash_win() {
 # config real de zcode, y stdin queda confirmado bajo type:command (cbm lo
 # lee asi). Residual del plan resuelto con evidencia, no por fe.
 zcode_hook_cmd() {  # $1=bash_win  $2=tag
-  printf '"%s" "%s" --saikit-capture-id 5.1 --only-cwd "%s" --capture-dir "%s" --tag %s' \
-    "$1" "$capturador" "$destino_real" "$destino_real/capturas" "$2"
+  printf '"%s" "%s" --saikit-capture-id 5.1 --saikit-dest %s --only-cwd "%s" --capture-dir "%s" --tag %s' \
+    "$1" "$capturador" "$dest_id" "$destino_real" "$destino_real/capturas" "$2"
 }
 
 zcode_install() {
@@ -259,7 +293,8 @@ zcode_install() {
   cmd_stop="$(zcode_hook_cmd "$bash_win" stop)"
   tmp_new="$(mktemp)" || { echo "capture-payloads: no pude crear tmp" >&2; exit 2; }
   if ! jq --arg ups_cmd "$cmd_ups" --arg task_cmd "$cmd_task" --arg agent_cmd "$cmd_agent" \
-          --arg tools_cmd "$cmd_tools" --arg stop_cmd "$cmd_stop" "$JQ_INSTALL" \
+          --arg tools_cmd "$cmd_tools" --arg stop_cmd "$cmd_stop" \
+          --arg destid "$dest_id" "$JQ_INSTALL" \
           "$user_config" > "$tmp_new"; then
     echo "capture-payloads: jq fallo al appendear; el config original queda intacto" >&2
     rm -f "$tmp_new"; exit 2
@@ -289,7 +324,7 @@ zcode_quitar() {
 
   n_antes="$(grep -c 'saikit-capture-id 5\.1' "$user_config" 2>/dev/null || true)"
   tmp_new="$(mktemp)" || exit 2
-  if ! jq "$JQ_QUITAR" "$user_config" > "$tmp_new"; then
+  if ! jq --arg destid "$dest_id" "$JQ_QUITAR" "$user_config" > "$tmp_new"; then
     echo "capture-payloads: jq fallo al quitar; el config queda intacto" >&2
     rm -f "$tmp_new"; exit 2
   fi
@@ -301,10 +336,77 @@ zcode_quitar() {
   echo "  antes: $n_antes   despues: $n_despues   (los hooks ajenos quedan intactos)"
 }
 
+# ------------------------------------------------------ Task 6.1: codex ----
+# En codex la captura es COLOCACION DE ARCHIVO, no mutacion de config, y esa es
+# la diferencia entera con zcode. Medido: ~/.codex/hooks/summonaikit-harness.ps1
+# resuelve su hook con `git rev-parse --show-toplevel` y PREFIERE
+# <repo>/.codex/hooks/summonaikit-harness.sh cuando existe. Entonces alcanza con
+# dejar el shim ahi: el registro de ~/.codex/hooks.json, que ya cubre las 3
+# fases, lo invoca solo. El config del operador no se toca en ningun momento —
+# su cksum es parte de la evidencia de la tarea. Tampoco hace falta jq.
+codex_shim_path() { printf '%s/.codex/hooks/summonaikit-harness.sh' "$destino_real"; }
+
+codex_install() {
+  local shim
+  ( cd "$destino_real" && git rev-parse --show-toplevel >/dev/null 2>&1 ) || {
+    echo "capture-payloads: el destino tiene que ser un repo git." >&2
+    echo "                  El .ps1 de codex resuelve su hook con git rev-parse --show-toplevel;" >&2
+    echo "                  sin repo el shim queda puesto y NO corre nunca: una captura que miente." >&2
+    exit 2; }
+  shim="$(codex_shim_path)"
+  if [ -e "$shim" ] && ! grep -q -- '--saikit-capture-id 6.1' "$shim" 2>/dev/null; then
+    echo "capture-payloads: $shim existe y no lo escribi yo — no lo toco." >&2
+    exit 2; fi
+  umask 077
+  mkdir -p "$(dirname "$shim")" 2>/dev/null || exit 2
+  # Las capturas se crean ya ignoradas, antes del primer payload (mismo motivo
+  # que en el camino Claude: si no, el .gitignore llega despues del archivo con
+  # el contenido del turno).
+  mkdir -p "$destino_real/capturas" 2>/dev/null || true
+  printf '*\n' > "$destino_real/capturas/.gitignore" 2>/dev/null || true
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf '# Shim de captura (Task 6.1), escrito por tools/capture-payloads.sh.\n'
+    printf '# Lo invoca ~/.codex/hooks/summonaikit-harness.ps1, que prefiere esta ruta\n'
+    printf '# sobre la del perfil cuando el cwd resuelve a un repo git.\n'
+    printf '# La fase sale del ENV (el .ps1 la setea), no del payload: si codex no emite\n'
+    printf '# hook_event_name, el capturador nombraria las 3 fases "sin-evento" y\n'
+    printf '# colisionarian en un solo prefijo. El --tag es lo que las separa.\n'
+    printf 'exec bash "%s" \\\n' "$capturador"
+    printf '  --saikit-capture-id 6.1 \\\n'
+    printf '  --tag "${SUMMONAIKIT_HOOK_PHASE:-sin-fase}" \\\n'
+    printf '  --capture-dir "%s/capturas" \\\n' "$destino_real"
+    printf '  --only-cwd "%s"\n' "$destino_real"
+  } > "$shim" || { echo "capture-payloads: no pude escribir $shim" >&2; exit 2; }
+  bash -n "$shim" 2>/dev/null || {
+    echo "capture-payloads: el shim generado no parsea; lo saco antes de que rompa un turno" >&2
+    rm -f "$shim"; exit 2; }
+  echo "Shim de captura en $shim"
+  echo "  ~/.codex/hooks.json NO se toco: el .ps1 ya prefiere esta ruta."
+  echo "Ahora: sesion NUEVA de codex en $destino_real, turno -saikit que delegue + un bash."
+  echo "Los payloads caen en $destino_real/capturas/"
+}
+
+codex_quitar() {
+  local shim
+  shim="$(codex_shim_path)"
+  if [ ! -e "$shim" ]; then
+    echo "No hay shim de captura en $shim (nada que quitar)"
+    return 0
+  fi
+  grep -q -- '--saikit-capture-id 6.1' "$shim" 2>/dev/null || {
+    echo "capture-payloads: $shim no lo escribi yo — no lo borro." >&2
+    exit 2; }
+  rm -f "$shim" || { echo "capture-payloads: no pude borrar $shim" >&2; exit 2; }
+  echo "Shim de captura quitado de $shim"
+}
+
 case "$modo" in
   instalar)
     if [ "$host" = "zcode" ]; then
       zcode_install
+    elif [ "$host" = "codex" ]; then
+      codex_install
     else
       # ----- Claude: settings.json del proyecto descartable (el original) -----
       settings="$destino_real/.claude/settings.json"
@@ -362,6 +464,8 @@ JSON
     fi
     if [ "$host" = "zcode" ]; then
       zcode_quitar
+    elif [ "$host" = "codex" ]; then
+      codex_quitar
     else
       # Solo se borra lo que ESTE script creo, y eso lo dice la marca de
       # propiedad, no el contenido. Un settings.json que menciona esta

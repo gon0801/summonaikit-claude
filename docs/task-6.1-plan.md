@@ -138,8 +138,80 @@ declara.
 | `<repo>` es un directorio de perfil (`~/.codex`, `~/.claude`, …) | 2 | ahí vive el gate real; el filtro de perfil ya existe en el script |
 | `<repo>/.codex/hooks/summonaikit-harness.sh` existe y **no** lleva el marcador | 2 | es de otro; "no es nuestro ⇒ sobrescribir" es cómo se destruye el cambio ajeno |
 | no se pudo escribir | 2 | no se afirma una captura que no va a ocurrir |
+| `--host` **sin valor** (`--instalar <repo> --host`) | 2 | hallazgo abierto de CodeRabbit, ver A4 |
 
-### A4. Tests — rojo primero
+### A4. Dos hallazgos de CodeRabbit (PR#2) que siguen abiertos — se cierran acá
+
+Medido 2026-08-13: de los 9 PRs del repo, CodeRabbit alcanzó a revisar **uno**
+(el #2, el único que quedó abierto más de 40 s; en los otros ocho el bot llegó
+tarde y comentó *"Review failed — the pull request is closed"*). En esa única
+pasada dejó 3 hallazgos y **ninguno se arregló**. Los dos Major viven en el
+archivo que esta sección ya toca, así que se cierran acá con su test, como pide
+la regla de hierro 2 del repo.
+
+**H1 — `--host` sin valor instala el host equivocado en silencio.** Severidad
+Major. Reproducido en vivo:
+
+```
+$ bash tools/capture-payloads.sh --instalar <repo> --host
+exit=0   (esperado 2)   →  escribio el settings de CLAUDE
+```
+
+Mecanismo: `:55` hace `host="${2:-}"`, que con el flag al final queda vacío, y
+`:117` hace `host="${host:-claude}"`, que lo convierte en `claude`. **Afecta a
+los tres hosts**, `codex` incluido. Es la misma clase de defecto que la Task 0.4
+cerró en `check-hook-registration.sh` (el `shift 2` con flag sin valor, que ahí
+colgaba el script). El daño concreto acá es distinto y peor de lo que parece: un
+typo en el flag no falla, captura mal, y se descubre con la captura vacía — o
+sea quemando una sesión con el operador adelante, el recurso más caro de la
+fase.
+
+Arreglo, en el propio branch del flag para que el error salga donde se cometió:
+
+```bash
+--host)
+  { [ $# -ge 2 ] && [ -n "$2" ]; } || {
+    echo "capture-payloads: --host requiere un valor ('claude', 'zcode' o 'codex')" >&2
+    exit 2; }
+  host="$2"; shift 2 ;;
+```
+
+Se exige `-n "$2"` además del conteo: `--host ""` también tiene que morir, y con
+solo `[ $# -ge 2 ]` pasaría y volvería a caer en el default `claude`. El
+`host="${host:-claude}"` de `:117` **se conserva**: sigue siendo correcto para el
+caso "no se pasó el flag".
+
+**H2 — `--quitar` de un repo borra los hooks vivos de otro.** Severidad Major.
+`JQ_QUITAR` define `def ours` matcheando el literal `saikit-capture-id 5[.]1`, y
+`has_tag` decide por evento+tag. Los dos ignoran el destino, y el user-config de
+zcode es **compartido**. Consecuencias, las dos reales:
+
+1. Instalás para el repo A y después para el B: `add_unless` ve el tag ya
+   presente y **no agrega las entradas de B**. La captura de B nunca ocurre.
+2. `--quitar B` matchea las entradas de A y **le borra a A sus hooks vivos**.
+
+**Solo afecta al camino `zcode`.** El camino `codex` de esta tarea es inmune por
+construcción: cada repo tiene su propio archivo en `<repo>/.codex/hooks/`, no
+hay config compartida. Se arregla igual porque es un bug vivo en el archivo que
+estamos tocando.
+
+Arreglo: que las dos decisiones miren también el destino. El comando registrado
+ya lo lleva embebido (`--only-cwd "<abs>"`), así que alcanza con compararlo. Se
+usa `contains` y **no** `test`: `contains` es subcadena literal, así que una ruta
+de Windows con metacaracteres de regex no rompe el match ni exige escaparla.
+
+```jq
+# antes:  def ours: any((.hooks // [])[]; ((.command // "") | test("saikit-capture-id 5[.]1")));
+def ours: any((.hooks // [])[];
+  ((.command // "") | contains("saikit-capture-id 5.1") and contains($destmark)));
+```
+
+con `--arg destmark "--only-cwd \"<abs del repo>\""` desde el shell, y el mismo
+`$destmark` sumado a la condición de `has_tag` para que B sí se agregue estando
+A. **Límite declarado:** si dos repos distintos resolvieran al mismo `pwd -P`,
+seguirían colisionando. No es alcanzable en la práctica y no se cubre.
+
+### A5. Tests — rojo primero
 
 - [ ] **Paso 1: escribir los casos que fallan**
 
@@ -199,6 +271,38 @@ caso "--quitar NO borra un shim ajeno"
 out="$(bash "$tool" --quitar "$ajeno" --host codex 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "borrar lo ajeno para 'limpiar' es el mismo error que pisarlo"
 [ -f "$ajeno/.codex/hooks/summonaikit-harness.sh" ] || malo "BORRO el hook del usuario"
+
+# ------------------------------ 7) H1: --host sin valor (CodeRabbit PR#2)
+caso "H1: --host sin valor sale 2 y NO instala el host equivocado"
+h1="$SANDBOX/repo-h1"
+mkdir -p "$h1" && ( cd "$h1" && git init -q )
+out="$(bash "$tool" --instalar "$h1" --host 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: un typo en el flag captura mal y quema una sesion con el operador adelante"
+[ ! -f "$h1/.claude/settings.json" ] || malo "cayo al default 'claude' e instalo el host equivocado"
+
+caso "H1: --host con valor vacio tambien sale 2"
+out="$(bash "$tool" --instalar "$h1" --host '' 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: '' vuelve a caer en el default por \${host:-claude}"
+[ ! -f "$h1/.claude/settings.json" ] || malo "instalo con host vacio"
+
+# ------------------- 8) H2: dos repos, un user-config (CodeRabbit PR#2)
+# Solo aplica al camino zcode: el de codex es inmune (archivo por repo).
+caso "H2: instalar para B estando A agrega las entradas de B"
+cfg="$SANDBOX/zcode-config.json"
+printf '{}\n' > "$cfg"
+rA="$SANDBOX/repo-A"; rB="$SANDBOX/repo-B"
+mkdir -p "$rA" "$rB"
+SAIKIT_ZCODE_USER_CONFIG="$cfg" bash "$tool" --instalar "$rA" --host zcode >/dev/null 2>&1
+SAIKIT_ZCODE_USER_CONFIG="$cfg" bash "$tool" --instalar "$rB" --host zcode >/dev/null 2>&1
+grep -q -- "--only-cwd \"$rB\"" "$cfg" \
+  || malo "las entradas de B no se agregaron: has_tag decide por evento+tag y el tag ya estaba por A"
+
+caso "H2: --quitar B NO se lleva las entradas vivas de A"
+SAIKIT_ZCODE_USER_CONFIG="$cfg" bash "$tool" --quitar "$rB" --host zcode >/dev/null 2>&1
+grep -q -- "--only-cwd \"$rA\"" "$cfg" \
+  || malo "BORRO los hooks vivos de A: 'ours' matchea el capture-id sin mirar el destino"
+grep -q -- "--only-cwd \"$rB\"" "$cfg" \
+  && malo "no quito las entradas de B"
 ```
 
 - [ ] **Paso 2: correrlos y verificar que fallan**
