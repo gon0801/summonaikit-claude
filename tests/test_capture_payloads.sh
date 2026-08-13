@@ -334,6 +334,21 @@ JSON
     malo "no quito las entradas de B"
   fi
 
+  # ---- z10: el resumen de --quitar no puede contar destinos ajenos --------
+  # Hallazgo 4 de la revision cruzada (kimi, 2026-08-13): tras el fix H2,
+  # n_antes/n_despues seguian contando TODAS las entradas 5.1 del config
+  # compartido, asi que el resumen mentia justo en el caso multi-repo que H2
+  # arregla. Misma familia que el unknown-publicado-como-PASS de la Task 1.5:
+  # el defecto esta en el REPORTE, no en la accion.
+  caso "H2: el resumen de --quitar cuenta solo el destino, no todos"
+  fabricar_zcode_config
+  rm -rf "$rA" "$rB"; mkdir -p "$rA" "$rB"
+  SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --instalar "$rA" --host zcode >/dev/null 2>&1
+  SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --instalar "$rB" --host zcode >/dev/null 2>&1
+  out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --quitar "$rB" --host zcode 2>&1)"
+  printf '%s' "$out" | grep -qE 'antes: *5 +despues: *0' \
+    || malo "el resumen cuenta las entradas de TODOS los destinos (esperaba 5 -> 0): $out"
+
   echo "  test_capture_payloads: zcode OK"
 fi
 
@@ -417,6 +432,37 @@ rm -rf "$h1"; mkdir -p "$h1" && ( cd "$h1" && git init -q )
 out="$(bash "$tool" --instalar "$h1" --host '' 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: '' vuelve a caer en el default por \${host:-claude}"
 [ ! -f "$h1/.claude/settings.json" ] || malo "instalo con host vacio"
+
+# --------------- Hallazgos 2 y 3 de la revision cruzada (kimi, 2026-08-13) ---
+# H-2: `git rev-parse` falla IGUAL si git no esta instalado que si el directorio
+# no es un repo, y el mensaje acusaba al directorio. Es la Core Rule 2 en
+# chiquito: "no se pudo mirar" reportado como "se miro y falta".
+caso "codex: git ausente se reporta como tal, no como 'no es repo git'"
+sg="$SANDBOX/codex-git-ausente"
+rm -rf "$sg"; mkdir -p "$sg" && ( cd "$sg" && git init -q )   # SI es repo git
+out="$(PATH=/usr/bin bash "$tool" --instalar "$sg" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: $out"
+printf '%s' "$out" | grep -qiE 'no encontr|no esta instalado|no se pudo' \
+  || malo "acusa al directorio cuando el problema es que git no esta: $out"
+[ ! -e "$sg/.codex" ] || malo "rechazo pero dejo el arbol puesto"
+
+# H-3: el shim hace `exec bash <ruta absoluta al capturador>`. Si ese repo se
+# mueve o se borra con el shim puesto, el shim muere con exit != 0 en CADA fase
+# y rompe los turnos del host. El fail-open del modo hook no cubre al shim: el
+# shim tiene que ser fail-open POR SI MISMO.
+caso "codex: el shim es fail-open si el capturador ya no esta"
+tmpcap="$SANDBOX/copia-tool"
+rm -rf "$tmpcap"; mkdir -p "$tmpcap"
+cp "$tool" "$tmpcap/capture-payloads.sh"
+sf="$SANDBOX/codex-shim-huerfano"
+rm -rf "$sf"; mkdir -p "$sf" && ( cd "$sf" && git init -q )
+bash "$tmpcap/capture-payloads.sh" --instalar "$sf" --host codex >/dev/null 2>&1
+[ -f "$sf/.codex/hooks/summonaikit-harness.sh" ] || malo "precondicion: no se instalo el shim"
+rm -f "$tmpcap/capture-payloads.sh"    # el capturador desaparece
+printf '{"hook_event_name":"Stop"}' \
+  | ( cd "$sf" && SUMMONAIKIT_HOOK_PHASE=stop bash "$sf/.codex/hooks/summonaikit-harness.sh" ) >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 0 ] || malo "el shim con capturador ausente salio $rc: romperia cada turno del host"
 
 echo "  test_capture_payloads: codex OK"
 

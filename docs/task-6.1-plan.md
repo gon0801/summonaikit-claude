@@ -211,6 +211,39 @@ con `--arg destmark "--only-cwd \"<abs del repo>\""` desde el shell, y el mismo
 A. **Límite declarado:** si dos repos distintos resolvieran al mismo `pwd -P`,
 seguirían colisionando. No es alcanzable en la práctica y no se cubre.
 
+### A4-bis. La revisión cruzada (kimi, 1 ronda, 2026-08-13)
+
+**Con codex no se pudo.** El prompt del script arranca con *"Actúa como revisor
+de código externo…"* y eso dispara la skill `harness-review` del perfil de codex,
+que abandona la tarea pedida y carga su propio workflow. Murió con exit 1 y
+respuesta vacía, sin mirar el diff. Se reintentó con kimi, que no tiene esa
+skill. **Queda anotado**: `cross-review.ps1 -Con codex` no sirve en esta máquina
+mientras esa skill se auto-dispare.
+
+**Cinco hallazgos, todos de severidad baja; ninguno alto ni medio**, así que el
+tope de 1 ronda de la regla global se cumple sin segunda vuelta. Kimi además
+corrió la suite por su cuenta y confirmó el verde.
+
+Tres se arreglaron acá, cada uno con su caso:
+
+| # | Qué | Dónde |
+|---|---|---|
+| 2 | `git rev-parse` falla igual sin git instalado que sin repo, y el mensaje acusaba al destino — Core Rule 2 en chiquito | `codex_install`, guarda `command -v git` |
+| 3 | El shim moría con **127** en cada fase si el repo que lo instaló se movía: **el fail-open del modo hook no cubre al shim** | el shim gana `[ -f … ] \|\| exit 0` |
+| 4 | `n_antes`/`n_despues` contaban sobre el config compartido entero, así que el resumen mentía justo en el caso multi-repo que H2 arregla | se cuenta por `saikit-dest` |
+
+El 5 (el árbol `.codex/hooks/` queda vacío tras `--quitar`) es cosmético y no se
+tocó.
+
+**El hallazgo 1 no tiene arreglo limpio y se declara.** Las entradas instaladas
+con la versión anterior —sin `--saikit-dest`— son invisibles para `mine`/`ours`:
+un reinstall las duplicaría y `--quitar` no podría borrarlas. Hacer que `ours`
+también matchee las entradas sin `dest` **reabre exactamente el bug H2**, porque
+una entrada sin destino puede ser de cualquier repo. Verificado en el
+user-config real (`~/.zcode/cli/config.json`): **no hay entradas saikit previas**,
+así que hoy no es alcanzable en esta máquina. Sólo importaría contra una
+instalación vieja en otro entorno, y el remedio ahí es editar el config a mano.
+
 ### A5. Tests — rojo primero
 
 - [ ] **Paso 1: escribir los casos que fallan**

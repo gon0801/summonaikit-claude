@@ -322,7 +322,13 @@ zcode_quitar() {
   [ -f "$user_config" ] || {
     echo "capture-payloads: no existe el user-config ($user_config)" >&2; exit 2; }
 
-  n_antes="$(grep -c 'saikit-capture-id 5\.1' "$user_config" 2>/dev/null || true)"
+  # Hallazgo 4 (revision cruzada kimi, 2026-08-13): estas dos cuentas grepeaban
+  # `saikit-capture-id 5.1` sobre el config ENTERO, que es compartido, asi que
+  # el resumen sumaba los destinos ajenos y mentia justo en el caso multi-repo
+  # que el fix H2 acaba de arreglar. Se cuenta por destino, con el mismo
+  # identificador que decide el borrado. Misma familia que el unknown publicado
+  # como PASS de la Task 1.5: el defecto estaba en el REPORTE, no en la accion.
+  n_antes="$(grep -c -- "saikit-dest $dest_id " "$user_config" 2>/dev/null || true)"
   tmp_new="$(mktemp)" || exit 2
   if ! jq --arg destid "$dest_id" "$JQ_QUITAR" "$user_config" > "$tmp_new"; then
     echo "capture-payloads: jq fallo al quitar; el config queda intacto" >&2
@@ -330,7 +336,7 @@ zcode_quitar() {
   fi
   mv -f "$tmp_new" "$user_config" || {
     echo "capture-payloads: no pude escribir $user_config" >&2; exit 2; }
-  n_despues="$(grep -c 'saikit-capture-id 5\.1' "$user_config" 2>/dev/null || true)"
+  n_despues="$(grep -c -- "saikit-dest $dest_id " "$user_config" 2>/dev/null || true)"
   rm -f "$marca"
   echo "Quitadas entradas de captura (saikit-capture-id 5.1) de $user_config"
   echo "  antes: $n_antes   despues: $n_despues   (los hooks ajenos quedan intactos)"
@@ -348,6 +354,15 @@ codex_shim_path() { printf '%s/.codex/hooks/summonaikit-harness.sh' "$destino_re
 
 codex_install() {
   local shim
+  # Hallazgo 2 (revision cruzada kimi, 2026-08-13): `git rev-parse` falla IGUAL
+  # si git no esta instalado que si el directorio no es un repo, y el mensaje
+  # de abajo acusaba al destino. Core Rule 2 en chiquito: no se afirma ausencia
+  # de lo que no se pudo mirar. Se separan los dos casos antes de preguntar.
+  command -v git >/dev/null 2>&1 || {
+    echo "capture-payloads: no encontre git en el PATH." >&2
+    echo "                  No se pudo determinar si el destino es un repo: eso es 'no se pudo mirar'," >&2
+    echo "                  no 'se miro y no lo es'. El destino queda intacto." >&2
+    exit 2; }
   ( cd "$destino_real" && git rev-parse --show-toplevel >/dev/null 2>&1 ) || {
     echo "capture-payloads: el destino tiene que ser un repo git." >&2
     echo "                  El .ps1 de codex resuelve su hook con git rev-parse --show-toplevel;" >&2
@@ -372,6 +387,12 @@ codex_install() {
     printf '# La fase sale del ENV (el .ps1 la setea), no del payload: si codex no emite\n'
     printf '# hook_event_name, el capturador nombraria las 3 fases "sin-evento" y\n'
     printf '# colisionarian en un solo prefijo. El --tag es lo que las separa.\n'
+    printf '#\n'
+    printf '# Hallazgo 3 (revision cruzada kimi, 2026-08-13): el fail-open del modo hook\n'
+    printf '# NO cubre a este shim. Si el repo que lo instalo se mueve o se borra, el\n'
+    printf '# exec moria con 127 en CADA fase y rompia los turnos del host. El shim\n'
+    printf '# tiene que ser fail-open por si mismo: si el capturador no esta, calla y sale 0.\n'
+    printf '[ -f "%s" ] || exit 0\n' "$capturador"
     printf 'exec bash "%s" \\\n' "$capturador"
     printf '  --saikit-capture-id 6.1 \\\n'
     printf '  --tag "${SUMMONAIKIT_HOOK_PHASE:-sin-fase}" \\\n'
