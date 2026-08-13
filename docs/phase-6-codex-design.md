@@ -2,9 +2,9 @@
 
 Fecha: 2026-08-12
 
-Diseño aprobado. El ledger de tareas sale de acá y vive en `Plans.md`; lo que
-esta fase cambie del contrato de producto se escribe en
-`docs/spec/00-project-spec.md` al cerrar cada tarea, no acá.
+Diseño aprobado. El ledger de tareas sale de acá y vive en `Plans.md`; el delta
+de producto aprobado para esta fase ya vive en `docs/spec/00-project-spec.md`.
+Cada tarea agrega allí sólo los hechos que mida al cerrar.
 
 Ubicación del archivo: `docs/` plano, como el resto de los planes de este repo
 (`task-N.N-plan.md`). No se creó `docs/superpowers/specs/` para no abrir un
@@ -16,10 +16,9 @@ Que un turno `-saikit` en Codex CLI gatee igual que uno en Claude Code: mismos
 arreglos, misma ceremonia de roles, mismo recibo. Hoy Codex corre otra variante
 del kit, con los once defectos abiertos y la ceremonia inerte.
 
-**Esto reabre un Non-Goal declarado.** El spec dice: *"No se adoptan los otros 3
-perfiles en este alcance. `.codex` es una variante distinta con parches de otro
-origen. La divergencia queda declarada."* La fase lo revierte **solo para
-`.codex`**. `.cursor` y `.agents` siguen fuera y su divergencia sigue declarada.
+**Esto reabre un Non-Goal original.** El delta aprobado ya quedó incorporado al
+spec: la fase lo revierte **solo para `.codex`**. `.cursor` y `.agents` siguen
+fuera y su divergencia sigue declarada.
 
 ## Premisas medidas (2026-08-12, no supuestas)
 
@@ -253,9 +252,10 @@ Una fuente (`hooks/summonaikit-harness.sh`), tres hosts, dos rutas instaladas:
 
 ## Medición primero (6.1 y 6.2)
 
-Ninguna toca un archivo del repo; las dos corren en un repo descartable con el
-operador adelante. Valen aunque el resto de la fase se cancele, igual que
-5.1/5.2.
+Ninguna toca el hook de producto, el instalador ni el perfil global; las dos
+corren en un repo descartable con el operador adelante. Pueden extender las
+herramientas de captura/probe y sus tests dentro del repo. Valen aunque el resto
+de la fase se cancele, igual que 5.1/5.2.
 
 ### 6.1 — Payloads reales de Codex CLI 0.147.0
 
@@ -366,7 +366,7 @@ dejó un fixture válido y silenciosamente falso).
 | 6.5 | Manifiesto + `--host codex` + verificador del registro | no (código + tests) | — |
 | 6.6 | Línea base del target + instalar + turno real | **sí** | — |
 
-Codex no se toca hasta la 6.6.
+El perfil Codex no se instala ni se reemplaza hasta la 6.6.
 
 **Dependía de que la Phase 5 cerrara, y cerró.** Verificado 2026-08-13: las seis
 tareas (5.1–5.6) están en `cc:完了` y en `master`, con medición viva registrada

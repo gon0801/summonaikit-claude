@@ -1,9 +1,10 @@
 # summonaikit-claude — Plans.md
 
 Creado: 2026-08-08
-Alcance: hacerse cargo del hook que gatea cada turno de Claude Code — pruebas
-propias, instalación por reemplazo, y cierre de los agujeros que hoy lo vuelven
-un control decorativo. Contrato de producto y premisas medidas:
+Alcance: hacerse cargo del hook que gatea cada turno y llevar la misma fuente a
+los hosts aprobados — Claude Code, zcode, Codex y Grok Build— con pruebas
+propias, instalación controlada y cierre de los agujeros que hoy lo vuelven un
+control decorativo. Contrato de producto y premisas medidas:
 `docs/spec/00-project-spec.md`.
 
 **Contrato de datos:** `not_observed != absent`. Lo que no se pudo observar se
@@ -108,8 +109,10 @@ comportamiento del hook, así que grabarla antes obliga a regrabarla siete veces
 Purpose: Codex CLI corre otra variante del kit, con A1–A11 abiertos y la
 ceremonia de roles **inerte** (su rama también pregunta por `TARGET = "claude"`
 y su wrapper manda `codex`). Esta fase le da el hook de este repo. Diseño
-aprobado y medido en `docs/phase-6-codex-design.md` (`599be48`); si una premisa
-de ahí cae, la fase se re-planifica antes de escribir una línea.
+aprobado en `docs/phase-6-codex-design.md` (`599be48`), con premisas de disco
+medidas; los payloads y la salida siguen siendo `unknown` hasta 6.1/6.2. Spec:
+`docs/spec/00-project-spec.md`. Si una premisa cae, la fase se re-planifica antes
+de tocar el hook de producto.
 
 **Reabre un Non-Goal declarado**, solo para `.codex`. `.cursor` y `.agents`
 siguen fuera y su divergencia sigue declarada.
@@ -118,16 +121,43 @@ siguen fuera y su divergencia sigue declarada.
 adelante y valen aunque el resto se cancele. **6.4 no se implementa antes que
 6.1**: prender la ceremonia sin saber si el rol llega convierte el gate de
 inerte en *inservible*, que es el error exacto que el spec declara para el orden
-A9/A10. Codex no se toca hasta 6.6.
+A9/A10. El perfil Codex no se instala hasta 6.6. 6.4 deja `codex` antes de
+zcode/Claude; 7.3, serializada detrás, insertará Grok arriba. El orden final es
+`grok > codex > zcode > claude > other`.
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| 6.1 | `[Test]` `[lane:gate]` `[tdd:required]` **PRIMER PASO OBLIGATORIO: capturar payloads reales de Codex CLI 0.147.0**, mismo criterio que 1.4 y 5.1 — de ahí salieron A9/A10/A11, ninguno visible en payloads reconstruidos. **Simplificación medida frente a 5.1**: el wrapper `.ps1` ya prefiere `<repo>/.codex/hooks/summonaikit-harness.sh`, así que la captura es **colocación de archivo en el repo descartable, NO mutación de `~/.codex/hooks.json`** — el config del operador no se toca | Payloads crudos de las 3 fases (`UserPromptSubmit`, `PostToolUse`, `Stop`) capturados en un turno `-saikit` real de Codex, en un repo descartable; queda escrito el **diff de forma contra los payloads de Claude**; se declara **cómo se llama la herramienta de subagentes y en qué campo viaja el rol**; se mide si el matcher REAL de `hooks.json` (`…\|Task\|exec\|local_shell_call\|shell_command\|commandExecution`) atrapa la delegación; se mide si `transcript_path` cae adentro de `~/.codex/sessions/` (decide si A6 contiene o queda fail-open); se confirma que `SUMMONAIKIT_HOOK_TARGET=codex` está en el env del hook; `~/.codex/hooks.json` verificado sin cambios (cksum antes/después). Si una premisa del diseño cae, se re-redacta la fase | — | cc:TODO |
+| 6.1 | `[Test]` `[lane:gate]` `[tdd:required]` **PRIMER PASO OBLIGATORIO: capturar payloads reales de Codex CLI 0.147.0**, mismo criterio que 1.4 y 5.1 — de ahí salieron A9/A10/A11, ninguno visible en payloads reconstruidos. **Simplificación medida frente a 5.1**: el wrapper `.ps1` ya prefiere `<repo>/.codex/hooks/summonaikit-harness.sh`, así que la captura es **colocación de archivo en el repo descartable, NO mutación de `~/.codex/hooks.json`** — el config del operador no se toca | Payloads crudos de las 3 fases (`UserPromptSubmit`, `PostToolUse`, `Stop`) capturados en un turno `-saikit` real de Codex, en un repo descartable; queda escrito el **diff de forma contra los payloads de Claude**; se declara **cómo se llama la herramienta de subagentes y en qué campo viaja el rol**; se mide si el matcher REAL de `hooks.json` (`…\|Task\|exec\|local_shell_call\|shell_command\|commandExecution`) atrapa la delegación; se mide si `transcript_path` cae adentro de `~/.codex/sessions/` (decide si A6 contiene o queda fail-open); se confirma que `SUMMONAIKIT_HOOK_TARGET=codex` está en el env del hook; `~/.codex/hooks.json` verificado sin cambios (cksum antes/después). Si una premisa del diseño cae, se re-redacta la fase | - | cc:TODO |
 | 6.2 | `[Test]` `[lane:gate]` `[tdd:required]` **El contrato de SALIDA, medido y no supuesto.** Se reusa `tools/probe-zcode-output.sh` (5.2). Hipótesis fuerte pero NO medida: el fork de Codex usa nuestra misma forma de bloqueo (`decision:block` + `exit 2` + stderr) y su `emit_allow` no imprime para no-cursor ⇒ el vendor cree que el esquema de Claude sirve ahí | Cada una de las 4 formas de salida tiene veredicto MEDIDO en Codex (aceptada / rechazada / ignorada), y el rechazo se distingue del silencio; `exit 2` en `Stop` tiene medido si bloquea, si continúa o si cuenta como error; el resultado decide si `TARGET=codex` alcanza o hace falta una forma propia, con su evidencia. **Se puede medir en la MISMA sesión que 6.1** | 6.1 | cc:TODO |
-| 6.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Absorber `ROLE FALLBACK` — cierra un agujero que Claude YA tiene hoy.** Es la única de las cinco divergencias del sabor Codex que es **código en la condición del gate**, no texto de contrato: permite declarar `ROLE FALLBACK: <ROL> (razón)` en el recibo en lugar del despacho cuando el subagente se cae por infraestructura (429, límite de uso). Nuestro hook no tiene ninguna escotilla ahí. **No toca Codex: es un cambio de Claude** | El gate acepta la declaración en lugar del despacho para los 3 roles; un recibo SIN la declaración y sin despacho sigue bloqueando; `mut_role_fallback_quitada` atrapada por el caso nuevo; el diff de la línea base queda **declarado por adelantado** — ningún veredicto se mueve (ningún escenario existente escribe la etiqueta) y sí cambia el texto del contrato inyectado, así que `02-armado-contrato` diverge; si diverge algo más, es señal de que la escotilla toca de más | — | cc:TODO |
-| 6.4 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **`HOST=codex` (D2) + la rama de ceremonia (D3).** `HOST` gana una rama por **señal explícita, PRIMERO en el orden**: el operador corre Codex desde adentro de Claude (agente `codex:codex-rescue`, `cross-review.ps1`), y ahí el hook de Codex hereda `CLAUDECODE=1` y se creería Claude. Allowlist, no passthrough: solo el literal `codex` | Un turno de Codex y uno de Claude sobre el MISMO repo no comparten estado, medido antes y después; un `SUMMONAIKIT_HOOK_TARGET` con valor no reconocido cae a `other`, nunca a `codex`; `CLAUDECODE=1` presente **más** `TARGET=codex` resuelve a `codex`; la ceremonia acepta `codex` **solo si 6.1 midió que el rol llega** — si no, la rama NO se prende y queda escrito como límite, no como pendiente; `mut_host_codex_sin_rama` y `mut_ceremonia_sin_codex` atrapadas | 6.1, 6.2 | cc:TODO |
+| 6.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Absorber `ROLE FALLBACK` — cierra un agujero que Claude YA tiene hoy.** Es la única de las cinco divergencias del sabor Codex que es **código en la condición del gate**, no texto de contrato: permite declarar `ROLE FALLBACK: <ROL> (razón)` en el recibo en lugar del despacho cuando el subagente se cae por infraestructura (429, límite de uso). Nuestro hook no tiene ninguna escotilla ahí. **No toca Codex: es un cambio de Claude** | El gate acepta la declaración en lugar del despacho para los 3 roles; un recibo SIN la declaración y sin despacho sigue bloqueando; `mut_role_fallback_quitada` atrapada por el caso nuevo; el diff de la línea base queda **declarado por adelantado** — ningún veredicto se mueve (ningún escenario existente escribe la etiqueta) y sí cambia el texto del contrato inyectado, así que `02-armado-contrato` diverge; si diverge algo más, es señal de que la escotilla toca de más | - | cc:TODO |
+| 6.4 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **`HOST=codex` (D2) + la rama de ceremonia (D3).** `HOST` gana una rama por **señal explícita antes de zcode/Claude**: el operador corre Codex desde adentro de Claude (agente `codex:codex-rescue`, `cross-review.ps1`), y ahí el hook de Codex hereda `CLAUDECODE=1` y se creería Claude. Allowlist, no passthrough: solo el literal `codex` | Un turno de Codex y uno de Claude sobre el MISMO repo no comparten estado, medido antes y después; un `SUMMONAIKIT_HOOK_TARGET` con valor no reconocido cae por las demás señales y nunca acredita `codex`; `CLAUDECODE=1` presente **más** `TARGET=codex` resuelve a `codex`; Codex queda antes de zcode/Claude y la DoD deja explícito que 7.3 añadirá Grok por encima; la ceremonia acepta `codex` **solo si 6.1 midió que el rol llega** — si no, la rama NO se prende y queda escrito como límite, no como pendiente; `mut_host_codex_sin_rama` y, si aplica, `mut_ceremonia_sin_codex` atrapadas | 6.1, 6.2 | cc:TODO |
 | 6.5 | `[Setup]` `[lane:gate]` `[tdd:required]` **Manifiesto + `--host codex` + verificador del registro.** El destino pasa a decidirse por `--host`, y cada host declara su ruta: el mensaje actual de rechazo del `--dest` (*"Una sola copia del hook vive en ~/.claude/hooks"*) queda falso y se reescribe. `~/.zcode` sigue rechazado; `~/.codex` se habilita **solo** con `--host codex` | `hooks/vendor-manifest.sha256` gana la entrada de Codex (`4e6a92fa…7902db0f`, 55609 bytes) con su etiqueta; `--host codex` respeta los tres estados y un `--dry-run` contra el destino real lo clasifica **vendor conocido**; `--restore-vendor` funciona para ese destino con sus mismas negativas (sin backup ⇒ exit 6; desconocido no se pisa ni para deshacer; backup fuera del manifiesto no se restaura); `check-hook-registration.sh` afirma **dos cosas separadas** —el registro nombra al wrapper, y el wrapper existe y nombra al hook— sin colapsarlas, conservando exit 0 siempre y `unknown` ≠ ausente; **chequeo explícito de que ningún aserto de quality-kit dependa de `$skippedOwned` vacío**, ANTES de instalar | 6.4 | cc:TODO |
-| 6.6 | `[Test]` `[lane:gate]` `[tdd:required]` **Línea base del target codex, instalación y turno real.** Escenarios **26+**, construidos desde los payloads de 6.1 y NO reconstruidos. Puesta en producción **directo al perfil** (decisión del operador), con `--restore-vendor` como red | Los escenarios de Codex tienen su bloque en la línea base y `--check` es reproducible; cada gate tiene al menos un caso que pasa y uno que bloquea **en este target**; los fixtures nuevos pasan `test_fixtures_json.sh` (parseo real **y** fidelidad de rutas); `tests/fixtures/arnes-falso/escenarios/04-codex/` espeja al `03-zcode`; el hook queda instalado en `~/.codex/hooks/` y un turno `-saikit` real en Codex **arma**, uno pelado **no**, y el estado aparece bajo `state/codex/`; `~/.claude/hooks/` y `~/.codex/hooks.json` verificados sin cambios | 6.5, 6.3 | cc:TODO |
+| 6.6 | `[Test]` `[lane:release]` `[tdd:required]` **Línea base del target codex, instalación y turno real.** Escenarios **26+**, construidos desde los payloads de 6.1 y NO reconstruidos. Puesta en producción **directo al perfil** (decisión del operador), con `--restore-vendor` como red | Los escenarios de Codex tienen su bloque en la línea base y `--check` es reproducible; cada gate tiene al menos un caso que pasa y uno que bloquea **en este target**; los fixtures nuevos pasan `test_fixtures_json.sh` (parseo real **y** fidelidad de rutas); `tests/fixtures/arnes-falso/escenarios/04-codex/` espeja al `03-zcode`; el hook queda instalado en `~/.codex/hooks/` y un turno `-saikit` real en Codex **arma**, uno pelado **no**, y el estado aparece bajo `state/codex/`; `~/.claude/hooks/` y `~/.codex/hooks.json` verificados sin cambios; `pre-commit run --all-files` pasa y, tras merge a `master`, se ejecuta el deploy/check de AGENTS.md más `--host codex` y se registra en `docs/deploy-log.md` | 6.5, 6.3 | cc:TODO |
+
+---
+
+## Phase 7: El cuarto host — Grok Build TUI
+
+Purpose: un turno `-saikit` en Grok Build 1.0.3 gatea con la misma fuente,
+arreglos A1–A11 y ceremonia implementer → verifier → reviewer. Diseño:
+`docs/phase-7-grok-design.md`; spec: `docs/spec/00-project-spec.md`. La
+documentación oficial fija hipótesis, no evidencia viva: payloads, resolución de
+roles y contrato de salida permanecen `unknown` hasta 7.1/7.2.
+
+**Orden:** 7.1 y 7.2 son mediciones independientes en un repo descartable y
+pueden correr antes de que cierre Phase 6. La implementación se serializa en las
+costuras compartidas: 7.3 detrás de 6.4, 7.5 detrás de 6.5 y la numeración/release
+7.6 detrás de 6.6. Así no hay dos writers sobre `HOST`, el instalador ni los
+escenarios 26+.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| 7.1 | `[Test]` `[lane:gate]` `[tdd:required]` **PRIMER PASO OBLIGATORIO: capturar payloads reales de Grok Build 1.0.3**, usando sólo hooks de proyecto en un repo descartable. `tools/capture-payloads.sh --host grok` puede crear el JSON/shim de medición; `/hooks-trust` es el único estado global permitido y se declara/revoca al terminar. No se instala el harness global | Quedan payloads crudos y versión exacta de `UserPromptSubmit`, `PostToolUse` exitoso, `PostToolUseFailure`, `SubagentStart`, `Stop reason=end_turn` y Stop de cierre (`channel_closed`/`shutdown`), más el diff contra Claude; se mide nombre nativo/alias de cada tool, ubicación del rol, resolución de un agente temporal, matcher real, `GROK_HOOK_EVENT`/`GROK_SESSION_ID`/`CLAUDECODE`, entrega del `env` map, `lastAssistantMessage`, transcript y contención A6; `~/.grok/hooks/`, `~/.grok/config.toml` y agentes globales quedan byte a byte intactos. Si cae una premisa, se corrigen diseño, spec y filas 7.2–7.6 antes de código de producto | - | cc:TODO |
+| 7.2 | `[Test]` `[lane:gate]` `[tdd:required]` **Contrato de salida medido, no inferido de la guía.** Extender `tools/probe-zcode-output.sh --host grok` para el mismo repo descartable, sin registro global | Las 4 formas (`additionalContext`, `decision:block`, `continue:false`+`stopReason`, `systemMessage`) y `exit 2` en Stop tienen veredicto vivo distinguible (aceptada/rechazada/ignorada); se mide también que el Stop de cierre ignora la decisión sin mutar estado; el resultado fija `TARGET`/budget de Grok. Si ninguna forma bloquea de manera fiable, 7.3–7.6 no arrancan: se re-planifica una salida propia o se cancela el host, sin publicar un gate decorativo | 7.1 | cc:TODO |
+| 7.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Envelope y señal Grok (D2+D4+D5+D6):** `HOST=grok`, aliases camel con precedencia snake, `user_prompt_submit`, tools nativas, evidencia de fallas y filtro `reason=end_turn`. Se integra sobre la rama Codex ya aterrizada | Un envelope real de 7.1 arma; el orden de identidad es `grok > codex > zcode > claude > other`; Grok y Claude sobre el mismo repo no comparten estado; todos los lectores camel medidos (`sessionId`, `toolName`, `toolInput`, `lastAssistantMessage` y transcript si existe) tienen caso de precedencia snake; `run_terminal_command`, `search_replace` y `spawn_subagent` acreditan sólo lo que corresponde; `PostToolUseFailure` no acredita verificación; un Stop Grok distinto de `end_turn` sale sin contar ciclo, limpiar ni crear estado; cada rama nueva tiene catch rojo y mutación dirigida, y las suites Claude/zcode/Codex no cambian de veredicto | 7.1, 7.2, 6.4 | cc:TODO |
+| 7.4 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Ceremonia Grok (D3), condicionada a la evidencia.** Se prende sólo por el canal que 7.1 haya demostrado para rol/`TARGET`; 7.2 fija las formas de salida y budget | Si rol y target llegan, implementer→verifier→reviewer queda exigido en target Grok, con caso que pasa, caso que bloquea y mutación `mut_ceremonia_sin_grok`; si el rol llega pero el env map no, se usa el fallback de host medido sin inventar `TARGET=grok`; si el rol no llega, no se prende ceremonia y la tarea cierra actualizando diseño/spec con el límite medido y una prueba negativa. Ninguna rama Grok altera la ceremonia de los otros hosts | 7.3 | cc:TODO |
+| 7.5 | `[Setup]` `[lane:gate]` `[tdd:required]` **`--host grok`, JSON de registro, verificador y perfiles (D1+D7).** Primero preflight de hook+JSON+agentes; sólo después se escribe, para que hook o JSON desconocidos dejen TODO intacto. Un agente desconocido es no fatal y no se pisa | `--host grok` cubre ausente/nuestro/desconocido para hook y JSON, con publicación atómica y rollback ante fallo; JSON desconocido o hook desconocido ⇒ exit != 0 y cero cambios en cualquier destino; `saikit_owned` se usa sólo si 7.1 confirmó que el loader lo tolera, o se adopta identidad byte-exacta; implementer/reviewer se instalan con marca, el `~/.grok/agents/verifier.md` ajeno sobrevive y se reporta; `--quitar-grok` retira sólo archivos propios con backup; el verificador separa JSON→hook, existencia+marca del hook y matcher de delegación, siempre exit 0 y `unknown` ≠ ausente | 7.4, 6.5 | cc:TODO |
+| 7.6 | `[Test]` `[lane:release]` `[tdd:required]` **Línea base, staging, instalación y turno real.** Toma el primer bloque libre DESPUÉS de los escenarios Codex ya mergeados; fixtures sólo desde 7.1. Staging con hook de proyecto confiado antes del perfil global | Cada gate Grok tiene caso que pasa y bloquea; `--check` es reproducible; fixtures parsean y conservan rutas; staging ejecuta el hook de proyecto sin tocar el global; el install deja hook+JSON propios bajo `~/.grok/hooks/`, conserva el verifier ajeno y no toca `~/.claude/hooks/` ni `~/.codex/hooks/`; sesión nueva: `-saikit` arma bajo `state/grok/`, prompt pelado no crea estado y la ceremonia cumple exactamente el límite medido en 7.1/7.4; `pre-commit run --all-files` pasa y, tras merge a `master`, se ejecuta el deploy/check de AGENTS.md más `--host grok` y se registra en `docs/deploy-log.md` | 7.5, 6.6 | cc:TODO |
 
 ---
 
@@ -142,6 +172,12 @@ hook sirve tal cual en zcode. Si dicen que sí, 5.3-5.5 son trabajo chico. Si
 dicen que no, la fase se reemplaza por un port propio al estilo de
 `summonaikit-kimi` —un repo entero, no cinco tareas— y esa decisión se toma con
 la medición adelante, no antes.
+
+**Required — ampliación aprobada de hosts (Phases 6 y 7).** En ambas, las dos
+primeras tareas son medición y conservan valor aunque se cancele el port. Ningún
+host se publica si su contrato de salida resulta decorativo. Phase 7 sólo es
+independiente de Phase 6 durante 7.1/7.2; las costuras de código, instalador y
+baseline están serializadas por `Depends`.
 
 **Recommended (fuera de este plan, independientes):**
 - Prueba real de Kimi con un turno `-saikit` en vivo: 24 tareas hechas y **cero
@@ -205,3 +241,12 @@ la medición adelante, no antes.
 - 事項: descarga del kit del vendor en directorio desechable (ya ejecutada 2026-08-08)
   理由: verificar la premisa de si conviene actualizar; se hizo fuera del home y se borró
   scope: pre-plan, completado
+- 事項: escritura y reemplazo recuperable de `~/.codex/hooks/summonaikit-harness.sh`
+  理由: instalar la fuente aprobada de Phase 6 y validar un turno real con backup/restore listo
+  scope: Phase 6 / Task 6.6
+- 事項: alta y revocación de folder trust para repos descartables de Grok
+  理由: ejecutar hooks de proyecto durante captura, probe y staging sin instalar el harness global
+  scope: Phase 7 / Tasks 7.1, 7.2 y 7.6
+- 事項: escritura/reemplazo recuperable y remoción selectiva bajo `~/.grok/hooks/` y `~/.grok/agents/`
+  理由: instalar o retirar sólo artefactos con propiedad `summonaikit-claude`, preservando el verifier ajeno
+  scope: Phase 7 / Tasks 7.5 y 7.6
