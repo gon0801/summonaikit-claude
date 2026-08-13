@@ -54,8 +54,9 @@ por segundos) contra el control (1).
 - El hook vivo (`emit_gate_failure` = JSON `decision:block` + `exit 2` + stderr)
   funciona en zcode tal cual: la inyección del contrato llega al modelo y el
   bloqueo fuerza pasadas de revisión (4, luego zcode corta con un tope interno).
-- `budget` y `notice` ignoradas son **inocuas**: el presupuesto-agotado se
-  apoya en `exit 2` (que sí bloquea), y el aviso RN es cortesía fail-open.
+- `notice` ignorada es inocua (RN fail-open). **`budget` no:**
+  `emit_budget_exhausted` es `continue:false`+exit 0, no el `exit 2` de
+  `emit_gate_failure`; en zcode esa forma no corta. Lo resuelve 5.4.
 - 5.3–5.5 son **adaptación del hook existente, no un port** (coincide con 5.1).
 
 ## Premisa tumbada (corregida en el spec, F2)
@@ -71,9 +72,9 @@ por segundos) contra el control (1).
 
 ## Datos nuevos para 5.3–5.5
 
-- `budget` (`continue:false`) es **ignorado**: el corte por presupuesto no se
-  puede expresar con esa forma sola en zcode — el vivo ya suma `exit 2`, que sí
-  bloquea, así que no hace falta cambiarlo. Lo declara 5.4.
+- `budget` (`continue:false`+exit 0) es **ignorado**: el vivo no le suma
+  `exit 2` (eso es `emit_gate_failure`). Tras 2 ciclos el Stop cierra como
+  allow. 5.4 tiene que cambiar esa forma si quiere el corte.
 - El `additionalContext` viaja como **mensaje `system`** (no `user`) con prefijo
   `UserPromptSubmit hook additional context:` y numeración `#1`. Inofensivo para
   el hook (lee el payload, no el contexto inyectado); registrado para 5.5.
