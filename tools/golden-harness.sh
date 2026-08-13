@@ -98,8 +98,14 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 
 normalizar() {
+  # Task 5.3: el state-path ahora lleva HOST (state/<host>/<key>/<sess>/...).
+  # La 1ra regex come host+key (host = [a-z]+: claude/zcode/other); la 2da
+  # cubre cualquier residual pre-5.3 (state/<key>/...). Se uso clase de chars y
+  # no (claude|zcode|other) porque el delimitador `|` choca con la alternancia
+  # en el sed de MSYS2/Git Bash (BRE \| y ERE | ambos se rompen).
   sed -e "s|$work_win|<SANDBOX>|g" \
       -e "s|$work|<SANDBOX>|g" \
+      -e 's|state/[a-z][a-z]*/[0-9][0-9]*|state/<PROJECT_KEY>|g' \
       -e 's|state/[0-9][0-9]*|state/<PROJECT_KEY>|g' \
       -e 's|[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z|<TS>|g'
 }
@@ -254,7 +260,12 @@ generar() {
 
       # `auto` = la variable NO se exporta. Es un caso real: si el registro en
       # settings.json no las pone, el hook deriva la fase del propio payload.
-      cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET -u CLAUDECODE
+      # Task 5.3: se unsetean tambien ZCODE_SESSION_ID / ZCODE_PROJECT_DIR (la
+      # senal de host de zcode, medida Task 5.1). Sin esto, un --check corrido
+      # DENTRO de zcode escribe state/zcode/... y uno desde Claude state/other/...
+      # => divergencia falsa por host, no por comportamiento.
+      cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
+           -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
       [ "$objetivo" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")

@@ -47,6 +47,7 @@ G1|sentinel_sin_guardia|se arma sin llegar a consultar el sentinel
 G1|session_sin_llave|el estado se vuelve a llavear solo por proyecto (sin sesion)
 G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sentinel
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
+G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -111,6 +112,13 @@ mut_desarmar_quita_borrado()   { sed 's/if \[ "\$PHASE" = "prompt" \] && \[ -f "
 # clave (un session_id anidado en session_crons) y re-llaveaba la ruta a mitad
 # de turno. Hallazgo [media] de la cross-review codex sobre la 3.4.
 mut_session_id_greedy()         { sed 's/json_top_level_string session_id/json_string_field session_id/'; }
+# Task 5.3 (A4-cross-host): anula el segmento HOST de PROJECT_DIR, devolviendolo
+# a STATE_ROOT/PROJECT_KEY. Sin HOST, dos hosts sobre el mismo $0 y la misma
+# sesion colapsan al mismo harness-state.env (A y B se pisan). Atrapada por
+# caso_g1_dos_hosts_mismo_repo_no_comparten_estado. Sin escapar los `$` (BRE:
+# literal a mitad de patron) y con `#` de delimitador para no chocar con las
+# barras del path.
+mut_host_sin_llave()            { sed 's#PROJECT_DIR="\$STATE_ROOT/\$HOST/\$PROJECT_KEY"#PROJECT_DIR="$STATE_ROOT/$PROJECT_KEY"#'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper

@@ -120,7 +120,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal"
 
 # El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
 # contiene "ui", asi que su regex de palabras clave armaba el harness solo.
@@ -230,6 +230,104 @@ caso_g1_session_id_anidado_no_reescribe_ruta() {
   lab_run stop claude "$(lab_payload_stop_con_cron_intruso 'cierre con cron intruso')"
   _igual "Stop con session_id anidado sigue viendo el estado de ESTA sesion (A4/C2)" "$LAB_RC" "2"
 }
+
+# DEFECTO A4-cross-host (Task 5.3) — el caso que lo habria atrapado. A4 llaveo
+# por sesion; 5.3 SUMA host. Si el harness se registra desde zcode apuntando al
+# MISMO $0 que Claude (~/.claude/hooks/…), STATE_ROOT (dirname $0) es identico y
+# dos turnos sobre el MISMO repo con la MISMA sesion escribian el mismo
+# harness-state.env: un cierre de zcode podia pisar el turno de Claude. La
+# senal de host es el env (medido Task 5.1): CLAUDECODE=1 (Claude/glm) o
+# ZCODE_SESSION_ID/ZCODE_PROJECT_DIR (zcode); ZCODE_* gana.
+#
+# DOS mitades como pide A4 (no basta "B no ve A" — un hook que borrara todo
+# pasaria esa sola mitad) MAS un tercio de RN: el aviso pendiente vive en
+# PROJECT_DIR, asi que si HOST no aísla PROJECT_DIR, rn_take_pending de B se
+# come el aviso de A (defecto 2 del plan).
+caso_g1_dos_hosts_mismo_repo_no_comparten_estado() {
+  # Mismo $0 (el lab copia un solo hook), mismo PROJECT_ROOT, MISMO session_id
+  # (LAB_SESSION_ID default para los dos). La unica diferencia es la senal de
+  # host. Lab_SESSION_ID arranca limpio por si un caso anterior lo dejo sucio.
+  LAB_SESSION_ID=""
+
+  # --- Lado A: Claude (CLAUDECODE=1, sin ZCODE_*) ---
+  LAB_CLAUDECODE=1
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tarea del host Claude')"
+  LAB_CLAUDECODE=""
+  # Redescubrir (hallazgo r2.3): LAB_ESTADO_PATH lo descubrio lab_init SIN
+  # senal de host => apunta a state/other/… . A armo bajo claude/; no asumir la
+  # profundidad, buscar. Contra el hook SIN arreglar no hay segmento claude/ y
+  # el estado queda directo en state/<key>/<session>/.
+  ruta_A="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+  _no_vacio "ruta de estado de A tras armar" "$ruta_A"
+  _igual "cycle de A recien armado" "$(grep '^cycle=' "$ruta_A" | tail -n 1 | cut -d= -f2-)" "0"
+
+  # Sembrar el aviso RN pendiente en el PROJECT_DIR de A. La ruta del estado es
+  # PROJECT_DIR/SESSION_KEY/harness-state.env siempre (2 niveles), asi que
+  # dirname dos veces da PROJECT_DIR cualquiera sea el esquema de host.
+  rn_pending_A="$(dirname "$(dirname "$ruta_A")")/review-notice-pending.log"
+  printf 'SAIKIT REVIEW NOTICE: aviso pendiente sembrado del lado Claude.\n' > "$rn_pending_A"
+
+  # --- Lado B: zcode (LAB_ZCODE_SESSION_ID, sin CLAUDECODE) ---
+  # B ARMA (no un Stop sin estado): el armado es lo que corre rn_take_pending
+  # (hallazgo r1.2 — un Stop sin estado propio sale por emit_allow y no toca RN).
+  LAB_ZCODE_SESSION_ID="sess_zcode_host_b"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tarea del host zcode')"
+  LAB_ZCODE_SESSION_ID=""
+  ruta_B="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | sort | tail -n 1)"
+  _no_vacio "ruta de estado de B tras armar" "$ruta_B"
+
+  # Mitad 1: B no ve el estado de A — rutas distintas. Sin el arreglo A y B
+  # colapsan al mismo path (mismo $0 + misma sesion + STATE_ROOT identico).
+  if [ "$ruta_A" = "$ruta_B" ]; then
+    _mal "A (claude) y B (zcode) comparten harness-state.env — A4 cross-host (Task 5.3)"
+  fi
+  # Mitad 2: el estado de A sobrevive intacto al armado de B.
+  [ -f "$ruta_A" ] || _mal "el estado de A se perdio al armar B (A4 cross-host, mitad 2)"
+  _igual "cycle de A intacto tras el armado de B" \
+         "$(grep '^cycle=' "$ruta_A" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "0"
+  # Mitad 3 (RN): el aviso pendiente de A sigue — rn_take_pending de B mira su
+  # PROPIO PROJECT_DIR. Si HOST no aísla PROJECT_DIR, B se come el aviso de A.
+  [ -f "$rn_pending_A" ] \
+    || _mal "el aviso RN de A fue tomado/borrado por B — HOST no aísla PROJECT_DIR (defecto 2)"
+
+  # Restaurar (hallazgo r2.2): correr_caso no restaura LAB_CLAUDECODE /
+  # LAB_ZCODE_*. Sin esto, los G1 siguientes heredan ZCODE_SESSION_ID y buscan
+  # estado bajo zcode/.
+  LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_ZCODE_PROJECT_DIR=""
+  LAB_SESSION_ID=""
+}
+
+# Control de DETECCION de host (Task 5.3, A3). No es el catch (no tiene mutacion
+# propia): afirma que el segmento de host sale de la senal correcta. Sin el
+# control de ZCODE_PROJECT_DIR-only (hallazgo 5), una implementacion que leyera
+# solo ZCODE_SESSION_ID pasaria la bateria entera. Va DESPUES del catch en
+# CASOS_G1: asi mut_host_sin_llave se acredita al catch (corre antes) y este
+# caso aporta cobertura sin robar la declaracion.
+caso_g1_host_segun_senal() {
+  _senal_espera_host() {
+    _senial="$1"; _esperado="$2"
+    lab_limpiar_estado
+    case "$_senial" in
+      claude)        LAB_CLAUDECODE=1 ;;
+      zcode-sid)     LAB_ZCODE_SESSION_ID="sess_ctrl_zcode" ;;
+      zcode-pdir)    LAB_ZCODE_PROJECT_DIR="/c/dummy/proyecto-zcode" ;;
+      ninguna)       : ;;
+    esac
+    lab_run prompt claude "$(lab_payload_prompt '-saikit detectar host')"
+    LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_ZCODE_PROJECT_DIR=""
+    _ruta="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+    _no_vacio "ruta de estado con senal=$_senial" "$_ruta"
+    case "$_ruta" in
+      *"/$_esperado/"*) : ;;
+      *) _mal "con senal=$_senial esperaba segmento /$_esperado/, dio: $_ruta" ;;
+    esac
+  }
+  _senal_espera_host claude    claude   # CLAUDECODE=1 => claude (regresion A10)
+  _senal_espera_host zcode-sid zcode    # solo ZCODE_SESSION_ID => zcode
+  _senal_espera_host zcode-pdir zcode   # solo ZCODE_PROJECT_DIR => zcode (hallazgo 5)
+  _senal_espera_host ninguna   other    # sin senal => other, NUNCA claude
+}
+
 
 # ============================================ G2 — evidencia de verificacion
 CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
@@ -550,7 +648,16 @@ caso_g3_agent_type_generico_no_cuenta() {
 # sin el arreglo el Stop cierra LIMPIO (exit 0, TARGET vacio => la rama de
 # secuencia no corre); con el arreglo bloquea reclamando los tres roles.
 caso_g3_target_por_claudecode_fallback() {
+  # Task 5.3: CLAUDECODE=1 hace que el hook lea state/claude/ (HOST entra al
+  # path). lab_sembrar escribe a LAB_ESTADO_PATH, que lab_init descubrio sin
+  # senal => state/other/. Para que el seed caiga donde el hook leera, se apunta
+  # LAB_ESTADO_PATH al path de claude/ SOLO al sembrar y se restaura enseguida.
+  # (Local: los helpers del lab siguen esquema-agnosticos — no asumir state/<host>/
+  # porque la bateria de mutaciones muta el esquema, p. ej. host_sin_llave.)
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/claude/|')"
   lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
+  LAB_ESTADO_PATH="$_ep_backup"
   LAB_CLAUDECODE=1
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
   LAB_CLAUDECODE=""

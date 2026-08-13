@@ -42,6 +42,24 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # transcript_path del payload (que llega con backslashes dobles literales porque
 # json_string_field no decodifica escapes).
 PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
+# Task 5.3 (A4-cross-host): aislar el estado por host. Si el harness se registra
+# desde zcode apuntando al MISMO $0 que Claude (~/.claude/hooks/…), STATE_ROOT
+# (dirname $0) es identico y dos turnos sobre el mismo repo con la misma sesion
+# escribian el mismo harness-state.env: un cierre de zcode pisaba el turno de
+# Claude. La senal de host es el env (medido Task 5.1): ZCODE_SESSION_ID o
+# ZCODE_PROJECT_DIR los inyecta zcode; CLAUDECODE=1 lo inyecta Claude/glm (A10).
+# ZCODE_* gana: zcode setea CLAUDE_SESSION_ID/CLAUDE_PROJECT_DIR pero NO
+# CLAUDECODE (5.1). HOST NO depende del payload, solo del env, asi que se
+# resuelve aca (junto a PROFILE_DIR) sin esperar a los lectores JSON. unknown
+# => other, NUNCA claude: colapsar a claude reabre el defecto cuando la senal
+# falta (Core Rule 2). HOST se SUMA a la sesion (A4), no la reemplaza.
+if [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
+  HOST=zcode
+elif [ "${CLAUDECODE:-}" = "1" ]; then
+  HOST=claude
+else
+  HOST=other
+fi
 # Resolve the project from the WORKING directory, not the script location. This
 # hook is installed at user level (~/.claude/hooks) and shared by every project,
 # so deriving the project from $0 would always point at the home dir. The cwd is
@@ -201,7 +219,10 @@ json_top_level_string() {
 # si se hashea porque su ruta trae `:` y `\` (ilegales en un nombre de dir).
 STATE_ROOT="$HOOK_DIR/state"
 PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
-PROJECT_DIR="$STATE_ROOT/$PROJECT_KEY"
+# Task 5.3: HOST entra en PROJECT_DIR para que dos hosts sobre el mismo $0 no
+# compartan estado. RN_PENDING_PATH hereda HOST de aca (ver comentario
+# REVIEW-NOTICE): NO volver a colgarlo de un path sin HOST.
+PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"
 SESSION_ID="$(json_top_level_string session_id)"
 if [ -z "$SESSION_ID" ]; then
   # session_id ausente -> slot nombrado y descubrible, no un slot unico que
@@ -477,6 +498,8 @@ read_state_value() {
 # de otra (el elif de mas abajo) -- para una senal advisory, preferible a
 # perder la entrega entre sesiones.
 RN_ORDER_PATH="${STATE_PATH%.env}-review-notice.env"
+# Task 5.3: PROJECT_DIR ahora lleva HOST, asi que RN_PENDING tambien se aísla
+# por host — un Stop de zcode no puede tomar/borrar el aviso pendiente de Claude.
 RN_PENDING_PATH="$PROJECT_DIR/review-notice-pending.log"
 
 rn_read_order() {
