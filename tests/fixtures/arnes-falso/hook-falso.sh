@@ -11,14 +11,22 @@ ESTADO_NOMBRE=falso.env
 INPUT="$(cat)"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 KEY="$(pwd | cksum | cut -d ' ' -f 1)"
-mkdir -p "$DIR/state/$KEY"
+# Task 5.5: el falso escribe state/<host>/<key>/ para que el arnes pueda afirmar
+# el HOST del target zcode (host_del_estado lee el segmento host sin normalizar).
+# Mismo criterio que el hook vivo (5.3): zcode si ZCODE_* esta seteada, other si
+# no. Antes escribia state/<key>/ sin host: el caso estado_host era vacuo.
+HOST=other
+[ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ] && HOST=zcode
+mkdir -p "$DIR/state/$HOST/$KEY"
 {
   printf 'phase=%s\n' "${SUMMONAIKIT_HOOK_PHASE:-<sin-fase>}"
   printf 'target=%s\n' "${SUMMONAIKIT_HOOK_TARGET:-<sin-target>}"
+  printf 'zcode_session=%s\n' "${ZCODE_SESSION_ID:-<sin-zcode>}"
+  printf 'zcode_project=%s\n' "${ZCODE_PROJECT_DIR:-<sin-zcode-project>}"
   printf 'ts=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'cwd=%s\n' "$(pwd)"
   printf 'bytes_entrada=%s\n' "${#INPUT}"
-} > "$DIR/state/$KEY/$ESTADO_NOMBRE"
+} > "$DIR/state/$HOST/$KEY/$ESTADO_NOMBRE"
 
 case "${SUMMONAIKIT_HOOK_PHASE:-}" in
   stop)

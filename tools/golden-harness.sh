@@ -159,6 +159,21 @@ instantanea_estado() {
   done < "$restos" | normalizar
 }
 
+# Task 5.5: el HOST que --print puede afirmar para el target zcode. `normalizar`
+# (arriba) reemplaza state/<host>/<key> por state/<PROJECT_KEY> ANTES de emitir,
+# asi que mirando el snapshot normalizado un --print no puede mostrar el host.
+# Esta funcion lee el arbol SIN normalizar y devuelve el segmento host
+# (state/<host>/...). Si no hay estado (escenario sin armar, o un Stop que ya
+# borro), devuelve vacio y la linea no se emite: no se inventa un host. Se llama
+# SOLO para objetivo=zcode; los escenarios 01-16 (claude/cursor/auto) no ganan
+# esta linea y siguen byte-identicos.
+host_del_estado() {
+  hb_sb="$1"
+  f="$(find "$hb_sb/hooks/state" -type f 2>/dev/null | head -n 1)"
+  [ -n "$f" ] || return 1
+  printf '%s' "$f" | sed -n 's|.*/state/\([a-z][a-z]*\)/.*|\1|p'
+}
+
 # ------------------------------------------------------------- validaciones
 if [ ! -r "$HOOK" ] || [ ! -f "$HOOK" ]; then
   printf 'golden-harness: unknown — no hay hook que ejercitar en: %s\n' "$HOOK" >&2
@@ -268,7 +283,20 @@ generar() {
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
-      [ "$objetivo" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")
+      # Task 5.5: el token `zcode` del filename NO exporta SUMMONAIKIT_HOOK_TARGET
+      # (5.2 declaro que TARGET=claude alcanza; 5.4 lo cablea por fallback). En
+      # su lugar pone la senal de host que zcode inyecta en produccion (5.1):
+      # ZCODE_SESSION_ID / ZCODE_PROJECT_DIR. Asi el golden ejercita el camino
+      # vivo (HOST=zcode + TARGET=claude por el fallback de 5.4), no un
+      # TARGET=zcode inventado que nadie probo; si el fallback de 5.4 se
+      # rompiera, este escenario lo delata. Las dos constantes son literales
+      # fijas (no la ruta del sandbox): si algo filtrara al estado, romperia
+      # --check entre corridas. auto/claude/cursor siguen como antes.
+      if [ "$objetivo" = "zcode" ]; then
+        cmd+=(ZCODE_SESSION_ID=sess_golden_zcode ZCODE_PROJECT_DIR=C:/dev/saikit-golden-zcode)
+      elif [ "$objetivo" != "auto" ]; then
+        cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")
+      fi
 
       out="$work/.out"; err="$work/.err"
       ( cd "$sb/proyecto" && "${cmd[@]}" bash "$sb/hooks/summonaikit-harness.sh" ) \
@@ -292,6 +320,23 @@ generar() {
         cat "$estado_ahora"
       fi
       cp "$estado_ahora" "$estado_previo"
+
+      # Task 5.5: para el target zcode, afirmar el HOST que el fallback de 5.4
+      # resolvio (debe ser zcode). Se lee del arbol SIN normalizar (ver
+      # host_del_estado): el snapshot de arriba ya perdio el segmento host. Si el
+      # token fallara y el hook escribiera state/other/ o state/claude/, la linea
+      # diria eso y --check daria rojo contra una baseline que espera zcode. Sin
+      # estado (sin armar / Stop que borro) no se emite: 01-16 tampoco la tienen.
+      if [ "$objetivo" = "zcode" ]; then
+        _hh="$(host_del_estado "$sb")"
+        # if/then (no `[ ] && printf`): cuando no hay estado _hh queda vacio y
+        # este bloque NO puede devolver non-zero, o se vuelve el exit status del
+        # while interno y generar cae en `|| exit 2` (medido: escenarios zcode
+        # sin estado, p.ej. el 17 sin armar). Un if sin rama tomada retorna 0.
+        if [ -n "$_hh" ]; then
+          printf 'estado_host: %s\n' "$_hh"
+        fi
+      fi
     done < "$pasos"
   done < "$lista_esc"
 }

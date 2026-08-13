@@ -1,0 +1,6 @@
+zcode, G3 bloquea. Corren implementer y reviewer pero NO verifier; hay runner
+que pasa (verified=1) y recibo en vinetas, asi que el UNICO motivo de bloqueo
+es la secuencia (Missing verifier). En zcode los eventos Agent SI llegan
+(medido 5.1: el alias Task<->Agent del matcher dispara), asi que omitir
+verifier es un fallo de verdad, no el A9 de Claude. Es el analogo del turno
+"omitir verifier" del STOP vivo (seccion D).

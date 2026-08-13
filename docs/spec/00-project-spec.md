@@ -1287,10 +1287,20 @@ producto.
 - `#14` dos fuentes (Claude `~/.claude/agents` vs `agents/` del repo):
   declarado, sin detector de deriva.
 
-La medición **viva** (registro en el config real del operador + un turno
-`-saikit` en zcode que arme y deje estado bajo `state/zcode/`) queda pendiente del
-operador (STOP §D del plan). Mientras no exista, la task no se declara
-`cc:完了`.
+La medición **viva** de 5.3/5.4 cerró el 2026-08-13 (turno `-saikit` en
+zcode: estado bajo `state/zcode/`, ceremonia implementer→verifier→reviewer,
+budget exit 2).
+
+### Medido 2026-08-13, Task 5.5 (línea base zcode)
+
+Escenarios 17–25 en `tests/fixtures/escenarios/` y bloque en
+`tests/golden/baseline.txt`. El token `zcode` del arnés exporta
+`ZCODE_*` (no `TARGET=zcode`). `--check` reproducible (25 escenarios).
+Cada gate tiene un caso que pasa y uno que bloquea en este target.
+Staging por `<repo>/.zcode/config.json` no aplica (override ignorado,
+5.1). El turno vivo `-saikit` arma y el pelado no (5.3/5.4/5.6).
+Baseline regrabada contra el hook post-G2-skip-ES (contrato UPS nombra
+`no corri`).
 
 ## Non-Goals
 

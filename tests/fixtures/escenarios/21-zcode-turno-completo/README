@@ -1,0 +1,4 @@
+zcode, G2+G3+G4 pasan. Secuencia completa implementer -> verifier -> reviewer
+(verifier via el runner Bash que pasa, ademas del Agent), verified=1 y recibo en
+vinetas. El Stop allow: exit 0 y borra el estado. Es el cierre limpio en este
+target; su par de "pasa" contra el "bloquea" del 20.

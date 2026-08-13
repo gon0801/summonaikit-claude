@@ -1,0 +1,5 @@
+zcode, G5 bloquea. Tres Stop seguidos sobre el mismo turno armado (como el 08).
+ciclo 1/2 bloquea, 2/2 bloquea y el tercero cae por presupuesto agotado. El
+delta contra el 08 es el corte de 5.4: en zcode el tercer Stop sale con exit 2
+(no continue:false+exit 0), porque continue:false es ignorado por este host
+(medido 5.2) y el presupuesto depende del exit 2, que en Stop SI bloquea.

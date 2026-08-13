@@ -144,8 +144,8 @@ mkdir -p "$esc_falsos/.claude"
 correr "$SANDBOX/oculto.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 grep -q '^=== escenario \.' "$SANDBOX/oculto.txt" && malo "un directorio oculto se colo como escenario"
-[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "2" ] \
-  || malo "esperaba exactamente 2 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
+[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "3" ] \
+  || malo "esperaba exactamente 3 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
 rmdir "$esc_falsos/.claude"
 
 # --------------------------------------------------------- 7) aislamiento
@@ -170,6 +170,59 @@ cmp -s "$hook_falso" "$marcado" && malo "el fixture marcado quedo identico; el c
 correr "$SANDBOX/marcado.txt" --hook "$marcado" --scenarios "$esc_falsos" --baseline "$base" --check
 [ "$rc" -eq 0 ] || malo "mismo comportamiento con otros bytes debe salir 0, dio $rc: $(cat "$SANDBOX/marcado.txt")"
 grep -qi 'identidad' "$SANDBOX/marcado.txt" || malo "deberia AVISAR que el hook cambio de identidad: $(cat "$SANDBOX/marcado.txt")"
+
+# ------------------------------------------ 9) target zcode (Task 5.5)
+# El token `zcode` del filename NO exporta SUMMONAIKIT_HOOK_TARGET: pone
+# ZCODE_SESSION_ID / ZCODE_PROJECT_DIR (la senal de host de zcode, medida 5.1),
+# igual que en produccion. El estado del falso lo registra, y el arnes emite
+# `estado_host: zcode` leyendo el arbol sin normalizar. 01-verde/02-bloqueo
+# (claude) no ganan ni zcode_session real ni la linea estado_host.
+caso "target zcode: el estado trae ZCODE_SESSION_ID/PROJECT_DIR y NO exporta TARGET"
+correr "$SANDBOX/zc.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
+[ "$rc" -eq 0 ] || malo "--print debio salir 0, dio $rc: $(cat "$SANDBOX/zc.txt")"
+# 03-zcode es ultimo en orden lexicografico -> su bloque corre hasta EOF.
+awk '/^=== escenario 03-zcode/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/zc_blk.txt"
+grep -q '^| zcode_session=sess_golden_zcode$' "$SANDBOX/zc_blk.txt" \
+  || malo "el estado zcode no trae zcode_session=sess_golden_zcode"
+grep -q '^| zcode_project=C:/dev/saikit-golden-zcode$' "$SANDBOX/zc_blk.txt" \
+  || malo "el estado zcode no trae zcode_project=C:/dev/saikit-golden-zcode"
+
+caso "target zcode: el estado NO trae target=zcode ni target=claude (TARGET no exportado)"
+# Se mira SOLO lineas de estado (prefijo '| '); el header '--- paso ... target=zcode'
+# del arnes es el token del filename, no la variable, y no se cuela aca.
+grep -q '^| target=zcode$' "$SANDBOX/zc_blk.txt" \
+  && malo "el estado zcode trae target=zcode: el arnes exporto TARGET=zcode (no debia)"
+grep -q '^| target=claude$' "$SANDBOX/zc_blk.txt" \
+  && malo "el estado zcode trae target=claude: TARGET se exporto cuando no debia"
+grep -q '^| target=<sin-target>$' "$SANDBOX/zc_blk.txt" \
+  || malo "el estado zcode debio traer target=<sin-target>"
+
+caso "target claude: sigue SIN ZCODE_* (regresion unset 5.3) y SIN linea estado_host"
+awk '/^=== escenario 01-verde/{f=1} /^=== escenario 02-bloqueo/{f=0} f' "$SANDBOX/zc.txt" > "$SANDBOX/cl_blk.txt"
+grep -q '^| zcode_session=sess_golden_zcode$' "$SANDBOX/cl_blk.txt" \
+  && malo "01-verde (claude) trae zcode_session real: el unset de ZCODE_* se rompio"
+grep -q '^| zcode_session=<sin-zcode>$' "$SANDBOX/cl_blk.txt" \
+  || malo "01-verde (claude) debio traer zcode_session=<sin-zcode>"
+grep -q '^estado_host:' "$SANDBOX/cl_blk.txt" \
+  && malo "01-verde (claude) NO debe tener linea estado_host (solo el target zcode)"
+
+caso "target zcode: un paso que deja estado trae 'estado_host: zcode' (A4)"
+grep -q '^estado_host: zcode$' "$SANDBOX/zc_blk.txt" \
+  || malo "el paso zcode debio traer 'estado_host: zcode': $(cat "$SANDBOX/zc_blk.txt")"
+
+caso "target zcode: dos --print seguidos son byte-identicos (constantes sin ruido)"
+correr "$SANDBOX/zc2.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
+if ! cmp -s "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt"; then
+  malo "dos --print con 03-zcode no son byte-identicos"
+  diff -u "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt" | head -20 >&2
+fi
+
+caso "target zcode: --record + --check del falso con 3 escenarios sigue en 0"
+base3="$SANDBOX/base3.txt"
+correr "$SANDBOX/rec3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --record
+[ "$rc" -eq 0 ] || malo "--record (3 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/rec3.txt")"
+correr "$SANDBOX/chk3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --check
+[ "$rc" -eq 0 ] || malo "--check (3 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2
