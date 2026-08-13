@@ -7,6 +7,16 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-13 — PR #9 / Task 5.5 (merge `b401fdd`)
+
+- **Mergeado:** PR #9 `feat/5.5-zcode-golden` → master — escenarios 17–25
+  (zcode) + token `ZCODE_*` en el arnés + baseline de 25 escenarios
+  (`--check` reproducible). Cierra `Plans.md` 5.5.
+- **¿Cambió el hook?** **No.** 5.5 es línea base + arnés; el harness intacto.
+- **`install-hook.sh`:** `YA AL DIA` (deploy no-op).
+- **Vivo vs master:** cksum idéntico (`2628234111 70227`).
+- **Operador:** Gon. Phase 5 del target zcode queda cerrada (5.1–5.6).
+
 ## 2026-08-12 — PR #8 / G2 skip ES (merge `024e0ec`)
 
 - **Mergeado:** PR #8 `feat/g2-verify-skip-es` → master — `VERIFY_SKIP_RE`
