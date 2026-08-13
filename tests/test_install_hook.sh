@@ -269,15 +269,21 @@ printf '%s' "$out" | grep -qi 'REGISTRO' \
 # --host zcode appendea las 3 fases ahi; NO instala el archivo (va antes, sin
 # --host). Preflight: config JSON, enabled==true estricto, DEST NUESTRO_IDENTICO
 # + linea de codigo 5.3. --quitar-zcode saca solo las entradas 5.4 (nivel entrada,
-# r2.2) sin ese preflight (r3.3).
+# r2.2) sin ese preflight (r3.3). Task 5.6: ademas instala/quita los
+# perfiles en SAIKIT_ZCODE_AGENTS_DIR (nunca el HOME real).
 
 n_cfg=0
 zcode_cfg=''
+zcode_agents=''
 nuevo_zcode_cfg() {
   n_cfg=$((n_cfg + 1))
   local c="$tmp/zcode-cfg-$n_cfg"
-  mkdir -p "$c"
+  mkdir -p "$c/agents"
   zcode_cfg="$c/config.json"
+  # Core Rule 4: nunca escribir ~/.zcode/agents del HOME real. El override
+  # apunta al sandbox de ESTE caso. El instalador post-5.6 instala ahi los
+  # perfiles implementer/verifier/reviewer.
+  zcode_agents="$c/agents"
   # config minimo con enabled:true + vecinos (SessionStart dummy, Stop tokentracker)
   cat > "$zcode_cfg" <<'JSON'
 {
@@ -298,11 +304,19 @@ JSON
 # DEST listo = copia identica de la fuente (NUESTRO_IDENTICO + lleva la linea 5.3).
 dest_listo() { nuevo_destino; cp "$fuente" "$dest"; }
 
+# Corre --host zcode contra el config y el dir de agentes del caso. --dest se
+# fija al DEST listo del caso; flags extra (--quitar-zcode) van en "$@".
+host_zcode() {
+  SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+  SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+    bash "$tool" --host zcode --dest "$dest" "$@"
+}
+
 # --- B3.1) appendea 3 fases, sin matcher UPS/Stop, PTU cubre Task|Agent; no toca DEST
 caso "zcode: --host zcode appendea 3 fases y NO toca DEST"
 dest_listo; nuevo_zcode_cfg
 dest_ck="$(cksum < "$dest")"
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
 [ "$dest_ck" = "$(cksum < "$dest")" ] || malo "--host zcode no debe tocar DEST (cksum cambio)"
 python - "$zcode_cfg" <<'PY' || malo "estructura appendeada distinta de la esperada"
@@ -328,9 +342,9 @@ PY
 # --- B3.2) idempotente + repara malformada
 caso "zcode: segunda vez no duplica (idempotencia por entrada canonica)"
 dest_listo; nuevo_zcode_cfg
-SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+host_zcode >/dev/null 2>&1
 antes=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
-SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+host_zcode >/dev/null 2>&1
 despues=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
 [ "$antes" = "$despues" ] || malo "segunda vez duplico ($antes -> $despues)"
 
@@ -344,7 +358,7 @@ d["hooks"]["events"].setdefault("UserPromptSubmit", []).append(
   {"hooks": [{"type": "process", "command": 'echo bash.exe DEST --saikit-harness-id 5.4', "timeout": 500}]})
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0 reparando, dio $rc: $out"
 python - "$zcode_cfg" <<'PY' || malo "la malformada (type process/timeout 500) no se reparo"
 import json, sys
@@ -358,13 +372,13 @@ PY
 # --- B3.3) parcial (falta Stop) => completa sin tocar las otras
 caso "zcode: parcial (falta Stop) => re-anade solo Stop"
 dest_listo; nuevo_zcode_cfg
-SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+host_zcode >/dev/null 2>&1
 python - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["events"]["Stop"]
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 n=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
 [ "$n" = "3" ] || malo "deben quedar 3 entradas 5.4, hay $n"
@@ -390,7 +404,7 @@ d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = json.loads(val
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
   cb="$(cksum < "$zcode_cfg")"
-  out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+  out="$(host_zcode 2>&1)"; rc=$?
   [ "$rc" -eq 2 ] || malo "enabled=$val debe salir 2, dio $rc"
   [ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto con enabled=$val"
 done
@@ -401,7 +415,7 @@ import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["enabled"]
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "enabled ausente debe salir 2, dio $rc"
 
 # --- B3.6) DEST sin controlar (NUESTRO_DISTINTO) => exit 2, config intacto
@@ -409,14 +423,14 @@ caso "zcode: DEST NUESTRO_DISTINTO => exit 2 (preflight r1.3)"
 dest_listo; nuevo_zcode_cfg
 escribir_nuestro_viejo "$dest"   # marcador propio pero contenido != fuente
 cb="$(cksum < "$zcode_cfg")"
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "DEST sin controlar debe salir 2, dio $rc: $out"
 [ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto"
 
 # --- B3.7) --quitar-zcode: nivel entrada (r2.2) + sin preflight (r3.3)
 caso "zcode: --quitar-zcode saca 5.4 y deja vecinos, incluido en el MISMO hooks[] (r2.2)"
 dest_listo; nuevo_zcode_cfg
-SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+host_zcode >/dev/null 2>&1
 python - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8'))
@@ -426,7 +440,7 @@ for g in d["hooks"]["events"]["UserPromptSubmit"]:
         hs.append({"type": "command", "command": "echo vecino-mismo-grupo"})
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --quitar-zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode --quitar-zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
 n=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
 [ "$n" = "0" ] || malo "deben quedar 0 entradas 5.4, hay $n"
@@ -436,14 +450,14 @@ grep -q 'tokentracker-dummy' "$zcode_cfg" || malo "vecino tokentracker borrado"
 
 caso "zcode: --quitar-zcode corre con enabled:false y DEST ausente (r3.3)"
 dest_listo; nuevo_zcode_cfg
-SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --dest "$dest" >/dev/null 2>&1
+host_zcode >/dev/null 2>&1
 python - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = False
 json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
 rm -f "$dest"
-out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" bash "$tool" --host zcode --quitar-zcode --dest "$dest" 2>&1)"; rc=$?
+out="$(host_zcode --quitar-zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "quitar debe correr sin preflight (r3.3), dio $rc: $out"
 
 # --- B3.8) --host inventado => exit 2
@@ -463,6 +477,184 @@ caso "zcode: regresion — un --dest Claude legal sigue funcionando"
 nuevo_destino; cp "$fuente" "$dest"
 out="$(bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "un --dest Claude legal debe seguir funcionando: $rc: $out"
+
+# ============================================================================
+# Task 5.6 — --host zcode tambien instala implementer/verifier/reviewer
+# ============================================================================
+# zcode solo conoce tipos registrados en ~/.zcode/agents/<name>.md (medido:
+# Agent type 'implementer' not found. Available: general-purpose, Explore).
+# Sin esos tres archivos el candado de secuencia es inalcanzable. Misma
+# disciplina de tres estados que DEST: AUSENTE instala, NUESTRO_IDENTICO no
+# reescribe, NUESTRO_DISTINTO repara, DESCONOCIDO no se toca. --quitar-zcode
+# solo borra los que llevan saikit_owned. Fuente = agents/ del repo.
+
+agentes_fuente="$repo/agents"
+cmp_agente() {
+  cmp -s "$agentes_fuente/$1.md" "$zcode_agents/$1.md"
+}
+
+caso "zcode: --host zcode instala implementer/verifier/reviewer en AGENTS_DIR"
+dest_listo; nuevo_zcode_cfg
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+for rol in implementer verifier reviewer; do
+  [ -f "$zcode_agents/$rol.md" ] || malo "falta $rol.md en AGENTS_DIR"
+  cmp_agente "$rol" || malo "$rol.md no quedo byte a byte igual a agents/$rol.md"
+  grep -q '^name: '"$rol"'$' "$zcode_agents/$rol.md" \
+    || malo "$rol.md no declara name: $rol"
+  grep -Eq '^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$' "$zcode_agents/$rol.md" \
+    || malo "$rol.md no lleva el marcador saikit_owned"
+done
+printf '%s' "$out" | grep -qi 'AGENTE' \
+  || malo "no reporta la instalacion de agentes: $out"
+
+caso "zcode: segunda vez no reescribe agentes identicos (mtime intacto)"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+mtime_1="$(mtime_de "$zcode_agents/implementer.md")"
+sleep 1
+host_zcode >/dev/null 2>&1
+[ "$(mtime_de "$zcode_agents/implementer.md")" = "$mtime_1" ] \
+  || malo "reescribio un agente que ya era identico (mtime cambio)"
+
+caso "zcode: agente DESCONOCIDO no se pisa y el hook igual se registra"
+dest_listo; nuevo_zcode_cfg
+printf '%s\n' '---' 'name: implementer' 'description: de otro' '---' '# custom' \
+  > "$zcode_agents/implementer.md"
+antes_sha="$(sha256sum < "$zcode_agents/implementer.md")"
+cb="$(cksum < "$zcode_cfg")"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "DESCONOCIDO no debe abortar el registro, dio $rc: $out"
+[ "$(sha256sum < "$zcode_agents/implementer.md")" = "$antes_sha" ] \
+  || malo "piso un implementer.md DESCONOCIDO"
+grep -q 'saikit-harness-id 5[.]4' "$zcode_cfg" \
+  || malo "el hook tenia que registrarse igual con un agente DESCONOCIDO"
+printf '%s' "$out" | grep -qi 'desconocid' \
+  || malo "no reporta el agente desconocido: $out"
+# verifier y reviewer no existian: se instalan
+cmp_agente verifier || malo "verifier.md tenia que instalarse (solo implementer era ajeno)"
+cmp_agente reviewer || malo "reviewer.md tenia que instalarse"
+
+caso "zcode: agente NUESTRO_DISTINTO se repara (con backup)"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+{
+  printf '%s\n' '---'
+  printf '%s\n' 'name: implementer'
+  printf '%s\n' 'description: viejo'
+  printf '%s\n' 'saikit_owned: summonaikit-claude'
+  printf '%s\n' '---'
+  printf '%s\n' '# implementer viejo'
+} > "$zcode_agents/implementer.md"
+previo_sha="$(sha256sum < "$zcode_agents/implementer.md")"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 reparando, dio $rc: $out"
+cmp_agente implementer || malo "no reparo implementer.md a la plantilla del repo"
+backup="$(find "$zcode_agents" -type f -name 'implementer.md*.bak' 2>/dev/null | head -n 1)"
+[ -n "$backup" ] || malo "reparo sin dejar backup"
+[ -n "$backup" ] && [ "$(sha256sum < "$backup")" = "$previo_sha" ] \
+  || malo "el backup no conserva el implementer previo"
+
+caso "zcode: --quitar-zcode borra SOLO los agentes nuestros (implementer DESCONOCIDO se queda, con backup de los nuestros)"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+ver_sha="$(sha256sum < "$zcode_agents/verifier.md")"
+printf '%s\n' '---' 'name: implementer' 'description: de otro' '---' '# custom' \
+  > "$zcode_agents/implementer.md"
+ajeno_sha="$(sha256sum < "$zcode_agents/implementer.md")"
+out="$(host_zcode --quitar-zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ -f "$zcode_agents/implementer.md" ] || malo "quitar borro un implementer DESCONOCIDO"
+[ "$(sha256sum < "$zcode_agents/implementer.md")" = "$ajeno_sha" ] \
+  || malo "quitar reescribio el implementer DESCONOCIDO"
+[ ! -e "$zcode_agents/verifier.md" ] || malo "quitar debio borrar verifier.md (era nuestro)"
+[ ! -e "$zcode_agents/reviewer.md" ] || malo "quitar debio borrar reviewer.md (era nuestro)"
+backup="$(find "$zcode_agents" -type f -name 'verifier.md*.bak' 2>/dev/null | head -n 1)"
+[ -n "$backup" ] || malo "quitar borro verifier.md sin dejar backup"
+[ -n "$backup" ] && [ "$(sha256sum < "$backup")" = "$ver_sha" ] \
+  || malo "el backup de verifier no conserva el contenido previo"
+
+caso "zcode: --quitar-zcode no toca un implementer DESCONOCIDO"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+printf '%s\n' '---' 'name: implementer' 'description: de otro' '---' '# custom' \
+  > "$zcode_agents/implementer.md"
+antes_sha="$(sha256sum < "$zcode_agents/implementer.md")"
+host_zcode --quitar-zcode >/dev/null 2>&1
+[ -f "$zcode_agents/implementer.md" ] || malo "quitar borro un implementer DESCONOCIDO"
+[ "$(sha256sum < "$zcode_agents/implementer.md")" = "$antes_sha" ] \
+  || malo "quitar reescribio un implementer DESCONOCIDO"
+[ ! -e "$zcode_agents/verifier.md" ] || malo "quitar debio borrar verifier.md (era nuestro)"
+
+caso "zcode: fuente de agentes ausente => exit 2, config intacto, dir vacio"
+dest_listo; nuevo_zcode_cfg
+src_vacio="$tmp/agents-vacio"
+mkdir -p "$src_vacio"
+cb="$(cksum < "$zcode_cfg")"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+       SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+       SAIKIT_ZCODE_AGENTS_SOURCE="$src_vacio" \
+       bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "fuente ausente debe salir 2, dio $rc: $out"
+[ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto si faltan las plantillas"
+[ ! -e "$zcode_agents/implementer.md" ] || malo "no debe instalar agentes si la fuente esta vacia"
+
+caso "zcode: marca solo en el body (no en frontmatter) => DESCONOCIDO, no se pisa"
+dest_listo; nuevo_zcode_cfg
+{
+  printf '%s\n' '---'
+  printf '%s\n' 'name: implementer'
+  printf '%s\n' 'description: de otro'
+  printf '%s\n' '---'
+  printf '%s\n' '# custom'
+  printf '%s\n' 'saikit_owned: summonaikit-claude'
+} > "$zcode_agents/implementer.md"
+antes_sha="$(sha256sum < "$zcode_agents/implementer.md")"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ "$(sha256sum < "$zcode_agents/implementer.md")" = "$antes_sha" ] \
+  || malo "una marca solo en el body no debe contar como nuestro"
+printf '%s' "$out" | grep -qi 'desconocid' \
+  || malo "debia reportar DESCONOCIDO (marca fuera del frontmatter): $out"
+
+caso "zcode: plantilla con CRLF en name: sigue siendo valida"
+dest_listo; nuevo_zcode_cfg
+src_crlf="$tmp/agents-crlf"
+mkdir -p "$src_crlf"
+for rol in implementer verifier reviewer; do
+  python - "$agentes_fuente/$rol.md" "$src_crlf/$rol.md" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
+open(dst, 'w', encoding='utf-8', newline='').write(text)
+PY
+done
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+       SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+       SAIKIT_ZCODE_AGENTS_SOURCE="$src_crlf" \
+       bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "plantilla CRLF debe instalarse, dio $rc: $out"
+[ -f "$zcode_agents/implementer.md" ] || malo "no instalo implementer.md desde plantilla CRLF"
+
+caso "zcode: sin bash.exe no escribe agentes ni config (preflight #3)"
+dest_listo; nuevo_zcode_cfg
+cb="$(cksum < "$zcode_cfg")"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+       SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+       SAIKIT_ZCODE_BASH_WIN= \
+       bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "sin bash.exe debe salir 2, dio $rc: $out"
+[ "$cb" = "$(cksum < "$zcode_cfg")" ] || malo "config debe quedar intacto si falta bash.exe"
+[ ! -e "$zcode_agents/implementer.md" ] \
+  || malo "no debe instalar agentes si bash.exe no se encontro"
+
+caso "zcode: sin --host no escribe AGENTS_DIR"
+dest_listo; nuevo_zcode_cfg
+SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+  bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" >/dev/null 2>&1
+[ ! -e "$zcode_agents/implementer.md" ] \
+  || malo "sin --host no debe escribir implementer.md en AGENTS_DIR"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
