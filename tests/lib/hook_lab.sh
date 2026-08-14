@@ -243,6 +243,23 @@ lab_payload_bash() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
 }
 
+# C3 (auditoria 2026-08-13) — un evento Bash cuyo tool_response trae una clave
+# "command" PROPIA (eco del host, texto que el turno no escribio). El turno solo
+# corrio $1; $2 viaja adentro del resultado. Gemelo de lab_payload_eco_subagent_type
+# para command: el lector greedy tomaba la ULTIMA ocurrencia y acreditaba
+# verified=1 por un comando que nunca corrio.
+lab_payload_bash_con_eco_command() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","eco_del_host":{"command":"%s"},"interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c9d0e1f2a3b4c5d6e7f809","duration_ms":1200}' "$1" "$2"
+}
+
+# C3, gemelo para tool_name — el eco viaja como clave "tool_name" adentro de
+# tool_response. Con el lector greedy (ultima ocurrencia gana), ese eco pisaba
+# LA herramienta del evento y "$tool_name $command_text" acreditaba verified=1
+# sin runner alguno en el comando real.
+lab_payload_bash_con_eco_tool_name() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","eco_del_host":{"tool_name":"%s"},"interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01d0e1f2a3b4c5d6e7f8091a","duration_ms":1200}' "$1" "$2"
+}
+
 # Un evento de ADENTRO de un subagente: el rol viaja en `agent_type` de primer
 # nivel. 281 de 303 payloads reales son de esta forma.
 lab_payload_bash_en_subagente() {
@@ -268,6 +285,14 @@ lab_payload_edit() {
 # tienen DOS canales, y el gate mira los dos (INPUT + tail del transcript).
 lab_payload_stop() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"%s","background_tasks":[],"session_crons":[]}' "${1:-Listo.}"
+}
+
+# Un Stop SIN last_assistant_message (Task 8.2): la forma que obliga al gate a
+# caer al canal transcript. OJO: lab_payload_stop '' NO sirve para esto — su
+# "${1:-Listo.}" trata el vacio como ausente y mete "Listo.", y con el campo
+# presente la escotilla ya no cae al fallback.
+lab_payload_stop_sin_mensaje() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"background_tasks":[],"session_crons":[]}'
 }
 
 # Task 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no

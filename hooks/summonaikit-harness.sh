@@ -251,6 +251,72 @@ STATE_DIR="$PROJECT_DIR/$SESSION_KEY"
 STATE_PATH="$STATE_DIR/harness-state.env"
 LOG_PATH="$STATE_DIR/harness-evidence.log"
 
+# Como json_top_level_string pero DECODIFICANDO los escapes \n \" \\ \t del
+# valor (los demas quedan crudos, mismo criterio medido de assistant_text_payload:
+# no aparecen en los 308 payloads de la 1.4 y un escape no manejado cae del lado
+# seguro). Cierra C1+C2 (auditoria 2026-08-13, Task 8.1) para el prompt:
+#
+# - C1: json_string_field cortaba el valor en la primera \" — `arregla el "bug"
+#   -saikit` llegaba truncado y NO armaba; peor, una correccion CON sentinel y
+#   con comillas antes tomaba la rama de DESARME y borraba el estado a media
+#   ceremonia.
+# - C2: el sentinel se grepeaba sobre el JSON crudo — un \n literal antes de
+#   `-saikit` deja una `n` alfanumerica pegada y la frontera izquierda de
+#   SAIKIT_SENTINEL_RE rechaza; el prompt multilinea con el sentinel en su
+#   propia linea (la colocacion mas natural) jamas armaba.
+#
+# Decodificar es lo que vuelve reales la comilla y el salto que el usuario
+# escribio. Es el gemelo parametrizado de assistant_text_payload (mismo escaner,
+# mismo emisor); aquella queda como esta porque su clave es fija y sus casos ya
+# la atan.
+json_top_level_decoded() {
+  field="$1"
+  case "$INPUT" in
+    *"\"$field\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk -v want="$field" '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; c1 = ""; emiti = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc) {
+            if (emiti) {
+              if      (c == "n")  printf "\n"
+              else if (c == "t")  printf "\t"
+              else if (c == "\\") printf "\\"
+              else if (c == "\"") printf "\""
+              else                printf "\\%s", c
+            }
+            esc = 0; continue
+          }
+          if (c == "\\") { esc = 1; continue }
+          if (c == "\"") {
+            ins = 0
+            ultima = substr(buf, ini, i - ini)
+            if (espera && depth == 1 && c1 == want) { emiti = 0; exit }
+            continue
+          }
+          if (emiti) printf "%s", c
+          continue
+        }
+        if (c == "\"") {
+          ins = 1; ini = i + 1
+          if (espera && depth == 1 && c1 == want) emiti = 1
+          continue
+        }
+        if (c == ":")                  { if (depth == 1) c1 = ultima; espera = 1 }
+        else if (c == "{" || c == "[") { depth++; espera = 0 }
+        else if (c == "}" || c == "]") { depth--; espera = 0 }
+        else if (c == ",")             { espera = 0 }
+      }
+    }'
+}
+
 # Lee un campo de string del objeto `tool_input` de PRIMER NIVEL, y solo de ahi.
 # Cierra el defecto A1 (Task 3.1).
 #
@@ -628,8 +694,8 @@ harness_context() {
 SUMMONAIKIT HARNESS REQUIRED
 
 Who you are working for:
-- The person giving you this task is non-technical (a founder, marketer, product manager, designer, or operator). They cannot read code and did not write any. They own WHAT gets built and WHY; you own HOW.
-- Talk to them only in plain language: no code, no file names, no library/tool/jargon words in anything you say to them. If a technical detail matters, first explain what it means in one plain sentence.
+- They own WHAT gets built and WHY; you own HOW.
+- Adapt your register to the person you are actually working with: do not assume they cannot read code, and do not throw jargon at them without explaining it. If a technical term matters, explain what it means before you rely on it.
 - Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.
 
 Run the work as a gated harness:
@@ -643,7 +709,14 @@ Run the work as a gated harness:
 Asking is not failing:
 - When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:
   SUMMONAIKIT HARNESS PAUSED - awaiting your answer
-- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Run the full cycle once they reply.
+- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.
+
+Waiting on a subagent is not failing:
+- A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.
+- While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:
+  SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>
+  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.
+- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
 Delegation rule (Claude):
 - Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:
@@ -654,6 +727,7 @@ Delegation rule (Claude):
   correctly-delegated turn still satisfies it.
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
+- Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
 
 Gate rule:
 - Do not advance past a stage without concrete evidence.
@@ -680,7 +754,7 @@ Data-source precondition (language/framework/platform agnostic):
 Missing-information rule (language/framework/platform agnostic):
 - Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what "done" looks like to them, naming and tone, anything irreversible).
 - If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.
-- Resolve every technical choice yourself from the repo; never hand a non-technical user a technical decision to make.
+- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.
 - Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.
 
 User-facing surface baseline (language/framework/platform agnostic):
@@ -688,7 +762,7 @@ User-facing surface baseline (language/framework/platform agnostic):
 - Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.
 - Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.
 
-Final receipt required before stopping (write every line in plain language a non-technical user can follow):
+Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
 Understand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
@@ -742,7 +816,10 @@ emit_allow() {
 }
 
 start_harness() {
-  prompt_text="$(json_string_field prompt)"
+  # Task 8.1 (C1+C2): el prompt se lee con el lector top-level DECODIFICADO —
+  # el sed greedy cortaba en la primera \" (no armaba / desarmaba con el
+  # sentinel presente) y los \n crudos rompian la frontera del sentinel.
+  prompt_text="$(json_top_level_decoded prompt)"
   if [ -z "$prompt_text" ]; then prompt_text="$INPUT"; fi
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # El sentinel REEMPLAZA a is_engineering_task / is_trivial_task: es la unica
@@ -912,9 +989,17 @@ record_tool_evidence() {
   if [ ! -f "$STATE_PATH" ]; then emit_allow; fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
   event_name="$(json_string_field hook_event_name)"
-  tool_name="$(json_string_field tool_name)"
-  command_text="$(json_string_field command)"
-  file_path="$(json_string_field file_path)"
+  # Task 8.1 (C3, clase A1): tool_name/command/file_path se leian con el sed
+  # greedy, que devuelve la ULTIMA ocurrencia del payload — una clave "command"
+  # DENTRO de tool_response (texto que el turno no escribio) acreditaba
+  # verified=1 por un comando que nunca corrio, falsificando el comentario de
+  # :972 ("never in the raw payload"). Mismo cierre que la 3.1 hizo para
+  # subagent_type: command/file_path acotados a tool_input, tool_name al primer
+  # nivel. event_name queda con el lector viejo: solo alimenta $combined, que
+  # ya incluye $INPUT entero para el grep laxo de "implemented".
+  tool_name="$(json_top_level_string tool_name)"
+  command_text="$(json_tool_input_string command)"
+  file_path="$(json_tool_input_string file_path)"
   combined="$event_name $tool_name $command_text $file_path $INPUT"
 
   # Record harness subagent runs (the delegation tool carries a subagent_type in
@@ -984,7 +1069,13 @@ has_receipt_label() {
   label="$1"
   alt="$2"
   text="$3"
-  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]])($label|$alt)[[:space:]]*:"
+  # Task 8.3 (C7): la alternativa (\*\*|__)? acepta el cierre de markdown bold
+  # entre la etiqueta y el `:` — `- **Understand**: ...` es la forma MAS
+  # natural en que el modelo escribe el recibo, y sin esto las SEIS etiquetas
+  # fallaban a la vez y un recibo honesto se bloqueaba (falso rojo => ciclos de
+  # revision de mas). El `**`/`__` de apertura ya pasaba por la frontera
+  # izquierda [^[:alpha:]]. El recibo plano sigue contando igual (A8 intacto).
+  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]])($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
 build_gate_feedback() {
@@ -1110,12 +1201,25 @@ transcript_en_perfil() {
   return 1
 }
 
+# Marcador de "el texto del asistente ya trae un bloque de recibo" (completo o
+# roto). Usado SOLO por la escotilla DELEGATED de mas abajo (fix de la
+# cross-review, ciclo 1): la escotilla no debe disparar una vez que hay
+# recibo, o sustituye en silencio al gate de verdad. Se declara como
+# constante propia (no inline) para que una mutacion pueda apuntar SOLO a
+# esta definicion, sin tocar de paso el chequeo separado y no relacionado de
+# "Missing SUMMONAIKIT HARNESS RECEIPT" mas abajo en stop_gate.
+RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'
+
 stop_gate() {
   if [ ! -f "$STATE_PATH" ]; then
     emit_allow
   fi
 
-  transcript_path="$(json_string_field transcript_path)"
+  # Task 8.1 (C3, misma clase): transcript_path con el lector top-level — el
+  # greedy podia tomar una ruta de otra parte del payload. La contencion de A6
+  # (transcript_en_perfil) sigue intacta detras; los escapes quedan crudos como
+  # siempre (cd+pwd los normaliza, ver :1084).
+  transcript_path="$(json_top_level_string transcript_path)"
   tail_text=""
   if [ -n "$transcript_path" ] && [ -r "$transcript_path" ] && transcript_en_perfil "$transcript_path"; then
     tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
@@ -1130,10 +1234,56 @@ stop_gate() {
   text="$(assistant_text_payload)
 $(printf '%s' "$tail_text" | assistant_text_transcript)"
 
+  # Task 8.2 (C4): las escotillas PAUSED/DELEGATED se evaluan sobre el texto
+  # del turno ACTUAL, no sobre $text entero — el tail de 160 lineas conserva
+  # turnos anteriores, y con eso un PAUSED viejo dejaba pasar el gate entero de
+  # un turno que no pauso, y un recibo viejo hacia fallar la clausula
+  # "recibo ausente" de DELEGATED (bloqueaba una delegacion legitima: falso
+  # rojo => ciclos de revision de mas). last_assistant_message ES el mensaje
+  # final del turno (medido Task 1.4); si el host no lo manda, fallback al
+  # texto completo — mismo fail-open de siempre, no se apaga ningun canal.
+  # Las ETIQUETAS del recibo siguen mirando $text entero (los dos canales):
+  # acotarlas repetiria A2/A8 y rompe caso_g4_recibo_solo_en_transcript_pasa.
+  text_hatch="$(assistant_text_payload)"
+  if [ -z "$text_hatch" ]; then text_hatch="$text"; fi
+
   # A clarifying pause is a valid way to end the turn: the agent asked the
-  # non-technical user a question and is waiting for the answer. Do not demand a
-  # receipt or the implement -> verify -> review sequence in that case.
-  if printf '%s' "$text" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then
+  # user a question and is waiting for the answer. Do not demand a receipt or
+  # the implement -> verify -> review sequence in that case.
+  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then
+    emit_allow
+  fi
+
+  # Sibling escape hatch (arreglo 1): the agent delegated to a subagent that is
+  # still running (implementer/verifier/reviewer subagents measured at 30-100
+  # min) and is correctly waiting on it, not failing. Unlike PAUSED above, this
+  # one REQUIRES the role to be named -- one of the three canonical roles --
+  # so it stays auditable instead of a blanket skip-the-gate (same discipline
+  # ROLE FALLBACK already uses, see D4/Task 6.3 below). A DELEGATED line that
+  # names no role does not match and falls through to the normal receipt gate.
+  #
+  # Bug found by cross-review (cycle 1), reproduced with execution, fixed
+  # here: the hatch must ALSO require that no receipt is present yet. Without
+  # this second clause, a BROKEN receipt (missing labels, zero subagents
+  # dispatched, no ROLE FALLBACK declared) that merely mentioned "DELEGATED"
+  # in passing (e.g. inside the Close bullet) closed the turn silently with
+  # exit 0 and no feedback -- exactly the skip-the-gate this hatch exists to
+  # avoid. It also let a COMPLETE, valid receipt that happens to mention
+  # "DELEGATED" in Retro (plausible: the receipt shape invites harness-
+  # improvement notes there) exit 0 WITHOUT clearing state, so a clean close
+  # stopped being clean. Requiring the receipt to be absent fixes both: a
+  # broken receipt now falls through to the normal missing-label feedback
+  # below, and a complete receipt closes clean through the regular path
+  # (state cleared), never through this hatch.
+  #
+  # Declared limit (same trade-off as ROLE FALLBACK above): the match is
+  # still an unanchored substring over assistant text that has NO receipt at
+  # all -- a message that happens to cite the exact phrase "SUMMONAIKIT
+  # HARNESS DELEGATED - awaiting <role>" without having genuinely delegated
+  # would still close the turn. Accepted on purpose, same reason the gate as
+  # a whole is advisory/fail-open by design.
+  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer)' \
+     && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
     emit_allow
   fi
 
@@ -1180,17 +1330,28 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # Code primitive). The first three gates must each run as their own subagent,
   # in order. closer/retro stay receipt sections the lead writes.
   if [ "$TARGET" = "claude" ]; then
+    # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
+    # kit -- un subagente caido por infraestructura (429, limite de uso, error
+    # de herramienta) trababa el turno sin salida. La declaracion en el recibo
+    # sustituye al despacho; sin ella, el motivo de siempre sigue exigiendo.
+    #
+    # Limite declarado (revision cruzada, ciclo 1): el match es SUBCADENA SIN
+    # ANCLAR sobre el texto del asistente -- si el propio agente cita "ROLE
+    # FALLBACK: <ROL>" mientras ese rol falta de verdad, lo perdona. Aceptado a
+    # proposito: anclar mas estricto repite A8 (un recibo legitimo en texto
+    # corrido dejaba de contar), y el gate es advisory/fail-open por diseno --
+    # mismo trade-off que el README ya declara para el gate entero.
     case ",$agents_seen," in
       *",implementer,"*) ;;
-      *) missing="$missing- Missing implementer subagent run (delegate the change via the Task tool).\n" ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",verifier,"*) ;;
-      *) missing="$missing- Missing verifier subagent run (delegate verification via the Task tool).\n" ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",reviewer,"*) ;;
-      *) missing="$missing- Missing reviewer subagent run (delegate review via the Task tool).\n" ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
       if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then
