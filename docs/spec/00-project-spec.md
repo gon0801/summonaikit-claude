@@ -1337,6 +1337,23 @@ de hooks en Windows es **powershell.exe** (el comando registrado usa la forma
 `<user_query>…</user_query>`. Perfil `~/.grok` byte a byte intacto; trust del
 repo descartable declarado y revocado.
 
+### Medido 2026-08-14, Task 7.2 (contrato de salida Grok)
+
+7 rondas headless (una por forma) + 4 variantes oráculo
+(`docs/task-7.2-salida.md`). **Bloquea:** `decision:block` top-level con exit 0
+(log `block=true`, el turno continúa y el modelo recibe el `reason`) y
+`continue:false`+`stopReason` (log `prevent_continuation=true`). **No bloquea:**
+`exit 2` — el wrapper PowerShell lo devuelve como exit 1 y Grok es fail-open
+ante exit ≠ 0 en Stop. **No llega al modelo:** `additionalContext`, en ninguna
+de las 4 formas medidas (envuelta camel/snake o top-level, en UPS o en Stop) —
+el armado por contrato inyectado necesita otro canal en 7.3. `systemMessage`
+parsea sin rechazo pero no tiene superficie en headless. El esquema **no es
+estricto** (clave extra tolerada). La decisión sobre el Stop de cierre
+(`reason=shutdown`) se emite y se ignora sin mutar estado ⇒ D6 confirmado.
+Decisión: `TARGET=grok` con **forma propia** (bloqueo sin exit 2) y armado a
+re-planificar; el gate no es decorativo. Perfil `~/.grok` byte a byte intacto
+(cksums antes/después); trust declarado y revocado.
+
 Las mediciones 7.1/7.2 son independientes de Phase 6. Las costuras compartidas
 se serializan: 7.3 después de 6.4, 7.5 después de 6.5 y 7.6 después de 6.6. El
 orden final de identidad es `grok > codex > zcode > claude > other`. Hasta que
