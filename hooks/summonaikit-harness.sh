@@ -740,6 +740,15 @@ Fast lane (-saikit:fast):
   implement directly. The receipt and real verification evidence (or a declared skip) are
   still required. A plain -saikit arm runs the full ceremony above.
 
+Revision after findings (do this the CHEAP way):
+- If the reviewer returns findings, do NOT restart the ceremony. Fix the exact
+  findings, then have the verifier re-check ONLY those points (targeted
+  commands, not the full battery), and the reviewer re-read ONLY the new diff.
+- One full battery run per task, at the end, is enough evidence for the
+  receipt. Re-running the entire suite after every fix wastes the turn.
+- Batch your evidence: group verification commands into ONE shell invocation
+  per checkpoint instead of dozens of single-command calls.
+
 Gate rule:
 - Do not advance past a stage without concrete evidence.
 - On failure, revise from the first failed gate with structured feedback.
@@ -1394,7 +1403,9 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     rn_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
     printf '%s review-notice: code was edited after the last reviewer subagent run (tool-name signal only -- an edit made via a shell command, e.g. sed/heredoc/git apply, is NOT detected by this check).\n' "$rn_ts" >> "$LOG_PATH" 2>/dev/null || true
     mkdir -p "$STATE_DIR" 2>/dev/null || true
-    printf 'SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed.\n' > "$RN_PENDING_PATH" 2>/dev/null || true
+    # Task 10.2: la coletilla ata el aviso a la disciplina de re-review dirigido
+    # (el contrato de arriba ya la pide): re-review del delta, no ceremonia nueva.
+    printf 'SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed. Re-review the new diff only; do not restart the ceremony.\n' > "$RN_PENDING_PATH" 2>/dev/null || true
     rn_notice_fired="1"
   elif [ -n "$rn_check_last_code_edit" ] || [ -n "$rn_check_last_review" ]; then
     rm -f "$RN_PENDING_PATH" 2>/dev/null || true
