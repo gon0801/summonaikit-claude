@@ -476,6 +476,147 @@ rc=$?
 
 echo "  test_capture_payloads: codex OK"
 
+# ============================================================
+# Task 7.1 -- --host grok: colocacion de archivo, como codex, pero aca el
+# registro es un JSON PROPIO en <repo>/.grok/hooks/ (Grok corre hooks de
+# proyecto tras trust del folder) y cada handler lleva el env map
+# SUMMONAIKIT_HOOK_TARGET=grok -- medir si ese env llega de verdad es una de
+# las preguntas de la 7.1. PostToolUse se registra TRES veces a proposito:
+# matcher estilo Claude (Bash|Edit|Write|Task), matcher con los nombres
+# nativos y sin matcher. Es la leccion de la 6.1: hay que distinguir "el host
+# no emite el evento" de "el matcher lo filtro", y eso solo se ve si las tres
+# variantes llevan --tag distinto desde el primer turno.
+# ============================================================
+if ! command -v jq >/dev/null 2>&1; then
+  # El install de grok no necesita jq, pero validar que el JSON generado
+  # PARSEA si. Sin jq no se puede medir; se declara unknown (unknown != verde).
+  echo "  caso: --host grok requiere jq para validar el JSON -> UNKNOWN (jq no disponible)"
+  echo "  test_capture_payloads: grok skip (unknown)"
+else
+  grk="$SANDBOX/repo-grok"
+  mkdir -p "$grk"
+  gjson="$grk/.grok/hooks/saikit-capture.json"
+
+  # ---- g1: instalar crea el JSON de registro con los 5 eventos --------------
+  caso "grok --instalar crea .grok/hooks/saikit-capture.json parseable con los 5 eventos"
+  out="$(bash "$tool" --instalar "$grk" --host grok 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+  [ -f "$gjson" ] || malo "no escribio $gjson"
+  jq -e . "$gjson" >/dev/null 2>&1 || malo "el JSON generado no parsea"
+  jq -e '.hooks | has("UserPromptSubmit") and has("PostToolUse") and has("PostToolUseFailure") and has("SubagentStart") and has("Stop")' \
+        "$gjson" >/dev/null || malo "faltan eventos: se piden UserPromptSubmit, PostToolUse, PostToolUseFailure, SubagentStart, Stop"
+
+  caso "grok: PostToolUse lleva las 3 variantes (alias Claude, nativos, sin matcher)"
+  jq -e '[.hooks.PostToolUse[] | select(.matcher=="Bash|Edit|Write|Task")] | length==1' "$gjson" >/dev/null \
+    || malo "falta la entrada PostToolUse con matcher estilo Claude"
+  jq -e '[.hooks.PostToolUse[] | select(.matcher=="run_terminal_command|search_replace|spawn_subagent")] | length==1' "$gjson" >/dev/null \
+    || malo "falta la entrada PostToolUse con los nombres nativos"
+  jq -e '[.hooks.PostToolUse[] | select(has("matcher")|not)] | length==1' "$gjson" >/dev/null \
+    || malo "falta la entrada PostToolUse sin matcher (distingue no-emite de matcher-filtra)"
+
+  caso "grok: UserPromptSubmit, SubagentStart, Stop y PostToolUseFailure van sin matcher"
+  for ev in UserPromptSubmit SubagentStart Stop PostToolUseFailure; do
+    jq -e --arg ev "$ev" '[.hooks[$ev][] | select(has("matcher"))] | length==0' "$gjson" >/dev/null \
+      || malo "$ev no deberia llevar matcher (captura: ver todo lo que el host emite)"
+  done
+
+  caso "grok: TODO handler lleva el env map SUMMONAIKIT_HOOK_TARGET=grok y el capture-id"
+  jq -e '[.hooks | to_entries[] | .value[] | .hooks[]] | all(.env.SUMMONAIKIT_HOOK_TARGET=="grok")' \
+        "$gjson" >/dev/null || malo "hay handlers sin el env map TARGET=grok"
+  jq -e '[.hooks | to_entries[] | .value[] | .hooks[]] | all(.command | contains("--saikit-capture-id 7.1"))' \
+        "$gjson" >/dev/null || malo "hay handlers sin el marker de propiedad --saikit-capture-id 7.1"
+  for t in ups ptu-alias ptu-native ptu-all ptuf sub stop; do
+    grep -q -- "--tag $t" "$gjson" || malo "falta --tag $t (sin tags no se distingue que entrada disparo)"
+  done
+
+  caso "grok --instalar deja marca de propiedad, capturas ignoradas y NO toca otros hosts"
+  [ -f "$grk/.grok/.capture-payloads-owned" ] || malo "no dejo marca .grok/.capture-payloads-owned"
+  [ -f "$grk/capturas/.gitignore" ] || malo "no ignoro capturas/"
+  [ ! -e "$grk/.claude" ] || malo "creo .claude en modo grok"
+  [ ! -e "$grk/.codex" ]  || malo "creo .codex en modo grok"
+  [ ! -e "$grk/.zcode" ]  || malo "creo .zcode en modo grok"
+
+  # ---- g2: no pisa un JSON ajeno ---------------------------------------------
+  caso "grok --instalar NO pisa un saikit-capture.json ajeno"
+  gajeno="$SANDBOX/grok-ajeno"
+  rm -rf "$gajeno"; mkdir -p "$gajeno/.grok/hooks"
+  printf '{"mio":true}\n' > "$gajeno/.grok/hooks/saikit-capture.json"
+  antes_gajeno="$(cksum < "$gajeno/.grok/hooks/saikit-capture.json")"
+  out="$(bash "$tool" --instalar "$gajeno" --host grok 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "pisar un JSON ajeno debe fallar, dio $rc"
+  [ "$antes_gajeno" = "$(cksum < "$gajeno/.grok/hooks/saikit-capture.json")" ] \
+    || malo "PISO el JSON del usuario"
+
+  # ---- g3: reinstalar es idempotente ------------------------------------------
+  caso "grok segunda --instalar no duplica ni rompe (idempotente)"
+  out="$(bash "$tool" --instalar "$grk" --host grok 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "segunda instalacion debe ser exit 0, dio $rc: $out"
+  jq -e . "$gjson" >/dev/null 2>&1 || malo "la segunda instalacion dejo el JSON roto"
+  n_json="$(find "$grk/.grok/hooks" -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')"
+  [ "$n_json" -eq 1 ] || malo "hay $n_json JSON en .grok/hooks, esperaba 1"
+
+  # ---- g4: quitar saca solo lo propio ------------------------------------------
+  caso "grok --quitar saca JSON y marca propios, respeta vecinos ajenos"
+  printf '{"ajeno":true}\n' > "$grk/.grok/hooks/other.json"
+  antes_other="$(cksum < "$grk/.grok/hooks/other.json")"
+  out="$(bash "$tool" --quitar "$grk" --host grok 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+  [ ! -f "$gjson" ] || malo "no quito el JSON propio"
+  [ ! -f "$grk/.grok/.capture-payloads-owned" ] || malo "dejo la marca colgada"
+  [ -f "$grk/.grok/hooks/other.json" ] || malo "BORRO el JSON vecino ajeno"
+  [ "$antes_other" = "$(cksum < "$grk/.grok/hooks/other.json" 2>/dev/null)" ] \
+    || malo "MODIFICO el JSON vecino ajeno"
+
+  # ---- g5: quitar sin --host infiere grok por la marca --------------------------
+  caso "grok --quitar sin --host infiere el host por la marca .grok"
+  bash "$tool" --instalar "$grk" --host grok >/dev/null 2>&1
+  out="$(bash "$tool" --quitar "$grk" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+  [ ! -f "$gjson" ] || malo "sin --host no quito el JSON (no infirio grok por la marca)"
+
+  # ---- g6: quitar NO borra un JSON que ya no es nuestro -------------------------
+  caso "grok --quitar NO borra un saikit-capture.json que ya no lleva el capture-id"
+  bash "$tool" --instalar "$grk" --host grok >/dev/null 2>&1
+  printf '{"cambiado":"por el usuario"}\n' > "$gjson"
+  out="$(bash "$tool" --quitar "$grk" --host grok 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "borrar un JSON que ya no es nuestro debe fallar, dio $rc"
+  grep -q 'cambiado' "$gjson" || malo "BORRO/MODIFICO el JSON que el usuario cambio"
+  rm -rf "$grk/.grok"   # limpieza del caso
+
+  # ---- g7: el perfil real de grok queda rechazado -------------------------------
+  caso "grok se niega a instalar si el dest resuelve a \$HOME/.grok"
+  mkdir -p "$HOME/.grok"   # $HOME es el del sandbox
+  out="$(bash "$tool" --instalar "$HOME/.grok" --host grok 2>&1)"; rc=$?
+  [ "$rc" -ne 0 ] || malo "instalar sobre \$HOME/.grok debe fallar (dio $rc)"
+  [ ! -e "$HOME/.grok/.grok" ] && [ ! -f "$HOME/.grok/hooks/saikit-capture.json" ] \
+    || malo "escribio adentro del perfil grok"
+
+  echo "  test_capture_payloads: grok OK"
+fi
+
+# ---- g8/g9: el modo hook entiende el envelope camel de Grok ------------------
+# Estos casos no necesitan jq: miden al capturador actuando de hook, no el JSON.
+caso "grok modo hook: hookEventName (camel) entra en el nombre del archivo"
+grkcap="$SANDBOX/cap-grok"
+printf '%s' '{"hookEventName":"UserPromptSubmit","prompt":"x"}' \
+  | ( cd "$SANDBOX" && SAIKIT_CAPTURE_DIR="$grkcap" bash "$tool" ); rc=$?
+[ "$rc" -eq 0 ] || malo "fail-open roto con envelope camel (dio $rc)"
+[ -n "$(find "$grkcap" -name '*UserPromptSubmit*.json' 2>/dev/null | head -1)" ] \
+  || malo "no nombro el archivo por hookEventName: los eventos de Grok colisionarian en 'sin-evento'"
+
+caso "grok modo hook: el env dump trae GROK_HOOK_EVENT/GROK_SESSION_ID y NUNCA GROK_API_KEY"
+printf '%s' '{"hookEventName":"Stop","reason":"end_turn"}' \
+  | ( cd "$SANDBOX" && SAIKIT_CAPTURE_DIR="$grkcap" \
+      GROK_HOOK_EVENT=stop GROK_SESSION_ID=g123 GROK_WORKSPACE_ROOT=/x \
+      GROK_API_KEY=no-volcar-esto bash "$tool" ); rc=$?
+[ "$rc" -eq 0 ] || malo "fail-open roto con env grok (dio $rc)"
+envfile="$(find "$grkcap" -name '*.env' 2>/dev/null | head -1)"
+[ -n "$envfile" ] || malo "no escribio el .env"
+grep -q 'GROK_HOOK_EVENT=stop' "$envfile" 2>/dev/null || malo "el env dump no trae GROK_HOOK_EVENT (D2 no se puede medir)"
+grep -q 'GROK_SESSION_ID=g123' "$envfile" 2>/dev/null || malo "el env dump no trae GROK_SESSION_ID"
+grep -q 'GROK_API_KEY' "$envfile" 2>/dev/null \
+  && malo "el env dump volco GROK_API_KEY: la allowlist es por NOMBRE, nunca por prefijo GROK_"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_capture_payloads: FAIL" >&2
   exit 1

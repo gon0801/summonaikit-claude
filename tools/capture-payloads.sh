@@ -18,9 +18,15 @@
 #   --instalar <repo> --host zcode     appendea 5 entradas de captura en el
 #                                      USER-CONFIG de zcode (~/.zcode/cli/config.json)
 #                                      — el override de proyecto NO corre en este CLI
+#   --instalar <repo> --host codex     coloca un shim en <repo>/.codex/hooks/ (el
+#                                      .ps1 del perfil lo prefiere; no toca configs)
+#   --instalar <repo> --host grok      escribe <repo>/.grok/hooks/saikit-capture.json
+#                                      (Grok SI corre hooks de proyecto, tras trust
+#                                      del folder) — cada handler lleva el env map
+#                                      SUMMONAIKIT_HOOK_TARGET=grok para medir si llega
 #   --cosechar <repo>                  lista lo capturado y recuerda como sacarlo
-#   --quitar <repo>                    saca el registro de captura (Claude o zcode
-#                                      segun --host, o inferido por la marca)
+#   --quitar <repo>                    saca el registro de captura (Claude, zcode,
+#                                      codex o grok segun --host, o inferido por la marca)
 #   (sin modo, con stdin)              ESTE archivo actuando de hook: guarda el payload
 #
 # Flags del modo hook (las pone --instalar --host zcode; fail-open siempre):
@@ -31,9 +37,12 @@
 #   --tag <nombre>                     entra en el nombre del archivo
 #
 # Reglas duras:
-#   - Se registra SOLO en un proyecto descartable (Claude) o appendeando en el
-#     user-config de zcode. NUNCA en `~/.claude/settings.json`: ahi vive el gate.
-#   - El repo destino no puede resolver al perfil ($HOME/.claude* ni $HOME/.zcode*).
+#   - Se registra SOLO en un proyecto descartable. NUNCA en
+#     `~/.claude/settings.json`: ahi vive el gate. En zcode se appendea al
+#     user-config; en codex/grok se colocan archivos propios en <repo>/.codex
+#     y <repo>/.grok — los perfiles `~/.codex` y `~/.grok` no se tocan.
+#   - El repo destino no puede resolver al perfil ($HOME/.claude*, $HOME/.zcode*
+#     ni $HOME/.grok*).
 #   - Fail-open siempre. Un hook de captura que rompe la sesion que estamos
 #     observando no sirve para observar nada.
 #   - Lo capturado puede traer rutas y texto del turno real: revisarlo ANTES de
@@ -61,7 +70,7 @@ while [ $# -gt 0 ]; do
     # porque `--host ""` volveria a caer en el mismo default.
     --host)
       { [ $# -ge 2 ] && [ -n "$2" ]; } || {
-        echo "capture-payloads: --host requiere un valor ('claude', 'zcode' o 'codex')" >&2
+        echo "capture-payloads: --host requiere un valor ('claude', 'zcode', 'codex' o 'grok')" >&2
         exit 2; }
       host="$2"; shift 2 ;;
     --saikit-capture-id) cap_id="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
@@ -71,7 +80,7 @@ while [ $# -gt 0 ]; do
     --only-cwd) only_cwd="${2:-}";  [ $# -ge 2 ] && shift 2 || shift ;;
     --capture-dir) cap_dir="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
     --tag)      tag="${2:-}";       [ $# -ge 2 ] && shift 2 || shift ;;
-    -h|--help)  sed -n '2,40p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '2,49p' "$0"; exit 0 ;;
     *)          shift ;;
   esac
 done
@@ -103,6 +112,11 @@ if [ -z "$modo" ]; then
     crudo="$(cat)"
     evento="$(printf '%s' "$crudo" | tr '\n' ' ' \
       | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    # Grok manda el envelope en camelCase (`hookEventName`), no en snake. Sin
+    # este fallback todos los eventos de Grok colisionarian en "sin-evento" y
+    # la captura no serviria para nada. El snake sigue ganando si llega.
+    [ -n "$evento" ] || evento="$(printf '%s' "$crudo" | tr '\n' ' ' \
+      | sed -n 's/.*"hookEventName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
     [ -n "$evento" ] || evento="sin-evento"
     tagnorm="${tag:+-$tag}"
 
@@ -126,7 +140,11 @@ if [ -z "$modo" ]; then
     # asi: el regex ancla el `=` inmediatamente despues, asi que
     # SUMMONAIKIT_HOOK_TARGET NUNCA se capturaba. En zcode daba igual (ahi el
     # TARGET no llega, A10); en codex es el dato que la DoD pide medir.
-    env | grep -E '^(PWD|TERM|CLAUDECODE|SUMMONAIKIT|SUMMONAIKIT_HOOK_TARGET|SUMMONAIKIT_HOOK_PHASE|ZCODE_PROJECT_DIR|ZCODE_SESSION_ID|CLAUDE_PROJECT_DIR|CLAUDE_SESSION_ID)=' \
+    # Task 7.1: GROK_HOOK_EVENT/GROK_SESSION_ID/GROK_WORKSPACE_ROOT por NOMBRE
+    # (D2 cuelga de medirlas). El prefijo GROK_ queda FUERA por la misma razon
+    # que ZCODE_: volcaria GROK_API_KEY. `CLAUDECODE` ya esta en la lista y
+    # contesta la otra mitad de D2 (si Grok la setea, hay colision que cerrar).
+    env | grep -E '^(PWD|TERM|CLAUDECODE|SUMMONAIKIT|SUMMONAIKIT_HOOK_TARGET|SUMMONAIKIT_HOOK_PHASE|ZCODE_PROJECT_DIR|ZCODE_SESSION_ID|CLAUDE_PROJECT_DIR|CLAUDE_SESSION_ID|GROK_HOOK_EVENT|GROK_SESSION_ID|GROK_WORKSPACE_ROOT)=' \
       > "$salida/$base.env" 2>/dev/null || true
   } >/dev/null 2>&1
   exit 0
@@ -137,8 +155,8 @@ fi
 # murio arriba (H1), asi que este `:-` ya no puede enmascarar un error.
 host="${host:-claude}"
 case "$host" in
-  claude|zcode|codex) ;;
-  *) echo "capture-payloads: --host acepta 'claude', 'zcode' o 'codex' (dio '$host')" >&2
+  claude|zcode|codex|grok) ;;
+  *) echo "capture-payloads: --host acepta 'claude', 'zcode', 'codex' o 'grok' (dio '$host')" >&2
      exit 2 ;;
 esac
 
@@ -152,7 +170,8 @@ fi
 # del enlace, asi que el destino real quedaba escondido detras del alias. Todo
 # el valor de esta herramienta es no tocar el perfil vivo; el chequeo tiene que
 # mirar donde se escribe de verdad. zcode suma $HOME/.zcode* (donde vive su
-# config de usuario) al mismo criterio.
+# config de usuario) y grok $HOME/.grok* (hooks y agents globales) al mismo
+# criterio.
 destino_real="$(cd "$destino" 2>/dev/null && pwd -P)"
 home_real="$(cd "$HOME" 2>/dev/null && pwd -P)"
 
@@ -162,7 +181,7 @@ if [ -z "$destino_real" ]; then
 fi
 
 case "$destino_real" in
-  "$home_real"|"$home_real"/.claude*|"$home_real"/.zcode*)
+  "$home_real"|"$home_real"/.claude*|"$home_real"/.zcode*|"$home_real"/.grok*)
     echo "capture-payloads: me niego a tocar el perfil real." >&2
     echo "                  pedido: $destino" >&2
     echo "                  resuelve a: $destino_real" >&2
@@ -218,7 +237,8 @@ if ((.hooks // {}) | has("events")) then
 else . end
 '
 
-# Resolver un bash.exe de Windows para registrar en el user-config de zcode.
+# Resolver un bash.exe de Windows para los comandos registrados (user-config
+# de zcode; JSON de grok, cuyo runner spawnea powershell.exe — Task 7.1).
 # NUNCA persistir /usr/bin/bash ni la salida cruda de `command -v bash`: en
 # MSYS son rutas virtuales que Node resuelve con ENOENT (R2.5 del plan).
 zcode_bash_win() {
@@ -422,12 +442,151 @@ codex_quitar() {
   echo "Shim de captura quitado de $shim"
 }
 
+# ------------------------------------------------------ Task 7.1: grok ----
+# Grok SI corre hooks de proyecto (<repo>/.grok/hooks/*.json) tras el trust del
+# folder — el override que zcode no tenia. Entonces la captura es colocacion de
+# archivo, como codex, pero con DOS archivos propios: el JSON de registro y la
+# marca. El JSON lo escribe este script ENTERO (no es append a un archivo
+# ajeno): si existe y no lleva el capture-id 7.1, se planta sin tocarlo.
+#
+# Dos decisiones deliberadas, ambas al servicio de las preguntas de la 7.1:
+#
+# 1) Cada handler lleva "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }. Claude no
+#    propaga el prefijo VAR=val del comando (A10); el env map de Grok es de
+#    primer nivel en el handler (doc). Si llega de verdad al proceso del hook
+#    es una de las 11 preguntas — por eso va en TODOS los handlers.
+#
+# 2) PostToolUse se registra TRES veces con --tag distinto: matcher estilo
+#    Claude (Bash|Edit|Write|Task), matcher con los nombres nativos
+#    (run_terminal_command|search_replace|spawn_subagent) y SIN matcher. Si solo
+#    dispara la nativa, el alias NO expande; si disparan alias y nativa, si; si
+#    solo la sin-matcher, ninguna de las dos matchea. La 6.1 dejo esa
+#    distincion en unknown por no registrar la variante a tiempo — no dos veces.
+grok_json_path() { printf '%s/.grok/hooks/saikit-capture.json' "$destino_real"; }
+grok_marca()     { printf '%s/.grok/.capture-payloads-owned' "$destino_real"; }
+
+# Escape minimo para meter un string dentro de JSON (los comandos llevan
+# comillas alrededor de las rutas con espacios, como bash.exe en Program Files).
+grok_json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# Comando de hook para una tag. MEDIDO (Task 7.1, probe de 4 formas de comando):
+# en Windows Grok 1.0.3 corre los commands con powershell.exe (lo logea:
+# `xai_grok_config::shell: Windows shell: powershell.exe`). Consecuencias:
+#   - `"C:/.../bash.exe" "script" args` (forma zcode) NO parsea: en PowerShell un
+#     string quoted es una expresion, no una invocacion — exit 1 sin correr nada.
+#   - `bash -c '...'` funciona pero depende de que `bash` resuelva en el PATH.
+#   - La forma que invoca al bash.exe correcto SIN depender del PATH es el call
+#     operator: `& "<bash.exe>" "<script>" args`.
+# --only-cwd contiene por si el trust del folder sobrevive a la captura: fuera
+# del descartable el hook calla.
+grok_hook_cmd() {  # $1=bash_win  $2=tag
+  printf '& "%s" "%s" --saikit-capture-id 7.1 --only-cwd "%s" --capture-dir "%s" --tag %s' \
+    "$1" "$capturador" "$destino_real" "$destino_real/capturas" "$2"
+}
+
+grok_install() {
+  local json marca bash_win
+  json="$(grok_json_path)"
+  marca="$(grok_marca)"
+  bash_win="$(zcode_bash_win)" || {
+    echo "capture-payloads: no encontre un bash.exe de Windows para registrar el hook" >&2
+    exit 2; }
+  if [ -e "$json" ] && ! grep -q -- '--saikit-capture-id 7.1' "$json" 2>/dev/null; then
+    echo "capture-payloads: $json existe y no lo escribi yo — no lo toco." >&2
+    exit 2; fi
+  umask 077
+  mkdir -p "$(dirname "$json")" || exit 2
+  # Las capturas se crean ya ignoradas, antes del primer payload (mismo motivo
+  # que en los otros hosts: si no, el .gitignore llega despues del archivo con
+  # el contenido del turno).
+  mkdir -p "$destino_real/capturas" 2>/dev/null || true
+  printf '*\n' > "$destino_real/capturas/.gitignore" 2>/dev/null || true
+
+  local c_ups c_ptu_alias c_ptu_native c_ptu_all c_ptuf c_sub c_stop
+  c_ups="$(grok_json_esc "$(grok_hook_cmd "$bash_win" ups)")"
+  c_ptu_alias="$(grok_json_esc "$(grok_hook_cmd "$bash_win" ptu-alias)")"
+  c_ptu_native="$(grok_json_esc "$(grok_hook_cmd "$bash_win" ptu-native)")"
+  c_ptu_all="$(grok_json_esc "$(grok_hook_cmd "$bash_win" ptu-all)")"
+  c_ptuf="$(grok_json_esc "$(grok_hook_cmd "$bash_win" ptuf)")"
+  c_sub="$(grok_json_esc "$(grok_hook_cmd "$bash_win" sub)")"
+  c_stop="$(grok_json_esc "$(grok_hook_cmd "$bash_win" stop)")"
+
+  cat > "$json" <<JSON
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "$c_ups", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|Edit|Write|Task",
+        "hooks": [ { "type": "command", "command": "$c_ptu_alias", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] },
+      { "matcher": "run_terminal_command|search_replace|spawn_subagent",
+        "hooks": [ { "type": "command", "command": "$c_ptu_native", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] },
+      { "hooks": [ { "type": "command", "command": "$c_ptu_all", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] }
+    ],
+    "PostToolUseFailure": [
+      { "hooks": [ { "type": "command", "command": "$c_ptuf", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] }
+    ],
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "$c_sub", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$c_stop", "timeout": 15,
+                     "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" } } ] }
+    ]
+  }
+}
+JSON
+
+  # Red de seguridad: un JSON que no parsea dejaria el registro roto en un repo
+  # donde Grok lo va a leer en cada turno. Se valida si hay jq; si no hay, la
+  # plantilla es fija y el test la valida en el sandbox.
+  if command -v jq >/dev/null 2>&1 && ! jq -e . "$json" >/dev/null 2>&1; then
+    echo "capture-payloads: el JSON generado no parsea; lo saco antes de que rompa un turno" >&2
+    rm -f "$json"; exit 2
+  fi
+  printf 'owner=tools/capture-payloads.sh\nhost=grok\ntask=7.1\ncwd=%s\ninstalled=%s\n' \
+    "$destino_real" "$(date +%Y%m%d-%H%M%S)" > "$marca" || exit 2
+  echo "Registro de captura en $json"
+  echo "  7 entradas con --saikit-capture-id 7.1: UPS, PostToolUse x3 (alias/nativo/sin-matcher),"
+  echo "  PostToolUseFailure, SubagentStart, Stop. Todas con env SUMMONAIKIT_HOOK_TARGET=grok."
+  echo "  Repo descartable: $destino_real (capturas en $destino_real/capturas/)"
+  echo "  Falta el trust del folder (grok: /hooks-trust o trusted_folders.toml) y una sesion NUEVA."
+}
+
+grok_quitar() {
+  local json marca
+  json="$(grok_json_path)"
+  marca="$(grok_marca)"
+  [ -f "$marca" ] || {
+    echo "capture-payloads: no hay marca de captura grok en $marca (nada que quitar)" >&2
+    exit 2; }
+  if [ -e "$json" ]; then
+    grep -q -- '--saikit-capture-id 7.1' "$json" 2>/dev/null || {
+      echo "capture-payloads: $json ya no lleva el capture-id 7.1 — no lo borro." >&2
+      echo "                  Alguien lo cambio despues del install; revisarlo a mano." >&2
+      exit 2; }
+    rm -f "$json" || { echo "capture-payloads: no pude borrar $json" >&2; exit 2; }
+  fi
+  rm -f "$marca"
+  echo "Quitado el registro de captura grok ($json) y la marca."
+  echo "  Las capturas quedan en $destino_real/capturas/ (no se borran: son la evidencia)."
+}
+
 case "$modo" in
   instalar)
     if [ "$host" = "zcode" ]; then
       zcode_install
     elif [ "$host" = "codex" ]; then
       codex_install
+    elif [ "$host" = "grok" ]; then
+      grok_install
     else
       # ----- Claude: settings.json del proyecto descartable (el original) -----
       settings="$destino_real/.claude/settings.json"
@@ -479,14 +638,20 @@ JSON
     echo "Revisar el contenido antes de copiarlo: puede traer rutas y texto del turno real."
     ;;
   quitar)
-    # Inferir el host si no se paso --host: la marca .zcode dice zcode.
+    # Inferir el host si no se paso --host: la marca de cada host lo dice
+    # (.zcode => zcode, .grok => grok; codex no tiene marca, usa --host).
     if [ "$host" = "claude" ] && [ -f "$destino_real/.zcode/.capture-payloads-owned" ]; then
       host="zcode"
+    fi
+    if [ "$host" = "claude" ] && [ -f "$destino_real/.grok/.capture-payloads-owned" ]; then
+      host="grok"
     fi
     if [ "$host" = "zcode" ]; then
       zcode_quitar
     elif [ "$host" = "codex" ]; then
       codex_quitar
+    elif [ "$host" = "grok" ]; then
+      grok_quitar
     else
       # Solo se borra lo que ESTE script creo, y eso lo dice la marca de
       # propiedad, no el contenido. Un settings.json que menciona esta
