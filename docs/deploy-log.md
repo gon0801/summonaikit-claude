@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-13 — PR #13 / Phase 8: auditoría del sentinel (merge `ed8ff80`)
+
+- **Mergeado:** PR #13 `fix/phase-8-sentinel-audit` → master — tasks 8.1–8.4
+  (lectores escape-aware en armado/evidencia, escotillas PAUSED/DELEGATED al
+  turno actual, etiquetas `**Label**:`, contrato honesto sobre el desarme).
+  Incluye el trabajo validado de la sesión anterior (escotilla DELEGATED +
+  ROLE FALLBACK, Task 6.3) que estaba sin commitear.
+- **¿Cambió el hook?** **Sí.** `json_top_level_decoded` para `prompt`;
+  `command`/`file_path` acotados a `tool_input`; `tool_name`/`transcript_path`
+  top-level; `text_hatch` para las escotillas; bold en `has_receipt_label`;
+  bullets PAUSED/DELEGATED del contrato reescritos.
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la
+  fuente.` Backup:
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260813-235148.bak`
+- **`check-hook-registration.sh`:** registro en las 3 fases OK (exit 0). Mismo
+  advisory conocido de A9 (matcher PostToolUse sin `Agent`).
+- **Vivo vs master:** cksum idéntico (`2905702708 80780`).
+- **Nota:** deploy corrido desde worktree limpio de `origin/master` — el árbol
+  de trabajo principal tenía WIP de la Task 7.2 de otra sesión y no se tocó.
+- **Operador:** Gon.
+
 ## 2026-08-13 — PR #12 / diseño Phase 7 corregido + plan 7.2 (merge `4088213`)
 
 - **Mergeado:** PR #12 `docs/7.2-plan-y-diseno` → master — diseño de Phase 7
