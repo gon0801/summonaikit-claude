@@ -33,6 +33,22 @@
 #      trusted_folders.toml (medido en 7.1). NADA global, NADA de zcode.
 #      El command es PowerShell (`& "<bash.exe>" ...`, medido en 7.1) y las
 #      rutas con metacaracteres de PowerShell se rechazan (fail-closed).
+#      Con --host codex (Task 6.2): SHIM en <repo>/.codex/hooks/
+#      summonaikit-harness.sh, que el .ps1 del perfil prefiere sobre su propia
+#      copia cuando el cwd resuelve a un repo git (medido en 6.1). No se muta
+#      ninguna config: ~/.codex/hooks.json queda intacto. NO se registra un
+#      <repo>/.codex/hooks.json — config.toml exige trusted_hash por entrada y
+#      uno nuevo no corre (6.1), asi que mediria cero y lo leeriamos como
+#      "el probe fallo". El destino tiene que ser la RAIZ de un repo git.
+#
+# Modo hook con --host codex:
+#   - los literales de evento son los MISMOS que Claude/zcode (6.1 midio clave
+#     snake con valor CamelCase): no hay tabla nueva.
+#   - el .ok gana stop_active= (el stop_hook_active del payload — el oraculo de
+#     bloqueo que 5.2 no tuvo), round= (session_id) y suppressed=.
+#   - tope de 3 emisiones por ronda para los modos de Stop: si el bloqueo
+#     funciona, Codex re-llama al modelo y cada pasada la paga el operador.
+#     La visita topada igual deja su .ok — ese .ok ES la prueba del lazo.
 #
 # Modo hook con --host grok (lo pone el --instalar en el command del JSON):
 #   - hookEventName llega camel de CLAVE pero con VALOR snake: los modos UPS
@@ -96,8 +112,8 @@ while [ $# -gt 0 ]; do
     # runtime, no un flag mal parseado.
     --host)
       case "${2:-}" in
-        zcode|grok) host="$2" ;;
-        *) echo "probe-zcode-output: --host requiere 'zcode' o 'grok' (dio '${2:-}')" >&2
+        zcode|grok|codex) host="$2" ;;
+        *) echo "probe-zcode-output: --host requiere 'zcode', 'grok' o 'codex' (dio '${2:-}')" >&2
            exit 2 ;;
       esac
       shift 2 ;;
@@ -105,7 +121,7 @@ while [ $# -gt 0 ]; do
     --mode-file) mode_file="${2:-}";       [ $# -ge 2 ] && shift 2 || shift ;;
     --only-cwd) only_cwd="${2:-}";         [ $# -ge 2 ] && shift 2 || shift ;;
     --saikit-probe-id) probe_id="${2:-}";  [ $# -ge 2 ] && shift 2 || shift ;;
-    -h|--help)  sed -n '2,75p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '2,92p' "$0"; exit 0 ;;
     *)          shift ;;
   esac
 done
@@ -196,6 +212,7 @@ if [ -z "$modo_operacion" ]; then
   ev_stop="Stop"
   reason=""
   ronda=""
+  stop_active=""
   if [ "$host" = "grok" ]; then
     ev_ups="user_prompt_submit"
     ev_stop="stop"
@@ -231,6 +248,29 @@ if [ -z "$modo_operacion" ]; then
         | grep -o '"promptId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 \
         | sed 's/^.*:[[:space:]]*"//; s/"$//')"
     fi
+  fi
+
+  # Task 6.2: codex. Los literales de evento NO cambian — 6.1 midio clave snake
+  # con valor CamelCase, la misma forma que Claude — asi que ev_ups/ev_stop
+  # quedan como estan y no hay tabla nueva. Lo que se agrega es la lectura de
+  # dos campos del Stop:
+  #
+  #   - stop_hook_active: el oraculo de bloqueo que 5.2 NO tuvo. Alla el bloqueo
+  #     se leia por CONTEO de Stops, que no distingue "el hook forzo otra
+  #     pasada" de "el operador mando otro turno". Es un BOOLEANO del JSON (sin
+  #     comillas), por eso no se puede reusar el extractor de strings.
+  #   - session_id: identidad de la ronda, insumo del tope de emisiones.
+  if [ "$host" = "codex" ]; then
+    stop_active="$(printf '%s' "$payload" \
+      | grep -o '"stop_hook_active"[[:space:]]*:[[:space:]]*[a-z]*' | head -n 1 \
+      | sed 's/^.*:[[:space:]]*//')"
+    # Solo los dos literales booleanos cuentan; cualquier otra cosa queda `none`
+    # (mismo criterio que el reason= de grok: no se declara un veredicto a
+    # partir de basura del payload).
+    case "$stop_active" in true|false) ;; *) stop_active="" ;; esac
+    ronda="$(printf '%s' "$payload" \
+      | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 \
+      | sed 's/^.*:[[:space:]]*"//; s/"$//')"
   fi
 
   # probe-ran/ cae junto al mode-file (el dest en produccion); si no hay mode-file,
@@ -290,6 +330,40 @@ if [ -z "$modo_operacion" ]; then
     esac
   fi
 
+  # Tope de emisiones por ronda en codex (Task 6.2). Si block0 o exit2 bloquean
+  # de verdad, Codex re-llama al modelo y el probe se re-dispara. zcode cortaba
+  # solo a las 4 pasadas, pero Codex NO tiene tope medido y cada pasada la paga
+  # el operador. Tres emisiones alcanzan para el veredicto (1 visita = no
+  # bloqueo; >=2 = bloqueo) y acotan el runaway. La visita topada igual deja su
+  # .ok: ese .ok ES la evidencia de que el lazo siguio.
+  #
+  # Se cuentan VISITAS, no emisiones, y da exactamente lo mismo: una visita solo
+  # se suprime DESPUES de que hubo 3 emisiones, asi que filtrar por
+  # `suppressed=0` seria codigo muerto. No es una suposicion — se escribio el
+  # filtro, se mutó (`mut_tope_cuenta_topadas`) y NINGUNA prueba podia atraparlo.
+  # Se saco en vez de dejarlo decorativo. La linea suppressed= del .ok se queda:
+  # es evidencia para el operador de cuanto siguio el lazo mas alla de lo emitido.
+  CODEX_MAX_EMIT=3
+  if [ "$host" = "codex" ] && [ "$ok" = "1" ] && [ "$evento" = "$ev_stop" ] && [ -n "$ronda" ]; then
+    case "$mode" in
+      block0|budget|notice|exit2)
+        visitas=0
+        for f in "$ran_dir"/*.ok; do
+          [ -f "$f" ] || continue
+          # Las dos reglas de grok, por las mismas dos razones medidas ahi: los
+          # .ok COSECHADOS (<modo>-<nonce>.ok, con guion) no cuentan — si
+          # contaran, una re-medicion arrancaria ya topada y daria un falso
+          # "ignorada" — y solo cuenta la MISMA ronda.
+          case "$(basename "$f")" in *-*) continue ;; esac
+          grep -q "^mode=$mode " "$f" 2>/dev/null || continue
+          grep -Fxq "round=$ronda" "$f" 2>/dev/null || continue
+          visitas=$((visitas + 1))
+        done
+        if [ "$visitas" -ge "$CODEX_MAX_EMIT" ]; then suprimir="1"; fi
+        ;;
+    esac
+  fi
+
   # Side-channel ANTES de emitir. Fail-open: si no se puede escribir, se emite
   # igual (el turno del operador no se rompe por el side-channel).
   if [ "$ok" = "1" ]; then
@@ -301,6 +375,14 @@ if [ -z "$modo_operacion" ]; then
     if [ "$host" = "grok" ]; then
       printf 'reason=%s\n' "${reason:-none}" >> "$ran_dir/$nonce.ok" 2>/dev/null || true
       printf 'round=%s\n' "${ronda:-none}" >> "$ran_dir/$nonce.ok" 2>/dev/null || true
+    fi
+    # codex: stop_active= es el veredicto de bloqueo leido de frente; round= la
+    # ronda; suppressed= si el tope callo ESTA visita (sin esa linea, el conteo
+    # del tope no podria distinguir una visita emitida de una topada).
+    if [ "$host" = "codex" ]; then
+      printf 'stop_active=%s\n' "${stop_active:-none}" >> "$ran_dir/$nonce.ok" 2>/dev/null || true
+      printf 'round=%s\n' "${ronda:-none}" >> "$ran_dir/$nonce.ok" 2>/dev/null || true
+      printf 'suppressed=%s\n' "$suprimir" >> "$ran_dir/$nonce.ok" 2>/dev/null || true
     fi
   fi
 
@@ -369,7 +451,7 @@ if [ -z "$destino_real" ]; then
   exit 2
 fi
 case "$destino_real" in
-  "$home_real"|"$home_real"/.claude*|"$home_real"/.zcode*|"$home_real"/.grok*)
+  "$home_real"|"$home_real"/.claude*|"$home_real"/.zcode*|"$home_real"/.grok*|"$home_real"/.codex*)
     echo "probe-zcode-output: me niego a tocar el perfil real." >&2
     echo "                   pedido: $destino" >&2
     echo "                   resuelve a: $destino_real" >&2
@@ -632,9 +714,170 @@ grok_probe_quitar() {
   echo "  ~/.grok/trusted_folders.toml (no pisar el archivo con el backup)."
 }
 
+# ===================================================== Task 6.2: codex ======
+# Registro por COLOCACION DE ARCHIVO, no mutacion de config — y esa es la
+# diferencia entera con zcode y con grok. Medido en 6.1:
+# ~/.codex/hooks/summonaikit-harness.ps1 resuelve su hook con
+# `git rev-parse --show-toplevel` y PREFIERE
+# <repo>/.codex/hooks/summonaikit-harness.sh cuando existe. Alcanza con dejar
+# el shim ahi: el registro de ~/.codex/hooks.json, que ya cubre las 3 fases, lo
+# invoca solo. El perfil no se toca en ningun momento.
+#
+# Lo que NO se hace, y por que: NO se registra un <repo>/.codex/hooks.json. 6.1
+# midio que config.toml lleva un trusted_hash POR ENTRADA, incluidas las de
+# proyecto, asi que un hooks.json nuevo no corre. Intentarlo mediria cero y lo
+# leeriamos como "el probe fallo".
+CODEX_SHIM_STAMP='# saikit-probe-shim-id: 6.2'
+
+codex_shim_path()   { printf '%s/.codex/hooks/summonaikit-harness.sh' "$destino_real"; }
+codex_probe_marca() { printf '%s/.codex/.probe-codex-owned' "$destino_real"; }
+
+# Fail-closed. El shim interpola rutas en un script bash entre comillas dobles:
+# un `$`, un backtick o una comilla ahi ejecutarian expresiones en CADA fase de
+# CADA turno del host. Mismo criterio que grok, distinta razon (alla era
+# PowerShell, aca es bash). La barra invertida entra porque rompe el quoting.
+codex_rechaza_metacaracteres() {
+  local v
+  for v in "$@"; do
+    case "$v" in
+      *\"*|*\`*|*\$*|*\\*)
+        echo "probe-zcode-output: ruta con metacaracteres de shell: $v" >&2
+        echo "                   El shim la interpola entre comillas dobles y ejecutaria" >&2
+        echo "                   expresiones en cada turno del host. No se registra." >&2
+        exit 2 ;;
+    esac
+  done
+}
+
+# Identidad estricta (leccion H1 de 7.2): la marca .probe-codex-owned Y el sello
+# del shim, grepeado como LINEA COMPLETA. Un hook ajeno que mencione el probe-id
+# en un comentario no es nuestro; sin AMBAS cosas el destino es desconocido y no
+# se toca ni para instalar ni para deshacer.
+codex_shim_es_nuestro() {  # $1=shim  $2=marca
+  [ -f "$2" ] || return 1
+  grep -Fxq "$CODEX_SHIM_STAMP" "$1" 2>/dev/null
+}
+
+codex_probe_instalar() {
+  local shim marca top top_real tmp_new
+  codex_rechaza_metacaracteres "$destino_real" "$probe"
+
+  # El repo del PRODUCTO no puede ser el destino: el shim REEMPLAZA al harness
+  # (el .ps1 corre UN hook, no dos — medido en 6.1). Apuntar el probe al repo
+  # del kit apagaria el gate ahi sin avisar, y todo lo que midieramos despues
+  # seria de otra cosa.
+  if [ -f "$destino_real/hooks/summonaikit-harness.sh" ]; then
+    echo "probe-zcode-output: $destino_real es el repo del PRODUCTO (tiene hooks/summonaikit-harness.sh)." >&2
+    echo "                   El shim reemplaza al harness: instalarlo aca apagaria el gate." >&2
+    echo "                   El probe va en un repo descartable." >&2
+    exit 2
+  fi
+
+  # Dos casos que se separan a proposito (Core Rule 2): que git no este es "no
+  # se pudo mirar", no "se miro y no es un repo".
+  command -v git >/dev/null 2>&1 || {
+    echo "probe-zcode-output: no encontre git en el PATH." >&2
+    echo "                   No se pudo determinar si el destino es la raiz de un repo git:" >&2
+    echo "                   eso es 'no se pudo mirar', no 'se miro y no lo es'. Nada se toca." >&2
+    exit 2; }
+  top="$(cd "$destino_real" && git rev-parse --show-toplevel 2>/dev/null)"
+  top_real=""
+  [ -n "$top" ] && top_real="$(cd "$top" 2>/dev/null && pwd -P)"
+  if [ -z "$top_real" ]; then
+    echo "probe-zcode-output: el destino tiene que ser un repo git." >&2
+    echo "                   El .ps1 de codex resuelve su hook con git rev-parse --show-toplevel;" >&2
+    echo "                   sin repo el shim queda puesto y NO corre nunca: una medicion que miente." >&2
+    exit 2
+  fi
+  # Mas estricto que capture-payloads a proposito: no alcanza con "esta adentro
+  # de algun repo". El .ps1 busca <raiz>/.codex/hooks/..., asi que un shim en un
+  # subdir no lo lee NADIE y la medicion entera daria "no corrio" — que
+  # leeriamos como veredicto.
+  if [ "$top_real" != "$destino_real" ]; then
+    echo "probe-zcode-output: el destino no es la RAIZ del repo (toplevel: $top_real)." >&2
+    echo "                   El .ps1 busca <raiz>/.codex/hooks/summonaikit-harness.sh; un shim" >&2
+    echo "                   en un subdir no lo lee nadie y todo daria 'no corrio'." >&2
+    exit 2
+  fi
+
+  shim="$(codex_shim_path)"
+  marca="$(codex_probe_marca)"
+  if [ -e "$shim" ] && ! codex_shim_es_nuestro "$shim" "$marca"; then
+    echo "probe-zcode-output: $shim existe y no es mio (falta el sello del shim" >&2
+    echo "                   o la marca .probe-codex-owned) — no lo toco." >&2
+    exit 2
+  fi
+
+  umask 077
+  mkdir -p "$(dirname "$shim")" || exit 2
+  printf 'empty\n' > "$destino_real/probe-mode.txt" || exit 2
+  mkdir -p "$destino_real/probe-ran" 2>/dev/null || true
+
+  tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf '%s\n' "$CODEX_SHIM_STAMP"
+    printf '# Shim del probe de salida (Task 6.2), escrito por tools/probe-zcode-output.sh.\n'
+    printf '# Lo invoca ~/.codex/hooks/summonaikit-harness.ps1, que prefiere esta ruta\n'
+    printf '# sobre la del perfil cuando el cwd resuelve a un repo git. Mientras este\n'
+    printf '# puesto, el harness REAL no corre en este repo: el .ps1 corre UN hook.\n'
+    printf '#\n'
+    printf '# Fail-open por si mismo (hallazgo 3 de la revision cruzada de 6.1): si el\n'
+    printf '# probe no esta en su ruta, calla y sale 0. Sin esto, mover o borrar el repo\n'
+    printf '# del kit mataria CADA fase de CADA turno de Codex con un 127.\n'
+    printf '[ -f "%s" ] || exit 0\n' "$probe"
+    printf 'exec bash "%s" \\\n' "$probe"
+    printf '  --saikit-probe-id 6.2 \\\n'
+    printf '  --host codex \\\n'
+    printf '  --only-cwd "%s" \\\n' "$destino_real"
+    printf '  --mode-file "%s/probe-mode.txt"\n' "$destino_real"
+  } > "$tmp_new" || {
+    echo "probe-zcode-output: no pude escribir el shim temporal" >&2; rm -f "$tmp_new"; exit 2; }
+  # Un shim que no parsea rompe CADA fase de CADA turno del host. Nunca se hace
+  # mv de algo que bash no acepta.
+  bash -n "$tmp_new" 2>/dev/null || {
+    echo "probe-zcode-output: el shim generado no parsea; no toco el destino" >&2
+    rm -f "$tmp_new"; exit 2; }
+  mv -f "$tmp_new" "$shim" || {
+    echo "probe-zcode-output: no pude escribir $shim" >&2; rm -f "$tmp_new"; exit 2; }
+  chmod +x "$shim" 2>/dev/null || true
+  printf 'owner=tools/probe-zcode-output.sh\nhost=codex\ntask=6.2\ncwd=%s\ninstalled=%s\n' \
+    "$destino_real" "$(date +%Y%m%d-%H%M%S)" > "$marca" || exit 2
+
+  echo "Shim del probe en $shim"
+  echo "  ~/.codex/hooks.json y ~/.codex/hooks/ NO se tocaron: el .ps1 ya prefiere esta ruta."
+  echo "  OJO: mientras el shim este puesto, el harness REAL no corre en este repo."
+  echo "  Repo descartable: $destino_real (probe-ran/ ahi; mode-file probe-mode.txt, ahora: empty)"
+  echo "  Sesion NUEVA de Codex en $destino_real; un modo por turno (pisa probe-mode.txt)."
+}
+
+codex_probe_quitar() {
+  local shim marca
+  shim="$(codex_shim_path)"
+  marca="$(codex_probe_marca)"
+  [ -f "$marca" ] || {
+    echo "probe-zcode-output: no hay marca de probe codex en $marca (nada que quitar)" >&2
+    exit 2; }
+  if [ -e "$shim" ]; then
+    grep -Fxq "$CODEX_SHIM_STAMP" "$shim" 2>/dev/null || {
+      echo "probe-zcode-output: $shim no lo escribi yo (le falta el sello) — no lo borro." >&2
+      echo "                   Alguien lo cambio despues del install; revisarlo a mano." >&2
+      exit 2; }
+    rm -f "$shim" || { echo "probe-zcode-output: no pude borrar $shim" >&2; exit 2; }
+  fi
+  rm -f "$marca"
+  echo "Quitado el shim del probe codex ($shim) y la marca."
+  echo "  probe-mode.txt y probe-ran/ quedan (la evidencia no se borra)."
+  echo "  El harness REAL vuelve a correr en este repo."
+}
+
 case "$modo_operacion" in
   instalar)
-    if [ "$host" = "grok" ]; then grok_probe_instalar; else probe_instalar; fi ;;
+    if   [ "$host" = "grok" ];  then grok_probe_instalar
+    elif [ "$host" = "codex" ]; then codex_probe_instalar
+    else probe_instalar; fi ;;
   quitar)
-    if [ "$host" = "grok" ]; then grok_probe_quitar; else probe_quitar; fi ;;
+    if   [ "$host" = "grok" ];  then grok_probe_quitar
+    elif [ "$host" = "codex" ]; then codex_probe_quitar
+    else probe_quitar; fi ;;
 esac

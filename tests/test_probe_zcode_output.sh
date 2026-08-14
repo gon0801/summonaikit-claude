@@ -637,6 +637,323 @@ fi
 
 echo "  test_probe_zcode_output: grok OK"
 
+# ============================================================
+# Task 6.2 -- --host codex (docs/task-6.2-plan.md). Tres bloques:
+#
+#   - modo hook: los literales de evento son los MISMOS que Claude/zcode
+#     (6.1 midio clave snake con valor CamelCase), asi que aca NO hay tabla
+#     nueva. Lo que cambia es el .ok: gana stop_active= (el stop_hook_active
+#     del payload, el oraculo de bloqueo que 5.2 no tuvo), round= (session_id)
+#     y suppressed=, mas un tope de 3 emisiones por ronda.
+#   - --instalar/--quitar --host codex: COLOCACION DE ARCHIVO, no mutacion de
+#     config. El shim va a <repo>/.codex/hooks/summonaikit-harness.sh, que el
+#     .ps1 del perfil prefiere (medido en 6.1). ~/.codex NO se toca.
+#   - tres guardas que esta tarea abre y cierra: $HOME/.codex en la lista de
+#     rechazo, el repo del producto, y los metacaracteres de la ruta.
+# ============================================================
+UPSC='{"hook_event_name":"UserPromptSubmit","session_id":"s62","prompt":"x"}'
+STOPC='{"hook_event_name":"Stop","session_id":"s62","stop_hook_active":false}'
+STOPC_CONT='{"hook_event_name":"Stop","session_id":"s62","stop_hook_active":true}'
+STOPC_SIN='{"hook_event_name":"Stop","stop_hook_active":false}'
+STOPC_R99='{"hook_event_name":"Stop","session_id":"s99","stop_hook_active":true}'
+
+WORKC="$SANDBOX/work-codex"
+mkdir -p "$WORKC"
+mfc="$WORKC/probe-mode.txt"
+okc_of() { printf '%s/probe-ran/%s.ok' "$WORKC" "$1"; }   # $1=nonce
+# linea exacta dentro del .ok ($1=nonce, $2=linea esperada)
+okc_linea() {
+  grep -Fxq "$2" "$(okc_of "$1")" 2>/dev/null \
+    || malo "codex: el .ok de $1 no lleva la linea [$2] (tiene: $(tr '\n' '|' < "$(okc_of "$1")" 2>/dev/null))"
+}
+
+# ---- B1: los literales de evento NO cambian respecto de Claude/zcode -------
+caso "codex: context (UserPromptSubmit CamelCase) => forma 1 exacta + exit 0 + .ok"
+printf '%s' "$UPSC" | SAIKIT_PROBE_NONCE=CA01 bash "$tool" --host codex --mode context --mode-file "$mfc" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "codex context: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"PROBE-CONTEXT-CA01"}}'
+[ -f "$(okc_of CA01)" ] || malo "codex context: no escribio .ok"
+
+caso "codex: extra (UPS) => forma 1 + clave extra + .ok"
+printf '%s' "$UPSC" | SAIKIT_PROBE_NONCE=CA02 bash "$tool" --host codex --mode extra --mode-file "$mfc" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "codex extra: exit $RC"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"PROBE-EXTRA-CA02"},"saikitProbe":true}'
+
+caso "codex: block0 (Stop) => forma 2 con exit 0 + .ok"
+printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA03 bash "$tool" --host codex --mode block0 --mode-file "$mfc" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "codex block0: exit $RC"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-CA03"}'
+
+caso "codex: budget / notice / exit2 (Stop) mantienen su forma y su exit"
+printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA04 bash "$tool" --host codex --mode budget --mode-file "$mfc" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "codex budget: exit $RC"
+stdout_is '{"continue":false,"stopReason":"PROBE-BUDGET-CA04"}'
+printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA05 bash "$tool" --host codex --mode notice --mode-file "$mfc" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "codex notice: exit $RC"
+stdout_is '{"systemMessage":"PROBE-NOTICE-CA05"}'
+printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA06 bash "$tool" --host codex --mode exit2 --mode-file "$mfc" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 2 ] || malo "codex exit2: exit $RC (esperaba 2)"
+stdout_is_empty
+grep -q 'PROBE-EXIT2-CA06' "$EF" || malo "codex exit2: stderr sin el nonce"
+
+caso "codex: evento incorrecto para el modo => vacio, exit 0, SIN .ok"
+for m in block0 budget notice exit2; do
+  printf '%s' "$UPSC" | SAIKIT_PROBE_NONCE="CX$m" bash "$tool" --host codex --mode "$m" --mode-file "$mfc" >"$OF" 2>/dev/null; rc=$?
+  [ "$rc" -eq 0 ] || malo "codex $m en UPS: exit $rc (esperaba 0)"
+  stdout_is_empty
+  [ -f "$(okc_of "CX$m")" ] && malo "codex $m en UPS: escribio .ok (no debia)" || true
+done
+
+# ---- B2: el .ok gana stop_active= / round= / suppressed= -------------------
+# Es la mitad de la DoD que 5.2 no pudo medir: alli el bloqueo se leia por
+# CONTEO de Stops, que no distingue "el hook forzo otra pasada" de "el operador
+# mando otro turno". stop_hook_active lo dice de frente.
+caso "codex: el .ok registra stop_active del payload (false y true)"
+okc_linea CA03 'stop_active=false'
+okc_linea CA03 'round=s62'
+okc_linea CA03 'suppressed=0'
+printf '%s' "$STOPC_CONT" | SAIKIT_PROBE_NONCE=CB01 bash "$tool" --host codex --mode empty --mode-file "$mfc" >"$OF" 2>/dev/null
+okc_linea CB01 'stop_active=true'
+
+caso "codex: sin stop_hook_active ni session_id el .ok dice none (no inventa)"
+printf '%s' '{"hook_event_name":"Stop"}' | SAIKIT_PROBE_NONCE=CB02 bash "$tool" --host codex --mode empty --mode-file "$mfc" >"$OF" 2>/dev/null
+okc_linea CB02 'stop_active=none'
+okc_linea CB02 'round=none'
+
+caso "codex: un stop_hook_active que no es booleano NO se propaga como veredicto"
+# `null` es JSON valido Y minuscula, asi que el extractor crudo lo captura: es
+# el caso que obliga a validar contra los dos literales. Con "quiza" no alcanza
+# — ahi la comilla ya corta la extraccion y el guard queda sin medir (lo dijo
+# la mutacion mut_stop_active_basura_pasa, que con "quiza" nadie atrapaba).
+printf '%s' '{"hook_event_name":"Stop","stop_hook_active":null}' | SAIKIT_PROBE_NONCE=CB03 bash "$tool" --host codex --mode empty --mode-file "$mfc" >"$OF" 2>/dev/null
+okc_linea CB03 'stop_active=none'
+printf '%s' '{"hook_event_name":"Stop","stop_hook_active":"quiza"}' | SAIKIT_PROBE_NONCE=CB04 bash "$tool" --host codex --mode empty --mode-file "$mfc" >"$OF" 2>/dev/null
+okc_linea CB04 'stop_active=none'
+
+# ---- B3: tope de 3 emisiones por ronda -------------------------------------
+# Si block0/exit2 bloquean de verdad, Codex re-llama al modelo y el probe se
+# re-dispara. zcode corto solo a las 4 pasadas; Codex no tiene tope medido y
+# cada pasada la paga el operador. 3 alcanza para el veredicto (1 visita = no
+# bloqueo; >=2 = bloqueo) y acota el runaway.
+TOPE="$SANDBOX/work-tope"
+mkdir -p "$TOPE"
+mft="$TOPE/probe-mode.txt"
+okt_of() { printf '%s/probe-ran/%s.ok' "$TOPE" "$1"; }
+tope_visita() {  # $1=nonce  $2=payload
+  printf '%s' "$2" | SAIKIT_PROBE_NONCE="$1" bash "$tool" --host codex --mode block0 --mode-file "$mft" >"$OF" 2>/dev/null
+}
+caso "codex: las 3 primeras visitas de la ronda emiten; la 4a se registra y calla"
+tope_visita T1 "$STOPC";      [ -s "$OF" ] || malo "tope: la visita 1 no emitio"
+tope_visita T2 "$STOPC_CONT"; [ -s "$OF" ] || malo "tope: la visita 2 no emitio"
+tope_visita T3 "$STOPC_CONT"; [ -s "$OF" ] || malo "tope: la visita 3 no emitio"
+tope_visita T4 "$STOPC_CONT"; RC=$?
+stdout_is_empty
+[ "$RC" -eq 0 ] || malo "tope: la visita topada debe salir 0, dio $RC"
+[ -f "$(okt_of T4)" ] || malo "tope: la visita topada igual tiene que dejar su .ok (es la evidencia del lazo)"
+grep -Fxq 'suppressed=1' "$(okt_of T4)" 2>/dev/null || malo "tope: el .ok de la 4a visita no dice suppressed=1"
+grep -Fxq 'suppressed=0' "$(okt_of T3)" 2>/dev/null || malo "tope: el .ok de la 3a visita no dice suppressed=0"
+
+caso "codex: los .ok COSECHADOS (<modo>-<nonce>.ok) no cuentan para el tope"
+# Sin esto, una re-medicion arranca ya topada y el veredicto sale falso "ignorada".
+for n in T1 T2 T3 T4; do mv "$(okt_of $n)" "$TOPE/probe-ran/block0-$n.ok" 2>/dev/null || true; done
+tope_visita T5 "$STOPC"
+[ -s "$OF" ] || malo "tope: tras cosechar, la ronda nueva debe volver a emitir"
+
+caso "codex: un .ok vivo de OTRA ronda no topa la ronda nueva"
+tope_visita T6 "$STOPC"; tope_visita T7 "$STOPC"   # ya van 3 de la ronda s62
+tope_visita T8 "$STOPC_R99"
+[ -s "$OF" ] || malo "tope: la ronda s99 se topo con .ok de la ronda s62"
+
+caso "codex: sin identidad de ronda NO se suprime (preferible emitir de mas)"
+tope_visita T9 "$STOPC_SIN"; tope_visita TA "$STOPC_SIN"
+tope_visita TB "$STOPC_SIN"; tope_visita TC "$STOPC_SIN"
+[ -s "$OF" ] || malo "tope: sin session_id no se puede afirmar 'misma ronda'; no debe suprimir"
+
+caso "codex: el tope NO aplica al UPS (context/extra disparan una vez por turno)"
+for n in TU1 TU2 TU3 TU4; do
+  printf '%s' "$UPSC" | SAIKIT_PROBE_NONCE="$n" bash "$tool" --host codex --mode context --mode-file "$mft" >"$OF" 2>/dev/null
+done
+[ -s "$OF" ] || malo "tope: el UPS no debe toparse"
+
+# ---- B4: regresion — zcode y grok no cambian ------------------------------
+caso "regresion: el .ok de zcode NO gana las lineas de codex"
+printf '%s' "$STOP" | SAIKIT_PROBE_NONCE=RZ01 bash "$tool" --mode empty --mode-file "$mf" >"$OF" 2>/dev/null
+grep -q '^stop_active=' "$(ok_of RZ01)" 2>/dev/null && malo "zcode: el .ok gano stop_active (regresion)" || true
+grep -q '^suppressed=' "$(ok_of RZ01)" 2>/dev/null && malo "zcode: el .ok gano suppressed (regresion)" || true
+[ "$(head -n 1 "$(ok_of RZ01)")" = "mode=empty event=Stop nonce=RZ01" ] \
+  || malo "zcode: la primera linea del .ok cambio (regresion)"
+
+caso "regresion: grok sigue con reason=/round= y sin stop_active="
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=RG01 bash "$tool" --host grok --mode empty --mode-file "$mfg" >"$OF" 2>/dev/null
+grep -q '^reason=end_turn$' "$(okg_of RG01)" 2>/dev/null || malo "grok: perdio la linea reason= (regresion)"
+grep -q '^stop_active=' "$(okg_of RG01)" 2>/dev/null && malo "grok: gano stop_active (regresion)" || true
+
+# ---- B5: registro por shim ------------------------------------------------
+cp_repo="$SANDBOX/codex-repo"
+mkdir -p "$cp_repo"
+( cd "$cp_repo" && git init -q . >/dev/null 2>&1 ) || true
+cshim="$cp_repo/.codex/hooks/summonaikit-harness.sh"
+
+if ( cd "$cp_repo" && git rev-parse --show-toplevel >/dev/null 2>&1 ); then
+
+caso "codex --instalar deja el shim, la marca, el mode-file y probe-ran/"
+out="$(bash "$tool" --instalar "$cp_repo" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "codex --instalar dio $rc: $out"
+[ -f "$cshim" ] || malo "no escribio el shim en $cshim"
+bash -n "$cshim" 2>/dev/null || malo "el shim generado no parsea"
+grep -q -- '--saikit-probe-id 6.2' "$cshim" || malo "el shim no lleva el probe-id 6.2"
+grep -q -- '--host codex' "$cshim" || malo "el shim no pasa --host codex (el .ok saldria sin stop_active)"
+[ -f "$cp_repo/.codex/.probe-codex-owned" ] || malo "falta la marca .codex/.probe-codex-owned"
+[ "$(cat "$cp_repo/probe-mode.txt" 2>/dev/null)" = "empty" ] || malo "probe-mode.txt no empezo en empty"
+[ -d "$cp_repo/probe-ran" ] || malo "no creo probe-ran/"
+
+caso "codex --instalar NO toca ~/.codex ni el user-config de zcode ni .grok"
+[ ! -e "$HOME/.codex" ] || malo "toco el ~/.codex (falso) del sandbox"
+[ ! -e "$cp_repo/.grok" ] || malo "creo .grok en modo codex"
+[ ! -e "$cp_repo/.zcode/.probe-zcode-owned" ] || malo "dejo marca de zcode en modo codex"
+zcfg_cx="$SANDBOX/no-existe-cx/.zcode/cli/config.json"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg_cx" bash "$tool" --instalar "$cp_repo" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "con --host codex no hace falta el user-config de zcode, dio $rc: $out"
+[ ! -e "$zcfg_cx" ] || malo "creo el user-config de zcode en modo codex"
+
+caso "codex: el shim CORRE de punta a punta (shim -> probe -> forma + .ok con stop_active)"
+printf 'block0\n' > "$cp_repo/probe-mode.txt"
+( cd "$cp_repo" && printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CS01 bash "$cshim" ) >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "el shim end-to-end dio exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-CS01"}'
+grep -Fxq 'stop_active=false' "$cp_repo/probe-ran/CS01.ok" 2>/dev/null \
+  || malo "el shim no propago --host codex: el .ok no lleva stop_active"
+printf 'empty\n' > "$cp_repo/probe-mode.txt"
+
+caso "codex: el shim es fail-open si el probe no esta (no rompe el turno del host)"
+# Hallazgo 3 de la revision cruzada de 6.1: sin esto, mover o borrar el repo del
+# kit mataba CADA fase de CADA turno de Codex en ese repo con un 127.
+shim_hu="$SANDBOX/shim-huerfano.sh"
+sed "s#$repo/tools/probe-zcode-output.sh#$SANDBOX/no-existe/probe.sh#g" "$cshim" > "$shim_hu"
+grep -q 'no-existe' "$shim_hu" || malo "el shim no nombra la ruta del probe (no se pudo medir el fail-open)"
+( cd "$cp_repo" && printf '%s' "$STOPC" | bash "$shim_hu" ) >"$OF" 2>"$EF"; rc=$?
+[ "$rc" -eq 0 ] || malo "shim huerfano: esperaba exit 0 (fail-open), dio $rc"
+stdout_is_empty
+
+caso "codex: segunda --instalar es no-op (byte a byte igual)"
+snap_cx="$(cksum < "$cshim")"
+out="$(bash "$tool" --instalar "$cp_repo" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "segunda instalacion debe ser exit 0, dio $rc: $out"
+[ "$snap_cx" = "$(cksum < "$cshim")" ] || malo "la segunda instalacion cambio el shim"
+
+caso "codex --quitar saca el shim y la marca; el shim de captura vecino no existe pero .codex sobrevive"
+out="$(bash "$tool" --quitar "$cp_repo" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "quitar debe ser exit 0, dio $rc: $out"
+[ ! -e "$cshim" ] || malo "no quito el shim"
+[ ! -e "$cp_repo/.codex/.probe-codex-owned" ] || malo "quitar dejo la marca colgada"
+[ -d "$cp_repo/probe-ran" ] || malo "quitar borro la evidencia (probe-ran/)"
+
+caso "codex --instalar NO pisa un shim desconocido en esa ruta"
+cxajeno="$SANDBOX/codex-ajeno"
+mkdir -p "$cxajeno/.codex/hooks"
+( cd "$cxajeno" && git init -q . >/dev/null 2>&1 ) || true
+printf '#!/usr/bin/env bash\n# hook propio del usuario\nexit 0\n' > "$cxajeno/.codex/hooks/summonaikit-harness.sh"
+antes_cx="$(cksum < "$cxajeno/.codex/hooks/summonaikit-harness.sh")"
+out="$(bash "$tool" --instalar "$cxajeno" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "pisar un shim desconocido debe fallar (dio $rc)"
+printf '%s' "$out" | grep -q 'no es mio' || malo "el rechazo del shim ajeno no dice por que: $out"
+[ "$antes_cx" = "$(cksum < "$cxajeno/.codex/hooks/summonaikit-harness.sh")" ] || malo "PISO el shim desconocido"
+out="$(bash "$tool" --quitar "$cxajeno" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "borrar un shim desconocido debe fallar (dio $rc)"
+[ -f "$cxajeno/.codex/hooks/summonaikit-harness.sh" ] || malo "BORRO el shim del usuario"
+
+# Misma leccion H1 que 7.2: la identidad no puede ser "el archivo menciona el
+# probe-id". Un hook ajeno que lo cite en un comentario no es nuestro.
+caso "H1: shim ajeno que MENCIONA el probe-id (sin marca) no se pisa ni se quita"
+cxh1="$SANDBOX/codex-menciona"
+mkdir -p "$cxh1/.codex/hooks"
+( cd "$cxh1" && git init -q . >/dev/null 2>&1 ) || true
+printf '#!/usr/bin/env bash\n# nota: ver --saikit-probe-id 6.2 del kit\nexit 0\n' > "$cxh1/.codex/hooks/summonaikit-harness.sh"
+snap_cxh1="$(cksum < "$cxh1/.codex/hooks/summonaikit-harness.sh")"
+out="$(bash "$tool" --instalar "$cxh1" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "H1 install codex: mencionar el probe-id no lo vuelve nuestro (dio $rc)"
+[ "$snap_cxh1" = "$(cksum < "$cxh1/.codex/hooks/summonaikit-harness.sh")" ] || malo "H1 install codex: PISO el shim ajeno"
+printf 'owner=otro\n' > "$cxh1/.codex/.probe-codex-owned"
+# Con la marca YA puesta, la unica cosa que separa "nuestro" de "ajeno" es el
+# sello del shim. Sin este caso, aflojar la identidad a un grep del probe-id
+# quedaba sin atrapar: en la variante sin marca el install ya fallaba por la
+# marca (lo dijo la mutacion mut_identidad_shim_laxa).
+out="$(bash "$tool" --instalar "$cxh1" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "H1 install codex: con marca presente, mencionar el probe-id no lo vuelve nuestro (dio $rc)"
+printf '%s' "$out" | grep -q 'no es mio' || malo "H1 install codex: el rechazo no dice que el shim no es nuestro: $out"
+[ "$snap_cxh1" = "$(cksum < "$cxh1/.codex/hooks/summonaikit-harness.sh")" ] || malo "H1 install codex: PISO el shim ajeno teniendo la marca"
+out="$(bash "$tool" --quitar "$cxh1" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "H1 quitar codex: con marca ajena pero shim ajeno no se borra (dio $rc)"
+printf '%s' "$out" | grep -qi 'no lo escribi\|no es mio' \
+  || malo "H1 quitar codex: el rechazo no dice que el shim no es nuestro: $out"
+[ "$snap_cxh1" = "$(cksum < "$cxh1/.codex/hooks/summonaikit-harness.sh")" ] || malo "H1 quitar codex: BORRO el shim ajeno"
+
+else
+  echo "    unknown: git no disponible o no pudo inicializar; el registro codex no se pudo medir"
+fi
+
+# ---- B6: las tres guardas que 6.2 abre y cierra ---------------------------
+caso "codex se niega a instalar si el dest resuelve a \$HOME/.codex"
+# El agujero: la lista de rechazo tenia .claude*/.zcode*/.grok* y NO .codex*.
+# Mientras no existia --host codex era una inconsistencia; ahora es un agujero.
+mkdir -p "$HOME/.codex"
+out="$(bash "$tool" --instalar "$HOME/.codex" --host codex 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "instalar sobre \$HOME/.codex debe fallar (dio $rc)"
+printf '%s' "$out" | grep -q 'perfil real' \
+  || malo "tiene que rechazarlo POR SER el perfil, no por otra cosa: $out"
+[ ! -e "$HOME/.codex/.codex" ] || malo "escribio adentro del perfil codex"
+[ ! -e "$HOME/.codex/hooks" ] || malo "escribio hooks/ adentro del perfil codex"
+rmdir "$HOME/.codex" 2>/dev/null || true
+
+caso "codex se niega a instalar sobre el repo del PRODUCTO (el shim mataria el gate)"
+# El shim REEMPLAZA al harness (medido en 6.1). Apuntar el probe al repo del kit
+# apagaria el gate ahi sin avisar, y la medicion siguiente seria de otra cosa.
+cxprod="$SANDBOX/codex-producto"
+mkdir -p "$cxprod/hooks"
+( cd "$cxprod" && git init -q . >/dev/null 2>&1 ) || true
+printf '#!/usr/bin/env bash\n# harness del producto\n' > "$cxprod/hooks/summonaikit-harness.sh"
+out="$(bash "$tool" --instalar "$cxprod" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "instalar sobre el repo del producto debe salir 2, dio $rc"
+printf '%s' "$out" | grep -qi 'producto' \
+  || malo "tiene que rechazarlo POR SER el repo del producto: $out"
+[ ! -e "$cxprod/.codex/hooks/summonaikit-harness.sh" ] || malo "escribio el shim sobre el repo del producto"
+
+caso "codex: rutas con metacaracteres de shell se rechazan (fail-closed)"
+# El shim interpola las rutas en un script bash entre comillas dobles: un \$ o un
+# backtick ahi ejecutaria expresiones en CADA fase de CADA turno del host.
+cxmal="$SANDBOX/codex-mal-\$home"
+mkdir -p "$cxmal"
+out="$(bash "$tool" --instalar "$cxmal" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "una ruta con \$ interpolada en el shim: esperaba exit 2, dio $rc"
+printf '%s' "$out" | grep -qi 'metacaracteres' \
+  || malo "tiene que rechazarla POR los metacaracteres: $out"
+[ ! -e "$cxmal/.codex" ] || malo "rechazo la ruta pero dejo el arbol puesto"
+
+caso "codex: un dest que NO es la raiz de un repo git se rechaza"
+# El .ps1 resuelve <toplevel>/.codex/hooks/... con git rev-parse --show-toplevel.
+# Si el dest es un subdir, el shim queda en una ruta que NADIE lee: la medicion
+# entera daria 'no corrio' y lo leeriamos como veredicto.
+cxsub="$SANDBOX/codex-repo/subdir"
+mkdir -p "$cxsub"
+out="$(bash "$tool" --instalar "$cxsub" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "un subdir de repo debe salir 2 (el shim quedaria sin lector), dio $rc"
+printf '%s' "$out" | grep -qi 'raiz\|toplevel' \
+  || malo "tiene que rechazarlo POR no ser la raiz del repo: $out"
+[ ! -e "$cxsub/.codex/hooks/summonaikit-harness.sh" ] || malo "escribio el shim en un subdir"
+cxnorepo="$SANDBOX/codex-sin-repo"
+mkdir -p "$cxnorepo"
+out="$(bash "$tool" --instalar "$cxnorepo" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "un dest que no es repo git debe salir 2, dio $rc"
+printf '%s' "$out" | grep -qi 'repo git\|raiz' \
+  || malo "tiene que rechazarlo POR no ser repo git: $out"
+
+caso "codex: --host invalido sigue saliendo 2 y el mensaje ya nombra codex"
+out="$(bash "$tool" --instalar "$cp_repo" --host inventado 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2 con --host inventado, dio $rc"
+printf '%s' "$out" | grep -q 'codex' || malo "el mensaje de host invalido no menciona codex: $out"
+
+echo "  test_probe_zcode_output: codex OK"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_probe_zcode_output: FAIL" >&2
   exit 1
