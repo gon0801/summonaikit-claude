@@ -7,6 +7,40 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-13 — PR #11 / Task 7.1 (merge `e41f7da`)
+
+- **Mergeado:** PR #11 `feat/7.1-grok-capture` → master — Task 7.1 medida y
+  cerrada (`cc:完了`): captura de **37 payloads reales de Grok Build 1.0.3** en
+  5 rondas sobre `C:\dev\saikit-captura-grok` (descartable). Writeup:
+  `docs/task-7.1-captura.md`. `tools/capture-payloads.sh` gana `--host grok`
+  (andamiaje de medición, como 5.1/6.1) + 13 casos en
+  `tests/test_capture_payloads.sh`.
+- **¿Cambió el hook?** **No.** Todo el PR es medición + herramienta de
+  captura; `hooks/summonaikit-harness.sh` no se toca. Grok no se instala hasta
+  la 7.6.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual a
+  la fuente.` (deploy no-op, exit 0).
+- **`check-hook-registration.sh`:** exit 0. Mismo advisory conocido de A9
+  (matcher de `PostToolUse` sin `Agent`), sin cambios.
+- **Vivo vs master:** cksum idéntico (`2628234111 70227`), sha256
+  `ef9a66bf3a51ee5b…`.
+- **Lo que la 7.1 mide, y no vale perder:** **D3 se prende entero** — el rol
+  del subagente llega por 3 canales (`SubagentStart`, despacho
+  `spawn_subagent`, eventos internos) y el `env` map entrega
+  `SUMMONAIKIT_HOOK_TARGET=grok`. `transcriptPath` cae en `~/.grok/sessions/`
+  (A6 contiene). Premisas caídas, declaradas: `PostToolUseFailure` no dispara
+  (las fallas llegan como `post_tool_use` con `toolResult` de error), el runner
+  de hooks en Windows ejecuta vía **powershell.exe** (la 7.5 emite
+  `& "bash.exe" "hook"`), la tool de escritura real es `write` además de
+  `search_replace`. Perfil `~/.grok` byte a byte intacto (cksums
+  antes/después); trust declarado y revocado.
+- **Nota de coordinación:** el trabajo se hizo en worktree
+  (`C:\dev\summonaikit-claude-7.1`) para no colisionar con la Phase 6 en curso
+  en el checkout principal. El `git pull` post-merge en el checkout principal
+  queda **pendiente**: tiene cambios sin commitear de la 6.3 que tocan
+  `Plans.md` y bloquean el ff — se sincroniza cuando esa task commitee.
+- **Operador:** Gon (vía kimi).
+
 ## 2026-08-13 — PR #10 / Phase 6 + Phase 7 + Task 6.1 (merge `454b02a`)
 
 - **Mergeado:** PR #10 `docs/phase-6-codex-design` → master. Diseño de **Phase 6
