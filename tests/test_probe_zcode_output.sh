@@ -696,8 +696,33 @@ printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA06 bash "$tool" --host codex --mode 
 stdout_is_empty
 grep -q 'PROBE-EXIT2-CA06' "$EF" || malo "codex exit2: stderr sin el nonce"
 
+# block2 es la combinacion del hook VIVO (emit_gate_failure): forma 2 + exit 2 +
+# stderr. Sin este modo, block0 y exit2 miden las dos mitades por separado y la
+# combinacion no la mide nadie — que es justo lo que decide la 6.4 en Codex,
+# donde el exit 2 pelado resulto ignorado.
+caso "codex: block2 (Stop) => forma 2 EN stdout + exit 2 + nonce en stderr + .ok"
+printf '%s' "$STOPC" | SAIKIT_PROBE_NONCE=CA07 bash "$tool" --host codex --mode block2 --mode-file "$mfc" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 2 ] || malo "codex block2: exit $RC (esperaba 2 — es el exit del vivo)"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK2-CA07"}'
+grep -q 'PROBE-BLOCK2-CA07' "$EF" || malo "codex block2: stderr sin el nonce"
+[ -f "$(okc_of CA07)" ] || malo "codex block2: no escribio .ok"
+okc_linea CA07 'suppressed=0'
+
+caso "codex: block2 entra al tope por ronda, y la visita topada sale 0 (no el 2 de la forma)"
+# Dir propio: este caso no puede depender de que la seccion del tope (§B3) ya
+# haya corrido — con set -u, usar su $mft antes de tiempo aborta la suite entera.
+Z="$SANDBOX/work-block2"; mkdir -p "$Z"; mfz="$Z/probe-mode.txt"
+for n in Z1 Z2 Z3; do
+  printf '%s' "$STOPC_CONT" | SAIKIT_PROBE_NONCE="$n" bash "$tool" --host codex --mode block2 --mode-file "$mfz" >"$OF" 2>/dev/null
+  [ -s "$OF" ] || malo "codex block2: la visita $n debia emitir la forma 2"
+done
+printf '%s' "$STOPC_CONT" | SAIKIT_PROBE_NONCE=Z4 bash "$tool" --host codex --mode block2 --mode-file "$mfz" >"$OF" 2>/dev/null; RC=$?
+stdout_is_empty
+[ "$RC" -eq 0 ] || malo "codex block2 topado: esperaba exit 0 (no el 2 de la forma), dio $RC"
+grep -Fxq 'suppressed=1' "$Z/probe-ran/Z4.ok" 2>/dev/null || malo "codex block2: la 4a visita no quedo marcada suppressed=1"
+
 caso "codex: evento incorrecto para el modo => vacio, exit 0, SIN .ok"
-for m in block0 budget notice exit2; do
+for m in block0 block2 budget notice exit2; do
   printf '%s' "$UPSC" | SAIKIT_PROBE_NONCE="CX$m" bash "$tool" --host codex --mode "$m" --mode-file "$mfc" >"$OF" 2>/dev/null; rc=$?
   [ "$rc" -eq 0 ] || malo "codex $m en UPS: exit $rc (esperaba 0)"
   stdout_is_empty

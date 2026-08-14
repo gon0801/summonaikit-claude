@@ -69,6 +69,7 @@
 #   context  UserPromptSubmit   {"hookSpecificOutput":{"hookEventName":"UserPromptSubmit",...}}  0
 #   extra    UserPromptSubmit   igual a context + "saikitProbe":true (clave extra)              0
 #   block0   Stop               {"decision":"block","reason":"PROBE-BLOCK-<nonce>"}             0 (no 2)
+#   block2   Stop               {"decision":"block","reason":"PROBE-BLOCK2-<nonce>"} + stderr   2   (el vivo)
 #   budget   Stop               {"continue":false,"stopReason":"PROBE-BUDGET-<nonce>"}          0
 #   notice   Stop               {"systemMessage":"PROBE-NOTICE-<nonce>"}                        0
 #   exit2    Stop               (vacio) + stderr "PROBE-EXIT2-<nonce>"                          2
@@ -121,7 +122,7 @@ while [ $# -gt 0 ]; do
     --mode-file) mode_file="${2:-}";       [ $# -ge 2 ] && shift 2 || shift ;;
     --only-cwd) only_cwd="${2:-}";         [ $# -ge 2 ] && shift 2 || shift ;;
     --saikit-probe-id) probe_id="${2:-}";  [ $# -ge 2 ] && shift 2 || shift ;;
-    -h|--help)  sed -n '2,92p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '2,93p' "$0"; exit 0 ;;
     *)          shift ;;
   esac
 done
@@ -289,7 +290,7 @@ if [ -z "$modo_operacion" ]; then
   ok="0"
   case "$mode" in
     context|extra)        [ "$evento" = "$ev_ups" ] && ok="1" ;;
-    block0|budget|notice|exit2) [ "$evento" = "$ev_stop" ] && ok="1" ;;
+    block0|block2|budget|notice|exit2) [ "$evento" = "$ev_stop" ] && ok="1" ;;
     empty)                ok="1" ;;
     *)                    ok="0" ;;
   esac
@@ -307,7 +308,7 @@ if [ -z "$modo_operacion" ]; then
   suprimir="0"
   if [ "$host" = "grok" ] && [ "$ok" = "1" ] && [ "$evento" = "$ev_stop" ] && [ "$reason" = "end_turn" ] && [ -n "$ronda" ]; then
     case "$mode" in
-      block0|budget|notice|exit2)
+      block0|block2|budget|notice|exit2)
         for f in "$ran_dir"/*.ok; do
           [ -f "$f" ] || continue
           # Hallazgo 1 (ciclo de revision 1): la cosecha del plan (§C) renombra
@@ -346,7 +347,7 @@ if [ -z "$modo_operacion" ]; then
   CODEX_MAX_EMIT=3
   if [ "$host" = "codex" ] && [ "$ok" = "1" ] && [ "$evento" = "$ev_stop" ] && [ -n "$ronda" ]; then
     case "$mode" in
-      block0|budget|notice|exit2)
+      block0|block2|budget|notice|exit2)
         visitas=0
         for f in "$ran_dir"/*.ok; do
           [ -f "$f" ] || continue
@@ -408,6 +409,18 @@ if [ -z "$modo_operacion" ]; then
         printf 'PROBE mode=block0 event=%s exit=0\n' "$evento" >&2
         printf '{"decision":"block","reason":"PROBE-BLOCK-%s"}\n' "$nonce"
         exit 0
+      fi ;;
+    # block2 = EXACTAMENTE lo que emite el hook vivo (`emit_gate_failure`):
+    # el JSON de forma 2 MAS exit 2 MAS stderr. block0 y exit2 miden las dos
+    # mitades por separado, y en zcode alcanzo porque las dos funcionaban. En
+    # Codex NO: 6.2 midio que el exit 2 pelado es ignorado, asi que la pregunta
+    # que decide la 6.4 es si el stdout se sigue parseando cuando el exit no es
+    # 0. Sin este modo esa combinacion no la mide nadie.
+    block2)
+      if [ "$evento" = "$ev_stop" ]; then
+        printf 'PROBE mode=block2 event=%s exit=2 PROBE-BLOCK2-%s\n' "$evento" "$nonce" >&2
+        printf '{"decision":"block","reason":"PROBE-BLOCK2-%s"}\n' "$nonce"
+        exit 2
       fi ;;
     budget)
       if [ "$evento" = "$ev_stop" ]; then
