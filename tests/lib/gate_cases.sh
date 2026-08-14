@@ -166,7 +166,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full"
 
 # El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
 # contiene "ui", asi que su regex de palabras clave armaba el harness solo.
@@ -404,6 +404,38 @@ caso_g1_arma_con_sentinel_en_linea_nueva() {
   lab_run prompt claude "$(lab_payload_prompt 'arregla el bug del parser\n-saikit')"
   _contiene "stdout con sentinel en linea nueva" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
   if ! lab_hay_estado; then _mal "un prompt multilinea con -saikit en su propia linea debe armar (C2)"; fi
+}
+
+# ================================================= Task 10.1 — carril -saikit:fast
+# El carril NO se infiere de regex de trivialidad: el usuario lo pide explicito
+# (-saikit:fast). OJO (cross-review codex r1, hallazgo 4): -saikit:fast YA ARMA
+# con el sentinel de siempre (el `:` pasa la frontera derecha) — el ROJO de los
+# dos primeros casos es por el CAMPO lane ausente del estado (lab_estado lane da
+# vacio != fast/full), no por no armar. El RE del sentinel no cambia; lo nuevo
+# es la DETECCION del carril. Con lane=fast el Stop gate exige recibo completo +
+# evidencia de verificacion (o skip) pero NO la ceremonia de 3 subagentes;
+# -saikit pelado = ceremonia completa, sin cambios.
+caso_g1_fast_arma_con_lane() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:fast corrige el typo del header')"
+  _igual "lane" "$(lab_estado lane)" "fast"
+}
+
+caso_g1_pelado_arma_lane_full() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint')"
+  _igual "lane" "$(lab_estado lane)" "full"
+}
+
+# r1 hallazgo 4: el match del sufijo es EXACTO (:fast con frontera derecha).
+# Cualquier otro sufijo (-saikit:fasst, -saikit:rapido) arma FULL — limite
+# declarado: un typo del carril cae al lado seguro (ceremonia completa), nunca
+# a un fast silencioso. Se ATA con este caso propio.
+caso_g1_sufijo_desconocido_arma_full() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:fasst corrige el typo')"
+  _igual "lane con sufijo desconocido" "$(lab_estado lane)" "full"
+  if ! lab_hay_estado; then _mal "sufijo desconocido arma igual (full), no silencio"; fi
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:rapido corrige el typo')"
+  _igual "lane con sufijo :rapido" "$(lab_estado lane)" "full"
 }
 
 # ============================================ G2 — evidencia de verificacion
@@ -684,7 +716,7 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -837,6 +869,30 @@ caso_g3_role_fallback_reviewer_permite() {
   _igual "exit code (ROLE FALLBACK sustituye al despacho, D4)" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Task 10.1 — carril fast en la secuencia: con lane=fast (armado por eventos con
+# -saikit:fast), un turno con recibo completo y verify cierra SIN subagentes; el
+# mismo turno sin recibo sigue bloqueando por el recibo (el carril no es un
+# salta-gate: exime la ceremonia, no el recibo ni la evidencia). El turno se
+# arma por EVENTOS (no lab_sembrar): el campo lane del estado lo escribe el
+# armado, y sembrarlo a mano probaria otra cosa.
+caso_g3_fast_cierra_sin_subagentes() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:fast corrige el typo')"
+  lab_run tool claude "$(lab_payload_edit '/proyecto/src/header.ts')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "fast cierra sin ceremonia" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio fast debe borrar el estado del turno"; fi
+}
+
+caso_g3_fast_sin_recibo_sigue_bloqueando() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:fast corrige el typo')"
+  lab_run tool claude "$(lab_payload_edit '/proyecto/src/header.ts')"
+  lab_run stop claude "$(lab_payload_stop 'listo, creo')"
+  _igual "fast sin recibo bloquea" "$LAB_RC" "2"
+  _contiene "motivo (el recibo sigue exigido en fast)" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
 # G5: en zcode continue:false+exit 0 es ignorado (5.2). El corte por presupuesto
