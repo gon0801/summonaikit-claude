@@ -115,6 +115,41 @@ genérico de `--host codex` y no por la guarda que dicen medir.
 | Bloqueo (Stop) | Conteo de `.ok` con `event=Stop` **de la misma `round=`**, más `stop_active=` | El control da 1. `stop_active=true` en la 2.ª visita prueba que la continuación es del hook y no del operador — señal que 5.2 no tuvo |
 | Rechazo vs. silencio | Lo que Codex muestre en pantalla o log al recibir la forma | Si no hay superficie, el veredicto es **`ignorada`**, no `rechazada`, y se declara que no se pudo distinguir |
 
+## §B-bis — Pre-flight verificado (2026-08-14, sólo lectura)
+
+Antes de la ceremonia se releyó el perfil real. **Nada se escribió.**
+
+- **La premisa de 6.1 sigue viva y el entorno no se movió.** Los tres cksum de
+  `~/.codex/` son **idénticos** a los que 6.1 dejó escritos el 2026-08-13
+  (`hooks.json 2271698800 2717`, `summonaikit-harness.sh 2998360912 55609`,
+  `summonaikit-harness.ps1 2437289870 1501`), y Codex sigue en **0.147.0**.
+- **El `.ps1` prefiere el shim por `Test-Path`, nada más.** No pide bit de
+  ejecución ni confianza. Y hace `Join-Path $repoRoot ".codex\hooks\…"` sobre
+  el **toplevel** de git — que es exactamente por qué la guarda A3.4 compara
+  contra la raíz y no contra el cwd.
+- **Invoca el shim como `bash <shim>` con el payload por stdin y sin
+  argumentos.** El shim generado no toma argumentos: calza.
+- **`exit $LASTEXITCODE`: los códigos de salida se propagan.** Es una
+  diferencia con Grok, donde 7.2 midió que PowerShell devolvía el `exit 2`
+  como 1 y la forma quedó ignorada. Acá el 2 debería llegar como 2 — sigue
+  siendo hipótesis hasta el turno, pero el camino está despejado.
+- **Sólo 3 fases están registradas para nosotros**: `UserPromptSubmit`
+  (`-Phase prompt`), `PostToolUse` (`-Phase tool`, con el matcher de 6.1) y
+  `Stop` (`-Phase stop`). `SessionStart` **no** es nuestro.
+
+**Confusor declarado, encontrado acá:** el `Stop` tiene **dos** hooks
+registrados — el nuestro y uno de `harness-mem` —, y `UserPromptSubmit`
+también. O sea que durante la medición hay **otro** hook emitiendo en la misma
+fase. Consecuencias que hay que tener presentes al leer los veredictos:
+
+1. El `.ok` sigue siendo un oráculo válido: es nuestro y nadie más lo escribe.
+2. Un veredicto de `ignorada` **no** puede atribuirse sin más a Codex: puede
+   ser que el otro hook haya ganado la salida. Si alguna forma sale `ignorada`,
+   se repite el modo con el otro hook fuera de juego antes de escribirlo como
+   veredicto — o se declara que no se pudo aislar.
+3. Para `exit 2` en particular: no está medido qué hace Codex cuando **uno** de
+   dos hooks de la misma fase sale 2. Eso entra a § D como `unknown`.
+
 ## §C — La ceremonia viva (operador adelante)
 
 Repo descartable, sesión **nueva** por modo, un modo por turno. `REPO` es el
@@ -183,6 +218,9 @@ está corriendo y **toda** medición posterior sería `unknown` disfrazado de
 
 - Si Codex tiene un **Stop de cierre** distinto del de turno (Grok sí lo tiene;
   en Claude y zcode no se midió). Si aparece, se anota; no se persigue.
+- **Qué hace Codex cuando uno de dos hooks de la misma fase sale 2** (ver
+  § B-bis: el `Stop` tiene el nuestro y uno de `harness-mem`). Decide si el
+  veredicto de `exit2` se puede atribuir a Codex o queda contaminado.
 - Si `spawn_agent` emite evento — heredado de 6.1, fuera de alcance acá.
 - Si Codex expone errores de hook en alguna superficie. De eso depende que
   "rechazada" sea siquiera medible; si no lo es, se declara.
