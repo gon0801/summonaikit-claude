@@ -1313,9 +1313,29 @@ dos hosts adicionales, sin prometer que ya estén operativos:
   demuestra que el rol llega. El contrato de salida se decide con 6.2.
 - **Phase 7 — Grok Build 1.0.3:** instala una copia propia y un JSON propio bajo
   `~/.grok/hooks/`, conserva `compat.claude.hooks = false`, aísla el estado como
-  `state/grok/` y adapta el envelope camel sólo según los payloads reales 7.1.
-  La ceremonia y las formas de bloqueo dependen de 7.1/7.2; si no se pueden
-  medir, el host no se publica como gate funcional.
+  `state/grok/` y adapta el envelope camel según los payloads reales 7.1
+  (**ya medidos**, ver abajo). Las formas de bloqueo dependen de 7.2; si no se
+  pueden medir, el host no se publica como gate funcional.
+
+### Medido 2026-08-13, Task 7.1 (captura Grok)
+
+37 payloads en 5 rondas de `grok -p` headless sobre repo descartable
+(`docs/task-7.1-captura.md`). Envelope con **claves camel y valores snake**
+(`hookEventName: "user_prompt_submit"`, `sessionId`, `toolInput`,
+`lastAssistantMessage`, `transcriptPath` → adentro de `~/.grok/sessions/`, A6
+contiene). El rol del subagente llega por **tres canales** (`SubagentStart`,
+despacho `spawn_subagent` con `toolInput.subagent_type`, eventos internos con
+`subagentType` de primer nivel) y el `env` map del handler entrega
+`SUMMONAIKIT_HOOK_TARGET=grok` ⇒ **la ceremonia Grok es exigible**. El matcher
+alias-expande (`Bash`→`run_terminal_command`, `Task`→`spawn_subagent`,
+`Write`→`write`). `GROK_HOOK_EVENT`/`GROK_SESSION_ID` presentes, `CLAUDECODE`
+ausente. Premisas de la doc que **cayeron**: `PostToolUseFailure` no dispara
+(las fallas llegan como `post_tool_use` con `toolResult` de error), el shell
+de hooks en Windows es **powershell.exe** (el comando registrado usa la forma
+`& "bash.exe" "hook"`), la tool de escritura real es `write` (además de
+`search_replace`), y el prompt del usuario llega envuelto en
+`<user_query>…</user_query>`. Perfil `~/.grok` byte a byte intacto; trust del
+repo descartable declarado y revocado.
 
 Las mediciones 7.1/7.2 son independientes de Phase 6. Las costuras compartidas
 se serializan: 7.3 después de 6.4, 7.5 después de 6.5 y 7.6 después de 6.6. El
