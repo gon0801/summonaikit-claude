@@ -15,7 +15,7 @@ Review the change for correctness, repo-consistency, reuse, and security before 
 
 ## Verification
 
-Run the repo's own type-check / build / test commands against the diff (discover them from `package.json` scripts / `Makefile` / `pyproject.toml` / `Cargo.toml` / CI config) and report any failures. For schema/data-model changes, confirm a corresponding migration was generated and that it matches intent (no destructive drops unless deliberate).
+Do NOT re-run the full test suite: the verifier already did and its evidence is in the turn. Re-run ONLY a check whose result you have concrete reason to distrust, and say why. Your job is the diff: correctness, consistency, reuse, security. For schema/data-model changes, confirm a corresponding migration was generated and that it matches intent (no destructive drops unless deliberate).
 
 ## What to verify
 

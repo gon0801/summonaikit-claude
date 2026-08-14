@@ -18,11 +18,15 @@ Confirm the change actually works, with fresh eyes and real evidence — never t
 Find the repo's own verification commands (don't assume a toolchain): read `package.json` scripts / `Makefile` / `pyproject.toml` / `Cargo.toml` / `go.mod` / CI config, then run the relevant ones:
 
 - **Type/compile check** for the language(s) touched.
-- **Tests** — run the focused suite for the changed area; run the full suite when the change is broad.
+- **Tests** — run the focused suite for the changed area; the FULL suite at most once per task, and only when the change is broad or the task is closing.
 - **Build** — when the change can break compilation/bundling.
 - **Lint** — when the repo enforces it in CI.
 
 Report the exact commands and their results. A check that was skipped must be named with a concrete reason.
+
+## Batch your evidence
+
+Group your verification commands into a few shell invocations (one per checkpoint), never one call per command — each call costs a full model turn.
 
 ## Evidence types
 
