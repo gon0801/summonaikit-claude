@@ -343,10 +343,14 @@ veredicto.
 bash <CO>/tools/probe-zcode-output.sh --quitar /c/dev/saikit-captura-grok --host grok
 # restore QUIRURGICO del trust (hallazgo 3 del cross-review): se quita SOLO
 # la entrada que agregamos en A3; NO se pisa el archivo con el backup, porque
-# un cambio concurrente del operador se perderia. Si el archivo difiere del
-# backup en algo mas que nuestra entrada, se para y se reporta.
-grep -v 'saikit-captura-grok' ~/.grok/trusted_folders.toml > /tmp/tf.toml \
-  && mv /tmp/tf.toml ~/.grok/trusted_folders.toml
+# un cambio concurrente del operador se perderia. OJO (corregido 2026-08-14,
+# leccion de la medicion real): la entrada son TRES lineas (header + trusted +
+# decided_at); un `grep -v` del header solo deja las otras dos HUESPEDAS de la
+# seccion anterior y rompe el TOML. La forma segura: restaurar el backup SOLO
+# si el diff contra el archivo actual es exactamente nuestra entrada; si el
+# archivo difiere en algo mas, se para y se reporta.
+diff trusted_folders.toml.bak-7.2 ~/.grok/trusted_folders.toml   # == solo nuestra entrada
+cp trusted_folders.toml.bak-7.2 ~/.grok/trusted_folders.toml
 cksum ~/.grok/trusted_folders.toml   # == al cksum ANTES de A3
 grok inspect  # Project trusted: no (o el valor previo)
 ```

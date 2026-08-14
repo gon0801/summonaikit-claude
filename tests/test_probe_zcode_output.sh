@@ -306,6 +306,337 @@ JSON
   echo "  test_probe_zcode_output: install/quitar OK"
 fi
 
+# ============================================================
+# Task 7.2 -- --host grok (docs/task-7.2-plan.md §A). Dos cambios, uno solo de
+# registro y uno de modo hook:
+#
+#   - --instalar/--quitar --host grok: JSON PROPIO en <repo>/.grok/hooks/
+#     saikit-probe.json (no el user-config de zcode, no nada global), comando
+#     PowerShell `& "<bash.exe>" ...` (medido en 7.1: el shell de hooks de Grok
+#     en Windows es powershell.exe y la forma zcode muere con exit 1).
+#   - modo hook con --host grok: hookEventName llega camel de CLAVE pero con
+#     VALOR snake (user_prompt_submit / stop), el .ok gana la linea reason= y
+#     las formas de Stop se emiten UNA sola vez por ronda con reason=end_turn
+#     (hallazgo 2 del cross-review: un block aceptado re-bloquearia la
+#     continuacion hasta el limite interno de Grok).
+# ============================================================
+UPSG='{"hookEventName":"user_prompt_submit","prompt":"x"}'
+STOPG='{"hookEventName":"stop"}'         # sin reason: el tope no aplica
+# Medido en 7.1: el Stop de turno trae sessionId + promptId. El sessionId es la
+# identidad de la ronda (cada `grok -p` es una sesion nueva; la continuacion
+# tras un block comparte sesion): sin el, el tope por ronda no puede distinguir
+# una continuacion de una ronda vieja abortada (hallazgo H2, ciclo 2).
+STOPG_ET='{"hookEventName":"stop","reason":"end_turn","sessionId":"s7","promptId":"p1"}'
+STOPG_SD='{"hookEventName":"stop","reason":"shutdown","sessionId":"s7"}'
+
+WORKG="$SANDBOX/work-grok"
+mkdir -p "$WORKG"
+mfg="$WORKG/probe-mode.txt"
+okg_of() { printf '%s/probe-ran/%s.ok' "$WORKG" "$1"; }   # $1=nonce
+
+# ---- A2.1: cada modo, con el literal snake que Grok manda de verdad --------
+caso "grok: context (user_prompt_submit) => forma 1 exacta + exit 0 + .ok"
+printf '%s' "$UPSG" | SAIKIT_PROBE_NONCE=GA01 bash "$tool" --host grok --mode context --mode-file "$mfg" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "grok context: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"PROBE-CONTEXT-GA01"}}'
+[ -f "$(okg_of GA01)" ] || malo "grok context: no escribio .ok"
+
+caso "grok: extra (user_prompt_submit) => forma 1 + clave extra + .ok"
+printf '%s' "$UPSG" | SAIKIT_PROBE_NONCE=GA02 bash "$tool" --host grok --mode extra --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok extra: exit $RC"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"PROBE-EXTRA-GA02"},"saikitProbe":true}'
+[ -f "$(okg_of GA02)" ] || malo "grok extra: no escribio .ok"
+
+caso "grok: block0 (stop sin reason) => forma 2 con exit 0 + .ok con reason=none"
+printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE=GA03 bash "$tool" --host grok --mode block0 --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok block0: exit $RC"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GA03"}'
+[ -f "$(okg_of GA03)" ] || malo "grok block0: no escribio .ok"
+grep -q '^reason=none$' "$(okg_of GA03)" 2>/dev/null \
+  || malo "grok block0: el .ok no registra reason=none (la DoD (2) lee eso)"
+
+caso "grok: budget (stop sin reason) => forma 3 + exit 0 + .ok"
+printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE=GA04 bash "$tool" --host grok --mode budget --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok budget: exit $RC"
+stdout_is '{"continue":false,"stopReason":"PROBE-BUDGET-GA04"}'
+[ -f "$(okg_of GA04)" ] || malo "grok budget: no escribio .ok"
+
+caso "grok: notice (stop sin reason) => forma 4 + exit 0 + .ok"
+printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE=GA05 bash "$tool" --host grok --mode notice --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok notice: exit $RC"
+stdout_is '{"systemMessage":"PROBE-NOTICE-GA05"}'
+[ -f "$(okg_of GA05)" ] || malo "grok notice: no escribio .ok"
+
+caso "grok: exit2 (stop sin reason) => stdout vacio + stderr nonce + exit 2 + .ok"
+printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE=GA06 bash "$tool" --host grok --mode exit2 --mode-file "$mfg" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 2 ] || malo "grok exit2: exit $RC (esperaba 2)"
+stdout_is_empty
+grep -q 'PROBE-EXIT2-GA06' "$EF" || malo "grok exit2: stderr sin el nonce"
+[ -f "$(okg_of GA06)" ] || malo "grok exit2: no escribio .ok"
+
+caso "grok: empty (control) => vacio, exit 0, .ok SIEMPRE"
+printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE=GA07 bash "$tool" --host grok --mode empty --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok empty: exit $RC"
+stdout_is_empty
+[ -f "$(okg_of GA07)" ] || malo "grok empty: no escribio .ok"
+
+# ---- A2.2: evento incorrecto para el modo ----------------------------------
+caso "grok: modos stop con evento user_prompt_submit => vacio, exit 0, SIN .ok"
+for m in block0 budget notice exit2; do
+  printf '%s' "$UPSG" | SAIKIT_PROBE_NONCE="GX$m" bash "$tool" --host grok --mode "$m" --mode-file "$mfg" >"$OF" 2>/dev/null; rc=$?
+  [ "$rc" -eq 0 ] || malo "grok $m en UPS: exit $rc (esperaba 0)"
+  stdout_is_empty
+  [ -f "$(okg_of "GX$m")" ] && malo "grok $m en UPS: escribio .ok (no debia)" || true
+done
+
+caso "grok: modos UPS con evento stop => vacio, exit 0, SIN .ok"
+for m in context extra; do
+  printf '%s' "$STOPG" | SAIKIT_PROBE_NONCE="GY$m" bash "$tool" --host grok --mode "$m" --mode-file "$mfg" >"$OF" 2>/dev/null; rc=$?
+  [ "$rc" -eq 0 ] || malo "grok $m en stop: exit $rc (esperaba 0)"
+  stdout_is_empty
+  [ -f "$(okg_of "GY$m")" ] && malo "grok $m en stop: escribio .ok (no debia)" || true
+done
+
+# ---- A2.3: el Stop de cierre (reason=shutdown) emite SIEMPRE ---------------
+caso "grok: block0 con stop+reason=shutdown EMITE (el cierre no se topa) y el .ok lo registra"
+printf '%s' "$STOPG_SD" | SAIKIT_PROBE_NONCE=GSD1 bash "$tool" --host grok --mode block0 --mode-file "$mfg" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok shutdown: exit $RC"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GSD1"}'
+[ -f "$(okg_of GSD1)" ] || malo "grok shutdown: no escribio .ok"
+grep -q '^reason=shutdown$' "$(okg_of GSD1)" 2>/dev/null \
+  || malo "grok shutdown: el .ok no registra reason=shutdown"
+
+# ---- A2.3b: tope de UNA emision de bloqueo por ronda (hallazgo 2 CR) -------
+# Aislado en su propio dir: WORKG ya tiene .ok de block0 con reason=none, que
+# no debe disparar el tope (solo cuenta reason=end_turn).
+WORKG2="$SANDBOX/work-grok-tope"
+mkdir -p "$WORKG2"
+mfg2="$WORKG2/probe-mode.txt"
+
+caso "grok: block0 con reason=end_turn emite UNA vez por ronda; la 2da visita calla pero se registra"
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT01 bash "$tool" --host grok --mode block0 --mode-file "$mfg2" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "tope, 1ra: exit $RC"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT01"}'
+grep -q '^reason=end_turn$' "$WORKG2/probe-ran/GT01.ok" 2>/dev/null || malo "tope, 1ra: .ok sin reason=end_turn"
+# Segunda invocacion igual (el block fue aceptado y Grok continuo el turno):
+# NO vuelve a emitir (si no, re-bloquea la continuacion hasta el tope de Grok)
+# pero la visita igual queda registrada en su .ok.
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT02 bash "$tool" --host grok --mode block0 --mode-file "$mfg2" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "tope, 2da: exit $rc (esperaba 0 en silencio)"
+stdout_is_empty
+[ -f "$WORKG2/probe-ran/GT02.ok" ] || malo "tope, 2da: la visita no quedo registrada en .ok"
+# Otro modo de Stop en la MISMA ronda si emite: el tope es por modo.
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT03 bash "$tool" --host grok --mode notice --mode-file "$mfg2" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "tope, otro modo: exit $rc"
+stdout_is '{"systemMessage":"PROBE-NOTICE-GT03"}'
+
+caso "grok: el tope NO se activa por un .ok con reason=none o reason=shutdown"
+WORKG3="$SANDBOX/work-grok-tope2"
+mkdir -p "$WORKG3/probe-ran"
+printf 'mode=block0 event=stop nonce=viejo\nreason=none\n' > "$WORKG3/probe-ran/viejo.ok"
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT04 bash "$tool" --host grok --mode block0 --mode-file "$WORKG3/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "tope reason=none: exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT04"}'
+
+# Hallazgo 1 del ciclo de revision 1: la cosecha del plan (§C) renombra los .ok
+# a probe-ran/<modo>-<nonce>.ok — mismo dir, misma extension. En una
+# re-medicion (modo que salio unknown, sesion nueva) el tope encontraba los
+# .ok COSECHADOS con reason=end_turn y la primera visita de la ronda nueva no
+# emitia: veredicto falso "ignored" cuando era "accepted".
+caso "grok: un .ok COSECHADO (prefijo <modo>-) no dispara el tope en la ronda siguiente"
+WORKG4="$SANDBOX/work-grok-cosecha"
+mkdir -p "$WORKG4/probe-ran"
+printf 'mode=block0 event=stop nonce=viejo\nreason=end_turn\n' > "$WORKG4/probe-ran/block0-viejo.ok"
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT05 bash "$tool" --host grok --mode block0 --mode-file "$WORKG4/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "cosechado: exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT05"}'
+# Control: un .ok VIVO (nombre = nonce puro, sin guion) de la MISMA ronda si
+# dispara el tope.
+printf 'mode=block0 event=stop nonce=vivopuro\nreason=end_turn\nround=s7\n' > "$WORKG4/probe-ran/vivopuro.ok"
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT06 bash "$tool" --host grok --mode block0 --mode-file "$WORKG4/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "control vivo: exit $rc"
+stdout_is_empty
+[ -f "$WORKG4/probe-ran/GT06.ok" ] || malo "control vivo: la visita no quedo registrada en .ok"
+
+# Hallazgo H2 (ciclo 2, cross-review Codex): un .ok vivo de OTRA sesion (ronda
+# abortada sin cosechar) NO puede silenciar la ronda nueva — el tope compara la
+# identidad de la ronda (sessionId medido en 7.1), no solo mode+reason.
+caso "grok: un .ok vivo de OTRA sesion no suprime la ronda nueva (H2)"
+WORKG6="$SANDBOX/work-grok-rondas"
+mkdir -p "$WORKG6/probe-ran"
+printf 'mode=block0 event=stop nonce=viejo\nreason=end_turn\nround=s-vieja\n' > "$WORKG6/probe-ran/viejo.ok"
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT09 bash "$tool" --host grok --mode block0 --mode-file "$WORKG6/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "otra sesion: exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT09"}'
+grep -q '^round=s7$' "$WORKG6/probe-ran/GT09.ok" 2>/dev/null \
+  || malo "el .ok no registra la identidad de la ronda (round=sessionId)"
+# Y la continuacion de ESTA sesion si se topa (misma ronda, mismo modo).
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT10 bash "$tool" --host grok --mode block0 --mode-file "$WORKG6/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "misma sesion: exit $rc"
+stdout_is_empty
+[ -f "$WORKG6/probe-ran/GT10.ok" ] || malo "misma sesion: la visita no quedo registrada en .ok"
+
+# Hallazgo 3 del ciclo de revision 1: grep -o | head -1 puede leer un "reason"
+# embebido en lastAssistantMessage antes del campo real. Solo end_turn y
+# shutdown son literales documentados de Grok; cualquier otro valor se descarta
+# como none (no topa, no se declara shutdown lo que no es).
+caso "grok: reason con valor NO reconocido se trata como none (emite, .ok dice none)"
+WORKG5="$SANDBOX/work-grok-reason"
+mkdir -p "$WORKG5"
+printf '%s' '{"hookEventName":"stop","lastAssistantMessage":"dije \"reason\":\"end_turn\" en el texto","reason":"otra-cosa"}' \
+  | SAIKIT_PROBE_NONCE=GT07 bash "$tool" --host grok --mode block0 --mode-file "$WORKG5/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "reason desconocido: exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT07"}'
+grep -q '^reason=none$' "$WORKG5/probe-ran/GT07.ok" 2>/dev/null \
+  || malo "reason desconocido: el .ok debe decir reason=none, no el valor crudo"
+# Y la visita siguiente con end_turn real NO se topa por ese .ok.
+printf '%s' "$STOPG_ET" | SAIKIT_PROBE_NONCE=GT08 bash "$tool" --host grok --mode block0 --mode-file "$WORKG5/probe-mode.txt" >"$OF" 2>/dev/null; rc=$?
+[ "$rc" -eq 0 ] || malo "tras reason desconocido: exit $rc"
+stdout_is '{"decision":"block","reason":"PROBE-BLOCK-GT08"}'
+
+# ---- A2.4: --instalar / --quitar grok --------------------------------------
+gp="$SANDBOX/grok-repo"
+mkdir -p "$gp"
+gpjson="$gp/.grok/hooks/saikit-probe.json"
+
+caso "grok --instalar escribe saikit-probe.json (UPS + Stop) y la marca; nada global"
+out="$(bash "$tool" --instalar "$gp" --host grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ -f "$gpjson" ] || malo "no escribio $gpjson"
+if [ -f "$gpjson" ]; then
+  grep -q -- '--saikit-probe-id 7\.2' "$gpjson" || malo "falta --saikit-probe-id 7.2 en el comando"
+  grep -q -- '--host grok' "$gpjson" || malo "falta --host grok en el comando (sin eso el modo hook no matchea snake)"
+  grep -q -- '--only-cwd' "$gpjson" || malo "falta --only-cwd"
+  grep -q -- '--mode-file' "$gpjson" || malo "falta --mode-file"
+  grep -q 'probe-mode.txt' "$gpjson" || malo "el mode-file no apunta a probe-mode.txt"
+fi
+if command -v jq >/dev/null 2>&1; then
+  jq -e . "$gpjson" >/dev/null 2>&1 || malo "el JSON de registro grok del probe no parsea"
+  jq -e '(.hooks|keys|sort) == ["Stop","UserPromptSubmit"]' "$gpjson" >/dev/null 2>&1 \
+    || malo "el probe grok registra SOLO UserPromptSubmit y Stop (como zcode)"
+  jq -e '(.hooks.UserPromptSubmit[0]|has("matcher")|not) and (.hooks.Stop[0]|has("matcher")|not)' "$gpjson" >/dev/null 2>&1 \
+    || malo "UPS y Stop van sin matcher"
+  jq -e '.saikit_probe == "7.2"' "$gpjson" >/dev/null 2>&1 || malo "falta la marca top-level saikit_probe=7.2"
+  jq -e 'all(.hooks[][].hooks[]; (.type=="command") and (.timeout==30)
+         and (.command|startswith("& ")) and (.command|test("bash[.]exe")))' "$gpjson" >/dev/null 2>&1 \
+    || malo "todo handler debe ser type=command, timeout 30, forma PowerShell '& \"<bash.exe>\"'"
+else
+  echo "    unknown: jq no disponible; el parseo del JSON grok no se pudo medir"
+fi
+[ -f "$gp/.grok/.probe-grok-owned" ] || malo "falta la marca .grok/.probe-grok-owned"
+[ "$(cat "$gp/probe-mode.txt" 2>/dev/null)" = "empty" ] || malo "probe-mode.txt no empezo en empty"
+[ -d "$gp/probe-ran" ] || malo "no creo probe-ran/"
+[ ! -e "$HOME/.grok" ] || malo "tocó el ~/.grok (falso) del sandbox"
+[ ! -f "$gp/.claude/settings.json" ] || malo "escribio .claude/settings.json en modo grok"
+[ ! -e "$gp/.zcode/.probe-zcode-owned" ] || malo "dejo marca de zcode en modo grok"
+
+caso "grok --instalar NO requiere ni toca el user-config de zcode"
+zcfg_inexistente="$SANDBOX/no-existe/.zcode/cli/config.json"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg_inexistente" bash "$tool" --instalar "$gp" --host grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "con --host grok no hace falta el user-config de zcode, dio $rc: $out"
+[ ! -e "$zcfg_inexistente" ] || malo "creo el user-config de zcode en modo grok"
+
+caso "grok segunda --instalar es no-op (byte a byte igual)"
+snap_gp="$(cksum < "$gpjson")"
+out="$(bash "$tool" --instalar "$gp" --host grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "segunda instalacion debe ser exit 0, dio $rc: $out"
+[ "$snap_gp" = "$(cksum < "$gpjson")" ] || malo "la segunda instalacion cambio el JSON"
+
+caso "grok --instalar NO pisa un JSON desconocido en esa ruta"
+gpajeno="$SANDBOX/grok-probe-ajeno"
+mkdir -p "$gpajeno/.grok/hooks"
+printf '{"hooks":{"Stop":[]}}\n' > "$gpajeno/.grok/hooks/saikit-probe.json"
+antes_gp="$(cksum < "$gpajeno/.grok/hooks/saikit-probe.json")"
+out="$(bash "$tool" --instalar "$gpajeno" --host grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "pisar un JSON desconocido debe fallar (dio $rc)"
+[ "$antes_gp" = "$(cksum < "$gpajeno/.grok/hooks/saikit-probe.json")" ] || malo "PISO el JSON desconocido"
+
+caso "grok: rutas con metacaracteres de PowerShell se rechazan (fail-closed, hallazgo 4 CR)"
+gmal="$SANDBOX/grok-mal-\$home"
+mkdir -p "$gmal"
+out="$(bash "$tool" --instalar "$gmal" --host grok 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "una ruta con \$ en el command PowerShell ejecutaria expresiones: esperaba exit 2, dio $rc"
+[ ! -e "$gmal/.grok" ] || malo "rechazo la ruta pero dejo el arbol puesto"
+
+caso "grok se niega a instalar si el dest resuelve a \$HOME/.grok"
+mkdir -p "$HOME/.grok"
+out="$(bash "$tool" --instalar "$HOME/.grok" --host grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "instalar sobre \$HOME/.grok debe fallar (dio $rc)"
+[ ! -e "$HOME/.grok/hooks/saikit-probe.json" ] || malo "escribio adentro del perfil grok"
+rmdir "$HOME/.grok" 2>/dev/null || true
+
+caso "grok --quitar saca el JSON propio y la marca; el saikit-capture.json vecino sobrevive"
+capvecino="$gp/.grok/hooks/saikit-capture.json"
+printf '{"hooks":{}}\n' > "$capvecino"
+snap_cap="$(cksum < "$capvecino")"
+out="$(bash "$tool" --quitar "$gp" --host grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "quitar debe ser exit 0, dio $rc: $out"
+[ ! -f "$gpjson" ] || malo "no quito el JSON propio"
+[ ! -f "$gp/.grok/.probe-grok-owned" ] || malo "quitar dejo la marca colgada"
+[ "$snap_cap" = "$(cksum < "$capvecino" 2>/dev/null)" ] || malo "quitar toco el saikit-capture.json de 7.1"
+
+caso "grok --quitar NO borra un JSON desconocido (sin marca + sin probe-id)"
+out="$(bash "$tool" --quitar "$gpajeno" --host grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "borrar lo ajeno debe fallar, dio $rc"
+[ -f "$gpajeno/.grok/hooks/saikit-probe.json" ] || malo "BORRO el JSON del usuario"
+
+caso "grok: --host invalido o sin valor sale 2 y no escribe"
+out="$(bash "$tool" --instalar "$gp" --host inventado 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2 con --host inventado, dio $rc"
+printf '%s' "$out" | grep -q 'grok' || malo "el mensaje de host invalido no menciona grok: $out"
+out="$(bash "$tool" --instalar "$gp" --host 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2 con --host sin valor, dio $rc (trampa H1)"
+[ ! -e "$gp/.grok/hooks/saikit-probe.json" ] || malo "--host invalido escribio el JSON grok"
+
+# Hallazgo H1 (ciclo 2, cross-review Codex): un JSON AJENO que menciona el
+# texto --saikit-probe-id 7.2 en una nota, sin marca .probe-grok-owned, se
+# SOBRESCRIBIA: la identidad era grep del texto del flag. La identidad es la
+# clave top-level "saikit_probe" + la marca; si no cumple AMBAS, desconocido.
+caso "H1: JSON ajeno que MENCIONA el probe-id (sin marca) no se pisa ni se quita"
+gph1="$SANDBOX/grok-probe-menciona"
+mkdir -p "$gph1/.grok/hooks"
+printf '{"note":"user-owned --saikit-probe-id 7.2"}\n' > "$gph1/.grok/hooks/saikit-probe.json"
+snap_h1="$(cksum < "$gph1/.grok/hooks/saikit-probe.json")"
+out="$(bash "$tool" --instalar "$gph1" --host grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "H1 install: mencionar el probe-id no lo vuelve nuestro (dio $rc)"
+[ "$snap_h1" = "$(cksum < "$gph1/.grok/hooks/saikit-probe.json")" ] || malo "H1 install: PISO el JSON ajeno"
+# Variante quitar: marca presente (estado inconsistente) pero el JSON es ajeno
+# (sin la clave top-level) aunque mencione el probe-id => no se borra.
+printf 'owner=otro\n' > "$gph1/.grok/.probe-grok-owned"
+out="$(bash "$tool" --quitar "$gph1" --host grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "H1 quitar: el JSON ajeno con el probe-id en una nota no se borra (dio $rc)"
+[ "$snap_h1" = "$(cksum < "$gph1/.grok/hooks/saikit-probe.json")" ] || malo "H1 quitar: BORRO/PISO el JSON ajeno"
+
+# Hallazgo H3 (ciclo 2): `--host --instalar <repo>` tragaba --instalar como
+# VALOR del flag y salia exit 0 sin instalar nada. El valor se valida en el
+# PARSEO: empieza con '-' o no es zcode/grok => exit 2, en cualquier modo.
+caso "H3: --host seguido de otro flag sale 2 en el parseo, en cualquier modo"
+out="$(bash "$tool" --host --instalar "$gp" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "H3: --host trago --instalar como valor y salio $rc"
+[ ! -e "$gp/.grok/hooks/saikit-probe.json" ] || malo "H3: escribio el JSON grok"
+out="$(bash "$tool" --host --quitar "$gp" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "H3: --host trago --quitar como valor y salio $rc"
+# Se corre adentro del sandbox: en rojo (bug presente) el modo hook seguiria y
+# escribiria probe-ran/ en el cwd — que no sea el repo.
+( cd "$SANDBOX" && printf '%s' "$STOPG" | bash "$tool" --host --mode block0 >"$OF" 2>/dev/null ); rc=$?
+[ "$rc" -eq 2 ] || malo "H3: en modo hook un --host mal parseado tambien sale 2 (dio $rc)"
+
+caso "regresion: sin --host sigue siendo zcode puro (no crea .grok en el dest)"
+if command -v jq >/dev/null 2>&1; then
+  zre="$SANDBOX/zcode-repo-reg"; mkdir -p "$zre"
+  zhome_re="$SANDBOX/zcode-home-reg"; zcfg_re="$zhome_re/.zcode/cli/config.json"
+  mkdir -p "$zhome_re/.zcode/cli"
+  printf '{"hooks":{"enabled":true,"events":{}}}\n' > "$zcfg_re"
+  out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg_re" bash "$tool" --instalar "$zre" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "instalar zcode default debe exit 0, dio $rc: $out"
+  grep -q 'saikit-probe-id 5\.2' "$zcfg_re" || malo "no appendeo en el user-config zcode"
+  [ ! -e "$zre/.grok" ] || malo "el modo default (zcode) creo .grok en el dest"
+else
+  echo "    unknown: jq no disponible; la regresion del default zcode no se pudo medir"
+fi
+
+echo "  test_probe_zcode_output: grok OK"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_probe_zcode_output: FAIL" >&2
   exit 1
