@@ -106,8 +106,48 @@ _RECIBO_SIN_RETRO_NO_CORRI='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste u
 # (comando y prosa) y un punto al final de una oracion NO es una extension.
 _RECIBO_SIN_RETRO_PYTEST_PUNTO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
 
+# D4 (Task 6.3) — ROLE FALLBACK: <ROL> (razon) declarado en el recibo, en vez
+# del despacho, para cuando el subagente se cae por infraestructura (429,
+# limite de uso, error de herramienta). La declaracion puede vivir en
+# cualquier parte del recibo; aca se la agrega al final del bullet de Close,
+# como la escribiria el lead real. Un fixture por rol (los tres casos abajo
+# necesitan el suyo propio: ver el comentario sobre CASOS_G3).
+_RECIBO_ROLE_FALLBACK_IMPLEMENTER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: IMPLEMENTER (429).\n- Retro: none.'
+
+_RECIBO_ROLE_FALLBACK_VERIFIER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: VERIFIER (429).\n- Retro: none.'
+
+_RECIBO_ROLE_FALLBACK_REVIEWER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: REVIEWER (429).\n- Retro: none.'
+
+# C7 (auditoria 2026-08-13, Task 8.3) — el recibo con las etiquetas en
+# markdown bold (**Label**:), la forma MAS natural en que el modelo escribe
+# listas. El `**` entre la etiqueta y el `:` rompia has_receipt_label y un
+# recibo honesto y completo se bloqueaba con las seis etiquetas "faltantes".
+_RECIBO_BOLD='SUMMONAIKIT HARNESS RECEIPT\n- **Understand**: pediste poder listar las sesiones abiertas.\n- **Implement**: se agrego el endpoint y su ruta.\n- **Verify**: se corrio la bateria completa, 12 en verde.\n- **Review**: sin hallazgos.\n- **Close**: entregado; no se toco codigo despues de la revision.\n- **Retro**: none.'
+
 _TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
 _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
+
+# Escotilla "delegado y en vuelo" (arreglo 1): hermana de la pausa, para cuando
+# el lead delego a un subagente (implementer/verifier/reviewer) que todavia no
+# contesto. Tiene que NOMBRAR el rol -- el segundo fixture omite el rol a
+# proposito, para el caso que confirma que sin el la escotilla no vale.
+_TEXTO_DELEGADO='Delegue la verificacion al subagente verifier y sigue corriendo.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting verifier'
+_TEXTO_DELEGADO_SIN_ROL='Delegue el trabajo y sigue corriendo.\n\nSUMMONAIKIT HARNESS DELEGATED'
+
+# Bug de cross-review (ciclo 1), REPRODUCIDO con ejecucion: la escotilla
+# DELEGATED disparaba con CUALQUIER texto que trajera la frase, sin comprobar
+# que el recibo estuviera ausente. Estos dos fixtures son las dos pruebas del
+# revisor.
+#
+# Mitad "roto": ningun subagente corrio, falta Retro, no hay ROLE FALLBACK, y
+# el bullet de Close menciona la frase DELEGATED de pasada (una nota sobre
+# OTRA tarea, no una pausa real de esta).
+_RECIBO_ROTO_CON_DELEGADO_INCIDENTAL='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; nota aparte: en otra tarea deje dicho SUMMONAIKIT HARNESS DELEGATED - awaiting verifier, no en esta.'
+
+# Mitad "completo": recibo VALIDO con las 6 etiquetas, que menciona la frase
+# DELEGATED en el bullet de Retro -- plausible, porque el propio formato del
+# recibo invita a comentar mejoras del harness ahi.
+_RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: el harness podria documentar mejor el patron SUMMONAIKIT HARNESS DELEGATED - awaiting verifier para subagentes largos.'
 
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
@@ -126,7 +166,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva"
 
 # El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
 # contiene "ui", asi que su regex de palabras clave armaba el harness solo.
@@ -335,8 +375,68 @@ caso_g1_host_segun_senal() {
 }
 
 
+# C1 (auditoria 2026-08-13, Task 8.1) — json_string_field cortaba el valor del
+# prompt en la primera comilla escapada: `arregla el "bug" -saikit` llegaba
+# truncado a `arregla el \` y el sentinel jamas se veia. Comillas en un prompt
+# son entrada de todos los dias (mensajes de error, nombres de campo, salida
+# pegada). Rojo medido contra el hook pre-8.1.
+caso_g1_arma_con_comillas_antes_del_sentinel() {
+  lab_run prompt claude "$(lab_payload_prompt 'arregla el \"bug\" del login -saikit')"
+  _contiene "stdout con comillas antes del sentinel" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+  if ! lab_hay_estado; then _mal "un prompt con comillas antes de -saikit debe armar (C1)"; fi
+}
+
+# C1, mitad desarme — la correccion a mitad de ceremonia CON sentinel pero con
+# una comilla antes tomaba la rama de desarme (el sentinel quedaba del otro
+# lado del corte) y borraba el estado armado en silencio.
+caso_g1_correccion_con_comillas_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt 'ojo, el campo es \"user_id\" no user -saikit')"
+  if ! lab_hay_estado; then _mal "una correccion con comillas y -saikit no debe desarmar (C1)"; fi
+}
+
+# C2 (auditoria 2026-08-13, Task 8.1) — el sentinel se grepeaba sobre el JSON
+# crudo sin decodificar: un salto de linea antes de -saikit llega como los DOS
+# caracteres literales \n, la `n` es alfanumerica y la frontera izquierda
+# rechaza. El sentinel en su propia linea es la colocacion mas natural de un
+# prompt multilinea.
+caso_g1_arma_con_sentinel_en_linea_nueva() {
+  lab_run prompt claude "$(lab_payload_prompt 'arregla el bug del parser\n-saikit')"
+  _contiene "stdout con sentinel en linea nueva" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+  if ! lab_hay_estado; then _mal "un prompt multilinea con -saikit en su propia linea debe armar (C2)"; fi
+}
+
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca"
+
+# C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
+# entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
+# command en la primera \" y el regex jamas veia pytest. El Stop de ese turno
+# reclamaba evidencia que SI existia (ciclo de revision de mas).
+caso_g2_comando_entrecomillado_marca_verificado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash -c \"cd app && pytest -q\"')"
+  _igual "verified con runner entrecomillado" "$(lab_estado verified)" "1"
+}
+
+# C3 (auditoria 2026-08-13, Task 8.1) — clase A1 para command: una clave
+# "command" DENTRO de tool_response (texto que el turno no escribio) era tomada
+# por el lector greedy (ultima ocurrencia gana) y acreditaba verified=1 por un
+# comando que nunca corrio. Gemelo de caso_g3_eco_fuera_de_tool_input_no_cuenta.
+caso_g2_eco_de_command_en_tool_response_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_con_eco_command 'echo hola' 'pytest -q')"
+  _igual "verified tras eco de command en tool_response" "$(lab_estado verified)" "0"
+}
+
+# C3, gemelo para tool_name — el eco {"tool_name":"pytest"} dentro de
+# tool_response pisaba la herramienta real del evento con el lector greedy y
+# el chequeo del runner acreditaba sin comando de test alguno.
+caso_g2_eco_de_tool_name_en_tool_response_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'echo hola' 'pytest')"
+  _igual "verified tras eco de tool_name en tool_response" "$(lab_estado verified)" "0"
+}
 
 caso_g2_runner_marca_verificado() {
   lab_sembrar 123456 0 0 0 ""
@@ -584,7 +684,7 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -696,6 +796,49 @@ caso_g3_target_por_zcode_fallback() {
   _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
+# D4 (Task 6.3) — absorbe la escotilla ROLE FALLBACK del sabor Codex del kit
+# (unica de las cinco divergencias que es codigo en la condicion del gate, no
+# texto de contrato). Sembrado SIN despachar el rol correspondiente y CON la
+# declaracion en el recibo: el gate tiene que aceptarla en vez del despacho y
+# cerrar limpio, no reclamar "Missing <rol> subagent run".
+#
+# UN CASO POR ROL, no uno solo (revision cruzada, ciclo 1): las tres ramas del
+# gate estan tipeadas a mano con un literal de rol distinto cada una -- no son
+# un loop sobre una lista -- y `mut_role_fallback_quitada` rompe las tres A LA
+# VEZ con un solo sed sobre la subcadena compartida. Esa mutacion prueba que el
+# mecanismo anda en ALGUN lado, no que cada rama sea correcta por separado: un
+# typo en la rama de IMPLEMENTER (el literal del rol mal escrito, o el mensaje
+# de otro rol pegado ahi) no lo atrapaba nadie sin su propio caso. Mismo
+# precedente que ya tiene este archivo en G2 (un caso por runner sobre un
+# mecanismo compartido: pytest/tsc/phpunit/cargo/go).
+#
+# El caso que bloquea sin despacho Y sin declaracion ya existe para el rol
+# reviewer (caso_g3_falta_reviewer_bloquea ejercita la MISMA rama *) con un
+# recibo sin ROLE FALLBACK) — no se duplica esa mitad.
+caso_g3_role_fallback_implementer_permite() {
+  lab_sembrar 123456 0 1 1 "verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROLE_FALLBACK_IMPLEMENTER")"
+  _igual "exit code (ROLE FALLBACK sustituye al despacho, D4)" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+caso_g3_role_fallback_verifier_permite() {
+  lab_sembrar 123456 0 1 1 "implementer,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROLE_FALLBACK_VERIFIER")"
+  _igual "exit code (ROLE FALLBACK sustituye al despacho, D4)" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+caso_g3_role_fallback_reviewer_permite() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROLE_FALLBACK_REVIEWER")"
+  _igual "exit code (ROLE FALLBACK sustituye al despacho, D4)" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
 # G5: en zcode continue:false+exit 0 es ignorado (5.2). El corte por presupuesto
 # depende del exit 2 que esta task anade al budget. Sin ZCODE_* sigue exit 0
 # (regresion Claude = caso_g5_presupuesto_agotado).
@@ -796,7 +939,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -811,6 +954,40 @@ caso_g4_pausa_permite() {
   if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
 }
 
+# C4 (auditoria 2026-08-13, Task 8.2), mitad PAUSED — el tail de 160 lineas
+# conserva texto de turnos ANTERIORES: un PAUSED viejo en el transcript dejaba
+# pasar el gate ENTERO de un turno que no pauso (el mensaje final del turno es
+# texto llano sin recibo). La escotilla debe mirar el turno actual
+# (last_assistant_message), no la historia.
+caso_g4_pausa_vieja_solo_en_transcript_bloquea() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop 'Ya quedo el cambio, avisame.')" "$(lab_transcript_asistente "$_TEXTO_PAUSA")"
+  _igual "exit code con PAUSED viejo en el tail" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+}
+
+# C4, mitad DELEGATED — el recibo del turno ANTERIOR en el tail hacia fallar la
+# clausula "recibo ausente" de la escotilla, y un turno de delegacion legitimo
+# se bloqueaba: falso rojo => ciclos de revision de mas (la lentitud medida).
+caso_g4_delegado_con_recibo_viejo_en_transcript_permite() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_DELEGADO")" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  _igual "exit code delegando con recibo viejo en el tail" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if ! lab_hay_estado; then _mal "la delegacion no cierra el turno: el estado debe seguir (C4)"; fi
+}
+
+# C7 (auditoria 2026-08-13, Task 8.3) — un recibo completo y honesto con las
+# etiquetas en markdown bold cierra limpio; antes las 6 etiquetas fallaban por
+# el `**` entre la etiqueta y el `:` (falso rojo => ciclos de mas).
+caso_g4_recibo_bold_pasa() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_BOLD")"
+  _igual "exit code con recibo bold" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio con recibo bold debe borrar el estado"; fi
+}
+
 # DEFECTO A2, la mitad mala: la cadena de pausa aparece SOLO adentro del
 # `content` de un `tool_result` en el transcript — un mensaje `user`, no
 # `assistant`. El asistente nunca la escribio; hoy el grep crudo sobre el tail la
@@ -819,7 +996,11 @@ caso_g4_pausa_permite() {
 # Es el caso que habria atrapado A2. Estado NO borrado: el turno sigue abierto.
 caso_g4_pausa_en_resultado_bloquea() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Ya lo cambie.')" "$(lab_transcript_pausa_en_resultado)"
+  # Stop SIN last_assistant_message a proposito (Task 8.2): la escotilla ahora
+  # mira el turno actual y solo cae al canal transcript cuando el payload no
+  # trae el campo — que es exactamente el camino donde la condicion role:assistant
+  # del walker decide, y lo que mantiene atrapable a mut_texto_incluye_tool_result.
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)" "$(lab_transcript_pausa_en_resultado)"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
   if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
@@ -834,9 +1015,69 @@ caso_g4_pausa_en_resultado_bloquea() {
 # profundidad que el walker rastrea y asi la mutacion type:text es atrapable.
 caso_g4_pausa_en_thinking_no_cuenta() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Ya lo cambie.')" "$(lab_transcript_thinking_con_pausa)"
+  # Stop sin last_assistant_message por la misma razon que
+  # caso_g4_pausa_en_resultado_bloquea (Task 8.2): la condicion type:text del
+  # walker decide en el fallback, y asi mut_texto_incluye_tool_use sigue atrapable.
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)" "$(lab_transcript_thinking_con_pausa)"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+}
+
+# ARREGLO 1 — escotilla "delegado y en vuelo", hermana de la pausa de arriba.
+# El contrato exige delegar a tres subagentes en secuencia, y esos subagentes
+# tardan (30-100 min medidos). Sin esta escotilla, un turno que delego y sigue
+# esperando queda atrapado: o bloquea horas, o cierra y el Stop gate reclama
+# el recibo que todavia no puede escribir. Se acepta sin recibo, sin evidencia
+# y sin la secuencia completa -- igual que la pausa, y por la misma razon: el
+# agente esta correctamente esperando, no fallando.
+caso_g4_delegado_permite() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_DELEGADO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if ! lab_hay_estado; then _mal "la delegacion no cierra el turno: el estado tiene que seguir ahi"; fi
+}
+
+# La escotilla SOLO vale si nombra uno de los tres roles canonicos
+# (implementer/verifier/reviewer) -- igual disciplina que ROLE FALLBACK (D4,
+# Task 6.3): sin el rol, "DELEGATED" a secas seria un "salteate el gate"
+# generico y no uno auditable. El turno sigue abierto (mismo criterio que la
+# pausa: el gate reclama el recibo normal, no una etiqueta puntual).
+caso_g4_delegado_sin_rol_bloquea() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_DELEGADO_SIN_ROL")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# Bug de cross-review (ciclo 1), REPRODUCIDO con ejecucion: la escotilla
+# DELEGATED disparaba (exit 0, sin feedback) con un recibo ROTO que solo
+# menciona la frase de pasada -- exactamente el "salteate el gate" que la
+# exigencia del rol queria evitar. Con el arreglo (exigir recibo AUSENTE), el
+# recibo (esta presente, aunque roto) desactiva la escotilla y el turno cae
+# al gate normal, que reclama lo que falta de verdad.
+caso_g4_delegado_incidental_en_recibo_roto_bloquea() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROTO_CON_DELEGADO_INCIDENTAL")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _contiene "motivo" "$LAB_OUT" 'Missing implementer subagent run'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# La otra mitad del mismo bug: un recibo COMPLETO que menciona la frase
+# DELEGATED en Retro cerraba exit 0 pero NO borraba el estado (la escotilla
+# lo interceptaba antes de llegar al cierre limpio de verdad). Con el
+# arreglo, el recibo desactiva la escotilla, el turno cae al camino normal, y
+# como esta completo cierra limpio DE VERDAD (estado borrado) -- la regla de
+# hierro del repo (recibo completo = cierre limpio) se restablece.
+caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS_CON_DELEGADO_EN_RETRO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un recibo completo tiene que cerrar limpio de verdad (estado borrado), no colgarse de la escotilla DELEGATED"; fi
 }
 
 # Repone el atrapador de mut_etiqueta_sin_frontera que el caso A8 invertido le

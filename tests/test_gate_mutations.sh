@@ -48,6 +48,7 @@ G1|session_sin_llave|el estado se vuelve a llavear solo por proyecto (sin sesion
 G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sentinel
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
+G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -63,6 +64,8 @@ G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
+G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
+G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -72,7 +75,11 @@ G3|agent_type_no_se_lee|el rol de los eventos internos (agent_type) deja de leer
 G3|target_sin_claudecode|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
 G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
+G4|etiqueta_sin_bold|la alternativa markdown bold se quita y un recibo **Label**: vuelve a bloquear
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
+G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
+G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
+G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
 G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
 G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
@@ -85,6 +92,7 @@ G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
 G3|zcode_sin_target|el fallback ZCODE_* se anula y TARGET queda vacio en zcode (la secuencia no se exige)
 G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae a "tool" (stop_gate no corre)
 G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
+G3|role_fallback_quitada|se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -123,6 +131,11 @@ mut_session_id_greedy()         { sed 's/json_top_level_string session_id/json_s
 # literal a mitad de patron) y con `#` de delimitador para no chocar con las
 # barras del path.
 mut_host_sin_llave()            { sed 's#PROJECT_DIR="\$STATE_ROOT/\$HOST/\$PROJECT_KEY"#PROJECT_DIR="$STATE_ROOT/$PROJECT_KEY"#'; }
+# Task 8.1 (C1+C2): devuelve el prompt al lector greedy sin decodificar. Los
+# catches son caso_g1_arma_con_comillas_antes_del_sentinel (C1) y
+# caso_g1_arma_con_sentinel_en_linea_nueva (C2) — con el greedy, la comilla
+# escapada trunca el valor y el \n crudo rompe la frontera del sentinel.
+mut_prompt_greedy()             { sed 's/json_top_level_decoded prompt/json_string_field prompt/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
@@ -140,6 +153,12 @@ mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
 # Quita el tramo ES de VERIFY_SKIP_RE. El catch es caso_g2_excusa_espanol_no_reclama
 # (el recibo del vivo zcode). skipped/not run siguen, el resto de G2 no se rompe.
 mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
+# Task 8.1 (C3, clase A1 para la evidencia): devuelven command/tool_name al
+# lector greedy del payload entero. Catches: caso_g2_comando_entrecomillado_
+# marca_verificado y caso_g2_eco_de_command_en_tool_response_no_marca (command);
+# caso_g2_eco_de_tool_name_en_tool_response_no_marca (tool_name).
+mut_command_desacotado()   { sed 's/json_tool_input_string command/json_string_field command/'; }
+mut_tool_name_desacotado() { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
@@ -224,7 +243,38 @@ mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/';
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }
+# Task 8.3 (C7): quita la alternativa markdown bold entre etiqueta y `:`.
+# Catch: caso_g4_recibo_bold_pasa (el recibo **Label**: vuelve a bloquear).
+mut_etiqueta_sin_bold()    { sed 's/(\\\*\\\*|__)?\[\[:space:\]\]\*:/[[:space:]]*:/'; }
 mut_pausa_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED NUNCA'/"; }
+# Arreglo 1 (escotilla hermana "delegado y en vuelo"): neutraliza la CONDICION
+# apuntando al ancla unica `grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED` -- ese
+# prefijo con la comilla y el "grep -Eiq" solo aparece en la condicion del
+# Stop gate, nunca en el texto del contrato inyectado (ahi es prosa suelta,
+# sin "grep -Eiq '" delante), asi que la mutacion no le pega al mensaje. Con
+# "_NUNCA" pegado, "SUMMONAIKIT HARNESS DELEGATED - awaiting verifier" deja de
+# matchear -> la escotilla desaparece -> un recibo que la usa vuelve a
+# bloquear. Lo atrapa caso_g4_delegado_permite (ningun otro caso de CASOS_G4
+# escribe "SUMMONAIKIT HARNESS DELEGATED" en su fixture, asi que ningun otro
+# reacciona). Misma forma que mut_pausa_no_se_reconoce / mut_role_fallback_quitada.
+mut_delegado_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED_NUNCA/"; }
+# Fix de cross-review (ciclo 1): la escotilla DELEGATED tiene que exigir
+# ADEMAS que no haya recibo, o un recibo (roto o completo) que solo la
+# mencione de pasada la deja disparar igual -- ver RECEIPT_MARKER_RE y el
+# comentario largo que lo explica en el hook. Se declaro como constante
+# propia (no inline) exactamente para que esta mutacion pueda apuntar SOLO a
+# su definicion, sin tocar de paso el chequeo separado y no relacionado de
+# "Missing SUMMONAIKIT HARNESS RECEIPT" (que usa el mismo literal inline mas
+# abajo en stop_gate). Con el marcador roto ("_NUNCA" pegado), la guardia
+# `! grep "$RECEIPT_MARKER_RE"` vuelve a dar VERDADERO siempre -- la
+# escotilla vuelve a disparar sin importar si hay recibo. Lo atrapa
+# caso_g4_delegado_incidental_en_recibo_roto_bloquea (el recibo roto con la
+# frase incidental vuelve a cerrar en silencio, exit 0 en vez de 2).
+mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT_NUNCA'/"; }
+# Task 8.2 (C4): devuelve las escotillas al texto completo ($text incluye el
+# tail con turnos anteriores). Catch: caso_g4_pausa_vieja_solo_en_transcript_
+# bloquea (un PAUSED viejo vuelve a saltar el gate).
+mut_escotillas_leen_tail_viejo() { sed 's/text_hatch="$(assistant_text_payload)"/text_hatch="$text"/'; }
 # Las cuatro mitades del arreglo de A2+A8 (Task 3.2), una mutacion cada una.
 # Las dos primeras mutan la LLAMADA en stop_gate (no el awk interno) porque
 # MSYS2/Git Bash corrompe los backslashes en literales de sed — cambiar la
@@ -270,6 +320,20 @@ mut_phase_sin_camel()       { sed 's/event="$(json_top_level_string hookEventNam
 # caso_g5_presupuesto_zcode_exit2. {n;} edita la linea DESPUES del comentario 5.4
 # del budget (donde vive el exit 2), sin tocar el exit 2 del gate_failure.
 mut_budget_zcode_sigue_0()  { sed '/saikit-5.4-zcode-budget/s/exit 2/exit 0/'; }
+
+# D4 (Task 6.3): saca la escotilla ROLE FALLBACK del gate de secuencia
+# (rompe la CONDICION, no el texto del mensaje). Apunta al ancla unica
+# `grep -Eiq 'ROLE FALLBACK: ` -- solo aparece en las tres condiciones nuevas,
+# nunca en el texto del mensaje ("...or declare ROLE FALLBACK: VERIFIER
+# (reason)...", sin comilla simple ni "grep -Eiq" delante) ni en el bullet del
+# contrato inyectado, asi que la mutacion no les pega. Sin escapar el `*` de
+# `ROLE FALLBACK: *VERIFIER` (la parte que sigue intacta tras el reemplazo):
+# el patron de busqueda no lo incluye, asi que no hace falta la trampa de
+# backslashes de MSYS2 documentada en :128-131. Con las tres condiciones
+# neutralizadas, un recibo con la declaracion vuelve a bloquear -- lo atrapa
+# caso_g3_role_fallback_verifier_permite (ningun otro caso de CASOS_G3 escribe
+# "ROLE FALLBACK: " en su recibo, asi que ningun otro reacciona).
+mut_role_fallback_quitada() { sed "s/grep -Eiq 'ROLE FALLBACK: /grep -Eiq 'ROLE_FALLBACK_NUNCA: /"; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
