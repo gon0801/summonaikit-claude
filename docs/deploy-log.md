@@ -7,6 +7,26 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-14 — PR #14 / Task 7.2: contrato de salida Grok (merge `fcccf87`)
+
+- **Mergeado:** PR #14 `feat/7.2-probe-grok` → master — `probe-zcode-output.sh`
+  gana `--host grok` (con 2 ciclos de corrección: reviewer interno +
+  cross-review Codex, 3 hallazgos), tests, veredictos medidos
+  (`docs/task-7.2-salida.md`), párrafo spec y cierre de la fila 7.2.
+- **¿Cambió el hook?** **No.** Sólo andamiaje de medición (`tools/`), tests y
+  docs; `hooks/summonaikit-harness.sh` intacto.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual a
+  la fuente.` (deploy no-op, exit 0).
+- **`check-hook-registration.sh`:** exit 0; mismo advisory conocido de A9
+  (matcher PostToolUse sin `Agent`), preexistente.
+- **Medición 7.2 (contexto):** 7 rondas headless + 4 variantes oráculo en
+  `C:\dev\saikit-captura-grok`; bloquean `decision:block` (exit 0) y
+  `continue:false`; ignoradas `exit 2`, `additionalContext` (4 formas) y
+  `systemMessage`; perfil `~/.grok` byte a byte intacto (cksums), trust
+  revocado. Decisión: `TARGET=grok` con forma propia; armado se re-planifica
+  en 7.3.
+- **Operador:** Gon.
+
 ## 2026-08-13 — PR #13 / Phase 8: auditoría del sentinel (merge `ed8ff80`)
 
 - **Mergeado:** PR #13 `fix/phase-8-sentinel-audit` → master — tasks 8.1–8.4
