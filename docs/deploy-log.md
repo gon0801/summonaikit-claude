@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-13 — PR #12 / diseño Phase 7 corregido + plan 7.2 (merge `4088213`)
+
+- **Mergeado:** PR #12 `docs/7.2-plan-y-diseno` → master — diseño de Phase 7
+  actualizado con la evidencia de la 7.1 (D2/D3/D5/D6/D7, JSON canónico con
+  comando PowerShell, riesgos cerrados), párrafo "Medido …, Task 7.1" en el
+  spec, filas 7.2–7.6 de `Plans.md` corregidas, y `docs/task-7.2-plan.md` con
+  cross-review de Codex incorporado (1 ronda, 6 hallazgos aceptados).
+- **¿Cambió el hook?** **No.** Todo el PR es documentación.
+- **`install-hook.sh`:** `YA AL DIA: el destino es nuestro y byte a byte igual a
+  la fuente.` (deploy no-op, exit 0).
+- **`check-hook-registration.sh`:** exit 0. Mismo advisory conocido de A9
+  (matcher de `PostToolUse` sin `Agent`), sin cambios.
+- **Vivo vs master:** cksum idéntico (`2628234111 70227`).
+- **Coordinación:** deploy corrido desde el worktree; el checkout principal
+  sigue con cambios sin commitear de la 6.3 (otro agente) y su `git pull`
+  queda pendiente hasta que esa task commitee.
+- **Operador:** Gon (vía kimi).
+
 ## 2026-08-13 — PR #11 / Task 7.1 (merge `e41f7da`)
 
 - **Mergeado:** PR #11 `feat/7.1-grok-capture` → master — Task 7.1 medida y
