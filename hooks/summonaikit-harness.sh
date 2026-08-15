@@ -90,7 +90,25 @@ fi
 # the Stop gate, so detection stays consistent across ecosystems (JS/TS, Python,
 # Ruby/Rails, PHP, .NET, JVM, Go, Rust, Elixir, Swift, C/C++, make). Add a host's
 # runner here rather than in two places.
-TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|lint))|npm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|pnpm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|yarn[[:space:]]+(test|typecheck|lint)|deno[[:space:]]+(test|lint|check)|vitest|jest|playwright[[:space:]]+test|cypress[[:space:]]+run|tsc|check-types|typecheck|cargo[[:space:]]+(test|nextest)|go[[:space:]]+test|gotestsum|pytest|unittest|tox|rspec|rake[[:space:]]+(test|spec)|rails[[:space:]]+test|bundle[[:space:]]+exec[[:space:]]+(rspec|rake|cucumber|minitest)|mix[[:space:]]+test|phpunit|pest|artisan[[:space:]]+test|composer[[:space:]]+(test|run[[:space:]]+test)|dotnet[[:space:]]+test|gradle[[:space:]]+(test|check)|gradlew[[:space:]]+(test|check)|mvn[[:space:]]+(test|verify)|swift[[:space:]]+test|ctest|ginkgo|make[[:space:]]+(test|check)'
+TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|lint))|npm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|pnpm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|yarn[[:space:]]+(test|typecheck|lint)|deno[[:space:]]+(test|lint|check)|vitest|jest|playwright[[:space:]]+test|cypress[[:space:]]+run|tsc|check-types|typecheck|cargo[[:space:]]+(test|nextest)|go[[:space:]]+test|gotestsum|pytest|unittest|tox|rspec|rake[[:space:]]+(test|spec)|rails[[:space:]]+test|bundle[[:space:]]+exec[[:space:]]+(rspec|rake|cucumber|minitest)|mix[[:space:]]+test|phpunit|pest|artisan[[:space:]]+test|composer[[:space:]]+(test|run[[:space:]]+test)|dotnet[[:space:]]+test|gradle[[:space:]]+(test|check)|gradlew[[:space:]]+(test|check)|mvn[[:space:]]+(test|verify)|swift[[:space:]]+test|ctest|ginkgo|make[[:space:]]+(test|check)|(ba|z|da|k)?sh[[:space:]]+[^[:space:]]*tests?/run\.sh|^(\./)?tests?/run\.sh'
+
+# Task 9.10 — las DOS ramas nuevas del final (runner bash propio del kit):
+#   1. `(ba|z|da|k)?sh[[:space:]]+[^[:space:]]*tests?/run\.sh` — verbo shell
+#      (bash/zsh/dash/ksh/sh) seguido de una RUTA SIN ESPACIOS que termina en
+#      tests/run.sh: cubre `bash tests/run.sh`, `bash /c/dev/proyecto/tests/
+#      run.sh` y `cd /repo && bash tests/run.sh`, que es el gate FINAL de este
+#      repo y no matcheaba nada (en hosts sin transcript legible, el gate de
+#      verificacion quedaba insatisfible).
+#   2. `^(\./)?tests?/run\.sh` — invocacion directa ANCLADA al inicio del
+#      comando (`./tests/run.sh`, `tests/run.sh` pelado).
+# A3 queda cerrado y es el wrapper de abajo el que lo cierra: `cat tests/run.sh`
+# no satisface la rama 2 (no empieza el comando ahi) ni la 1 (no hay verbo), y
+# `grep run.sh tests/run.sh` tampoco — el unico `sh` con espacio detras viene
+# precedido de `.` (run.sh), que la frontera izquierda [^A-Za-z0-9_.-] del
+# wrapper EXCLUDE, asi que el match no puede iniciar ahi. Limites declarados
+# del lado estricto (sin credito el gate pide la razon, que es recuperable):
+# `bash -e tests/run.sh` (espacio entre flag y ruta) y
+# `./otros-tests/run.sh` (frontera izquierda `-`) NO cuentan.
 
 # Wrapper con fronteras de palabra: el runner debe estar flanqueado por
 # start/end o un caracter que NO forme parte de un nombre de archivo. Cierra A3

@@ -439,7 +439,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -713,6 +713,59 @@ caso_g2_credencial_entrecomillada_se_redacta_entera() {
   _igual "verified (el runner sigue contando)" "$(lab_estado verified)" "1"
   _no_contiene "la cola del secreto no queda en el log" "$(lab_log)" 'dos-palabras'
   _contiene "runner preservado" "$(lab_log)" 'pytest'
+}
+
+# ============================================= Task 9.10 — runner bash propio
+# `bash tests/run.sh` es el gate FINAL de ESTE repo (~18 min de MSYS2) y no
+# matcheaba NINGUNA rama de TEST_RUNNER_RE: en hosts sin transcript legible el
+# gate de verificacion quedaba insatisfible — el comando CORRECTO no acreditaba
+# y el gate exigia una bateria que ya se habia corrido. Se extiende la
+# constante compartida (misma superficie para el evento y la prosa del recibo)
+# con DOS ramas: verbo shell + ruta sin espacios, e invocacion directa anclada
+# a inicio de comando. Sin reabrir A3: `cat tests/run.sh` y
+# `grep run.sh tests/run.sh` siguen sin contar (el wrapper de fronteras y la
+# clase de exclusion [^A-Za-z0-9_.-] hacen el trabajo: el `sh` dentro de
+# `run.sh` queda precedido por `.` y no puede iniciar el match).
+caso_g2_runner_bash_run_sh_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash tests/run.sh')"
+  _igual "verified con bash tests/run.sh" "$(lab_estado verified)" "1"
+}
+
+caso_g2_runner_bash_ruta_absoluta_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash /c/dev/proyecto/tests/run.sh')"
+  _igual "verified con bash y ruta absoluta" "$(lab_estado verified)" "1"
+}
+
+caso_g2_runner_bash_tras_and_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cd /repo && bash tests/run.sh')"
+  _igual "verified con bash tras &&" "$(lab_estado verified)" "1"
+}
+
+# Invocacion directa (sin verbo): solo cuenta ANCLADA al inicio del comando —
+# `./tests/run.sh` y `tests/run.sh` pelados. Desanclarla reabriria A3.
+caso_g2_runner_run_sh_directo_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash './tests/run.sh')"
+  _igual "verified con ./tests/run.sh" "$(lab_estado verified)" "1"
+  lab_run tool claude "$(lab_payload_bash 'tests/run.sh')"
+  _igual "verified con tests/run.sh directo" "$(lab_estado verified)" "1"
+}
+
+# 9.10, clase A3 — mencionar/leer el runner NO es correrlo: el cat del propio
+# runner y un grep sobre su texto no acreditan (analogos a cat pytest.log).
+caso_g2_runner_run_sh_en_cat_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'cat tests/run.sh')"
+  _igual "verified con cat tests/run.sh" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_run_sh_en_grep_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'grep run.sh tests/run.sh')"
+  _igual "verified con grep run.sh tests/run.sh" "$(lab_estado verified)" "0"
 }
 
 # ============================================== G3 — secuencia de subagentes
