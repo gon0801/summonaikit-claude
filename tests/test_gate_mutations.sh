@@ -67,6 +67,7 @@ G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuel
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
+G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -170,6 +171,12 @@ mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # caso_g2_eco_de_tool_name_en_tool_response_no_marca (tool_name).
 mut_command_desacotado()   { sed 's/json_tool_input_string command/json_string_field command/'; }
 mut_tool_name_desacotado() { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
+# Task 9.10: neutraliza las DOS ramas nuevas (verbo shell + invocacion directa)
+# rompiendo el sufijo tests?/run\.sh que comparten — el resto de TEST_RUNNER_RE
+# queda intacto. Lo atrapa caso_g2_runner_bash_run_sh_marca (verde->rojo:
+# `bash tests/run.sh` vuelve a verified=0). BRE sin cuantificadores que
+# escapar: `?` tras `s` y `\\`+`.` para el `\.` literal del target.
+mut_runner_bash_quitada()  { sed 's#tests?/run\\.sh#testsNUNCA/runX.sh#g'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
