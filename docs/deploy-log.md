@@ -7,6 +7,43 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-15 — PR #15 / Task 6.2: contrato de salida de Codex (merge `5006de7`)
+
+- **Mergeado:** PR #15 `feat/6.2-probe-codex` → master — `probe-zcode-output.sh`
+  gana `--host codex` (registro por **colocación de shim**, no mutación de
+  config), el modo `block2`, cuatro guardas nuevas con su caso, veredictos
+  medidos (`docs/task-6.2-salida.md`), plan (`docs/task-6.2-plan.md`) y cierre
+  de la fila 6.2 con la restricción heredada escrita en la DoD de 6.4.
+- **¿Cambió el hook?** **No.** Cero commits sobre `hooks/`; sólo andamiaje de
+  medición (`tools/`), tests y docs.
+- **`install-hook.sh`: NO se ejecutó, y es deliberado.** El merge trajo el hook
+  de Phase 10 (PR #16), y el working tree de esta sesión estaba en la rama 6.2,
+  o sea con el hook **anterior**. Correr el instalador desde ahí habría **pisado
+  el hook vivo con una copia vieja** — el deploy habría revertido Phase 10 en
+  silencio. En su lugar se verificó la igualdad, que es lo que el deploy
+  realmente afirma: `cksum` del vivo == `cksum` de
+  `origin/master:hooks/summonaikit-harness.sh`. Deploy **no-op verificado**.
+- **`check-hook-registration.sh`:** exit 0; mismo advisory conocido de A9
+  (matcher PostToolUse sin `Agent`), preexistente.
+- **Medición 6.2 (contexto):** 12 turnos headless (`codex exec --json`) en
+  `C:\dev\saikit-probe-codex`, Codex CLI 0.147.0, sesión nueva por turno.
+  **Hallazgo que decide la 6.4:** con el MISMO JSON de bloqueo, `exit 0` ⇒ 4
+  Stops y 3 `hook_prompt` (bloquea); `exit 2` ⇒ 1 Stop y 0 `hook_prompt` (no
+  bloquea, 2/2). Codex **descarta el stdout del hook cuando el exit no es 0**,
+  así que `emit_gate_failure` tal como emite hoy sería **decorativo** ahí.
+  `additionalContext` aceptada (2/2, entra como rol `developer`); clave extra
+  **rechazada** (0/3) ⇒ esquema **estricto**, al revés que zcode. Perfil
+  `~/.codex` byte a byte intacto (3 cksum antes/después); ninguna config
+  editada.
+- **CodeRabbit (PR #15):** 4 hallazgos, los 4 verificados contra el código y
+  válidos, atendidos en `559e952` — orden marca→shim (el shim quedaba vivo y
+  `--quitar` se negaba a sacarlo), marca ajena que se pisaba, symlinks bajo la
+  raíz del repo (esquivaban la negativa a tocar el perfil real) y un error
+  factual del doc. **Límite declarado:** el caso del symlink reporta `unknown`
+  en Windows/MSYS y su mutación no queda atrapada en esta máquina.
+- **Vivo vs master:** cksum idéntico (`3561109110 81554`).
+- **Operador:** Gon.
+
 ## 2026-08-14 — PR #14 / Task 7.2: contrato de salida Grok (merge `fcccf87`)
 
 - **Mergeado:** PR #14 `feat/7.2-probe-grok` → master — `probe-zcode-output.sh`
