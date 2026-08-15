@@ -17,6 +17,11 @@ KEY="$(pwd | cksum | cut -d ' ' -f 1)"
 # no. Antes escribia state/<key>/ sin host: el caso estado_host era vacuo.
 HOST=other
 [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ] && HOST=zcode
+# Task 6.6: espejo de D2 (6.4) — la senal explicita de codex va PRIMERO, como
+# en el hook vivo; sin esta rama el caso estado_host de codex seria vacuo
+# (caeria en other), la misma trampa que 5.5 ya arreglo para zcode. ROJO
+# medido: neutralizada esta linea, el caso 'estado_host: codex' se pone rojo.
+[ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ] && HOST=codex
 mkdir -p "$DIR/state/$HOST/$KEY"
 {
   printf 'phase=%s\n' "${SUMMONAIKIT_HOOK_PHASE:-<sin-fase>}"

@@ -327,7 +327,10 @@ generar() {
       # token fallara y el hook escribiera state/other/ o state/claude/, la linea
       # diria eso y --check daria rojo contra una baseline que espera zcode. Sin
       # estado (sin armar / Stop que borro) no se emite: 01-16 tampoco la tienen.
-      if [ "$objetivo" = "zcode" ]; then
+      # Task 6.6: mismo mecanismo para codex — el snapshot normaliza el segmento
+      # host, asi que esta linea es lo UNICO que pinna en la linea base que el
+      # estado quedo bajo state/codex/ (D2, Task 6.4) y no bajo other/claude.
+      if [ "$objetivo" = "zcode" ] || [ "$objetivo" = "codex" ]; then
         _hh="$(host_del_estado "$sb")"
         # if/then (no `[ ] && printf`): cuando no hay estado _hh queda vacio y
         # este bloque NO puede devolver non-zero, o se vuelve el exit status del

@@ -1,0 +1,7 @@
+codex, G1 no-arma + G6 permiso. Un prompt sin sentinel en el tercer host:
+mudo y sin estado; el tool no crea estado sin turno armado; el Stop deja pasar
+en silencio (emit_allow no imprime para codex). Analogo del 01/17.
+Payloads con la forma RECAPTURADA 2026-08-15 (los crudos de 6.1 no se
+commitearon y su repo fue borrado; la recaptura headless salio del mismo
+binario, codex-cli 0.147.0): snake_case sin duplicado camel, turn_id, model,
+permission_mode=bypassPermissions, tool_response STRING, tool_use_id exec-.
