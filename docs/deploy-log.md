@@ -7,6 +7,53 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-15 — PR #19 / Task 10.6: reglas permanentes en `SessionStart` (merge `3f4f076`)
+
+- **Mergeado:** PR #19 `feat/10.6-standing-rules-sessionstart` → master — el kit
+  gana un canal para **invariantes permanentes**: en la fase `SessionStart`
+  inyecta 3 reglas de velocidad **arme o no** el turno. No gatea, no arma, no
+  cuenta ciclos, y **no toca el invariante del sentinel**.
+- **Por qué existe, medido:** el transcript `e86ddb2c` (2026-08-14) mostró una
+  task de ~7 h con **2.6 h bloqueado esperando** (51 % del tiempo de
+  herramientas), ~1.75 h evitables. **La regla ya estaba** en el contrato desde
+  la 10.2 — pero `harness_context()` sólo corre en el camino **armado**, y esa
+  sesión nunca armó (`/goal`, sin `-saikit`). La regla existía y era invisible.
+- **¿Cambió el hook?** **Sí.** `standing_rules()` + `emit_standing_rules()` y una
+  rama en `start_harness` acotada a `PHASE=session` **y** `TARGET=claude`,
+  después del desarme y antes del `emit_allow`.
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la
+  fuente.` Backup:
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260815-001541.bak`
+  **Vivo vs master:** cksum idéntico (`1303783510 88474`).
+- **`check-hook-registration.sh`:** exit 0 y **silencio** — sin el advisory de
+  `SessionStart` (la fase quedó registrada) y sin el advisory de A9 (el matcher
+  ya cubre `Agent`).
+- **Registro (acción de operador, no del instalador):** entrada `SessionStart`
+  sin matcher con `PHASE=session` en `~/.claude/settings.json`, con backup
+  (`settings.json.bak-10.6-20260814-215110`), las 7 entradas ajenas intactas y
+  JSON validado antes de escribir. `install-hook.sh` **no** registra en Claude:
+  sólo instala el archivo, y su única rama de registro es `--host zcode`.
+- **Verificación viva POST-DEPLOY:** un turno headless `claude -p` en un repo
+  nuevo, **sin `-saikit` y sin staging**, devolvió las 3 reglas **textuales**. La
+  medición previa (antes de diseñar) ya había confirmado que `SessionStart` en
+  Claude acepta `hookSpecificOutput.additionalContext`.
+- **Alcance:** sólo `TARGET=claude`. zcode, Codex y Grok quedan `unknown`, no
+  "no lo tienen": registrar a ciegas es el error que la 6.2 evitó por un pelo.
+- **CodeRabbit (PR #19):** 3 hallazgos, los 3 válidos. Dos arreglados; el Major
+  (un `summary` de sesión reanudada que cite un `-saikit` viejo hace que la
+  sesión arme y las reglas no salgan) **no se arregló a propósito**: ese fallback
+  es C9 / Task 9.4, cuya DoD decide conservarlo, y acotarlo puso rojo
+  `caso_g6_armado_por_target`. Queda **atado por caso** y declarado como pérdida
+  de cobertura.
+- **Integración con la sesión paralela:** master avanzó con PR #17/#18/#20
+  durante la review y el #20 tocó el hook (`TEST_RUNNER_CMD_RE`). Se integró por
+  **merge** (el force-push está prohibido acá) dejando el árbol byte a byte igual
+  al ya verificado, y la suite se re-corrió **después** de fusionar los dos
+  cambios del hook.
+- **Gates:** `tests/run.sh` OK (18 tests) con `SAIKIT_HOOK_VIVO` a la fuente;
+  `pre-commit run --all-files` Passed.
+- **Operador:** Gon.
+
 ## 2026-08-15 — PR #15 / Task 6.2: contrato de salida de Codex (merge `5006de7`)
 
 - **Mergeado:** PR #15 `feat/6.2-probe-codex` → master — `probe-zcode-output.sh`
