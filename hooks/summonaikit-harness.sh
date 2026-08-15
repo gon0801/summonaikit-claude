@@ -90,25 +90,38 @@ fi
 # the Stop gate, so detection stays consistent across ecosystems (JS/TS, Python,
 # Ruby/Rails, PHP, .NET, JVM, Go, Rust, Elixir, Swift, C/C++, make). Add a host's
 # runner here rather than in two places.
-TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|lint))|npm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|pnpm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|yarn[[:space:]]+(test|typecheck|lint)|deno[[:space:]]+(test|lint|check)|vitest|jest|playwright[[:space:]]+test|cypress[[:space:]]+run|tsc|check-types|typecheck|cargo[[:space:]]+(test|nextest)|go[[:space:]]+test|gotestsum|pytest|unittest|tox|rspec|rake[[:space:]]+(test|spec)|rails[[:space:]]+test|bundle[[:space:]]+exec[[:space:]]+(rspec|rake|cucumber|minitest)|mix[[:space:]]+test|phpunit|pest|artisan[[:space:]]+test|composer[[:space:]]+(test|run[[:space:]]+test)|dotnet[[:space:]]+test|gradle[[:space:]]+(test|check)|gradlew[[:space:]]+(test|check)|mvn[[:space:]]+(test|verify)|swift[[:space:]]+test|ctest|ginkgo|make[[:space:]]+(test|check)|(ba|z|da|k)?sh[[:space:]]+[^[:space:]]*tests?/run\.sh|^(\./)?tests?/run\.sh'
+TEST_RUNNER_RE='bun[[:space:]]+(test|run[[:space:]]+(test|check-types|typecheck|lint))|npm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|pnpm[[:space:]]+(test|run[[:space:]]+(test|typecheck|lint))|yarn[[:space:]]+(test|typecheck|lint)|deno[[:space:]]+(test|lint|check)|vitest|jest|playwright[[:space:]]+test|cypress[[:space:]]+run|tsc|check-types|typecheck|cargo[[:space:]]+(test|nextest)|go[[:space:]]+test|gotestsum|pytest|unittest|tox|rspec|rake[[:space:]]+(test|spec)|rails[[:space:]]+test|bundle[[:space:]]+exec[[:space:]]+(rspec|rake|cucumber|minitest)|mix[[:space:]]+test|phpunit|pest|artisan[[:space:]]+test|composer[[:space:]]+(test|run[[:space:]]+test)|dotnet[[:space:]]+test|gradle[[:space:]]+(test|check)|gradlew[[:space:]]+(test|check)|mvn[[:space:]]+(test|verify)|swift[[:space:]]+test|ctest|ginkgo|make[[:space:]]+(test|check)'
 
-# Task 9.10 — las DOS ramas nuevas del final (runner bash propio del kit):
-#   1. `(ba|z|da|k)?sh[[:space:]]+[^[:space:]]*tests?/run\.sh` — verbo shell
-#      (bash/zsh/dash/ksh/sh) seguido de una RUTA SIN ESPACIOS que termina en
-#      tests/run.sh: cubre `bash tests/run.sh`, `bash /c/dev/proyecto/tests/
-#      run.sh` y `cd /repo && bash tests/run.sh`, que es el gate FINAL de este
-#      repo y no matcheaba nada (en hosts sin transcript legible, el gate de
-#      verificacion quedaba insatisfible).
-#   2. `^(\./)?tests?/run\.sh` — invocacion directa ANCLADA al inicio del
-#      comando (`./tests/run.sh`, `tests/run.sh` pelado).
-# A3 queda cerrado y es el wrapper de abajo el que lo cierra: `cat tests/run.sh`
-# no satisface la rama 2 (no empieza el comando ahi) ni la 1 (no hay verbo), y
-# `grep run.sh tests/run.sh` tampoco — el unico `sh` con espacio detras viene
-# precedido de `.` (run.sh), que la frontera izquierda [^A-Za-z0-9_.-] del
-# wrapper EXCLUDE, asi que el match no puede iniciar ahi. Limites declarados
-# del lado estricto (sin credito el gate pide la razon, que es recuperable):
-# `bash -e tests/run.sh` (espacio entre flag y ruta) y
-# `./otros-tests/run.sh` (frontera izquierda `-`) NO cuentan.
+# Task 9.10 r2 (cross-review codex r1, hallazgo ALTA) — el runner bash propio
+# del kit (`bash tests/run.sh`, el gate FINAL de este repo) vive en una
+# constante PROPIA, aplicada SIN el wrapper de abajo. La r1 de 9.10 lo metio
+# como dos ramas mas de TEST_RUNNER_RE y el wrapper — que solo sabe de
+# FRONTERAS DE PALABRA, no de posicion — dejo pasar decoys: `bash
+# contest/run.sh` ("contest" termina en "test"), `bash tests/run.sh/typo` (el
+# `/` pasa por frontera derecha), y `grep/printf/echo bash tests/run.sh` (un
+# espacio o comilla antes del verbo pasa la frontera izquierda). Todos
+# acreditaban verified=1 sin correr la suite.
+#
+# TEST_RUNNER_CMD_RE exige POSICION DE COMANDO: inicio, o tras un separador de
+# shell (; & | && ||); luego el verbo shell opcional (bash/zsh/dash/ksh/sh) o
+# la invocacion directa; y segmentos de path ESTRICTOS — `([^/[:space:]]*/)*`
+# seguido de `tests?/run\.sh` textual — para que "contest/run.sh" no matchee.
+# El terminador `([[:space:]]|$)` impide sufijos typo ("/typo") y admite args
+# despues del runner. OJO a por que NO va adentro de TEST_RUNNER_RE: el
+# wrapper envuelve la alternacion ENTERA con `(^|[^A-Za-z0-9_.-])` — una rama
+# que empieza en un separador quedaria fuera porque el char previo al `&&` es
+# un word char (`/repo&&`), y un terminador interno compone mal con el grupo
+# de frontera derecha del wrapper (consumiria el espacio y exigiria otro
+# boundary sobre la palabra siguiente). Por eso esta constante se aplica
+# aparte, en los DOS sitios donde el gate decide credito de verificacion.
+#
+# Limites declarados del lado estricto (sin credito el gate pide la razon,
+# que es recuperable): `bash -e tests/run.sh` (espacio entre flag y ruta),
+# `bash tests/run.sh&&otro` (sin espacio tras el runner) y el runner dentro de
+# comillas NO cuentan. En la PROSA del recibo solo cuentan los runners
+# clasicos (WORD_RE): una linea "Verify: bash tests/run.sh" no esta en
+# posicion de comando — el credito del carril run.sh vive en el EVENTO.
+TEST_RUNNER_CMD_RE='(^|[;&|](&|\|)?[[:space:]]+)(ba|z|da|k)?sh[[:space:]]+([^/[:space:]]*/)*tests?/run\.sh([[:space:]]|$)|(^|[;&|](&|\|)?[[:space:]]*)(\./)?([^/[:space:]]*/)*tests?/run\.sh([[:space:]]|$)'
 
 # Wrapper con fronteras de palabra: el runner debe estar flanqueado por
 # start/end o un caracter que NO forme parte de un nombre de archivo. Cierra A3
@@ -1153,7 +1166,13 @@ record_tool_evidence() {
   # Bash: la unica senal de fracaso disponible es el TEXTO de stdout/stderr del
   # runner. Dos regex: CI para patrones con digito no-cero y crashes; CS para
   # frases literales donde -i daria falso positivo en prosa (`0 failures!`).
-  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"; then
+  # Task 9.10 r2: el runner bash propio (tests/run.sh) se acredita por
+  # TEST_RUNNER_CMD_RE sobre $command_text SOLO — posicion de comando estricta,
+  # sin wrapper (ver el comentario de la constante). No se concatena
+  # tool_name: el ancla ^ y el separador son del COMANDO, y un tool_name
+  # delante moveria el inicio de linea.
+  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
+     || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; then
     if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
            || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
@@ -1421,7 +1440,12 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # VERIFY_SKIP_RE: EN+IT historicos + ES natural. Vivo 2026-08-13: zcode
   # escribio "No corri los candados" y el gate lo rechazo porque solo
   # aceptaba skipped/not run. "se corrio la bateria" NO matchea (falta "no ").
-  if [ "$verified" != "1" ] && ! printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE"; then
+  # Task 9.10 r2: el runner bash propio tambien se acepta aqui via
+  # TEST_RUNNER_CMD_RE — grep ancla ^ por LINEA, asi que en prosa solo cuenta
+  # una linea que ESTEME en posicion de comando; el credito real del carril
+  # run.sh vive en el evento (arriba), este es el fallback de prosa.
+  if [ "$verified" != "1" ] && ! { printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE" \
+                                      || printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
     missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
   fi
 

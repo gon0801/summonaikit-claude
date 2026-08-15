@@ -131,6 +131,14 @@ for t in "$repo_root"/tests/test_*.sh; do
   fi
 done
 
+# Task 10.5 / codex r1 (hallazgo 3): el resumen de skips imprime SIEMPRE que
+# haya skips, ANTES de ramificar la salida — antes vivia al final y con
+# UNKNOWN y SKIP a la vez la rama de UNKNOWN salia antes: los omitidos no se
+# nombraban nunca, contradiciendo la garantia declarada.
+if [ "$skipped" -gt 0 ]; then
+  echo "tests/run.sh: $skipped SKIP linux-ci declarados — ver arriba"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "tests/run.sh: FAIL" >&2
   exit 1
@@ -147,12 +155,6 @@ if [ "$unknown" -gt 0 ]; then
     exit "$SAIKIT_EXIT_UNKNOWN_RUNNER"
   fi
   echo "tests/run.sh: OK con $unknown de $corridos en unknown (ver arriba cuales)"
-  exit 0
-fi
-# Task 10.5: los skips linux-ci tampoco son un OK silencioso — el resumen los
-# nombra para que nadie lea "18 tests" creyendo que corrieron 18.
-if [ "$skipped" -gt 0 ]; then
-  echo "tests/run.sh: OK ($corridos tests, $skipped SKIP linux-ci declarados — ver arriba)"
   exit 0
 fi
 echo "tests/run.sh: OK ($corridos tests)"

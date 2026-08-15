@@ -500,7 +500,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -827,6 +827,68 @@ caso_g2_runner_run_sh_en_grep_no_marca() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'grep run.sh tests/run.sh')"
   _igual "verified con grep run.sh tests/run.sh" "$(lab_estado verified)" "0"
+}
+
+# ================= 9.10 r2 — posición de comando (cross-review codex r1, ALTA)
+# Las ramas run.sh dentro de TEST_RUNNER_RE aceptaban DECOYS: el wrapper de
+# fronteras no sabe de POSICION, y `bash contest/run.sh` ("contest" termina en
+# "test"), `bash tests/run.sh/typo` (el `/` pasaba por frontera derecha),
+# `grep bash tests/run.sh`, `printf 'bash tests/run.sh'` y `echo bash
+# tests/run.sh` acreditaban verified=1 sin correr la suite. El fix mueve las
+# ramas run.sh a TEST_RUNNER_CMD_RE (constante propia, SIN wrapper, con
+# posición de comando y segmentos de path estrictos); TEST_RUNNER_RE/WORD_RE
+# vuelve a su forma pre-9.10 para los runners clásicos.
+
+# Positivos nuevos de la matriz de aceptación r2 (args tras el runner y otro
+# verbo shell): controlan que el endurecimiento no coma las formas legitimas.
+caso_g2_runner_bash_con_args_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash tests/run.sh arg --flag')"
+  _igual "verified con bash tests/run.sh arg --flag" "$(lab_estado verified)" "1"
+}
+
+caso_g2_runner_zsh_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'zsh tests/run.sh')"
+  _igual "verified con zsh tests/run.sh" "$(lab_estado verified)" "1"
+}
+
+# Decoy 1 (r1): "contest" termina en "test" y `[^[:space:]]*` se comia "con" —
+# un directorio que NO es tests/ acreditaba la suite entera.
+caso_g2_runner_decoy_contest_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash contest/run.sh')"
+  _igual "verified con bash contest/run.sh (decoy)" "$(lab_estado verified)" "0"
+}
+
+# Decoy 2 (r1): el `/` tras run.sh pasaba por frontera derecha del wrapper —
+# un path typo'eado acreditaba.
+caso_g2_runner_decoy_typo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash tests/run.sh/typo')"
+  _igual "verified con bash tests/run.sh/typo (decoy)" "$(lab_estado verified)" "0"
+}
+
+# Decoys 3-5 (r1): mencionar el verbo NO es correrlo. `grep bash tests/run.sh`,
+# `printf 'bash tests/run.sh'` y `echo bash tests/run.sh` ponen el verbo en
+# posicion de ARGUMENTO o dentro de comillas/prosa — el espacio o la comilla
+# antes de `bash` pasaba la frontera izquierda del wrapper.
+caso_g2_runner_decoy_grep_bash_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'grep bash tests/run.sh')"
+  _igual "verified con grep bash tests/run.sh (decoy)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_decoy_printf_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash "printf 'bash tests/run.sh'")"
+  _igual "verified con printf entrecomillado (decoy)" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_decoy_echo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'echo bash tests/run.sh')"
+  _igual "verified con echo bash tests/run.sh (decoy)" "$(lab_estado verified)" "0"
 }
 
 # ============================================== G3 — secuencia de subagentes
