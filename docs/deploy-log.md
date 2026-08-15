@@ -7,6 +7,51 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-15 — PR #22 / Phase 9: seis defectos del gate (merge `637330a`)
+
+- **Mergeado:** PR #22 `feat/phase-9-gate-defects` → master — Tasks **9.1, 9.2,
+  9.4, 9.5, 9.6 y 9.7**. Reparto acordado con la sesión de Phase 6, que tomó
+  9.3 y 9.8 (viven en `stop_gate`) y cerró Phase 6 en paralelo.
+- **¿Cambió el hook?** **Sí**, y en seis lugares:
+  - **9.4** el fallback al payload crudo se acota a `PHASE=session` (sin eso, un
+    `-saikit` en un campo de resumen **armaba la ceremonia sin que nadie la
+    pidiera**);
+  - **9.5** la frontera izquierda del sentinel excluye `/` y `-` (referenciar
+    `docs/-saikit.md` o citar `--saikit` armaba);
+  - **9.6** el walker resetea `en_text`/`en_assistant` al cerrar llaves — sin
+    eso **el gate CERRABA por texto que el asistente no escribió**;
+  - **9.7** `podar_dir_sesion` + `barrer_estado_viejo` (TTL 14 días): `state/`
+    dejaba un directorio inmortal por sesión;
+  - **9.1** `failed` entra a la vía B del CI y los literales de gradle al CS
+    (dotnet y gradle **reventados acreditaban verificación**);
+  - **9.2** `ECHO_LEAD_RE` y el crédito deja de mirar `tool_name` (`echo pytest`
+    acreditaba, y una tool MCP llamada como un runner también).
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la
+  fuente.` Backup:
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260815-114439.bak`
+  **Vivo vs master:** cksum idéntico (`3755086874 97179`).
+- **`check-hook-registration.sh`:** exit 0 y **silencio**.
+- **Gates:** `tests/run.sh` **OK (18 tests)** con `SAIKIT_HOOK_VIVO` a la fuente
+  (corrida al final, tras integrar master); `pre-commit run --all-files` Passed.
+- **Mutaciones:** 8 nuevas, todas atrapadas por su propio caso. Se **retiró**
+  `tool_name_desacotado` (se quedó sin detector al sacar `tool_name` del
+  crédito) y se **reemplazó** por `credito_por_tool_name`, que sí es observable.
+- **CodeRabbit (PR #22):** 3 hallazgos, los 3 válidos y atendidos. El segundo
+  proponía dejar sólo `TEST_RUNNER_CMD_RE`: **se probó y rompió tres casos
+  legítimos** — esa constante cubre únicamente el runner propio del repo, así
+  que habría borrado el crédito de pytest y compañía. El agujero era real, la
+  receta no. El tercero encontró que mi propio caso de regresión **no probaba
+  lo que decía**: el fixture ponía el `tool_name` real en `Bash`. Corregido con
+  un fixture nuevo y su mutación.
+- **Integración con la sesión paralela:** master avanzó con los PRs #23/#24/#25
+  durante la review; se integró por **merge** (force-push prohibido). Los dos
+  conflictos fueron de UNIÓN, no de decisión: las listas `CASOS_G1`/`CASOS_G4` y
+  las filas 9.x de `Plans.md`. **Lección anotada:** la primera resolución salió
+  invertida (en `git merge` el primer lado es HEAD, no el entrante) y pisó los
+  cierres propios con el estado de master; se detectó verificando fila por fila
+  después de resolver, no antes.
+- **Operador:** Gon.
+
 ## 2026-08-15 — PR #19 / Task 10.6: reglas permanentes en `SessionStart` (merge `3f4f076`)
 
 - **Mergeado:** PR #19 `feat/10.6-standing-rules-sessionstart` → master — el kit
