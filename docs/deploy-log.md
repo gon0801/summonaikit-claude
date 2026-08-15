@@ -417,3 +417,15 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **CI del PR:** quality PASS, suite PASS (1m43s), CodeRabbit PASS.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-15 — Merge ajeno 9.4+9.5 (f78e9c7) — deploy desde sesión zcode
+
+- **Mergeado/pusheado por la sesión de Phase 9** (`f78e9c7` fix(9.4+9.5): el
+  sentinel deja de armar por texto citado — campo ausente; `0b4c77f` reserva
+  de filas 6.4/6.5/6.6/9.3/9.8 en cc:WIP). Su sesión sigue trabajando; este
+  deploy sincroniza el vivo a master para no dejar el artefacto atrás
+  (regla: deploy tras merge, SIEMPRE — su próximo deploy será no-op).
+- **Deploy:** install desde blob de origin/master (worktree, desviación de
+  siempre). **Vivo vs master:** cmp byte a byte idéntico (0b4c77f).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Operador:** Gon (sesión zcode).
