@@ -29,8 +29,11 @@ registro es colocación de shim, que el `.ps1` prefiere solo.
 | `{"decision":"block",…}` + **exit 0** | **4** | **3** | ✅ **sí** |
 | `{"decision":"block",…}` + **exit 2** | **1** | **0** | ❌ **no** (2/2 corridas) |
 
-Mismo JSON, misma sesión, misma máquina: lo único que cambia es el código de
-salida. **Codex 0.147.0 descarta el stdout del hook cuando el exit no es 0.**
+Mismo JSON byte a byte, mismo repo, misma máquina, misma versión del probe y el
+mismo payload de `Stop`. **Sesiones distintas** — cada turno abre una nueva, así
+que la sesión no puede ser una constante y no se la invoca como tal. Lo único
+que se movió a propósito entre las dos filas es el código de salida.
+⇒ **Codex 0.147.0 descarta el stdout del hook cuando el exit no es 0.**
 
 Y no es que el 2 no llegue: se verificó la cadena entera aparte —
 `.ps1 → shim → probe` devuelve **exit 2** y el stderr con el nonce sale. Codex

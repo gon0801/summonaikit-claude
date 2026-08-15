@@ -913,6 +913,71 @@ printf '%s' "$out" | grep -qi 'no lo escribi\|no es mio' \
   || malo "H1 quitar codex: el rechazo no dice que el shim no es nuestro: $out"
 [ "$snap_cxh1" = "$(cksum < "$cxh1/.codex/hooks/summonaikit-harness.sh")" ] || malo "H1 quitar codex: BORRO el shim ajeno"
 
+# ---- CodeRabbit PR #15 ------------------------------------------------------
+# CR1: la MARCA sola tambien es estado reclamado. Si existe sin shim, el install
+# la pisaba sin mirarla; un archivo ajeno con ese nombre se perdia.
+caso "CR1: una marca AJENA (sin la linea owner=) no se pisa, ni sin shim"
+cxm="$SANDBOX/codex-marca-ajena"
+mkdir -p "$cxm/.codex"
+( cd "$cxm" && git init -q . >/dev/null 2>&1 ) || true
+printf 'datos del usuario, no del probe\n' > "$cxm/.codex/.probe-codex-owned"
+snap_cxm="$(cksum < "$cxm/.codex/.probe-codex-owned")"
+out="$(bash "$tool" --instalar "$cxm" --host codex 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "CR1: pisar una marca ajena debe salir 2, dio $rc"
+printf '%s' "$out" | grep -q 'no es mio' || malo "CR1: el rechazo no dice que la marca no es nuestra: $out"
+[ "$snap_cxm" = "$(cksum < "$cxm/.codex/.probe-codex-owned")" ] || malo "CR1: PISO la marca ajena"
+[ ! -e "$cxm/.codex/hooks/summonaikit-harness.sh" ] || malo "CR1: escribio el shim igual"
+
+# CR3 (Major): el shim se publicaba ANTES que la marca. Si la escritura de la
+# marca fallaba, el shim quedaba VIVO tapando al harness real y --quitar se
+# negaba a sacarlo por falta de marca: el gate apagado sin vuelta atras por
+# herramienta. El orden correcto es marca primero.
+caso "CR3: si la marca no se puede escribir, NO queda un shim vivo"
+cxo="$SANDBOX/codex-orden"
+mkdir -p "$cxo"
+( cd "$cxo" && git init -q . >/dev/null 2>&1 ) || true
+bash "$tool" --instalar "$cxo" --host codex >/dev/null 2>&1
+rm -f "$cxo/.codex/hooks/summonaikit-harness.sh"          # deja la marca NUESTRA sin shim
+chmod 444 "$cxo/.codex/.probe-codex-owned" 2>/dev/null || true
+if printf 'x\n' > "$cxo/.codex/.probe-codex-owned" 2>/dev/null; then
+  echo "    unknown: no se pudo hacer la marca de solo-lectura; el orden no se pudo medir"
+  chmod 644 "$cxo/.codex/.probe-codex-owned" 2>/dev/null || true
+else
+  out="$(bash "$tool" --instalar "$cxo" --host codex 2>&1)"; rc=$?
+  [ "$rc" -ne 0 ] || malo "CR3: la marca no se pudo escribir y aun asi salio 0"
+  [ ! -e "$cxo/.codex/hooks/summonaikit-harness.sh" ] \
+    || malo "CR3: dejo el shim VIVO sin marca — es el estado que --quitar no puede limpiar"
+  chmod 644 "$cxo/.codex/.probe-codex-owned" 2>/dev/null || true
+fi
+
+# CR4: un symlink en .codex/ saca la escritura fuera del repo y con eso esquiva
+# la negativa a tocar el perfil real (<repo>/.codex -> ~/.codex mete el shim
+# adentro del perfil). La guarda de destino mira el destino, no los componentes.
+caso "CR4: un <repo>/.codex que es symlink se rechaza, en instalar y en quitar"
+cxs="$SANDBOX/codex-symlink"
+mkdir -p "$cxs" "$SANDBOX/codex-symlink-afuera/hooks"
+( cd "$cxs" && git init -q . >/dev/null 2>&1 ) || true
+ln -s "$SANDBOX/codex-symlink-afuera" "$cxs/.codex" 2>/dev/null || true
+if [ ! -L "$cxs/.codex" ]; then
+  echo "    unknown: este sistema no creo un symlink real; la guarda no se pudo medir"
+else
+  out="$(bash "$tool" --instalar "$cxs" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "CR4 instalar: un .codex symlink debe salir 2, dio $rc"
+  printf '%s' "$out" | grep -qi 'symlink' || malo "CR4: el rechazo no nombra el symlink: $out"
+  [ ! -e "$SANDBOX/codex-symlink-afuera/hooks/summonaikit-harness.sh" ] \
+    || malo "CR4: ESCRIBIO del otro lado del symlink (fuera del repo descartable)"
+  # Del otro lado se deja un shim que SI lleva el sello: asi el caso mide la
+  # guarda del symlink y no la de identidad — ni siquiera algo que parece
+  # nuestro se borra a traves de un link.
+  printf '#!/usr/bin/env bash\n# saikit-probe-shim-id: 6.2\nexit 0\n' \
+    > "$SANDBOX/codex-symlink-afuera/hooks/summonaikit-harness.sh"
+  printf 'owner=tools/probe-zcode-output.sh\n' > "$SANDBOX/codex-symlink-afuera/.probe-codex-owned"
+  out="$(bash "$tool" --quitar "$cxs" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "CR4 quitar: un .codex symlink debe salir 2, dio $rc"
+  [ -f "$SANDBOX/codex-symlink-afuera/hooks/summonaikit-harness.sh" ] \
+    || malo "CR4: BORRO del otro lado del symlink"
+fi
+
 else
   echo "    unknown: git no disponible o no pudo inicializar; el registro codex no se pudo medir"
 fi

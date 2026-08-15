@@ -771,6 +771,45 @@ codex_shim_es_nuestro() {  # $1=shim  $2=marca
   grep -Fxq "$CODEX_SHIM_STAMP" "$1" 2>/dev/null
 }
 
+# La marca sola tambien es un estado reclamado (CodeRabbit, PR #15). Si existe
+# SIN shim —porque alguien borro el shim a mano, o porque el archivo es ajeno y
+# se llama igual— el install la pisaba sin mirarla. Se mira: tiene que llevar
+# nuestra linea owner=.
+CODEX_MARCA_OWNER='owner=tools/probe-zcode-output.sh'
+codex_marca_es_nuestra() { grep -Fxq "$CODEX_MARCA_OWNER" "$1" 2>/dev/null; }
+
+# Un symlink en cualquiera de estas rutas saca la escritura —o el borrado— fuera
+# del repo descartable, y con eso ESQUIVA la negativa a tocar el perfil real:
+# un <repo>/.codex apuntando a ~/.codex mete el shim adentro del perfil. La
+# guarda de destino mira el destino, no los componentes de adentro (CodeRabbit,
+# PR #15). Fail-closed: no se resuelve el link, se rechaza.
+codex_rechaza_symlinks() {
+  local v
+  for v in "$@"; do
+    if [ -L "$v" ]; then
+      echo "probe-zcode-output: hay un symlink en la ruta: $v" >&2
+      echo "                   Escribir (o borrar) a traves de el puede caer fuera del repo" >&2
+      echo "                   descartable y esquivar la negativa a tocar el perfil real." >&2
+      exit 2
+    fi
+  done
+}
+
+# Segunda mitad de lo mismo: si el dir ya existe, su forma canonica tiene que
+# quedar ADENTRO del repo descartable. Cubre lo que el chequeo por componente no
+# ve (p. ej. un montaje).
+codex_exige_contencion() {  # $1=dir
+  local d
+  [ -d "$1" ] || return 0
+  d="$(cd "$1" 2>/dev/null && pwd -P)" || return 0
+  case "$d/" in
+    "$destino_real"/*) return 0 ;;
+  esac
+  echo "probe-zcode-output: $1 resuelve FUERA del repo descartable ($d)." >&2
+  echo "                   No escribo ni borro ahi." >&2
+  exit 2
+}
+
 codex_probe_instalar() {
   local shim marca top top_real tmp_new
   codex_rechaza_metacaracteres "$destino_real" "$probe"
@@ -815,9 +854,19 @@ codex_probe_instalar() {
 
   shim="$(codex_shim_path)"
   marca="$(codex_probe_marca)"
+  codex_rechaza_symlinks "$destino_real/.codex" "$destino_real/.codex/hooks" "$shim" "$marca"
+  codex_exige_contencion "$destino_real/.codex"
+  codex_exige_contencion "$destino_real/.codex/hooks"
   if [ -e "$shim" ] && ! codex_shim_es_nuestro "$shim" "$marca"; then
     echo "probe-zcode-output: $shim existe y no es mio (falta el sello del shim" >&2
     echo "                   o la marca .probe-codex-owned) — no lo toco." >&2
+    exit 2
+  fi
+  # La marca sin shim tambien es estado reclamado: si existe y no lleva nuestra
+  # linea owner=, es de otro y no se pisa.
+  if [ -e "$marca" ] && ! codex_marca_es_nuestra "$marca"; then
+    echo "probe-zcode-output: $marca existe y no es mio (sin la linea $CODEX_MARCA_OWNER)" >&2
+    echo "                   — no lo toco." >&2
     exit 2
   fi
 
@@ -825,6 +874,17 @@ codex_probe_instalar() {
   mkdir -p "$(dirname "$shim")" || exit 2
   printf 'empty\n' > "$destino_real/probe-mode.txt" || exit 2
   mkdir -p "$destino_real/probe-ran" 2>/dev/null || true
+
+  # La marca va ANTES que el shim, y el orden es el arreglo (CodeRabbit, PR #15).
+  # Al reves, si la escritura de la marca fallaba, el shim ya estaba vivo
+  # tapando al harness real y `--quitar` se NEGABA a sacarlo por falta de marca:
+  # el gate apagado en ese repo sin vuelta atras por herramienta. En este orden
+  # los dos estados posibles ante una falla —marca sin shim, o marca con el shim
+  # viejo— los limpia `--quitar` sin problema.
+  printf 'owner=tools/probe-zcode-output.sh\nhost=codex\ntask=6.2\ncwd=%s\ninstalled=%s\n' \
+    "$destino_real" "$(date +%Y%m%d-%H%M%S)" > "$marca" || {
+    echo "probe-zcode-output: no pude escribir la marca $marca; no publico el shim" >&2
+    exit 2; }
 
   tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
   {
@@ -852,10 +912,9 @@ codex_probe_instalar() {
     echo "probe-zcode-output: el shim generado no parsea; no toco el destino" >&2
     rm -f "$tmp_new"; exit 2; }
   mv -f "$tmp_new" "$shim" || {
-    echo "probe-zcode-output: no pude escribir $shim" >&2; rm -f "$tmp_new"; exit 2; }
+    echo "probe-zcode-output: no pude escribir $shim" >&2; rm -f "$tmp_new"
+    echo "                   La marca queda: --quitar limpia el estado." >&2; exit 2; }
   chmod +x "$shim" 2>/dev/null || true
-  printf 'owner=tools/probe-zcode-output.sh\nhost=codex\ntask=6.2\ncwd=%s\ninstalled=%s\n' \
-    "$destino_real" "$(date +%Y%m%d-%H%M%S)" > "$marca" || exit 2
 
   echo "Shim del probe en $shim"
   echo "  ~/.codex/hooks.json y ~/.codex/hooks/ NO se tocaron: el .ps1 ya prefiere esta ruta."
@@ -868,6 +927,11 @@ codex_probe_quitar() {
   local shim marca
   shim="$(codex_shim_path)"
   marca="$(codex_probe_marca)"
+  # Mismas guardas que el install: un `rm` a traves de un symlink borra del otro
+  # lado. Van antes de cualquier lectura o borrado.
+  codex_rechaza_symlinks "$destino_real/.codex" "$destino_real/.codex/hooks" "$shim" "$marca"
+  codex_exige_contencion "$destino_real/.codex"
+  codex_exige_contencion "$destino_real/.codex/hooks"
   [ -f "$marca" ] || {
     echo "probe-zcode-output: no hay marca de probe codex en $marca (nada que quitar)" >&2
     exit 2; }
