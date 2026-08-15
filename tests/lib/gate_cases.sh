@@ -134,6 +134,13 @@ _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS P
 _TEXTO_DELEGADO='Delegue la verificacion al subagente verifier y sigue corriendo.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting verifier'
 _TEXTO_DELEGADO_SIN_ROL='Delegue el trabajo y sigue corriendo.\n\nSUMMONAIKIT HARNESS DELEGATED'
 
+# C11 (auditoria 2026-08-13, Task 9.3) — un mensaje que CITA la mecanica del
+# gate: nombra el marcador del recibo y las seis etiquetas entre comillas
+# simples, como las escribiria alguien explicando lo que el gate le pidio. La
+# comilla pasaba la frontera [^[:alpha:]] de has_receipt_label y el turno
+# cerraba sin recibo real.
+_TEXTO_CITA_FEEDBACK='El gate me pidio: agregar una linea que empiece con '"'"'Understand:'"'"' dentro del bloque SUMMONAIKIT HARNESS RECEIPT, y lo mismo para '"'"'Implement:'"'"', '"'"'Verify:'"'"', '"'"'Review:'"'"', '"'"'Close:'"'"' y '"'"'Retro:'"'"'. Lo hago en el siguiente turno.'
+
 # Bug de cross-review (ciclo 1), REPRODUCIDO con ejecucion: la escotilla
 # DELEGATED disparaba con CUALQUIER texto que trajera la frase, sin comprobar
 # que el recibo estuviera ausente. Estos dos fixtures son las dos pruebas del
@@ -1311,7 +1318,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_cita_del_feedback_no_satisface"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -1324,6 +1331,19 @@ caso_g4_pausa_permite() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if ! lab_hay_estado; then _mal "la pausa no cierra el turno: el estado tiene que seguir ahi"; fi
+}
+
+# C11 (Task 9.3) — citar el feedback del gate no es escribir un recibo. El
+# turno esta completo salvo por el recibo (agents/implemented/verified
+# sembrados), y el mensaje final CITA el marcador y las etiquetas entre
+# comillas: sin la frontera que excluye comillas, las seis contaban y el gate
+# cerraba. Limite declarado (advisory por diseno): citar el TEMPLATE completo
+# del recibo, con sus saltos de linea reales, seguiria contando — es
+# indistinguible de un recibo real.
+caso_g4_cita_del_feedback_no_satisface() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_CITA_FEEDBACK")"
+  _igual "exit citando el feedback" "$LAB_RC" "2"
 }
 
 # C4 (auditoria 2026-08-13, Task 8.2), mitad PAUSED — el tail de 160 lineas

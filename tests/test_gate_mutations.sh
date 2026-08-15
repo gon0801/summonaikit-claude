@@ -104,6 +104,7 @@ G3|fast_no_exime_ceremonia|lane=fast deja de eximir la secuencia (el carril no s
 G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
 G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
+G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -325,7 +326,16 @@ mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex)/case "$TA
 mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
-mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }
+# Task 9.3 movio la frontera de has_receipt_label a (^|[^[:alpha:]'"]): el sed
+# de esta mutacion se actualiza al literal nuevo (mismo efecto de siempre:
+# cualquier caracter delante cuenta). Sin actualizarlo, la guardia 2 de la
+# bateria ("la mutacion no cambio nada") reventaba.
+mut_etiqueta_sin_frontera(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|.)/"; }
+# Task 9.3 (C11): revierte SOLO la mitad de las comillas (vuelve a la frontera
+# pre-9.3). Citar el feedback con 'Understand:' etc. vuelve a satisfacer las
+# seis etiquetas — lo atrapa caso_g4_cita_del_feedback_no_satisface (ningun
+# otro caso de CASOS_G4 escribe etiquetas entre comillas).
+mut_frontera_acepta_comillas(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|[^[:alpha:]])/"; }
 # Task 8.3 (C7): quita la alternativa markdown bold entre etiqueta y `:`.
 # Catch: caso_g4_recibo_bold_pasa (el recibo **Label**: vuelve a bloquear).
 mut_etiqueta_sin_bold()    { sed 's/(\\\*\\\*|__)?\[\[:space:\]\]\*:/[[:space:]]*:/'; }

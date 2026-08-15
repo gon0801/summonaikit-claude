@@ -1225,7 +1225,15 @@ has_receipt_label() {
   # fallaban a la vez y un recibo honesto se bloqueaba (falso rojo => ciclos de
   # revision de mas). El `**`/`__` de apertura ya pasaba por la frontera
   # izquierda [^[:alpha:]]. El recibo plano sigue contando igual (A8 intacto).
-  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]])($label|$alt)(\*\*|__)?[[:space:]]*:"
+  # Task 9.3 (C11): la frontera izquierda excluye ademas la comilla simple y
+  # la doble — el feedback del gate y cualquier explicacion de su mecanica
+  # citan las etiquetas como 'Understand:', y esa cita satisfacia las seis sin
+  # recibo real. Limite declarado: una etiqueta legitima precedida por
+  # apostrofo deja de contar (recuperable — el gate pide el recibo de nuevo);
+  # y citar el TEMPLATE completo con sus saltos reales sigue contando, porque
+  # es indistinguible de un recibo (advisory por diseno). A8 (prosa corrida)
+  # intacto: el \n decodificado no es comilla.
+  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]'\"])($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
 build_gate_feedback() {
