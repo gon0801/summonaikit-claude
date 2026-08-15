@@ -771,7 +771,9 @@ caso_g2_runner_con_and_y_var_sigue_acreditando() {
 # lo tapa: el comando no empieza con echo.
 caso_g2_tool_name_runner_con_comando_ajeno_no_marca() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'ls -la' 'pytest')"
+  # El tool_name REAL va en pytest; el comando no corre nada y no empieza con
+  # echo, asi que ECHO_LEAD_RE no puede tapar el agujero por casualidad.
+  lab_run tool claude "$(lab_payload_tool_name_arbitrario 'pytest' 'ls -la')"
   _igual "una tool llamada como un runner no acredita si el comando no lo corre" "$(lab_estado verified)" "0"
 }
 

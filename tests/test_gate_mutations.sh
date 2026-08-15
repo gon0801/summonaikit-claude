@@ -76,6 +76,7 @@ G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutra
 G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y `echo pytest` vuelve a acreditar verificacion
+G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
@@ -214,6 +215,16 @@ mut_falla_gradle_quitada()   { sed 's@|FAILURE: Build failed|BUILD FAILED@@'; }
 # vuelve a acreditar verificacion sin correr nada — lo atrapa
 # caso_g2_runner_en_echo_no_marca.
 mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCHEA_ESTO'@"; }
+
+# CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
+# SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una
+# tool llamada como un runner acredita verificacion con un comando que no corre
+# nada. La atrapa caso_g2_tool_name_runner_con_comando_ajeno_no_marca, que para
+# esto necesita un fixture con el tool_name REAL (no un eco en tool_response).
+# El ancla NO puede llevar `printf '%s'`: sus comillas simples cortan el sed y
+# el `|` siguiente se vuelve una tuberia de shell (medido: `failed: command not
+# found`). Se ancla en la parte sin comillas simples.
+mut_credito_por_tool_name() { sed 's@"$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@"$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
