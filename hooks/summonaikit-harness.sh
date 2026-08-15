@@ -780,6 +780,13 @@ Revision after findings (do this the CHEAP way):
 - Batch your evidence: group verification commands into ONE shell invocation
   per checkpoint instead of dozens of single-command calls.
 
+One ceremony per task, not per edit:
+- Batch your edits: make all your changes first, then run the
+  implement -> verify -> review sequence ONCE over the final stable diff.
+- Trivial in-task edits (a rename, a move, a typo fix) do NOT re-trigger
+  delegation: verify them yourself with a focused check and say so in the
+  receipt.
+
 Gate rule:
 - Do not advance past a stage without concrete evidence.
 - On failure, revise from the first failed gate with structured feedback.
