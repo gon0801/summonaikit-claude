@@ -52,6 +52,8 @@ G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \
 G1|fast_no_se_detecta|el lane fast deja de detectarse y todo arma full
 G1|session_sin_reglas|la fase session vuelve a salir muda y las reglas permanentes no se inyectan
 G1|session_pisa_gate|la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
+G1|fallback_sin_acotar|el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar
+G1|frontera_izquierda_floja|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -160,11 +162,25 @@ mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 # caso que ya existe es la regresion, y la mutacion lo demuestra.
 mut_session_sin_reglas()        { sed 's/^      emit_standing_rules$/      :/'; }
 mut_session_pisa_gate()         { sed 's/\[ "$PHASE" = "session" \] && \[ "$TARGET" = "claude" \]/[ "$TARGET" = "claude" ]/'; }
-# Nota (CodeRabbit PR #19): NO hay mutacion para el fallback al payload crudo en
-# session porque 10.6 no lo acota — es C9 / Task 9.4 y su DoD decide
-# conservarlo. El limite queda atado por
+# Task 9.4 (C9): revierte el acotamiento del fallback al payload crudo. Sin el,
+# un payload sin campo `prompt` busca el sentinel en el PAYLOAD ENTERO y un
+# -saikit en un campo de resumen arma la ceremonia — lo atrapa
+# caso_g1_prompt_sin_campo_no_arma.
+mut_fallback_sin_acotar()       { sed 's/if \[ -z "$prompt_text" \] && \[ "$PHASE" = "session" \]; then/if [ -z "$prompt_text" ]; then/'; }
+# Task 9.5 (C10): devuelve la frontera izquierda floja (sin / ni -). Se reemplaza
+# la LINEA entera para no tocar de paso el regex del carril :fast, que comparte
+# la misma clase de caracteres — si los mutara a los dos, no se sabria cual caso
+# reacciona a que. Lo atrapa caso_g1_sentinel_con_frontera.
+mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_RE='(^|[^A-Za-z0-9_])-saikit([^A-Za-z0-9_-]|\$)'@"; }
+
+# Nota (actualizada al aterrizar 9.4): el fallback SI tiene mutacion ahora
+# (mut_fallback_sin_acotar, arriba), pero cubre el acotamiento a `session`, no lo
+# que pasa DENTRO de session. Ese resto — un `summary` de sesion reanudada que
+# cite un -saikit viejo hace que la sesion arme y las reglas permanentes no
+# salgan — sigue SIN mutacion a proposito: 9.4 conserva el fallback en session
+# porque ahi cursor arma de verdad. Queda atado por
 # caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas, que fija el
-# comportamiento de HOY y se pondra rojo si 9.4 lo cambia.
+# comportamiento de HOY y se pondra rojo el dia que alguien lo cambie.
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper

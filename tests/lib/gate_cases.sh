@@ -166,7 +166,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -188,6 +188,23 @@ caso_g1_session_inyecta_reglas() {
   # La fase session NO arma: si creara estado, el Stop gate empezaria a exigir
   # recibo en sesiones que nadie armo — es el defecto A4 en version nueva.
   if lab_hay_estado; then _mal "la fase session NO debe crear estado (el Stop gate se activaria solo)"; fi
+}
+
+# Task 9.4 (C9). El fallback `prompt_text="$INPUT"` no estaba acotado: si el
+# payload no traia campo `prompt`, el sentinel se buscaba en el PAYLOAD ENTERO y
+# un `-saikit` en cualquier otro campo armaba la ceremonia. La forma real es un
+# resume, donde el texto viejo viaja en un campo de resumen: nadie pidio nada y
+# el gate quedaba exigiendo recibo.
+#
+# El fallback se conserva SOLO en `session`, donde cursor si arma con el
+# sentinel en el texto (medido, caso_g6_armado_por_target).
+caso_g1_prompt_sin_campo_no_arma() {
+  lab_run prompt claude "$(lab_payload_prompt_sin_campo 'el turno anterior decia -saikit agrega el endpoint')"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then
+    _mal "sin campo prompt NO se arma: el sentinel en otro campo del payload no es una peticion"
+  fi
 }
 
 # LIMITE de la Task 10.6, ATADO por este caso en vez de solo declarado
@@ -266,6 +283,33 @@ caso_g1_sentinel_con_frontera() {
   lab_run prompt claude "$(lab_payload_prompt 'el flag es -saikitx')"
   _vacio "stdout con frontera derecha rota" "$LAB_OUT"
   if lab_hay_estado; then _mal "-saikitx no debe armar (frontera derecha)"; fi
+
+  # Task 9.5 (C10): la frontera izquierda aceptaba `/` y `-`, asi que REFERENCIAR
+  # un archivo o un flag que contiene el token armaba la ceremonia entera. Es el
+  # mismo dano que x-saikit, por dos caracteres que faltaban en la clase.
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'edita el archivo docs/-saikit.md')"
+  _vacio "stdout con / antes del sentinel" "$LAB_OUT"
+  if lab_hay_estado; then _mal "docs/-saikit.md no debe armar: es una RUTA, no una peticion"; fi
+
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'el flag largo es --saikit')"
+  _vacio "stdout con - antes del sentinel" "$LAB_OUT"
+  if lab_hay_estado; then _mal "--saikit no debe armar: es un FLAG citado, no una peticion"; fi
+
+  # Controles: lo que SI tiene que seguir armando. Sin estos, apretar la frontera
+  # pasaria de tapar un agujero a romper el armado normal — que es el dano de A8.
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arranca al principio del texto')"
+  if ! lab_hay_estado; then _mal "control: el sentinel al INICIO del texto tiene que armar"; fi
+
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'arranca (-saikit) entre parentesis')"
+  if ! lab_hay_estado; then _mal "control: el sentinel tras '(' tiene que armar"; fi
+
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'hace esto, -saikit, con cuidado')"
+  if ! lab_hay_estado; then _mal "control: el sentinel tras ',' tiene que armar"; fi
 }
 
 # DEFECTO A4 (clausula 1) — cerrado por la Task 3.4. Antes el estado se llaveaba

@@ -202,6 +202,14 @@ lab_payload_prompt() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
 }
 
+# Task 9.4 (C9): un UserPromptSubmit SIN campo `prompt`, con el sentinel en OTRO
+# campo del payload. Es la forma de un resume: el texto viejo viaja en un campo
+# de resumen, no en una peticion del usuario. Con el fallback al payload crudo
+# sin acotar, ese texto armaba la ceremonia entera sin que nadie la pidiera.
+lab_payload_prompt_sin_campo() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","resumen_previo":"%s"}' "$1"
+}
+
 # El payload de SessionStart NO trae campo `prompt`: el hook cae al INPUT entero
 # como texto del prompt. Por eso el sentinel, si aparece, aparece en otro campo
 # (un resumen de sesion reanudada, por ejemplo).

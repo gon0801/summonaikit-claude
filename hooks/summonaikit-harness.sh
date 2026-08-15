@@ -12,7 +12,19 @@ MAX_CYCLES=2
 # parche el harness SOLO se arma si el prompt trae el sentinel explicito.
 # El sentinel es unicamente -saikit: /harness-plan es del plugin claude-code-harness,
 # otro sistema, y no debe despertar a este kit.
-SAIKIT_SENTINEL_RE='(^|[^A-Za-z0-9_])-saikit([^A-Za-z0-9_-]|$)'
+# Task 9.5 (C10): la frontera IZQUIERDA excluye tambien `/` y `-`. Sin eso,
+# REFERENCIAR un archivo (`docs/-saikit.md`) o citar un flag (`--saikit`) armaba
+# la ceremonia entera — el mismo dano que `x-saikit`, por dos caracteres que
+# faltaban en la clase. El `-` va ULTIMO en el bracket para que sea literal.
+#
+# Lo que sigue armando, atado por controles en caso_g1_sentinel_con_frontera:
+# inicio de texto, espacio, `(`, `,`, comillas y `\n` decodificado. Apretar de
+# mas aca seria repetir A8 (un recibo legitimo que deja de contar), por eso los
+# controles positivos viven en el MISMO caso que los negativos.
+#
+# La deteccion del carril `:fast` (Task 10.1) ya usaba esta frontera apretada;
+# esto alinea el sentinel con ella en vez de tener dos criterios distintos.
+SAIKIT_SENTINEL_RE='(^|[^A-Za-z0-9_/-])-saikit([^A-Za-z0-9_-]|$)'
 # <<< SAIKIT-SENTINEL-GATE v1 <<<
 
 if [ "$SUMMONAIKIT_INTERNAL_GENERATION" = "1" ] 2>/dev/null; then
@@ -898,24 +910,24 @@ start_harness() {
   # el sed greedy cortaba en la primera \" (no armaba / desarmaba con el
   # sentinel presente) y los \n crudos rompian la frontera del sentinel.
   prompt_text="$(json_top_level_decoded prompt)"
-  if [ -z "$prompt_text" ]; then prompt_text="$INPUT"; fi
-  # LIMITE DECLARADO de la Task 10.6 (hallazgo Major de CodeRabbit, PR #19).
-  # El payload de SessionStart no trae `prompt` y SI trae `summary`; el summary
+  # Task 9.4 (C9): el fallback al payload CRUDO se acota a la fase `session`.
+  # Sin acotar, un payload sin campo `prompt` hacia que el sentinel se buscara
+  # en el PAYLOAD ENTERO: un `-saikit` en cualquier otro campo — la forma real
+  # es un resume, donde el texto viejo viaja en un campo de resumen — armaba la
+  # ceremonia entera sin que nadie la pidiera, y el gate quedaba exigiendo
+  # recibo por un turno que no lo pidio. Medido en
+  # caso_g1_prompt_sin_campo_no_arma (rojo antes del acotamiento).
+  #
+  # Se CONSERVA en `session` porque ahi cursor si arma con el sentinel en el
+  # texto y no hay campo `prompt` que leer (medido, caso_g6_armado_por_target).
+  if [ -z "$prompt_text" ] && [ "$PHASE" = "session" ]; then prompt_text="$INPUT"; fi
+  # LIMITE que sobrevive, heredado de la Task 10.6 (hallazgo Major de CodeRabbit,
+  # PR #19) y NO cerrado por este acotamiento: dentro de `session`, el `summary`
   # de una sesion reanudada suele CITAR el prompt anterior, que llevaba -saikit.
-  # Con este fallback al payload crudo, ese texto viejo matchea el sentinel y el
-  # SessionStart se va por el camino ARMADO: inyecta el contrato en vez de las
-  # reglas permanentes (y escribe estado sin que nadie armara).
-  #
-  # NO se arregla aca, a proposito: el fallback sin acotar es C9 / Task 9.4, y
-  # su DoD decide EXPLICITAMENTE conservar el fallback en `session` dejando
-  # `caso_g6_armado_por_target` intacto — un turno claude+session con -saikit
-  # arma hoy, y ese caso lo exige. Acotarlo desde aca pisaria el diseno de esa
-  # tarea y pondria rojo su caso.
-  #
-  # Consecuencia, escrita para que nadie la descubra de nuevo: en una sesion
-  # reanudada cuyo summary cite un -saikit viejo, las reglas permanentes NO
-  # salen; sale el contrato. Es un intercambio razonable (el contrato dice mas)
-  # pero es una perdida real de cobertura de esta tarea.
+  # Ese texto viejo sigue matcheando y la sesion arma: sale el contrato en vez de
+  # las reglas permanentes. Cerrarlo exigiria distinguir "peticion" de "resumen"
+  # DENTRO de session, y ahi el unico host medido que arma asi es cursor.
+  # Atado por caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas.
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # El sentinel es la unica condicion de armado (REEMPLAZO a los clasificadores
   # is_engineering_task / is_trivial_task del vendor, retirados en la Task 10.1
