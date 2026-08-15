@@ -187,7 +187,7 @@ VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corr
 # - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
 #   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
 #   `Failures: 0`.
-FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
+FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?|failed)[=:]([[:space:]]*)?[1-9]'
 # CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
 # positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
 # Cubre los runners cuya senal de fracaso no trae numero inmediato. OJO: $combined
@@ -201,7 +201,12 @@ FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|Assertion
 #   que pasa seria falso positivo (raro, declarado).
 # - FAILURES! — banner de phpunit.
 # - ---[[:space:]]+FAIL: — go test individual (`--- FAIL: TestX`).
-FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:'
+FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:|FAILURE: Build failed|BUILD FAILED'
+
+# Task 9.2 (C8): el primer token del comando. Si es echo o printf, el comando no
+# acredita verificacion por mas que nombre un runner — `echo pytest` no corre
+# pytest. Se aplica SOLO a la primera linea del comando (ver su uso).
+ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 
 json_string_field() {
   field="$1"
@@ -1243,8 +1248,30 @@ record_tool_evidence() {
   # sin wrapper (ver el comentario de la constante). No se concatena
   # tool_name: el ancla ^ y el separador son del COMANDO, y un tool_name
   # delante moveria el inicio de linea.
-  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
-     || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; then
+  # Task 9.2 (C8), mitad que faltaba. Dos cambios sobre la condicion de credito:
+  #
+  #   1. ECHO_LEAD_RE: si el PRIMER token del comando es echo/printf, ese
+  #      comando JAMAS acredita. `echo pytest` ponia al runner en posicion de
+  #      comando legitima — TEST_RUNNER_CMD_RE lo daba por bueno — y acreditaba
+  #      verificacion sin correr nada.
+  #      Se mira SOLO la primera linea (`head -n 1`), no el comando entero: con
+  #      `grep -E '^...'` sobre todo el texto, un comando multilinea legitimo que
+  #      tuviera un `echo` en cualquier linea perderia el credito.
+  #   2. `tool_name` SE CONSERVA en la rama WORD_RE — **desviacion declarada de
+  #      la DoD**, que pedia sacarlo. Se saco, la suite completa lo puso rojo y
+  #      se repuso: sin el, la mutacion `tool_name_desacotado` se queda sin
+  #      detector (nada observa que el lector de tool_name este acotado) y se
+  #      pierde cobertura real a cambio de nada. La razon que daba la DoD —el
+  #      ancla `^` y el separador son del COMANDO— ya esta cubierta: la rama
+  #      TEST_RUNNER_CMD_RE usa `$command_text` SOLO, y es la unica anclada.
+  #
+  # LIMITE del lado estricto, declarado y ATADO por
+  # caso_g2_echo_seguido_de_runner_no_acredita: `echo hola && pytest` tampoco
+  # acredita. Distinguirlo exigiria parsear el shell, y este gate es advisory —
+  # se elige perder un credito legitimo antes que regalar uno falso.
+  if ! printf '%s' "$command_text" | head -n 1 | grep -Eiq "$ECHO_LEAD_RE" \
+     && { printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
+          || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
     if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
            || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"

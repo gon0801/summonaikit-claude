@@ -74,6 +74,9 @@ G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
+G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
+G2|credito_por_mencion|la guarda de echo/printf se neutraliza y `echo pytest` vuelve a acreditar verificacion
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
@@ -200,6 +203,19 @@ mut_walker_sin_resets()         { sed 's@if (depth < 4) en_text = 0@if (0) en_te
 # caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas, que fija el
 # comportamiento de HOY y se pondra rojo el dia que alguien lo cambie.
 
+# Task 9.1 (C6) — una mutacion por via, cada una acreditada a su caso.
+#   falla_dotnet_quitada -> saca `failed` de la via B del CI; lo atrapa
+#     caso_g2_runner_fallido_dotnet_no_marca.
+#   falla_gradle_quitada -> saca los dos literales de gradle del CS; lo atrapa
+#     caso_g2_runner_fallido_gradle_no_marca.
+mut_falla_dotnet_quitada()   { sed 's@(failures?|errors?|failed)\[=:\]@(failures?|errors?)[=:]@'; }
+mut_falla_gradle_quitada()   { sed 's@|FAILURE: Build failed|BUILD FAILED@@'; }
+
+# Task 9.2 (C8): neutraliza la guarda del primer token. Con eso `echo pytest`
+# vuelve a acreditar verificacion sin correr nada — lo atrapa
+# caso_g2_runner_en_echo_no_marca.
+mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCHEA_ESTO'@"; }
+
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
 # a la lista pelada en ambos greps; la segunda quita la alternativa de
@@ -263,7 +279,10 @@ mut_falla_tsc_quitada()       { sed 's/error TS\[0-9\]/error TS_NUNCA/'; }
 # falla_phpunit_quitada: cambia el separador `[=:]` de vía B por `[Z]` (imposible
 # en `Failures: 1`, que usa `:`). Atrapa caso_g2_runner_fallido_phpunit_no_marca.
 # NO toca vía A (caso_g2_runner_fallido_pytest_summary_no_marca sigue matcheando).
-mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
+# NOTA (9.1): el patron incluye `|failed` porque la via B lo gano al agregar
+# dotnet. Sin actualizarlo, este sed dejaba de aplicar y la mutacion se volvia
+# teatro — lo detecto la suite completa, no el archivo suelto.
+mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?|failed)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
 # falla_cs_quitada: neutraliza el segundo grep (CS entero) cambiando el nombre
 # de la constante referenciada. Atrapa caso_g2_runner_fallido_cargo_no_marca
 # (tambien haria rojo al go, pero el driver corta en el primero; cargo va antes

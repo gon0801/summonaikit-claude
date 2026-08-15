@@ -590,7 +590,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -617,7 +617,10 @@ caso_g2_eco_de_command_en_tool_response_no_marca() {
 # el chequeo del runner acreditaba sin comando de test alguno.
 caso_g2_eco_de_tool_name_en_tool_response_no_marca() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'echo hola' 'pytest')"
+  # El comando NO puede empezar con echo: desde 9.2 ECHO_LEAD_RE lo bloquea por
+  # su cuenta y enmascararia la mutacion (el caso quedaria verde por el motivo
+  # equivocado). Se usa un comando que no es runner ni lleva echo adelante.
+  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'ls -la' 'pytest')"
   _igual "verified tras eco de tool_name en tool_response" "$(lab_estado verified)" "0"
 }
 
@@ -693,6 +696,73 @@ caso_g2_runner_fallido_cargo_no_marca() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'cargo test' 'test result: FAILED.')"
   _igual "cargo con test result: FAILED no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+# Task 9.1 (C6). Los banners de dotnet y gradle NO matcheaban ninguna via del
+# guardia de fallas, asi que un runner que REVENTO acreditaba verificacion:
+#   - dotnet dice `Failed:     1` — la via B pedia (failures?|errors?), sin
+#     `failed`, y la via A pide el digito ANTES de la palabra;
+#   - gradle dice `FAILURE: Build failed` / `BUILD FAILED` — el `FAIL[^a-zA-Z]`
+#     del CS exige un NO-letra despues, y ahi siguen `U` y `E`.
+caso_g2_runner_fallido_dotnet_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'dotnet test' 'Failed!  - Failed:     1, Passed:    12, Skipped:     0, Total:    13')"
+  _igual "dotnet con Failed: 1 no acredita" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_gradle_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'gradle test' 'FAILURE: Build failed with an exception.')"
+  _igual "gradle con FAILURE: Build failed no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'gradle test' 'BUILD FAILED in 3s')"
+  _igual "gradle con BUILD FAILED no acredita" "$(lab_estado verified)" "0"
+}
+
+# Control negativo de 9.1: dotnet EXITOSO sigue acreditando. Es lo que protege
+# la frontera [1-9] al agregar `failed` a la via B — sin el, `Failed:     0` de
+# una corrida verde pasaria a contarse como fracaso y el gate exigiria de mas.
+caso_g2_dotnet_exitoso_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'dotnet test' 'Passed!  - Failed:     0, Passed:    13, Skipped:     0, Total:    13')"
+  _igual "dotnet exitoso con Failed: 0 sigue acreditando" "$(lab_estado verified)" "1"
+}
+
+# Task 9.2 (C8), mitad que faltaba. TEST_RUNNER_CMD_RE (llegada en el PR #20) ya
+# exige POSICION de comando, pero `echo` es un comando: `echo pytest` pone al
+# runner en posicion legitima y acreditaba verificacion sin correr nada.
+# ECHO_LEAD_RE lo tapa: si el PRIMER token es echo/printf, ese comando jamas
+# acredita.
+caso_g2_runner_en_echo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'echo pytest' 'pytest')"
+  _igual "un runner mencionado por echo no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'printf "%s" "pytest -q"' 'pytest -q')"
+  _igual "un runner mencionado por printf no acredita" "$(lab_estado verified)" "0"
+}
+
+# LIMITE del lado estricto, ATADO por test (r1 del plan): si el primer token es
+# echo, el comando NO acredita aunque despues del && haya un runner de verdad.
+# Es a proposito: distinguirlo exigiria parsear el shell, y el gate es advisory.
+# Si algun dia se afloja, este caso se pone rojo y obliga a decidirlo.
+caso_g2_echo_seguido_de_runner_no_acredita() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'echo empiezo && pytest -q' '5 passed')"
+  _igual "limite declarado: con echo adelante no acredita ni con runner despues" "$(lab_estado verified)" "0"
+}
+
+# Controles verdes: el lado estricto no puede comerse los casos legitimos.
+caso_g2_runner_con_and_y_var_sigue_acreditando() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q && echo listo' '5 passed')"
+  _igual "runner primero y echo despues SI acredita" "$(lab_estado verified)" "1"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'CI=1 pytest -q' '5 passed')"
+  _igual "prefijo VAR=val sigue acreditando" "$(lab_estado verified)" "1"
 }
 
 caso_g2_runner_fallido_go_no_marca() {
