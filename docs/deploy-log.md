@@ -400,3 +400,20 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   suite PASS (1m43s), CodeRabbit PASS.
 - **Operador:** Gon (sesión zcode). Ronda de cross-review: 1 de 1 (tope
   respetado; residuales declarados, sin re-revisión).
+
+## 2026-08-15 — PR #21 / Task 10.7 (ceremonia por tarea)
+
+- **Mergeado:** PR #21 `feat/10.6-ceremonia-por-tarea` — Task 10.7: el contrato
+  gana "One ceremony per task, not per edit" (batch de ediciones + la
+  secuencia UNA vez sobre el diff estable; ediciones triviales no re-delegan,
+  se verifican una misma con check enfocado y se declaran en el recibo).
+  Origen: feedback del operador post-10.2 (re-cadena por rename/move). Sin
+  cambio de condición del gate; auditoría de línea base 0 veredictos.
+- **¿Cambió el hook?** **Sí** (solo texto del contrato, 6 líneas).
+- **Deploy:** install desde blob de origin/master (desviación adicional: el
+  worktree no pudo hacer checkout de master — lo tiene tomado el árbol
+  principal de la sesión 6.2; se desplegó el blob exacto de origin/master
+  post-merge y se verificó byte a byte + registro OK).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **CI del PR:** quality PASS, suite PASS (1m43s), CodeRabbit PASS.
+- **Operador:** Gon (sesión zcode).
