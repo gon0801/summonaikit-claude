@@ -333,3 +333,23 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   acción que la 3.7 pedía.
 - **Vivo vs master:** cmp byte a byte idéntico (verificado).
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-15 — PR #20 / Cross-review codex r1 (9.10 cmdpos + runner)
+
+- **Mergeado:** PR #20 `feat/9.10-cmdpos` — fix del hallazgo ALTA del
+  cross-review codex r1: las ramas run.sh salen de `TEST_RUNNER_RE` (vuelve a
+  su forma pre-9.10) y viven en `TEST_RUNNER_CMD_RE` nueva, sin wrapper, con
+  posición de comando estricta y segmentos de path — los 5 decoys
+  (`bash contest/run.sh`, `bash tests/run.sh/typo`, `grep bash tests/run.sh`,
+  `printf 'bash tests/run.sh'`, `echo bash tests/run.sh`) medidos en ROJO y
+  cerrados. Además: resumen de SKIP del runner siempre imprime (hallazgo BAJA)
+  y env-determinism del caso nuevo (`env -u SAIKIT_CI_LINUX`). Residual
+  declarado en 10.5: skip linux-ci por archivo entero.
+- **¿Cambió el hook?** **Sí** (constante nueva + call sites del crédito).
+- **`install-hook.sh`:** vivo actualizado a master (worktree, desviación de
+  siempre: árbol principal ocupado por la sesión de 6.2).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Vivo vs master:** cmp byte a byte idéntico. CI del PR: quality PASS,
+  suite PASS (1m43s), CodeRabbit PASS.
+- **Operador:** Gon (sesión zcode). Ronda de cross-review: 1 de 1 (tope
+  respetado; residuales declarados, sin re-revisión).
