@@ -1257,20 +1257,25 @@ record_tool_evidence() {
   #      Se mira SOLO la primera linea (`head -n 1`), no el comando entero: con
   #      `grep -E '^...'` sobre todo el texto, un comando multilinea legitimo que
   #      tuviera un `echo` en cualquier linea perderia el credito.
-  #   2. `tool_name` SE CONSERVA en la rama WORD_RE — **desviacion declarada de
-  #      la DoD**, que pedia sacarlo. Se saco, la suite completa lo puso rojo y
-  #      se repuso: sin el, la mutacion `tool_name_desacotado` se queda sin
-  #      detector (nada observa que el lector de tool_name este acotado) y se
-  #      pierde cobertura real a cambio de nada. La razon que daba la DoD —el
-  #      ancla `^` y el separador son del COMANDO— ya esta cubierta: la rama
-  #      TEST_RUNNER_CMD_RE usa `$command_text` SOLO, y es la unica anclada.
+  #   2. el credito deja de mirar `tool_name`: las DOS ramas corren sobre
+  #      `$command_text` SOLO. Un `tool_name` llamado como un runner —posible
+  #      con una tool MCP— mas un comando `ls -la` acreditaba verificacion sin
+  #      que corriera nada, y ECHO_LEAD_RE no lo tapa (el comando no empieza con
+  #      echo). Hallado en la review del PR #22 y atado por
+  #      caso_g2_tool_name_runner_con_comando_ajeno_no_marca.
+  #
+  #      La review proponia dejar SOLO TEST_RUNNER_CMD_RE. Se probo y rompio
+  #      tres casos legitimos: esa constante cubre UNICAMENTE el runner propio
+  #      del repo (`tests/run.sh`, Task 9.10) — pytest, vitest y compania viven
+  #      en WORD_RE. Aplicarla tal cual borraba el credito de todos los runners
+  #      normales. El agujero era real; la receta, no.
   #
   # LIMITE del lado estricto, declarado y ATADO por
   # caso_g2_echo_seguido_de_runner_no_acredita: `echo hola && pytest` tampoco
   # acredita. Distinguirlo exigiria parsear el shell, y este gate es advisory —
   # se elige perder un credito legitimo antes que regalar uno falso.
   if ! printf '%s' "$command_text" | head -n 1 | grep -Eiq "$ECHO_LEAD_RE" \
-     && { printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
+     && { printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
           || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
     if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
            || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then

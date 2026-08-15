@@ -72,7 +72,6 @@ G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de co
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
-G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
 G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
@@ -237,7 +236,19 @@ mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # marca_verificado y caso_g2_eco_de_command_en_tool_response_no_marca (command);
 # caso_g2_eco_de_tool_name_en_tool_response_no_marca (tool_name).
 mut_command_desacotado()   { sed 's/json_tool_input_string command/json_string_field command/'; }
-mut_tool_name_desacotado() { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
+# RETIRADA (PR #22): `mut_tool_name_desacotado` cambiaba el lector de tool_name
+# por el greedy. Dejo de tener detector cuando el credito de verificacion dejo
+# de mirar `tool_name` — que fue el arreglo de un agujero REAL (una tool MCP
+# llamada como un runner acreditaba sin correr nada). Con el credito fuera, un
+# tool_name greedy ya no cambia nada observable ahi: `combined` incluye $INPUT
+# entero, asi que la deteccion de fallas tampoco se mueve.
+#
+# DONDE SI SIGUE IMPORTANDO que el lector este acotado: la deteccion de
+# edicion del aviso RN (`^(edit|write|...)$` sobre tool_name). Cubrir ESO con
+# un caso vive en la zona de la Task 9.8, que esta tomada por otra sesion — se
+# deja anotado ahi en vez de invadirla. Se retira la mutacion en vez de
+# dejarla de adorno: una que ningun caso puede atrapar convierte la bateria en
+# teatro, que es justo lo que este archivo existe para evitar.
 # Task 9.10: neutraliza las DOS ramas nuevas (verbo shell + invocacion directa)
 # rompiendo el sufijo tests?/run\.sh que comparten — el resto de TEST_RUNNER_RE
 # queda intacto. Lo atrapa caso_g2_runner_bash_run_sh_marca (verde->rojo:
