@@ -249,8 +249,17 @@ baseline están serializadas por `Depends`.
 **Recommended (fuera de este plan, independientes):**
 - Prueba real de Kimi con un turno `-saikit` en vivo: 24 tareas hechas y **cero
   turnos reales**. Responde además dos hallazgos que quedaron como preguntas.
-- CI + pre-commit con detección de secretos en este repo: el archivo corre en
-  cada turno; hoy nada impide instalar desde una rama sucia.
+- ~~CI + pre-commit con detección de secretos en este repo~~ **hecho [534ef72]**:
+  `tools/check-secrets.sh` (gitleaks si está disponible, fallback grep con la
+  familia de `redact_secrets` si no) como hook local de pre-commit, más el job
+  `secrets` del CI (gitleaks 8.30.1 sobre el historial completo, binario
+  verificado por sha256 pineado). Calibrado midiendo: 0 falsos positivos sobre
+  los archivos escaneados (el fallback excluye a propósito `tests/`, `docs/`,
+  `Plans.md` y el comentario-documental del hook; `.gitleaks.toml` allowlista
+  `tests/` porque carga trampas por diseño) y trampas reales detectadas. Test
+  con 12 casos y 2 mutaciones acreditadas; revisión de bots atendida (PR #24):
+  el P1 real era que `gitleaks dir` con 2+ fuentes escanea el directorio
+  hermano — ahora se invoca una vez por archivo, atado por caso.
 
 **Optional:**
 - Portar el aviso post-revisión a Kimi (canal distinto: Kimi no tiene el mensaje

@@ -76,3 +76,38 @@ jobs:
           # (los nombra el runner uno por uno; razones en Plans.md, fila 10.5).
           SAIKIT_CI_LINUX: '1'
         run: bash tests/run.sh
+
+  # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de
+  # secretos en este repo"): el hook de este repo corre en CADA turno y nada
+  # impedia instalarlo desde una rama con un secreto adentro. Este job es la
+  # capa fuerte: gitleaks sobre el HISTORIAL COMPLETO del push (fetch-depth
+  # 0), no solo el diff. El binario se descarga a mano en vez de usar
+  # gitleaks-action porque esa action exige licencia paga en repos privados.
+  #
+  # Calibracion medida 2026-08-15 con esta misma version (8.30.1, config
+  # default): 0 hallazgos sobre los 179 commits — las credenciales FALSAS de
+  # los tests de redaccion (Task 3.5) no matchean sus reglas — y atrapa
+  # trampas reales (ghp_/AKIA/sk-proj). La capa local (pre-commit) vive en
+  # tools/check-secrets.sh.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # `gitleaks git .` es lectura local: no necesita el token del
+          # checkout, y no dejarlo persistido reduce lo que un artefacto
+          # externo podria hacer si se lo burlara (hallazgo CR PR #24).
+          persist-credentials: false
+
+      - name: gitleaks sobre el historial completo
+        run: |
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          # sha256 PINEADO, verificado contra gitleaks_8.30.1_checksums.txt del
+          # propio release (hallazgo Greptile P2 / CodeRabbit del PR #24:
+          # descargar-y-ejecutar sin verificar deja el historial completo del
+          # checkout expuesto a un artefacto sustituido).
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git . --redact --exit-code 1

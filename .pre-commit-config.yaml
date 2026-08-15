@@ -35,3 +35,18 @@ repos:
       - id: check-added-large-files
       - id: check-json
       - id: check-yaml
+
+  # PERSONALIZACION PROPIA (init-repo.ps1 la detecta y NO la pisa).
+  #
+  # Item "Recommended" de Plans.md: deteccion de secretos antes del commit.
+  # tools/check-secrets.sh usa gitleaks si esta instalado (o en
+  # $SAIKIT_GITLEAKS) y si no cae a un grep best-effort con los falsos
+  # conocidos del repo excluidos; el escaneo fuerte del HISTORIAL lo hace el
+  # job `secrets` del CI (.github/workflows/quality.yml).
+  - repo: local
+    hooks:
+      - id: saikit-check-secrets
+        name: deteccion de secretos (gitleaks o fallback grep)
+        entry: bash tools/check-secrets.sh
+        language: system
+        types: [text]
