@@ -456,3 +456,16 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   también lo cambian) — le toca al flujo de siempre de la sesión zcode/Phase 9
   en su próximo ciclo (avisado por broadcast).
 - **Operador:** sesión Claude Phase 6 (autónoma), Gon dormido.
+
+## 2026-08-15 — PR #25 (e332def): review de bots del PR #23 atendida — deploy no-op
+
+- **Contenido:** Greptile P1 (la afirmación (b) del wrapper aceptaba una mención
+  solo-en-comentario — ahora exige línea de código, con el límite "no se parsea
+  PowerShell" declarado, criterio de la 0.4) + minor de CodeRabbit (el caso
+  aserta el diagnóstico exacto). CodeRabbit no había alcanzado a correr en el
+  #23 (mergeado antes de su pasada — lección aprendida: el #25 esperó a los DOS
+  bots + CI antes de mergear). ROJO medido; CI 4/4.
+- **Deploy `~/.codex`:** no-op — "YA AL DIA: el destino es nuestro y byte a byte
+  igual a la fuente" (el merge tocó tools/tests, no el hook). Se corre y se
+  registra igual, para no perder la costumbre.
+- **Operador:** sesión Claude Phase 6 (autónoma).
