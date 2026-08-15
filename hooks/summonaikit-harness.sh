@@ -201,7 +201,7 @@ VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corr
 # - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
 #   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
 #   `Failures: 0`.
-FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?)[=:]([[:space:]]*)?[1-9]'
+FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?|failed)[=:]([[:space:]]*)?[1-9]'
 # CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
 # positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
 # Cubre los runners cuya senal de fracaso no trae numero inmediato. OJO: $combined
@@ -215,7 +215,12 @@ FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|Assertion
 #   que pasa seria falso positivo (raro, declarado).
 # - FAILURES! — banner de phpunit.
 # - ---[[:space:]]+FAIL: — go test individual (`--- FAIL: TestX`).
-FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:'
+FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]+FAIL:|FAILURE: Build failed|BUILD FAILED'
+
+# Task 9.2 (C8): el primer token del comando. Si es echo o printf, el comando no
+# acredita verificacion por mas que nombre un runner — `echo pytest` no corre
+# pytest. Se aplica SOLO a la primera linea del comando (ver su uso).
+ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 
 json_string_field() {
   field="$1"
@@ -307,6 +312,45 @@ SESSION_KEY="$(printf '%s' "$SESSION_ID" | sed 's/[^A-Za-z0-9_-]/_/g' | cut -c1-
 STATE_DIR="$PROJECT_DIR/$SESSION_KEY"
 STATE_PATH="$STATE_DIR/harness-state.env"
 LOG_PATH="$STATE_DIR/harness-evidence.log"
+
+# >>> SAIKIT-STATE-TTL v1 >>>
+# Task 9.7 (C13): `state/` crecia para siempre. Cada limpieza borraba los
+# ARCHIVOS y dejaba el directorio de la sesion: una sesion = un dir vacio
+# inmortal. Dos mitades, y una sin la otra no arregla nada.
+#
+# (a) podar_dir_sesion: `rmdir` best-effort al final de CADA limpieza. Es
+#     `rmdir`, JAMAS `rm -rf`: si por lo que sea quedo algo adentro, el dir
+#     sobrevive y se ve, en vez de borrarse en silencio.
+podar_dir_sesion() { rmdir "$STATE_DIR" 2>/dev/null || true; }
+
+# (b) barrer_estado_viejo: al ARMAR, se llevan las hermanas del MISMO
+#     proyecto+host cuyo `harness-state.env` pasa el TTL. Cubre las sesiones que
+#     nunca cerraron limpio, que son justo las que (a) no alcanza a tocar.
+#
+#     TTL en minutos porque `-mmin` es lo portable: `touch -d '15 days ago'`,
+#     `touch -t` y `find -mmin` se MIDIERON funcionando en MSYS2 antes de
+#     escribir esto, asi que no hizo falta el TTL-por-env que preveia el plan.
+#
+#     Tres acotamientos, cada uno con su razon:
+#       - sin `find` no se barre nada (fail-open, Core Rule 1);
+#       - solo se borra lo que cae DEBAJO de $PROJECT_DIR (el `case` lo verifica
+#         sobre la ruta ya resuelta, no sobre el patron);
+#       - nunca el dir del turno que dispara el barrido.
+#     El estado FRESCO de una hermana viva sobrevive: barrer por edad sin
+#     discriminar seria A4 otra vez, borrandole el estado a una sesion en curso.
+SAIKIT_STATE_TTL_MIN=20160   # 14 dias
+barrer_estado_viejo() {
+  command -v find >/dev/null 2>&1 || return 0
+  [ -d "$PROJECT_DIR" ] || return 0
+  find "$PROJECT_DIR" -mindepth 2 -maxdepth 2 -type f -name 'harness-state.env' \
+       -mmin "+$SAIKIT_STATE_TTL_MIN" 2>/dev/null | while IFS= read -r _viejo; do
+    _dir="$(dirname "$_viejo")"
+    [ "$_dir" = "$STATE_DIR" ] && continue
+    case "$_dir" in "$PROJECT_DIR"/?*) rm -rf "$_dir" 2>/dev/null || true ;; esac
+  done
+  return 0
+}
+# <<< SAIKIT-STATE-TTL v1 <<<
 
 # Como json_top_level_string pero DECODIFICANDO los escapes \n \" \\ \t del
 # valor (los demas quedan crudos, mismo criterio medido de assistant_text_payload:
@@ -579,7 +623,16 @@ assistant_text_transcript() {
           # y la frontera [^[:alpha:]] de has_receipt_label falla. Hallazgo de
           # la revision cruzada (codex, 2026-08-11).
           if (depth == 4 && emiti) { printf "\n"; emiti = 0 }
-          depth--; espera = 0; continue
+          depth--; espera = 0
+          # Task 9.6 (C12): al SALIR se resetea lo que al entrar se prendio. Sin
+          # esto, en_text/en_assistant quedaban en 1 para siempre y la condicion
+          # de emision NO mira depth — asi que un valor top-level POSTERIOR a
+          # `message` (un requestId, por ejemplo) se concatenaba al texto del
+          # asistente y aportaba etiquetas que el turno no escribio. Medido: una
+          # fuga con `Retro:` cerraba un gate al que le faltaba justo esa.
+          if (depth < 4) en_text = 0
+          if (depth < 2) en_assistant = 0
+          continue
         }
         if (c == ",")             { espera = 0; continue }
       }
@@ -956,6 +1009,7 @@ start_harness() {
     # arma en session con -saikit en el texto, ver caso_g6_armado_por_target).
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ]; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
+      podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
     # >>> SAIKIT-STANDING-RULES v1 >>>
     # Task 10.6: la fase session sin sentinel salia en silencio; ahora deja las
@@ -993,6 +1047,10 @@ start_harness() {
   rn_pending_text="$(rn_take_pending)"
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
   write_state "$task_hash" "0" "0" "0" "" "$lane"
+  # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
+  # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni
+  # por el skip explicito. Fail-open: si no hay `find`, no se barre nada.
+  barrer_estado_viejo
   printf 'prompt task started: %s\n' "$task_hash" > "$LOG_PATH" 2>/dev/null || true
 
   context="$(harness_context)"
@@ -1204,8 +1262,35 @@ record_tool_evidence() {
   # sin wrapper (ver el comentario de la constante). No se concatena
   # tool_name: el ancla ^ y el separador son del COMANDO, y un tool_name
   # delante moveria el inicio de linea.
-  if printf '%s' "$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
-     || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; then
+  # Task 9.2 (C8), mitad que faltaba. Dos cambios sobre la condicion de credito:
+  #
+  #   1. ECHO_LEAD_RE: si el PRIMER token del comando es echo/printf, ese
+  #      comando JAMAS acredita. `echo pytest` ponia al runner en posicion de
+  #      comando legitima — TEST_RUNNER_CMD_RE lo daba por bueno — y acreditaba
+  #      verificacion sin correr nada.
+  #      Se mira SOLO la primera linea (`head -n 1`), no el comando entero: con
+  #      `grep -E '^...'` sobre todo el texto, un comando multilinea legitimo que
+  #      tuviera un `echo` en cualquier linea perderia el credito.
+  #   2. el credito deja de mirar `tool_name`: las DOS ramas corren sobre
+  #      `$command_text` SOLO. Un `tool_name` llamado como un runner —posible
+  #      con una tool MCP— mas un comando `ls -la` acreditaba verificacion sin
+  #      que corriera nada, y ECHO_LEAD_RE no lo tapa (el comando no empieza con
+  #      echo). Hallado en la review del PR #22 y atado por
+  #      caso_g2_tool_name_runner_con_comando_ajeno_no_marca.
+  #
+  #      La review proponia dejar SOLO TEST_RUNNER_CMD_RE. Se probo y rompio
+  #      tres casos legitimos: esa constante cubre UNICAMENTE el runner propio
+  #      del repo (`tests/run.sh`, Task 9.10) — pytest, vitest y compania viven
+  #      en WORD_RE. Aplicarla tal cual borraba el credito de todos los runners
+  #      normales. El agujero era real; la receta, no.
+  #
+  # LIMITE del lado estricto, declarado y ATADO por
+  # caso_g2_echo_seguido_de_runner_no_acredita: `echo hola && pytest` tampoco
+  # acredita. Distinguirlo exigiria parsear el shell, y este gate es advisory —
+  # se elige perder un credito legitimo antes que regalar uno falso.
+  if ! printf '%s' "$command_text" | head -n 1 | grep -Eiq "$ECHO_LEAD_RE" \
+     && { printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
+          || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
     if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
            || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
@@ -1591,6 +1676,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     fi
     # <<< SAIKIT-REVIEW-NOTICE v1 <<<
     rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
+    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_allow
   fi
 
@@ -1600,6 +1686,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
     # cobrando recibo despues de declararse agotado (A4).
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
+    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_budget_exhausted "$missing"
   fi
 

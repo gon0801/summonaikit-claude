@@ -256,6 +256,15 @@ lab_payload_bash() {
 # corrio $1; $2 viaja adentro del resultado. Gemelo de lab_payload_eco_subagent_type
 # para command: el lector greedy tomaba la ULTIMA ocurrencia y acreditaba
 # verified=1 por un comando que nunca corrio.
+# CodeRabbit PR #22: para probar el agujero de `tool_name` hace falta que el
+# tool_name REAL (top-level) sea el runner. lab_payload_bash_con_eco_tool_name
+# no sirve: ahi el tool_name real es "Bash" y el runner solo aparece ecoado en
+# tool_response, asi que el caso quedaba verde aunque el credito volviera a
+# mirar tool_name ("Bash ls -la" no tiene runner). $1 = tool_name, $2 = comando.
+lab_payload_tool_name_arbitrario() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"%s","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "$2"
+}
+
 lab_payload_bash_con_eco_command() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"","eco_del_host":{"command":"%s"},"interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01c9d0e1f2a3b4c5d6e7f809","duration_ms":1200}' "$1" "$2"
 }
@@ -353,6 +362,15 @@ lab_transcript_asistente() {
 # un `type:text` de un mensaje `user` — realista (el usuario escribio texto) y a
 # la profundidad que el walker rastrea. Con el hook sano no se emite (role no es
 # assistant); con la mutacion de role si, y el caso se pone rojo.
+# Task 9.6 (C12): una clave TOP-LEVEL que viene DESPUES de `message`. El walker
+# pone en_text/en_assistant en 1 y nunca los resetea al cerrar llaves, y su
+# condicion de emision no mira `depth` — asi que el valor de esta clave se
+# concatena al texto del asistente y aporta etiquetas que el turno no escribio.
+# $1 = texto real del asistente; $2 = el valor que se fuga.
+lab_transcript_fuga_top_level() {
+  printf '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_1","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"%s"}]},"requestId":"%s","uuid":"a2","timestamp":"2026-08-09T12:00:00.000Z"}' "$1" "$2"
+}
+
 lab_transcript_pausa_en_resultado() {
   printf '%s\n%s' \
     '{"parentUuid":"a1","type":"user","message":{"role":"user","content":[{"type":"text","text":"la linea que el kit espera es SUMMONAIKIT HARNESS PAUSED - awaiting your answer"}]},"uuid":"a2","timestamp":"2026-08-09T12:30:00.000Z"}' \
