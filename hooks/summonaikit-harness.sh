@@ -1646,6 +1646,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   case "$rn_check_last_code_edit" in ''|*[!0-9]*) rn_check_last_code_edit="" ;; esac
   case "$rn_check_last_review" in ''|*[!0-9]*) rn_check_last_review="" ;; esac
   rn_notice_fired=""
+  rn_pendiente_borrable=""
   if [ -n "$rn_check_last_code_edit" ] && [ -n "$rn_check_last_review" ] && [ "$rn_check_last_code_edit" -gt "$rn_check_last_review" ] 2>/dev/null; then
     rn_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
     printf '%s review-notice: code was edited after the last reviewer subagent run (tool-name signal only -- an edit made via a shell command, e.g. sed/heredoc/git apply, is NOT detected by this check).\n' "$rn_ts" >> "$LOG_PATH" 2>/dev/null || true
@@ -1655,12 +1656,26 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     printf 'SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed. Re-review the new diff only; do not restart the ceremony.\n' > "$RN_PENDING_PATH" 2>/dev/null || true
     rn_notice_fired="1"
   elif [ -n "$rn_check_last_code_edit" ] || [ -n "$rn_check_last_review" ]; then
-    rm -f "$RN_PENDING_PATH" 2>/dev/null || true
+    # Task 9.8 (C14): el borde declarado es "el Stop de una sesion con
+    # secuencia limpia PUEDE borrar el aviso" — y ese borde es el CIERRE
+    # limpio, no cualquier Stop. Aca solo se ANOTA que la secuencia se observo
+    # limpia; el rm vive abajo, dentro de [ -z "$missing" ], junto al del
+    # RN_ORDER. Antes el rm corria aqui, en TODO Stop: uno que BLOQUEABA se
+    # llevaba el aviso que una sesion hermana dejo para el proximo turno del
+    # proyecto (RN_PENDING_PATH es per-proyecto a proposito).
+    rn_pendiente_borrable=1
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
   if [ -z "$missing" ]; then
     # >>> SAIKIT-REVIEW-NOTICE v1 >>>
     rm -f "$RN_ORDER_PATH" 2>/dev/null || true
+    # Task 9.8 (C14): el aviso pendiente desactualizado solo lo borra un
+    # cierre LIMPIO cuya secuencia se observo limpia (el elif de arriba). Si
+    # el aviso disparo en ESTE Stop (rama if), el flag no se seteo y el
+    # pendiente queda para el turno siguiente, como siempre.
+    if [ "$rn_pendiente_borrable" = "1" ]; then
+      rm -f "$RN_PENDING_PATH" 2>/dev/null || true
+    fi
     # Canal INMEDIATO (ademas del pendiente que lee el turno siguiente): en un
     # cierre limpio donde el aviso disparo, se emite el campo systemMessage
     # del contrato de hooks de Claude Code -- documentado como universal, se

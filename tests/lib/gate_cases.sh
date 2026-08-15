@@ -1771,7 +1771,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2"
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
@@ -1822,6 +1822,35 @@ caso_g5_agotado_limpia_estado() {
   _igual "exit code del presupuesto agotado" "$LAB_RC" "0"
   _contiene "stdout del presupuesto agotado" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
   if lab_hay_estado; then _mal "presupuesto agotado debe limpiar el estado — A4 c.4"; fi
+}
+
+# C14 (auditoria 2026-08-13, Task 9.8) — el borde declarado dice "el Stop de
+# una sesion con secuencia RN limpia puede borrar el aviso pendiente"; un Stop
+# que BLOQUEA no es eso. El elif del bloque REVIEW-NOTICE corria en TODO Stop:
+# con contadores observados y secuencia limpia (review >= edit), un Stop
+# fallido se llevaba el aviso que una sesion hermana dejo para el proximo
+# turno del proyecto (RN_PENDING_PATH es per-PROYECTO a proposito).
+caso_g5_stop_fallido_no_borra_aviso_ajeno() {
+  # Armado e incompleto (este Stop bloquea), con secuencia RN limpia observada:
+  # el elif pre-9.8 disparaba aqui y borraba el aviso ajeno.
+  lab_sembrar 123456 0 0 0 ""
+  printf 'last_code_edit=1\nlast_review=2\n' > "${LAB_ESTADO_PATH%.env}-review-notice.env"
+  rn_ajeno="$(dirname "$(dirname "$LAB_ESTADO_PATH")")/review-notice-pending.log"
+  printf 'SAIKIT REVIEW NOTICE: aviso de la sesion hermana.\n' > "$rn_ajeno"
+  lab_run stop claude "$(lab_payload_stop 'sin recibo, sigo trabajando')"
+  _igual "el Stop bloquea" "$LAB_RC" "2"
+  [ -f "$rn_ajeno" ] || _mal "un Stop FALLIDO no debe borrar el aviso pendiente ajeno (C14)"
+
+  # La mitad buena del borde: el CIERRE limpio de esa misma secuencia si puede
+  # llevarselo (aviso desactualizado; si hiciera falta uno nuevo, el `if` del
+  # bloque lo reescribe en ese mismo Stop).
+  _sembrar_turno_completo
+  printf 'last_code_edit=1\nlast_review=2\n' > "${LAB_ESTADO_PATH%.env}-review-notice.env"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "el cierre limpio cierra" "$LAB_RC" "0"
+  if [ -f "$rn_ajeno" ]; then
+    _mal "el cierre LIMPIO con secuencia observada debe llevarse el aviso desactualizado (borde C14)"
+  fi
 }
 
 # ========================================== G6 — salidas por target y por fase

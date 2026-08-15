@@ -20,8 +20,7 @@ fork cuesta ~28 ms en MSYS2 (en Linux nativo el mismo fork es ~0.1 ms). El cuell
 es el fork de MSYS, no la logica del hook.
 
 1. **El TDD rojo/verde se hace sobre UN archivo de test, no sobre `tests/run.sh`.**
-   `run.sh` es el gate FINAL pre-commit: se corre una sola vez por cambio, al
-   final. Para rojo/verde durante el desarrollo, correr el test suelto en su
+   Para rojo/verde durante el desarrollo, correr el test suelto en su
    sandbox (copia el env de `tests/run.sh`: `HOME`, `TMPDIR`, `USERPROFILE` y
    `SAIKIT_HOOK_VIVO="$PWD/hooks/summonaikit-harness.sh"`). Sin `SAIKIT_HOOK_VIVO`
    apuntando a la fuente, el runner mide el hook **instalado** y no el que estas
@@ -37,6 +36,30 @@ es el fork de MSYS, no la logica del hook.
    atrapa — los escenarios usan rutas POSIX del sandbox, asi que WSL daria limpio
    sin divergencia y se pierde cobertura sin enterarse. Si algun dia se usa WSL, es
    por caso especifico POSIX-only con la salvedad declarada, no como atajo general.
+
+## Gate final: CI Linux, no la suite local (politica 2026-08-15)
+
+El job `suite` del CI (Task 10.5) corre `tests/run.sh` COMPLETO en ubuntu en
+~1m32s, en CADA push/PR. Correr ademas la suite completa en local (~20 min por
+el fork de MSYS) es pagar dos veces lo mismo — medido 2026-08-15: dos sesiones
+paralelas gastaron ~2 h de pared en suites locales serializadas por el candado.
+
+1. **Local, por cambio: SOLO lo acotado.** Rojo/verde con el driver suelto
+   (regla 1 de arriba) + la bateria de mutaciones ACOTADA a las lineas tocadas
+   (`SAIKIT_MUTACIONES='...' bash tests/test_gate_mutations.sh`). ~1-3 min.
+2. **El gate final de una task/PR es el job `suite` del CI en verde.** El
+   cierre en Plans.md cita ese run de Actions donde antes citaba la corrida
+   local. La suite completa local queda como opcion (medir la forma Windows
+   entera), no como requisito.
+3. **Excepcion Windows-bound:** si el cambio toca lo que el CI saltea con
+   `SAIKIT_CI_LINUX=1` (install/capture/probe/hook-acl — el runner los NOMBRA
+   en su output), correr ESOS archivos de test sueltos en local, ademas del CI.
+4. **Candado de una-sola-suite** (sesiones paralelas): aplica a corridas
+   locales pesadas. Antes de declarar "ocupado", distinguir corredor REAL de
+   huerfano: fecha de inicio del proceso y que el arbol de su command line
+   exista. Un stop de tarea NO mata el arbol de procesos — al abortar una
+   suite, matar explicitamente el `bash tests/run.sh` hijo, o el zombi hereda
+   el candado (medido 2026-08-15: una hora de espera detras de un huerfano).
 
 ## Deploy tras merge
 
