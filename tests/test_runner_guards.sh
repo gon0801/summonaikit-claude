@@ -149,6 +149,27 @@ caso "raiz inexistente => falla, no pasa como verde con cobertura cero"
 out="$(bash "$run_sh" "$SANDBOX/no-existe" 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] || malo "una raiz inexistente NO puede salir 0: $out"
 
+# ------------------------------- 8) skip linux-ci + unknown a la vez (codex r1)
+# Hallazgo 3 de la cross-review: con UNKNOWN y SKIP simultaneos, la rama de
+# UNKNOWN salia antes del resumen de SKIP y los omitidos no se nombraban nunca
+# — contradecia la garantia declarada. El resumen de skips tiene que imprimir
+# SIEMPRE que haya skips, en cualquier camino de salida (tambien el exit 3).
+caso "unknown + SKIP linux-ci simultaneos => el resumen de skips igual imprime"
+mkdir -p "$SANDBOX/unk-y-skip/tests"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk-y-skip/tests/test_no_observado.sh"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk-y-skip/tests/test_capture_payloads.sh"
+out="$(SAIKIT_CI_LINUX=1 bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
+[ "$rc" -eq 3 ] || malo "todos los corridos unknown y con skip => exit 3, dio $rc: $out"
+printf '%s' "$out" | grep -q 'SKIP (linux-ci): test_capture_payloads' \
+  || malo "el skip del Windows-bound no se lista: $out"
+printf '%s' "$out" | grep -q 'SKIP linux-ci declarados' \
+  || malo "el resumen de skips no imprime antes del exit 3 (codex r1, hallazgo 3): $out"
+# Y el mismo repo SIN la variable: nada se salta, los dos corren y quedan
+# unknown (el fallback honesto de 10.5 sigue intacto).
+out="$(bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
+[ "$rc" -eq 3 ] || malo "sin SAIKIT_CI_LINUX el skip no aplica, dos unknown => exit 3, dio $rc: $out"
+printf '%s' "$out" | grep -q 'SKIP (linux-ci)' && malo "sin la variable no hay skips que listar: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2
   exit 1
