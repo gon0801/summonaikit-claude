@@ -570,8 +570,11 @@ caso "codex: wrapper que solo nombra al hook en un COMENTARIO => reporta la afir
 nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_hook_solo_en_comentario
 out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
-printf '%s' "$out" | grep -qi 'wrapper' \
-  || malo "una mencion en comentario no es codigo que lance el hook; debe reportar (b): $out"
+# CodeRabbit (PR #25, minor): el assert va al DIAGNOSTICO especifico — con
+# `wrapper` a secas, cualquier otra linea del wrapper (p.ej. "no existe") lo
+# satisfaria y el caso pasaria sin fijar el filtrado de comentarios.
+printf '%s' "$out" | grep -q 'existe pero NO nombra summonaikit-harness.sh en ninguna linea de codigo' \
+  || malo "una mencion en comentario no es codigo que lance el hook; debe reportar (b) con su diagnostico exacto: $out"
 
 caso "codex: hooks.json ilegible => unknown, no ausencia"
 nuevo_codex_reg; printf '{ roto' > "$codex_dir/hooks.json"; escribir_codex_wrapper_ok
