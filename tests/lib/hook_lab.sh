@@ -128,6 +128,7 @@ lab_run() {
 
   lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
+           -u GROK_HOOK_EVENT -u GROK_SESSION_ID -u GROK_WORKSPACE_ROOT
            HOME="$LAB/home" USERPROFILE="$LAB/home")
   [ "$lab_fase" != "auto" ]   && lab_cmd+=(SUMMONAIKIT_HOOK_PHASE="$lab_fase")
   [ "$lab_target" != "auto" ] && lab_cmd+=(SUMMONAIKIT_HOOK_TARGET="$lab_target")
@@ -139,6 +140,13 @@ lab_run() {
   [ -n "${LAB_CLAUDECODE:-}" ] && lab_cmd+=(CLAUDECODE="$LAB_CLAUDECODE")
   [ -n "${LAB_ZCODE_SESSION_ID:-}" ]  && lab_cmd+=(ZCODE_SESSION_ID="$LAB_ZCODE_SESSION_ID")
   [ -n "${LAB_ZCODE_PROJECT_DIR:-}" ] && lab_cmd+=(ZCODE_PROJECT_DIR="$LAB_ZCODE_PROJECT_DIR")
+  # Task 7.3: mismo determinismo para Grok. GROK_HOOK_EVENT la inyecta el runner
+  # de hooks de Grok (senal de host D2); sin unsetearla, la suite corriendo
+  # DENTRO de un Grok hijo heredaria la senal del runner padre y todo el lab
+  # resolveria HOST=grok. Solo el caso que la pide via LAB_GROK_*.
+  [ -n "${LAB_GROK_HOOK_EVENT:-}" ]    && lab_cmd+=(GROK_HOOK_EVENT="$LAB_GROK_HOOK_EVENT")
+  [ -n "${LAB_GROK_SESSION_ID:-}" ]    && lab_cmd+=(GROK_SESSION_ID="$LAB_GROK_SESSION_ID")
+  [ -n "${LAB_GROK_WORKSPACE_ROOT:-}" ] && lab_cmd+=(GROK_WORKSPACE_ROOT="$LAB_GROK_WORKSPACE_ROOT")
   # Task 5.3: ZCODE_SESSION_ID / ZCODE_PROJECT_DIR son la senal de host de zcode
   # (medido Task 5.1: las inyecta el host, no el comando registrado). Mismo
   # determinismo que CLAUDECODE: el lab las unsetea SIEMPRE y solo las repone el
@@ -300,7 +308,52 @@ lab_payload_stop() {
 # "${1:-Listo.}" trata el vacio como ausente y mete "Listo.", y con el campo
 # presente la escotilla ya no cae al fallback.
 lab_payload_stop_sin_mensaje() {
-  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"background_tasks":[],"session_crons":[]}'
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-444455556666","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"Stop","stop_hook_active":false,"background_tasks":[],"session_crons":[]}'
+}
+
+# ------------------------------- Task 7.3: envelope Grok Build (medido 7.1)
+# Claves camel (sessionId, toolName, toolInput, transcriptPath,
+# lastAssistantMessage), valor del evento SNAKE (user_prompt_submit,
+# post_tool_use, stop). El prompt del usuario llega WRAPPEADO en
+# <user_query>...</user_query> (el de subagente llega pelado). Las senales de
+# host van por env en el caso (LAB_GROK_HOOK_EVENT, como LAB_ZCODE_*):
+# GROK_HOOK_EVENT la inyecta el runner de Grok, no el payload.
+
+lab_payload_grok_prompt() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"user_prompt_submit","prompt":"<user_query>\\n%s\\n</user_query>"}' "$1"
+}
+
+# run_terminal_command: la tool de shell nativa. $1 = comando, $2 = exit_code
+# del toolResult (0 por defecto). La falla de un comando viaja en
+# toolResult.exit_code (medido 7.1; PostToolUseFailure no dispara en 1.0.3).
+lab_payload_grok_bash() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","toolName":"run_terminal_command","toolInput":{"command":"%s","description":"paso del turno"},"toolResult":{"exit_code":%s,"output_for_prompt":"salida"},"toolUseId":"tu-gk-01","isBackgrounded":false}' "$1" "${2:-0}"
+}
+
+# search_replace: UNA de las dos tools de edicion nativas (la otra es write,
+# minúscula, ya cubierta por el alias Write del matcher). $2 permite sembrar la
+# variante de error medida ("NoMatchesFound" a primer nivel del toolResult).
+lab_payload_grok_edit() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","toolName":"search_replace","toolInput":{"file_path":"%s","old_string":"a","new_string":"b"},"toolResult":{"type":"SearchReplace"%s},"toolUseId":"tu-gk-02","isBackgrounded":false}' "$1" "${2:+,\"${2}\":{}}"
+}
+
+# El DESPACHO de subagente: spawn_subagent SI emite post_tool_use (a diferencia
+# de Codex) y el rol viaja en toolInput.subagent_type — clave interna snake
+# bajo padre camel (forma medida 7.1 ronda 5).
+lab_payload_grok_spawn() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","toolName":"spawn_subagent","toolInput":{"prompt":"hace lo tuyo","description":"paso del harness","subagent_type":"%s","background":false},"toolResult":{"ok":true},"toolUseId":"tu-gk-03","isBackgrounded":false}' "$1"
+}
+
+# Un evento INTERNO de un subagente de Grok: el rol viaja en subagentType de
+# PRIMER nivel (canal 3 medido en 7.1; el analogo Claude es agent_type/A9).
+lab_payload_grok_interno() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","subagentId":"sub-impl-1","subagentType":"%s","description":"hijo","toolName":"run_terminal_command","toolInput":{"command":"%s","description":"paso del hijo"},"toolResult":{"exit_code":0,"output_for_prompt":"ok"},"toolUseId":"tu-gk-04","isBackgrounded":false}' "$1" "$2"
+}
+
+# Stop Grok: $1 = lastAssistantMessage, $2 = reason (end_turn = turno;
+# shutdown = cierre del proceso; medidos 5/5 pares en headless).
+lab_payload_grok_stop() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"%s","stopHookActive":false,"lastAssistantMessage":"%s","promptId":"p-gk-1","backgroundTasks":[],"sessionCrons":[]}' "${2:-end_turn}" "$1"
 }
 
 # Task 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no

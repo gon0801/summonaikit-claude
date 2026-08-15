@@ -173,7 +173,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal"
+CASOS_G1="caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -618,7 +618,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca"
+CASOS_G2="caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1010,7 +1010,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando"
+CASOS_G3="caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -1318,7 +1318,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_cita_del_feedback_no_satisface"
+CASOS_G4="caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_cita_del_feedback_no_satisface"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -1757,6 +1757,247 @@ caso_g6_bloqueo_codex_exit_cero() {
   _igual "exit code en codex (con exit 2 Codex descarta el stdout, 6.2)" "$LAB_RC" "0"
   _contiene "stdout en codex" "$LAB_OUT" '"decision":"block"'
   _no_vacio "stderr en codex (el feedback igual se reporta)" "$LAB_ERR"
+}
+
+# ============================ Task 7.3: envelope Grok Build (D2+D4+D5+D6) ====
+# Casos contra el envelope medido en 7.1 (claves camel, valor de evento snake,
+# prompt wrappeado en <user_query>, toolResult con exit_code, reason en el
+# Stop). La senal de host va por env (LAB_GROK_HOOK_EVENT): GROK_HOOK_EVENT la
+# inyecta el runner de Grok, nunca el payload. Fase "auto": la fase la deriva
+# el hook del hookEventName del payload, que es lo que esta task agrego al
+# case — inyectar PHASE por env saltaria el codigo bajo prueba.
+
+# Re-apunta al arbol de estado de grok (patron del caso codex de arriba). El
+# armado real ya creo el archivo ahi.
+_grok_ruta_estado() {
+  printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/grok/|'
+}
+
+caso_g1_grok_envelope_arma() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit agrega el endpoint de sesiones')"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "estado bajo state/grok/ tras armar con envelope real (D4)" "$_gk"
+}
+
+# D2 — el catch de mut_host_grok_sin_rama. El escenario que la rama previene
+# (espejo del caso codex): el operador lanza Grok DESDE ADENTRO de Claude, el
+# runner de Grok setea GROK_HOOK_EVENT pero el proceso tambien hereda
+# CLAUDECODE=1 del padre. Grok va PRIMERO en el orden: sin la rama, B resolveria
+# HOST=claude y ambos turnos compartirian estado.
+caso_g1_dos_hosts_grok_y_claude_no_comparten_estado() {
+  LAB_SESSION_ID=""
+  LAB_CLAUDECODE=1
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tarea del host Claude')"
+  LAB_CLAUDECODE=""
+  ruta_A="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep -v '/grok/' | head -n 1)"
+  _no_vacio "ruta de estado de A tras armar" "$ruta_A"
+
+  LAB_CLAUDECODE=1
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit tarea del host Grok')"
+  LAB_CLAUDECODE=""
+  LAB_GROK_HOOK_EVENT=""
+  ruta_B="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "estado de B bajo state/grok/ (GROK gana al CLAUDECODE heredado)" "$ruta_B"
+  [ "$ruta_A" != "$ruta_B" ] || _mal "A (claude) y B (grok) comparten harness-state.env — D2 sin rama (Task 7.3)"
+  [ -f "$ruta_A" ] || _mal "el estado de A se perdio al armar B"
+}
+
+# D6 — el Stop de CIERRE (reason=shutdown, el proceso que se va) no es un Stop
+# de turno: sale inmediato, sin contar ciclo, limpiar ni crear estado. El
+# control del final ata que el Stop de TURNO (end_turn) si corre el gate.
+caso_g1_grok_stop_shutdown_no_toca_estado() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit tarea con doble stop')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "estado grok armado" "$_gk"
+
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'el proceso se cierra' shutdown)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "exit del Stop de cierre" "$LAB_RC" "0"
+  _vacio "stdout del Stop de cierre" "$LAB_OUT"
+  [ -f "$_gk" ] || _mal "el Stop de cierre borro el estado del turno (D6)"
+  _igual "cycle intacto tras el Stop de cierre" "$(grep '^cycle=' "$_gk" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "0"
+
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'todavia no cierro' end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  [ "$LAB_RC" != "0" ] || _mal "control D6: el Stop end_turn sin recibo tiene que correr el gate"
+}
+
+# D5 — el credito de verificacion con las formas camel completas: command bajo
+# toolInput, exit_code 0.
+caso_g2_grok_runner_marca_verificado() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit verifico con runner')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  _contiene "log con runner camel (verified)" "$(cat "$_gk_log" 2>/dev/null)" 'verified'
+}
+
+# D5, el catch — el runner rojo VISIBLE: toolResult.exit_code != 0 veta el
+# credito (PostToolUseFailure no dispara en Grok 1.0.3, medido 7.1). Sin el
+# veto, este comando acreditaba verificacion por ausencia de senal.
+caso_g2_grok_runner_fallido_no_marca() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit runner reventado')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 1)"
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  case "$(cat "$_gk_log" 2>/dev/null)" in
+    *verified*) _mal "runner rojo (toolResult.exit_code=1) acredito verificacion — D5 (Task 7.3)" ;;
+  esac
+}
+
+# Variante de error medida (NoMatchesFound a primer nivel del toolResult),
+# ejercida donde importa: command con runner y toolResult de error.
+caso_g2_grok_nomatchesfound_no_marca() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit variante de error del toolResult')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","hookEventName":"post_tool_use","toolName":"run_terminal_command","toolInput":{"command":"pytest -q","description":"paso"},"toolResult":{"type":"SearchReplace","NoMatchesFound":{}},"toolUseId":"tu-gk-05"}'
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  case "$(cat "$_gk_log" 2>/dev/null)" in
+    *verified*) _mal "toolResult con NoMatchesFound acredito verificacion — D5 variante (Task 7.3)" ;;
+  esac
+}
+
+# D5 — search_replace (la tool de edicion nativa que faltaba en la lista)
+# acredita implemented via toolInput.file_path.
+caso_g2_grok_edit_marca_implemented() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit edito un archivo')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  _contiene "log con edicion grok (implemented)" "$(cat "$_gk_log" 2>/dev/null)" 'implemented'
+}
+
+# Precedencia snake del padre: el runner viaja SOLO en toolInput (camel); el
+# tool_input snake trae un comando sin runner. El snake gana -> no acredita.
+caso_g2_grok_precedencia_toolinput_gana_snake() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit precedencia del padre')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","hookEventName":"post_tool_use","toolName":"run_terminal_command","tool_input":{"command":"echo listo"},"toolInput":{"command":"pytest -q"},"toolResult":{"exit_code":0,"output_for_prompt":"ok"}}'
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  case "$(cat "$_gk_log" 2>/dev/null)" in
+    *verified*) _mal "toolInput (camel) gano sobre tool_input (snake) — precedencia D4" ;;
+  esac
+}
+
+# Precedencia snake de toolName: el snake trae una tool sin runner (Read) y el
+# camel el nombre del runner (pytest). El snake tiene que ganar.
+caso_g2_grok_precedencia_toolname_gana_snake() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit precedencia de toolName')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","hookEventName":"post_tool_use","tool_name":"Read","toolName":"pytest","tool_input":{"command":"echo listo"},"toolResult":{"exit_code":0,"output_for_prompt":"ok"}}'
+  LAB_GROK_HOOK_EVENT=""
+  _gk_log="$(dirname "$(_grok_ruta_estado)")/harness-evidence.log"
+  case "$(cat "$_gk_log" 2>/dev/null)" in
+    *verified*) _mal "toolName (camel) gano sobre tool_name (snake) — precedencia D4" ;;
+  esac
+}
+
+# El rol YA tiene que registrarse por los canales medidos (la ceremonia grok es
+# 7.4; sin estos casos, 7.4 no tendria con que construir).
+caso_g3_grok_spawn_registra_rol() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delego')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(_grok_ruta_estado)"
+  _contiene "agents_seen con despacho spawn_subagent" "$(grep '^agents_seen=' "$_gk" 2>/dev/null)" 'implementer'
+}
+
+caso_g3_grok_interno_registra_rol() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit subagente adentro')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_interno reviewer 'echo listo')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(_grok_ruta_estado)"
+  _contiene "agents_seen con evento interno (subagentType top-level)" "$(grep '^agents_seen=' "$_gk" 2>/dev/null)" 'reviewer'
+}
+
+# D4 walker — el recibo viaja en lastAssistantMessage (camel). Turno completo
+# grok: arma, acredita verificacion y edicion con tools nativas, cierra con
+# recibo. La ceremonia no se exige en grok hasta 7.4 (case claude|codex).
+caso_g4_grok_turno_completo_camel_cierra() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit turno completo grok')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "exit del turno completo grok" "$LAB_RC" "0"
+  _vacio "stdout del cierre limpio" "$LAB_OUT"
+  _gk="$(_grok_ruta_estado)"
+  [ -f "$_gk" ] && _mal "el cierre limpio grok no borro el estado"
+}
+
+caso_g4_grok_stop_sin_recibo_bloquea() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit turno sin recibo')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'listo, entrega' end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  [ "$LAB_RC" != "0" ] || _mal "Stop grok end_turn sin recibo ni evidencia no bloquea"
+  _contiene "stdout" "$LAB_OUT" '"decision":"block"'
+}
+
+# Precedencia snake del walker: AMBOS mensajes en el payload; el snake (sin
+# recibo) tiene que ganar sobre el camel (con recibo completo).
+caso_g4_grok_precedencia_lastmessage_gana_snake() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit precedencia del walker')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"last_assistant_message":"%s","lastAssistantMessage":"%s","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$_TEXTO_LLANO" "$_RECIBO_VINETAS")"
+  LAB_GROK_HOOK_EVENT=""
+  [ "$LAB_RC" != "0" ] || _mal "lastAssistantMessage (camel) gano sobre last_assistant_message (snake)"
+}
+
+# transcriptPath camel: el recibo SOLO en el transcript (canal 2), el payload
+# sin lastAssistantMessage — la contencion A6 contiene ($LAB/entrada bajo el
+# perfil del banco). Mitad 2: transcript_path (snake) inexistente gana sobre
+# transcriptPath real -> canal muerto -> sin recibo -> bloquea.
+caso_g4_grok_transcriptpath_camel() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit recibo en transcript camel')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "cierre con recibo solo en transcript camel" "$LAB_RC" "0"
+
+  lab_limpiar_estado
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit precedencia transcript')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","transcript_path":"/no/existe/transcript.jsonl","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"'"$_TEXTO_LLANO"'","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  LAB_GROK_HOOK_EVENT=""
+  [ "$LAB_RC" != "0" ] || _mal "transcript_path (snake, inexistente) no gano sobre transcriptPath (camel)"
 }
 
 # --------------------------------------------------------------------- indice
