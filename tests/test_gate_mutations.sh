@@ -89,6 +89,7 @@ G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
 G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
+G4|walker_sin_resets|el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente
 G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
 G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
@@ -185,6 +186,10 @@ mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_
 #                       la mutacion la ataca en vez de solo apagar el barrido.
 mut_estado_inmortal()           { sed 's@rmdir "$STATE_DIR"@true "$STATE_DIR"@'; }
 mut_barrido_sin_ttl()           { sed 's@ -mmin "+$SAIKIT_STATE_TTL_MIN"@@'; }
+# Task 9.6 (C12): saca los dos resets del walker. Con eso en_text/en_assistant
+# quedan en 1 para siempre y un valor top-level posterior a `message` vuelve a
+# contarse como texto del asistente — lo atrapa caso_g4_fuga_top_level_no_cierra.
+mut_walker_sin_resets()         { sed 's@if (depth < 4) en_text = 0@if (0) en_text = 0@; s@if (depth < 2) en_assistant = 0@if (0) en_assistant = 0@'; }
 
 # Nota (actualizada al aterrizar 9.4): el fallback SI tiene mutacion ahora
 # (mut_fallback_sin_acotar, arriba), pero cubre el acotamiento a `session`, no lo

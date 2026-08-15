@@ -1261,13 +1261,28 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
 # Nota grabada: por esta via el estado NO se borra (el turno sigue abierto a
 # proposito). Es la mitad buena de A2; la mitad mala — que la pausa se encuentre
 # adentro del resultado de una herramienta — la cierra la Task 3.2.
+# Task 9.6 (C12). El walker pone en_text/en_assistant en 1 y NUNCA los resetea al
+# cerrar llaves, y su condicion de emision no mira `depth`. Consecuencia: un
+# valor top-level POSTERIOR a `message` se concatena al texto del asistente y
+# aporta etiquetas que el turno no escribio. Aca la fuga trae justo la etiqueta
+# que falta (Retro), asi que con el defecto el gate CIERRA por texto ajeno.
+#
+# Stop sin last_assistant_message a proposito: asi decide el canal transcript,
+# que es donde vive la condicion que se esta probando.
+caso_g4_fuga_top_level_no_cierra() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"           "$(lab_transcript_fuga_top_level "$_RECIBO_SIN_RETRO" 'Retro: none.')"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Retro'
+}
+
 caso_g4_pausa_permite() {
   lab_sembrar 123456 0 0 0 ""
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"

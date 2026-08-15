@@ -353,6 +353,15 @@ lab_transcript_asistente() {
 # un `type:text` de un mensaje `user` — realista (el usuario escribio texto) y a
 # la profundidad que el walker rastrea. Con el hook sano no se emite (role no es
 # assistant); con la mutacion de role si, y el caso se pone rojo.
+# Task 9.6 (C12): una clave TOP-LEVEL que viene DESPUES de `message`. El walker
+# pone en_text/en_assistant en 1 y nunca los resetea al cerrar llaves, y su
+# condicion de emision no mira `depth` — asi que el valor de esta clave se
+# concatena al texto del asistente y aporta etiquetas que el turno no escribio.
+# $1 = texto real del asistente; $2 = el valor que se fuga.
+lab_transcript_fuga_top_level() {
+  printf '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_1","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"%s"}]},"requestId":"%s","uuid":"a2","timestamp":"2026-08-09T12:00:00.000Z"}' "$1" "$2"
+}
+
 lab_transcript_pausa_en_resultado() {
   printf '%s\n%s' \
     '{"parentUuid":"a1","type":"user","message":{"role":"user","content":[{"type":"text","text":"la linea que el kit espera es SUMMONAIKIT HARNESS PAUSED - awaiting your answer"}]},"uuid":"a2","timestamp":"2026-08-09T12:30:00.000Z"}' \

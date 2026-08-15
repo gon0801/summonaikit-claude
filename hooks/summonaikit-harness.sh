@@ -604,7 +604,16 @@ assistant_text_transcript() {
           # y la frontera [^[:alpha:]] de has_receipt_label falla. Hallazgo de
           # la revision cruzada (codex, 2026-08-11).
           if (depth == 4 && emiti) { printf "\n"; emiti = 0 }
-          depth--; espera = 0; continue
+          depth--; espera = 0
+          # Task 9.6 (C12): al SALIR se resetea lo que al entrar se prendio. Sin
+          # esto, en_text/en_assistant quedaban en 1 para siempre y la condicion
+          # de emision NO mira depth — asi que un valor top-level POSTERIOR a
+          # `message` (un requestId, por ejemplo) se concatenaba al texto del
+          # asistente y aportaba etiquetas que el turno no escribio. Medido: una
+          # fuga con `Retro:` cerraba un gate al que le faltaba justo esa.
+          if (depth < 4) en_text = 0
+          if (depth < 2) en_assistant = 0
+          continue
         }
         if (c == ",")             { espera = 0; continue }
       }
