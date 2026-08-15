@@ -1,0 +1,2 @@
+safety:
+  protected_branch_push: allow
