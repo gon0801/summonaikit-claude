@@ -68,6 +68,7 @@ G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
+G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -177,6 +178,14 @@ mut_tool_name_desacotado() { sed 's/json_top_level_string tool_name/json_string_
 # `bash tests/run.sh` vuelve a verified=0). BRE sin cuantificadores que
 # escapar: `?` tras `s` y `\\`+`.` para el `\.` literal del target.
 mut_runner_bash_quitada()  { sed 's#tests?/run\\.sh#testsNUNCA/runX.sh#g'; }
+# 9.10 r2 (codex r1): neutraliza la APLICACION de la constante en los DOS call
+# sites (credito del evento y fallback de prosa) prefijando el patron con un
+# literal imposible — "NUNCA_" pegado delante del ancla ^ no puede matchear
+# jamas, a diferencia de vaciar la variable (un patron vacio matchea TODO y el
+# catch seria el caso equivocado). El RE queda intacto: es el cableado lo que
+# se rompe. Lo atrapa caso_g2_runner_bash_run_sh_marca (sin CMD_RE aplicada,
+# la forma bash ya no esta en WORD_RE y verified queda en 0).
+mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "NUNCA_\$TEST_RUNNER_CMD_RE"/g'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
