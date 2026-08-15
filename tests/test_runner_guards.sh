@@ -165,8 +165,11 @@ printf '%s' "$out" | grep -q 'SKIP (linux-ci): test_capture_payloads' \
 printf '%s' "$out" | grep -q 'SKIP linux-ci declarados' \
   || malo "el resumen de skips no imprime antes del exit 3 (codex r1, hallazgo 3): $out"
 # Y el mismo repo SIN la variable: nada se salta, los dos corren y quedan
-# unknown (el fallback honesto de 10.5 sigue intacto).
-out="$(bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
+# unknown (el fallback honesto de 10.5 sigue intacto). env -u porque este test
+# puede correr DENTRO de un runner con SAIKIT_CI_LINUX=1 (el job suite del CI):
+# heredarla volveria la mitad "sin variable" indistinguible de la primera (la
+# misma leccion de determinismo que el lab aplica con CLAUDECODE/ZCODE_*).
+out="$(env -u SAIKIT_CI_LINUX bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
 [ "$rc" -eq 3 ] || malo "sin SAIKIT_CI_LINUX el skip no aplica, dos unknown => exit 3, dio $rc: $out"
 printf '%s' "$out" | grep -q 'SKIP (linux-ci)' && malo "sin la variable no hay skips que listar: $out"
 
