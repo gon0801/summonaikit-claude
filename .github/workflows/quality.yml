@@ -48,3 +48,31 @@ jobs:
       - name: Run Node tests
         if: hashFiles('package.json') != ''
         run: npm test --if-present
+
+  # Task 10.5 — la suite completa en Linux. En Git Bash/MSYS2 la misma corrida
+  # tarda ~18 min porque cada fork del hook cuesta ~28 ms (documentado en
+  # AGENTS.md); en Linux el fork es ~0.1 ms, asi que aca la suite entera corre
+  # en ~1-2 min y el PR sabe si algo rompio sin esperar la corrida local.
+  # SAIKIT_HOOK_VIVO apunta a la FUENTE del repo (leccion de la Task 3.5): sin
+  # eso, la suite mediria el hook INSTALADO de la maquina, que en el runner no
+  # existe (y cada test saldria `unknown`, que run.sh reporta y NO cuenta como
+  # PASS).
+  #
+  # Salvedad declarada (AGENTS.md, regla 3): la suite ejercita normalizacion de
+  # rutas Windows (cd "C:\..." && pwd, contencion A6/3.6). Los casos atados a
+  # cygpath ya se autolimitan con `command -v cygpath` y en Linux corren su
+  # mitad POSIX; los que dependen de forma Windows de rutas se listan en la
+  # fila 10.5 de Plans.md si llegaran a divergir.
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the full gate suite (tests/run.sh)
+        env:
+          SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
+          # Task 10.5: marca los 4 tests Windows-bound como SKIP CON LISTADO
+          # (los nombra el runner uno por uno; razones en Plans.md, fila 10.5).
+          SAIKIT_CI_LINUX: '1'
+        run: bash tests/run.sh

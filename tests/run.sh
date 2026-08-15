@@ -30,6 +30,7 @@ fi
 fail=0
 unknown=0
 corridos=0
+skipped=0
 # Mismo codigo que usan los tests para "no se pudo verificar" (ver
 # `tests/lib/hook_bajo_prueba.sh`). Se define aca tambien porque el runner no
 # carga esa lib: la cargan los tests, en sus propios procesos.
@@ -74,6 +75,28 @@ hook_vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
 shopt -s nullglob
 for t in "$repo_root"/tests/test_*.sh; do
   nombre="$(basename "$t" .sh)"
+
+  # Task 10.5 (CI Linux): tests atados a WINDOWS, declarados uno por uno. Con
+  # SAIKIT_CI_LINUX=1 (lo setea el job `suite` del workflow) se saltan CON
+  # LISTADO — not_observed != absent: el skip se imprime y se cuenta aparte,
+  # nunca se publica como PASS. Sin la variable corren normal: en una maquina
+  # Linux sin la variable fallan honestamente (esa no es su plataforma), y en
+  # Windows corren siempre. Ninguno de los cuatro prueba el gate hook: son el
+  # tooling que REGISTRA hooks (exige bash.exe de Windows para armar el
+  # command del registro) y la clasificacion de ACLs/SIDs de Windows.
+  skip_razon=""
+  case "$nombre" in
+    test_capture_payloads)   skip_razon="capture-payloads exige un bash.exe de Windows para armar el comando de registro" ;;
+    test_install_hook)       skip_razon="install-hook exige un bash.exe de Windows para el command del registro y prueba perfiles de hosts Windows" ;;
+    test_probe_zcode_output) skip_razon="probe-zcode-output exige un bash.exe de Windows para registrar el probe" ;;
+    test_hook_acl)           skip_razon="clasifica SIDs de Windows via PowerShell; el pwsh de Linux no resuelve los SIDs locales" ;;
+  esac
+  if [ -n "$skip_razon" ] && [ "${SAIKIT_CI_LINUX:-}" = "1" ]; then
+    echo "SKIP (linux-ci): $nombre — $skip_razon"
+    skipped=$((skipped + 1))
+    continue
+  fi
+
   caja="$run_root/$nombre"
   mkdir -p "$caja/home/.claude/hooks/state" "$caja/tmp"
   if command -v cygpath >/dev/null 2>&1; then
@@ -124,6 +147,12 @@ if [ "$unknown" -gt 0 ]; then
     exit "$SAIKIT_EXIT_UNKNOWN_RUNNER"
   fi
   echo "tests/run.sh: OK con $unknown de $corridos en unknown (ver arriba cuales)"
+  exit 0
+fi
+# Task 10.5: los skips linux-ci tampoco son un OK silencioso — el resumen los
+# nombra para que nadie lea "18 tests" creyendo que corrieron 18.
+if [ "$skipped" -gt 0 ]; then
+  echo "tests/run.sh: OK ($corridos tests, $skipped SKIP linux-ci declarados — ver arriba)"
   exit 0
 fi
 echo "tests/run.sh: OK ($corridos tests)"
