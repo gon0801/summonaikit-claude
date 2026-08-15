@@ -105,6 +105,7 @@ G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex
 G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
 G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
+G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -336,6 +337,13 @@ mut_etiqueta_sin_frontera(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|.)/"; }
 # seis etiquetas — lo atrapa caso_g4_cita_del_feedback_no_satisface (ningun
 # otro caso de CASOS_G4 escribe etiquetas entre comillas).
 mut_frontera_acepta_comillas(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|[^[:alpha:]])/"; }
+# Task 9.8 (C14): devuelve el rm del aviso pendiente al elif de todo Stop —
+# la anotacion del flag se reemplaza por el rm directo, asi un Stop que
+# bloquea vuelve a llevarse el aviso ajeno. Lo atrapa
+# caso_g5_stop_fallido_no_borra_aviso_ajeno (su primera mitad). El patron es
+# unico: la comparacion del camino limpio lleva espacios y comillas
+# ("$rn_pendiente_borrable" = "1") y no matchea.
+mut_aviso_se_borra_en_fallo(){ sed 's#rn_pendiente_borrable=1#rm -f "$RN_PENDING_PATH" 2>/dev/null || true#'; }
 # Task 8.3 (C7): quita la alternativa markdown bold entre etiqueta y `:`.
 # Catch: caso_g4_recibo_bold_pasa (el recibo **Label**: vuelve a bloquear).
 mut_etiqueta_sin_bold()    { sed 's/(\\\*\\\*|__)?\[\[:space:\]\]\*:/[[:space:]]*:/'; }
