@@ -541,3 +541,23 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **Vivo vs master:** cmp byte a byte idéntico.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-15 — PR #26 (443aa7e): 9.8 + política de gate en CI — deploy `~/.codex`
+
+- **Mergeado por la sesión de Phase 6.** Contenido: 9.8 (el aviso RN pendiente
+  solo lo borra un cierre limpio — `rn_pendiente_borrable` en el elif, `rm`
+  dentro de `[ -z "$missing" ]`), validado sobre el MERGE con el lote de
+  Phase 9 (19 tests, **70 mutaciones/70**, golden 34 escenarios, 0 divergencia;
+  composición del bloque compartido con los `podar_dir_sesion` de 9.7a
+  verificada caso por caso). Además `AGENTS.md` gana la **política de gate en
+  CI** (local acotado; el job `suite` de ubuntu como gate final — este mismo PR
+  la estrenó: suite completa en CI en 2m28s; excepción Windows-bound; candado
+  endurecido: corredor real ≠ huérfano).
+- **Bots:** CI 4/4 (suite 2m28s, quality, secrets, Greptile sin hallazgos);
+  CodeRabbit quedó "in progress" al mergear (rate-limited como en #25) — si
+  publica hallazgos tarde, se triagean post-merge (camino probado en #23→#25).
+- **Deploy `~/.codex`:** REPARADO con backup
+  `saikit-backups/summonaikit-harness.sh.nuestro.20260815-133404.bak`; vivo ==
+  fuente byte a byte; `hooks.json` cksum 2271698800 intacto; verificador codex
+  en silencio. **`~/.claude`:** deployado por la sesión zcode (entrada previa).
+- **Operador:** sesión Claude Phase 6 (autónoma).
