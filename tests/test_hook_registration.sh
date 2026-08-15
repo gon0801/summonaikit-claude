@@ -465,6 +465,107 @@ out="$(bash "$tool" --settings "$tmp/zc-como-claude.json" 2>&1)"; rc=$?
 printf '%s' "$out" | grep -qi 'UserPromptSubmit' \
   || malo "modo Claude no debe interpretar hooks.events como registro Claude: $out"
 
+# ================================================ Task 6.5 — la TERCERA forma
+# En Codex el registro no nombra al hook: nombra al WRAPPER (.ps1), y el
+# wrapper nombra al hook. La afirmacion se vuelve indirecta y se parte en DOS
+# separadas — (a) el registro nombra al wrapper; (b) el wrapper existe y nombra
+# al hook — porque colapsarlas esconderia cual de las dos se rompio. Mismo
+# contrato de siempre: exit 0 SIEMPRE, unknown != ausente, silencio si todo ok.
+codex_dir=''
+nuevo_codex_reg() {
+  codex_dir="$tmp/codex-reg-$RANDOM"
+  mkdir -p "$codex_dir/hooks"
+}
+
+escribir_codex_json_completo() {
+  cat > "$codex_dir/hooks.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/x/.codex/hooks/summonaikit-harness.ps1\" -Phase prompt" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|Edit|Write|apply_patch|Task|exec|local_shell_call|shell_command|commandExecution",
+        "hooks": [ { "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/x/.codex/hooks/summonaikit-harness.ps1\" -Phase tool" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/x/.codex/hooks/summonaikit-harness.ps1\" -Phase stop" } ] }
+    ]
+  }
+}
+JSON
+}
+
+escribir_codex_json_sin_stop() {
+  cat > "$codex_dir/hooks.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -NoProfile -File \"C:/Users/x/.codex/hooks/summonaikit-harness.ps1\" -Phase prompt" } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -NoProfile -File \"C:/Users/x/.codex/hooks/summonaikit-harness.ps1\" -Phase tool" } ] }
+    ]
+  }
+}
+JSON
+}
+
+escribir_codex_wrapper_ok() {
+  cat > "$codex_dir/hooks/summonaikit-harness.ps1" <<'PS1'
+param([string]$Phase)
+$env:SUMMONAIKIT_HOOK_TARGET = "codex"
+$hookPath = Join-Path $env:USERPROFILE ".codex\hooks\summonaikit-harness.sh"
+$payload | & bash $hookPath
+PS1
+}
+
+escribir_codex_wrapper_sin_hook() {
+  cat > "$codex_dir/hooks/summonaikit-harness.ps1" <<'PS1'
+param([string]$Phase)
+Write-Output "wrapper que ya no lanza nada"
+PS1
+}
+
+caso "codex: registro completo + wrapper que nombra al hook => SILENCIO y exit 0"
+nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_ok
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "esperaba silencio con las dos afirmaciones en verde: $out"
+
+caso "codex: sin Stop => INCOMPLETO y nombra solo Stop (afirmacion a)"
+nuevo_codex_reg; escribir_codex_json_sin_stop; escribir_codex_wrapper_ok
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 (fail-open), dio $rc"
+printf '%s' "$out" | grep -q 'Stop' || malo "debe nombrar la fase Stop faltante: $out"
+printf '%s' "$out" | grep -q 'UserPromptSubmit' && malo "no debe acusar fases registradas: $out"
+
+caso "codex: wrapper AUSENTE con registro completo => reporta la afirmacion (b), no un registro roto"
+nuevo_codex_reg; escribir_codex_json_completo
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'wrapper' || malo "debe reportar el wrapper (afirmacion b): $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "el registro (a) esta completo; no debe acusarlo: $out"
+
+caso "codex: wrapper presente que NO nombra al hook => reporta la afirmacion (b)"
+nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_sin_hook
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'wrapper' || malo "debe reportar que el wrapper no nombra al hook: $out"
+
+caso "codex: hooks.json ilegible => unknown, no ausencia"
+nuevo_codex_reg; printf '{ roto' > "$codex_dir/hooks.json"; escribir_codex_wrapper_ok
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "ilegible es unknown: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "ilegible NO es ausencia observada: $out"
+
+caso "codex: --codex-hooks-json + --settings juntos => unknown (no se mezclan)"
+nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_ok
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" --settings "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "formas mezcladas es unknown: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

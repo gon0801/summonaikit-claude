@@ -144,8 +144,8 @@ mkdir -p "$esc_falsos/.claude"
 correr "$SANDBOX/oculto.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 grep -q '^=== escenario \.' "$SANDBOX/oculto.txt" && malo "un directorio oculto se colo como escenario"
-[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "3" ] \
-  || malo "esperaba exactamente 3 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
+[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "4" ] \
+  || malo "esperaba exactamente 4 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
 rmdir "$esc_falsos/.claude"
 
 # --------------------------------------------------------- 7) aislamiento
@@ -180,8 +180,9 @@ grep -qi 'identidad' "$SANDBOX/marcado.txt" || malo "deberia AVISAR que el hook 
 caso "target zcode: el estado trae ZCODE_SESSION_ID/PROJECT_DIR y NO exporta TARGET"
 correr "$SANDBOX/zc.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 [ "$rc" -eq 0 ] || malo "--print debio salir 0, dio $rc: $(cat "$SANDBOX/zc.txt")"
-# 03-zcode es ultimo en orden lexicografico -> su bloque corre hasta EOF.
-awk '/^=== escenario 03-zcode/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/zc_blk.txt"
+# Task 6.6: 03-zcode ya NO es el ultimo (04-codex lo sigue): el bloque se acota
+# al proximo `=== escenario` en vez de correr hasta EOF.
+awk '/^=== escenario 03-zcode/{f=1; print; next} /^=== escenario /{f=0} f' "$SANDBOX/zc.txt" > "$SANDBOX/zc_blk.txt"
 grep -q '^| zcode_session=sess_golden_zcode$' "$SANDBOX/zc_blk.txt" \
   || malo "el estado zcode no trae zcode_session=sess_golden_zcode"
 grep -q '^| zcode_project=C:/dev/saikit-golden-zcode$' "$SANDBOX/zc_blk.txt" \
@@ -210,6 +211,21 @@ caso "target zcode: un paso que deja estado trae 'estado_host: zcode' (A4)"
 grep -q '^estado_host: zcode$' "$SANDBOX/zc_blk.txt" \
   || malo "el paso zcode debio traer 'estado_host: zcode': $(cat "$SANDBOX/zc_blk.txt")"
 
+# ------------------------------------------ 9-bis) target codex (Task 6.6)
+# El token `codex` SI exporta SUMMONAIKIT_HOOK_TARGET=codex — la senal real
+# del wrapper .ps1 de Codex (unico host donde el TARGET llega, 6.1) — la
+# contraparte exacta de zcode, que va por ZCODE_* sin TARGET.
+caso "target codex: el estado trae target=codex (TARGET exportado) y sin ZCODE_*"
+awk '/^=== escenario 04-codex/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/cx_blk.txt"
+grep -q '^| target=codex$' "$SANDBOX/cx_blk.txt" \
+  || malo "el estado codex debio traer target=codex (el arnes no exporto TARGET)"
+grep -q '^| zcode_session=<sin-zcode>$' "$SANDBOX/cx_blk.txt" \
+  || malo "el estado codex debio traer zcode_session=<sin-zcode> (regresion unset 5.3)"
+
+caso "target codex: un paso que deja estado trae 'estado_host: codex' (D2, 6.4)"
+grep -q '^estado_host: codex$' "$SANDBOX/cx_blk.txt" \
+  || malo "el paso codex debio traer 'estado_host: codex': $(cat "$SANDBOX/cx_blk.txt")"
+
 caso "target zcode: dos --print seguidos son byte-identicos (constantes sin ruido)"
 correr "$SANDBOX/zc2.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 if ! cmp -s "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt"; then
@@ -217,12 +233,12 @@ if ! cmp -s "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt"; then
   diff -u "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt" | head -20 >&2
 fi
 
-caso "target zcode: --record + --check del falso con 3 escenarios sigue en 0"
+caso "target zcode/codex: --record + --check del falso con 4 escenarios sigue en 0"
 base3="$SANDBOX/base3.txt"
 correr "$SANDBOX/rec3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --record
-[ "$rc" -eq 0 ] || malo "--record (3 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/rec3.txt")"
+[ "$rc" -eq 0 ] || malo "--record (4 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/rec3.txt")"
 correr "$SANDBOX/chk3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --check
-[ "$rc" -eq 0 ] || malo "--check (3 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
+[ "$rc" -eq 0 ] || malo "--check (4 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2

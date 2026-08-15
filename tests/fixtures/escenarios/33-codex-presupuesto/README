@@ -1,0 +1,6 @@
+codex, G5: dos Stops fallidos consumen los 2 ciclos; el tercero agota el
+presupuesto y sale con la forma claude (continue:false + exit 0), que Codex
+IGNORA (6.2, veredicto blanco) — limite declarado en 6.4: el corte no bloquea
+en codex, pero el estado igual se limpia (A4-c4) y el turno termina. La linea
+base graba la forma tal cual: el dia que el budget gane forma propia para
+codex, este bloque lo delata. Analogo del 23.

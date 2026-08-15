@@ -656,6 +656,70 @@ SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
 [ ! -e "$zcode_agents/implementer.md" ] \
   || malo "sin --host no debe escribir implementer.md en AGENTS_DIR"
 
+# ===================================================== Task 6.5 — --host codex
+# El destino lo decide --host y cada host declara su ruta (D1): --host codex
+# escribe la SEGUNDA copia en <home>/.codex/hooks/ con los MISMOS tres estados
+# y la misma escritura atomica del flujo normal — a diferencia de --host zcode,
+# que es registro-only y nunca toca DEST. ~/.zcode sigue rechazado siempre;
+# ~/.codex se habilita SOLO con --host codex.
+n_codex=0
+home_cx=''
+nuevo_home_codex() {
+  n_codex=$((n_codex + 1))
+  home_cx="$tmp/codex-$n_codex"
+  mkdir -p "$home_cx/.codex/hooks"
+  dest="$home_cx/.codex/hooks/summonaikit-harness.sh"
+}
+
+caso "codex: destino AUSENTE + --host codex => instala en <home>/.codex/hooks (ruta por defecto del host)"
+nuevo_home_codex
+rm -f "$dest"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 instalando codex sobre ausente, dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "el destino codex no quedo byte a byte igual a la fuente"
+sin_temporales_sueltos "$dest" || malo "dejo temporales sueltos junto al destino codex"
+
+caso "codex: destino VENDOR conocido => backup fechado + reemplazo byte a byte"
+nuevo_home_codex
+vendor_cx="$tmp/vendor-codex.sh"
+printf '#!/usr/bin/env bash\n# fork codex del vendor, sin marcador propio\nexit 0\n' > "$vendor_cx"
+cp "$vendor_cx" "$dest"
+mani_cx="$tmp/manifiesto-codex.sha256"
+{ cat "$manifiesto" 2>/dev/null; printf '%s  vendor codex sintetico del test\n' "$(sha256sum < "$vendor_cx" | cut -d' ' -f1)"; } > "$mani_cx"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$mani_cx" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 reemplazando vendor codex conocido, dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "el destino codex no quedo igual a la fuente"
+bak_cx="$(find "$(dirname "$dest")" -type f -name '*.bak' 2>/dev/null | head -n 1)"
+[ -n "$bak_cx" ] || malo "no dejo backup del vendor codex antes de reemplazarlo"
+if [ -n "$bak_cx" ]; then
+  cmp -s "$bak_cx" "$vendor_cx" || malo "el backup codex no tiene el contenido previo del destino"
+fi
+
+caso "codex: destino DESCONOCIDO => se planta, no escribe, y lo dice"
+nuevo_home_codex
+printf '#!/usr/bin/env bash\n# hook de otro en .codex, editado a mano\nexit 0\n' > "$dest"
+antes_cx="$(sha256sum < "$dest")"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "esperaba exit != 0 ante un destino codex desconocido, dio 0"
+[ "$(sha256sum < "$dest")" = "$antes_cx" ] || malo "REESCRIBIO un destino codex desconocido"
+printf '%s' "$out" | grep -qi 'desconocid' || malo "no reporta el estado desconocido en codex: $out"
+
+caso "codex: --dest bajo <home>/.codex SIN --host codex => rechazado con la regla nueva"
+nuevo_home_codex
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un --dest bajo ~/.codex sin --host codex debe rechazarse, dio 0"
+printf '%s' "$out" | grep -q -- '--host' || malo "el rechazo debe nombrar la regla del --host: $out"
+[ ! -f "$dest" ] || malo "escribio bajo .codex sin --host codex"
+
+caso "codex: el rechazo de ~/.zcode ya no afirma 'Una sola copia' (quedo falso con la copia codex)"
+zc_dest="$tmp/zhome/.zcode/hooks/summonaikit-harness.sh"; mkdir -p "$(dirname "$zc_dest")"
+out="$(HOME="$tmp/zhome" USERPROFILE="$tmp/zhome" bash "$tool" --dest "$zc_dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "~/.zcode debe seguir rechazado, dio 0"
+if printf '%s' "$out" | grep -qi 'Una sola copia'; then
+  malo "el mensaje viejo ('Una sola copia...') quedo falso con la copia codex y debia reescribirse: $out"
+fi
+printf '%s' "$out" | grep -qi -- '--host' || malo "el rechazo debe explicar la regla nueva (el destino lo decide --host): $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

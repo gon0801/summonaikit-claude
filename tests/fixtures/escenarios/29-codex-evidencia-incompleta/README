@@ -1,0 +1,5 @@
+codex, G2/G3/G4 bloquean + LA FORMA NUEVA DE SALIDA (Task 6.4): el JSON
+decision:block viaja con exit 0 — 6.2 midio que Codex DESCARTA el stdout del
+hook cuando el exit no es 0 (el exit 2 del vivo era decorativo aca; con exit 0
+bloquea de verdad). Armado, una edicion por Bash, Stop sin recibo: bloquea
+reclamando evidencia, ceremonia y recibo. Analogo del 19.
