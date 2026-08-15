@@ -49,6 +49,7 @@ G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sent
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
+G1|fast_no_se_detecta|el lane fast deja de detectarse y todo arma full
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -93,6 +94,7 @@ G3|zcode_sin_target|el fallback ZCODE_* se anula y TARGET queda vacio en zcode (
 G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae a "tool" (stop_gate no corre)
 G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
 G3|role_fallback_quitada|se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear
+G3|fast_no_exime_ceremonia|lane=fast deja de eximir la secuencia (el carril no sirve)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -136,6 +138,15 @@ mut_host_sin_llave()            { sed 's#PROJECT_DIR="\$STATE_ROOT/\$HOST/\$PROJ
 # caso_g1_arma_con_sentinel_en_linea_nueva (C2) — con el greedy, la comilla
 # escapada trunca el valor y el \n crudo rompe la frontera del sentinel.
 mut_prompt_greedy()             { sed 's/json_top_level_decoded prompt/json_string_field prompt/'; }
+# Task 10.1 — las dos mitades del carril fast, una mutacion cada una y cada una
+# acreditada a su caso. fast_no_se_detecta neutraliza la DETECCION (todo arma
+# full) — lo atrapa caso_g1_fast_arma_con_lane (ningun otro caso de CASOS_G1
+# escribe :fast en su prompt, asi que ningun otro reacciona). fast_no_exime_
+# ceremonia rompe solo la comparacion del wrap de stop_gate (el armado y el
+# campo lane siguen sanos) — lo atrapa caso_g3_fast_cierra_sin_subagentes
+# (exit 0 -> 2: la ceremonia vuelve a exigirse con lane=fast).
+mut_fast_no_se_detecta()        { sed 's/then lane="fast"; fi/then lane="full"; fi/'; }
+mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper

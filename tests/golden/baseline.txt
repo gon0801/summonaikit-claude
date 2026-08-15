@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: a6d86fc19817d3fe440f6dc1277b895af63c50f00b40d76385fd2069c7ebc19a
-# hook_bytes: 80780
-# hook_lineas: 1446
-# escenarios: 25
+# hook_sha256: ae9f0a1317b47b6b39bbc23d53e0dba1a6d27b8638f8cd9bcc96d0e77dbf15ba
+# hook_bytes: 81554
+# hook_lineas: 1470
+# escenarios: 26
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -48,8 +48,8 @@ estado sin cambios
 # byte a byte al pasar el archivo al repo.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes)
-| {"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- They own WHAT gets built and WHY; you own HOW.\n- Adapt your register to the person you are actually working with: do not assume they cannot read code, and do not throw jargon at them without explaining it. If a technical term matters, explain what it means before you rely on it.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.\n\nWaiting on a subagent is not failing:\n- A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.\n- While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:\n  SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>\n  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.\n- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n- Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly \"ROLE FALLBACK: <ROLE> (reason)\" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain, clear language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. \"No corri los candados\" counts; \"PASS\" or od/wc alone does not.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}}
+stdout (sha de6844ae1f3bc824, 11306 bytes)
+| {"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- They own WHAT gets built and WHY; you own HOW.\n- Adapt your register to the person you are actually working with: do not assume they cannot read code, and do not throw jargon at them without explaining it. If a technical term matters, explain what it means before you rely on it.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.\n\nWaiting on a subagent is not failing:\n- A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.\n- While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:\n  SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>\n  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.\n- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n- Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly \"ROLE FALLBACK: <ROLE> (reason)\" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.\n\nFast lane (-saikit:fast):\n- A turn armed with -saikit:fast is exempt from the three-subagent ceremony: you (the lead)\n  implement directly. The receipt and real verification evidence (or a declared skip) are\n  still required. A plain -saikit arm runs the full ceremony above.\n\nRevision after findings (do this the CHEAP way):\n- If the reviewer returns findings, do NOT restart the ceremony. Fix the exact\n  findings, then have the verifier re-check ONLY those points (targeted\n  commands, not the full battery), and the reviewer re-read ONLY the new diff.\n- One full battery run per task, at the end, is enough evidence for the\n  receipt. Re-running the entire suite after every fix wastes the turn.\n- Batch your evidence: group verification commands into ONE shell invocation\n  per checkpoint instead of dozens of single-command calls.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain, clear language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. \"No corri los candados\" counts; \"PASS\" or od/wc alone does not.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}}
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-evidence.log
@@ -60,6 +60,7 @@ hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 03-cursor-sin-armar-y-gate
 # Target cursor, turno completo de punta a punta.
@@ -89,6 +90,7 @@ hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 03  phase=tool target=cursor  payload=03.tool.cursor.json
 exit 0
 stdout (sha ca3d163bab055381, 3 bytes) identico a 03-cursor-sin-armar-y-gate/paso 01
@@ -107,6 +109,7 @@ hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 04  phase=stop target=cursor  payload=04.stop.cursor.json
 exit 0
 stdout (sha cdf374571f939e37, 1658 bytes)
@@ -126,6 +129,7 @@ hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 04-cursor-sesion-armada
 # Unica via por la que cursor recibe el contrato: un payload de SessionStart
@@ -135,8 +139,8 @@ hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 # que la linea base deja escrito.
 --- paso 01  phase=session target=cursor  payload=01.session.cursor.json
 exit 0
-stdout (sha b0f49035ccbc0eb0, 10397 bytes)
-| {"additional_context":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- They own WHAT gets built and WHY; you own HOW.\n- Adapt your register to the person you are actually working with: do not assume they cannot read code, and do not throw jargon at them without explaining it. If a technical term matters, explain what it means before you rely on it.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.\n\nWaiting on a subagent is not failing:\n- A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.\n- While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:\n  SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>\n  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.\n- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n- Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly \"ROLE FALLBACK: <ROLE> (reason)\" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain, clear language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. \"No corri los candados\" counts; \"PASS\" or od/wc alone does not.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}
+stdout (sha 28d610fed781ef74, 11249 bytes)
+| {"additional_context":"SUMMONAIKIT HARNESS REQUIRED\n\nWho you are working for:\n- They own WHAT gets built and WHY; you own HOW.\n- Adapt your register to the person you are actually working with: do not assume they cannot read code, and do not throw jargon at them without explaining it. If a technical term matters, explain what it means before you rely on it.\n- Never ask them to make a technical decision (which library, which data model, fail-open vs fail-closed, which framework). Decide those yourself from the repo and tell them the result in plain words.\n\nRun the work as a gated harness:\n1. Understand - FIRST, restate the request back in your own plain words so the user can confirm you got it right. If anything about the desired OUTCOME is unclear, ambiguous, or hard to undo, ask short plain-language questions about what they want (never about how to build it) and WAIT for the answer before building. This step is yours as the lead; do not delegate it.\n2. Implement - write code and run focused checks while editing.\n3. Verify - use fresh-eyes verification and scenario tests where relevant.\n4. Review - inspect principles, code quality, regressions, and skill gotchas.\n5. Close - reconcile evidence, changed files, skipped checks, and readiness, and explain what changed for the user in plain words.\n6. Retro - capture what should improve in the harness or codebase memory.\n\nAsking is not failing:\n- When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:\n  SUMMONAIKIT HARNESS PAUSED - awaiting your answer\n- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.\n\nWaiting on a subagent is not failing:\n- A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.\n- While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:\n  SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>\n  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.\n- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.\n\nDelegation rule (Claude):\n- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:\n  1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.\n- If your host does not surface those project-level agents in the Task tool, delegate to its\n  nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,\n  a code-review agent to review. The gate maps host agent names to these roles by function, so a\n  correctly-delegated turn still satisfies it.\n- You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.\n- The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.\n- Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly \"ROLE FALLBACK: <ROLE> (reason)\" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.\n\nFast lane (-saikit:fast):\n- A turn armed with -saikit:fast is exempt from the three-subagent ceremony: you (the lead)\n  implement directly. The receipt and real verification evidence (or a declared skip) are\n  still required. A plain -saikit arm runs the full ceremony above.\n\nRevision after findings (do this the CHEAP way):\n- If the reviewer returns findings, do NOT restart the ceremony. Fix the exact\n  findings, then have the verifier re-check ONLY those points (targeted\n  commands, not the full battery), and the reviewer re-read ONLY the new diff.\n- One full battery run per task, at the end, is enough evidence for the\n  receipt. Re-running the entire suite after every fix wastes the turn.\n- Batch your evidence: group verification commands into ONE shell invocation\n  per checkpoint instead of dozens of single-command calls.\n\nGate rule:\n- Do not advance past a stage without concrete evidence.\n- On failure, revise from the first failed gate with structured feedback.\n- Revision budget is 2 cycles max. Do not blindly retry.\n\nContext rule:\n- Use Context7 for library/framework/API/CLI/cloud basics.\n- Use the installed skill references for repo-specific patterns, gotchas, files, and anti-patterns.\n\nCapability-first contract (language/framework/platform agnostic):\n- Before adding a new dependency or hand-rolling a mechanism, check — via Context7 and the repo's own deps/config/SDKs — whether the capability the task needs is ALREADY provided by the deploy platform or by a library/framework already installed, and prefer that. Don't add a package for something an installed library already does (e.g. an interaction an existing UI library already supports), and don't reinvent a primitive the platform manages. Identify what's already present from the repo; never assume a provider.\n- Run guards (auth/session, validation, authorization) before side effects (email, payments, analytics, storage, persisted writes).\n- For ANY guard or limiter, declare its failure stance explicitly — fail-open (allow on guard-infrastructure failure) vs fail-closed (deny on failure) — choose the stance that matches the task's risk, and implement the branch you chose; never leave the failure behavior unstated.\n- Before accepting any hand-rolled, in-process, or generic-store implementation of a capability the task needs, first identify the DETECTED platform and look up its OWN native primitive for that SPECIFIC capability (use Context7 and the platform's own docs/SDK/config in the repo). Prefer that native primitive and wire it through the repo's infra/config and typed runtime boundary. A generic durable store is a LAST-RESORT fallback only when no native primitive and no installed library fits; if you fall back, justify in writing why the native primitive does not apply — do not defer the native option to \"later\".\n- The verifier rejects a new dependency or an improvised/in-process/ad-hoc solution when the detected platform or an already-installed library already covers the capability, unless the user explicitly chose otherwise.\n\nData-source precondition (language/framework/platform agnostic):\n- Before building any surface that reads, lists, displays, or reports existing data, first confirm the backing data source actually exists — inspect the repo's schema/models/storage and the procedures or endpoints that would supply it. Do not assume prior data is already captured.\n- If the source does NOT exist yet, treat it as a gap: either ask one clarifying question, OR state the assumption EXPLICITLY before coding (for example: this is newly tracked, collection starts now, and there is no historical data to backfill) — and write that assumption into the code itself (a comment or doc on the new source/record path), not only in chat, because reviewers see the diff, not the conversation.\n- When a gap is found, the change is a complete slice: create the source, the write path that records new entries going forward, the read path, and the surface that shows them — wired to the existing auth/identity and reusing the repo's own conventions.\n- Never claim or imply data that cannot exist yet; what the surface promises must match what is actually recorded.\n\nMissing-information rule (language/framework/platform agnostic):\n- Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what \"done\" looks like to them, naming and tone, anything irreversible).\n- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.\n- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.\n- Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.\n\nUser-facing surface baseline (language/framework/platform agnostic):\n- For ANY user-facing surface you add or change, cover the full state matrix explicitly: loading, EMPTY (no data), error, and success — not only the happy path.\n- Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.\n- Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.\n\nFinal receipt required before stopping (write every line in plain, clear language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.\nImplement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.\nVerify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. \"No corri los candados\" counts; \"PASS\" or od/wc alone does not.\nReview: findings, risks, or \"no findings\" with basis.\nClose: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).\nRetro: harness/codebase-memory improvement, or \"none\"."}
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/762bb571-1858-449b-8513-cdc8a39798b9/harness-evidence.log
@@ -147,6 +151,7 @@ hooks/state/<PROJECT_KEY>/762bb571-1858-449b-8513-cdc8a39798b9/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 05-turno-completo-recibo-plano
 # Turno completo y bien hecho: implementer -> verifier -> reviewer, una edicion,
@@ -159,7 +164,7 @@ hooks/state/<PROJECT_KEY>/762bb571-1858-449b-8513-cdc8a39798b9/harness-state.env
 # vinetas: ahi si pasa.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
@@ -170,6 +175,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -188,6 +194,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -207,6 +214,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -227,6 +235,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer
+| lane=full
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -248,6 +257,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -270,6 +280,7 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
 exit 0
 stdout <vacio>
@@ -287,7 +298,7 @@ stderr <vacio>
 # cambiar a proposito y se vea en el diff.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-evidence.log
@@ -298,6 +309,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -316,6 +328,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -335,6 +348,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -355,6 +369,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer
+| lane=full
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -376,6 +391,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -398,6 +414,7 @@ hooks/state/<PROJECT_KEY>/6071b58b-04d4-48a4-8ae3-ba49e7a976ce/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
 exit 0
 stdout <vacio>
@@ -411,7 +428,7 @@ stderr <vacio>
 # tres subagentes, todo en el mismo mensaje de gate, con exit 2.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-evidence.log
@@ -422,6 +439,7 @@ hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -440,6 +458,7 @@ hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 03  phase=stop target=claude  payload=03.stop.claude.json
 exit 2
 stdout (sha d5ca22a68197b13e, 2199 bytes)
@@ -483,6 +502,7 @@ hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 08-ciclos-y-presupuesto
 # El presupuesto de revision, medido: tres Stop seguidos sobre el mismo turno.
@@ -491,7 +511,7 @@ hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 # agotado" se ve en el exit code, no solo en el texto.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-evidence.log
@@ -502,6 +522,7 @@ hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
 exit 2
 stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
@@ -515,6 +536,7 @@ hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 03  phase=stop target=claude  payload=03.stop.claude.json
 exit 2
 stdout (sha cfa775d0ab8e38bf, 2199 bytes)
@@ -553,6 +575,7 @@ hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 04  phase=stop target=claude  payload=04.stop.claude.json
 exit 0
 stdout (sha 527f3355f667559c, 1718 bytes)
@@ -575,7 +598,7 @@ stderr (sha d9c5ceb904a8f1f6, 1666 bytes)
 # Es la unica salida limpia que NO exige la ceremonia completa.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/35dec07e-7489-421b-8ac3-071deda35fff/harness-evidence.log
@@ -586,6 +609,7 @@ hooks/state/<PROJECT_KEY>/35dec07e-7489-421b-8ac3-071deda35fff/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
 exit 0
 stdout <vacio>
@@ -599,7 +623,7 @@ estado sin cambios
 # y un archivo pendiente que lee el proximo turno armado.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-evidence.log
@@ -610,6 +634,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -628,6 +653,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -647,6 +673,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer,verifier
+| lane=full
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -667,6 +694,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -688,6 +716,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -710,6 +739,7 @@ hooks/state/<PROJECT_KEY>/fc471e8e-c5d2-4201-8b2d-ddd3ff94675b/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
 exit 0
 stdout (sha 31e7f4e3de42dbf0, 282 bytes)
@@ -717,7 +747,7 @@ stdout (sha 31e7f4e3de42dbf0, 282 bytes)
 stderr <vacio>
 --- estado tras el paso 07
 hooks/state/<PROJECT_KEY>/review-notice-pending.log
-| SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed.
+| SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed. Re-review the new diff only; do not restart the ceremony.
 
 === escenario 11-orden-invertido
 # Los tres subagentes corrieron, pero al reves: reviewer, verifier, implementer.
@@ -725,7 +755,7 @@ hooks/state/<PROJECT_KEY>/review-notice-pending.log
 # solo gate faltante, el del orden, y con ese alcanza para bloquear.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-evidence.log
@@ -736,6 +766,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -754,6 +785,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=reviewer
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -773,6 +805,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=reviewer,verifier
+| lane=full
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -793,6 +826,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=reviewer,verifier,implementer
+| lane=full
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -814,6 +848,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=reviewer,verifier,implementer
+| lane=full
 --- paso 06  phase=stop target=claude  payload=06.stop.claude.json
 exit 2
 stdout (sha 661ec8c2eadb0424, 811 bytes)
@@ -860,6 +895,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=reviewer,verifier,implementer
+| lane=full
 
 === escenario 12-defecto-a1-medido
 # Defecto A1, MEDIDO — y el spec lo describia mal. Los dos pasos son la medicion.
@@ -891,7 +927,7 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 # borraba el legitimo.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-evidence.log
@@ -902,6 +938,7 @@ hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -920,6 +957,7 @@ hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -939,6 +977,7 @@ hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 13-defecto-a3-cat-del-log
 # Defecto A3, cerrado por la Task 3.3. Antes TEST_RUNNER_RE no tenia fronteras de
@@ -951,7 +990,7 @@ hooks/state/<PROJECT_KEY>/f86a9169-5c3d-43ec-8360-c0275ce86ea2/harness-state.env
 # debe pasar cuando nadie corrio nada.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-evidence.log
@@ -962,6 +1001,7 @@ hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -979,6 +1019,7 @@ hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -996,6 +1037,7 @@ hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 14-defecto-a2-pausa-en-resultado
 # Defecto A2, grabado: la pausa se busca en el tail del transcript entero, que
@@ -1004,7 +1046,7 @@ hooks/state/<PROJECT_KEY>/578fa916-a3d4-4f01-8527-c0c4e2dc6984/harness-state.env
 # deja pasar el turno sin pedir nada.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-evidence.log
@@ -1015,6 +1057,7 @@ hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
 exit 2
 stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
@@ -1028,6 +1071,7 @@ hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 15-fase-derivada-del-payload
 # Sin las variables de entorno del registro (target y phase): el hook deriva la
@@ -1036,7 +1080,7 @@ hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 # y hace falta saber que asi tambien gatea.
 --- paso 01  phase=auto target=auto  payload=01.auto.auto.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-evidence.log
@@ -1047,6 +1091,7 @@ hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 
 === escenario 16-eventos-dentro-de-subagente
 # Escenario 16 — turno completo con eventos de ADENTRO de subagentes.
@@ -1082,7 +1127,7 @@ hooks/state/<PROJECT_KEY>/c34a6e43-b370-4da2-8dfa-874eed8b8bf3/harness-state.env
 # arreglo de A9 puro; el de A10 lo mide `caso_g3_target_por_claudecode_fallback`.
 --- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
@@ -1093,6 +1138,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 --- paso 02  phase=tool target=claude  payload=02.tool.claude.json
 exit 0
 stdout <vacio>
@@ -1112,6 +1158,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=implementer
+| lane=full
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -1133,6 +1180,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -1155,6 +1203,7 @@ hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
 | implemented=1
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 --- paso 05  phase=stop target=claude  payload=05.stop.claude.json
 exit 0
 stdout <vacio>
@@ -1192,7 +1241,7 @@ estado sin cambios
 # hookSpecificOutput.additionalContext con el contrato. estado_host: zcode.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_18/harness-evidence.log
@@ -1203,6 +1252,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_18/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 
 === escenario 19-zcode-evidencia-incompleta
@@ -1212,7 +1262,7 @@ estado_host: zcode
 # analogo del 07 en este target.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-evidence.log
@@ -1223,6 +1273,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
 exit 0
@@ -1242,6 +1293,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
@@ -1261,6 +1313,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-state.env
 | implemented=1
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 
 === escenario 20-zcode-falta-verifier
@@ -1272,7 +1325,7 @@ estado_host: zcode
 # "omitir verifier" del STOP vivo (seccion D).
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-evidence.log
@@ -1283,6 +1336,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
 exit 0
@@ -1302,6 +1356,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 03  phase=tool target=zcode  payload=03.tool.zcode.json
 exit 0
@@ -1322,6 +1377,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 04  phase=tool target=zcode  payload=04.tool.zcode.json
 exit 0
@@ -1343,6 +1399,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,reviewer
+| lane=full
 estado_host: zcode
 --- paso 05  phase=stop target=zcode  payload=05.stop.zcode.json
 exit 2
@@ -1389,6 +1446,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,reviewer
+| lane=full
 estado_host: zcode
 
 === escenario 21-zcode-turno-completo
@@ -1398,7 +1456,7 @@ estado_host: zcode
 # target; su par de "pasa" contra el "bloquea" del 20.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-evidence.log
@@ -1409,6 +1467,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
 exit 0
@@ -1428,6 +1487,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 03  phase=tool target=zcode  payload=03.tool.zcode.json
 exit 0
@@ -1448,6 +1508,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 04  phase=tool target=zcode  payload=04.tool.zcode.json
 exit 0
@@ -1469,6 +1530,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 estado_host: zcode
 --- paso 05  phase=tool target=zcode  payload=05.tool.zcode.json
 exit 0
@@ -1491,6 +1553,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_21/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 estado_host: zcode
 --- paso 06  phase=stop target=zcode  payload=06.stop.zcode.json
 exit 0
@@ -1505,7 +1568,7 @@ stderr <vacio>
 # secuencia ni evidencia. Aisla el gate del recibo en este target.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-evidence.log
@@ -1516,6 +1579,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
 exit 0
@@ -1535,6 +1599,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 03  phase=tool target=zcode  payload=03.tool.zcode.json
 exit 0
@@ -1555,6 +1620,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 04  phase=tool target=zcode  payload=04.tool.zcode.json
 exit 0
@@ -1576,6 +1642,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 estado_host: zcode
 --- paso 05  phase=tool target=zcode  payload=05.tool.zcode.json
 exit 0
@@ -1598,6 +1665,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 estado_host: zcode
 --- paso 06  phase=stop target=zcode  payload=06.stop.zcode.json
 exit 2
@@ -1645,6 +1713,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 estado_host: zcode
 
 === escenario 23-zcode-presupuesto
@@ -1655,7 +1724,7 @@ estado_host: zcode
 # (medido 5.2) y el presupuesto depende del exit 2, que en Stop SI bloquea.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-evidence.log
@@ -1666,6 +1735,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=stop target=zcode  payload=02.stop.zcode.json
 exit 2
@@ -1680,6 +1750,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
@@ -1694,6 +1765,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 04  phase=stop target=zcode  payload=04.stop.zcode.json
 exit 2
@@ -1710,7 +1782,7 @@ stderr (sha d9c5ceb904a8f1f6, 1666 bytes) identico a 08-ciclos-y-presupuesto/pas
 # exitCode, este escenario se pondria verde de mentira y --check lo diria.
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-evidence.log
@@ -1721,6 +1793,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
 exit 0
@@ -1739,6 +1812,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
@@ -1757,6 +1831,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 
 === escenario 25-zcode-ciclo-consumido-cierra
@@ -1768,7 +1843,7 @@ estado_host: zcode
 # el 23 no lo cubre (solo agota presupuesto).
 --- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
 exit 0
-stdout (sha 23b92ee4d9d905cc, 10454 bytes) identico a 02-armado-contrato/paso 01
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
 stderr <vacio>
 --- estado tras el paso 01
 hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-evidence.log
@@ -1779,6 +1854,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 02  phase=stop target=zcode  payload=02.stop.zcode.json
 exit 2
@@ -1793,6 +1869,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=
+| lane=full
 estado_host: zcode
 --- paso 03  phase=tool target=zcode  payload=03.tool.zcode.json
 exit 0
@@ -1812,6 +1889,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=0
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 04  phase=tool target=zcode  payload=04.tool.zcode.json
 exit 0
@@ -1832,6 +1910,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer
+| lane=full
 estado_host: zcode
 --- paso 05  phase=tool target=zcode  payload=05.tool.zcode.json
 exit 0
@@ -1853,6 +1932,7 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier
+| lane=full
 estado_host: zcode
 --- paso 06  phase=tool target=zcode  payload=06.tool.zcode.json
 exit 0
@@ -1875,10 +1955,78 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 | implemented=0
 | verified=1
 | agents_seen=implementer,verifier,reviewer
+| lane=full
 estado_host: zcode
 --- paso 07  phase=stop target=zcode  payload=07.stop.zcode.json
 exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 07
+(sin estado)
+
+=== escenario 26-fast-cierre-sin-ceremonia
+# Task 10.1 — carril fast: el turno arma con -saikit:fast, el lead edita y
+# verifica SIN despachar subagentes, y el Stop cierra limpio (exit 0) con recibo
+# completo. Deja grabado: el estado arma con lane=fast; la ceremonia de
+# subagentes no se exige; el recibo y la evidencia de verificacion SI. El aviso
+# RN no dispara (no corrio reviewer => last_review vacio => la comparacion de
+# orden no se arma, fail-open de siempre).
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha de6844ae1f3bc824, 11306 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
+| prompt task started: 2656866924
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
+| task_hash=2656866924
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=fast
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
+| prompt task started: 2656866924
+| implemented: C:\\dev\\demo\\src\\header.ts
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
+| task_hash=2656866924
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=
+| lane=fast
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-evidence.log
+| prompt task started: 2656866924
+| implemented: C:\\dev\\demo\\src\\header.ts
+| verified: pytest -q
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state-review-notice.env
+| counter=2
+| last_code_edit=1
+| last_review=
+hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
+| task_hash=2656866924
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=
+| lane=fast
+--- paso 04  phase=stop target=claude  payload=04.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
 (sin estado)

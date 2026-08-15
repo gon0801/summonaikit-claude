@@ -1,0 +1,6 @@
+Task 10.1 — carril fast: el turno arma con -saikit:fast, el lead edita y
+verifica SIN despachar subagentes, y el Stop cierra limpio (exit 0) con recibo
+completo. Deja grabado: el estado arma con lane=fast; la ceremonia de
+subagentes no se exige; el recibo y la evidencia de verificacion SI. El aviso
+RN no dispara (no corrio reviewer => last_review vacio => la comparacion de
+orden no se arma, fail-open de siempre).

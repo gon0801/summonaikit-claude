@@ -21,7 +21,11 @@ Never assume a toolchain. Read the repo to learn how it checks itself, then use 
 - Lockfile tells you the package manager (`bun.lock` → bun, `pnpm-lock.yaml` → pnpm, `package-lock.json` → npm, `yarn.lock` → yarn, etc.).
 - CI config (`.github/workflows`, `.gitlab-ci.yml`, etc.) is the source of truth for the commands that must pass.
 
-From those, identify the repo's own **type-check / build / test / lint** commands and run the focused ones while you work.
+From those, identify the repo's own **type-check / build / test / lint** commands: run focused checks while editing; leave the full battery to the verifier.
+
+## Batch your evidence
+
+Group your verification commands into a few shell invocations (one per checkpoint), never one call per command — each call costs a full model turn.
 
 ## Classify applicable skills before starting
 

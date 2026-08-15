@@ -673,12 +673,17 @@ rn_take_pending() {
   rm -f "$RN_PENDING_PATH" 2>/dev/null || true
 }
 # <<< SAIKIT-REVIEW-NOTICE v1 <<<
+# Task 10.1: write_state persiste tambien el carril (lane = full | fast). Un
+# estado sin el campo (sembrado por el banco, o escrito por un hook previo a la
+# 10.1) lee lane="" — y "" != "fast", o sea que el default ausente es el lado
+# SEGURO: ceremonia completa. Ningun call site inventa un lane.
 write_state() {
   task_hash="$1"
   cycle="$2"
   implemented="$3"
   verified="$4"
   agents_seen="$5"
+  lane="$6"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   {
     printf 'task_hash=%s\n' "$task_hash"
@@ -686,6 +691,7 @@ write_state() {
     printf 'implemented=%s\n' "$implemented"
     printf 'verified=%s\n' "$verified"
     printf 'agents_seen=%s\n' "$agents_seen"
+    printf 'lane=%s\n' "$lane"
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -728,6 +734,20 @@ Delegation rule (Claude):
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
 - Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
+
+Fast lane (-saikit:fast):
+- A turn armed with -saikit:fast is exempt from the three-subagent ceremony: you (the lead)
+  implement directly. The receipt and real verification evidence (or a declared skip) are
+  still required. A plain -saikit arm runs the full ceremony above.
+
+Revision after findings (do this the CHEAP way):
+- If the reviewer returns findings, do NOT restart the ceremony. Fix the exact
+  findings, then have the verifier re-check ONLY those points (targeted
+  commands, not the full battery), and the reviewer re-read ONLY the new diff.
+- One full battery run per task, at the end, is enough evidence for the
+  receipt. Re-running the entire suite after every fix wastes the turn.
+- Batch your evidence: group verification commands into ONE shell invocation
+  per checkpoint instead of dozens of single-command calls.
 
 Gate rule:
 - Do not advance past a stage without concrete evidence.
@@ -773,29 +793,11 @@ Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
 }
 
-is_engineering_task() {
-  text="$1"
-  printf '%s' "$text" | grep -Eiq 'implement|fix|debug|build|create|add|change|update|rewrite|refactor|hook|skill|agent|cli|code|test|verify|review|frontend|backend|database|auth|api|schema|migration|component|ui|ux|bug|patch'
-}
-
-# Substantive-work signals. When any appear, the task is real implementation and
-# the full gate runs even if cosmetic words are also present ("change the auth
-# flow" must gate, "change the heading text" must not). Platform/stack-agnostic.
-SUBSTANTIVE_RE='implement|feature|endpoint|route|handler|\bapi\b|graphql|schema|migration|database|\bdb\b|\bsql\b|query|model|table|index|transaction|concurren|race condition|\bauth\b|login|signup|sign-?in|session|password|token|oauth|permission|authoriz|payment|billing|checkout|webhook|subscription|invoice|refactor|rewrite|re-?architect|redesign|integrat|algorithm|parser|encrypt|hash|security|vulnerab|injection|rate.?limit|throttle|state machine|workflow|queue|cron|scheduled|background (job|task)|deploy|infrastructure|pipeline|new (page|screen|view|route|component|model|table|service|endpoint|module)|business logic|validation|upload|file handling|cache|caching|websocket|stream'
-
-# Trivial-edit signals. Low-risk, narrow changes that do not need the implement
-# -> verify -> review gate (the user can still ask for it explicitly).
-TRIVIAL_RE='typo|misspell|spell(ing)?|wording|copywrit|copy edit|rephras|reword|reorder|\btext\b|\blabel\b|caption|placeholder text|heading text|title text|\bstring\b|wording|spacing|whitespace|indent(ation)?|\bformat(ting)?\b|prettier|lint(er)? (fix|warning|error)|^lint$|rename|comment|docstring|\bdocs?\b|documentation|readme|changelog|version bump|bump (the )?version|colou?r|margin|padding|\bfont\b|font.?size|\bpx\b|alignment|capitaliz|punctuation|emoji|trailing (space|whitespace|newline)|semicolon|tweak (the )?(copy|wording|text|spacing|color|colour|margin|padding)'
-
-# A task is trivial when it matches a cosmetic/minor signal AND carries no
-# substantive-work signal. Substantive always wins.
-is_trivial_task() {
-  text="$1"
-  if printf '%s' "$text" | grep -Eiq "$SUBSTANTIVE_RE"; then
-    return 1
-  fi
-  printf '%s' "$text" | grep -Eiq "$TRIVIAL_RE"
-}
+# Task 10.1: los clasificadores del vendor (is_engineering_task,
+# is_trivial_task, SUBSTANTIVE_RE, TRIVIAL_RE) se RETIRARON. Estuvieron muertos
+# desde el parche sentinel (cero call sites, grep-verificado antes de borrar):
+# el sentinel es la unica condicion de armado, y el carril fast NO se infiere de
+# regex de trivialidad — se pide explicito (-saikit:fast).
 
 emit_cursor_json() {
   key="$1"
@@ -822,9 +824,9 @@ start_harness() {
   prompt_text="$(json_top_level_decoded prompt)"
   if [ -z "$prompt_text" ]; then prompt_text="$INPUT"; fi
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
-  # El sentinel REEMPLAZA a is_engineering_task / is_trivial_task: es la unica
-  # condicion de armado. Dejarlas activas ademas del sentinel hacia que un prompt
-  # con -saikit pero sin palabras en ingles siguiera durmiendo. Si lo escribiste,
+  # El sentinel es la unica condicion de armado (REEMPLAZO a los clasificadores
+  # is_engineering_task / is_trivial_task del vendor, retirados en la Task 10.1
+  # tras estar muertos desde este parche, cero call sites). Si lo escribiste,
   # lo quieres. Aplica igual a la fase session, cuyo payload nunca trae sentinel.
   if ! printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_SENTINEL_RE"; then
     # Sin sentinel: si habia estado armado para ESTA sesion, desarmar (borrar).
@@ -840,6 +842,16 @@ start_harness() {
   fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
 
+  # Task 10.1: carril fast. r1 hallazgo 4 (verificado con grep): -saikit:fast YA
+  # ARMA con el sentinel de siempre (el `:` pasa la frontera derecha), asi que el
+  # RE del sentinel NO cambia — lo nuevo es solo la DETECCION del carril. El
+  # match del sufijo es EXACTO (:fast con frontera derecha propia); cualquier
+  # otro sufijo (-saikit:fasst, -saikit:rapido) arma FULL — limite declarado: un
+  # typo del carril cae al lado seguro (ceremonia completa), nunca a un fast
+  # silencioso. Atado por caso_g1_sufijo_desconocido_arma_full.
+  lane="full"
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:fast([^A-Za-z0-9_-]|$)'; then lane="fast"; fi
+
   task_hash="$(printf '%s' "$prompt_text" | cksum | awk '{print $1}')"
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   # Reinicia el contador de orden; STATE_DIR (y por lo tanto RN_ORDER_PATH)
@@ -850,7 +862,7 @@ start_harness() {
   rm -f "$RN_ORDER_PATH" 2>/dev/null || true
   rn_pending_text="$(rn_take_pending)"
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-  write_state "$task_hash" "0" "0" "0" ""
+  write_state "$task_hash" "0" "0" "0" "" "$lane"
   printf 'prompt task started: %s\n' "$task_hash" > "$LOG_PATH" 2>/dev/null || true
 
   context="$(harness_context)"
@@ -910,6 +922,7 @@ mark_evidence() {
   implemented="$(read_state_value implemented)"
   verified="$(read_state_value verified)"
   agents_seen="$(read_state_value agents_seen)"
+  lane="$(read_state_value lane)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
@@ -917,7 +930,7 @@ mark_evidence() {
 
   if [ "$kind" = "implemented" ]; then implemented="1"; fi
   if [ "$kind" = "verified" ]; then verified="1"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane"
   printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -967,6 +980,7 @@ record_agent() {
   implemented="$(read_state_value implemented)"
   verified="$(read_state_value verified)"
   agents_seen="$(read_state_value agents_seen)"
+  lane="$(read_state_value lane)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
@@ -977,7 +991,7 @@ record_agent() {
       if [ -z "$agents_seen" ]; then agents_seen="$agent"; else agents_seen="$agents_seen,$agent"; fi
       ;;
   esac
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane"
   printf 'agent: %s\n' "$agent" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -1292,6 +1306,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   cycle="$(read_state_value cycle)"
   task_hash="$(read_state_value task_hash)"
   agents_seen="$(read_state_value agents_seen)"
+  lane="$(read_state_value lane)"
   if [ -z "$implemented" ]; then implemented="0"; fi
   if [ -z "$verified" ]; then verified="0"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
@@ -1329,6 +1344,12 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude
   # Code primitive). The first three gates must each run as their own subagent,
   # in order. closer/retro stay receipt sections the lead writes.
+  # Task 10.1: con lane=fast (armado con -saikit:fast) la ceremonia de
+  # subagentes NO se exige — el recibo y la evidencia de verificacion siguen
+  # exigidos arriba, ahi no cambia nada. Un lane ausente/vacio (estado sembrado
+  # por el banco o escrito por un hook pre-10.1) != "fast" => ceremonia
+  # completa: el default ausente es el lado seguro.
+  if [ "$(read_state_value lane)" != "fast" ]; then
   if [ "$TARGET" = "claude" ]; then
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
@@ -1359,6 +1380,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
       fi
     fi
   fi
+  fi
 
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   # Chequeo ADVISORY: compara el evento de la ultima edicion de codigo contra
@@ -1381,7 +1403,9 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     rn_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
     printf '%s review-notice: code was edited after the last reviewer subagent run (tool-name signal only -- an edit made via a shell command, e.g. sed/heredoc/git apply, is NOT detected by this check).\n' "$rn_ts" >> "$LOG_PATH" 2>/dev/null || true
     mkdir -p "$STATE_DIR" 2>/dev/null || true
-    printf 'SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed.\n' > "$RN_PENDING_PATH" 2>/dev/null || true
+    # Task 10.2: la coletilla ata el aviso a la disciplina de re-review dirigido
+    # (el contrato de arriba ya la pide): re-review del delta, no ceremonia nueva.
+    printf 'SAIKIT REVIEW NOTICE: in your previous turn, code was edited after the reviewer subagent last ran, and those edits were not reviewed. Re-review the new diff only; do not restart the ceremony.\n' > "$RN_PENDING_PATH" 2>/dev/null || true
     rn_notice_fired="1"
   elif [ -n "$rn_check_last_code_edit" ] || [ -n "$rn_check_last_review" ]; then
     rm -f "$RN_PENDING_PATH" 2>/dev/null || true
@@ -1418,7 +1442,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   fi
 
   next_cycle=$((cycle + 1))
-  write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen"
+  write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane"
   feedback="$(build_gate_feedback "$missing" "$next_cycle")"
   emit_gate_failure "$feedback"
 }
