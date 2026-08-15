@@ -54,6 +54,8 @@ G1|session_sin_reglas|la fase session vuelve a salir muda y las reglas permanent
 G1|session_pisa_gate|la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
 G1|fallback_sin_acotar|el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar
 G1|frontera_izquierda_floja|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
+G1|estado_inmortal|la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre
+G1|barrido_sin_ttl|el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -172,6 +174,17 @@ mut_fallback_sin_acotar()       { sed 's/if \[ -z "$prompt_text" \] && \[ "$PHAS
 # la misma clase de caracteres — si los mutara a los dos, no se sabria cual caso
 # reacciona a que. Lo atrapa caso_g1_sentinel_con_frontera.
 mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_RE='(^|[^A-Za-z0-9_])-saikit([^A-Za-z0-9_-]|\$)'@"; }
+# Task 9.7 (C13) — una mutacion por MITAD. Las dos caen sobre el mismo caso
+# (caso_g1_estado_no_se_acumula) porque el arreglo solo sirve completo: podar sin
+# barrer deja las sesiones que nunca cerraron, y barrer sin podar deja la del
+# turno actual. Cada mutacion pone roja SU mitad del caso.
+#   estado_inmortal  -> neutraliza el rmdir: vuelve el dir vacio inmortal.
+#   barrido_sin_ttl  -> le saca el filtro de edad al barrido, asi que se lleva
+#                       tambien la hermana FRESCA. Esa es la direccion peligrosa
+#                       (es A4: borrarle el estado a una sesion viva), y por eso
+#                       la mutacion la ataca en vez de solo apagar el barrido.
+mut_estado_inmortal()           { sed 's@rmdir "$STATE_DIR"@true "$STATE_DIR"@'; }
+mut_barrido_sin_ttl()           { sed 's@ -mmin "+$SAIKIT_STATE_TTL_MIN"@@'; }
 
 # Nota (actualizada al aterrizar 9.4): el fallback SI tiene mutacion ahora
 # (mut_fallback_sin_acotar, arriba), pero cubre el acotamiento a `session`, no lo

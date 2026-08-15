@@ -166,7 +166,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -320,6 +320,52 @@ caso_g1_sentinel_con_frontera() {
 # DOS mitades, como pide la revision (CORRECCION 10): no basta con "B no ve el
 # estado de A" — un hook que borrara TODO pasaria esa sola mitad. La otra ata que
 # el estado de A sobrevive intacto al turno de B.
+# Task 9.7 (C13). `state/` crecia para siempre: cada limpieza borraba los
+# ARCHIVOS y dejaba el directorio de la sesion. Una sesion = un dir vacio
+# inmortal. Dos mitades, las dos en este caso porque una sin la otra no arregla
+# nada: sin (a) el dir del turno actual queda; sin (b) los de las sesiones que
+# nunca cerraron limpio quedan igual.
+caso_g1_estado_no_se_acumula() {
+  # (a) el cierre limpio se lleva el DIRECTORIO, no solo los archivos.
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  dir_turno="$(dirname "$LAB_ESTADO_PATH")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code del cierre limpio" "$LAB_RC" "0"
+  if [ -d "$dir_turno" ]; then
+    _mal "un cierre limpio debe llevarse el DIRECTORIO de la sesion, no solo los archivos"
+  fi
+
+  # (b) al ARMAR se barren las hermanas muertas del mismo proyecto+host.
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit turno que arma y barre')"
+  dir_vivo="$(dirname "$LAB_ESTADO_PATH")"
+  proyecto_dir="$(dirname "$dir_vivo")"
+  _no_vacio "dir de proyecto" "$proyecto_dir"
+
+  mkdir -p "$proyecto_dir/hermana-muerta" "$proyecto_dir/hermana-fresca"
+  printf 'cycle=0\n' > "$proyecto_dir/hermana-muerta/harness-state.env"
+  printf 'cycle=0\n' > "$proyecto_dir/hermana-fresca/harness-state.env"
+  # 15 dias: pasa el TTL de 14. `touch -d` se midio funcionando en MSYS2 antes
+  # de disenar esto, asi que no hace falta el TTL-por-env que preveia el plan.
+  touch -d '15 days ago' "$proyecto_dir/hermana-muerta/harness-state.env" 2>/dev/null \
+    || _mal "no se pudo antedatar la hermana muerta; el barrido no se puede medir"
+
+  lab_run prompt claude "$(lab_payload_prompt '-saikit segundo turno, dispara el barrido')"
+
+  # La muerta se va. La FRESCA sobrevive: barrer por edad sin discriminar seria
+  # A4 otra vez, borrandole el estado a una sesion hermana que sigue viva.
+  if [ -d "$proyecto_dir/hermana-muerta" ]; then
+    _mal "el barrido no se llevo la hermana MUERTA (>14 dias)"
+  fi
+  if [ ! -d "$proyecto_dir/hermana-fresca" ]; then
+    _mal "el barrido se llevo una hermana FRESCA — eso es A4: le borra el estado a una sesion viva"
+  fi
+  # Y jamas el turno que esta armando.
+  if [ ! -f "$LAB_ESTADO_PATH" ]; then
+    _mal "el barrido se llevo el estado del turno que lo disparo"
+  fi
+}
+
 caso_g1_dos_sesiones_no_comparten_estado() {
   # A arma con la sesion por defecto del banco. LAB_ESTADO_PATH queda apuntando a
   # la ruta de A; las aserciones sobre A la leen ahi aunque cambiemos de sesion.

@@ -294,6 +294,45 @@ STATE_DIR="$PROJECT_DIR/$SESSION_KEY"
 STATE_PATH="$STATE_DIR/harness-state.env"
 LOG_PATH="$STATE_DIR/harness-evidence.log"
 
+# >>> SAIKIT-STATE-TTL v1 >>>
+# Task 9.7 (C13): `state/` crecia para siempre. Cada limpieza borraba los
+# ARCHIVOS y dejaba el directorio de la sesion: una sesion = un dir vacio
+# inmortal. Dos mitades, y una sin la otra no arregla nada.
+#
+# (a) podar_dir_sesion: `rmdir` best-effort al final de CADA limpieza. Es
+#     `rmdir`, JAMAS `rm -rf`: si por lo que sea quedo algo adentro, el dir
+#     sobrevive y se ve, en vez de borrarse en silencio.
+podar_dir_sesion() { rmdir "$STATE_DIR" 2>/dev/null || true; }
+
+# (b) barrer_estado_viejo: al ARMAR, se llevan las hermanas del MISMO
+#     proyecto+host cuyo `harness-state.env` pasa el TTL. Cubre las sesiones que
+#     nunca cerraron limpio, que son justo las que (a) no alcanza a tocar.
+#
+#     TTL en minutos porque `-mmin` es lo portable: `touch -d '15 days ago'`,
+#     `touch -t` y `find -mmin` se MIDIERON funcionando en MSYS2 antes de
+#     escribir esto, asi que no hizo falta el TTL-por-env que preveia el plan.
+#
+#     Tres acotamientos, cada uno con su razon:
+#       - sin `find` no se barre nada (fail-open, Core Rule 1);
+#       - solo se borra lo que cae DEBAJO de $PROJECT_DIR (el `case` lo verifica
+#         sobre la ruta ya resuelta, no sobre el patron);
+#       - nunca el dir del turno que dispara el barrido.
+#     El estado FRESCO de una hermana viva sobrevive: barrer por edad sin
+#     discriminar seria A4 otra vez, borrandole el estado a una sesion en curso.
+SAIKIT_STATE_TTL_MIN=20160   # 14 dias
+barrer_estado_viejo() {
+  command -v find >/dev/null 2>&1 || return 0
+  [ -d "$PROJECT_DIR" ] || return 0
+  find "$PROJECT_DIR" -mindepth 2 -maxdepth 2 -type f -name 'harness-state.env' \
+       -mmin "+$SAIKIT_STATE_TTL_MIN" 2>/dev/null | while IFS= read -r _viejo; do
+    _dir="$(dirname "$_viejo")"
+    [ "$_dir" = "$STATE_DIR" ] && continue
+    case "$_dir" in "$PROJECT_DIR"/?*) rm -rf "$_dir" 2>/dev/null || true ;; esac
+  done
+  return 0
+}
+# <<< SAIKIT-STATE-TTL v1 <<<
+
 # Como json_top_level_string pero DECODIFICANDO los escapes \n \" \\ \t del
 # valor (los demas quedan crudos, mismo criterio medido de assistant_text_payload:
 # no aparecen en los 308 payloads de la 1.4 y un escape no manejado cae del lado
@@ -942,6 +981,7 @@ start_harness() {
     # arma en session con -saikit en el texto, ver caso_g6_armado_por_target).
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ]; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
+      podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
     # >>> SAIKIT-STANDING-RULES v1 >>>
     # Task 10.6: la fase session sin sentinel salia en silencio; ahora deja las
@@ -979,6 +1019,10 @@ start_harness() {
   rn_pending_text="$(rn_take_pending)"
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
   write_state "$task_hash" "0" "0" "0" "" "$lane"
+  # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
+  # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni
+  # por el skip explicito. Fail-open: si no hay `find`, no se barre nada.
+  barrer_estado_viejo
   printf 'prompt task started: %s\n' "$task_hash" > "$LOG_PATH" 2>/dev/null || true
 
   context="$(harness_context)"
@@ -1556,6 +1600,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     fi
     # <<< SAIKIT-REVIEW-NOTICE v1 <<<
     rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
+    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_allow
   fi
 
@@ -1565,6 +1610,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
     # cobrando recibo despues de declararse agotado (A4).
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
+    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_budget_exhausted "$missing"
   fi
 
