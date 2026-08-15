@@ -353,6 +353,13 @@ propiedad byte a byte que vuelve verificable la adopción entera. Su remoción e
 un cambio de bytes real con comportamiento nulo, así que le corresponde su
 propia tarea y su propia declaración, con el arnés probando la inercia.
 
+**Removido después:** la Task 10.1 [e1f6582, PR #16] retiró
+`is_engineering_task`/`is_trivial_task`/`SUBSTANTIVE_RE`/`TRIVIAL_RE` (grep de
+cero call sites antes de borrar). `json_number_field` sigue en la fuente: hoy
+tiene definición sin call sites (muerto también), y su retiro le toca a la
+tarea de limpieza que lo nombre. Este párrafo queda como registro histórico de
+la decisión de adopción.
+
 **Dato para el instalador (2.2):** el archivo vivo es **LF puro** (medido, no
 supuesto: 40333 bytes con y sin `\r`), y `.gitattributes` ya fuerza
 `*.sh text eol=lf`. El instalador tiene que escribir LF; con CRLF rompería la
