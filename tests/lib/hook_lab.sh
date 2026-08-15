@@ -147,6 +147,11 @@ lab_run() {
   [ -n "${LAB_GROK_HOOK_EVENT:-}" ]    && lab_cmd+=(GROK_HOOK_EVENT="$LAB_GROK_HOOK_EVENT")
   [ -n "${LAB_GROK_SESSION_ID:-}" ]    && lab_cmd+=(GROK_SESSION_ID="$LAB_GROK_SESSION_ID")
   [ -n "${LAB_GROK_WORKSPACE_ROOT:-}" ] && lab_cmd+=(GROK_WORKSPACE_ROOT="$LAB_GROK_WORKSPACE_ROOT")
+  # Task 7.3 r1 (Greptile P2 / CR PR #27): la senal EXPORTADA VACIA tambien
+  # identifica a Grok (el hook la mira por setness). Este interruptor la
+  # inyecta vacia a proposito; el mecanismo principal de arriba no puede
+  # (LAB_GROK_HOOK_EVENT="" significa "no inyectar").
+  [ "${LAB_GROK_HOOK_EVENT_VACIA:-}" = "1" ] && lab_cmd+=(GROK_HOOK_EVENT="")
   # Task 5.3: ZCODE_SESSION_ID / ZCODE_PROJECT_DIR son la senal de host de zcode
   # (medido Task 5.1: las inyecta el host, no el comando registrado). Mismo
   # determinismo que CLAUDECODE: el lab las unsetea SIEMPRE y solo las repone el

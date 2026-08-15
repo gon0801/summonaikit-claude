@@ -111,6 +111,7 @@ G2|toolresult_veto_quitado|el veto de toolResult.exit_code != 0 se neutraliza y 
 G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)
 G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
+G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -335,7 +336,7 @@ mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 # adentro de Claude hereda CLAUDECODE=1 Y recibe GROK_HOOK_EVENT del runner —
 # sin la rama (y sin su prioridad), el lado grok resuelve HOST=claude y los dos
 # hosts comparten estado. Lo atrapa caso_g1_dos_hosts_grok_y_claude_no_comparten_estado.
-mut_host_grok_sin_rama()     { sed 's/if \[ -n "\${GROK_HOOK_EVENT:-}" \]; then/if false; then/'; }
+mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; then/if false; then/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa
@@ -358,6 +359,10 @@ mut_alias_padre_camel_quitado() { sed 's/^  \[ -n "$command_text" \] || command_
 # toca estado de un proceso que se va. Lo atrapa
 # caso_g1_grok_stop_shutdown_no_toca_estado.
 mut_stop_sin_filtro_end_turn() { sed 's/\[ "$stop_reason" != "end_turn" \]/[ "$stop_reason" != "end_turn" ] \&\& false/'; }
+# r1 (Greptile P2 / CR PR #27): devuelve la deteccion a -n (valor no-vacio).
+# Una senal exportada VACIA deja de contar y el estado del turno grok cae al
+# arbol del host heredado. Lo atrapa caso_g1_grok_senal_exportada_vacia_cuenta.
+mut_grok_setness_por_valor() { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]/if [ -n "\${GROK_HOOK_EVENT:-}" ]/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 # Task 9.3 movio la frontera de has_receipt_label a (^|[^[:alpha:]'"]): el sed

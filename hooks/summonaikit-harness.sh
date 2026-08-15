@@ -86,16 +86,18 @@ PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
 # Codex inyecta una senal propia, esa es mejor evidencia y esta rama se
 # reescribe. 7.3 insertara grok ENCIMA (orden final: grok > codex > zcode >
 # claude > other).
-if [ -n "${GROK_HOOK_EVENT:-}" ]; then
+if [ "${GROK_HOOK_EVENT+x}" = "x" ]; then
   # Task 7.3 (D2): GROK_HOOK_EVENT la inyecta el runner de hooks de Grok en
   # cada proceso que el spawnea (presente en los 12 dumps de env de 7.1). Va
-  # con presencia, no valor: cualquier valor cuenta, porque si el runner la
-  # seteo, el proceso es de Grok — un evento que no reconozcamos no cambia la
-  # identidad. NO se usa GROK_SESSION_ID a proposito: el operador lanza Claude
-  # DESDE Grok y el hijo heredaria esa var y se creeria Grok — el mismo error
-  # de identidad que la rama codex de abajo cierra en direccion inversa.
-  # CLAUDECODE ausente en Grok (measured 7.1), y Claude/zcode/Codex no setean
-  # GROK_HOOK_EVENT: sin colision medida en ninguna direccion.
+  # por SETNESS, no valor: cuenta incluso EXPORTADA VACIA (hallazgo Greptile
+  # P2 / CR r1 del PR #27 — `-n` la ignoraria y el proceso clasificaria por
+  # las senales heredadas, p.ej. un CLAUDECODE=1 del padre), porque si el
+  # runner la exporto, el proceso es de Grok — un evento que no reconozcamos
+  # no cambia la identidad. NO se usa GROK_SESSION_ID a proposito: el operador
+  # lanza Claude DESDE Grok y el hijo heredaria esa var y se creeria Grok —
+  # el mismo error de identidad que la rama codex de abajo cierra en
+  # direccion inversa. CLAUDECODE ausente en Grok (medido 7.1), y
+  # Claude/zcode/Codex no setean GROK_HOOK_EVENT: sin colision medida.
   HOST=grok
 elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
   HOST=codex
