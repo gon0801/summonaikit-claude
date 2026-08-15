@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-15 — Deploy pendiente del perfil Claude (master `d41f85d`)
+
+- **Qué se deployó:** el hook de `master` al perfil **Claude**. No corresponde a
+  un PR nuevo: el PR #26 (9.8 + política de gate en CI) **cambió el hook** y su
+  deploy fue sólo a `~/.codex`, así que `~/.claude/hooks/` quedó atrás.
+  Detectado al revisar el cierre de la jornada: vivo `3755086874 97179` contra
+  master `678207720 98088`.
+- **`install-hook.sh`:** `REPARADO: el destino era nuestro y difiere de la
+  fuente.` Backup:
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260815-134654.bak`
+  **Vivo vs master:** cksum idéntico (`678207720 98088`).
+- **`check-hook-registration.sh`:** exit 0 y silencio.
+- **Verificación viva:** un turno headless `claude -p` en un repo nuevo, sin
+  `-saikit`, devolvió `OK + REGLAS` — la sesión funciona y las reglas
+  permanentes de 10.6 siguen llegando con el hook nuevo.
+- **Regla que esto confirma:** el deploy es **por perfil**. Un PR que toca el
+  hook y se deploya sólo a un host deja los otros atrás en silencio; la única
+  señal es comparar `vivo` contra `origin/master`, que es justo el chequeo que
+  la nota de coordinación pide hacer SIEMPRE antes de instalar.
+- **Operador:** Gon.
+
 ## 2026-08-15 — PR #22 / Phase 9: seis defectos del gate (merge `637330a`)
 
 - **Mergeado:** PR #22 `feat/phase-9-gate-defects` → master — Tasks **9.1, 9.2,
