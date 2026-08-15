@@ -101,6 +101,9 @@ G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae
 G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
 G3|role_fallback_quitada|se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear
 G3|fast_no_exime_ceremonia|lane=fast deja de eximir la secuencia (el carril no sirve)
+G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
+G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
+G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -279,7 +282,12 @@ mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_al
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
 mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'/'implementer|verifier|reviewer'/"; }
-mut_secuencia_tambien_en_cursor() { sed 's/if \[ "\$TARGET" = "claude" \]; then/if true; then/'; }
+# Task 6.4 movio la condicion de la ceremonia de `if [ "$TARGET" = "claude" ]`
+# a `case "$TARGET" in claude|codex)`: el sed de esta mutacion se actualiza al
+# literal nuevo (el patron `*)` matchea cualquier target, mismo efecto que el
+# `if true` de antes). Si el sed viejo quedara, la guardia 2 del driver ("la
+# mutacion no cambio nada") reventaria la bateria entera.
+mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex)/case "$TARGET" in *)/'; }
 # Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
@@ -299,6 +307,22 @@ mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\
 # ni mete backslashes (la trampa de MSYS2 de :128-131).
 mut_agent_type_no_se_lee()   { sed 's/json_top_level_string agent_type/true/'; }
 mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/'; }
+# Task 6.4 (D2): apaga la rama explicita de codex en la deteccion de HOST. Con
+# CLAUDECODE=1 heredado (el escenario real: Codex lanzado desde adentro de
+# Claude), el lado codex vuelve a HOST=claude y los dos hosts comparten estado
+# — lo atrapa caso_g1_dos_hosts_codex_y_claude_no_comparten_estado. El patron
+# matchea SOLO la linea de deteccion (SUMMONAIKIT_HOOK_TARGET con su `:-`), no
+# el chequeo de salida de emit_gate_failure (que compara $TARGET pelado).
+mut_host_codex_sin_rama()    { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "codex" \]/SUMMONAIKIT_HOOK_TARGET:-}" = "codexNUNCA" ]/'; }
+# Task 6.4 (D3): revierte la ceremonia a claude-only — el gate vuelve a ser
+# inerte en codex. Lo atrapa caso_g3_ceremonia_se_exige_en_codex (el bloqueo
+# que reclama al implementer desaparece y el turno cierra limpio).
+mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex)/case "$TARGET" in claude)/'; }
+# Task 6.4 (medido 6.2): devuelve el exit 2 al bloqueo de codex. Codex descarta
+# el stdout con exit != 0, o sea gate decorativo — lo atrapa
+# caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
+# patron de ancla por comentario que mut_budget_zcode_sigue_0.
+mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 mut_etiqueta_sin_frontera(){ sed 's/(^|\[^\[:alpha:\]\])/(^|.)/'; }

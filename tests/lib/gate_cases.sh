@@ -166,7 +166,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -477,6 +477,73 @@ caso_g1_host_segun_senal() {
   _senal_espera_host zcode-sid zcode    # solo ZCODE_SESSION_ID => zcode
   _senal_espera_host zcode-pdir zcode   # solo ZCODE_PROJECT_DIR => zcode (hallazgo 5)
   _senal_espera_host ninguna   other    # sin senal => other, NUNCA claude
+}
+
+# Task 6.4 (D2) — el caso que ata HOST=codex, espejo del cross-host zcode de
+# arriba. El escenario REAL que la rama previene (medido 6.1): el operador
+# corre Codex DESDE ADENTRO de Claude (codex-rescue, cross-review.ps1) y el
+# hook de Codex hereda CLAUDECODE=1 del proceso padre — sin la senal explicita
+# PRIMERO en el orden, el lado codex resuelve HOST=claude y ambos turnos
+# comparten estado. Lado B lleva LAS DOS senales a proposito: la explicita
+# (SUMMONAIKIT_HOOK_TARGET=codex, la unica que en Codex llega de verdad —
+# 6.1) tiene que GANARLE a la heredada.
+caso_g1_dos_hosts_codex_y_claude_no_comparten_estado() {
+  LAB_SESSION_ID=""
+
+  # --- Lado A: Claude (CLAUDECODE=1, sin TARGET explicito) ---
+  LAB_CLAUDECODE=1
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tarea del host Claude')"
+  LAB_CLAUDECODE=""
+  ruta_A="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+  _no_vacio "ruta de estado de A tras armar" "$ruta_A"
+  _igual "cycle de A recien armado" "$(grep '^cycle=' "$ruta_A" | tail -n 1 | cut -d= -f2-)" "0"
+
+  # --- Lado B: Codex lanzado desde adentro de Claude (CLAUDECODE=1 heredado
+  # + TARGET=codex explicito; lab_run exporta SUMMONAIKIT_HOOK_TARGET) ---
+  LAB_CLAUDECODE=1
+  lab_run prompt codex "$(lab_payload_prompt '-saikit tarea del host Codex')"
+  LAB_CLAUDECODE=""
+  ruta_B="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/codex/' | head -n 1)"
+  _no_vacio "estado de B bajo state/codex/ (la senal explicita gana a CLAUDECODE)" "$ruta_B"
+
+  # Mitad 1: rutas distintas — sin la rama, B colapsa al path de A.
+  if [ -n "$ruta_B" ] && [ "$ruta_A" = "$ruta_B" ]; then
+    _mal "A (claude) y B (codex) comparten harness-state.env — D2 sin rama (Task 6.4)"
+  fi
+  # Mitad 2: el estado de A sobrevive intacto al armado de B.
+  [ -f "$ruta_A" ] || _mal "el estado de A se perdio al armar B (Task 6.4, mitad 2)"
+  _igual "cycle de A intacto tras el armado de B" \
+         "$(grep '^cycle=' "$ruta_A" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "0"
+
+  LAB_CLAUDECODE=""; LAB_SESSION_ID=""
+}
+
+# Control de allowlist (Task 6.4, sin mutacion propia — el catch es el caso de
+# arriba): SOLO el literal `codex` mapea a HOST=codex; cualquier otro valor de
+# SUMMONAIKIT_HOOK_TARGET cae por las senales de abajo hasta other (Core Rule
+# 2: un valor que no reconozco no es evidencia de nada). Y codex va PRIMERO:
+# le gana incluso a la senal de zcode (7.3 insertara grok encima, orden final
+# grok > codex > zcode > claude > other).
+caso_g1_host_codex_solo_literal() {
+  _target_espera_host() {
+    _t="$1"; _esperado="$2"
+    lab_limpiar_estado
+    lab_run prompt "$_t" "$(lab_payload_prompt '-saikit detectar host por target')"
+    LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""
+    _ruta="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | head -n 1)"
+    _no_vacio "ruta de estado con target=$_t" "$_ruta"
+    case "$_ruta" in
+      *"/$_esperado/"*) : ;;
+      *) _mal "con target=$_t esperaba segmento /$_esperado/, dio: $_ruta" ;;
+    esac
+  }
+  _target_espera_host codex codex        # el literal acredita
+  _target_espera_host codexx other       # valor no reconocido: NUNCA codex, y sin otra senal => other
+  LAB_CLAUDECODE=1
+  _target_espera_host codexy claude      # no reconocido + CLAUDECODE=1 => cae al fallback claude
+  LAB_ZCODE_SESSION_ID="sess_zcode_ctrl"
+  _target_espera_host codex codex        # codex le GANA a la senal zcode presente
+  lab_limpiar_estado
 }
 
 
@@ -936,7 +1003,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando"
+CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -1029,6 +1096,35 @@ caso_g3_target_por_claudecode_fallback() {
   LAB_CLAUDECODE=""
   _igual "exit code (CLAUDECODE=1 => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
   _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+}
+
+# Task 6.4 (D3) — la ceremonia se exige TAMBIEN con TARGET=codex. 6.1 midio que
+# el rol llega en Codex (agent_type de primer nivel, forma identica a Claude
+# post-3.7), asi que la rama SE PRENDE: [ "$TARGET" = "claude" ] pasa a
+# case claude|codex. La forma del bloqueo es la que 6.2 midio: el JSON viaja
+# con exit 0 porque Codex descarta el stdout si el exit no es 0 — la mitad de
+# salida la ata caso_g6_bloqueo_codex_exit_cero. Y la escotilla ROLE FALLBACK
+# (D4) tiene que valer por la MISMA rama: es la primera vez que la ceremonia
+# corre en Codex y sin escotilla un 429 dejaria el turno sin salida.
+caso_g3_ceremonia_se_exige_en_codex() {
+  # Sembrar bajo state/codex/: el Stop con TARGET=codex lee ahi (Task 5.3).
+  # Mismo malabar que caso_g3_target_por_claudecode_fallback y por el mismo
+  # motivo: los helpers del lab son esquema-agnosticos a proposito.
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
+  lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit (el bloqueo codex viaja con exit 0, medido 6.2)" "$LAB_RC" "0"
+  _contiene "decision de bloqueo en codex" "$LAB_OUT" '"decision":"block"'
+  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+
+  # La escotilla D4 vale en codex: dos roles corridos, el tercero declarado.
+  lab_limpiar_estado
+  lab_sembrar 123456 0 1 1 "implementer,verifier"
+  lab_run stop codex "$(lab_payload_stop "$_RECIBO_ROLE_FALLBACK_REVIEWER")"
+  _igual "exit con ROLE FALLBACK: REVIEWER declarado en codex" "$LAB_RC" "0"
+  _no_contiene "sin bloqueo con la escotilla declarada" "$LAB_OUT" '"decision":"block"'
+  LAB_ESTADO_PATH="$_ep_backup"
 }
 
 # ===================== Task 5.4 — TARGET/budget/PHASE para el segundo host ====
@@ -1566,7 +1662,7 @@ caso_g5_agotado_limpia_estado() {
 }
 
 # ========================================== G6 — salidas por target y por fase
-CASOS_G6="caso_g6_bloqueo_por_target caso_g6_permiso_por_target caso_g6_presupuesto_agotado_por_target caso_g6_armado_por_target"
+CASOS_G6="caso_g6_bloqueo_por_target caso_g6_permiso_por_target caso_g6_presupuesto_agotado_por_target caso_g6_armado_por_target caso_g6_bloqueo_codex_exit_cero"
 
 # El mismo estado, el mismo veredicto, dos contratos de salida distintos: en
 # claude el host lee el exit code 2 y el JSON de decision; en cursor solo lee un
@@ -1624,6 +1720,23 @@ caso_g6_armado_por_target() {
   lab_limpiar_estado
   lab_run session claude "$(lab_payload_session 'continuar la tarea -saikit del turno anterior')"
   _contiene "stdout en claude, fase session" "$LAB_OUT" '"hookEventName":"UserPromptSubmit"'
+}
+
+# Task 6.4 — la forma de salida de codex, medida en 6.2 (12 turnos headless):
+# Codex DESCARTA el stdout del hook cuando el exit no es 0 (exit 2 => 1 Stop,
+# 0 hook_prompt, NO bloquea; el mismo JSON con exit 0 => 4 Stops, bloquea).
+# El emit_gate_failure del vivo (decision:block + exit 2) era DECORATIVO ahi.
+# En target codex el JSON de bloqueo viaja con exit 0; claude conserva su
+# exit 2 (caso_g6_bloqueo_por_target, arriba, lo sigue atando).
+caso_g6_bloqueo_codex_exit_cero() {
+  _ep_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  _sembrar_turno_completo
+  lab_run stop codex "$(lab_payload_stop "$_TEXTO_LLANO")"
+  LAB_ESTADO_PATH="$_ep_backup"
+  _igual "exit code en codex (con exit 2 Codex descarta el stdout, 6.2)" "$LAB_RC" "0"
+  _contiene "stdout en codex" "$LAB_OUT" '"decision":"block"'
+  _no_vacio "stderr en codex (el feedback igual se reporta)" "$LAB_ERR"
 }
 
 # --------------------------------------------------------------------- indice
