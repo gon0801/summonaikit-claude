@@ -817,6 +817,44 @@ HARNESS_CONTEXT
 # el sentinel es la unica condicion de armado, y el carril fast NO se infiere de
 # regex de trivialidad — se pide explicito (-saikit:fast).
 
+# >>> SAIKIT-STANDING-RULES v1 >>>
+# Task 10.6: reglas PERMANENTES, inyectadas una vez por sesion en la fase
+# SessionStart. No gatean, no arman, no cuentan ciclos.
+#
+# Por que hace falta un canal aparte del contrato: la regla "una corrida de la
+# bateria por tarea" YA vivia en harness_context() desde la 10.2 y se violo
+# igual. harness_context() se llama dentro de start_harness, o sea SOLO en el
+# camino armado; una sesion sin -saikit nunca lo ve. Medido en el transcript
+# e86ddb2c (2026-08-14): 2.6 h bloqueado esperando, ~1.75 h de ellas evitables,
+# con la regla presente en el kit y fuera del alcance del modelo.
+#
+# Cada linea lleva un numero medido atras. Sin numero no entra: este texto se
+# paga en CADA sesion de CADA repo, con el mismo criterio que un CLAUDE.md.
+standing_rules() {
+  cat <<'STANDING_RULES'
+SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn is armed with -saikit)
+- Run the FULL test battery ONCE per task, at the end. Do red/green on the single test file you are changing, never on the whole suite.
+- Do NOT sit blocked waiting on a background job. Start it, keep doing other work; you are notified when it finishes.
+- Before waiting on an external reviewer or CI, check whether it ALREADY finished instead of re-polling in a loop.
+STANDING_RULES
+}
+
+# Acotado a TARGET=claude a proposito: es el unico host donde se MIDIO que
+# SessionStart acepta hookSpecificOutput.additionalContext y que el texto llega
+# al modelo (repo descartable + claude -p headless; docs/task-10.6-plan.md).
+# zcode, Codex y Grok quedan `unknown`, no "no lo tienen": registrarlos a ciegas
+# es el error que la 6.2 evito por un pelo — ahi Codex resulto DESCARTAR el
+# stdout cuando el exit no es 0, algo que ninguna otra fase sugeria.
+#
+# Emite JSON completo y sale por su cuenta: el emit_allow que sigue no imprime
+# nada para claude, asi que esta funcion es la unica salida de este camino.
+emit_standing_rules() {
+  escaped="$(json_escape "$(standing_rules)")"
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$escaped"
+  exit 0
+}
+# <<< SAIKIT-STANDING-RULES v1 <<<
+
 emit_cursor_json() {
   key="$1"
   message="$2"
@@ -856,6 +894,17 @@ start_harness() {
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ]; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
     fi
+    # >>> SAIKIT-STANDING-RULES v1 >>>
+    # Task 10.6: la fase session sin sentinel salia en silencio; ahora deja las
+    # reglas permanentes. Va DESPUES del desarme y ANTES del emit_allow, y esta
+    # acotado a session: si corriera en prompt, un turno sin sentinel dejaria de
+    # ser mudo y se rompe caso_g1_no_arma_sin_sentinel (esa es la regresion que
+    # atrapa una rama mal acotada, por eso 10.6 no agrega un caso propio).
+    # No arma, no escribe estado y no toca el gate del sentinel.
+    if [ "$PHASE" = "session" ] && [ "$TARGET" = "claude" ]; then
+      emit_standing_rules
+    fi
+    # <<< SAIKIT-STANDING-RULES v1 <<<
     emit_allow
   fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<

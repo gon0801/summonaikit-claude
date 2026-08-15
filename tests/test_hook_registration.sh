@@ -41,11 +41,20 @@ escribir_settings_completo() {
     ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=stop bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=session bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
     ]
   }
 }
 JSON
 }
+
+# Task 10.6: SessionStart entra al fixture "completo" porque un registro completo
+# hoy la incluye — sin ella el verificador avisa (con razon) que las reglas
+# permanentes no llegan, y "completo => SILENCIO" dejaria de significar completo.
+# NO entra en `escribir_settings_real_sin_agent`: ese fixture representa el
+# registro REAL del operador, que no la tiene, y es el que ata el advisory.
 
 # El matcher REAL que usa el operador hoy (sin Agent). Es el fixture del caso
 # "registro real" y de los casos de matcher: cuenta las 3 fases (el hook corre)
@@ -167,7 +176,8 @@ cat > "$tmp/compuesto.json" <<'JSON'
   "hooks": {
     "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "echo armando && bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
     "PostToolUse":      [ { "hooks": [ { "type": "command", "command": "echo x; bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
-    "Stop":             [ { "hooks": [ { "type": "command", "command": "true || bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ]
+    "Stop":             [ { "hooks": [ { "type": "command", "command": "true || bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
+    "SessionStart":     [ { "hooks": [ { "type": "command", "command": "bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ]
   }
 }
 JSON
@@ -187,6 +197,22 @@ out="$(bash "$tool" --settings "$tmp/real.json" 2>&1)"; rc=$?
 printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "el matcher real sin Agent debe disparar el aviso: $out"
 printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "las 3 fases corren: no debe reportar INCOMPLETO"
 printf '%s' "$out" | grep -qi 'el gate NO corre' && malo "el gate SI corre en las 3 fases"
+
+# ------------------- 8-bis) Task 10.6: SessionStart se afirma SEPARADA y advisory
+# El registro real tiene las 3 fases del gate y NO tiene SessionStart. El
+# verificador tiene que decirlo, y tiene que decirlo SIN disfrazarlo de gate
+# roto: las reglas permanentes son una mejora, el gate corre igual. Si esto se
+# reportara como fase faltante, todo install existente pasaria a "INCOMPLETO"
+# — la alarma falsa que la Task 0.4 prohibe.
+caso "3 fases sin SessionStart => avisa de reglas permanentes, NO de gate roto"
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'REGLAS PERMANENTES' || malo "sin SessionStart debe avisar de las reglas permanentes: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "SessionStart ausente NO vuelve incompleto al registro del gate"
+printf '%s' "$out" | grep -qi 'el gate NO corre' && malo "el gate corre igual sin SessionStart"
+
+caso "con SessionStart registrada, el aviso de reglas permanentes NO aparece"
+out_s="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"
+printf '%s' "$out_s" | grep -qi 'REGLAS PERMANENTES' && malo "con SessionStart no debe avisar: $out_s"
 
 # ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
 caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"
@@ -229,7 +255,7 @@ printf '%s' "$out" | grep -qi 'el gate NO corre' \
 
 caso "matcher de PostToolUse sin Agent => reporta FUERTE y exit 0"
 cat > "$tmp/no-agent.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash|Edit|Write","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash|Edit|Write","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/no-agent.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "fail-open: esperaba exit 0, dio $rc"
@@ -237,7 +263,7 @@ printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "debe reportar que el m
 
 caso "matcher '*' cubre Agent y calla"
 cat > "$tmp/star.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -245,7 +271,7 @@ out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 
 caso "un matcher cubierto entre varios grupos => calla"
 cat > "$tmp/mix.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -253,7 +279,7 @@ out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 
 caso "base sin Agent + local con Agent => calla"
 cat > "$tmp/base-noagent.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 cat > "$tmp/local-agent.json" <<'JSON'
 { "hooks": { "PostToolUse": [{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
@@ -271,7 +297,7 @@ printf '%s' "$out" | grep -qi "no cubre 'Agent'" && malo "no afirma ausencia de 
 
 caso "matcher que no compila como regex => unknown, no ausencia"
 cat > "$tmp/badregex.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash[","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash[","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/badregex.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"

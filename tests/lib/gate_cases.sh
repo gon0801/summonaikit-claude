@@ -166,10 +166,48 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma"
+
+# Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
+# cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
+#
+# Por que existe: la regla "una corrida de la bateria por tarea" YA estaba en el
+# contrato (10.2) y se violo igual, porque el contrato solo se inyecta en el
+# camino ARMADO y esa sesion nunca armo (se trabajo sin -saikit). Medido en el
+# transcript e86ddb2c: 2.6 h bloqueado esperando, ~1.75 h evitables.
+#
+# Medido antes de disenar (repo descartable, claude -p headless): SessionStart
+# en Claude acepta hookSpecificOutput.additionalContext y el texto llega al
+# modelo textual. Ver docs/task-10.6-plan.md.
+caso_g1_session_inyecta_reglas() {
+  lab_run session claude "$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" '"hookSpecificOutput"'
+  _contiene "stdout" "$LAB_OUT" '"hookEventName":"SessionStart"'
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
+  # La fase session NO arma: si creara estado, el Stop gate empezaria a exigir
+  # recibo en sesiones que nadie armo — es el defecto A4 en version nueva.
+  if lab_hay_estado; then _mal "la fase session NO debe crear estado (el Stop gate se activaria solo)"; fi
+}
+
+# El desarme sigue acotado a PHASE=prompt (el mismo acotamiento que ya protegia
+# a cursor). Un SessionStart no puede borrar el estado de un turno armado: en
+# Claude un /clear dispara SessionStart y se llevaria puesta la ceremonia en
+# curso.
+caso_g1_session_no_desarma() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
+  if ! lab_hay_estado; then _mal "precondicion: el turno con sentinel tenia que armar"; fi
+
+  lab_run session claude "$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
+  _igual "exit code" "$LAB_RC" "0"
+  if ! lab_hay_estado; then _mal "un SessionStart sin sentinel NO debe desarmar el turno en curso"; fi
+}
 
 # El bug del vendor que el parche del sentinel existe para tapar: "cualquier"
 # contiene "ui", asi que su regex de palabras clave armaba el harness solo.
+# NOTA (10.6): este caso es TAMBIEN la regresion que atrapa una rama de session
+# mal acotada — si la emision de reglas corriera en PHASE=prompt, este stdout
+# dejaria de estar vacio. Por eso 10.6 no agrega un caso propio para eso.
 caso_g1_no_arma_sin_sentinel() {
   lab_run prompt claude "$(lab_payload_prompt 'arregla cualquier bug del login y corre los tests')"
   _igual "exit code" "$LAB_RC" "0"

@@ -244,7 +244,13 @@ if "PostToolUse" in registradas and ptu_matchers:
 else:
     matcher_estado = "sin-ptu"
 
+# Task 10.6: SessionStart se afirma SEPARADO y NO entra en ESPERADAS. El gate
+# funciona sin esa fase — lo unico que se pierde son las reglas permanentes, que
+# son una mejora y no un requisito. Meterla en ESPERADAS haria que TODO install
+# existente se reporte "INCOMPLETO — el gate NO corre", que es exactamente la
+# alarma falsa que la Task 0.4 prohibe.
 print(json.dumps({
+    "session_registrada": ("SessionStart" in registradas),
     "faltantes": faltantes,
     "leidos": leidos,
     "ilegibles": ilegibles,
@@ -269,6 +275,20 @@ matcher_estado="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; 
 matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("matchers_obs",[])))' 2>/dev/null)"
 enabled_mal="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("enabled_mal",False))' 2>/dev/null)"
 fases_con_matcher="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fases_con_matcher",[])))' 2>/dev/null)"
+session_registrada="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("session_registrada",False))' 2>/dev/null)"
+
+# Task 10.6 — afirmacion SEPARADA, y advisory: sin SessionStart el gate corre
+# igual; lo que no llega son las reglas permanentes, que valen arme o no el
+# turno. Solo aplica a Claude: es el unico host donde se MIDIO que esa fase
+# acepta additionalContext y que el texto llega al modelo.
+reportar_session_rules() {
+  [ "$MODO" = "claude" ] || return 0
+  [ "$session_registrada" = "True" ] && return 0
+  reportar "[summonaikit] REGLAS PERMANENTES: SessionStart no esta registrado."
+  reportar "              El gate NO depende de esto y sigue corriendo igual: lo que se pierde"
+  reportar "              son las reglas que valen en toda sesion, arme o no el turno con -saikit."
+  reportar "              Se arregla en settings.json: agregar el hook en SessionStart, sin matcher."
+}
 
 # Reporta el hueco del matcher de Agent cuando PostToolUse esta registrado pero
 # su matcher no cubre 'Agent' (Task 3.7 / CORRECCION 2): un subagente read-only
@@ -321,6 +341,7 @@ if [ -z "$faltantes" ]; then
   [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
   [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
+  reportar_session_rules
   exit 0
 fi
 
@@ -345,5 +366,6 @@ reportar "              El archivo del hook puede estar perfecto: esto es el reg
 reportar "              revisar: $SETTINGS"
 [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
 [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
+reportar_session_rules
 reportar_matcher
 exit 0
