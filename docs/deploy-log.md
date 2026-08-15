@@ -246,3 +246,31 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   advisory conocido de A9 (matcher PostToolUse sin `Agent`).
 - **Vivo vs master:** cksum idéntico (`4023882360 67915`).
 - **Operador:** Gon.
+
+## 2026-08-14 — PR #16 / Phase 10 (Tasks 10.1, 10.2 y 10.3)
+
+- **Mergeado:** PR #16 `feat/phase-10-ceremonia-velocidad` → master — Phase 10
+  (velocidad de la ceremonia): 10.1 carril `-saikit:fast` (lane= en el estado,
+  Stop exige recibo+verify pero no los 3 subagentes; clasificadores muertos
+  retirados), 10.2 contrato con re-review dirigido al delta + evidencia en
+  batch + coletilla al aviso RN, 10.3 role files del repo sin verificación
+  duplicada. 9.x y 10.4 quedan `cc:TODO`. Plan doc commiteado byte-idéntico al
+  staged de la sesión de 6.2 (coordinación en `.harness-mem/`).
+- **¿Cambió el hook?** **Sí** (10.1 + 10.2: detección de lane, `write_state`
+  con lane, `stop_gate` con exención de ceremonia, contrato con carril y
+  bloque CHEAP-way, aviso RN con coletilla).
+- **`install-hook.sh`:** `REPARADO/ACTUALIZADO: el destino era nuestro y difiere
+  de la fuente` — vivo actualizado a master. **Desviación declarada:** deploy
+  ejecutado desde el worktree `summonaikit-claude-wt-p10` (master) porque el
+  árbol principal está ocupado por la sesión de `feat/6.2-probe-codex` con
+  trabajo sin commitear; `git checkout master && git pull --ff-only` hechos en
+  el worktree.
+- **`check-hook-registration.sh`:** registro en las 3 fases OK (exit 0). Mismo
+  advisory conocido del matcher PostToolUse sin `Agent`.
+- **Vivo vs master:** cmp byte a byte idéntico (verificado por la sesión).
+- **10.3 Step 4 (reinstalar perfiles al host, flujo 5.6):** sigue diferido —
+  instala sólo a `~/.zcode/agents` con `--host zcode`; no se ejecutó en este
+  deploy (ver fila 10.3 en Plans.md). El dir neutral `~/.agents/agents/` es
+  propiedad del kit vendor y NO se toca (medido: contenido propio, no deriva
+  de este repo).
+- **Operador:** Gon (sesión zcode, goal "fase de eficiencia de kimi").
