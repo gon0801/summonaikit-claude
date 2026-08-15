@@ -63,6 +63,10 @@ RESTORE=0
 # candado de secuencia es inalcanzable). No toca DEST.
 HOST=''
 QUITAR_ZCODE=0
+# Task 6.5: --host codex escribe la SEGUNDA copia (~/.codex/hooks) por el flujo
+# NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
+# el host declara".
+VIO_DEST=0
 
 # Posicion y formato fijos, como los declara el spec (§ La adopcion). La linea 1
 # es el shebang: un marcador antes de el rompe la ejecucion. Se lee UNA linea,
@@ -73,7 +77,7 @@ MARCADOR_RE='^# SAIKIT-CLAUDE-OWNED summonaikit-claude [^[:space:]]+$'
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dest)     DEST="${2:-}"; shift 2 ;;
+    --dest)     DEST="${2:-}"; VIO_DEST=1; shift 2 ;;
     --source)   SOURCE="${2:-}"; shift 2 ;;
     --manifest) MANIFEST="${2:-}"; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
@@ -89,10 +93,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Task 5.4: --host zcode es la unica forma de --host que existe hoy. Otro valor
-# no se acepta: falla antes de tocar el archivo o el config.
-if [ -n "$HOST" ] && [ "$HOST" != "zcode" ]; then
-  printf '[summonaikit] instalador: --host solo acepta "zcode" (recibido: %s)\n' "$HOST" >&2
+# Task 5.4 / 6.5: --host acepta zcode (registro-only, no toca DEST) y codex
+# (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal de DEST).
+# Otro valor no se acepta: falla antes de tocar el archivo o el config.
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode" o "codex" (recibido: %s)\n' "$HOST" >&2
   exit 2
 fi
 if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
@@ -100,17 +105,39 @@ if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
   exit 2
 fi
 
-# Task 5.4 (hallazgo 6): una sola copia del hook. Un --dest que caiga bajo
-# ~/.zcode crearia la segunda copia que 5.3 prohibio. Se niega, con o sin --host:
-# el estado se separa por HOST (dirname $0 + env), no duplicando el archivo.
+# Task 6.5 (D1): el destino lo decide --host, y cada host declara su ruta.
+# Sin --dest explicito, --host codex instala en la ruta que el wrapper .ps1 ya
+# lee como fallback (~/.codex/hooks). La copia NO se inventa: existe desde
+# antes y es carga estructural del .ps1 — la unica via por la que el TARGET
+# llega en Codex (6.1). El instalador es el UNICO escritor de ambas rutas y
+# las compara byte a byte contra la misma fuente: no divergen sin que grite.
+if [ "$HOST" = "codex" ] && [ "$VIO_DEST" -eq 0 ]; then
+  DEST="${HOME:-}/.codex/hooks/summonaikit-harness.sh"
+fi
+
+# Task 5.4 (hallazgo 6) / 6.5: ~/.zcode se niega SIEMPRE — ahi el estado se
+# separa por HOST y una copia seria inventada. ~/.codex se habilita SOLO con
+# --host codex: la regla nueva es que el destino lo decide --host, no que haya
+# una sola copia (D1 declaro la segunda para Codex).
 _zc_prefix="$(printf '%s/.zcode' "${HOME:-}")"
 case "$DEST" in
   "$_zc_prefix"|"$_zc_prefix"/*)
     printf '[summonaikit] instalador: --dest (%s) cae bajo ~/.zcode: rechazado.\n' "$DEST" >&2
-    printf '             Una sola copia del hook vive en ~/.claude/hooks. 5.3 separa por HOST.\n' >&2
+    printf '             El destino lo decide --host y zcode no declara copia propia: su estado\n' >&2
+    printf '             se separa por HOST sobre la copia de ~/.claude/hooks (5.3/5.4).\n' >&2
     exit 2
     ;;
 esac
+_cx_prefix="$(printf '%s/.codex' "${HOME:-}")"
+if [ "$HOST" != "codex" ]; then
+  case "$DEST" in
+    "$_cx_prefix"|"$_cx_prefix"/*)
+      printf '[summonaikit] instalador: --dest (%s) cae bajo ~/.codex: rechazado sin --host codex.\n' "$DEST" >&2
+      printf '             El destino lo decide --host y cada host declara su ruta (6.5/D1).\n' >&2
+      exit 2
+      ;;
+  esac
+fi
 
 decir() { printf '%s\n' "$*"; }
 
@@ -125,6 +152,13 @@ avisar_registro() {
   local verificador settings
   verificador="$here/check-hook-registration.sh"
   [ -r "$verificador" ] || return 0
+  # Task 6.5: en codex el registro no nombra al hook sino al wrapper .ps1, y
+  # vive en hooks.json (hermano del dir de hooks). La forma codex del
+  # verificador hace las DOS afirmaciones (registro->wrapper, wrapper->hook).
+  if [ "$HOST" = "codex" ]; then
+    bash "$verificador" --codex-hooks-json "$(dirname "$(dirname "$DEST")")/hooks.json" || true
+    return 0
+  fi
   settings="$(dirname "$(dirname "$DEST")")/settings.json"
   bash "$verificador" --settings "$settings" --hook-name "$(basename "$DEST")" || true
 }

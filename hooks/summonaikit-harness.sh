@@ -74,7 +74,21 @@ PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
 # resuelve aca (junto a PROFILE_DIR) sin esperar a los lectores JSON. unknown
 # => other, NUNCA claude: colapsar a claude reabre el defecto cuando la senal
 # falta (Core Rule 2). HOST se SUMA a la sesion (A4), no la reemplaza.
-if [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
+# Task 6.4 (D2): la senal EXPLICITA de Codex va PRIMERO. El operador corre
+# Codex desde adentro de Claude (codex-rescue, cross-review.ps1) y ahi el hook
+# de Codex hereda CLAUDECODE=1 del proceso padre (medido 6.1: reproducido
+# lanzando desde Claude); sin esta rama primero, ese turno se creeria claude y
+# los dos hosts compartirian estado. Allowlist, no passthrough: SOLO el
+# literal `codex` mapea (Core Rule 2 — un valor no reconocido no es evidencia
+# de nada) y cualquier otro valor cae por las senales de abajo. Es la primera
+# vez que HOST sale de una variable NUESTRA (la inyecta el .ps1 vecino como
+# env real del proceso, el unico host donde llega — A10/6.1); si algun dia
+# Codex inyecta una senal propia, esa es mejor evidencia y esta rama se
+# reescribe. 7.3 insertara grok ENCIMA (orden final: grok > codex > zcode >
+# claude > other).
+if [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
+  HOST=codex
+elif [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
   HOST=zcode
 elif [ "${CLAUDECODE:-}" = "1" ]; then
   HOST=claude
@@ -1296,7 +1310,15 @@ has_receipt_label() {
   # fallaban a la vez y un recibo honesto se bloqueaba (falso rojo => ciclos de
   # revision de mas). El `**`/`__` de apertura ya pasaba por la frontera
   # izquierda [^[:alpha:]]. El recibo plano sigue contando igual (A8 intacto).
-  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]])($label|$alt)(\*\*|__)?[[:space:]]*:"
+  # Task 9.3 (C11): la frontera izquierda excluye ademas la comilla simple y
+  # la doble — el feedback del gate y cualquier explicacion de su mecanica
+  # citan las etiquetas como 'Understand:', y esa cita satisfacia las seis sin
+  # recibo real. Limite declarado: una etiqueta legitima precedida por
+  # apostrofo deja de contar (recuperable — el gate pide el recibo de nuevo);
+  # y citar el TEMPLATE completo con sus saltos reales sigue contando, porque
+  # es indistinguible de un recibo (advisory por diseno). A8 (prosa corrida)
+  # intacto: el \n decodificado no es comilla.
+  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]'\"])($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
 build_gate_feedback() {
@@ -1340,6 +1362,13 @@ emit_gate_failure() {
   escaped="$(json_escape "$feedback")"
   printf '{"decision":"block","reason":"%s"}\n' "$escaped"
   printf '%s\n' "$feedback" >&2
+  # Task 6.4 (medido 6.2, 12 turnos headless): Codex DESCARTA el stdout del
+  # hook cuando el exit no es 0 — el mismo JSON con exit 2 no bloquea (1 Stop,
+  # 0 hook_prompt) y con exit 0 bloquea (4 Stops, 3 hook_prompt). El bloqueo
+  # de codex viaja con exit 0; claude/zcode conservan el exit 2 medido en 5.2.
+  if [ "$TARGET" = "codex" ]; then
+    exit 0    # saikit-6.4-codex-block (mutacion: exit 0 -> exit 2)
+  fi
   exit 2
 }
 
@@ -1562,7 +1591,12 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # por el banco o escrito por un hook pre-10.1) != "fast" => ceremonia
   # completa: el default ausente es el lado seguro.
   if [ "$(read_state_value lane)" != "fast" ]; then
-  if [ "$TARGET" = "claude" ]; then
+  # Task 6.4 (D3): la ceremonia acepta codex. 6.1 midio que el rol LLEGA en
+  # Codex (agent_type de primer nivel en los eventos internos, forma identica
+  # a Claude post-3.7), asi que la rama se prende — la condicion del diseno
+  # ("solo si 6.1 mide que el rol llega") esta cumplida y medida. cursor y
+  # other siguen fuera; zcode entra por su fallback TARGET=claude (5.4).
+  case "$TARGET" in claude|codex)
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
     # de herramienta) trababa el turno sin salida. La declaracion en el recibo
@@ -1591,7 +1625,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
         missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\n"
       fi
     fi
-  fi
+  ;;
+  esac
   fi
 
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>

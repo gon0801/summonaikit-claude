@@ -290,6 +290,38 @@ out="$(restaurar)"; rc=$?
 [ "$(find "$backups" -type f -name '*.bak' | wc -l)" -eq "$antes_n" ] \
   || malo "archivo un destino que no existia"
 
+# =============================================== Task 6.5 — restore para codex
+# La vuelta atras vale igual para la segunda copia (--host codex resuelve el
+# DEST a <home>/.codex/hooks/): mismas negativas que el flujo claude, atadas
+# aca porque el dia que diverjan lo haran en silencio.
+caso "codex: restaura el backup del vendor listado en el manifiesto"
+home_cx="$tmp/codex-restore-1"; d_cx="$home_cx/.codex/hooks"; mkdir -p "$d_cx"
+dest="$d_cx/summonaikit-harness.sh"; backups="$d_cx/saikit-backups"; mkdir -p "$backups"
+vendor_cx="$tmp/vendor-codex-restore.sh"
+escribir_vendor "$vendor_cx" "codex-1"
+cp "$vendor_cx" "$backups/summonaikit-harness.sh.vendor.20260101-000000.bak"
+cp "$fuente" "$dest"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --manifest "$mani_backups" --restore-vendor 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 restaurando codex, dio $rc: $out"
+cmp -s "$dest" "$vendor_cx" || malo "el destino codex no volvio al backup del vendor"
+
+caso "codex: sin backup del vendor => exit 6, no escribe"
+home_cx="$tmp/codex-restore-2"; d_cx="$home_cx/.codex/hooks"; mkdir -p "$d_cx"
+dest="$d_cx/summonaikit-harness.sh"
+cp "$fuente" "$dest"; antes_cx="$(sha256sum < "$dest")"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --manifest "$mani_backups" --restore-vendor 2>&1)"; rc=$?
+[ "$rc" -eq 6 ] || malo "esperaba exit 6 sin backups codex, dio $rc: $out"
+[ "$(sha256sum < "$dest")" = "$antes_cx" ] || malo "escribio el destino codex sin tener de donde"
+
+caso "codex: backup fuera del manifiesto => no se restaura"
+home_cx="$tmp/codex-restore-3"; d_cx="$home_cx/.codex/hooks"; mkdir -p "$d_cx"
+dest="$d_cx/summonaikit-harness.sh"; backups="$d_cx/saikit-backups"; mkdir -p "$backups"
+printf '#!/usr/bin/env bash\n# backup que nadie miro jamas\nexit 0\n' > "$backups/summonaikit-harness.sh.vendor.20260101-000000.bak"
+cp "$fuente" "$dest"; antes_cx="$(sha256sum < "$dest")"
+out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --manifest "$mani_backups" --restore-vendor 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && malo "restauro un backup codex fuera del manifiesto: $out"
+[ "$(sha256sum < "$dest")" = "$antes_cx" ] || malo "el destino codex cambio con un backup no manifestado"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_restore_vendor: FAIL" >&2
   exit 1

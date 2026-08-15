@@ -417,3 +417,55 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **CI del PR:** quality PASS, suite PASS (1m43s), CodeRabbit PASS.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-15 — Merge ajeno 9.4+9.5 (f78e9c7) — deploy desde sesión zcode
+
+- **Mergeado/pusheado por la sesión de Phase 9** (`f78e9c7` fix(9.4+9.5): el
+  sentinel deja de armar por texto citado — campo ausente; `0b4c77f` reserva
+  de filas 6.4/6.5/6.6/9.3/9.8 en cc:WIP). Su sesión sigue trabajando; este
+  deploy sincroniza el vivo a master para no dejar el artefacto atrás
+  (regla: deploy tras merge, SIEMPRE — su próximo deploy será no-op).
+- **Deploy:** install desde blob de origin/master (worktree, desviación de
+  siempre). **Vivo vs master:** cmp byte a byte idéntico (0b4c77f).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Operador:** Gon (sesión zcode).
+
+## 2026-08-15 — PR #23 (2e7a181): Phase 6 (6.4+6.5+línea base 6.6) + 9.3 — deploy `~/.codex` (TERCER HOST)
+
+- **Mergeado por la sesión de Phase 6** (worktree `wt-p6`). Contenido: HOST=codex
+  por señal explícita (D2), ceremonia `case claude|codex` (D3 prendida), bloqueo
+  con exit 0 en codex (lo que 6.2 midió), `--host codex` en el instalador,
+  manifiesto con el vivo de Codex, verificador con la cadena wrapper, frontera
+  anti-cita de 9.3, y línea base con los escenarios codex 27-33.
+- **Deploy `~/.codex` (PRIMERA VEZ):** `install-hook.sh --host codex` desde wt-p6
+  con contenido == origin/master (diff vacío verificado antes). Destino clasificó
+  **VENDOR CONOCIDO** (etiqueta del manifiesto 6.5) → backup
+  `saikit-backups/summonaikit-harness.sh.vendor.20260815-094928.bak` → reemplazo
+  byte a byte (cmp OK). `--restore-vendor` queda como red (backup en manifiesto).
+- **Verificador codex:** silencio, exit 0 (registro→wrapper y wrapper→hook verdes).
+- **Perfiles ajenos intactos:** `~/.codex/hooks.json` cksum 2271698800 y
+  `~/.claude/hooks/summonaikit-harness.sh` cksum 4159550777, idénticos antes/después.
+- **Turnos reales (codex exec, headless):** `-saikit` ARMÓ — contrato inyectado,
+  el modelo intentó `spawn_agent`, reintentó una vez como exige el flujo y declaró
+  `SUMMONAIKIT HARNESS DELEGATED - awaiting implementer` (la escotilla, viva);
+  estado en `state/codex/1686855735/<session>/`. El turno pelado NO armó (1 solo
+  estado tras ambos). Nota: `codex exec` corre read-only por defecto — el patch
+  del turno A fue rechazado por el sandbox de Codex, no por el gate.
+- **`~/.claude` NO se tocó en este deploy**: el hook vivo de Claude quedó en el
+  estado del deploy anterior (98ef786) y ahora está DETRÁS de master (6.4/9.3
+  también lo cambian) — le toca al flujo de siempre de la sesión zcode/Phase 9
+  en su próximo ciclo (avisado por broadcast).
+- **Operador:** sesión Claude Phase 6 (autónoma), Gon dormido.
+
+## 2026-08-15 — PR #25 (e332def): review de bots del PR #23 atendida — deploy no-op
+
+- **Contenido:** Greptile P1 (la afirmación (b) del wrapper aceptaba una mención
+  solo-en-comentario — ahora exige línea de código, con el límite "no se parsea
+  PowerShell" declarado, criterio de la 0.4) + minor de CodeRabbit (el caso
+  aserta el diagnóstico exacto). CodeRabbit no había alcanzado a correr en el
+  #23 (mergeado antes de su pasada — lección aprendida: el #25 esperó a los DOS
+  bots + CI antes de mergear). ROJO medido; CI 4/4.
+- **Deploy `~/.codex`:** no-op — "YA AL DIA: el destino es nuestro y byte a byte
+  igual a la fuente" (el merge tocó tools/tests, no el hook). Se corre y se
+  registra igual, para no perder la costumbre.
+- **Operador:** sesión Claude Phase 6 (autónoma).

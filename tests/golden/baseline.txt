@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 360d7299daeff4f08d50f0231ff45fae3bc6b611cd19f3eb6b26e8cc67c657cd
-# hook_bytes: 88806
-# hook_lineas: 1585
-# escenarios: 26
+# hook_sha256: 8caca7c61d254742a6001d76742232ff6e6fbe73adb9a21149815bfc2d9d30a3
+# hook_bytes: 92052
+# hook_lineas: 1632
+# escenarios: 33
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -2028,5 +2028,480 @@ hooks/state/<PROJECT_KEY>/ec0eda84-6011-49f8-8d51-58e10deb537c/harness-state.env
 exit 0
 stdout <vacio>
 stderr <vacio>
+--- estado tras el paso 04
+(sin estado)
+
+=== escenario 27-codex-sin-armar
+# codex, G1 no-arma + G6 permiso. Un prompt sin sentinel en el tercer host:
+# mudo y sin estado; el tool no crea estado sin turno armado; el Stop deja pasar
+# en silencio (emit_allow no imprime para codex). Analogo del 01/17.
+# Payloads con la forma RECAPTURADA 2026-08-15 (los crudos de 6.1 no se
+# commitearon y su repo fue borrado; la recaptura headless salio del mismo
+# binario, codex-cli 0.147.0): snake_case sin duplicado camel, turn_id, model,
+# permission_mode=bypassPermissions, tool_response STRING, tool_use_id exec-.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 01
+(sin estado)
+--- paso 02  phase=tool target=codex  payload=02.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+--- paso 03  phase=stop target=codex  payload=03.stop.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+
+=== escenario 28-codex-armado-contrato
+# codex, G1 arma + contrato. El token codex del filename exporta
+# SUMMONAIKIT_HOOK_TARGET=codex — la MISMA senal real que inyecta el .ps1
+# (unico host donde el TARGET llega, 6.1) — y el estado queda bajo
+# state/codex/<key>/ (D2, Task 6.4). El contrato viaja por additionalContext,
+# la forma que 6.2 midio aceptada en codex (llega como mensaje developer).
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0028-7abc-8def-000000000028/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0028-7abc-8def-000000000028/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+
+=== escenario 29-codex-evidencia-incompleta
+# codex, G2/G3/G4 bloquean + LA FORMA NUEVA DE SALIDA (Task 6.4): el JSON
+# decision:block viaja con exit 0 — 6.2 midio que Codex DESCARTA el stdout del
+# hook cuando el exit no es 0 (el exit 2 del vivo era decorativo aca; con exit 0
+# bloquea de verdad). Armado, una edicion por Bash, Stop sin recibo: bloquea
+# reclamando evidencia, ceremonia y recibo. Analogo del 19.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 02  phase=tool target=codex  payload=02.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 03  phase=stop target=codex  payload=03.stop.codex.json
+exit 0
+stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+
+=== escenario 30-codex-falta-verifier
+# codex, G3 bloquea — D3 PRENDIDA: la ceremonia se exige con TARGET=codex
+# (Task 6.4; 6.1 midio que el rol llega en agent_type de PRIMER NIVEL en los
+# eventos internos del subagente, y estos payloads llevan esa forma real).
+# implementer y reviewer corrieron; el verifier no; el runner del turno
+# principal acredita verified. El Stop con recibo completo bloquea SOLO por el
+# verifier y el mensaje ofrece la escotilla ROLE FALLBACK (D4). Analogo del 20.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 02  phase=tool target=codex  payload=02.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+estado_host: codex
+--- paso 03  phase=tool target=codex  payload=03.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: pytest -q
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer
+| lane=full
+estado_host: codex
+--- paso 04  phase=tool target=codex  payload=04.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,reviewer
+| lane=full
+estado_host: codex
+--- paso 05  phase=stop target=codex  payload=05.stop.codex.json
+exit 0
+stdout (sha a09bca6984e28fcd, 899 bytes) identico a 20-zcode-falta-verifier/paso 05
+stderr (sha c556b3d5eb5b543f, 843 bytes) identico a 20-zcode-falta-verifier/paso 05 (stderr)
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=1
+| agents_seen=implementer,reviewer
+| lane=full
+estado_host: codex
+
+=== escenario 31-codex-turno-completo
+# codex, G2+G3+G4 pasan: secuencia implementer -> verifier -> reviewer por
+# eventos internos (agent_type, la via medida en 6.1 — el despacho de
+# spawn_agent no emite evento y quedo unknown), el verifier corre pytest verde
+# (rol + verified en el mismo evento), recibo en vinetas. Stop allow: exit 0 en
+# silencio y el estado se va. Par de "pasa" contra el 30.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 02  phase=tool target=codex  payload=02.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+estado_host: codex
+--- paso 03  phase=tool target=codex  payload=03.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: pytest -q
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier
+| lane=full
+estado_host: codex
+--- paso 04  phase=tool target=codex  payload=04.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/01a0c0de-0031-7abc-8def-000000000031/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+estado_host: codex
+--- paso 05  phase=stop target=codex  payload=05.stop.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+(sin estado)
+
+=== escenario 32-codex-sin-recibo
+# codex, G4 bloquea con la forma 6.4: la ceremonia entera corrio y el runner
+# esta verde, pero el Stop no trae recibo => decision:block con exit 0.
+# Analogo del 22.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 02  phase=tool target=codex  payload=02.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+estado_host: codex
+--- paso 03  phase=tool target=codex  payload=03.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: pytest -q
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier
+| lane=full
+estado_host: codex
+--- paso 04  phase=tool target=codex  payload=04.tool.codex.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+estado_host: codex
+--- paso 05  phase=stop target=codex  payload=05.stop.codex.json
+exit 0
+stdout (sha ff0d3b577881bcd5, 1599 bytes) identico a 22-zcode-sin-recibo/paso 06
+stderr (sha 61022d8e3b4d24e7, 1537 bytes) identico a 22-zcode-sin-recibo/paso 06 (stderr)
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| verified: pytest -q
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+estado_host: codex
+
+=== escenario 33-codex-presupuesto
+# codex, G5: dos Stops fallidos consumen los 2 ciclos; el tercero agota el
+# presupuesto y sale con la forma claude (continue:false + exit 0), que Codex
+# IGNORA (6.2, veredicto blanco) — limite declarado en 6.4: el corte no bloquea
+# en codex, pero el estado igual se limpia (A4-c4) y el turno termina. La linea
+# base graba la forma tal cual: el dia que el budget gane forma propia para
+# codex, este bloque lo delata. Analogo del 23.
+--- paso 01  phase=prompt target=codex  payload=01.prompt.codex.json
+exit 0
+stdout (sha 26e99af6e40524dd, 11645 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 02  phase=stop target=codex  payload=02.stop.codex.json
+exit 0
+stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-state.env
+| task_hash=2415293084
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 03  phase=stop target=codex  payload=03.stop.codex.json
+exit 0
+stdout (sha cfa775d0ab8e38bf, 2199 bytes) identico a 08-ciclos-y-presupuesto/paso 03
+stderr (sha 5f8af324cc78b749, 2133 bytes) identico a 08-ciclos-y-presupuesto/paso 03 (stderr)
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-state.env
+| task_hash=2415293084
+| cycle=2
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: codex
+--- paso 04  phase=stop target=codex  payload=04.stop.codex.json
+exit 0
+stdout (sha 527f3355f667559c, 1718 bytes) identico a 08-ciclos-y-presupuesto/paso 04
+stderr (sha d9c5ceb904a8f1f6, 1666 bytes) identico a 08-ciclos-y-presupuesto/paso 04 (stderr)
 --- estado tras el paso 04
 (sin estado)

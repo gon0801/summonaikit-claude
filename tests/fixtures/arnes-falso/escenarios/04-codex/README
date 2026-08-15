@@ -1,0 +1,4 @@
+Escenario para probar que el arnes entiende el token `codex` del filename:
+exporta SUMMONAIKIT_HOOK_TARGET=codex — la senal real del wrapper .ps1 de
+Codex (medida 6.1), a diferencia de zcode, que va por ZCODE_* sin TARGET.
+El estado del falso tiene que registrar target=codex y estado_host: codex.

@@ -1,0 +1,5 @@
+codex, G1 arma + contrato. El token codex del filename exporta
+SUMMONAIKIT_HOOK_TARGET=codex — la MISMA senal real que inyecta el .ps1
+(unico host donde el TARGET llega, 6.1) — y el estado queda bajo
+state/codex/<key>/ (D2, Task 6.4). El contrato viaja por additionalContext,
+la forma que 6.2 midio aceptada en codex (llega como mensaje developer).

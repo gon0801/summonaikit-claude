@@ -30,6 +30,14 @@ LOCAL_SETTINGS=''
 ZCODE_USER_CONFIG=''
 VIO_CLAUDE=0
 VIO_ZCODE=0
+# Task 6.5: la TERCERA forma. En Codex el registro (hooks.json) nombra al
+# WRAPPER (.ps1) y el wrapper nombra al hook: la afirmacion se vuelve indirecta
+# y se parte en DOS separadas — (a) el registro nombra al wrapper; (b) el
+# wrapper existe y nombra al hook — porque colapsarlas esconderia cual de las
+# dos se rompio.
+CODEX_HOOKS_JSON=''
+CODEX_WRAPPER=''
+VIO_CODEX=0
 
 reportar() { printf '%s\n' "$*"; }
 
@@ -43,17 +51,19 @@ reportar() { printf '%s\n' "$*"; }
 # exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings|--local-settings|--hook-name|--zcode-config)
+    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper)
       if [ $# -lt 2 ]; then
         reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
         reportar "              No se afirma que el registro falte: no se pudo mirar."
         exit 0
       fi
       case "$1" in
-        --settings)       SETTINGS="$2"; VIO_CLAUDE=1 ;;
-        --local-settings) LOCAL_SETTINGS="$2" ;;
-        --hook-name)      HOOK_NAME="$2" ;;
-        --zcode-config)   ZCODE_USER_CONFIG="$2"; VIO_ZCODE=1 ;;
+        --settings)        SETTINGS="$2"; VIO_CLAUDE=1 ;;
+        --local-settings)  LOCAL_SETTINGS="$2" ;;
+        --hook-name)       HOOK_NAME="$2" ;;
+        --zcode-config)    ZCODE_USER_CONFIG="$2"; VIO_ZCODE=1 ;;
+        --codex-hooks-json) CODEX_HOOKS_JSON="$2"; VIO_CODEX=1 ;;
+        --codex-wrapper)   CODEX_WRAPPER="$2" ;;
       esac
       shift 2
       ;;
@@ -65,8 +75,8 @@ done
 # Task 5.4: --zcode-config y --settings son mutuamente excluyentes (cada host
 # registra en su propio archivo). Mezclarlos no tiene sentido y leer la forma
 # equivocada daria silencio o INCOMPLETO falsos. Fail-open: unknown, exit 0.
-if [ "$VIO_CLAUDE" -gt 0 ] && [ "$VIO_ZCODE" -gt 0 ]; then
-  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --zcode-config y --settings son mutuamente excluyentes."
+if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX)) -gt 1 ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config y --codex-hooks-json son mutuamente excluyentes."
   reportar "              Cada host registra en su propio archivo; no se verifico nada."
   reportar "              No se afirma que el registro falte: no se pudo mirar."
   exit 0
@@ -76,6 +86,17 @@ if [ "$VIO_ZCODE" -gt 0 ]; then
   MODO="zcode"
   SETTINGS="$ZCODE_USER_CONFIG"
   LOCAL_SETTINGS=''
+fi
+# Task 6.5 (modo codex): el archivo que se lee es hooks.json (misma forma
+# hooks.<Fase> que Claude, medido en el registro vivo) y lo que se busca en los
+# commands es el WRAPPER, no el hook. El wrapper por defecto es el que la
+# cadena real usa: <dir del hooks.json>/hooks/summonaikit-harness.ps1.
+if [ "$VIO_CODEX" -gt 0 ]; then
+  MODO="codex"
+  SETTINGS="$CODEX_HOOKS_JSON"
+  LOCAL_SETTINGS=''
+  [ -n "$CODEX_WRAPPER" ] || CODEX_WRAPPER="$(dirname "$CODEX_HOOKS_JSON")/hooks/summonaikit-harness.ps1"
+  HOOK_NAME="$(basename "$CODEX_WRAPPER")"
 fi
 
 # El local por defecto es HERMANO del settings dado, no el del HOME real: si no,
@@ -215,8 +236,13 @@ for path in (settings, local):
                     entrada_ejecuta = True
                     registradas.add(fase)
             # El matcher vive en el GRUPO, no en la entrada. Solo importa para
-            # PostToolUse y solo si el grupo ejecuta el hook.
-            if entrada_ejecuta and fase == "PostToolUse":
+            # PostToolUse y solo si el grupo ejecuta el hook. Task 6.5: en modo
+            # codex el advisory de Agent NO aplica — 6.1 midio que el rol llega
+            # por los eventos INTERNOS del subagente (que entran como Bash) y
+            # que el despacho de spawn_agent quedo `unknown` (0 eventos, sin
+            # distinguir "no emite" de "lo filtra el matcher"): un advisory
+            # sobre eso seria una alarma sin medicion detras.
+            if entrada_ejecuta and fase == "PostToolUse" and modo != "codex":
                 m = grupo.get("matcher", "")
                 if m is None:
                     m = ""
@@ -309,6 +335,38 @@ reportar_matcher() {
   fi
 }
 
+# Task 6.5 (modo codex) — la afirmacion (b), SEPARADA de (a): el wrapper existe
+# y nombra al hook. Corre en todos los desenlaces de (a) porque es independiente:
+# el registro puede estar perfecto con el wrapper roto, y al reves. Ausente es
+# OBSERVADO (se afirma); ilegible es unknown (no se acusa).
+reportar_wrapper_codex() {
+  [ "$MODO" = "codex" ] || return 0
+  if [ ! -e "$CODEX_WRAPPER" ]; then
+    reportar "[summonaikit] WRAPPER DE CODEX: no existe ($CODEX_WRAPPER)."
+    reportar "              La cadena es registro -> wrapper -> hook: el registro puede estar perfecto"
+    reportar "              y el hook no correr igual. Afirmacion separada de la del registro a proposito."
+    return 0
+  fi
+  if [ ! -f "$CODEX_WRAPPER" ] || [ ! -r "$CODEX_WRAPPER" ]; then
+    reportar "[summonaikit] WRAPPER DE CODEX: unknown — existe pero no se pudo leer ($CODEX_WRAPPER)."
+    reportar "              No se afirma que no nombre al hook: no se pudo mirar."
+    return 0
+  fi
+  # Greptile P1 (PR #23): la mencion tiene que vivir en una LINEA DE CODIGO —
+  # un wrapper viejo que solo la conserve en un comentario PowerShell (`#...`)
+  # pasaba como valido y el checker callaba con la cadena rota. Mismo criterio
+  # que la 0.4 en los settings: nombrar el hook no es ejecutarlo. Limite
+  # declarado (el mismo que ejecuta() declara para shell): esto NO parsea
+  # PowerShell — una mencion dentro de un string de diagnostico en una linea
+  # de codigo sigue contando; cubrir eso pedia interpretar PowerShell, que es
+  # mas riesgo del que evita.
+  if ! grep -v '^[[:space:]]*#' "$CODEX_WRAPPER" | grep -q 'summonaikit-harness\.sh'; then
+    reportar "[summonaikit] WRAPPER DE CODEX: existe pero NO nombra summonaikit-harness.sh en ninguna linea de codigo ($CODEX_WRAPPER)."
+    reportar "              (Una mencion solo en comentarios no cuenta: nombrar el hook no es ejecutarlo.)"
+    reportar "              El segundo eslabon de la cadena registro -> wrapper -> hook esta cortado."
+  fi
+}
+
 # Task 5.4 (modo zcode): los hooks de archivo no corren sin hooks.enabled:true.
 reportar_enabled_zcode() {
   reportar "[summonaikit] REGISTRO DEL HOOK: hooks.enabled no es true en el user-config de zcode."
@@ -330,6 +388,7 @@ if [ "${leidos:-0}" = "0" ]; then
   reportar "                          $LOCAL_SETTINGS"
   [ -n "$ilegibles" ] && reportar "              ilegible(s): $ilegibles"
   reportar "              No se afirma que el registro falte: no se pudo mirar."
+  reportar_wrapper_codex
   exit 0
 fi
 
@@ -342,6 +401,7 @@ if [ -z "$faltantes" ]; then
   [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
   reportar_session_rules
+  reportar_wrapper_codex
   exit 0
 fi
 
@@ -354,6 +414,7 @@ if [ -n "$ilegibles" ]; then
   reportar "              pero hay settings ilegible(s) que podrian registrarlas: $ilegibles"
   reportar "              No se afirma que el gate deje de correr: esa parte no se pudo mirar."
   reportar "              revisar: $SETTINGS"
+  reportar_wrapper_codex
   exit 0
 fi
 
@@ -368,4 +429,5 @@ reportar "              revisar: $SETTINGS"
 [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
 reportar_session_rules
 reportar_matcher
+reportar_wrapper_codex
 exit 0

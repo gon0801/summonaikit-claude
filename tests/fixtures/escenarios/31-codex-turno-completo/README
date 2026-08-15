@@ -1,0 +1,5 @@
+codex, G2+G3+G4 pasan: secuencia implementer -> verifier -> reviewer por
+eventos internos (agent_type, la via medida en 6.1 — el despacho de
+spawn_agent no emite evento y quedo unknown), el verifier corre pytest verde
+(rol + verified en el mismo evento), recibo en vinetas. Stop allow: exit 0 en
+silencio y el estado se va. Par de "pasa" contra el 30.
