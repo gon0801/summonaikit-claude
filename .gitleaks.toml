@@ -1,0 +1,19 @@
+# Config de gitleaks para este repo: las ~200 reglas default EXTENDIDAS con
+# una sola allowlist de rutas. Calibrada 2026-08-15 contra el historial real
+# (179 commits, 0 hallazgos) y contra trampas reales (ghp_ 36 chars, AKIA,
+# sk-proj: todas detectadas).
+#
+# tests/ va en la allowlist porque CARGA TRAMPAS POR DISENO: los casos de
+# redaccion de la Task 3.5 y tests/test_check_secrets.sh contienen credenciales
+# falsas con formato valido a proposito — sin esto, el job `secrets` del CI
+# fallaria por los propios tests que ejercen la deteccion. Declarado igual que
+# en tools/check-secrets.sh: la capa fuerte no escanea tests/, y nadie deberia
+# poner un secreto REAL en un test (el fallback de pre-commit tampoco los mira).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "trampas de los tests de este repo (redaccion 3.5 + deteccion de secretos)"
+paths = [
+  '''(^|/)tests/''',
+]
