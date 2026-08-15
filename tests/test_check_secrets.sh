@@ -89,14 +89,17 @@ fi
 
 caso "gitleaks: 2+ archivos escanean SOLO los pasados (P1 del PR #24)"
 if [ -n "$gl" ]; then
-  mkdir -p "$tmp/sub"
-  printf 'limpio a\n' > "$tmp/sub/a.txt"
-  printf 'limpio b\n' > "$tmp/sub/b.txt"
-  printf 'ghp_ABCDEF1234567890abcdefABCDEF1234567890\n' > "$tmp/sub/trampa.txt"
-  # Pre-fix esto daba exit 1: con 2+ fuentes gitleaks escaneaba el DIRECTORIO
-  # hermano y encontraba trampa.txt, que nunca fue pasada como argumento.
-  SAIKIT_GITLEAKS="$gl" bash "$tool" "$tmp/sub/a.txt" "$tmp/sub/b.txt" >/dev/null 2>&1
-  [ $? -eq 0 ] || malo "con 2+ archivos gitleaks escaneo mas que los pasados"
+  mkdir -p "$tmp/p1"
+  printf 'limpio a\n' > "$tmp/p1/a.txt"
+  printf 'limpio b\n' > "$tmp/p1/b.txt"
+  printf 'ghp_ABCDEF1234567890abcdefABCDEF1234567890\n' > "$tmp/p1/trampa.txt"
+  # Pre-fix: la llamada multi-arg IGNORABA los archivos y escaneaba el CWD
+  # entero (medido: se puso a escanear 2.11 MB del repo sin que ningun
+  # archivo pasado lo pidiera) — con una trampa HERMANA no pasada, un commit
+  # de archivos limpios se bloqueaba. Args RELATIVOS con cd, que es como
+  # pre-commit los pasa y la forma en que el bug escala al repo entero.
+  ( cd "$tmp/p1" && SAIKIT_GITLEAKS="$gl" bash "$tool" a.txt b.txt ) >/dev/null 2>&1
+  [ $? -eq 0 ] || malo "con 2+ archivos gitleaks escaneo mas que los pasados (el cwd entero)"
 else
   printf '    skip: sin binario gitleaks en esta maquina\n'
 fi
