@@ -173,7 +173,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -327,6 +327,52 @@ caso_g1_sentinel_con_frontera() {
 # DOS mitades, como pide la revision (CORRECCION 10): no basta con "B no ve el
 # estado de A" — un hook que borrara TODO pasaria esa sola mitad. La otra ata que
 # el estado de A sobrevive intacto al turno de B.
+# Task 9.7 (C13). `state/` crecia para siempre: cada limpieza borraba los
+# ARCHIVOS y dejaba el directorio de la sesion. Una sesion = un dir vacio
+# inmortal. Dos mitades, las dos en este caso porque una sin la otra no arregla
+# nada: sin (a) el dir del turno actual queda; sin (b) los de las sesiones que
+# nunca cerraron limpio quedan igual.
+caso_g1_estado_no_se_acumula() {
+  # (a) el cierre limpio se lleva el DIRECTORIO, no solo los archivos.
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  dir_turno="$(dirname "$LAB_ESTADO_PATH")"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code del cierre limpio" "$LAB_RC" "0"
+  if [ -d "$dir_turno" ]; then
+    _mal "un cierre limpio debe llevarse el DIRECTORIO de la sesion, no solo los archivos"
+  fi
+
+  # (b) al ARMAR se barren las hermanas muertas del mismo proyecto+host.
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit turno que arma y barre')"
+  dir_vivo="$(dirname "$LAB_ESTADO_PATH")"
+  proyecto_dir="$(dirname "$dir_vivo")"
+  _no_vacio "dir de proyecto" "$proyecto_dir"
+
+  mkdir -p "$proyecto_dir/hermana-muerta" "$proyecto_dir/hermana-fresca"
+  printf 'cycle=0\n' > "$proyecto_dir/hermana-muerta/harness-state.env"
+  printf 'cycle=0\n' > "$proyecto_dir/hermana-fresca/harness-state.env"
+  # 15 dias: pasa el TTL de 14. `touch -d` se midio funcionando en MSYS2 antes
+  # de disenar esto, asi que no hace falta el TTL-por-env que preveia el plan.
+  touch -d '15 days ago' "$proyecto_dir/hermana-muerta/harness-state.env" 2>/dev/null \
+    || _mal "no se pudo antedatar la hermana muerta; el barrido no se puede medir"
+
+  lab_run prompt claude "$(lab_payload_prompt '-saikit segundo turno, dispara el barrido')"
+
+  # La muerta se va. La FRESCA sobrevive: barrer por edad sin discriminar seria
+  # A4 otra vez, borrandole el estado a una sesion hermana que sigue viva.
+  if [ -d "$proyecto_dir/hermana-muerta" ]; then
+    _mal "el barrido no se llevo la hermana MUERTA (>14 dias)"
+  fi
+  if [ ! -d "$proyecto_dir/hermana-fresca" ]; then
+    _mal "el barrido se llevo una hermana FRESCA — eso es A4: le borra el estado a una sesion viva"
+  fi
+  # Y jamas el turno que esta armando.
+  if [ ! -f "$LAB_ESTADO_PATH" ]; then
+    _mal "el barrido se llevo el estado del turno que lo disparo"
+  fi
+}
+
 caso_g1_dos_sesiones_no_comparten_estado() {
   # A arma con la sesion por defecto del banco. LAB_ESTADO_PATH queda apuntando a
   # la ruta de A; las aserciones sobre A la leen ahi aunque cambiemos de sesion.
@@ -618,7 +664,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -645,7 +691,10 @@ caso_g2_eco_de_command_en_tool_response_no_marca() {
 # el chequeo del runner acreditaba sin comando de test alguno.
 caso_g2_eco_de_tool_name_en_tool_response_no_marca() {
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'echo hola' 'pytest')"
+  # El comando NO puede empezar con echo: desde 9.2 ECHO_LEAD_RE lo bloquea por
+  # su cuenta y enmascararia la mutacion (el caso quedaria verde por el motivo
+  # equivocado). Se usa un comando que no es runner ni lleva echo adelante.
+  lab_run tool claude "$(lab_payload_bash_con_eco_tool_name 'ls -la' 'pytest')"
   _igual "verified tras eco de tool_name en tool_response" "$(lab_estado verified)" "0"
 }
 
@@ -721,6 +770,85 @@ caso_g2_runner_fallido_cargo_no_marca() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'cargo test' 'test result: FAILED.')"
   _igual "cargo con test result: FAILED no acredita (CS)" "$(lab_estado verified)" "0"
+}
+
+# Task 9.1 (C6). Los banners de dotnet y gradle NO matcheaban ninguna via del
+# guardia de fallas, asi que un runner que REVENTO acreditaba verificacion:
+#   - dotnet dice `Failed:     1` — la via B pedia (failures?|errors?), sin
+#     `failed`, y la via A pide el digito ANTES de la palabra;
+#   - gradle dice `FAILURE: Build failed` / `BUILD FAILED` — el `FAIL[^a-zA-Z]`
+#     del CS exige un NO-letra despues, y ahi siguen `U` y `E`.
+caso_g2_runner_fallido_dotnet_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'dotnet test' 'Failed!  - Failed:     1, Passed:    12, Skipped:     0, Total:    13')"
+  _igual "dotnet con Failed: 1 no acredita" "$(lab_estado verified)" "0"
+}
+
+caso_g2_runner_fallido_gradle_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'gradle test' 'FAILURE: Build failed with an exception.')"
+  _igual "gradle con FAILURE: Build failed no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'gradle test' 'BUILD FAILED in 3s')"
+  _igual "gradle con BUILD FAILED no acredita" "$(lab_estado verified)" "0"
+}
+
+# Control negativo de 9.1: dotnet EXITOSO sigue acreditando. Es lo que protege
+# la frontera [1-9] al agregar `failed` a la via B — sin el, `Failed:     0` de
+# una corrida verde pasaria a contarse como fracaso y el gate exigiria de mas.
+caso_g2_dotnet_exitoso_sigue_acreditado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'dotnet test' 'Passed!  - Failed:     0, Passed:    13, Skipped:     0, Total:    13')"
+  _igual "dotnet exitoso con Failed: 0 sigue acreditando" "$(lab_estado verified)" "1"
+}
+
+# Task 9.2 (C8), mitad que faltaba. TEST_RUNNER_CMD_RE (llegada en el PR #20) ya
+# exige POSICION de comando, pero `echo` es un comando: `echo pytest` pone al
+# runner en posicion legitima y acreditaba verificacion sin correr nada.
+# ECHO_LEAD_RE lo tapa: si el PRIMER token es echo/printf, ese comando jamas
+# acredita.
+caso_g2_runner_en_echo_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'echo pytest' 'pytest')"
+  _igual "un runner mencionado por echo no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'printf "%s" "pytest -q"' 'pytest -q')"
+  _igual "un runner mencionado por printf no acredita" "$(lab_estado verified)" "0"
+}
+
+# LIMITE del lado estricto, ATADO por test (r1 del plan): si el primer token es
+# echo, el comando NO acredita aunque despues del && haya un runner de verdad.
+# Es a proposito: distinguirlo exigiria parsear el shell, y el gate es advisory.
+# Si algun dia se afloja, este caso se pone rojo y obliga a decidirlo.
+caso_g2_echo_seguido_de_runner_no_acredita() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'echo empiezo && pytest -q' '5 passed')"
+  _igual "limite declarado: con echo adelante no acredita ni con runner despues" "$(lab_estado verified)" "0"
+}
+
+# Controles verdes: el lado estricto no puede comerse los casos legitimos.
+caso_g2_runner_con_and_y_var_sigue_acreditando() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q && echo listo' '5 passed')"
+  _igual "runner primero y echo despues SI acredita" "$(lab_estado verified)" "1"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'CI=1 pytest -q' '5 passed')"
+  _igual "prefijo VAR=val sigue acreditando" "$(lab_estado verified)" "1"
+}
+
+# CodeRabbit PR #22 (Major). El credito miraba `$tool_name $command_text` con el
+# regex laxo, asi que una tool LLAMADA como un runner —posible con un servidor
+# MCP— acreditaba verificacion con un comando que no corre nada. ECHO_LEAD_RE no
+# lo tapa: el comando no empieza con echo.
+caso_g2_tool_name_runner_con_comando_ajeno_no_marca() {
+  lab_sembrar 123456 0 0 0 ""
+  # El tool_name REAL va en pytest; el comando no corre nada y no empieza con
+  # echo, asi que ECHO_LEAD_RE no puede tapar el agujero por casualidad.
+  lab_run tool claude "$(lab_payload_tool_name_arbitrario 'pytest' 'ls -la')"
+  _igual "una tool llamada como un runner no acredita si el comando no lo corre" "$(lab_estado verified)" "0"
 }
 
 caso_g2_runner_fallido_go_no_marca() {
@@ -1318,13 +1446,28 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_cita_del_feedback_no_satisface"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
 # Nota grabada: por esta via el estado NO se borra (el turno sigue abierto a
 # proposito). Es la mitad buena de A2; la mitad mala — que la pausa se encuentre
 # adentro del resultado de una herramienta — la cierra la Task 3.2.
+# Task 9.6 (C12). El walker pone en_text/en_assistant en 1 y NUNCA los resetea al
+# cerrar llaves, y su condicion de emision no mira `depth`. Consecuencia: un
+# valor top-level POSTERIOR a `message` se concatena al texto del asistente y
+# aporta etiquetas que el turno no escribio. Aca la fuga trae justo la etiqueta
+# que falta (Retro), asi que con el defecto el gate CIERRA por texto ajeno.
+#
+# Stop sin last_assistant_message a proposito: asi decide el canal transcript,
+# que es donde vive la condicion que se esta probando.
+caso_g4_fuga_top_level_no_cierra() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"           "$(lab_transcript_fuga_top_level "$_RECIBO_SIN_RETRO" 'Retro: none.')"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Retro'
+}
+
 caso_g4_pausa_permite() {
   lab_sembrar 123456 0 0 0 ""
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"

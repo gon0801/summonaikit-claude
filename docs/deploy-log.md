@@ -469,3 +469,30 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   igual a la fuente" (el merge tocó tools/tests, no el hook). Se corre y se
   registra igual, para no perder la costumbre.
 - **Operador:** sesión Claude Phase 6 (autónoma).
+
+## 2026-08-15 — PR #24 (73307cc): detección de secretos (Recommended) — deploy ACTUALIZA el vivo ~/.claude pendiente desde el PR #23
+
+- **Mergeado por la sesión zcode** (worktree aparte, rama `feat/ci-secret-detection`).
+  Contenido: `tools/check-secrets.sh` (gitleaks por archivo + fallback grep con los
+  falsos conocidos excluidos), hook local de pre-commit, job `secrets` del CI
+  (gitleaks 8.30.1 sobre el historial, sha256 pineado, `persist-credentials: false`),
+  `.gitleaks.toml` (config default extendida + allowlist `tests/`) y test con 12
+  casos y mutaciones acreditadas. Cierra el ítem "Recommended" de Plans.md.
+- **Review de bots atendida en 2 rondas:** Greptile P1 real y confirmado por
+  medición (`gitleaks dir` multi-arg IGNORA los archivos y escanea el CWD entero
+  — fix: una invocación por archivo, con caso que lo habría atrapado y mutación
+  roja), P2 checksum del binario, CR Major-sec (`persist-credentials`,
+  `curl --fail`) y 3 minors (reporte `archivo:linea`, PATH del test verificado,
+  wording de Plans.md). Greptile final: **5/5, sin blockers**. CI:
+  quality/secrets/suite PASS.
+- **¿Cambió el hook? El PR #24 NO lo toca — pero el deploy NO fue no-op:** el
+  vivo estaba DETRÁS, cksum `4159550777` (= `f78e9c7`, exactamente el estado que
+  el deploy del PR #23 dejó declarado pendiente "para el próximo ciclo").
+  `install-hook.sh` lo REPARÓ con backup
+  `saikit-backups/summonaikit-harness.sh.nuestro.20260815-105455.bak`. El vivo
+  ahora incluye lo que trajeron #23/#25: HOST=codex por señal explícita (D2),
+  ceremonia `claude|codex` (D3), bloqueo con exit 0 en codex y la frontera
+  anti-cita de 9.3.
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Vivo vs master:** cmp byte a byte idéntico.
+- **Operador:** Gon (sesión zcode).
