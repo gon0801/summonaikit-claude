@@ -311,3 +311,25 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   propiedad del kit vendor y NO se toca (medido: contenido propio, no deriva
   de este repo).
 - **Operador:** Gon (sesión zcode, goal "fase de eficiencia de kimi").
+
+## 2026-08-15 — PR #17 / Task 9.10 + PR #18 / Task 10.5
+
+- **Mergeado:** PR #17 `feat/9.10-runner-bash` — `TEST_RUNNER_RE` reconoce el
+  runner bash propio (`bash tests/run.sh`, ruta absoluta, tras `&&`, invocación
+  directa `./tests/run.sh`), sin reabrir A3 (`cat tests/run.sh` y
+  `grep run.sh tests/run.sh` no cuentan; corpus G2 32 casos verde). Motivación:
+  en hosts sin transcript legible el gate de verificación quedaba insatisfible
+  para repos bash-only. PR #18 `feat/10.5-ci-linux` — job `suite` en
+  ubuntu-latest (~1m35s vs ~18 min de MSYS2), `SAIKIT_CI_LINUX=1` salta los 4
+  tests Windows-bound con listado explícito (capture/install/probe exigen
+  bash.exe de Windows; hook_acl clasifica SIDs vía PowerShell).
+- **¿Cambió el hook?** **Sí** (9.10: dos ramas nuevas en TEST_RUNNER_RE).
+- **`install-hook.sh`:** vivo actualizado a master. **Desviación declarada:**
+  deploy desde worktree `summonaikit-claude-wt-p10` (árbol principal sigue
+  ocupado por la sesión de 6.2).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0 — y sin el advisory del
+  matcher: el operador agregó `Agent` (y `SendMessage`) al matcher de
+  PostToolUse de settings.json (backup `.pre-agent-matcher-20260815.bak`), la
+  acción que la 3.7 pedía.
+- **Vivo vs master:** cmp byte a byte idéntico (verificado).
+- **Operador:** Gon (sesión zcode).
