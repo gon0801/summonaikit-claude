@@ -252,10 +252,14 @@ baseline están serializadas por `Depends`.
 - ~~CI + pre-commit con detección de secretos en este repo~~ **hecho [534ef72]**:
   `tools/check-secrets.sh` (gitleaks si está disponible, fallback grep con la
   familia de `redact_secrets` si no) como hook local de pre-commit, más el job
-  `secrets` del CI (gitleaks 8.30.1 sobre el historial completo). Calibrado
-  midiendo: 0 falsos positivos sobre el árbol versionado, trampas reales
-  detectadas; `.gitleaks.toml` allowlista `tests/` porque carga trampas por
-  diseño. Test con 10 casos y 2 mutaciones acreditadas.
+  `secrets` del CI (gitleaks 8.30.1 sobre el historial completo, binario
+  verificado por sha256 pineado). Calibrado midiendo: 0 falsos positivos sobre
+  los archivos escaneados (el fallback excluye a propósito `tests/`, `docs/`,
+  `Plans.md` y el comentario-documental del hook; `.gitleaks.toml` allowlista
+  `tests/` porque carga trampas por diseño) y trampas reales detectadas. Test
+  con 12 casos y 2 mutaciones acreditadas; revisión de bots atendida (PR #24):
+  el P1 real era que `gitleaks dir` con 2+ fuentes escanea el directorio
+  hermano — ahora se invoca una vez por archivo, atado por caso.
 
 **Optional:**
 - Portar el aviso post-revisión a Kimi (canal distinto: Kimi no tiene el mensaje
