@@ -352,8 +352,17 @@ reportar_wrapper_codex() {
     reportar "              No se afirma que no nombre al hook: no se pudo mirar."
     return 0
   fi
-  if ! grep -q 'summonaikit-harness\.sh' "$CODEX_WRAPPER"; then
-    reportar "[summonaikit] WRAPPER DE CODEX: existe pero NO nombra summonaikit-harness.sh ($CODEX_WRAPPER)."
+  # Greptile P1 (PR #23): la mencion tiene que vivir en una LINEA DE CODIGO —
+  # un wrapper viejo que solo la conserve en un comentario PowerShell (`#...`)
+  # pasaba como valido y el checker callaba con la cadena rota. Mismo criterio
+  # que la 0.4 en los settings: nombrar el hook no es ejecutarlo. Limite
+  # declarado (el mismo que ejecuta() declara para shell): esto NO parsea
+  # PowerShell — una mencion dentro de un string de diagnostico en una linea
+  # de codigo sigue contando; cubrir eso pedia interpretar PowerShell, que es
+  # mas riesgo del que evita.
+  if ! grep -v '^[[:space:]]*#' "$CODEX_WRAPPER" | grep -q 'summonaikit-harness\.sh'; then
+    reportar "[summonaikit] WRAPPER DE CODEX: existe pero NO nombra summonaikit-harness.sh en ninguna linea de codigo ($CODEX_WRAPPER)."
+    reportar "              (Una mencion solo en comentarios no cuenta: nombrar el hook no es ejecutarlo.)"
     reportar "              El segundo eslabon de la cadena registro -> wrapper -> hook esta cortado."
   fi
 }

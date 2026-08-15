@@ -527,6 +527,19 @@ Write-Output "wrapper que ya no lanza nada"
 PS1
 }
 
+# Greptile P1 (PR #23): un wrapper viejo cuya UNICA mencion del hook vive en un
+# comentario PowerShell. Con el grep de subcadena sin filtrar, la afirmacion
+# (b) quedaba verde y el checker callaba con la cadena rota — "nombrar el hook
+# no es ejecutarlo", el mismo modo de falla que la 0.4 cerro en los settings.
+escribir_codex_wrapper_hook_solo_en_comentario() {
+  cat > "$codex_dir/hooks/summonaikit-harness.ps1" <<'PS1'
+param([string]$Phase)
+# antes esto lanzaba summonaikit-harness.sh; se desactivo el 2026-08-01
+   # ruta vieja: $env:USERPROFILE\.codex\hooks\summonaikit-harness.sh
+Write-Output "wrapper desactivado"
+PS1
+}
+
 caso "codex: registro completo + wrapper que nombra al hook => SILENCIO y exit 0"
 nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_ok
 out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
@@ -552,6 +565,13 @@ nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_sin_hook
 out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'wrapper' || malo "debe reportar que el wrapper no nombra al hook: $out"
+
+caso "codex: wrapper que solo nombra al hook en un COMENTARIO => reporta la afirmacion (b) (Greptile P1)"
+nuevo_codex_reg; escribir_codex_json_completo; escribir_codex_wrapper_hook_solo_en_comentario
+out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'wrapper' \
+  || malo "una mencion en comentario no es codigo que lance el hook; debe reportar (b): $out"
 
 caso "codex: hooks.json ilegible => unknown, no ausencia"
 nuevo_codex_reg; printf '{ roto' > "$codex_dir/hooks.json"; escribir_codex_wrapper_ok
