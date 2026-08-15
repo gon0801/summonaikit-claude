@@ -211,8 +211,12 @@ printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "SessionStart ausente NO vuel
 printf '%s' "$out" | grep -qi 'el gate NO corre' && malo "el gate corre igual sin SessionStart"
 
 caso "con SessionStart registrada, el aviso de reglas permanentes NO aparece"
-out_s="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"
-printf '%s' "$out_s" | grep -qi 'REGLAS PERMANENTES' && malo "con SessionStart no debe avisar: $out_s"
+# Exigir exit 0 y silencio TOTAL, no solo la ausencia del aviso: con "no
+# contiene REGLAS PERMANENTES" alcanzaba con que el tool reventara con otra
+# salida para que el caso pasara en verde (CodeRabbit PR #19).
+if out_s="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"; then rc_s=0; else rc_s=$?; fi
+[ "$rc_s" -eq 0 ] || malo "registro completo debe terminar con exit 0, dio $rc_s: $out_s"
+[ -z "$out_s" ] || malo "registro completo (con SessionStart) debe quedar en SILENCIO: $out_s"
 
 # ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
 caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"

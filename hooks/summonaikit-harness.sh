@@ -879,6 +879,23 @@ start_harness() {
   # sentinel presente) y los \n crudos rompian la frontera del sentinel.
   prompt_text="$(json_top_level_decoded prompt)"
   if [ -z "$prompt_text" ]; then prompt_text="$INPUT"; fi
+  # LIMITE DECLARADO de la Task 10.6 (hallazgo Major de CodeRabbit, PR #19).
+  # El payload de SessionStart no trae `prompt` y SI trae `summary`; el summary
+  # de una sesion reanudada suele CITAR el prompt anterior, que llevaba -saikit.
+  # Con este fallback al payload crudo, ese texto viejo matchea el sentinel y el
+  # SessionStart se va por el camino ARMADO: inyecta el contrato en vez de las
+  # reglas permanentes (y escribe estado sin que nadie armara).
+  #
+  # NO se arregla aca, a proposito: el fallback sin acotar es C9 / Task 9.4, y
+  # su DoD decide EXPLICITAMENTE conservar el fallback en `session` dejando
+  # `caso_g6_armado_por_target` intacto — un turno claude+session con -saikit
+  # arma hoy, y ese caso lo exige. Acotarlo desde aca pisaria el diseno de esa
+  # tarea y pondria rojo su caso.
+  #
+  # Consecuencia, escrita para que nadie la descubra de nuevo: en una sesion
+  # reanudada cuyo summary cite un -saikit viejo, las reglas permanentes NO
+  # salen; sale el contrato. Es un intercambio razonable (el contrato dice mas)
+  # pero es una perdida real de cobertura de esta tarea.
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # El sentinel es la unica condicion de armado (REEMPLAZO a los clasificadores
   # is_engineering_task / is_trivial_task del vendor, retirados en la Task 10.1

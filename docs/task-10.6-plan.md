@@ -123,9 +123,9 @@ una mejora, no un requisito del gate. Se conserva `exit 0` siempre y
 
 | Caso | Qué fija |
 |---|---|
-| `caso_session_inyecta_reglas` | un `SessionStart` sin sentinel emite forma 1 con las reglas y sale 0 |
-| `caso_session_no_crea_estado` | ese mismo turno **no** escribe `harness-state.env` |
-| `caso_session_no_desarma` | con estado armado presente, un `SessionStart` no lo borra |
+| `caso_g1_session_inyecta_reglas` | un `SessionStart` sin sentinel emite forma 1 con las reglas, sale 0 **y no escribe `harness-state.env`** (las dos afirmaciones viven en este caso, no en uno aparte) |
+| `caso_g1_session_no_desarma` | con estado armado presente, un `SessionStart` no lo borra |
+| `caso_g1_session_con_sentinel_en_summary_no_arma` | **añadido tras la review**: un `summary` que cita un `-saikit` viejo no arma ni escribe estado, y las reglas salen igual |
 | `caso_g6_armado_por_target` | **regresión**: cursor con `-saikit` en `session` sigue armando |
 | `caso_prompt_sin_sentinel_sigue_mudo` | **regresión**: `PHASE=prompt` sin sentinel sigue sin emitir |
 | registro | `--host claude` deja la 4.ª fase; el verificador la reporta separada |
@@ -152,6 +152,29 @@ cubre** el camino nuevo. Se declara como hueco, no como éxito: los casos de
 escenario de `SessionStart` en la línea base queda pendiente y entra por su
 propia fila; grabarlo acá exigiría regrabar el bloque completo, que es
 exactamente lo que choca con la sesión paralela en curso.
+
+## §C-bis — Límite encontrado por la review (CodeRabbit PR #19, Major)
+
+El payload de `SessionStart` **no trae `prompt`** y **sí trae `summary`**, y
+`start_harness` cae al payload CRUDO cuando `prompt` está vacío. El `summary` de
+una sesión reanudada suele **citar el prompt anterior**, que llevaba `-saikit`.
+Consecuencia real: esa sesión **arma**, inyecta el contrato y **las reglas
+permanentes no salen**.
+
+**No se arregla en 10.6, y la razón es de alcance, no de pereza.** El fallback
+sin acotar es **C9 / Task 9.4**, cuya DoD decide **explícitamente conservarlo**
+en `session` dejando `caso_g6_armado_por_target` **intacto**. Se probó acotarlo
+a `claude`+`session`: **puso rojo ese caso**. Acotarlo desde acá pisaría el
+diseño de una tarea ajena que ya está planificada.
+
+El límite queda **atado por un caso**, no sólo escrito:
+`caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas` fija lo que hoy
+pasa (arma, sale el contrato, no salen las reglas). Si 9.4 cambia el fallback,
+ese caso se pone rojo y obliga a decidir quién gana en ese camino.
+
+**Pérdida de cobertura, dicha sin maquillar:** en sesiones reanudadas cuyo
+summary cite un `-saikit` viejo, esta tarea no entrega nada. El intercambio es
+razonable —el contrato dice más que las reglas— pero es una pérdida real.
 
 ## §D — Riesgos
 

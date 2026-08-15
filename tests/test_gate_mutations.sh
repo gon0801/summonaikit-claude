@@ -159,6 +159,11 @@ mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 # caso que ya existe es la regresion, y la mutacion lo demuestra.
 mut_session_sin_reglas()        { sed 's/^      emit_standing_rules$/      :/'; }
 mut_session_pisa_gate()         { sed 's/\[ "$PHASE" = "session" \] && \[ "$TARGET" = "claude" \]/[ "$TARGET" = "claude" ]/'; }
+# Nota (CodeRabbit PR #19): NO hay mutacion para el fallback al payload crudo en
+# session porque 10.6 no lo acota — es C9 / Task 9.4 y su DoD decide
+# conservarlo. El limite queda atado por
+# caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas, que fija el
+# comportamiento de HOY y se pondra rojo si 9.4 lo cambia.
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
