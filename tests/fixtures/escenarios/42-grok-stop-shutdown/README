@@ -1,0 +1,10 @@
+grok, D6: el Stop de CIERRE. Todo turno headless grok dispara DOS Stops
+(recaptura 5/5 pares, igual que 7.1): el de turno (reason=end_turn con
+promptId y lastAssistantMessage — todos los otros escenarios grok) y el de
+cierre cuando el proceso sale (reason=shutdown SIN ninguno de los dos). Este
+escenario pinnar lo que ninguno de los 35-41 toca: el Stop shutdown llega con
+el turno ARMADO y sale inmediato — exit 0, sin salida, ESTADO SIN CAMBIOS
+(no cuenta ciclo, no limpia, no crea). 7.2 lo midio en vivo: la decision se
+emite y el host la ignora sin mutar estado. Sin este bloque, una regresion
+que tratara el shutdown como Stop de turno cobraria recibo al proceso que se
+va y quedaria invisible en la linea base.

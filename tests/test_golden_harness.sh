@@ -144,8 +144,9 @@ mkdir -p "$esc_falsos/.claude"
 correr "$SANDBOX/oculto.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 grep -q '^=== escenario \.' "$SANDBOX/oculto.txt" && malo "un directorio oculto se colo como escenario"
-[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "4" ] \
-  || malo "esperaba exactamente 4 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
+# Task 7.6: 05-grok sigue a 04-codex; el conteo sube a 5.
+[ "$(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")" = "5" ] \
+  || malo "esperaba exactamente 5 escenarios, hubo $(grep -c '^=== escenario ' "$SANDBOX/oculto.txt")"
 rmdir "$esc_falsos/.claude"
 
 # --------------------------------------------------------- 7) aislamiento
@@ -216,7 +217,9 @@ grep -q '^estado_host: zcode$' "$SANDBOX/zc_blk.txt" \
 # del wrapper .ps1 de Codex (unico host donde el TARGET llega, 6.1) — la
 # contraparte exacta de zcode, que va por ZCODE_* sin TARGET.
 caso "target codex: el estado trae target=codex (TARGET exportado) y sin ZCODE_*"
-awk '/^=== escenario 04-codex/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/cx_blk.txt"
+# Task 7.6: 04-codex ya NO es el ultimo (05-grok lo sigue): el bloque se acota
+# al proximo `=== escenario` en vez de correr hasta EOF.
+awk '/^=== escenario 04-codex/{f=1; print; next} /^=== escenario /{f=0} f' "$SANDBOX/zc.txt" > "$SANDBOX/cx_blk.txt"
 grep -q '^| target=codex$' "$SANDBOX/cx_blk.txt" \
   || malo "el estado codex debio traer target=codex (el arnes no exporto TARGET)"
 grep -q '^| zcode_session=<sin-zcode>$' "$SANDBOX/cx_blk.txt" \
@@ -226,6 +229,25 @@ caso "target codex: un paso que deja estado trae 'estado_host: codex' (D2, 6.4)"
 grep -q '^estado_host: codex$' "$SANDBOX/cx_blk.txt" \
   || malo "el paso codex debio traer 'estado_host: codex': $(cat "$SANDBOX/cx_blk.txt")"
 
+# ------------------------------------------ 9-ter) target grok (Task 7.6)
+# El token `grok` exporta las TRES senales del runner de hooks de Grok
+# (medidas 7.1): GROK_HOOK_EVENT (setness => HOST=grok), GROK_SESSION_ID y el
+# env map SUMMONAIKIT_HOOK_TARGET=grok. El estado del falso lo registra todo.
+caso "target grok: el estado trae target=grok, grok_event real y sin ZCODE_*"
+awk '/^=== escenario 05-grok/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/gk_blk.txt"
+grep -q '^| target=grok$' "$SANDBOX/gk_blk.txt" \
+  || malo "el estado grok debio traer target=grok (env map exportado)"
+grep -q '^| grok_event=user_prompt_submit$' "$SANDBOX/gk_blk.txt" \
+  || malo "el estado grok debio traer grok_event=user_prompt_submit (mapeo fase->evento)"
+grep -q '^| grok_session=sess_golden_grok$' "$SANDBOX/gk_blk.txt" \
+  || malo "el estado grok debio traer grok_session=sess_golden_grok"
+grep -q '^| zcode_session=<sin-zcode>$' "$SANDBOX/gk_blk.txt" \
+  || malo "el estado grok debio traer zcode_session=<sin-zcode> (regresion unset 5.3)"
+
+caso "target grok: un paso que deja estado trae 'estado_host: grok' (D2, 7.3)"
+grep -q '^estado_host: grok$' "$SANDBOX/gk_blk.txt" \
+  || malo "el paso grok debio traer 'estado_host: grok': $(cat "$SANDBOX/gk_blk.txt")"
+
 caso "target zcode: dos --print seguidos son byte-identicos (constantes sin ruido)"
 correr "$SANDBOX/zc2.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --print
 if ! cmp -s "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt"; then
@@ -233,12 +255,12 @@ if ! cmp -s "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt"; then
   diff -u "$SANDBOX/zc.txt" "$SANDBOX/zc2.txt" | head -20 >&2
 fi
 
-caso "target zcode/codex: --record + --check del falso con 4 escenarios sigue en 0"
+caso "target zcode/codex/grok: --record + --check del falso con 5 escenarios sigue en 0"
 base3="$SANDBOX/base3.txt"
 correr "$SANDBOX/rec3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --record
-[ "$rc" -eq 0 ] || malo "--record (4 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/rec3.txt")"
+[ "$rc" -eq 0 ] || malo "--record (5 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/rec3.txt")"
 correr "$SANDBOX/chk3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --check
-[ "$rc" -eq 0 ] || malo "--check (4 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
+[ "$rc" -eq 0 ] || malo "--check (5 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2

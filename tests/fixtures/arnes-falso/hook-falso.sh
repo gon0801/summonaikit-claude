@@ -22,12 +22,21 @@ HOST=other
 # (caeria en other), la misma trampa que 5.5 ya arreglo para zcode. ROJO
 # medido: neutralizada esta linea, el caso 'estado_host: codex' se pone rojo.
 [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ] && HOST=codex
+# Task 7.6: espejo de D2 (7.3) — grok va por SETNESS de GROK_HOOK_EVENT (una
+# senal exportada VACIA cuenta; el valor no decide identidad) y ARRIBA de
+# codex/zcode, el mismo orden compuesto del hook vivo. Sin esta rama el caso
+# estado_host de grok seria vacuo (caeria en other), la misma trampa que 6.6
+# cerro para codex. ROJO medido: neutralizada esta linea, el caso
+# 'estado_host: grok' se pone rojo.
+[ "${GROK_HOOK_EVENT+x}" = "x" ] && HOST=grok
 mkdir -p "$DIR/state/$HOST/$KEY"
 {
   printf 'phase=%s\n' "${SUMMONAIKIT_HOOK_PHASE:-<sin-fase>}"
   printf 'target=%s\n' "${SUMMONAIKIT_HOOK_TARGET:-<sin-target>}"
   printf 'zcode_session=%s\n' "${ZCODE_SESSION_ID:-<sin-zcode>}"
   printf 'zcode_project=%s\n' "${ZCODE_PROJECT_DIR:-<sin-zcode-project>}"
+  printf 'grok_event=%s\n' "${GROK_HOOK_EVENT:-<sin-grok>}"
+  printf 'grok_session=%s\n' "${GROK_SESSION_ID:-<sin-grok-sesion>}"
   printf 'ts=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'cwd=%s\n' "$(pwd)"
   printf 'bytes_entrada=%s\n' "${#INPUT}"

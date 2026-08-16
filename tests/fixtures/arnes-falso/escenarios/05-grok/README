@@ -1,0 +1,7 @@
+Escenario para probar que el arnes entiende el token `grok` del filename:
+exporta las TRES senales reales del runner de hooks de Grok (medidas 7.1) —
+GROK_HOOK_EVENT=user_prompt_submit (por SETNESS clasifica HOST=grok),
+GROK_SESSION_ID=sess_golden_grok y SUMMONAIKIT_HOOK_TARGET=grok (env map del
+JSON de registro). El estado del falso tiene que registrar target=grok,
+grok_event=user_prompt_submit, grok_session=sess_golden_grok y la linea
+estado_host: grok.

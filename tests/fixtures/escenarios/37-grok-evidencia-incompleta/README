@@ -1,0 +1,10 @@
+grok, G2/G3/G4 bloquean + LAS DOS FORMAS PROPIAS DE GROK (7.4/7.2): el JSON
+decision:block viaja con exit 0 (exit 2 es IGNORADO — PowerShell lo devuelve
+como 1 y el host hace fail-open en Stop) y el CONTRATO COMPLETO va adosado al
+reason del bloqueo, el unico canal medido que llega al modelo. Armado, una
+edicion via la tool nativa write (toolResult tipo SearchReplace con
+EditsApplied, forma recapturada), y un runner ROJO: toolResult.exit_code NUMERO
+= 1 (sin comillas, medido 7.1/recaptura) veta el credito de verificacion
+(D5) — el estado queda verified=0 y el Stop sin recibo bloquea reclamando
+evidencia, ceremonia y recibo. Analogos del 19/29; el veto numerico del
+exit_code es la mitad grok del 24.

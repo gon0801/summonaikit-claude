@@ -1,0 +1,6 @@
+grok, G5: dos Stops fallidos consumen los 2 ciclos; el tercero agota el
+presupuesto. A diferencia de codex (que IGNORA continue:false, veredicto
+blanco de 6.2), en grok la forma default del budget — continue:false +
+stopReason con exit 0 — es la que 7.2 midio ACEPTADA
+(prevent_continuation=true): el corte bloquea de verdad. La linea base graba
+la forma default tal cual (igual que claude/zcode). Analogo del 23/33.

@@ -279,8 +279,13 @@ generar() {
       # senal de host de zcode, medida Task 5.1). Sin esto, un --check corrido
       # DENTRO de zcode escribe state/zcode/... y uno desde Claude state/other/...
       # => divergencia falsa por host, no por comportamiento.
+      # Task 7.6: misma leccion para grok — GROK_HOOK_EVENT / GROK_SESSION_ID
+      # las inyecta el runner de hooks de Grok en cada proceso (medido 7.1,
+      # 12/12 dumps), asi que un --check corrido desde adentro de Grok las
+      # hereda y clasificaria HOST=grok sin que ningun escenario lo pida.
       cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
+           -u GROK_HOOK_EVENT -u GROK_SESSION_ID
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
       # Task 5.5: el token `zcode` del filename NO exporta SUMMONAIKIT_HOOK_TARGET
@@ -294,6 +299,24 @@ generar() {
       # --check entre corridas. auto/claude/cursor siguen como antes.
       if [ "$objetivo" = "zcode" ]; then
         cmd+=(ZCODE_SESSION_ID=sess_golden_zcode ZCODE_PROJECT_DIR=C:/dev/saikit-golden-zcode)
+      elif [ "$objetivo" = "grok" ]; then
+        # Task 7.6 (design §Testing): el token grok reproduce las TRES senales
+        # reales que el runner de hooks de Grok pone en el env de cada proceso
+        # (medido 7.1 en los 12 dumps): GROK_HOOK_EVENT con el literal del
+        # evento del paso (mapeado de la fase del filename: el valor no decide
+        # HOST — que va por SETNESS — pero el arnes copia la senal del runtime,
+        # no la que nos gustaria, misma disciplina que el token zcode de 5.5),
+        # GROK_SESSION_ID y el env map SUMMONAIKIT_HOOK_TARGET=grok, que el
+        # JSON de registro entrega de verdad (7.1: el modelo de registro mide
+        # si llega; llego). Asi el golden ejercita el camino vivo: HOST=grok
+        # (D2, 7.3) + TARGET=grok (D3, 7.4) por la via del env map.
+        case "$fase" in
+          prompt) ev_grok="user_prompt_submit" ;;
+          tool)   ev_grok="post_tool_use" ;;
+          stop)   ev_grok="stop" ;;
+          *)      ev_grok="$fase" ;;
+        esac
+        cmd+=(GROK_HOOK_EVENT="$ev_grok" GROK_SESSION_ID=sess_golden_grok SUMMONAIKIT_HOOK_TARGET=grok)
       elif [ "$objetivo" != "auto" ]; then
         cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")
       fi
@@ -330,7 +353,9 @@ generar() {
       # Task 6.6: mismo mecanismo para codex — el snapshot normaliza el segmento
       # host, asi que esta linea es lo UNICO que pinna en la linea base que el
       # estado quedo bajo state/codex/ (D2, Task 6.4) y no bajo other/claude.
-      if [ "$objetivo" = "zcode" ] || [ "$objetivo" = "codex" ]; then
+      # Task 7.6: idem grok (D2, Task 7.3): el estado de los escenarios grok
+      # tiene que quedar bajo state/grok/, nunca bajo other/claude/zcode.
+      if [ "$objetivo" = "zcode" ] || [ "$objetivo" = "codex" ] || [ "$objetivo" = "grok" ]; then
         _hh="$(host_del_estado "$sb")"
         # if/then (no `[ ] && printf`): cuando no hay estado _hh queda vacio y
         # este bloque NO puede devolver non-zero, o se vuelve el exit status del

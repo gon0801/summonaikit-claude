@@ -1,0 +1,11 @@
+grok, G1 arma + contrato. El sentinel viaja DENTRO del wrapper
+<user_query>...</user_query> (forma medida 7.1/recaptura: el \n decodificado
+delante de -saikit es frontera izquierda valida). El token grok del filename
+exporta las TRES senales reales del runner de hooks de Grok (7.1, 12/12 dumps
+de env): GROK_HOOK_EVENT=user_prompt_submit, GROK_SESSION_ID y el env map
+SUMMONAIKIT_HOOK_TARGET=grok — y el estado queda bajo state/grok/<key>/
+(D2, Task 7.3). El contrato viaja por additionalContext igual que en claude:
+7.2 midio que Grok lo IGNORA (ninguna de las 4 formas llega al modelo), y
+7.4 re-planifico el canal — el contrato real viaja adosado al reason de cada
+bloqueo (ver 37). La linea base graba la salida tal cual: el dia que el
+armado grok gane forma propia, este bloque lo delata.
