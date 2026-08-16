@@ -1,0 +1,8 @@
+grok, turno COMPLETO que cierra limpio. La ceremonia real medida en recaptura:
+por cada rol, el despacho spawn_subagent con toolInput.subagent_type (paso par)
+y su SubagentStart con subagentType de primer nivel (paso impar), en el orden
+implementer -> verifier -> reviewer. El runner del turno principal (exit_code
+NUMERO 0) acredita verified SIN veto — la contracara del 37: mismo runner,
+exit_code 0 acredita, exit_code 1 no. Stop end_turn con recibo completo:
+exit 0, stdout vacio (emit_allow no imprime para grok), estado borrado.
+Analogo del 05/21/31.

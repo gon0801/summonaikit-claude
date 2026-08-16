@@ -1,0 +1,4 @@
+grok, G4 bloquea con la forma grok (7.4): la ceremonia entera corrio (los tres
+SubagentStart con su rol de primer nivel) y el runner esta verde, pero el Stop
+no trae recibo => decision:block con exit 0 y el contrato adosado al reason.
+Analogo del 22/32.

@@ -1,0 +1,10 @@
+grok, G1 no-arma + G6 permiso. Un prompt sin sentinel en el cuarto host:
+mudo y sin estado (el Stop de cierre del proceso headless no se simula aca;
+el 42 lo pinnar); el tool no crea estado sin turno armado; el Stop deja
+pasar en silencio (emit_allow no imprime para grok). Analogos del 01/17/27.
+Payloads con la forma RECAPTURADA 2026-08-16 (los 37 crudos de 7.1 no se
+commitearon y su repo fue borrado; recaptura headless del mismo binario,
+grok 1.0.3): envelope camel (sessionId, transcriptPath, toolName, toolInput,
+lastAssistantMessage) con literales snake de VALOR (user_prompt_submit,
+post_tool_use, stop), prompt del usuario wrappeado en <user_query>, toolResult
+con exit_code NUMERO y permissionMode bypassPermissions.
