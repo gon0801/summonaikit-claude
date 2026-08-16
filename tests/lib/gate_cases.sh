@@ -173,7 +173,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -277,6 +277,32 @@ caso_g1_arma_con_sentinel() {
   else
     _mal "con sentinel se debe crear el estado del turno"
   fi
+}
+
+# Task 10.12 — el contrato que sale AL ARMAR (fase prompt) solo describia las
+# seis etapas en prosa numerada con guion ("1. Understand - ..."), que invita
+# a decorar la etiqueta real. El lector del Stop gate exige que cada linea
+# EMPIECE con la etiqueta y dos puntos; medido en vivo, un recibo con las seis
+# compuertas correctas pero decoradas fue rechazado entero. Este caso ata que
+# el texto que sale AL ARMAR (no solo el feedback de un rechazo, que ya
+# mostraba la forma) incluye la forma minima "Etiqueta: ..." de las seis, mas
+# la linea que aclara que la etiqueta va al inicio de linea sin adorno.
+caso_g1_contrato_muestra_forma_recibo() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
+  _igual "exit code" "$LAB_RC" "0"
+  # Revision cruzada (codex, 2026-08-15): el texto viejo afirmaba que no se
+  # admite decoracion delante de la etiqueta, y eso era FALSO --
+  # has_receipt_label acepta vineta y negrita desde la Task 8.3. Lo que de
+  # verdad rompe el recibo es reemplazar los dos puntos por un guion, que es
+  # justo lo que modela la lista numerada del propio contrato.
+  _contiene "stdout" "$LAB_OUT" 'followed by a COLON'
+  _contiene "stdout" "$LAB_OUT" 'copying that dash into the receipt'
+  _contiene "stdout" "$LAB_OUT" 'Understand: ...'
+  _contiene "stdout" "$LAB_OUT" 'Implement: ...'
+  _contiene "stdout" "$LAB_OUT" 'Verify: ...'
+  _contiene "stdout" "$LAB_OUT" 'Review: ...'
+  _contiene "stdout" "$LAB_OUT" 'Close: ...'
+  _contiene "stdout" "$LAB_OUT" 'Retro: ...'
 }
 
 # El sentinel pide fronteras a los dos lados. Sin ellas, cualquier archivo o
@@ -420,6 +446,71 @@ caso_g1_correccion_al_vuelo_no_desarma() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
   lab_run prompt claude "$(lab_payload_prompt '-saikit correccion al vuelo del turno')"
   if ! lab_hay_estado; then _mal "una correccion al vuelo (prompt con -saikit) no desarma — A4 c.3 (guardia)"; fi
+}
+
+# Task 10.14 — DEFECTO: una notificacion de tarea en background llega como
+# UserPromptSubmit sin sentinel y start_harness la trataba como un prompt
+# humano nuevo, ejecutando el desarme A4-c2 completo a mitad de un turno
+# armado. Medido en el transcript de la sesion: <task-notification> discrimina
+# perfecto (5/5 notificaciones, 0/41 turnos humanos). El desarme se acota para
+# que esta forma NO borre el estado del turno en curso.
+caso_g1_notificacion_tarea_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt_notificacion_tarea 'tarea-bg-42')"
+  if ! lab_hay_estado; then _mal "una notificacion de tarea en background NO debe desarmar un turno armado — Task 10.14"; fi
+}
+
+# Task 10.14, segunda mitad del acotamiento: lo que NO se pudo medir es si la
+# notificacion llega al campo `prompt` o lo deja vacio/ausente (exigiria
+# capturar el payload real con un operador delante). El acotamiento cubre las
+# dos formas a la vez: sin prompt_text no hay nada que buscar el marcador, asi
+# que la condicion exige ADEMAS que el prompt no este vacio antes de desarmar.
+# Dos variantes del mismo hueco: el campo ausente (reusa el fixture de la
+# Task 9.4) y el campo presente con string vacio.
+# Task 10.14 (hallazgo del reviewer + revision cruzada, 2026-08-15). El hueco
+# que el acotamiento original NO cerraba: el chequeo de notificacion vivia
+# DENTRO de la rama "sin sentinel", asi que una notificacion cuyo texto trae
+# `-saikit` (lo normal en este repo: la notificacion incluye el resumen del
+# job, y los prompts a subagentes llevan el sentinel) nunca lo alcanzaba: se
+# iba por la rama de ARMADO, donde write_state resetea cycle/implemented/
+# verified a cero y el log se sobrescribe. O sea un evento del sistema borraba
+# en silencio evidencia ya acreditada del turno en curso. Ahora la guarda vive
+# ANTES del gate del sentinel: un evento del sistema no arma NI desarma.
+# PR #30: la contracara del caso de abajo. La marca sola no alcanza para
+# declarar que un evento es del sistema, porque su texto es CONTENIDO que
+# cualquiera puede escribir. Solo la forma ESTRICTA (marca al inicio del texto)
+# saltea el gate; una mencion en medio de un prompt humano se procesa normal y
+# el sentinel arma como siempre.
+caso_g1_mencion_humana_de_la_marca_sigue_armando() {
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt_menciona_marca)"
+  if ! lab_hay_estado; then
+    _mal "un prompt humano con -saikit que MENCIONA la marca debe armar igual (PR #30)"
+    return
+  fi
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+}
+
+caso_g1_notificacion_con_sentinel_no_rearma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt_notificacion_con_sentinel 'tarea-bg-77')"
+  if ! lab_hay_estado; then
+    _mal "una notificacion con el sentinel adentro no debe borrar el estado — Task 10.14"
+    return
+  fi
+  _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
+  _igual "implemented conservado" "$(sed -n 's/^implemented=//p' "$LAB_ESTADO_PATH")" "1"
+  _igual "verified conservado" "$(sed -n 's/^verified=//p' "$LAB_ESTADO_PATH")" "1"
+}
+
+caso_g1_prompt_vacio_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt_sin_campo 'el turno anterior decia -saikit agrega el endpoint')"
+  if ! lab_hay_estado; then _mal "un UserPromptSubmit SIN campo prompt no debe desarmar un turno armado — Task 10.14"; fi
+
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt '')"
+  if ! lab_hay_estado; then _mal "un UserPromptSubmit con prompt VACIO (campo presente, string vacio) no debe desarmar un turno armado — Task 10.14"; fi
 }
 
 # DEFECTO A4 (costado de la CORRECCION 2 del plan) — session_id anidado. El
@@ -664,7 +755,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_marca_verificado caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -704,6 +795,20 @@ caso_g2_runner_marca_verificado() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   _igual "verified" "$(lab_estado verified)" "1"
+}
+
+# Task 10.13 — REFUTADA la hipotesis de que un runner lanzado en background no
+# acredita verificacion. Medido en hook_lab con las dos formas del
+# tool_response (objeto de primer plano vs. cadena real de background:
+# "Command running in background with ID: ..."): las dos dan verified=1 por
+# igual, porque el credito depende SOLO de command_text (lo que se lanzo),
+# nunca de la forma del tool_response. Caso de regresion: fija esa conducta
+# para que no se rompa en silencio si el credito alguna vez empieza a mirar
+# la forma del tool_response.
+caso_g2_runner_en_background_marca_verificado() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash_en_background 'pytest -q')"
+  _igual "verified tras runner lanzado en background" "$(lab_estado verified)" "1"
 }
 
 caso_g2_sin_runner_no_marca() {
