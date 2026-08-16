@@ -173,7 +173,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -241,6 +241,27 @@ caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas() {
 # a cursor). Un SessionStart no puede borrar el estado de un turno armado: en
 # Claude un /clear dispara SessionStart y se llevaria puesta la ceremonia en
 # curso.
+# Task 10.16: la regla de la bateria tiene que nombrar el LUGAR. Sin esta
+# asercion, alguien puede podar la mencion al CI y el texto vuelve a decir solo
+# cuantas veces -- que es exactamente la forma en que fallo tres tareas
+# seguidas sin que nadie lo notara (el agente cumplia la regla al pie de la
+# letra, en el lugar mas caro).
+caso_g1_reglas_nombran_donde_correr_la_bateria() {
+  lab_run session claude "$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
+  _contiene "stdout" "$LAB_OUT" 'OPEN A PULL REQUEST'
+  # PR #33 (greptile P1): sin esta parte la regla manda a esperar un CI que
+  # nunca corre -- muchas configuraciones lo disparan en pull_request y no en
+  # un push de rama suelta.
+  _contiene "stdout" "$LAB_OUT" 'NOT on a bare feature-branch push'
+  # PR #33 (greptile P1, segunda ronda): si el CI del repo NO corre la bateria
+  # completa, seguir la regla al pie de la letra la dejaria sin correr en NINGUN
+  # lado. La invariante es que corre una vez en ALGUN lado.
+  _contiene "stdout" "$LAB_OUT" 'runs once SOMEWHERE'
+  _contiene "stdout" "$LAB_OUT" 'if the repo has CI'
+}
+
 caso_g1_session_no_desarma() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el endpoint de sesiones')"
   if ! lab_hay_estado; then _mal "precondicion: el turno con sentinel tenia que armar"; fi
