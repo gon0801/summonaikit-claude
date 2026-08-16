@@ -54,6 +54,14 @@ if [ -z "$TARGET" ] && [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; the
   TARGET="claude"
 fi
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
+# Task 7.4 r1 (hallazgo CR PR #28): la herramienta de subagentes que el gate
+# NOMBRA en sus mensajes tiene que existir en el host que los lee. En Grok se
+# llama spawn_subagent (medido 7.1); "Task tool" ahi es una instruccion sin
+# objeto y lleva a bloqueos en bucle. El contrato ya declara el "equivalente
+# mas cercano" (linea Delegation rule), pero los mensajes de bloqueo no —
+# unifico por TOOL_HINT.
+TOOL_HINT="the Task tool"
+if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
 # ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
@@ -855,7 +863,11 @@ write_state() {
 # toca el lector (has_receipt_label ya es correcto); esto solo agrega lo que
 # faltaba en el contrato. Atado por caso_g1_contrato_muestra_forma_recibo.
 harness_context() {
-  cat <<'HARNESS_CONTEXT'
+  # r2 (Greptile P1 / CR PR #28): el heredoc con delimitador entrecomillado NO
+  # expande $TOOL_HINT — llegaba LITERAL al modelo ("delegate via $TOOL_HINT").
+  # Sustitucion controlada a posteriori: unico punto donde la variable
+  # entra al contrato, el resto del heredoc sigue sin expansion.
+  _hc="$(cat <<'HARNESS_CONTEXT'
 SUMMONAIKIT HARNESS REQUIRED
 
 Who you are working for:
@@ -883,10 +895,10 @@ Waiting on a subagent is not failing:
   where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.
 - That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
-Delegation rule (Claude):
-- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:
+Delegation rule:
+- Delegate the implement, verify, and review gates to subagents via $TOOL_HINT, in this exact sequence:
   1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.
-- If your host does not surface those project-level agents in the Task tool, delegate to its
+- If your host does not surface those project-level agents in $TOOL_HINT, delegate to its
   nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,
   a code-review agent to review. The gate maps host agent names to these roles by function, so a
   correctly-delegated turn still satisfies it.
@@ -965,6 +977,8 @@ Review: findings, risks, or "no findings" with basis.
 Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
+)"
+  printf '%s' "${_hc//\$TOOL_HINT/$TOOL_HINT}"
 }
 
 # Task 10.1: los clasificadores del vendor (is_engineering_task,
@@ -1528,13 +1542,29 @@ emit_gate_failure() {
   fi
 
   escaped="$(json_escape "$feedback")"
+  # Task 7.4 (re-planificacion del armado, medido 7.2): additionalContext es
+  # IGNORADO por Grok en las 4 formas medidas, y UPS no esta en
+  # blockingEvents — el unico canal medido que llega al modelo es el REASON
+  # del decision:block (7.2: el modelo lo cito textual en el turno block0).
+  # Asi que en grok el contrato viaja ADOSADO a cada bloqueo del Stop: llega
+  # al primer Stop bloqueado en vez de al armado (declarado como limite), y
+  # llega completo cada vez (idempotente, el modelo relee lo que falto).
+  if [ "$TARGET" = "grok" ]; then
+    feedback="$feedback
+
+$(harness_context)"
+    escaped="$(json_escape "$feedback")"
+  fi
   printf '{"decision":"block","reason":"%s"}\n' "$escaped"
   printf '%s\n' "$feedback" >&2
   # Task 6.4 (medido 6.2, 12 turnos headless): Codex DESCARTA el stdout del
   # hook cuando el exit no es 0 — el mismo JSON con exit 2 no bloquea (1 Stop,
   # 0 hook_prompt) y con exit 0 bloquea (4 Stops, 3 hook_prompt). El bloqueo
   # de codex viaja con exit 0; claude/zcode conservan el exit 2 medido en 5.2.
-  if [ "$TARGET" = "codex" ]; then
+  # Task 7.4 (medido 7.2): grok igual que codex — PowerShell devuelve el
+  # exit 2 como 1 y Grok hace fail-open en Stop (exit 2 = IGNORADA); el JSON
+  # con exit 0 = ACEPTADA y mueve el Stop de forma fiable.
+  if [ "$TARGET" = "codex" ] || [ "$TARGET" = "grok" ]; then
     exit 0    # saikit-6.4-codex-block (mutacion: exit 0 -> exit 2)
   fi
   exit 2
@@ -1787,7 +1817,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # a Claude post-3.7), asi que la rama se prende — la condicion del diseno
   # ("solo si 6.1 mide que el rol llega") esta cumplida y medida. cursor y
   # other siguen fuera; zcode entra por su fallback TARGET=claude (5.4).
-  case "$TARGET" in claude|codex)
+  # Task 7.4 (D3): grok entra — 7.1 midio el rol por TRES canales
+  # (SubagentStart.subagentType top-level, despacho spawn_subagent con
+  # toolInput.subagent_type que SI emite post_tool_use, e internos del hijo
+  # con subagentType), y el env map entrega TARGET=grok en los 37 dumps. La
+  # condicion del diseño ("solo si 7.1 mide que el rol llega") cumplida por
+  # partida doble. Los tres canales ya los leia la 7.3.
+  case "$TARGET" in claude|codex|grok)
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
     # de herramienta) trababa el turno sin salida. La declaracion en el recibo
@@ -1801,15 +1837,15 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # mismo trade-off que el README ya declara para el gate entero.
     case ",$agents_seen," in
       *",implementer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via $TOOL_HINT, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",verifier,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via $TOOL_HINT, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",reviewer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via $TOOL_HINT, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
       if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then

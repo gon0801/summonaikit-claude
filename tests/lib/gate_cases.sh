@@ -1243,7 +1243,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -2153,7 +2153,9 @@ caso_g1_grok_stop_shutdown_no_toca_estado() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'todavia no cierro' end_turn)"
   LAB_GROK_HOOK_EVENT=""
-  [ "$LAB_RC" != "0" ] || _mal "control D6: el Stop end_turn sin recibo tiene que correr el gate"
+  # 7.4: el bloqueo grok viaja con exit 0 (exit 2 es ignorado, 7.2) — el
+  # control ahora mira la decision, no el exit code.
+  _contiene "control D6: el Stop end_turn corre el gate" "$LAB_OUT" '"decision":"block"'
 }
 
 # D5 — el credito de verificacion con las formas camel completas: command bajo
@@ -2280,8 +2282,11 @@ caso_g4_grok_turno_completo_camel_cierra() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit turno completo grok')"
   LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
   lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  lab_run auto grok "$(lab_payload_grok_interno verifier 'npm test')"
+  lab_run auto grok "$(lab_payload_grok_spawn reviewer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
   LAB_GROK_HOOK_EVENT=""
@@ -2297,8 +2302,7 @@ caso_g4_grok_stop_sin_recibo_bloquea() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'listo, entrega' end_turn)"
   LAB_GROK_HOOK_EVENT=""
-  [ "$LAB_RC" != "0" ] || _mal "Stop grok end_turn sin recibo ni evidencia no bloquea"
-  _contiene "stdout" "$LAB_OUT" '"decision":"block"'
+  _contiene "Stop grok end_turn sin recibo bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
 
 # Precedencia snake del walker: AMBOS mensajes en el payload; el snake (sin
@@ -2309,7 +2313,7 @@ caso_g4_grok_precedencia_lastmessage_gana_snake() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"last_assistant_message":"%s","lastAssistantMessage":"%s","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$_TEXTO_LLANO" "$_RECIBO_VINETAS")"
   LAB_GROK_HOOK_EVENT=""
-  [ "$LAB_RC" != "0" ] || _mal "lastAssistantMessage (camel) gano sobre last_assistant_message (snake)"
+  _contiene "last_message snake gano: bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
 
 # transcriptPath camel: el recibo SOLO en el transcript (canal 2), el payload
@@ -2320,8 +2324,11 @@ caso_g4_grok_transcriptpath_camel() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit recibo en transcript camel')"
   LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
   lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  lab_run auto grok "$(lab_payload_grok_interno verifier 'npm test')"
+  lab_run auto grok "$(lab_payload_grok_spawn reviewer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
   LAB_GROK_HOOK_EVENT=""
@@ -2336,8 +2343,68 @@ caso_g4_grok_transcriptpath_camel() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcript_path":"/no/existe/transcript.jsonl","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"'"$_TEXTO_LLANO"'","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
   LAB_GROK_HOOK_EVENT=""
-  [ "$LAB_RC" != "0" ] || _mal "transcript_path (snake, inexistente) no gano sobre transcriptPath (camel)"
+  _contiene "transcript snake gano: bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
+
+# ============================== Task 7.4: ceremonia Grok (D3) ================
+# La secuencia implementer->verifier->reviewer se exige en TARGET=grok (7.1
+# midio el rol por tres canales y el env map entrega TARGET=grok). El bloqueo
+# viaja con decision:block + exit 0 (7.2: exit 2 es IGNORADO en Grok) y el
+# contrato viaja adosado al reason del bloqueo (additionalContext ignorado,
+# la re-planificacion que 7.2 decidio). El budget usa la forma default
+# (continue:false + exit 0), que es la aceptada — sin cambio.
+
+# Caso que PASA: ceremonia completa en grok cierra limpio.
+caso_g3_grok_ceremonia_completa_cierra() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit turno con ceremonia')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  lab_run auto grok "$(lab_payload_grok_interno verifier 'npm test')"
+  lab_run auto grok "$(lab_payload_grok_spawn reviewer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "ceremonia completa grok cierra" "$LAB_RC" "0"
+  _gk="$(_grok_ruta_estado)"
+  [ -f "$_gk" ] && _mal "el cierre con ceremonia completa no borro el estado"
+}
+
+# Caso que BLOQUEA (el catch de mut_ceremonia_sin_grok): sin despachar
+# verifier/reviewer, el Stop bloquea con la forma grok (exit 0 + decision:block
+# + el contrato en el reason — la re-planificacion del armado de 7.2).
+caso_g3_grok_ceremonia_incompleta_bloquea() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit ceremonia incompleta')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "bloqueo grok con exit 0 (exit 2 es ignorado, 7.2)" "$LAB_RC" "0"
+  _contiene "bloqueo grok con decision:block" "$LAB_OUT" '"decision":"block"'
+  _contiene "el motivo nombra al verifier faltante" "$LAB_ERR" 'Missing verifier'
+  _contiene "el contrato viaja en el bloqueo (reason, 7.2)" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
+  _contiene "el reason nombra la tool nativa de grok (CR PR #28)" "$LAB_OUT" 'spawn_subagent tool'
+  case "$LAB_OUT" in *'Task tool'*) _mal "el reason grok nombra Task tool, que no existe en Grok (CR PR #28)" ;; esac
+  case "$LAB_OUT" in *'$TOOL_HINT'*) _mal "el contrato emite TOOL_HINT literal: el heredoc no expande (r3 PR #28)" ;; esac
+}
+
+# Prueba negativa: SIN TARGET=grok la rama no aplica. Un Stop de cursor con la
+# misma forma de estado NO exige secuencia (regresion: si grok se prendiera en
+# cualquier host, el gate de cursor volveria a falsos bloqueos).
+caso_g3_grok_ceremonia_no_corre_en_cursor() {
+  lab_run prompt cursor "$(lab_payload_prompt '-saikit turno de cursor')"
+  lab_run tool cursor "$(lab_payload_edit '/proyecto/src/x.ts')"
+  lab_run tool cursor "$(lab_payload_bash 'pytest -q')"
+  lab_run stop cursor "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "cursor sin ceremonia cierra (la rama grok no se filtra)" "$LAB_RC" "0"
+}
+
 
 # --------------------------------------------------------------------- indice
 # Un caso que no este en ninguna lista NO CORRE. La bateria de comportamiento

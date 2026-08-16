@@ -589,6 +589,137 @@ out="$(bash "$tool" --codex-hooks-json "$codex_dir/hooks.json" --settings "$code
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'unknown' || malo "formas mezcladas es unknown: $out"
 
+# ============================================ Task 7.5 — la CUARTA forma (grok)
+# En Grok el registro es un JSON PROPIO (<dir>/summonaikit.json) cuyo command
+# nombra al hook DIRECTAMENTE, en forma PowerShell: '& "bash.exe" "hook"' — 7.1
+# midio que el shell de hooks en Windows es powershell.exe y que el call
+# operator '&' es la invocacion (la forma zcode muere con exit 1). TRES
+# afirmaciones SEPARADAS, no colapsadas (leccion 0.4 + Greptile P1 del PR #25):
+#   (1) el JSON nombra al hook en una linea que no solo IMPRIME;
+#   (2) el hook que el JSON nombra EXISTE y lleva el marcador de la linea 2;
+#   (3) el matcher de PostToolUse cubre spawn_subagent o su alias Task (7.1).
+# Contrato intacto: exit 0 SIEMPRE, unknown != ausente.
+n_grok_reg=0
+grok_dir=''
+nuevo_grok_reg() {
+  n_grok_reg=$((n_grok_reg + 1))
+  grok_dir="$tmp/grok-reg-$n_grok_reg"
+  mkdir -p "$grok_dir/hooks"
+}
+
+escribir_hook_grok() {
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' '# SAIKIT-CLAUDE-OWNED summonaikit-claude 7.5'
+    printf '%s\n' 'exit 0'
+  } > "$grok_dir/hooks/summonaikit-harness.sh"
+}
+
+# $1=command (YA escapado para JSON), $2=matcher de PostToolUse ('' => sin matcher).
+escribir_grok_json() {
+  local m=''
+  [ -n "$2" ] && m="\"matcher\": \"$2\","
+  cat > "$grok_dir/hooks/summonaikit.json" <<JSON
+{
+  "saikit_owned": "summonaikit-claude",
+  "hooks": {
+    "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "$1", "timeout": 30 } ] } ],
+    "PostToolUse": [ { $m "hooks": [ { "type": "command", "command": "$1", "timeout": 30 } ] } ],
+    "Stop": [ { "hooks": [ { "type": "command", "command": "$1", "timeout": 600 } ] } ]
+  }
+}
+JSON
+}
+
+# El command en forma PowerShell, YA escapado para vivir dentro del string JSON.
+grok_cmd_json() {
+  printf '& \\"C:/Program Files/Git/bin/bash.exe\\" \\"%s\\"' "$grok_dir/hooks/summonaikit-harness.sh"
+}
+
+caso "grok: registro completo (JSON + hook con marca + matcher) => SILENCIO y exit 0"
+nuevo_grok_reg; escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Bash|Edit|Write|apply_patch|Task|Agent|spawn_subagent|run_terminal_command|search_replace|write'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "esperaba silencio con las tres afirmaciones en verde: $out"
+
+caso "grok: un JSON que solo IMPRIME el nombre del hook NO cuenta (afirmacion 1)"
+nuevo_grok_reg; escribir_hook_grok
+escribir_grok_json 'echo summonaikit-harness.sh' ''
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "fail-open: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' || malo "debe reportar el registro incompleto: $out"
+printf '%s' "$out" | grep -q 'PostToolUse' || malo "debe nombrar la fase PostToolUse faltante: $out"
+
+caso "grok: el JSON nombra un hook que NO existe => afirmacion (2), no un registro roto"
+nuevo_grok_reg
+escribir_grok_json "$(grok_cmd_json)" 'spawn_subagent|Task|Bash'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'NO existe' || malo "debe reportar que el hook nombrado no existe: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "las 3 fases estan registradas; no debe acusar el registro"
+
+caso "grok: hook presente pero SIN el marcador de la linea 2 => afirmacion (2)"
+nuevo_grok_reg
+printf '#!/usr/bin/env bash\n# un hook de otro, sin marcador\nexit 0\n' > "$grok_dir/hooks/summonaikit-harness.sh"
+escribir_grok_json "$(grok_cmd_json)" 'spawn_subagent|Task|Bash'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'marcador' || malo "debe reportar el hook sin marcador: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "el registro esta completo; el hueco es del hook, no del JSON"
+
+caso "grok: matcher sin spawn_subagent ni Task => afirmacion (3)"
+nuevo_grok_reg; escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Bash|Edit|Write'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -q "no cubre 'spawn_subagent'" \
+  || malo "debe reportar que el matcher no cubre la delegacion: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "las 3 fases corren; el matcher es un hueco independiente"
+
+caso "grok: matcher con SOLO 'Task' cubre spawn_subagent por alias => silencio"
+nuevo_grok_reg; escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Task'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "el alias Task cubre spawn_subagent (medido 7.1) => silencio: $out"
+
+caso "grok: summonaikit.json ilegible => unknown, no ausencia"
+nuevo_grok_reg; escribir_hook_grok
+printf '{ roto\n' > "$grok_dir/hooks/summonaikit.json"
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "Core Rule 2: ilegible es unknown: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "ilegible NO es ausencia observada: $out"
+
+caso "grok: --grok-hooks-dir + --settings juntos => unknown (no se mezclan)"
+nuevo_grok_reg; escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Task'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" --settings "$grok_dir/hooks/summonaikit.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "formas mezcladas es unknown: $out"
+
+caso "grok: --grok-hooks-dir sin valor => unknown (fail-open, leccion 0.4)"
+out="$(timeout 5 bash "$tool" --grok-hooks-dir 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "el bucle de argumentos se colgo"
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "flag sin valor => unknown: $out"
+
+# r2/CodeRabbit: la ruta citada en el command puede tener espacios (un
+# 'C:/Users/John Doe/...' es un HOME real de Windows). Si la extraccion la
+# parte en el espacio, la afirmacion (2) reporta un falso 'NO existe' sobre
+# un hook que SI esta. El fixture cita la ruta ENTRE COMILLAS, como el JSON
+# canonico del instalador.
+caso "grok: hook nombrado bajo una ruta CON ESPACIOS cuenta entera (r2)"
+n_grok_reg=$((n_grok_reg + 1))
+grok_dir="$tmp/grok reg espacios $n_grok_reg"
+mkdir -p "$grok_dir/hooks"
+escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Task'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "el hook bajo ruta con espacios existe y lleva marca: silencio, no $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

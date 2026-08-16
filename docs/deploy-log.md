@@ -608,3 +608,30 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **Vivo vs origin/master:** cmp byte a byte idéntico.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-16 — PR #28 / Task 7.4 (ceremonia grok) + PR #29 / Task 7.5 (--host grok) — deploy ACTUALIZA el vivo ~/.claude
+
+- **Mergeados por la sesión zcode** (worktree `wt-p7`; 7.5 implementada por subagente
+  implementer supervisado). **7.4**: ceremonia `case claude|codex|grok`, bloqueo con
+  `decision:block` + exit 0 (exit 2 ignorado en Grok, medido 7.2), armado re-planificado
+  — el contrato viaja adosado al `reason` de cada bloqueo (único canal medido que llega
+  al modelo), `TOOL_HINT` por host (los mensajes jamás nombran una tool que no exista en
+  el host), budget con la forma default aceptada. **7.5**: `--host grok` (hook + JSON
+  canónico + 3 perfiles con `skills:` omitido por el loader), preflight sin escribir ante
+  desconocido, rollback, `--quitar-grok` (el `verifier.md` ajeno sobrevive), verificador
+  `--grok-hooks-dir` con 3 afirmaciones separadas. 26+ casos nuevos con TDD.
+- **Reviews de bots: 5 rondas atendidas** entre ambos PRs (Greptile P1 heredoc literal,
+  aserto inerte CR, rollback de agentes, rutas con espacios, umask) + **deuda 9.1
+  saldada de paso**: backticks en descripciones del catálogo de mutaciones EJECUTABAN
+  comandos en cada corrida del CI (`failed: command not found`) — misma clase que la
+  lección 9.10.
+- **Outage de GitHub Actions**: los últimos pushes de ambos PRs no dispararon runs
+  (verificado con commits vacíos y API; apps externas sí corrieron). Validación local
+  completa: behavior, mutaciones (78/78 tras el merge), línea base 34 escenarios — con
+  merge de master (10.8) resuelto tomando su base + regrabada auditada (30 sha, 0
+  veredictos).
+- **¿Cambió el hook? SÍ** (7.4). `install-hook.sh`: REPARADO con backup
+  `…nuestro.20260816-004901.bak`. 7.5 es tools-only (no toca el hook).
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Vivo vs origin/master:** cmp byte a byte idéntico.
+- **Operador:** Gon (sesión zcode).

@@ -68,7 +68,7 @@ G2|falla_phpunit_quitada|la vía B (failures/errors: N) deja de matchear
 G2|falla_cs_quitada|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
 G2|falla_go_quitada|la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)
 G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
-G2|falla_excepciones_sin_dospuntos|se quita el `:` despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
+G2|falla_excepciones_sin_dospuntos|se quita el ':' despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
@@ -76,9 +76,9 @@ G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuel
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
-G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
-G2|credito_por_mencion|la guarda de echo/printf se neutraliza y `echo pytest` vuelve a acreditar verificacion
+G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
@@ -123,6 +123,7 @@ G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en t
 G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
 G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
+G3|ceremonia_sin_grok|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -389,7 +390,7 @@ mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'
 # literal nuevo (el patron `*)` matchea cualquier target, mismo efecto que el
 # `if true` de antes). Si el sed viejo quedara, la guardia 2 del driver ("la
 # mutacion no cambio nada") reventaria la bateria entera.
-mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex)/case "$TARGET" in *)/'; }
+mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok)/case "$TARGET" in *)/'; }
 # Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
@@ -419,7 +420,7 @@ mut_host_codex_sin_rama()    { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "codex" \]/S
 # Task 6.4 (D3): revierte la ceremonia a claude-only — el gate vuelve a ser
 # inerte en codex. Lo atrapa caso_g3_ceremonia_se_exige_en_codex (el bloqueo
 # que reclama al implementer desaparece y el turno cierra limpio).
-mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex)/case "$TARGET" in claude)/'; }
+mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok)/case "$TARGET" in claude|grok)/'; }
 # Task 6.4 (medido 6.2): devuelve el exit 2 al bloqueo de codex. Codex descarta
 # el stdout con exit != 0, o sea gate decorativo — lo atrapa
 # caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
@@ -431,6 +432,10 @@ mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 # sin la rama (y sin su prioridad), el lado grok resuelve HOST=claude y los dos
 # hosts comparten estado. Lo atrapa caso_g1_dos_hosts_grok_y_claude_no_comparten_estado.
 mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; then/if false; then/'; }
+# Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
+# inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
+# incompleto pasa a cerrar limpio y el decision:block desaparece).
+mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok)/case "$TARGET" in claude|codex)/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa
