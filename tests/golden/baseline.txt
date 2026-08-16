@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: cbf6d3069f29b3cd1506101eff2226c1aa2259e020c3f833b98fe8669e80f904
-# hook_bytes: 116465
-# hook_lineas: 2005
-# escenarios: 42
+# hook_sha256: fe5165f913042c274d8859b8a6e3c20673ce62c6ad53db08104edfe8b0bfd7f8
+# hook_bytes: 118023
+# hook_lineas: 2028
+# escenarios: 43
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -3759,3 +3759,36 @@ stdout <vacio>
 stderr <vacio>
 estado sin cambios
 estado_host: grok
+
+=== escenario 43-desarme-a4
+# Dos pasos de fase `prompt` en la MISMA sesion: el primero arma con el sentinel,
+# el segundo llega sin el y debe DESARMAR (defecto A4 c.2).
+# Por que existe: hasta la Task 10.17 ningun escenario dorado mandaba un SEGUNDO
+# UserPromptSubmit despues de armar, que es la unica forma de alcanzar esa rama.
+# Medido en la verificacion del paquete A: con una copia del hook donde el
+# desarme nunca borraba el estado, `--check` seguia dando exit 0 -- la capa que
+# graba COMPORTAMIENTO no veia nada. Las otras dos capas (mutaciones y casos) si
+# la atrapaban; esta cierra la que faltaba.
+# Lo que se graba: el paso 1 deja estado en disco; el paso 2 lo borra y el
+# escenario termina en `(sin estado)`. Si el desarme se rompiera, el paso 2
+# dejaria el estado vivo y el diff lo mostraria.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha c7657b58c1d0f783, 12188 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/3d7e1b04-9a52-4c6f-8e13-5b2a7c4d9e60/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/3d7e1b04-9a52-4c6f-8e13-5b2a7c4d9e60/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+--- paso 02  phase=prompt target=claude  payload=02.prompt.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+(sin estado)

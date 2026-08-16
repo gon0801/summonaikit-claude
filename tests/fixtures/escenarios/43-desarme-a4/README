@@ -1,0 +1,11 @@
+Dos pasos de fase `prompt` en la MISMA sesion: el primero arma con el sentinel,
+el segundo llega sin el y debe DESARMAR (defecto A4 c.2).
+Por que existe: hasta la Task 10.17 ningun escenario dorado mandaba un SEGUNDO
+UserPromptSubmit despues de armar, que es la unica forma de alcanzar esa rama.
+Medido en la verificacion del paquete A: con una copia del hook donde el
+desarme nunca borraba el estado, `--check` seguia dando exit 0 -- la capa que
+graba COMPORTAMIENTO no veia nada. Las otras dos capas (mutaciones y casos) si
+la atrapaban; esta cierra la que faltaba.
+Lo que se graba: el paso 1 deja estado en disco; el paso 2 lo borra y el
+escenario termina en `(sin estado)`. Si el desarme se rompiera, el paso 2
+dejaria el estado vivo y el diff lo mostraria.
