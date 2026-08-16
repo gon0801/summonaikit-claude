@@ -582,3 +582,29 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   fuente byte a byte; `hooks.json` cksum 2271698800 intacto; verificador codex
   en silencio. **`~/.claude`:** deployado por la sesión zcode (entrada previa).
 - **Operador:** sesión Claude Phase 6 (autónoma).
+
+## 2026-08-15 — PR #27 / Task 7.3 (envelope y señal Grok) — deploy ACTUALIZA el vivo ~/.claude
+
+- **Mergeado por la sesión zcode** (worktree `wt-p7`). Contenido: HOST=grok por
+  setness de `GROK_HOOK_EVENT` (arriba de codex: `grok > codex > zcode >
+  claude > other`), aliases camel con precedencia snake (`sessionId`,
+  `toolName`, `toolInput`, `transcriptPath`, walker), literales
+  `user_prompt_submit`/`session_start` en el case de PHASE, veto D5
+  (`toolResult.exit_code` + variantes, grep acotado al objeto), `search_replace`
+  en la señal de edición, filtro D6 de Stop `reason=end_turn`. **Merge con
+  conflictos contra master** (los PRs #22/#26/#10.10 entraron mientras): el
+  veto D5 quedó integrado dentro de la condición de crédito de 9.2; el
+  auto-merge perdió 3 funciones que se recuperaron de master; la primera
+  unión de listas duplicaba 82 casos y el guard de huérfanos del behavior lo
+  cazó. Validación del mundo combinado: behavior 139 casos OK, **77 mutaciones
+  / 77 atrapadas**, línea base 33/33 sin mover veredictos.
+- **Review de bots atendida (2 rondas)**: Greptile P2 + CR Minor (señal
+  exportada vacía → `${VAR+x}`, caso + mutación propios), CR Major (`write`
+  con caso; la mutación pedida se declaró sin killer posible — `implemented`
+  es laxo por diseño vendor). CI 4/4.
+- **¿Cambió el hook? SÍ** (D2-D6). `install-hook.sh`: destino nuestro y
+  distinto ⇒ REPARADO con backup
+  `saikit-backups/summonaikit-harness.sh.nuestro.20260815-182912.bak`.
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Vivo vs origin/master:** cmp byte a byte idéntico.
+- **Operador:** Gon (sesión zcode).
