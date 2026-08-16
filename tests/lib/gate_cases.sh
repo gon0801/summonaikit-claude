@@ -255,6 +255,10 @@ caso_g1_reglas_nombran_donde_correr_la_bateria() {
   # nunca corre -- muchas configuraciones lo disparan en pull_request y no en
   # un push de rama suelta.
   _contiene "stdout" "$LAB_OUT" 'NOT on a bare feature-branch push'
+  # PR #33 (greptile P1, segunda ronda): si el CI del repo NO corre la bateria
+  # completa, seguir la regla al pie de la letra la dejaria sin correr en NINGUN
+  # lado. La invariante es que corre una vez en ALGUN lado.
+  _contiene "stdout" "$LAB_OUT" 'runs once SOMEWHERE'
   _contiene "stdout" "$LAB_OUT" 'if the repo has CI'
 }
 
