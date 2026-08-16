@@ -7,6 +7,29 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy del perfil Claude (master `5de0e27`, PRs #30, #33 y #34)
+
+- **Que se deployo:** el hook de `master` al perfil **Claude**, con
+  `bash tools/install-hook.sh` (no `cp`). El instalador clasifico el destino
+  como NUESTRO-pero-distinto y lo reparo con backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260816-110614.bak`.
+- **Que traia:** las tres filas del paquete A (10.12 forma del recibo en el
+  contrato, 10.13 caso de regresion del credito en background, 10.14 guarda
+  contra notificaciones de tarea) mas la 10.16 (la regla permanente nombra el
+  LUGAR donde correr la bateria) y la correccion de la colision de la marca.
+- **Antes:** vivo `2129441864 113112`. **Despues:** vivo `3139286255 116465`,
+  identico al repo (`cmp` byte a byte).
+- **Verificado:** `tools/check-hook-registration.sh` sale **0 y en silencio**
+  (sin advisories), y `tests/test_golden_baseline.sh` da **OK** contra el hook
+  ya instalado — o sea la linea base grabada en el repo describe exactamente lo
+  que corre en el perfil. Antes del deploy esa prueba fallaba en local por
+  diseno, porque compara contra el vivo y el vivo estaba viejo.
+- **Nota de proceso:** este deploy se hizo DESPUES de repasar los comentarios de
+  coderabbit y greptile en los PRs #30 y #33 a pedido del operador. Ese repaso
+  encontro un hallazgo a medias que habria llegado al perfil: un prompt humano
+  que solo MENCIONA `<task-notification>` dejaba vivo el estado armado anterior
+  (sintoma A4). Se corrigio en el PR #34 antes de instalar.
+
 ## 2026-08-15 — Deploy pendiente del perfil Claude (master `d41f85d`)
 
 - **Qué se deployó:** el hook de `master` al perfil **Claude**. No corresponde a
