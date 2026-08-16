@@ -635,3 +635,29 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **Vivo vs origin/master:** cmp byte a byte idéntico.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-16 — Task 7.6 (línea base grok + staging + PRIMER INSTALL de ~/.grok) — cuarto host en producción
+
+- **Contexto**: fila que cierra Phase 7. El install de `~/.grok` se ejecutó
+  DURANTE la task (pre-autorizado por el plan: 7.6 es la fila release); el
+  sync post-merge de AGENTS.md queda como no-op esperado — 7.6 no toca el
+  hook, solo tools/tests/fixtures.
+- **`install-hook.sh --host grok`**: destino AUSENTE ⇒ publicado sin backup
+  necesario. Hook + `summonaikit.json` (command PowerShell `& "bash.exe"
+  "hook"`) bajo `~/.grok/hooks/`; `implementer.md`/`reviewer.md` con
+  frontmatter traducido; el `verifier.md` ajeno del operador sobrevivió y se
+  reportó (DESCONOCIDO — no se tocó). `--restore-vendor` no aplica (cuarto
+  host, sin entrada de manifiesto).
+- **`check-hook-registration.sh --grok-hooks-dir`**: SILENCIO (3 afirmaciones
+  verdes), exit 0; contraste negativo con dir vacío ⇒ `unknown` (no vacuo).
+- **Turnos reales headless**: `-saikit` ARMÓ bajo
+  `~/.grok/hooks/state/grok/<key>/<session>/`; primer Stop `block=true`
+  (decision:block + exit 0, forma 7.4) — el modelo citó el contrato del
+  reason, despachó implementer (`agents_seen=implementer`) y cerró por la
+  escotilla DELEGATED. Turno pelado en repo nuevo: 0 estado creado.
+- **Perfiles vecinos**: `~/.claude/hooks/` y `~/.codex/` con 8 cksum
+  idénticos antes/después (summonaikit-harness.sh claude/codex, wrapper .ps1,
+  hooks.json codex, backup, 3 cbm-*).
+- **Línea base**: 41 escenarios (bloque grok 35-41); región 01-34
+  byte-idéntica; `--check` reproducible ×2.
+- **Operador:** Gon (sesión zcode).
