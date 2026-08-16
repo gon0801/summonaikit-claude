@@ -47,6 +47,7 @@ G1|sentinel_sin_guardia|se arma sin llegar a consultar el sentinel
 G1|session_sin_llave|el estado se vuelve a llavear solo por proyecto (sin sesion)
 G1|desarmar_quita_borrado|el desarme deja de borrar el estado en prompt sin sentinel
 G1|desarma_con_prompt_vacio|la clausula que impide desarmar con prompt vacio se neutraliza y un evento sin texto vuelve a borrar el estado armado
+G1|marca_notificacion_laxa|la marca de notificacion vuelve a la forma laxa (contiene) y un prompt humano que la menciona se queda sin gate
 G1|notificacion_no_se_reconoce|el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
@@ -167,6 +168,9 @@ mut_desarmar_quita_borrado()   { sed 's/if \[ "\$PHASE" = "prompt" \] && \[ -f "
 # prompt NO vacio. Sin ella un UserPromptSubmit sin texto vuelve a desarmar.
 # La atrapa caso_g1_prompt_vacio_no_desarma.
 mut_desarma_con_prompt_vacio() { sed 's/\[ -n "$prompt_text" \]; then/true; then/'; }
+# PR #30 (greptile P1 + coderabbit Major): volver la marca a la forma laxa.
+# La atrapa caso_g1_mencion_humana_de_la_marca_sigue_armando.
+mut_marca_notificacion_laxa() { sed "s|'\^\[\[:space:\]\]\*<task-notification>'|'<task-notification>'|"; }
 mut_notificacion_no_se_reconoce() { sed 's/"\$SAIKIT_TASK_NOTIFICATION_RE"/"NUNCA_MATCHEA_ESTO_10_14"/'; }
 # session_id_greedy es el gemelo de mut_subagent_type_greedy para session_id:
 # volver al lector greedy del payload crudo tomaba la ULTIMA ocurrencia de la

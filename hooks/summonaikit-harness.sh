@@ -1051,7 +1051,18 @@ emit_allow() {
 # prompt HUMANO real sin sentinel SIGUE desarmando -- eso es A4 y no se afloja,
 # aflojarlo de mas revive el defecto que ese borrado cierra
 # (caso_g1_prompt_sin_sentinel_desarma fija esa regresion).
-SAIKIT_TASK_NOTIFICATION_RE='<task-notification>'
+# ESTRICTA: anclada al inicio del texto y con el cierre presente. La version
+# laxa (solo "contiene la marca") la rechazaron DOS revisores independientes
+# en el PR #30 -- greptile P1 y coderabbit Major, mismo hallazgo: un prompt
+# HUMANO que pide `-saikit` y ademas MENCIONA la marca (hablar de este mismo
+# defecto ya la menciona) salia por la guarda y se quedaba SIN gate. Perder el
+# candado justo cuando se pidio es peor que el defecto que la guarda cierra.
+# Medido: las 5 notificaciones reales EMPIEZAN con la marca en su primera
+# linea; una mencion humana la lleva en medio del texto.
+SAIKIT_TASK_NOTIFICATION_RE='^[[:space:]]*<task-notification>'
+# Laxa: solo se usa para NO DESARMAR (nunca para saltear el armado), como red
+# por si el host antepusiera algo a la marca y la estricta no matcheara.
+SAIKIT_TASK_NOTIFICATION_LAXA_RE='<task-notification>'
 
 start_harness() {
   # Task 8.1 (C1+C2): el prompt se lee con el lector top-level DECODIFICADO —
@@ -1086,7 +1097,9 @@ start_harness() {
   # cero y el log se SOBRESCRIBE, borrando en silencio evidencia ya acreditada
   # del turno en curso (por ejemplo un verified=1 ganado por una corrida real).
   # Un evento del sistema no debe armar NI desarmar: se deja pasar intacto.
-  # Atado por caso_g1_notificacion_con_sentinel_no_rearma.
+  # Solo la forma ESTRICTA saltea el gate entero. Atado por
+  # caso_g1_notificacion_con_sentinel_no_rearma y por
+  # caso_g1_mencion_humana_de_la_marca_sigue_armando.
   if [ "$PHASE" = "prompt" ] \
      && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_RE"; then
     emit_allow
@@ -1106,7 +1119,10 @@ start_harness() {
     # arma en session con -saikit en el texto, ver caso_g6_armado_por_target).
     #
     # Task 10.14: el desarme se acota ADEMAS a un prompt NO vacio. La
-    # notificacion ya se atajo arriba (antes del gate del sentinel), asi que
+    # notificacion en su forma ESTRICTA ya se atajo arriba; aca se usa la LAXA
+    # como red: si el host antepusiera algo a la marca, la estricta no matchea y
+    # sin esto volveriamos a desarmar con un evento del sistema. Nunca al reves:
+    # la laxa JAMAS saltea el armado, para no perder el gate cuando se pidio.
     # aca no se repite ese chequeo -- repetirlo dejaria una clausula
     # inalcanzable y su mutacion no la atraparia nadie.
     #
@@ -1121,7 +1137,8 @@ start_harness() {
     # con eventos de SISTEMA (un resume), no con un mensaje humano nuevo. Si
     # aparece un host donde no valga, se mide y se acota por host.
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ] \
-       && [ -n "$prompt_text" ]; then
+       && [ -n "$prompt_text" ] \
+       && ! printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_LAXA_RE"; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
       podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
@@ -1492,7 +1509,7 @@ Revision loop on failure:
 - Budget: 2 cycles max.
 - Do not blindly retry.
 
-Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 SUMMONAIKIT HARNESS RECEIPT
 Understand: ...
 Implement: ...

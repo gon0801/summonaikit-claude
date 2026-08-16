@@ -227,6 +227,15 @@ lab_payload_prompt() {
 # llevan `-saikit` por todos lados. Si el chequeo de notificacion viviera solo
 # en la rama "sin sentinel", esta forma tomaba la rama de ARMADO y reseteaba
 # cycle/implemented/verified a cero. $1 = id de la tarea.
+# PR #30 (greptile P1 + coderabbit Major, mismo hallazgo): un prompt HUMANO que
+# pide el gate y ademas MENCIONA la marca de notificacion. Hablar de este mismo
+# defecto ya la menciona, asi que no es rebuscado. Con la marca laxa este prompt
+# salia por la guarda y el turno se quedaba SIN gate: perder el candado justo
+# cuando se pidio es peor que el defecto que la guarda cierra.
+lab_payload_prompt_menciona_marca() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"-saikit arregla el bug: el hook trata cualquier texto con <task-notification> adentro como si fuera del sistema"}'
+}
+
 lab_payload_prompt_notificacion_con_sentinel() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"<task-notification>\\n<task-id>%s</task-id>\\n<summary>el subagente devolvio: implementa la task con -saikit y cerra el paquete</summary>\\n</task-notification>"}' "$1"
 }

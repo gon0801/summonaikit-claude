@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: fa49ad5e7257c74058c27cbc7f27378799126484035eda06cea5c10f3fb4beaa
-# hook_bytes: 109623
-# hook_lineas: 1913
+# hook_sha256: 5d3b01d2d48737f2f0c6d7e2ec8ea89fd3e7a77975298e29cc91284b7ebe0e1f
+# hook_bytes: 110963
+# hook_lineas: 1930
 # escenarios: 34
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -112,8 +112,8 @@ hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-state.env
 | lane=full
 --- paso 04  phase=stop target=cursor  payload=04.stop.cursor.json
 exit 0
-stdout (sha cdf374571f939e37, 1658 bytes)
-| {"followup_message":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stdout (sha c92d3ffca68343d0, 1746 bytes)
+| {"followup_message":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
 stderr <vacio>
 --- estado tras el paso 04
 hooks/state/<PROJECT_KEY>/c0f9b565-77a0-4033-8e37-15d27f26f427/harness-evidence.log
@@ -461,9 +461,9 @@ hooks/state/<PROJECT_KEY>/6e074288-743a-47dd-81b5-05e02ec46e82/harness-state.env
 | lane=full
 --- paso 03  phase=stop target=claude  payload=03.stop.claude.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha ac0fdc2295853d2d, 2133 bytes)
+stdout (sha 4e537fad1cfe935c, 2287 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha dde49761c5654530, 2221 bytes)
 | SUMMONAIKIT HARNESS GATE
 | 
 | Failed gates:
@@ -480,7 +480,7 @@ stderr (sha ac0fdc2295853d2d, 2133 bytes)
 | - Budget: 2 cycles max.
 | - Do not blindly retry.
 | 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 | SUMMONAIKIT HARNESS RECEIPT
 | Understand: ...
 | Implement: ...
@@ -525,8 +525,8 @@ hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | lane=full
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-evidence.log
 | prompt task started: 2415293084
@@ -539,9 +539,9 @@ hooks/state/<PROJECT_KEY>/a4fb9d94-fa64-4b0b-8275-7364a567d645/harness-state.env
 | lane=full
 --- paso 03  phase=stop target=claude  payload=03.stop.claude.json
 exit 2
-stdout (sha cfa775d0ab8e38bf, 2199 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 2/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha 5f8af324cc78b749, 2133 bytes)
+stdout (sha dc10b25f99f6a1ce, 2287 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing verification evidence or explicit skipped-check reason.\\n- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 2/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 788d6554ece79355, 2221 bytes)
 | SUMMONAIKIT HARNESS GATE
 | 
 | Failed gates:
@@ -558,7 +558,7 @@ stderr (sha 5f8af324cc78b749, 2133 bytes)
 | - Budget: 2 cycles max.
 | - Do not blindly retry.
 | 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 | SUMMONAIKIT HARNESS RECEIPT
 | Understand: ...
 | Implement: ...
@@ -851,9 +851,9 @@ hooks/state/<PROJECT_KEY>/b0c41d43-1c1a-4763-8ae9-4ab0a8ea7284/harness-state.env
 | lane=full
 --- paso 06  phase=stop target=claude  payload=06.stop.claude.json
 exit 2
-stdout (sha 661ec8c2eadb0424, 811 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha b6c9d070f8d41686, 755 bytes)
+stdout (sha 617360c41f90c44e, 899 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 8beedbae1581b3b5, 843 bytes)
 | SUMMONAIKIT HARNESS GATE
 | 
 | Failed gates:
@@ -870,7 +870,7 @@ stderr (sha b6c9d070f8d41686, 755 bytes)
 | - Budget: 2 cycles max.
 | - Do not blindly retry.
 | 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 | SUMMONAIKIT HARNESS RECEIPT
 | Understand: ...
 | Implement: ...
@@ -1060,8 +1060,8 @@ hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-state.env
 | lane=full
 --- paso 02  phase=stop target=claude  payload=02.stop.claude.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/79516afe-4c53-4052-86f7-cc0d2a8f3eb3/harness-evidence.log
 | prompt task started: 2415293084
@@ -1297,8 +1297,8 @@ hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-state.env
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/sess_zcode_19/harness-evidence.log
 | prompt task started: 2415293084
@@ -1403,9 +1403,9 @@ hooks/state/<PROJECT_KEY>/sess_zcode_20/harness-state.env
 estado_host: zcode
 --- paso 05  phase=stop target=zcode  payload=05.stop.zcode.json
 exit 2
-stdout (sha a09bca6984e28fcd, 899 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha c556b3d5eb5b543f, 843 bytes)
+stdout (sha 01b19f15c5fc68c0, 987 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha f7198d86c9645698, 931 bytes)
 | SUMMONAIKIT HARNESS GATE
 | 
 | Failed gates:
@@ -1422,7 +1422,7 @@ stderr (sha c556b3d5eb5b543f, 843 bytes)
 | - Budget: 2 cycles max.
 | - Do not blindly retry.
 | 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 | SUMMONAIKIT HARNESS RECEIPT
 | Understand: ...
 | Implement: ...
@@ -1669,9 +1669,9 @@ hooks/state/<PROJECT_KEY>/sess_zcode_22/harness-state.env
 estado_host: zcode
 --- paso 06  phase=stop target=zcode  payload=06.stop.zcode.json
 exit 2
-stdout (sha ff0d3b577881bcd5, 1599 bytes)
-| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
-stderr (sha 61022d8e3b4d24e7, 1537 bytes)
+stdout (sha f24e344529c975b3, 1687 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing SUMMONAIKIT HARNESS RECEIPT.\\n- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\\n- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 56aa79af672ccfa9, 1625 bytes)
 | SUMMONAIKIT HARNESS GATE
 | 
 | Failed gates:
@@ -1688,7 +1688,7 @@ stderr (sha 61022d8e3b4d24e7, 1537 bytes)
 | - Budget: 2 cycles max.
 | - Do not blindly retry.
 | 
-| Required receipt shape (each gate is one line that BEGINS with its label and a colon, inside the receipt block; write them in plain language):
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 | SUMMONAIKIT HARNESS RECEIPT
 | Understand: ...
 | Implement: ...
@@ -1739,8 +1739,8 @@ hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-state.env
 estado_host: zcode
 --- paso 02  phase=stop target=zcode  payload=02.stop.zcode.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-evidence.log
 | prompt task started: 2415293084
@@ -1754,8 +1754,8 @@ hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-state.env
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
-stdout (sha cfa775d0ab8e38bf, 2199 bytes) identico a 08-ciclos-y-presupuesto/paso 03
-stderr (sha 5f8af324cc78b749, 2133 bytes) identico a 08-ciclos-y-presupuesto/paso 03 (stderr)
+stdout (sha dc10b25f99f6a1ce, 2287 bytes) identico a 08-ciclos-y-presupuesto/paso 03
+stderr (sha 788d6554ece79355, 2221 bytes) identico a 08-ciclos-y-presupuesto/paso 03 (stderr)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/sess_zcode_23/harness-evidence.log
 | prompt task started: 2415293084
@@ -1816,8 +1816,8 @@ hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-state.env
 estado_host: zcode
 --- paso 03  phase=stop target=zcode  payload=03.stop.zcode.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/sess_zcode_24/harness-evidence.log
 | prompt task started: 2415293084
@@ -1858,8 +1858,8 @@ hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-state.env
 estado_host: zcode
 --- paso 02  phase=stop target=zcode  payload=02.stop.zcode.json
 exit 2
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/sess_zcode_25/harness-evidence.log
 | prompt task started: 2415293084
@@ -2120,8 +2120,8 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-state.env
 estado_host: codex
 --- paso 03  phase=stop target=codex  payload=03.stop.codex.json
 exit 0
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/01a0c0de-0029-7abc-8def-000000000029/harness-evidence.log
 | prompt task started: 2415293084
@@ -2225,8 +2225,8 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-state.env
 estado_host: codex
 --- paso 05  phase=stop target=codex  payload=05.stop.codex.json
 exit 0
-stdout (sha a09bca6984e28fcd, 899 bytes) identico a 20-zcode-falta-verifier/paso 05
-stderr (sha c556b3d5eb5b543f, 843 bytes) identico a 20-zcode-falta-verifier/paso 05 (stderr)
+stdout (sha 01b19f15c5fc68c0, 987 bytes) identico a 20-zcode-falta-verifier/paso 05
+stderr (sha f7198d86c9645698, 931 bytes) identico a 20-zcode-falta-verifier/paso 05 (stderr)
 --- estado tras el paso 05
 hooks/state/<PROJECT_KEY>/01a0c0de-0030-7abc-8def-000000000030/harness-evidence.log
 | prompt task started: 2415293084
@@ -2425,8 +2425,8 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-state.env
 estado_host: codex
 --- paso 05  phase=stop target=codex  payload=05.stop.codex.json
 exit 0
-stdout (sha ff0d3b577881bcd5, 1599 bytes) identico a 22-zcode-sin-recibo/paso 06
-stderr (sha 61022d8e3b4d24e7, 1537 bytes) identico a 22-zcode-sin-recibo/paso 06 (stderr)
+stdout (sha f24e344529c975b3, 1687 bytes) identico a 22-zcode-sin-recibo/paso 06
+stderr (sha 56aa79af672ccfa9, 1625 bytes) identico a 22-zcode-sin-recibo/paso 06 (stderr)
 --- estado tras el paso 05
 hooks/state/<PROJECT_KEY>/01a0c0de-0032-7abc-8def-000000000032/harness-evidence.log
 | prompt task started: 2415293084
@@ -2471,8 +2471,8 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-state.env
 estado_host: codex
 --- paso 02  phase=stop target=codex  payload=02.stop.codex.json
 exit 0
-stdout (sha d5ca22a68197b13e, 2199 bytes) identico a 07-evidencia-incompleta/paso 03
-stderr (sha ac0fdc2295853d2d, 2133 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
+stdout (sha 4e537fad1cfe935c, 2287 bytes) identico a 07-evidencia-incompleta/paso 03
+stderr (sha dde49761c5654530, 2221 bytes) identico a 07-evidencia-incompleta/paso 03 (stderr)
 --- estado tras el paso 02
 hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-evidence.log
 | prompt task started: 2415293084
@@ -2486,8 +2486,8 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-state.env
 estado_host: codex
 --- paso 03  phase=stop target=codex  payload=03.stop.codex.json
 exit 0
-stdout (sha cfa775d0ab8e38bf, 2199 bytes) identico a 08-ciclos-y-presupuesto/paso 03
-stderr (sha 5f8af324cc78b749, 2133 bytes) identico a 08-ciclos-y-presupuesto/paso 03 (stderr)
+stdout (sha dc10b25f99f6a1ce, 2287 bytes) identico a 08-ciclos-y-presupuesto/paso 03
+stderr (sha 788d6554ece79355, 2221 bytes) identico a 08-ciclos-y-presupuesto/paso 03 (stderr)
 --- estado tras el paso 03
 hooks/state/<PROJECT_KEY>/01a0c0de-0033-7abc-8def-000000000033/harness-evidence.log
 | prompt task started: 2415293084
