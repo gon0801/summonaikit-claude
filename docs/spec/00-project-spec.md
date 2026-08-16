@@ -1404,20 +1404,34 @@ GLOBAL**. Consecuencia operativa: **los índices son parte de la clave de
 confianza**, así que reordenar el array de una fase desalinea el `trusted_hash`
 de los hooks ya registrados — no se reordena.
 
-**El polizón de zcode, cerrado por caso.** `TARGET` para zcode resuelve a
+**zcode 3.7.5-11 — ACEPTADA, y sin rama nueva.** Turno real con el operador
+adelante: el texto entra al request del modelo como mensaje `role="system"` con
+el prefijo `SessionStart hook additional context:` y numeración `#1` —**la misma
+forma que la 5.2 midió para UPS**, sólo cambia el nombre de la fase— y el modelo
+devolvió el token literal que ese texto le pedía. `TARGET` para zcode resuelve a
 `claude` (fallback `ZCODE_SESSION_ID`/`ZCODE_PROJECT_DIR`, decisión de la 5.4),
-así que el guard de la 10.6 —que su comentario describe como «sólo Claude»—
-**también cubriría zcode**. Lo único que hoy lo frena es que
-`install-hook.sh --host zcode` registra 3 fases y no la de arranque, equilibrio
-que ningún caso sostenía. Ahora sí: el caso exige que no haya entrada canónica
-en `SessionStart` **y** que el vecino ajeno sobreviva. Cuando zcode tenga
-veredicto `aceptada`, ese caso se invierte a propósito.
+así que la condición del hook ya lo cubría: lo que cambió es el **registro**,
+`install-hook.sh --host zcode` pasa de 3 a 4 fases.
 
-**Ningún host habilita emisión con esta medición**, y por tres razones distintas:
-Grok porque se midió y da `ignorada`; Codex y zcode porque quedan `unknown` —
-Codex por el `trusted_hash`, zcode porque sus turnos murieron en
-`provider_not_configured` antes de llegar al modelo. `not_observed != absent`:
-en los tres la fase existe y corre.
+Eso cierra de paso un **polizón**: el guard de la 10.6 —que su comentario
+describe como «sólo Claude»— también cubría zcode, y lo único que lo frenaba era
+que el instalador no registraba la fase de arranque, equilibrio que ningún caso
+sostenía. El caso que lo ata nació exigiendo lo contrario (que la 4.ª fase NO se
+registrara mientras zcode fuera `unknown`) y **se invirtió el mismo día**, con el
+veredicto en la mano: el cambio de ese archivo es la declaración de que la
+medición existió, en vez de un aflojamiento silencioso.
+
+**Dos de tres habilitan emisión, y el resultado no fue uniforme** — que es
+exactamente por lo que la fila mide en vez de extrapolar. zcode y Codex aceptan;
+Grok se midió y da `ignorada`, así que no se registra: sería texto muerto en cada
+arranque de ese host. `not_observed != absent`: en los tres la fase existe y
+corre.
+
+**Límite operativo de zcode, declarado:** su `/login` escribe la API key en
+`~/.zcode/cli/config.json`, el mismo archivo donde el instalador y el probe hacen
+su append. Cualquier verificación de integridad sobre ese archivo tiene que ser
+**por estructura** (conteo de entradas por marker, vecinos ajenos, JSON válido),
+no por cksum ni por diff de contenido.
 
 ## Non-Goals
 

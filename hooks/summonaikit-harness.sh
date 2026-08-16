@@ -1066,12 +1066,17 @@ STANDING_RULES
 #                            literal que el texto le pedia.
 #   grok    IGNORADA (10.9)  las 3 formas emitieron y ninguna llego, ni a la
 #                            respuesta ni a los archivos de sesion (1.0.4).
-#   zcode   unknown  (10.9)  su SessionStart existe y DISPARA, pero los turnos
-#                            murieron en provider_not_configured antes del
-#                            modelo. Ojo: zcode resuelve a TARGET=claude por el
-#                            fallback de la 5.4, asi que esta condicion YA lo
-#                            cubriria — lo que lo frena es que su 4a fase no se
-#                            registra, invariante atado en test_install_hook.
+#   zcode   ACEPTADA (10.9)  turno real con el operador adelante. El texto entra
+#                            al request del modelo como mensaje role="system" con
+#                            el prefijo `SessionStart hook additional context:` y
+#                            numeracion `#1` — la MISMA forma que 5.2 midio para
+#                            UPS, solo cambia el nombre de la fase — y el modelo
+#                            devolvio el token literal que ese texto le pedia.
+#                            NO necesita rama propia: zcode resuelve a
+#                            TARGET=claude por el fallback de la 5.4, asi que
+#                            esta condicion ya lo cubre. Lo que cambio es el
+#                            REGISTRO: install-hook.sh --host zcode pasa de 3 a 4
+#                            fases, atado en test_install_hook.
 #
 # Registrarlos a ciegas es el error que la 6.2 evito por un pelo, y esta fila
 # volvio a mostrarlo desde otro angulo: en Codex un hook nuevo ni siquiera CORRE

@@ -2,12 +2,13 @@
 
 Fecha: **2026-08-16**. Protocolo: `docs/task-10.9-plan.md` §A. Repos descartables
 (`C:\dev\saikit-probe-109-{zcode,codex,grok}`), un modo por turno, sesión nueva
-por turno, todo headless. Cero payloads crudos, cero prompts del operador, cero
-rutas de perfil completas en este documento.
+por turno. Codex y Grok headless; **zcode con el operador adelante**, porque ahí
+el headless resultó imposible (ver su sección). Cero payloads crudos, cero
+prompts del operador, cero rutas de perfil completas en este documento.
 
-**Estado: 2 de 3 cerrados.** Codex **acepta** y entra; Grok **ignora** y no
-entra; zcode sigue bloqueado por autenticación. El resultado **no fue uniforme**,
-que es justo la razón por la que la fila mide en vez de extrapolar.
+**Estado: los 3 cerrados.** zcode y Codex **aceptan**; Grok **ignora**. El
+resultado **no fue uniforme**, que es justo la razón por la que la fila mide en
+vez de extrapolar: dos de tres habilitan, y el tercero habría sido texto muerto.
 
 ## Integridad del perfil — los tres, byte a byte
 
@@ -15,7 +16,7 @@ Es evidencia, no trámite. `cksum` antes y después de todo:
 
 | Archivo | Antes | Después |
 |---|---|---|
-| `~/.zcode/cli/config.json` | `1014530218 5458` | `1014530218 5458` ✓ |
+| `~/.zcode/cli/config.json` | `1014530218 5458` | **cambiado por el operador**, no por la medición: el `/login` escribe ahí la API key. Verificado por estructura — 0 entradas del probe, grupo ajeno intacto, JSON válido |
 | `~/.codex/hooks.json` | `2271698800 2717` | `2271698800 2717` ✓ |
 | `~/.codex/config.toml` | `3803647136 6012` | intacto (nunca se escribió) |
 | `~/.grok/trusted_folders.toml` | `716294082 491` | `716294082 491` ✓ |
@@ -163,30 +164,64 @@ que **no se reordena** el array de una fase. Reordenar desalinea el
 `trusted_hash` de los hooks ya registrados — es lo que pasó en el paso 5 y por
 eso se revirtió en el acto.
 
-## zcode — BLOQUEADO por autenticación
+## zcode — veredicto CERRADO: **ACEPTADA**
 
-- **Q1 medido y positivo:** el hook de `SessionStart` disparó (`.ok` con
-  `event=SessionStart`), con el probe registrado como 3.ª fase del user-config.
-- **Q2/Q3 no medidos:** los turnos fallaron antes de llegar al modelo.
-  `zcode-2026-08-16.jsonl` lo dice de frente:
-  `AiSdkModelAdapterError … "Model provider is missing an API key: zai"`,
-  `code: provider_not_configured`, `envKey: ANTHROPIC_API_KEY`.
-  Hay credencial guardada en el perfil, pero el proveedor no resuelve en una
-  sesión headless nueva.
+**Turno real con el operador adelante**, no headless: la medición headless fue
+imposible y esa imposibilidad es en sí un dato (ver abajo).
 
-**Lo que la lectura del bundle dice, y sigue sin sustituir a la medición:**
+Los **dos** oráculos, en la **misma línea** del rollout de la sesión:
+
+| Oráculo | Resultado |
+|---|---|
+| ¿corrió? | `.ok` con `mode=session event=SessionStart` |
+| transcript | el token está en `.request.messages[5].content`, con `role="system"`, precedido de `SessionStart hook additional context:` y numerado `#1` |
+| instrucción observable | `.response.text` = `¡Hola! PROBE-SESSION-… ¿En qué te puedo ayudar hoy?` — el modelo devolvió el token literal |
+
+**La forma de la inyección es la MISMA que 5.2 midió para UPS** (`role: system`,
+prefijo `<Fase> hook additional context:`, numeración `#1`); lo único que cambia
+es el nombre de la fase en el prefijo. Es la continuidad que hacía falta para no
+tener que inventar nada.
+
+⇒ **zcode habilita emisión, y sin rama nueva en el hook.** `TARGET` para zcode
+resuelve a `claude` por el fallback de la 5.4, así que la condición existente ya
+lo cubre. Lo que cambia es el **registro**: `install-hook.sh --host zcode` pasa
+de 3 a 4 fases, y el caso que impedía esa 4.ª fase se invierte (ver abajo).
+
+### La autenticación, y por qué el rodeo importa
+
+Los primeros turnos murieron en
+`AiSdkModelAdapterError … "Model provider is missing an API key: zai"`,
+`code: provider_not_configured` — con credencial guardada en el perfil. Se
+probó primero headless y después **el TUI, que falló idéntico**: eso descartó la
+hipótesis cómoda de "es solo el camino headless" y dejó claro que la credencial
+guardada no servía en ningún modo. El login del navegador tampoco es vía en
+Windows (*"Z.AI browser login requires macOS for the registered zcode:// callback"*);
+la que sirve es `/login zai-coding-plan-api-key <key>` dentro del TUI.
+
+**Consecuencia para la integridad del perfil, declarada sin maquillar:** ese
+login **escribe la API key en `~/.zcode/cli/config.json`** —lo dice el propio
+CLI— que es el mismo archivo donde el probe hace su append. Por eso el cksum de
+zcode **no vuelve** a su valor previo, y no sería honesto presentarlo como si lo
+hiciera: el archivo cambió por una acción del operador, no por la medición. La
+verificación de que la medición no dejó nada se hizo por **estructura**, sin leer
+el contenido: 0 entradas con el marker del probe, el grupo ajeno de
+`SessionStart` intacto, `hooks.enabled: true`, JSON válido.
+
+### Lo que la lectura del bundle había anticipado
+
 `vendor/zcode.cjs` tiene `runSessionStartHooks("startup")` y `("resume")`, cada
 uno seguido de `injectHookAdditionalContextIntoMessageHistory(Kr.SessionStart,…)`,
-y el `switch` que acumula `additionalContexts` incluye `case Kr.SessionStart`. O
-sea que el camino de inyección existe en el código. **No se registra como
-veredicto**: la 6.2 ya mostró que leer el bundle puede fallar en las dos mitades
-a la vez. zcode queda **`unknown`** hasta el turno que lo mida.
+y el `switch` que acumula `additionalContexts` incluye `case Kr.SessionStart`.
+**La lectura acertó** — y aun así no se registró como veredicto hasta el turno
+real, por la misma razón que la 6.2: ahí leer el bundle falló en las dos mitades
+a la vez. Que esta vez coincidiera no cambia la regla; la habría cambiado un
+resultado, no un acierto.
 
 ## Estado por host, para la fila de Plans.md
 
 | Host | Q1 fase de arranque | Q2/Q3 llega al modelo | ¿Habilita emisión? |
 |---|---|---|---|
-| zcode | **sí, disparó** | `unknown` (auth) | **no** |
+| zcode | **sí, disparó** | **ACEPTADA** (2 oráculos coinciden) | **sí** |
 | Codex | **sí, dispara** | **ACEPTADA** (2 oráculos coinciden) | **sí** |
 | Grok | **sí, disparó** | **ignorada** (3 formas, oráculo agotado) | **no** |
 
