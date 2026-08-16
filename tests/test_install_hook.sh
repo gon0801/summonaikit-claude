@@ -720,6 +720,255 @@ if printf '%s' "$out" | grep -qi 'Una sola copia'; then
 fi
 printf '%s' "$out" | grep -qi -- '--host' || malo "el rechazo debe explicar la regla nueva (el destino lo decide --host): $out"
 
+# ================================================================ Task 7.5 — grok
+# --host grok publica TRES cosas en orden (D1): (1) el hook por el flujo comun
+# de 3 estados, (2) el JSON de registro propio ~/.grok/hooks/summonaikit.json
+# (entero: ausente o nuestro => publicar; desconocido => PLANTARSE con CERO
+# cambios), (3) los perfiles en ~/.grok/agents con frontmatter TRADUCIDO (la
+# clave skills: como string no parsea en Grok — lo midio la 7.1). El PREFLIGHT
+# clasifica TODO antes de escribir: hook o JSON desconocidos dejan intacto
+# cualquier destino. Un agente desconocido NO aborta (D7): se instala el resto
+# y se reporta. --quitar-grok retira solo lo nuestro con backup; el verifier
+# ajeno del operador sobrevive.
+n_grok=0
+home_gk=''
+gk_json=''
+gk_agents=''
+nuevo_home_grok() {
+  n_grok=$((n_grok + 1))
+  home_gk="$tmp/grok-home-$n_grok"
+  gk_agents="$home_gk/.grok/agents"
+  gk_json="$home_gk/.grok/hooks/summonaikit.json"
+  mkdir -p "$home_gk/.grok/hooks" "$gk_agents"
+  dest="$home_gk/.grok/hooks/summonaikit-harness.sh"
+}
+# bash.exe FALSO pero existente: la validacion del override exige un archivo
+# real, y asi el command del JSON es determinista (no depende del PATH de la
+# maquina ni de un Git real instalado).
+bash_gk="$tmp/fake-bash.exe"
+: > "$bash_gk"
+host_grok() {
+  HOME="$home_gk" USERPROFILE="$home_gk" \
+  SAIKIT_GROK_BASH_WIN="$bash_gk" SAIKIT_GROK_AGENTS_DIR="$gk_agents" \
+    bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" --no-registration-check "$@"
+}
+
+# La estructura del JSON canonico (D1, forma PowerShell medida en 7.1), dicha
+# desde el test y no desde el instalador: eventos, matcher SOLO en PTU/PTUF,
+# timeout 30 (Stop 600), env por handler y saikit_owned top-level. El command
+# esperado viaja por ENV y no por argv: el python de Windows convierte las
+# rutas POSIX de los argumentos (medido: /tmp/... llega como C:/...Temp/...) y
+# la comparacion contra el contenido del JSON daria un falso por el motivo
+# equivocado. Los valores de entorno no se convierten.
+grok_json_asserts() {
+  GROK_EXPECT_CMD="$(printf '& "%s" "%s"' "$bash_gk" "$dest")" \
+  python - "$1" <<'PY'
+import json, os, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+assert d["saikit_owned"] == "summonaikit-claude", "falta saikit_owned top-level"
+h = d["hooks"]
+assert set(h) == {"UserPromptSubmit","PostToolUse","PostToolUseFailure","SubagentStart","Stop"}, set(h)
+cmd = os.environ["GROK_EXPECT_CMD"]
+for fase, grupos in h.items():
+    for g in grupos:
+        if "matcher" in g:
+            assert fase in ("PostToolUse", "PostToolUseFailure"), "matcher indebido en %s" % fase
+        for e in g["hooks"]:
+            assert e["type"] == "command", e
+            assert e["command"] == cmd, "command: %r (esperaba %r)" % (e["command"], cmd)
+            assert e["env"] == {"SUMMONAIKIT_HOOK_TARGET": "grok"}, e.get("env")
+            assert e["timeout"] == (600 if fase == "Stop" else 30), (fase, e.get("timeout"))
+assert h["PostToolUse"][0]["matcher"] == \
+    "Bash|Edit|Write|apply_patch|Task|Agent|spawn_subagent|run_terminal_command|search_replace|write"
+assert h["PostToolUseFailure"][0]["matcher"] == "Bash|run_terminal_command"
+PY
+}
+
+# Como sin_temporales_sueltos, pero para el dir de hooks de grok: ahi el JSON
+# de registro vive HERMANO del hook por diseño, no es un temporal.
+sin_grok_temporales() {
+  local n
+  n="$(find "$(dirname "$1")" -maxdepth 1 -type f -name '.saikit-*' 2>/dev/null | wc -l)"
+  [ "$n" -eq 0 ]
+}
+
+caso "grok: AUSENTE publica hook + JSON canonico + agentes (hook byte a byte)"
+nuevo_home_grok
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "el hook grok no quedo byte a byte igual a la fuente"
+[ -f "$gk_json" ] || malo "no publico el JSON de registro"
+grok_json_asserts "$gk_json" || malo "el JSON publicado no es el canonico del diseño (D1)"
+sin_grok_temporales "$dest" || malo "dejo temporales sueltos junto al hook grok"
+printf '%s' "$out" | grep -q 'REGISTRO GROK' || malo "no reporta la publicacion del JSON: $out"
+
+# El caso que ATA la traduccion de frontmatter (D7 + 7.1: skills: como string
+# no parsea en Grok). La copia instalada debe ser la fuente MENOS exactamente
+# la linea skills: — ni una linea mas, ni una menos.
+caso "grok: perfiles instalados = fuente MENOS exactamente la clave skills:"
+for rol in implementer verifier reviewer; do
+  [ -f "$gk_agents/$rol.md" ] || { malo "falta $rol.md en ~/.grok/agents"; continue; }
+  d_out="$(diff "$agentes_fuente/$rol.md" "$gk_agents/$rol.md")"
+  [ "$(printf '%s' "$d_out" | grep -c '^<')" -eq 1 ] \
+    || malo "$rol: la traduccion debe quitar EXACTAMENTE una linea: $d_out"
+  printf '%s' "$d_out" | grep -q '^< skills: ' \
+    || malo "$rol: la unica linea quitada debe ser skills: (no parsea en Grok)"
+  if printf '%s' "$d_out" | grep -q '^>'; then
+    malo "$rol: la traduccion no debe AGREGAR lineas: $d_out"
+  fi
+  grep -Eq '^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$' "$gk_agents/$rol.md" \
+    || malo "$rol.md instalado no lleva la marca saikit_owned"
+  grep -q "^name: $rol\$" "$gk_agents/$rol.md" || malo "$rol.md no declara name: $rol"
+done
+printf '%s' "$out" | grep -q 'AGENTE GROK' || malo "no reporta los agentes instalados: $out"
+
+caso "grok: JSON DESCONOCIDO => exit != 0, hook NO publicado, CERO cambios"
+nuevo_home_grok
+printf '{ "hooks": { "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "echo ajeno" } ] } ] } }\n' > "$gk_json"
+antes_sha="$(sha256sum < "$gk_json")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un JSON ajeno debe plantar (exit != 0), dio 0"
+[ ! -e "$dest" ] || malo "publico el hook pese al JSON desconocido"
+[ "$(sha256sum < "$gk_json")" = "$antes_sha" ] || malo "toco el JSON ajeno"
+[ ! -e "$gk_agents/implementer.md" ] || malo "instalo agentes pese al JSON desconocido"
+printf '%s' "$out" | grep -qi 'desconocid' || malo "no reporta el JSON desconocido: $out"
+
+caso "grok: JSON que no parsea => DESCONOCIDO (existe y no es nuestro), exit != 0"
+nuevo_home_grok
+printf '{ roto\n' > "$gk_json"
+antes_sha="$(sha256sum < "$gk_json")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un JSON ilegible debe plantar, dio 0"
+[ ! -e "$dest" ] || malo "publico el hook pese al JSON ilegible"
+[ "$(sha256sum < "$gk_json")" = "$antes_sha" ] || malo "toco el JSON ilegible"
+
+caso "grok: JSON NO_OBSERVABLE (es un directorio) => unknown, exit != 0, sin escribir"
+nuevo_home_grok
+mkdir "$gk_json"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un JSON no observable debe plantar, dio 0"
+printf '%s' "$out" | grep -qi 'unknown' || malo "Core Rule 2: lo no observable es unknown: $out"
+[ ! -e "$dest" ] || malo "publico el hook sin poder clasificar el JSON"
+
+caso "grok: agente DESCONOCIDO (el verifier del operador) => NO aborta: el resto se instala y se reporta"
+nuevo_home_grok
+printf '%s\n' '---' 'name: verifier' 'description: del operador' '---' '# verifier propio' > "$gk_agents/verifier.md"
+antes_sha="$(sha256sum < "$gk_agents/verifier.md")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un agente desconocido NO aborta (D7), dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "el hook tenia que instalarse igual"
+[ -f "$gk_json" ] || malo "el JSON tenia que publicarse igual"
+[ -f "$gk_agents/implementer.md" ] || malo "implementer tenia que instalarse"
+[ -f "$gk_agents/reviewer.md" ] || malo "reviewer tenia que instalarse"
+[ "$(sha256sum < "$gk_agents/verifier.md")" = "$antes_sha" ] \
+  || malo "piso el verifier.md ajeno (D7: no se toca)"
+printf '%s' "$out" | grep -qi 'desconocid' || malo "debe reportar el agente desconocido: $out"
+
+caso "grok: hook YA AL DIA igual publica el JSON y los agentes"
+nuevo_home_grok
+cp "$fuente" "$dest"
+antes_mtime="$(mtime_de "$dest")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ "$(mtime_de "$dest")" = "$antes_mtime" ] || malo "reescribio el hook que ya estaba al dia"
+[ -f "$gk_json" ] || malo "falta publicar el JSON cuando el hook ya esta al dia"
+[ -f "$gk_agents/implementer.md" ] || malo "falta instalar agentes cuando el hook ya esta al dia"
+
+caso "grok: NUESTRO_DISTINTO en hook y JSON => repara ambos con backup"
+nuevo_home_grok
+host_grok >/dev/null 2>&1
+escribir_nuestro_viejo "$dest"
+previo_hook="$(sha256sum < "$dest")"
+printf '{ "saikit_owned": "summonaikit-claude", "hooks": {} }\n' > "$gk_json"
+previo_json="$(sha256sum < "$gk_json")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0 reparando, dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "no reparo el hook a la fuente"
+grok_json_asserts "$gk_json" || malo "no reparo el JSON al canonico"
+bakh="$(find "$home_gk/.grok/hooks/saikit-backups" -type f -name 'summonaikit-harness.sh*.bak' 2>/dev/null | head -n 1)"
+[ -n "$bakh" ] || malo "reparo el hook sin backup"
+[ -n "$bakh" ] && [ "$(sha256sum < "$bakh")" = "$previo_hook" ] \
+  || malo "el backup del hook no conserva el contenido previo"
+bakj="$(find "$home_gk/.grok/hooks/saikit-backups" -type f -name 'summonaikit.json*.bak' 2>/dev/null | head -n 1)"
+[ -n "$bakj" ] || malo "republico el JSON sin backup"
+[ -n "$bakj" ] && [ "$(sha256sum < "$bakj")" = "$previo_json" ] \
+  || malo "el backup del JSON no conserva el contenido previo"
+
+caso "grok: segunda corrida no reescribe NADA (mtime de hook, JSON y agente intactos)"
+nuevo_home_grok
+host_grok >/dev/null 2>&1
+m_h="$(mtime_de "$dest")"; m_j="$(mtime_de "$gk_json")"; m_a="$(mtime_de "$gk_agents/implementer.md")"
+sleep 1
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ "$(mtime_de "$dest")" = "$m_h" ] || malo "reescribio un hook identico"
+[ "$(mtime_de "$gk_json")" = "$m_j" ] || malo "reescribio un JSON identico"
+[ "$(mtime_de "$gk_agents/implementer.md")" = "$m_a" ] || malo "reescribio un agente identico"
+
+caso "grok: --quitar-grok retira JSON+hook+agentes NUESTROS con backup; el verifier ajeno sobrevive"
+nuevo_home_grok
+host_grok >/dev/null 2>&1
+printf '%s\n' '---' 'name: verifier' 'description: del operador' '---' '# verifier propio' > "$gk_agents/verifier.md"
+ver_sha="$(sha256sum < "$gk_agents/verifier.md")"
+out="$(host_grok --quitar-grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ ! -e "$gk_json" ] || malo "no retiro el JSON nuestro"
+[ ! -e "$dest" ] || malo "no retiro el hook nuestro"
+[ ! -e "$gk_agents/implementer.md" ] || malo "no retiro implementer.md (era nuestro)"
+[ ! -e "$gk_agents/reviewer.md" ] || malo "no retiro reviewer.md (era nuestro)"
+[ "$(sha256sum < "$gk_agents/verifier.md")" = "$ver_sha" ] \
+  || malo "--quitar-grok toco el verifier ajeno"
+[ -n "$(find "$home_gk/.grok/hooks/saikit-backups" -type f -name 'summonaikit.json*.bak' 2>/dev/null)" ] \
+  || malo "quito el JSON sin backup"
+[ -n "$(find "$home_gk/.grok/hooks/saikit-backups" -type f -name 'summonaikit-harness.sh*.bak' 2>/dev/null)" ] \
+  || malo "quito el hook sin backup"
+[ -n "$(find "$gk_agents" -type f -name 'implementer.md*.bak' 2>/dev/null)" ] \
+  || malo "quito implementer.md sin backup"
+
+caso "grok: sin bash.exe => exit 2 sin escribir nada"
+nuevo_home_grok
+out="$(HOME="$home_gk" USERPROFILE="$home_gk" \
+       SAIKIT_GROK_BASH_WIN= SAIKIT_GROK_AGENTS_DIR="$gk_agents" \
+       bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "sin bash.exe debe salir 2, dio $rc: $out"
+[ ! -e "$dest" ] || malo "sin bash.exe no debe publicar el hook"
+[ ! -e "$gk_json" ] || malo "sin bash.exe no debe publicar el JSON"
+[ ! -e "$gk_agents/implementer.md" ] || malo "sin bash.exe no debe instalar agentes"
+
+caso "grok: fallo al publicar agentes => ROLLBACK de hook y JSON (exit 5, perfil como estaba)"
+nuevo_home_grok
+rm -rf "$gk_agents"
+: > "$gk_agents"   # un ARCHIVO donde va el dir de agentes: la publicacion falla
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "el fallo de publicacion debe salir 5, dio $rc: $out"
+[ ! -e "$dest" ] || malo "el hook publicado en esta corrida debia volver atras"
+[ ! -e "$gk_json" ] || malo "el JSON publicado en esta corrida debia volver atras"
+printf '%s' "$out" | grep -qi 'rollback' || malo "debe reportar el ROLLBACK: $out"
+
+caso "grok: --dest bajo ~/.grok SIN --host grok => rechazado"
+mkdir -p "$tmp/gk-guard/.grok/hooks"
+gd="$tmp/gk-guard/.grok/hooks/summonaikit-harness.sh"
+out="$(HOME="$tmp/gk-guard" USERPROFILE="$tmp/gk-guard" \
+       bash "$tool" --dest "$gd" --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un --dest bajo ~/.grok sin --host grok debe rechazarse, dio 0"
+printf '%s' "$out" | grep -q -- '--host' || malo "el rechazo debe nombrar la regla del --host: $out"
+[ ! -f "$gd" ] || malo "escribio bajo ~/.grok sin --host grok"
+
+caso "grok: --quitar-grok sin --host grok => exit 2"
+out="$(bash "$tool" --quitar-grok 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--quitar-grok sin --host grok debe salir 2, dio $rc: $out"
+
+# El aviso de registro es advisory (fail-open): con el install completo y
+# canonico el verificador calla, asi que este caso solo ata que el cableado
+# grok del aviso NO rompe la corrida ni mueve el exit code. Las TRES
+# afirmaciones del verificador se atan en test_hook_registration.sh.
+caso "grok: tras instalar corre el verificador de registro sin cambiar el exit code"
+nuevo_home_grok
+out="$(HOME="$home_gk" USERPROFILE="$home_gk" \
+       SAIKIT_GROK_BASH_WIN="$bash_gk" SAIKIT_GROK_AGENTS_DIR="$gk_agents" \
+       bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "el aviso de registro no debe cambiar el exit code (dio $rc): $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

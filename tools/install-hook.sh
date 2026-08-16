@@ -36,6 +36,9 @@
 #   bash tools/install-hook.sh [--dry-run]
 #   bash tools/install-hook.sh --dest <path> --source <path> --manifest <path>
 #   bash tools/install-hook.sh --restore-vendor [--dest <path>] [--dry-run]
+#   bash tools/install-hook.sh --host zcode [--quitar-zcode]
+#   bash tools/install-hook.sh --host codex
+#   bash tools/install-hook.sh --host grok [--quitar-grok]
 #
 # Exit codes (cualquier != 0 significa que el destino quedo INTACTO):
 #   0  instalado / reparado / restaurado / ya estaba al dia
@@ -63,6 +66,9 @@ RESTORE=0
 # candado de secuencia es inalcanzable). No toca DEST.
 HOST=''
 QUITAR_ZCODE=0
+# Task 7.5: --quitar-grok es la vuelta atras del host grok (JSON propio + hook
+# + agentes con marca); requiere --host grok, como --quitar-zcode con zcode.
+QUITAR_GROK=0
 # Task 6.5: --host codex escribe la SEGUNDA copia (~/.codex/hooks) por el flujo
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
@@ -85,6 +91,7 @@ while [ $# -gt 0 ]; do
     --no-registration-check) CHECK_REGISTRO=0; shift ;;
     --host)     HOST="${2:-}"; shift 2 ;;
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
+    --quitar-grok) QUITAR_GROK=1; shift ;;
     -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
       printf '[summonaikit] instalador: opcion desconocida: %s\n' "$1" >&2
@@ -93,15 +100,20 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Task 5.4 / 6.5: --host acepta zcode (registro-only, no toca DEST) y codex
-# (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal de DEST).
+# Task 5.4 / 6.5 / 7.5: --host acepta zcode (registro-only, no toca DEST),
+# codex (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal de
+# DEST) y grok (TERCERA copia en ~/.grok/hooks + JSON propio + agentes).
 # Otro valor no se acepta: falla antes de tocar el archivo o el config.
-if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ]; then
-  printf '[summonaikit] instalador: --host solo acepta "zcode" o "codex" (recibido: %s)\n' "$HOST" >&2
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex" o "grok" (recibido: %s)\n' "$HOST" >&2
   exit 2
 fi
 if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
   printf '[summonaikit] instalador: --quitar-zcode requiere --host zcode\n' >&2
+  exit 2
+fi
+if [ "$QUITAR_GROK" -eq 1 ] && [ "$HOST" != "grok" ]; then
+  printf '[summonaikit] instalador: --quitar-grok requiere --host grok\n' >&2
   exit 2
 fi
 
@@ -113,6 +125,15 @@ fi
 # las compara byte a byte contra la misma fuente: no divergen sin que grite.
 if [ "$HOST" = "codex" ] && [ "$VIO_DEST" -eq 0 ]; then
   DEST="${HOME:-}/.codex/hooks/summonaikit-harness.sh"
+fi
+
+# Task 7.5 (D1): grok declara su propia ruta (~/.grok/hooks). A diferencia de
+# zcode, --host grok SI escribe el archivo: PROFILE_DIR sale de dirname del
+# hook, y solo con la copia en ~/.grok la contencion de A6 cubre
+# ~/.grok/sessions (design D1, razon 1). Override de test: SAIKIT_GROK_HOOKS_DIR
+# (misma costura que SAIKIT_ZCODE_*).
+if [ "$HOST" = "grok" ] && [ "$VIO_DEST" -eq 0 ]; then
+  DEST="${SAIKIT_GROK_HOOKS_DIR:-${HOME:-}/.grok/hooks}/summonaikit-harness.sh"
 fi
 
 # Task 5.4 (hallazgo 6) / 6.5: ~/.zcode se niega SIEMPRE — ahi el estado se
@@ -138,6 +159,19 @@ if [ "$HOST" != "codex" ]; then
       ;;
   esac
 fi
+# Task 7.5: ~/.grok se habilita SOLO con --host grok (misma guardia de prefijo
+# que codex): el JSON de registro y los agentes de ese host los escribe este
+# instalador, y un --dest perdido ahi dejaria cableado cruzado entre hosts.
+_gk_prefix="$(printf '%s/.grok' "${HOME:-}")"
+if [ "$HOST" != "grok" ]; then
+  case "$DEST" in
+    "$_gk_prefix"|"$_gk_prefix"/*)
+      printf '[summonaikit] instalador: --dest (%s) cae bajo ~/.grok: rechazado sin --host grok.\n' "$DEST" >&2
+      printf '             El destino lo decide --host y cada host declara su ruta (7.5/D1).\n' >&2
+      exit 2
+      ;;
+  esac
+fi
 
 decir() { printf '%s\n' "$*"; }
 
@@ -157,6 +191,13 @@ avisar_registro() {
   # verificador hace las DOS afirmaciones (registro->wrapper, wrapper->hook).
   if [ "$HOST" = "codex" ]; then
     bash "$verificador" --codex-hooks-json "$(dirname "$(dirname "$DEST")")/hooks.json" || true
+    return 0
+  fi
+  # Task 7.5: en grok el registro es el JSON hermano del hook
+  # (<dir del hook>/summonaikit.json); el verificador hace sus TRES
+  # afirmaciones (JSON->hook, existencia+marca, matcher de delegacion).
+  if [ "$HOST" = "grok" ]; then
+    bash "$verificador" --grok-hooks-dir "$(dirname "$DEST")" || true
     return 0
   fi
   settings="$(dirname "$(dirname "$DEST")")/settings.json"
@@ -505,6 +546,408 @@ zcode_quitar() {
   zcode_quitar_agentes
 }
 
+# ---------------------------------------------------------------- Task 7.5: grok
+# D1/7.5: --host grok publica TRES cosas, en este orden y con PREFLIGHT antes
+# de la primera escritura:
+#   1. el hook (~/.grok/hooks/summonaikit-harness.sh) por el flujo COMUN de
+#      tres estados y escritura atomica que sigue mas abajo;
+#   2. el JSON de registro (<dir del hook>/summonaikit.json), archivo ENTERO
+#      propio de este repo: ausente o nuestro => publicar el canonico;
+#      desconocido => PLANTARSE sin tocar nada (preflight, cero cambios);
+#   3. los perfiles en ~/.grok/agents con el frontmatter TRADUCIDO.
+# Un agente desconocido NO aborta (D7): se instala el resto y se reporta.
+# Si una publicacion posterior falla, se hace rollback con los backups de esta
+# corrida (design D1).
+GROK_AGENT_ROLES='implementer verifier reviewer'
+GROK_BASH_WIN=''
+GROK_JSON_ESTADO=''
+GROK_JSON_BACKUP=''
+GROK_JSON_PUBLICADO=0
+GROK_HOOK_PUBLICADO=0
+
+grok_agents_dir() {
+  printf '%s' "${SAIKIT_GROK_AGENTS_DIR:-${HOME:-}/.grok/agents}"
+}
+
+grok_json_path() { printf '%s/summonaikit.json' "$(dirname "$DEST")"; }
+
+# bash.exe con override propio (misma semantica que SAIKIT_ZCODE_BASH_WIN: si
+# la variable ESTA seteada no se busca en disco; vacia o inexistente => fallo).
+grok_bash_win() {
+  if [ "${SAIKIT_GROK_BASH_WIN+set}" = "set" ]; then
+    if [ -n "$SAIKIT_GROK_BASH_WIN" ] && [ -f "$SAIKIT_GROK_BASH_WIN" ]; then
+      printf '%s' "$SAIKIT_GROK_BASH_WIN"; return 0
+    fi
+    return 1
+  fi
+  zcode_bash_win
+}
+
+grok_json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# 7.1 midio que el shell de hooks de Grok en Windows es powershell.exe: la
+# forma zcode ('"exe" "script"') muere con exit 1 porque un string quoted es
+# una expresion, no una invocacion. La forma que invoca sin depender del PATH
+# es el call operator: & "<bash.exe>" "<hook>". bash.exe viene en forma
+# forward-slashes de zcode_bash_win y el hook va con su ruta tal cual (la misma
+# forma verificada en los 37 payloads de la 7.1 via capture-payloads.sh).
+grok_hook_cmd() {  # $1=bash_win
+  printf '& "%s" "%s"' "$1" "$DEST"
+}
+
+# El JSON canonico completo (design D1): entero y a proposito repetitivo, sin
+# abreviaturas — es la plantilla que se publica tal cual. saikit_owned
+# top-level es tolerado por el loader (medido 7.1). PostToolUseFailure se
+# registra aunque 7.1 midio que no dispara (D5): cuesta cero y si un release
+# futuro lo emite, la evidencia aparece. Matcher SOLO en PTU/PTUF; sin matcher
+# en SubagentStart (vacuo = todos los subagentes) ni en UPS/Stop (Grok lo
+# ignora con warning). Stop timeout 600, el resto 30.
+grok_json_canonico() {  # $1=bash_win → stdout
+  local cmd
+  cmd="$(grok_json_esc "$(grok_hook_cmd "$1")")"
+  cat <<JSON
+{
+  "saikit_owned": "summonaikit-claude",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$cmd",
+            "timeout": 30,
+            "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|apply_patch|Task|Agent|spawn_subagent|run_terminal_command|search_replace|write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$cmd",
+            "timeout": 30,
+            "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|run_terminal_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$cmd",
+            "timeout": 30,
+            "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$cmd",
+            "timeout": 30,
+            "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$cmd",
+            "timeout": 600,
+            "env": { "SUMMONAIKIT_HOOK_TARGET": "grok" }
+          }
+        ]
+      }
+    ]
+  }
+}
+JSON
+}
+
+# Identidad del JSON (design D1): el archivo se llama summonaikit.json Y lleva
+# saikit_owned:"summonaikit-claude" en el objeto raiz. jq decide exacto: un
+# saikit_owned anidado en un archivo ajeno NO cuenta como nuestro (la direccion
+# peligrosa del grep seria pisar un registro de otro). Un archivo que existe y
+# no parsea se miro y no es nuestro: DESCONOCIDO, no unknown.
+grok_json_estado() {  # $1=json  $2=canonico
+  if [ ! -e "$1" ]; then printf 'AUSENTE'; return 0; fi
+  if [ ! -f "$1" ] || [ ! -r "$1" ]; then printf 'NO_OBSERVABLE'; return 0; fi
+  if ! jq -e '(.saikit_owned? // "") == "summonaikit-claude"' "$1" >/dev/null 2>&1; then
+    printf 'DESCONOCIDO'; return 0
+  fi
+  if [ "$(cat "$1")" = "$2" ]; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
+}
+
+# Traduccion OBLIGATORIA de frontmatter (D7 + 7.1): el frontmatter del repo
+# lleva `skills:` como string y el loader de Grok espera una secuencia (error
+# medido: `skills: invalid type: string ..., expected a sequence`). La
+# traduccion que esta task fija, medida como la segura: OMITIR la clave
+# `skills:` de la copia instalada — name/description/tools/saikit_owned no
+# rompieron nada medido. Solo el PRIMER bloque frontmatter: una linea skills:
+# en el body es contenido, no configuracion. La fuente del repo queda intacta
+# (una sola fuente, sin dos sabores).
+grok_agente_traducido() {  # $1=fuente → stdout
+  awk '
+    /^---[[:space:]]*\r?$/ { n++; print; next }
+    n == 1 && /^skills:/ { next }
+    { print }
+  ' "$1"
+}
+
+grok_agente_estado() {  # $1=dest  $2=contenido traducido
+  if [ ! -e "$1" ]; then printf 'AUSENTE'; return 0; fi
+  if [ ! -f "$1" ] || [ ! -r "$1" ]; then printf 'NO_OBSERVABLE'; return 0; fi
+  if ! zcode_agente_tiene_marca "$1"; then printf 'DESCONOCIDO'; return 0; fi
+  if [ "$(cat "$1")" = "$2" ]; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
+}
+
+# Misma disciplina atomica que DEST: temporal en el mismo dir, igualdad byte a
+# byte contra lo que se quizo escribir, recien entonces mv.
+grok_escribir_agente() {  # $1=contenido  $2=dest
+  local dir tmp
+  dir="$(dirname "$2")"
+  mkdir -p "$dir" || return 1
+  tmp="$(mktemp "$dir/.saikit-agent-XXXXXX")" || return 1
+  if ! printf '%s\n' "$1" > "$tmp" || ! printf '%s\n' "$1" | cmp -s - "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  mv -f "$tmp" "$2" || { rm -f "$tmp"; return 1; }
+  return 0
+}
+
+grok_archivar_json() {  # $1=json (mismo contrato de nombre que el hook)
+  local dir backup_dir sello n backup
+  dir="$(dirname "$1")"
+  backup_dir="$dir/saikit-backups"
+  mkdir -p "$backup_dir" || return 1
+  sello="$(date +%Y%m%d-%H%M%S)"
+  backup="$backup_dir/$(basename "$1").nuestro.$sello.bak"
+  n=2
+  while [ -e "$backup" ]; do
+    backup="$backup_dir/$(basename "$1").nuestro.$sello-$n.bak"
+    n=$((n + 1))
+  done
+  cp "$1" "$backup" || return 1
+  cmp -s "$backup" "$1" || return 1
+  GROK_JSON_BACKUP="$backup"
+  return 0
+}
+
+# PREFLIGHT (D1): clasifica TODO sin escribir. Se planta ANTES de tocar
+# cualquier destino si el JSON es desconocido/no observable, si falta jq o
+# bash.exe, o si una plantilla no valida. Un agente DESCONOCIDO no planta
+# (D7); NO_OBSERVABLE si: no se escribe alrededor de lo que no se pudo mirar.
+grok_preflight() {
+  local json canon estado_json rol fuente src dest_agente
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --host grok requiere jq (no encontrado)."; exit 2; }
+  GROK_BASH_WIN="$(grok_bash_win)" || {
+    decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command del JSON de grok."
+    decir "              Sin el no existe la forma PowerShell '& \"bash.exe\" \"hook\"' que 7.1 midio."; exit 2; }
+  json="$(grok_json_path)"
+  canon="$(grok_json_canonico "$GROK_BASH_WIN")"
+  estado_json="$(grok_json_estado "$json" "$canon")"
+  case "$estado_json" in
+    DESCONOCIDO)
+      decir "[summonaikit] JSON DE GROK DESCONOCIDO — no se toco nada (el hook incluido)."
+      decir "              json: $json"
+      decir "              Existe y no lleva saikit_owned: summonaikit-claude en el objeto raiz."
+      decir "              Puede ser un registro de otro: revisarlo antes de instalar."
+      exit 3
+      ;;
+    NO_OBSERVABLE)
+      decir "[summonaikit] unknown — no se pudo clasificar el JSON de grok; no se escribio nada."
+      decir "              json: $json"
+      exit 4
+      ;;
+  esac
+  GROK_JSON_ESTADO="$estado_json"
+  src="$repo/agents"
+  for rol in $GROK_AGENT_ROLES; do
+    fuente="$src/$rol.md"
+    if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
+      decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
+      decir "              --host grok no cablea un host sin implementer/verifier/reviewer."
+      exit 2
+    fi
+    if ! zcode_agente_tiene_marca "$fuente"; then
+      decir "[summonaikit] instalador: la plantilla $fuente no lleva saikit_owned."
+      decir "              Instalarla dejaria un archivo que el proximo install no reconoce."
+      exit 2
+    fi
+    if ! zcode_agente_frontmatter "$fuente" | grep -q "^name: ${rol}$"; then
+      decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."
+      exit 2
+    fi
+    dest_agente="$(grok_agents_dir)/$rol.md"
+    estado_json="$(grok_agente_estado "$dest_agente" "$(grok_agente_traducido "$fuente")")"
+    if [ "$estado_json" = 'NO_OBSERVABLE' ]; then
+      decir "[summonaikit] unknown — no se pudo clasificar el agente $dest_agente; no se escribio nada."
+      exit 4
+    fi
+  done
+}
+
+grok_publicar_json() {
+  local json dir canon tmp
+  [ "$GROK_JSON_ESTADO" = 'NUESTRO_IDENTICO' ] && return 0
+  json="$(grok_json_path)"
+  dir="$(dirname "$json")"
+  umask 077
+  canon="$(grok_json_canonico "$GROK_BASH_WIN")"
+  tmp="$(mktemp "$dir/.saikit-grok-XXXXXX")" || return 1
+  if ! printf '%s\n' "$canon" > "$tmp"; then rm -f "$tmp"; return 1; fi
+  if ! jq -e . "$tmp" >/dev/null 2>&1; then
+    rm -f "$tmp"
+    decir "[summonaikit] instalador: el JSON canonico de grok no parsea; no se publico nada."
+    return 1
+  fi
+  if ! printf '%s\n' "$canon" | cmp -s - "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  if [ "$GROK_JSON_ESTADO" = 'NUESTRO_DISTINTO' ]; then
+    grok_archivar_json "$json" || { rm -f "$tmp"; return 1; }
+  fi
+  if ! mv -f "$tmp" "$json"; then rm -f "$tmp"; return 1; fi
+  GROK_JSON_PUBLICADO=1
+  decir "[summonaikit] REGISTRO GROK PUBLICADO: $json"
+  decir "              command: & \"<bash.exe>\" \"<hook>\" (PowerShell; shell medido en 7.1)"
+  [ -n "$GROK_JSON_BACKUP" ] && decir "              backup:  $GROK_JSON_BACKUP"
+  return 0
+}
+
+grok_publicar_agentes() {
+  local src dir rol fuente trad dest estado
+  src="$repo/agents"
+  dir="$(grok_agents_dir)"
+  for rol in $GROK_AGENT_ROLES; do
+    fuente="$src/$rol.md"
+    trad="$(grok_agente_traducido "$fuente")"
+    dest="$dir/$rol.md"
+    estado="$(grok_agente_estado "$dest" "$trad")"
+    case "$estado" in
+      AUSENTE)
+        grok_escribir_agente "$trad" "$dest" || return 1
+        decir "[summonaikit] AGENTE GROK INSTALADO: $rol"
+        decir "              destino: $dest (frontmatter traducido: sin la clave skills:)"
+        ;;
+      NUESTRO_IDENTICO)
+        : ;;
+      NUESTRO_DISTINTO)
+        zcode_archivar_agente "$dest" || return 1
+        grok_escribir_agente "$trad" "$dest" || return 1
+        decir "[summonaikit] AGENTE GROK REPARADO: $rol"
+        decir "              destino: $dest"
+        ;;
+      DESCONOCIDO)
+        decir "[summonaikit] AGENTE GROK DESCONOCIDO: $rol — no se toco."
+        decir "              destino: $dest"
+        decir "              No lleva saikit_owned. Puede ser un cambio legitimo (D7)."
+        ;;
+    esac
+  done
+  return 0
+}
+
+# Vuelve atras lo publicado en ESTA corrida (design D1): cada destino vuelve al
+# estado pre-corrida — backup si lo habia, eliminacion si la corrida lo creo.
+grok_rollback() {
+  decir "[summonaikit] instalador: fallo publicar $1 — ROLLBACK de lo publicado en esta corrida."
+  if [ "$GROK_JSON_PUBLICADO" -eq 1 ]; then
+    if [ -n "$GROK_JSON_BACKUP" ] && [ -f "$GROK_JSON_BACKUP" ]; then
+      cp "$GROK_JSON_BACKUP" "$(grok_json_path)" \
+        && decir "              JSON restaurado desde $GROK_JSON_BACKUP"
+    else
+      rm -f "$(grok_json_path)" \
+        && decir "              JSON retirado (esta corrida lo habia creado)"
+    fi
+  fi
+  if [ "$GROK_HOOK_PUBLICADO" -eq 1 ]; then
+    if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
+      cp "$backup" "$DEST" && decir "              hook restaurado desde $backup"
+    else
+      rm -f "$DEST" && decir "              hook retirado (esta corrida lo habia creado)"
+    fi
+  fi
+  decir "              El perfil queda como estaba antes de la corrida."
+}
+
+grok_publicar() {
+  grok_publicar_json || { grok_rollback "el JSON de registro"; exit 5; }
+  grok_publicar_agentes || { grok_rollback "los agentes de grok"; exit 5; }
+}
+
+# --quitar-grok (design D1): saca JSON nuestro + hook nuestro + agentes con
+# marca, cada uno con backup. Lo ajeno (el verifier.md del operador, un JSON de
+# otro) sobrevive y se reporta. Sin preflight: la limpieza tiene que correr
+# aunque el resto ya no este.
+grok_quitar() {
+  local json rol dest dir
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --quitar-grok requiere jq (no encontrado)."; exit 2; }
+  json="$(grok_json_path)"
+  if [ -e "$json" ]; then
+    if [ ! -f "$json" ] || [ ! -r "$json" ]; then
+      decir "[summonaikit] unknown — no se pudo clasificar el JSON ($json); no se quito."
+    elif jq -e '(.saikit_owned? // "") == "summonaikit-claude"' "$json" >/dev/null 2>&1; then
+      grok_archivar_json "$json" || {
+        decir "[summonaikit] instalador: no se pudo respaldar $json"; exit 5; }
+      rm -f "$json" || {
+        decir "[summonaikit] instalador: no se pudo borrar $json"; exit 5; }
+      decir "[summonaikit] JSON DE GROK QUITADO: $json"
+      decir "              backup:  $GROK_JSON_BACKUP"
+    else
+      decir "[summonaikit] JSON DE GROK DESCONOCIDO — no se quito ($json)."
+    fi
+  else
+    decir "[summonaikit] JSON DE GROK: no existe ($json)."
+  fi
+  if [ -e "$DEST" ]; then
+    if [ ! -f "$DEST" ] || [ ! -r "$DEST" ]; then
+      decir "[summonaikit] unknown — no se pudo clasificar el hook ($DEST); no se quito."
+    elif sed -n "${MARCADOR_LINEA}p" "$DEST" | grep -Eq "$MARCADOR_RE"; then
+      archivar_destino "nuestro" || exit 5
+      rm -f "$DEST" || {
+        decir "[summonaikit] instalador: no se pudo borrar $DEST"; exit 5; }
+      decir "[summonaikit] HOOK DE GROK QUITADO: $DEST"
+      decir "              backup:  $backup"
+    else
+      decir "[summonaikit] HOOK DE GROK DESCONOCIDO — no se quito ($DEST)."
+    fi
+  else
+    decir "[summonaikit] HOOK DE GROK: no existe ($DEST)."
+  fi
+  dir="$(grok_agents_dir)"
+  [ -d "$dir" ] || return 0
+  for rol in $GROK_AGENT_ROLES; do
+    dest="$dir/$rol.md"
+    [ -f "$dest" ] || continue
+    if zcode_agente_tiene_marca "$dest"; then
+      zcode_archivar_agente "$dest" || {
+        decir "[summonaikit] instalador: no se pudo respaldar $dest antes de quitarlo"; exit 5; }
+      rm -f "$dest" || {
+        decir "[summonaikit] instalador: no se pudo borrar $dest"; exit 5; }
+      decir "[summonaikit] AGENTE GROK QUITADO: $rol"
+    else
+      decir "[summonaikit] AGENTE GROK DESCONOCIDO: $rol — no se quito."
+      decir "              destino: $dest"
+    fi
+  done
+  return 0
+}
+
 # ------------------------------------------------------------------ la fuente
 # En `--restore-vendor` la fuente no interviene: el archivo que va a quedar es un
 # backup, y el backup del vendor por definicion NO lleva nuestro marcador. Pedirle
@@ -717,6 +1160,19 @@ etiqueta_del_estado() {
   esac
 }
 
+# Task 7.5: --host grok. --quitar-grok termina aca (sin preflight: la limpieza
+# corre aunque falten piezas). Para el install, el PREFLIGHT va ANTES de
+# cualquier escritura — incluida la del --restore-vendor y la del flujo comun
+# que sigue — para que un JSON desconocido deje TODO intacto. La publicacion
+# del JSON y de los agentes se inyecta en los desenlaces verdes de abajo.
+if [ "$HOST" = "grok" ]; then
+  if [ "$QUITAR_GROK" -eq 1 ]; then
+    grok_quitar
+    exit $?
+  fi
+  grok_preflight
+fi
+
 # ------------------------------------------------- la vuelta: --restore-vendor
 if [ "$RESTORE" -eq 1 ]; then
   bdir="$dest_dir/saikit-backups"
@@ -896,6 +1352,11 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
   # senal barata de cuando cambio de verdad el archivo que gatea cada turno.
   decir "[summonaikit] YA AL DIA: el destino es nuestro y byte a byte igual a la fuente."
   decir "              destino: $DEST"
+  # Task 7.5: con el hook ya al dia igual faltan el JSON y los agentes de
+  # grok (D1: las tres publicaciones son independientes del estado del hook).
+  if [ "$HOST" = "grok" ]; then
+    grok_publicar
+  fi
   avisar_registro
   exit 0
 fi
@@ -908,6 +1369,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
   esac
   decir "              destino: $DEST"
   decir "              fuente:  $SOURCE"
+  if [ "$HOST" = "grok" ]; then
+    decir "              (grok: dry-run tampoco publica el JSON de registro ni los agentes)"
+  fi
   avisar_registro
   exit 0
 fi
@@ -919,6 +1383,13 @@ fi
 preparar_temporal "$SOURCE"
 [ "$estado" != 'AUSENTE' ] && archivar_destino "$(etiqueta_del_estado)"
 publicar_temporal
+# Task 7.5: hook publicado — el JSON y los agentes de grok salen DESPUES, y si
+# fallan se hace rollback del hook con el backup de esta corrida (D1). Va antes
+# de los mensajes de exito: con rollback no se afirma "INSTALADO".
+if [ "$HOST" = "grok" ]; then
+  GROK_HOOK_PUBLICADO=1
+  grok_publicar
+fi
 
 case "$estado" in
   AUSENTE)          decir "[summonaikit] INSTALADO: el destino no existia." ;;
