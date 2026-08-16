@@ -215,6 +215,26 @@ lab_payload_prompt() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$1"
 }
 
+# Task 10.14 -- forma de una notificacion de tarea en background que llega
+# como UserPromptSubmit. Medido en el transcript de la sesion (46 turnos): el
+# texto <task-notification> (igual <task-id> y </task-notification>) aparece
+# en 5 de 5 notificaciones reales y 0 de 41 turnos humanos -- discriminan
+# perfecto. Lo que NO se pudo medir es el envelope COMPLETO real; el fixture
+# reproduce solo la marca medida, no una forma inventada mas alla de eso.
+# Task 10.14 (hallazgo del reviewer): una notificacion de tarea cuyo texto SI
+# contiene el sentinel. No es rebuscado: la notificacion incluye el resumen o
+# el resultado del job, y en este repo los prompts a subagentes y los fixtures
+# llevan `-saikit` por todos lados. Si el chequeo de notificacion viviera solo
+# en la rama "sin sentinel", esta forma tomaba la rama de ARMADO y reseteaba
+# cycle/implemented/verified a cero. $1 = id de la tarea.
+lab_payload_prompt_notificacion_con_sentinel() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"<task-notification>\\n<task-id>%s</task-id>\\n<summary>el subagente devolvio: implementa la task con -saikit y cerra el paquete</summary>\\n</task-notification>"}' "$1"
+}
+
+lab_payload_prompt_notificacion_tarea() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"<task-notification>\\n<task-id>%s</task-id>\\n<task-status>completed</task-status>\\n</task-notification>"}' "$1"
+}
+
 # Task 9.4 (C9): un UserPromptSubmit SIN campo `prompt`, con el sentinel en OTRO
 # campo del payload. Es la forma de un resume: el texto viejo viaja en un campo
 # de resumen, no en una peticion del usuario. Con el fallback al payload crudo
@@ -262,6 +282,16 @@ lab_payload_agent_con_eco() {
 # caso_g2_runner_fallido_* usan stderrs con la forma real de cada runner.
 lab_payload_bash() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
+}
+
+# Task 10.13 — un runner lanzado EN BACKGROUND: el tool_response real de Bash
+# para un comando backgrounded NO es el objeto {stdout,stderr,...} de siempre,
+# es una CADENA con la forma "Command running in background with ID: <id>".
+# Medido en hook_lab: esa forma acredita verified=1 igual que un PostToolUse
+# en primer plano -- el credito depende SOLO de command_text (lo que se
+# lanzo), nunca de la forma del tool_response. $1 = comando, $2 = id del job.
+lab_payload_bash_en_background() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno","run_in_background":true},"tool_response":"Command running in background with ID: %s","tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":300}' "$1" "${2:-bg-1234abcd}"
 }
 
 # C3 (auditoria 2026-08-13) — un evento Bash cuyo tool_response trae una clave

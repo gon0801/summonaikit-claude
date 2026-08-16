@@ -843,6 +843,17 @@ write_state() {
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
+# Task 10.12 -- el bloque de arriba (numerado 1-6, "1. Understand - ...")
+# describe las ETAPAS en prosa con guion, no la FORMA del recibo que el Stop
+# gate realmente lee (has_receipt_label exige que cada linea EMPIECE con la
+# etiqueta seguida de dos puntos, sin importar el guion). Medido en vivo
+# (2026-08-15): un recibo con las seis compuertas correctas pero decoradas
+# ("Understand -- ...") fue rechazado entero y costo un ciclo completo de
+# revision de los dos del presupuesto. El bloque "Receipt line shape" de mas
+# abajo muestra la forma minima ("Etiqueta: ...") para que el modelo no copie
+# el estilo con guion de la lista numerada al escribir el recibo real. NO se
+# toca el lector (has_receipt_label ya es correcto); esto solo agrega lo que
+# faltaba en el contrato. Atado por caso_g1_contrato_muestra_forma_recibo.
 harness_context() {
   cat <<'HARNESS_CONTEXT'
 SUMMONAIKIT HARNESS REQUIRED
@@ -937,6 +948,14 @@ User-facing surface baseline (language/framework/platform agnostic):
 - Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.
 - Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.
 
+Receipt line shape (this is what the gate checks, not the numbered stage list above): what matters is that each label is followed by a COLON. A bullet or markdown bold around the label is fine -- "- **Understand**: ..." counts. What does NOT count is replacing the colon with a dash or any other separator: the numbered stage list above is written "1. Understand - ...", and copying that dash into the receipt fails every label at once. Bare, the six lines are:
+Understand: ...
+Implement: ...
+Verify: ...
+Review: ...
+Close: ...
+Retro: ...
+
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
 Understand: in one or two plain sentences, what the user asked for, plus any question you asked or assumption you made.
@@ -1010,6 +1029,30 @@ emit_allow() {
   exit 0
 }
 
+# Task 10.14 -- DEFECTO: una notificacion de tarea en background llega al hook
+# como UserPromptSubmit (la dispara la regla permanente 2 de la 10.6: "lanzala
+# y segui", que es la conducta que el kit mismo pide) y, al no traer el
+# sentinel, start_harness la trataba como un turno humano nuevo y ejecutaba el
+# desarme A4-c2 completo: un turno armado perdia el gate a mitad de camino, en
+# silencio.
+#
+# MEDIDO sobre 46 turnos reales del transcript de esta sesion: el texto
+# <task-notification> aparece en 5 de 5 notificaciones y 0 de 41 turnos
+# humanos (igual <task-id> y </task-notification> -- discriminan perfecto). El
+# cartel "[SYSTEM NOTIFICATION - NOT USER INPUT]" NO sirve de marca: 0/5 en el
+# transcript crudo -- lo agrega el harness al MOSTRARLE el evento al modelo, no
+# viaja en el payload del hook.
+#
+# NO se pudo medir si ese texto llega efectivamente al campo `prompt` del
+# payload (exigiria tools/capture-payloads.sh en una sesion nueva con
+# operador). Por eso el acotamiento de abajo exige las DOS condiciones a la
+# vez -- el lado seguro: si el prompt viene vacio/ausente, no desarma (cubre la
+# forma no medida); si trae la marca, tampoco (cubre la forma medida). Un
+# prompt HUMANO real sin sentinel SIGUE desarmando -- eso es A4 y no se afloja,
+# aflojarlo de mas revive el defecto que ese borrado cierra
+# (caso_g1_prompt_sin_sentinel_desarma fija esa regresion).
+SAIKIT_TASK_NOTIFICATION_RE='<task-notification>'
+
 start_harness() {
   # Task 8.1 (C1+C2): el prompt se lee con el lector top-level DECODIFICADO —
   # el sed greedy cortaba en la primera \" (no armaba / desarmaba con el
@@ -1033,6 +1076,22 @@ start_harness() {
   # las reglas permanentes. Cerrarlo exigiria distinguir "peticion" de "resumen"
   # DENTRO de session, y ahi el unico host medido que arma asi es cursor.
   # Atado por caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas.
+  # Task 10.14 (hallazgo de la revision cruzada + reviewer, 2026-08-15): la
+  # notificacion se ataja ANTES del gate del sentinel, no solo en la rama del
+  # desarme. Motivo: el texto de una notificacion de tarea PUEDE CONTENER
+  # `-saikit` -- en este repo es lo normal, porque los prompts a subagentes y
+  # los fixtures lo llevan, y la notificacion incluye el resumen/resultado. Si
+  # eso pasa y el chequeo viviera solo en la rama "sin sentinel", la ejecucion
+  # tomaba la rama de ARMADO: write_state resetea cycle/implemented/verified a
+  # cero y el log se SOBRESCRIBE, borrando en silencio evidencia ya acreditada
+  # del turno en curso (por ejemplo un verified=1 ganado por una corrida real).
+  # Un evento del sistema no debe armar NI desarmar: se deja pasar intacto.
+  # Atado por caso_g1_notificacion_con_sentinel_no_rearma.
+  if [ "$PHASE" = "prompt" ] \
+     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_RE"; then
+    emit_allow
+  fi
+
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # El sentinel es la unica condicion de armado (REEMPLAZO a los clasificadores
   # is_engineering_task / is_trivial_task del vendor, retirados en la Task 10.1
@@ -1045,7 +1104,24 @@ start_harness() {
     # no pasa por aca: re-arma mas abajo y conserva el estado. Acotado a
     # PHASE=prompt: un SessionStart sin sentinel no debe limpiar estado (cursor
     # arma en session con -saikit en el texto, ver caso_g6_armado_por_target).
-    if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ]; then
+    #
+    # Task 10.14: el desarme se acota ADEMAS a un prompt NO vacio. La
+    # notificacion ya se atajo arriba (antes del gate del sentinel), asi que
+    # aca no se repite ese chequeo -- repetirlo dejaria una clausula
+    # inalcanzable y su mutacion no la atraparia nadie.
+    #
+    # COSTO RESIDUAL DECLARADO (hallazgo del reviewer, 2026-08-15): antes de
+    # esta task un UserPromptSubmit con `prompt` vacio/ausente SI desarmaba, y
+    # ahora no. Si algun host produjera esa forma para un turno HUMANO genuino
+    # (el caso plausible: un mensaje que es solo un adjunto, sin texto) estando
+    # vivo un turno -saikit abandonado, ese turno humano heredaria el estado
+    # viejo y el Stop gate le exigiria recibo -- el sintoma de A4 por otra
+    # puerta. Se acepta con este precedente MEDIDO: el fixture de la Task
+    # 9.4/C9 mostro que en `claude` la forma sin campo `prompt` correlaciona
+    # con eventos de SISTEMA (un resume), no con un mensaje humano nuevo. Si
+    # aparece un host donde no valga, se mide y se acota por host.
+    if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ] \
+       && [ -n "$prompt_text" ]; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
       podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
