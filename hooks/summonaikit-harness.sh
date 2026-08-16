@@ -86,7 +86,20 @@ PROFILE_DIR="$(cd "$HOOK_DIR/.." 2>/dev/null && pwd)"
 # Codex inyecta una senal propia, esa es mejor evidencia y esta rama se
 # reescribe. 7.3 insertara grok ENCIMA (orden final: grok > codex > zcode >
 # claude > other).
-if [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
+if [ "${GROK_HOOK_EVENT+x}" = "x" ]; then
+  # Task 7.3 (D2): GROK_HOOK_EVENT la inyecta el runner de hooks de Grok en
+  # cada proceso que el spawnea (presente en los 12 dumps de env de 7.1). Va
+  # por SETNESS, no valor: cuenta incluso EXPORTADA VACIA (hallazgo Greptile
+  # P2 / CR r1 del PR #27 — `-n` la ignoraria y el proceso clasificaria por
+  # las senales heredadas, p.ej. un CLAUDECODE=1 del padre), porque si el
+  # runner la exporto, el proceso es de Grok — un evento que no reconozcamos
+  # no cambia la identidad. NO se usa GROK_SESSION_ID a proposito: el operador
+  # lanza Claude DESDE Grok y el hijo heredaria esa var y se creeria Grok —
+  # el mismo error de identidad que la rama codex de abajo cierra en
+  # direccion inversa. CLAUDECODE ausente en Grok (medido 7.1), y
+  # Claude/zcode/Codex no setean GROK_HOOK_EVENT: sin colision medida.
+  HOST=grok
+elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
   HOST=codex
 elif [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
   HOST=zcode
@@ -302,6 +315,13 @@ PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
 # REVIEW-NOTICE): NO volver a colgarlo de un path sin HOST.
 PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"
 SESSION_ID="$(json_top_level_string session_id)"
+# Task 7.3 (D4): alias camel de Grok como FALLBACK — el snake gana si llega
+# (misma postura que hookEventName en 5.4). En Grok el env del runner trae
+# GROK_SESSION_ID garantizado (7.1, 12/12 dumps) y cubre A4 si el payload no
+# entrega la clave; "el env es la via que el runner garantiza, no exime de
+# leer el payload" — por eso es el ultimo recurso, no el primero.
+if [ -z "$SESSION_ID" ]; then SESSION_ID="$(json_top_level_string sessionId)"; fi
+if [ -z "$SESSION_ID" ] && [ "$HOST" = "grok" ]; then SESSION_ID="${GROK_SESSION_ID:-}"; fi
 if [ -z "$SESSION_ID" ]; then
   # session_id ausente -> slot nombrado y descubrible, no un slot unico que
   # colapsaria todo y reintroduciria A4. Edge case: session_id SIEMPRE viene en
@@ -447,6 +467,11 @@ json_top_level_decoded() {
 # campo. Inventar uno para "dejar pasar" es exactamente A1.
 json_tool_input_string() {
   field="$1"
+  # Task 7.3 (D4): el objeto padre se recibe como $2 (default tool_input) para
+  # el alias camel de Grok — toolInput — sin duplicar el escanner. La
+  # precedencia la da el CALLER (primero snake, fallback camel), no el orden
+  # de aparicion en el payload.
+  padre="${2:-tool_input}"
   # Atajo barato y equivalente — el escaner solo puede encontrar lo que este en
   # el texto. Un turno real son ~300 eventos y solo 8 traen el campo (medido en
   # la captura de la Task 1.4), asi que esto ahorra el proceso en la mayoria.
@@ -454,7 +479,7 @@ json_tool_input_string() {
     *"\"$field\""*) ;;
     *) return 0 ;;
   esac
-  printf '%s' "$INPUT" | awk -v want="$field" '
+  printf '%s' "$INPUT" | awk -v want="$field" -v padre="$padre" '
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
@@ -469,7 +494,7 @@ json_tool_input_string() {
             ins = 0
             txt = substr(buf, ini, i - ini)
             if (espera) {
-              if (depth == 2 && clave1 == "tool_input" && clave == want) { print txt; exit }
+              if (depth == 2 && clave1 == padre && clave == want) { print txt; exit }
               espera = 0
             }
             ultima = txt
@@ -510,12 +535,16 @@ json_tool_input_string() {
 # json_tool_input_string, task_hash). Si faltara, el hook estaria roto antes.
 
 # Canal 1: last_assistant_message del payload Stop (clave de primer nivel).
+# Task 7.3 (D4): la clave se recibe como $1 (default snake) para el alias
+# camel de Grok — lastAssistantMessage — sin duplicar el walker. La
+# precedencia snake la da last_assistant_text, el wrapper de abajo.
 assistant_text_payload() {
+  clave_want="${1:-last_assistant_message}"
   case "$INPUT" in
-    *'"last_assistant_message"'*) ;;
+    *"\"$clave_want\""*) ;;
     *) return 0 ;;
   esac
-  printf '%s' "$INPUT" | awk '
+  printf '%s' "$INPUT" | awk -v want="$clave_want" '
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
@@ -538,7 +567,7 @@ assistant_text_payload() {
           if (c == "\"") {
             ins = 0
             ultima = substr(buf, ini, i - ini)
-            if (espera && depth == 1 && c1 == "last_assistant_message") { emiti = 0; exit }
+            if (espera && depth == 1 && c1 == want) { emiti = 0; exit }
             continue
           }
           if (emiti) printf "%s", c
@@ -546,7 +575,7 @@ assistant_text_payload() {
         }
         if (c == "\"") {
           ins = 1; ini = i + 1
-          if (espera && depth == 1 && c1 == "last_assistant_message") emiti = 1
+          if (espera && depth == 1 && c1 == want) emiti = 1
           continue
         }
         if (c == ":")                { if (depth == 1) c1 = ultima; espera = 1 }
@@ -555,6 +584,15 @@ assistant_text_payload() {
         else if (c == ",")             { espera = 0 }
       }
     }'
+}
+
+# Task 7.3 (D4): el texto final del turno con precedencia snake — Grok manda
+# lastAssistantMessage (camel, medido 7.1 en los 3 Stops de turno). Si ambos
+# llegan, gana el snake: misma postura que sessionId/toolName/transcriptPath.
+last_assistant_text() {
+  t="$(assistant_text_payload last_assistant_message)"
+  [ -n "$t" ] || t="$(assistant_text_payload lastAssistantMessage)"
+  printf '%s' "$t"
 }
 
 # Canal 2: bloques {"type":"text","text":...} de message.content con
@@ -1200,8 +1238,14 @@ record_tool_evidence() {
   # nivel. event_name queda con el lector viejo: solo alimenta $combined, que
   # ya incluye $INPUT entero para el grep laxo de "implemented".
   tool_name="$(json_top_level_string tool_name)"
+  # Task 7.3 (D4): fallbacks camel de Grok — el snake gana si llega. El padre
+  # de command/file_path pasa a toolInput en el fallback (medido 7.1: claves
+  # camel en el envelope, snake adentro del objeto).
+  [ -n "$tool_name" ] || tool_name="$(json_top_level_string toolName)"
   command_text="$(json_tool_input_string command)"
+  [ -n "$command_text" ] || command_text="$(json_tool_input_string command toolInput)"
   file_path="$(json_tool_input_string file_path)"
+  [ -n "$file_path" ] || file_path="$(json_tool_input_string file_path toolInput)"
   combined="$event_name $tool_name $command_text $file_path $INPUT"
 
   # Record harness subagent runs (the delegation tool carries a subagent_type in
@@ -1209,6 +1253,13 @@ record_tool_evidence() {
   # reviewer sequence. Se lee SOLO de `tool_input` de primer nivel: el resto del
   # payload trae el resultado de la herramienta, que el turno no escribio (A1).
   subagent="$(json_tool_input_string subagent_type)"
+  # Task 7.3 (D4): tres canales medidos en Grok (7.1 ronda 5) — el despacho
+  # spawn_subagent SI emite post_tool_use con toolInput.subagent_type (a
+  # diferencia de Codex), y los eventos SubagentStart/internos del hijo traen
+  # subagentType de PRIMER nivel. Fallbacks, no reemplazos: el snake de Claude
+  # sigue ganando.
+  [ -n "$subagent" ] || subagent="$(json_tool_input_string subagent_type toolInput)"
+  if [ -z "$subagent" ]; then subagent="$(json_top_level_string subagentType)"; fi
   if [ -z "$subagent" ]; then subagent="$(json_tool_input_string subagentType)"; fi
   # A9 (Task 3.7): los eventos INTERNOS del subagente (los que matchean el
   # matcher y llegan al gate) llevan el rol en agent_type de PRIMER NIVEL, no en
@@ -1241,7 +1292,9 @@ record_tool_evidence() {
   # registra nada -- mejor perder una edicion que fecharla mal. Por diseno
   # (pedido explicito) esta senal NUNCA lanza git ni un proceso por archivo:
   # es solo el nombre de la herramienta del evento que el hook ya recibe.
-  if [ -n "$file_path" ] && printf '%s' "$tool_name" | grep -Eiq '^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file)$'; then
+  # Task 7.3 (D5): search_replace es la tool de edicion nativa de Grok (write
+  # ya estaba en la lista); ambas traen toolInput.file_path (medido 7.1).
+  if [ -n "$file_path" ] && printf '%s' "$tool_name" | grep -Eiq '^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file|search_replace)$'; then
     if ! rn_is_noncode_path "$file_path"; then
       rn_mark_code_edit "$rn_order_now"
     fi
@@ -1262,6 +1315,27 @@ record_tool_evidence() {
   # sin wrapper (ver el comentario de la constante). No se concatena
   # tool_name: el ancla ^ y el separador son del COMANDO, y un tool_name
   # delante moveria el inicio de linea.
+  # Task 7.3 (D5): en Grok las fallas de tool llegan como post_tool_use NORMAL
+  # con toolResult de error — PostToolUseFailure no disparo nunca en 1.0.3
+  # (medido 7.1, 3 clases de falla). Senales medidas: toolResult.exit_code != 0
+  # (comando que revienta) y las variantes de error del objeto (FileNotFound /
+  # NoMatchesFound, forma medida a primer nivel del toolResult). Sin esta
+  # lectura un runner rojo no dejaba huella en $combined y acreditaba por
+  # ausencia. El veto es SOLO del credito de verificacion (advisory, como todo
+  # el gate); los hosts snake no traen toolResult y no se ven afectados.
+  toolresult_err=""
+  # exit_code viaja como NUMERO ("exit_code":1, sin comillas — medido 7.1), asi
+  # que los lectores de strings del hook no lo ven (medido: output_for_prompt
+  # sale, exit_code no). Patron grep ACOTADO al interior del toolResult: el
+  # [^}]* no puede cruzar su cierre, y un eco de exit_code en OTRO objeto del
+  # payload (clase C3) no puede colarse porque se exige "toolResult" antes sin
+  # llaves de por medio. "exit_code":0 no matchea ([1-9] directo tras el ':').
+  if printf '%s' "$INPUT" | grep -Eq '"toolResult"[^}]*"exit_code"[[:space:]]*:[[:space:]]*[1-9]'; then
+    toolresult_err="1"
+  fi
+  if printf '%s' "$INPUT" | grep -Eq '"toolResult"[:[:space:]]*\{[^}]*"(FileNotFound|NoMatchesFound)"'; then
+    toolresult_err="1"
+  fi
   # Task 9.2 (C8), mitad que faltaba. Dos cambios sobre la condicion de credito:
   #
   #   1. ECHO_LEAD_RE: si el PRIMER token del comando es echo/printf, ese
@@ -1291,8 +1365,9 @@ record_tool_evidence() {
   if ! printf '%s' "$command_text" | head -n 1 | grep -Eiq "$ECHO_LEAD_RE" \
      && { printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
           || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
-    if ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
-           || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
+    if [ -z "$toolresult_err" ] \
+       && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+              || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi
@@ -1465,11 +1540,33 @@ stop_gate() {
     emit_allow
   fi
 
+  # Task 7.3 (D6): Grok dispara DOS Stops por turno headless (medido 7.1, 5/5
+  # pares): el de turno trae reason="end_turn" con promptId y
+  # lastAssistantMessage; el de CIERRE (el proceso que sale) trae
+  # reason="shutdown" sin ninguno de los dos. 7.2 lo midio en vivo: el Stop de
+  # cierre RECIBE la decision y la ignora, sin segundo ciclo — tratarlo como
+  # Stop de turno contaria ciclo, limpiaria estado ajeno o crearia estado en
+  # un proceso que ya se va. Sale inmediato, sin tocar NADA. Acotado a
+  # HOST=grok a proposito: un Stop de Claude/zcode/Codex no trae reason, y
+  # exigirlo globalmente apagaria el gate en todos los demas hosts. `reason`
+  # VACIO no exime (Core Rule 2: no observado != no-end_turn) — sigue el
+  # camino normal del gate. channel_closed sigue unknown (no observado).
+  if [ "$HOST" = "grok" ]; then
+    stop_reason="$(json_top_level_string reason)"
+    if [ -n "$stop_reason" ] && [ "$stop_reason" != "end_turn" ]; then
+      emit_allow
+    fi
+  fi
+
   # Task 8.1 (C3, misma clase): transcript_path con el lector top-level — el
   # greedy podia tomar una ruta de otra parte del payload. La contencion de A6
   # (transcript_en_perfil) sigue intacta detras; los escapes quedan crudos como
   # siempre (cd+pwd los normaliza, ver :1084).
   transcript_path="$(json_top_level_string transcript_path)"
+  # Task 7.3 (D4): alias camel de Grok (transcriptPath, medido 7.1 — cae en
+  # ~/.grok/sessions/, o sea DENTRO del perfil: la contencion A6 contiene).
+  # Fallback, no reemplazo: el snake sigue ganando.
+  [ -n "$transcript_path" ] || transcript_path="$(json_top_level_string transcriptPath)"
   tail_text=""
   if [ -n "$transcript_path" ] && [ -r "$transcript_path" ] && transcript_en_perfil "$transcript_path"; then
     tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
@@ -1481,7 +1578,7 @@ stop_gate() {
   # conserva como recorte: leer el transcript entero agrandaria el hueco (un
   # recibo de hace 5 turnos satisfaria el gate) y es caro en Windows. Ver
   # docs/task-3.2-plan.md CORRECCION 2.
-  text="$(assistant_text_payload)
+  text="$(last_assistant_text)
 $(printf '%s' "$tail_text" | assistant_text_transcript)"
 
   # Task 8.2 (C4): las escotillas PAUSED/DELEGATED se evaluan sobre el texto
@@ -1494,7 +1591,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # texto completo — mismo fail-open de siempre, no se apaga ningun canal.
   # Las ETIQUETAS del recibo siguen mirando $text entero (los dos canales):
   # acotarlas repetiria A2/A8 y rompe caso_g4_recibo_solo_en_transcript_pasa.
-  text_hatch="$(assistant_text_payload)"
+  # Task 7.3: last_assistant_text = el walker con precedencia snake/camel.
+  text_hatch="$(last_assistant_text)"
   if [ -z "$text_hatch" ]; then text_hatch="$text"; fi
 
   # A clarifying pause is a valid way to end the turn: the agent asked the
@@ -1718,9 +1816,14 @@ if [ -z "$PHASE" ]; then
   # greedy de json_string_field) por el mismo motivo que session_id (3.4).
   event="$(json_top_level_string hook_event_name)"
   [ -n "$event" ] || event="$(json_top_level_string hookEventName)"
+  # Task 7.3 (D4): literales snake de Grok (valor del evento, medido 7.1 en los
+  # 37 payloads). Sin user_prompt_submit, un envelope Grok real caeria a
+  # PHASE=tool y NUNCA armaria — es el defecto que esta task cierra aunque la
+  # ceremonia (7.4) no se prenda. post_tool_use/subagent_start ya caen a tool,
+  # que es lo que se quiere: record_tool_evidence anota roles y runners.
   case "$event" in
-    UserPromptSubmit|beforeSubmitPrompt) PHASE="prompt" ;;
-    SessionStart|sessionStart) PHASE="session" ;;
+    UserPromptSubmit|beforeSubmitPrompt|user_prompt_submit) PHASE="prompt" ;;
+    SessionStart|sessionStart|session_start) PHASE="session" ;;
     Stop|stop) PHASE="stop" ;;
     *) PHASE="tool" ;;
   esac

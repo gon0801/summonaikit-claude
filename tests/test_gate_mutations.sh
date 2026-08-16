@@ -113,6 +113,13 @@ G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
 G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
 G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
+G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
+G1|phase_sin_user_prompt_submit|el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a "tool": nunca arma (D4)
+G2|toolresult_veto_quitado|el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)
+G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)
+G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
+G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
+G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -259,6 +266,7 @@ mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # marca_verificado y caso_g2_eco_de_command_en_tool_response_no_marca (command);
 # caso_g2_eco_de_tool_name_en_tool_response_no_marca (tool_name).
 mut_command_desacotado()   { sed 's/json_tool_input_string command/json_string_field command/'; }
+mut_tool_name_desacotado()   { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
 # RETIRADA (PR #22): `mut_tool_name_desacotado` cambiaba el lector de tool_name
 # por el greedy. Dejo de tener detector cuando el credito de verificacion dejo
 # de mirar `tool_name` — que fue el arreglo de un agujero REAL (una tool MCP
@@ -360,7 +368,7 @@ mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex)/case
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
 mut_subagent_type_greedy()   { sed 's/json_tool_input_string subagent_type/json_string_field subagent_type/'; }
-mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == "tool_input" \&\& clave == want/clave == want/'; }
+mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == padre \&\& clave == want/clave == want/'; }
 # Las dos mitades del arreglo de A9+A10 (Task 3.7), una mutacion cada una y cada
 # una acreditada a su caso. La primera neutraliza el fallback a agent_type
 # top-level: los eventos internos (que llegan al gate) dejan de registrar el
@@ -391,6 +399,38 @@ mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex)/case "$TA
 # caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
 # patron de ancla por comentario que mut_budget_zcode_sigue_0.
 mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
+# Task 7.3 (D2): apaga la rama grok de la deteccion de HOST, espejo exacto de
+# mut_host_codex_sin_rama. El escenario real que previene: Grok lanzado desde
+# adentro de Claude hereda CLAUDECODE=1 Y recibe GROK_HOOK_EVENT del runner —
+# sin la rama (y sin su prioridad), el lado grok resuelve HOST=claude y los dos
+# hosts comparten estado. Lo atrapa caso_g1_dos_hosts_grok_y_claude_no_comparten_estado.
+mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; then/if false; then/'; }
+# Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
+# de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
+# arma — es el defecto central que esta task cierra. Lo atrapa
+# caso_g1_grok_envelope_arma.
+mut_phase_sin_user_prompt_submit() { sed 's/UserPromptSubmit|beforeSubmitPrompt|user_prompt_submit)/UserPromptSubmit|beforeSubmitPrompt)/'; }
+# Task 7.3 (D5): neutraliza el veto de exit_code (la mitad principal). Con el
+# sed, el patron ya no matchea ninguna clave y un runner rojo grok vuelve a
+# acreditar verificacion por ausencia de senal. Lo atrapa
+# caso_g2_grok_runner_fallido_no_marca.
+mut_toolresult_veto_quitado() { sed 's/"exit_code"\[\[:space:\]\]\*:\[\[:space:\]\]\*\[1-9\]/"exit_codeMUT"/'; }
+# Task 7.3 (D5, variante): neutraliza la deteccion de las variantes de error
+# del toolResult. Lo atrapa caso_g2_grok_nomatchesfound_no_marca.
+mut_toolresult_variantes_quitada() { sed 's/FileNotFound|NoMatchesFound/FileNotFoundMUT|NoMatchesFoundMUT/'; }
+# Task 7.3 (D4): quita el fallback camel del padre — command vuelve a leerse
+# solo de tool_input snake y el credito camel de Grok muere. Lo atrapa
+# caso_g2_grok_runner_marca_verificado (el verified desaparece del log).
+mut_alias_padre_camel_quitado() { sed 's/^  \[ -n "$command_text" \] || command_text=.*$/  :/'; }
+# Task 7.3 (D6): neutraliza la condicion de salida temprana del Stop de cierre
+# grok (shutdown). El Stop de cierre vuelve al camino del gate: cuenta ciclo y
+# toca estado de un proceso que se va. Lo atrapa
+# caso_g1_grok_stop_shutdown_no_toca_estado.
+mut_stop_sin_filtro_end_turn() { sed 's/\[ "$stop_reason" != "end_turn" \]/[ "$stop_reason" != "end_turn" ] \&\& false/'; }
+# r1 (Greptile P2 / CR PR #27): devuelve la deteccion a -n (valor no-vacio).
+# Una senal exportada VACIA deja de contar y el estado del turno grok cae al
+# arbol del host heredado. Lo atrapa caso_g1_grok_senal_exportada_vacia_cuenta.
+mut_grok_setness_por_valor() { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]/if [ -n "\${GROK_HOOK_EVENT:-}" ]/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
 # Task 9.3 movio la frontera de has_receipt_label a (^|[^[:alpha:]'"]): el sed
@@ -441,13 +481,13 @@ mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS REC
 # Task 8.2 (C4): devuelve las escotillas al texto completo ($text incluye el
 # tail con turnos anteriores). Catch: caso_g4_pausa_vieja_solo_en_transcript_
 # bloquea (un PAUSED viejo vuelve a saltar el gate).
-mut_escotillas_leen_tail_viejo() { sed 's/text_hatch="$(assistant_text_payload)"/text_hatch="$text"/'; }
+mut_escotillas_leen_tail_viejo() { sed 's/text_hatch="$(last_assistant_text)"/text_hatch="$text"/'; }
 # Las cuatro mitades del arreglo de A2+A8 (Task 3.2), una mutacion cada una.
 # Las dos primeras mutan la LLAMADA en stop_gate (no el awk interno) porque
 # MSYS2/Git Bash corrompe los backslashes en literales de sed — cambiar la
 # funcion llamada es equivalente para lo que el caso prueba y no tiene ese
 # problema. Las dos ultimas mutan la condicion del walker directamente.
-mut_canal_payload_crudo()    { sed 's/$(assistant_text_payload)/$(json_string_field last_assistant_message)/'; }
+mut_canal_payload_crudo()    { sed 's/$(last_assistant_text)/$(json_string_field last_assistant_message)/'; }
 mut_canal_transcript_vacio() { sed 's/| assistant_text_transcript/| true/'; }
 mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"/c2 == "role"/'; }
 mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
