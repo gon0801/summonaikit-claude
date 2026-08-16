@@ -19,6 +19,8 @@
 #   bash tools/check-hook-registration.sh
 #   bash tools/check-hook-registration.sh --settings <path> [--local-settings <path>]
 #   bash tools/check-hook-registration.sh --zcode-config <user-config>   (Task 5.4)
+#   bash tools/check-hook-registration.sh --codex-hooks-json <hooks.json> (Task 6.5)
+#   bash tools/check-hook-registration.sh --grok-hooks-dir <dir>         (Task 7.5)
 set -u
 
 HOOK_NAME='summonaikit-harness.sh'
@@ -38,6 +40,14 @@ VIO_ZCODE=0
 CODEX_HOOKS_JSON=''
 CODEX_WRAPPER=''
 VIO_CODEX=0
+# Task 7.5: la CUARTA forma. En Grok el registro es un JSON propio
+# (<dir>/summonaikit.json) cuyo command nombra al hook DIRECTAMENTE en forma
+# PowerShell ('& "bash.exe" "hook"'). Tres afirmaciones separadas: (1) el JSON
+# nombra al hook en una linea que no solo imprima; (2) el hook que nombra
+# existe y lleva el marcador de linea 2; (3) el matcher de PostToolUse cubre
+# spawn_subagent o su alias Task (7.1 midio ambos nombres).
+GROK_HOOKS_DIR=''
+VIO_GROK=0
 
 reportar() { printf '%s\n' "$*"; }
 
@@ -51,7 +61,7 @@ reportar() { printf '%s\n' "$*"; }
 # exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper)
+    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper|--grok-hooks-dir)
       if [ $# -lt 2 ]; then
         reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
         reportar "              No se afirma que el registro falte: no se pudo mirar."
@@ -64,6 +74,7 @@ while [ $# -gt 0 ]; do
         --zcode-config)    ZCODE_USER_CONFIG="$2"; VIO_ZCODE=1 ;;
         --codex-hooks-json) CODEX_HOOKS_JSON="$2"; VIO_CODEX=1 ;;
         --codex-wrapper)   CODEX_WRAPPER="$2" ;;
+        --grok-hooks-dir)  GROK_HOOKS_DIR="$2"; VIO_GROK=1 ;;
       esac
       shift 2
       ;;
@@ -75,8 +86,9 @@ done
 # Task 5.4: --zcode-config y --settings son mutuamente excluyentes (cada host
 # registra en su propio archivo). Mezclarlos no tiene sentido y leer la forma
 # equivocada daria silencio o INCOMPLETO falsos. Fail-open: unknown, exit 0.
-if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX)) -gt 1 ]; then
-  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config y --codex-hooks-json son mutuamente excluyentes."
+# Task 7.5: --grok-hooks-dir entra en la misma regla.
+if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX + VIO_GROK)) -gt 1 ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config, --codex-hooks-json y --grok-hooks-dir son mutuamente excluyentes."
   reportar "              Cada host registra en su propio archivo; no se verifico nada."
   reportar "              No se afirma que el registro falte: no se pudo mirar."
   exit 0
@@ -97,6 +109,16 @@ if [ "$VIO_CODEX" -gt 0 ]; then
   LOCAL_SETTINGS=''
   [ -n "$CODEX_WRAPPER" ] || CODEX_WRAPPER="$(dirname "$CODEX_HOOKS_JSON")/hooks/summonaikit-harness.ps1"
   HOOK_NAME="$(basename "$CODEX_WRAPPER")"
+fi
+# Task 7.5 (modo grok): el archivo que se lee es summonaikit.json dentro del
+# dir de hooks; sin flag, el default del perfil (~/.grok/hooks). El command
+# nombra al hook directamente — no hay wrapper intermedio como en codex — asi
+# que la segunda afirmacion mira al propio hook (existencia + marcador).
+if [ "$VIO_GROK" -gt 0 ]; then
+  MODO="grok"
+  [ -n "$GROK_HOOKS_DIR" ] || GROK_HOOKS_DIR="${HOME:-}/.grok/hooks"
+  SETTINGS="$GROK_HOOKS_DIR/summonaikit.json"
+  LOCAL_SETTINGS=''
 fi
 
 # El local por defecto es HERMANO del settings dado, no el del HOME real: si no,
@@ -181,6 +203,13 @@ def _matcher_cubre(m, modo):
         rx = re.compile(m)
     except re.error:
         return (False, False)
+    # Task 7.5 (grok): la tool de delegacion es spawn_subagent y el matcher
+    # 'Task' la atrapa por alias (7.1 midio AMBAS cosas: el despacho emitia
+    # PostToolUse y ptu-alias='...|Task' disparo). Cubre cualquiera de las dos.
+    if modo == "grok":
+        if rx.search("spawn_subagent") is not None or rx.search("Task") is not None:
+            return (True, True)
+        return (False, True)
     if rx.search("Agent") is not None:
         return (True, True)
     # Task 5.4: en zcode el alias Task<->Agent (medido 5.1) hace que un matcher
@@ -193,6 +222,22 @@ def _matcher_cubre(m, modo):
 registradas, leidos, ilegibles = set(), [], []
 # (matcher_str, cubre, compila) por cada grupo de PostToolUse que ejecuta el hook.
 ptu_matchers = []
+# Task 7.5 (grok): las rutas de hook que el JSON NOMBRA en commands que
+# ejecutan. La afirmacion (b) las mira desde bash (existencia + marcador).
+# Se extraen por regex y NO con shlex: en posix-mode shlex la barra invertida
+# es escape y una ruta Windows ('C:\...\summonaikit-harness.sh') llegaria
+# mangleada a la verificacion de existencia.
+hook_paths = []
+
+def _hook_paths(comando):
+    # r2/CodeRabbit: la forma medida cita la ruta del hook ENTRE COMILLAS, y
+    # una ruta con espacios ('C:/Users/John Doe/...') partida en el espacio
+    # daria un falso 'NO existe'. Se extrae PRIMERO la porcion quoteda; el
+    # fallback sin comillas cubre los commands estilo Claude.
+    q = re.findall(r'"([^"]*summonaikit-harness\.sh)"', comando)
+    if q:
+        return q
+    return re.findall(r'[^\s"&|;]+summonaikit-harness\.sh', comando)
 # Task 5.4 (modo zcode): enabled != JSON true => los hooks de archivo no corren;
 # y un matcher en el grupo de UserPromptSubmit/Stop es error (el match value ahi
 # es texto/preview, no tool name). Solo se observan si el archivo se leyo.
@@ -232,9 +277,18 @@ for path in (settings, local):
             for entrada in grupo.get("hooks", []) or []:
                 if not isinstance(entrada, dict):
                     continue
-                if ejecuta(str(entrada.get("command", "")), hook):
+                comando = str(entrada.get("command", ""))
+                if ejecuta(comando, hook):
                     entrada_ejecuta = True
                     registradas.add(fase)
+                    # Task 7.5: token que termina en el nombre del hook, sin
+                    # comillas/operadores alrededor — la ruta que el registro
+                    # nombra de verdad. Limites declarados: no expande $VARS
+                    # ni resuelve relativos; con un command sano sobra.
+                    if modo == "grok":
+                        for tok in _hook_paths(comando):
+                            if tok not in hook_paths:
+                                hook_paths.append(tok)
             # El matcher vive en el GRUPO, no en la entrada. Solo importa para
             # PostToolUse y solo si el grupo ejecuta el hook. Task 6.5: en modo
             # codex el advisory de Agent NO aplica — 6.1 midio que el rol llega
@@ -284,6 +338,7 @@ print(json.dumps({
     "matchers_obs": [m for m, _, _ in ptu_matchers],
     "enabled_mal": enabled_mal,
     "fases_con_matcher": sorted(set(fases_con_matcher)),
+    "hook_paths": hook_paths,
 }))
 PY
 )"
@@ -302,6 +357,7 @@ matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; pr
 enabled_mal="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("enabled_mal",False))' 2>/dev/null)"
 fases_con_matcher="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fases_con_matcher",[])))' 2>/dev/null)"
 session_registrada="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("session_registrada",False))' 2>/dev/null)"
+hook_paths="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print("\n".join(json.load(sys.stdin).get("hook_paths",[])))' 2>/dev/null)"
 
 # Task 10.6 — afirmacion SEPARADA, y advisory: sin SessionStart el gate corre
 # igual; lo que no llega son las reglas permanentes, que valen arme o no el
@@ -322,6 +378,17 @@ reportar_session_rules() {
 # — la via de arreglarlo es settings.json, fuera de este tool. fail-open: exit 0.
 reportar_matcher() {
   if [ "$matcher_estado" = "uncovered" ]; then
+    if [ "$MODO" = "grok" ]; then
+      # Task 7.5: en grok la delegacion es spawn_subagent (medido 7.1) y el
+      # alias que la atrapa es Task; 'Agent' a secas no esta medido como alias
+      # de nada en este host, asi que el aviso nombra los dos que cuentan.
+      reportar "[summonaikit] REGISTRO DEL HOOK: el matcher de PostToolUse no cubre 'spawn_subagent' (ni su alias 'Task')."
+      reportar "              matcher observado: ${matchers_obs:-(sin matcher)}"
+      reportar "              Efecto: la delegacion de subagentes no genera eventos para el gate"
+      reportar "              y el rol no se registra, aunque el subagente haya corrido."
+      reportar "              Se arregla en summonaikit.json: agregar spawn_subagent o Task al matcher."
+      return 0
+    fi
     reportar "[summonaikit] REGISTRO DEL HOOK: el matcher de PostToolUse no cubre 'Agent'."
     reportar "              matcher observado: ${matchers_obs:-(sin matcher)}"
     reportar "              Efecto: un subagente que solo use herramientas fuera del matcher"
@@ -367,6 +434,46 @@ reportar_wrapper_codex() {
   fi
 }
 
+# Task 7.5 (modo grok) — la afirmacion (2), SEPARADA de la (1): el hook que el
+# JSON nombra EXISTE y lleva el marcador de la linea 2. Corre en todos los
+# desenlaces de la (1) porque es independiente: el registro puede estar
+# perfecto con el hook borrado, y al reves. Ausente es OBSERVADO (se afirma);
+# ilegible es unknown (no se acusa). Si el JSON no se pudo leer, no hay rutas
+# nombradas y esta afirmacion no dice nada (Core Rule 2).
+reportar_hook_grok() {
+  [ "$MODO" = "grok" ] || return 0
+  [ -n "$hook_paths" ] || return 0
+  local p p_norm
+  # r2/CodeRabbit: la lista viaja separada por SALTOS DE LINEA y se itera con
+  # read — un `for p in $hook_paths` la volveria a partir en los espacios y
+  # una ruta 'C:/Users/John Doe/...' daria falsos 'NO existe'.
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    # La forma medida del command lleva la ruta con barras normales; una forma
+    # Windows con backslashes se normaliza para poder mirarla desde bash.
+    p_norm="$(printf '%s' "$p" | sed 's|\\|/|g')"
+    if [ ! -e "$p_norm" ]; then
+      reportar "[summonaikit] HOOK DE GROK: el JSON nombra $p y NO existe."
+      reportar "              La cadena es JSON -> hook: el registro puede estar perfecto y el hook no correr."
+      reportar "              Afirmacion separada del registro a proposito."
+      continue
+    fi
+    if [ ! -f "$p_norm" ] || [ ! -r "$p_norm" ]; then
+      reportar "[summonaikit] HOOK DE GROK: unknown — $p existe pero no se pudo leer."
+      reportar "              No se afirma que le falte el marcador: no se pudo mirar."
+      continue
+    fi
+    if ! sed -n '2p' "$p_norm" | grep -Eq '^# SAIKIT-CLAUDE-OWNED summonaikit-claude [^[:space:]]+$'; then
+      reportar "[summonaikit] HOOK DE GROK: $p no lleva el marcador de propiedad en la linea 2."
+      reportar "              Un hook que el instalador no reconoce como suyo no se repara ni se quita:"
+      reportar "              revisarlo, y si es de otro, no instalar encima."
+    fi
+  done <<GROK_HOOK_PATHS
+$hook_paths
+GROK_HOOK_PATHS
+  return 0
+}
+
 # Task 5.4 (modo zcode): los hooks de archivo no corren sin hooks.enabled:true.
 reportar_enabled_zcode() {
   reportar "[summonaikit] REGISTRO DEL HOOK: hooks.enabled no es true en el user-config de zcode."
@@ -389,6 +496,7 @@ if [ "${leidos:-0}" = "0" ]; then
   [ -n "$ilegibles" ] && reportar "              ilegible(s): $ilegibles"
   reportar "              No se afirma que el registro falte: no se pudo mirar."
   reportar_wrapper_codex
+  reportar_hook_grok
   exit 0
 fi
 
@@ -402,6 +510,7 @@ if [ -z "$faltantes" ]; then
   reportar_matcher
   reportar_session_rules
   reportar_wrapper_codex
+  reportar_hook_grok
   exit 0
 fi
 
@@ -415,6 +524,7 @@ if [ -n "$ilegibles" ]; then
   reportar "              No se afirma que el gate deje de correr: esa parte no se pudo mirar."
   reportar "              revisar: $SETTINGS"
   reportar_wrapper_codex
+  reportar_hook_grok
   exit 0
 fi
 
@@ -430,4 +540,5 @@ reportar "              revisar: $SETTINGS"
 reportar_session_rules
 reportar_matcher
 reportar_wrapper_codex
+reportar_hook_grok
 exit 0
