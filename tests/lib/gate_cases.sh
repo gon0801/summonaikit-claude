@@ -2284,6 +2284,8 @@ caso_g3_grok_ceremonia_incompleta_bloquea() {
   _contiene "bloqueo grok con decision:block" "$LAB_OUT" '"decision":"block"'
   _contiene "el motivo nombra al verifier faltante" "$LAB_ERR" 'Missing verifier'
   _contiene "el contrato viaja en el bloqueo (reason, 7.2)" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
+  _contiene "el reason nombra la tool nativa de grok (CR PR #28)" "$LAB_OUT" 'spawn_subagent tool'
+  case "$LAB_OUT" in *'Task tool'*) _mal "el reason grok nombra Task tool, que no existe en Grok (CR PR #28)" ;; esac
 }
 
 # Prueba negativa: SIN TARGET=grok la rama no aplica. Un Stop de cursor con la

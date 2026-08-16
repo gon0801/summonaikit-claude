@@ -54,6 +54,14 @@ if [ -z "$TARGET" ] && [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; the
   TARGET="claude"
 fi
 PHASE="$SUMMONAIKIT_HOOK_PHASE"
+# Task 7.4 r1 (hallazgo CR PR #28): la herramienta de subagentes que el gate
+# NOMBRA en sus mensajes tiene que existir en el host que los lee. En Grok se
+# llama spawn_subagent (medido 7.1); "Task tool" ahi es una instruccion sin
+# objeto y lleva a bloqueos en bucle. El contrato ya declara el "equivalente
+# mas cercano" (linea Delegation rule), pero los mensajes de bloqueo no —
+# unifico por TOOL_HINT.
+TOOL_HINT="the Task tool"
+if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
 # ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
@@ -872,8 +880,8 @@ Waiting on a subagent is not failing:
   where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.
 - That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
-Delegation rule (Claude):
-- Delegate the implement, verify, and review gates to subagents via the Task tool, in this exact sequence:
+Delegation rule:
+- Delegate the implement, verify, and review gates to subagents via $TOOL_HINT, in this exact sequence:
   1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.
 - If your host does not surface those project-level agents in the Task tool, delegate to its
   nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,
@@ -1730,15 +1738,15 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # mismo trade-off que el README ya declara para el gate entero.
     case ",$agents_seen," in
       *",implementer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via the Task tool, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via $TOOL_HINT, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",verifier,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via the Task tool, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via $TOOL_HINT, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     case ",$agents_seen," in
       *",reviewer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
+      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via $TOOL_HINT, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
     esac
     if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
       if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then
