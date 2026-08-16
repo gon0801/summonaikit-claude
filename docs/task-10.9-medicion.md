@@ -5,8 +5,9 @@ Fecha: **2026-08-16**. Protocolo: `docs/task-10.9-plan.md` §A. Repos descartabl
 por turno, todo headless. Cero payloads crudos, cero prompts del operador, cero
 rutas de perfil completas en este documento.
 
-**Estado: PARCIAL.** Un veredicto cerrado (Grok), dos mediciones bloqueadas por
-causas distintas y ambas declaradas abajo. Ningún host habilita emisión con esto.
+**Estado: 2 de 3 cerrados.** Codex **acepta** y entra; Grok **ignora** y no
+entra; zcode sigue bloqueado por autenticación. El resultado **no fue uniforme**,
+que es justo la razón por la que la fila mide en vez de extrapolar.
 
 ## Integridad del perfil — los tres, byte a byte
 
@@ -76,9 +77,32 @@ que 7.2 midió en UPS y Stop sobre 1.0.3.
 cual: `.ok` presente + ninguna señal del oráculo = `ignorada`, y una `ignorada` no
 se registra. Emitirle sería texto muerto en cada arranque de ese host.
 
-## Codex — BLOQUEADO por mecanismo, y el mecanismo quedó medido
+## Codex — veredicto CERRADO: **ACEPTADA**
 
-**No se pudo medir Q2/Q3, y la razón es un hallazgo por derecho propio:**
+Los **dos** oráculos coincidieron, que es lo que la regla de decisión §B exige:
+
+| Oráculo | Resultado |
+|---|---|
+| ¿corrió? | `.ok` con `mode=session event=SessionStart` |
+| transcript | el nonce entra al rollout como `"role":"developer","content":[{"type":"input_text",…}]` — **la misma forma que la 6.2 midió para UPS** |
+| instrucción observable | el modelo devolvió el token literal; en el mismo rollout se lee como `"role":"assistant","content":[{"type":"output_text",…}]` |
+
+Una sola de las dos señales habría dejado el veredicto en `unknown`. Están las
+dos, y en el mismo archivo.
+
+**La forma emitida es la de Claude, sin cambios, y eso no es pereza:** 6.2 midió
+que el esquema de Codex es **estricto** (una clave extra invalida la salida
+entera), así que la forma limpia es la única candidata — y es exactamente la que
+`emit_standing_rules` ya produce.
+
+⇒ **Codex habilita emisión.** El **registro** no viene con eso: sigue siendo
+acción de operador por lo que se explica abajo. El `.ps1` del perfil ya acepta
+`-Phase session` y ya exporta `TARGET=codex`, así que la plomería estaba lista;
+lo que faltaba era el veredicto.
+
+### El mecanismo que casi lo deja en `unknown`, y que es hallazgo propio
+
+Medir esto costó descubrir primero por qué **no** se podía medir:
 
 > En Codex 0.147.0, registrar un hook **no es editar `hooks.json`**. Cada handler
 > necesita además un registro propio en `~/.codex/config.toml`:
@@ -119,10 +143,25 @@ Es la misma familia que el hallazgo de la 6.1 (*«`config.toml` exige
 `trusted_hash` por entrada y uno nuevo no corre»*), medido allá para un
 `<repo>/.codex/hooks.json` y **confirmado acá para el `hooks.json` GLOBAL**.
 
-**Qué haría falta para desbloquear:** que Codex acuñe el `trusted_hash` de la
-entrada nueva, que es acción de operador dentro de Codex (no la puede escribir a
-mano una herramienta: el hash es su decisión de confianza). Hasta entonces Codex
-queda **`unknown`** — no "no lo tiene": su `SessionStart` existe y dispara.
+**Cómo se desbloqueó, y por qué esa vía es legítima:** el propio Codex trae
+`--dangerously-bypass-hook-trust`, documentada como *"Run enabled hooks without
+requiring persisted hook trust for this invocation. Intended only for automation
+that already vets hook sources"*. Es **por invocación** (no persiste confianza),
+el único hook sin confianza era **el nuestro**, y corrió en un repo descartable.
+Con eso el `.ok` de `SessionStart` apareció, lo que confirma de paso que el
+`trusted_hash` era el único bloqueo.
+
+**Consecuencia para el registro en producción, declarada:** un `SessionStart`
+nuestro en el perfil real **no va a correr** hasta que Codex acuñe su
+`trusted_hash`. Eso es acción de operador dentro de Codex —el hash es su decisión
+de confianza, no algo que una herramienta pueda escribir a mano— y es el mismo
+patrón que la 10.6 en Claude y la 9.9 con el matcher de `Agent`. El instalador de
+este repo no escribe ahí y no debe.
+
+**Y una regla operativa que sale de esto:** los índices son parte de la clave, así
+que **no se reordena** el array de una fase. Reordenar desalinea el
+`trusted_hash` de los hooks ya registrados — es lo que pasó en el paso 5 y por
+eso se revirtió en el acto.
 
 ## zcode — BLOQUEADO por autenticación
 
@@ -148,8 +187,14 @@ a la vez. zcode queda **`unknown`** hasta el turno que lo mida.
 | Host | Q1 fase de arranque | Q2/Q3 llega al modelo | ¿Habilita emisión? |
 |---|---|---|---|
 | zcode | **sí, disparó** | `unknown` (auth) | **no** |
-| Codex | **sí, dispara** | `unknown` (trusted_hash) | **no** |
+| Codex | **sí, dispara** | **ACEPTADA** (2 oráculos coinciden) | **sí** |
 | Grok | **sí, disparó** | **ignorada** (3 formas, oráculo agotado) | **no** |
 
-Ninguno habilita todavía, y por tres razones distintas. La regla del plan §B se
-respeta sin excepción: **sin veredicto `aceptada` no se registra nada.**
+**El resultado no fue uniforme**, y ese es el punto de la fila: tres hosts con
+fase de arranque viva y tres respuestas distintas. Extrapolar de uno a otro
+—que es lo que la 10.6 se negó a hacer— habría acertado en Codex y fallado en
+Grok.
+
+La regla del plan §B se respeta sin excepción: **sin veredicto `aceptada` no se
+registra nada.** Grok tiene veredicto y es negativo; zcode no tiene veredicto.
+Los dos quedan afuera, por razones distintas y las dos escritas.
