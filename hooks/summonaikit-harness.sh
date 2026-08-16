@@ -1101,6 +1101,21 @@ SAIKIT_TASK_NOTIFICATION_RE='^[[:space:]]*<task-notification>'
 # Laxa: solo se usa para NO DESARMAR (nunca para saltear el armado), como red
 # por si el host antepusiera algo a la marca y la estricta no matcheara.
 SAIKIT_TASK_NOTIFICATION_LAXA_RE='<task-notification>'
+SAIKIT_TASK_NOTIFICATION_CIERRE_RE='</task-notification>'
+
+# La forma laxa exige las DOS marcas, apertura y cierre. Motivo MEDIDO (PR #30,
+# hallazgo de greptile que quedo a medias hasta esta correccion): con solo la
+# apertura, un prompt HUMANO sin sentinel que apenas MENCIONA la marca dejaba
+# vivo el estado armado anterior, y el Stop gate le exigia recibo a un turno que
+# nadie pidio -- el sintoma A4 por otra puerta. Verificado en el laboratorio
+# antes de corregir: el estado sobrevivia. La marca de cierre discrimina igual de
+# bien que la de apertura (5/5 notificaciones reales, 0/41 turnos humanos) y una
+# mencion casual no la lleva. Atado por
+# caso_g1_mencion_humana_sin_sentinel_si_desarma.
+parece_notificacion_laxa() {
+  printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_LAXA_RE" || return 1
+  printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_CIERRE_RE"
+}
 
 start_harness() {
   # Task 8.1 (C1+C2): el prompt se lee con el lector top-level DECODIFICADO —
@@ -1176,7 +1191,7 @@ start_harness() {
     # aparece un host donde no valga, se mide y se acota por host.
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ] \
        && [ -n "$prompt_text" ] \
-       && ! printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_LAXA_RE"; then
+       && ! parece_notificacion_laxa "$prompt_text"; then
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
       podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
