@@ -1000,10 +1000,25 @@ HARNESS_CONTEXT
 #
 # Cada linea lleva un numero medido atras. Sin numero no entra: este texto se
 # paga en CADA sesion de CADA repo, con el mismo criterio que un CLAUDE.md.
+# Task 10.16: la regla 1 nombra el LUGAR, no solo la frecuencia. El texto
+# anterior decia "una corrida por tarea, al final" y se cumplio al pie de la
+# letra en tres tareas seguidas (10.10, 10.8 y el paquete A) -- las tres en
+# local. El diagnostico ya estaba ESCRITO en
+# docs/task-10.4-datapoint-2026-08-15.md desde la primera, y se repitio igual:
+# el agente cumplia la regla literalmente y se quedaba tranquilo. Medido en la
+# maquina que sufrio el problema: crear un proceso cuesta 56 ms y una
+# invocacion del hook 658 ms; la misma bateria son ~10 min en local y 2m58s en
+# el CI de Linux. La mencion va CONDICIONADA ("si el repo tiene CI") porque el
+# kit corre en repos que pueden no tenerlo.
+#
+# Contraste deliberado con la Task 10.11, que decidio NO construir un candado
+# porque el texto alcanzaba: aca el texto FALLO tres veces y la correccion
+# sigue siendo texto -- porque lo que fallo fue que estaba INCOMPLETO, no que
+# se ignorara. Atado por caso_g1_reglas_nombran_donde_correr_la_bateria.
 standing_rules() {
   cat <<'STANDING_RULES'
 SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn is armed with -saikit)
-- Run the FULL test battery ONCE per task, at the end. Do red/green on the single test file you are changing, never on the whole suite.
+- Run the FULL test battery ONCE per task, at the end, and run it WHERE it is cheapest: if the repo has CI, push a branch and read the CI result instead of running the battery on this machine. Locally, red/green ONLY the single test file you are changing, never the whole suite. Saying "once per task" without saying where is not enough: measured on a Windows machine, the same battery took ~10 min locally and 2m58s in Linux CI, and three tasks in a row paid the local price while technically obeying the rule.
 - Do NOT sit blocked waiting on a background job. Start it, keep doing other work; you are notified when it finishes.
 - Before waiting on an external reviewer or CI, check whether it ALREADY finished instead of re-polling in a loop.
 STANDING_RULES
