@@ -47,10 +47,10 @@ headless** (`grok --always-approve --prompt-file`):
    `implementer` exitoso + eventos internos del hijo;
 3. turno pelado (sin sentinel).
 
-**22 payloads** (44 archivos con sus `.env`): 8 `user_prompt_submit` (wrappeado
-el del usuario, pelado el del subagente), 20 `post_tool_use` en los 3 matchers
-(write, run_terminal_command ok y exit 1, spawn_subagent, read_file interno),
-2 `post_tool_use_failure`, 12 `stop` (pares `end_turn`/`shutdown`), 2
+**22 payloads** (44 archivos: cada uno con su `.env`): 4 `user_prompt_submit`
+(wrappeado el del usuario, pelado el del subagente), 10 `post_tool_use` en los
+3 matchers (write, run_terminal_command ok y exit 1, spawn_subagent, read_file
+interno), 1 `post_tool_use_failure`, 6 `stop` (pares `end_turn`/`shutdown`), 1
 `subagent_start`. Los dumps `.env` confirman `GROK_HOOK_EVENT`,
 `GROK_SESSION_ID`, `GROK_WORKSPACE_ROOT`, `CLAUDE_PROJECT_DIR`,
 `SUMMONAIKIT_HOOK_TARGET=grok` y `CLAUDECODE` ausente.
@@ -59,7 +59,8 @@ el del usuario, pelado el del subagente), 20 `post_tool_use` en los 3 matchers
 sentinel dentro de `<user_query>`, `toolResult` con `exit_code` NUMERO, Stop
 `end_turn` con `lastAssistantMessage` vs `shutdown` sin él, rol por tres
 canales). Ninguna premisa cayó. **Un dato NUEVO** que resuelve el `unknown` de
-7.1: `PostToolUseFailure` SÍ disparó (2 eventos) — con un campo `error` y SIN
+7.1: `PostToolUseFailure` SÍ disparó (1 evento en esta captura) — con un campo
+`error` y SIN
 `toolResult`, sobre el despacho `spawn_subagent` con tipo desconocido. Es
 decir: PTUF = falla de runtime/despacho del tool; los errores de dominio
 (exit≠0, FileNotFound, NoMatchesFound) siguen llegando como `post_tool_use`
