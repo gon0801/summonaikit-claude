@@ -26,8 +26,9 @@
 #
 #   2) --instalar <repo> / --quitar <repo>: registrar/desregistrar el probe.
 #      Por defecto (--host zcode) en el USER-CONFIG de zcode
-#      (~/.zcode/cli/config.json). Append quirurgico de DOS entradas
-#      (UserPromptSubmit + Stop), idempotentes, con backup. No toca 5.1.
+#      (~/.zcode/cli/config.json). Append quirurgico de TRES entradas
+#      (UserPromptSubmit + Stop + SessionStart, esta ultima Task 10.9),
+#      idempotentes, con backup. No toca 5.1.
 #      Con --host grok (Task 7.2): JSON PROPIO en <repo>/.grok/hooks/
 #      saikit-probe.json — Grok corre hooks de proyecto con el repo en
 #      trusted_folders.toml (medido en 7.1). NADA global, NADA de zcode.
@@ -40,6 +41,11 @@
 #      <repo>/.codex/hooks.json — config.toml exige trusted_hash por entrada y
 #      uno nuevo no corre (6.1), asi que mediria cero y lo leeriamos como
 #      "el probe fallo". El destino tiene que ser la RAIZ de un repo git.
+#      Task 10.9: con --registrar-arranque ADEMAS appendea UN grupo SessionStart
+#      a ~/.codex/hooks.json (con backup). Es la unica via para medir la fase de
+#      arranque en Codex: el shim solo se despacha donde el .ps1 ya esta
+#      registrado, y ahi no lo esta. El alta pide la flag; la BAJA (--quitar) la
+#      saca SIEMPRE, sin flag, para no dejar huerfanos en el perfil real.
 #
 # Modo hook con --host codex:
 #   - los literales de evento son los MISMOS que Claude/zcode (6.1 midio clave
@@ -73,6 +79,9 @@
 #   budget   Stop               {"continue":false,"stopReason":"PROBE-BUDGET-<nonce>"}          0
 #   notice   Stop               {"systemMessage":"PROBE-NOTICE-<nonce>"}                        0
 #   exit2    Stop               (vacio) + stderr "PROBE-EXIT2-<nonce>"                          2
+#   session       SessionStart  {"hookSpecificOutput":{"hookEventName":"SessionStart",...}}      0   (Task 10.9)
+#   session_snake SessionStart  igual con "hookEventName":"session_start"                        0   (Task 10.9)
+#   session_top   SessionStart  {"additionalContext":"PROBE-SESSTOP-<nonce> ..."} top-level      0   (Task 10.9)
 #   empty    (control)          (vacio)                                                         0
 #   basura/ausente              (vacio)                                                         0   fail-open
 #
@@ -100,6 +109,7 @@ mode_file=""
 only_cwd=""
 probe_id=""
 host=""
+registrar_arranque="0"
 while [ $# -gt 0 ]; do
   case "$1" in
     --instalar) modo_operacion="instalar"; destino="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
@@ -118,6 +128,9 @@ while [ $# -gt 0 ]; do
            exit 2 ;;
       esac
       shift 2 ;;
+    # Task 10.9: alta EXPLICITA del registro de arranque en codex. Sin valor: es
+    # un booleano. Solo tiene efecto con --instalar --host codex.
+    --registrar-arranque) registrar_arranque="1"; shift ;;
     --mode)     mode_flag="${2:-}";        [ $# -ge 2 ] && shift 2 || shift ;;
     --mode-file) mode_file="${2:-}";       [ $# -ge 2 ] && shift 2 || shift ;;
     --only-cwd) only_cwd="${2:-}";         [ $# -ge 2 ] && shift 2 || shift ;;
@@ -211,12 +224,16 @@ if [ -z "$modo_operacion" ]; then
   # user_prompt_submit / stop. zcode manda UserPromptSubmit / Stop.
   ev_ups="UserPromptSubmit"
   ev_stop="Stop"
+  # Task 10.9: la fase de ARRANQUE, que ningun modo previo ejercitaba. Sigue la
+  # misma tabla por host que ev_ups/ev_stop — Grok manda el VALOR en snake.
+  ev_session="SessionStart"
   reason=""
   ronda=""
   stop_active=""
   if [ "$host" = "grok" ]; then
     ev_ups="user_prompt_submit"
     ev_stop="stop"
+    ev_session="session_start"
     # reason del payload (DoD (2): distinguir end_turn de shutdown). Solo se
     # extrae en grok: en zcode no se midio y el .ok queda byte a byte igual.
     # Hallazgo 3 (ciclo de revision 1): grep -o | head -1 puede leer un
@@ -291,6 +308,7 @@ if [ -z "$modo_operacion" ]; then
   case "$mode" in
     context|extra)        [ "$evento" = "$ev_ups" ] && ok="1" ;;
     block0|block2|budget|notice|exit2) [ "$evento" = "$ev_stop" ] && ok="1" ;;
+    session|session_snake|session_top) [ "$evento" = "$ev_session" ] && ok="1" ;;
     empty)                ok="1" ;;
     *)                    ok="0" ;;
   esac
@@ -404,6 +422,33 @@ if [ -z "$modo_operacion" ]; then
         printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"PROBE-EXTRA-%s"},"saikitProbe":true}\n' "$nonce"
         exit 0
       fi ;;
+    # Task 10.9 — las tres formas de la fase de arranque. El texto lleva una
+    # INSTRUCCION observable a proposito: el transcript dice si el host inyecto y
+    # el modelo obedeciendo dice si le llego; un veredicto necesita las dos, y
+    # declarar `ignored` sin el oraculo es el hallazgo 5 del cross-review de 7.2.
+    session)
+      if [ "$evento" = "$ev_session" ]; then
+        printf 'PROBE mode=session event=%s exit=0\n' "$evento" >&2
+        printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROBE-SESSION-%s reply with the literal token PROBE-SESSION-%s in your answer"}}\n' "$nonce" "$nonce"
+        exit 0
+      fi ;;
+    # El literal CamelCase de arriba es el que emite el hook vivo (10.6). Este
+    # modo prueba la otra mitad: Grok manda el VALOR snake en el PAYLOAD, y hay
+    # que descartar que tambien lo exija en la SALIDA antes de culpar al canal.
+    session_snake)
+      if [ "$evento" = "$ev_session" ]; then
+        printf 'PROBE mode=session_snake event=%s exit=0\n' "$evento" >&2
+        printf '{"hookSpecificOutput":{"hookEventName":"session_start","additionalContext":"PROBE-SESSNAKE-%s reply with the literal token PROBE-SESSNAKE-%s in your answer"}}\n' "$nonce" "$nonce"
+        exit 0
+      fi ;;
+    # Variante oraculo (7.2 C/D): sin envoltorio. Separa "el canal no existe" de
+    # "el envoltorio no es el que este host acepta".
+    session_top)
+      if [ "$evento" = "$ev_session" ]; then
+        printf 'PROBE mode=session_top event=%s exit=0\n' "$evento" >&2
+        printf '{"additionalContext":"PROBE-SESSTOP-%s reply with the literal token PROBE-SESSTOP-%s in your answer"}\n' "$nonce" "$nonce"
+        exit 0
+      fi ;;
     block0)
       if [ "$evento" = "$ev_stop" ]; then
         printf 'PROBE mode=block0 event=%s exit=0\n' "$evento" >&2
@@ -478,8 +523,15 @@ probe="$aqui/probe-zcode-output.sh"
 # ============================ filtros jq para el user-config (idempotentes) ===
 # ours/has_probe por ENTRADA (no por conteo): si UPS tiene el probe y Stop no,
 # agrega solo Stop. ours510 no se toca: --quitar saca solo saikit-probe-id 5.2,
-# respeta 5.1, SessionStart y tokentracker. 5[.]2 (punto literal) para no mezclar
+# respeta 5.1 y tokentracker. 5[.]2 (punto literal) para no mezclar
 # escapes de bash y jq.
+#
+# Task 10.9: SessionStart pasa de "vecino ajeno intocable" a TERCERA fase del
+# probe — es la fase que 10.9 viene a medir. Las entradas AJENAS de esa fase
+# siguen intactas (el filtro es por marker, no por fase). INSTALL y QUITAR se
+# tocan SIEMPRE juntos: agregar una fase al alta sin agregarla a la baja deja
+# una entrada huerfana en el config REAL del operador, que es su config de
+# verdad y no un sandbox. Atado por caso_quitar_saca_las_tres_fases.
 JQ_PROBE_INSTALL='
 def has_probe(ev):
   any( (.hooks.events[ev] // [])[] ;
@@ -491,6 +543,7 @@ def add_unless(ev; cmd):
   end;
 add_unless("UserPromptSubmit"; $cmd)
 | add_unless("Stop"; $cmd)
+| add_unless("SessionStart"; $cmd)
 '
 JQ_PROBE_QUITAR='
 def ours: any((.hooks // [])[]; ((.command // "") | test("saikit-probe-id 5[.]2")));
@@ -498,6 +551,7 @@ def strip(arr): ((arr // []) | map(select(ours | not)));
 if ((.hooks // {}) | has("events")) then
   .hooks.events.UserPromptSubmit = strip(.hooks.events.UserPromptSubmit)
   | .hooks.events.Stop = strip(.hooks.events.Stop)
+  | .hooks.events.SessionStart = strip(.hooks.events.SessionStart)
 else . end
 '
 
@@ -553,7 +607,8 @@ probe_instalar() {
     echo "                   El probe NO va a correr hasta arreglarlo." >&2
   fi
 
-  # 4) append idempotente de 2 entradas (UPS + Stop). jq solo escribe JSON
+  # 4) append idempotente de 3 entradas (UPS + Stop + SessionStart). jq solo
+  # escribe JSON
   # valido; si falla, no se hace mv y el vivo queda intacto (temp en mismo dir).
   cmd="$(zcode_probe_cmd "$bash_win")"
   tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
@@ -570,7 +625,7 @@ probe_instalar() {
     echo "probe-zcode-output: no pude escribir $user_config" >&2; exit 2; }
 
   echo "Probe registrado en el user-config: $user_config"
-  echo "  2 entradas con --saikit-probe-id 5.2: UserPromptSubmit + Stop (sin matcher)."
+  echo "  3 entradas con --saikit-probe-id 5.2: UserPromptSubmit + Stop + SessionStart (sin matcher)."
   echo "  Repo descartable: $destino_real (probe-ran/ ahi)"
   echo "  Mode-file: $destino_real/probe-mode.txt (ahora: empty)"
   echo "  Backup: $bak"
@@ -601,7 +656,7 @@ probe_quitar() {
   n_despues="$(grep -c 'saikit-probe-id 5\.2' "$user_config" 2>/dev/null || true)"
   rm -f "$marca"
   echo "Quitadas entradas del probe (saikit-probe-id 5.2) de $user_config"
-  echo "  antes: $n_antes   despues: $n_despues   (5.1, SessionStart y tokentracker quedan intactos)"
+  echo "  antes: $n_antes   despues: $n_despues   (5.1, entradas AJENAS de SessionStart y tokentracker quedan intactas)"
 }
 
 # ====================================================== Task 7.2: grok ======
@@ -683,6 +738,9 @@ grok_probe_instalar() {
     ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "$cmd", "timeout": 30 } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "$cmd", "timeout": 30 } ] }
     ]
   }
 }
@@ -699,7 +757,7 @@ JSON
   printf 'owner=tools/probe-zcode-output.sh\nhost=grok\ntask=7.2\ncwd=%s\ninstalled=%s\n' \
     "$destino_real" "$(date +%Y%m%d-%H%M%S)" > "$marca" || exit 2
   echo "Probe grok registrado en $json"
-  echo "  2 entradas con --saikit-probe-id 7.2: UserPromptSubmit + Stop (sin matcher)."
+  echo "  3 entradas con --saikit-probe-id 7.2: UserPromptSubmit + Stop + SessionStart (sin matcher)."
   echo "  Repo descartable: $destino_real (probe-ran/ ahi; mode-file probe-mode.txt, ahora: empty)"
   echo "  Falta el trust del folder (entrada en ~/.grok/trusted_folders.toml) y un turno por modo."
 }
@@ -916,11 +974,133 @@ codex_probe_instalar() {
     echo "                   La marca queda: --quitar limpia el estado." >&2; exit 2; }
   chmod +x "$shim" 2>/dev/null || true
 
+  # Task 10.9: la fase de arranque, solo si se pidio explicito. Va DESPUES de que
+  # el shim quedo publicado: si el append al perfil falla, el estado del repo
+  # descartable ya es coherente y --quitar lo limpia entero.
+  if [ "$registrar_arranque" = "1" ]; then codex_arranque_registrar; fi
+
   echo "Shim del probe en $shim"
-  echo "  ~/.codex/hooks.json y ~/.codex/hooks/ NO se tocaron: el .ps1 ya prefiere esta ruta."
+  if [ "$registrar_arranque" = "1" ]; then
+    echo "  ~/.codex/hooks/ NO se toco; hooks.json SI (1 grupo SessionStart, ver arriba)."
+  else
+    echo "  ~/.codex/hooks.json y ~/.codex/hooks/ NO se tocaron: el .ps1 ya prefiere esta ruta."
+  fi
   echo "  OJO: mientras el shim este puesto, el harness REAL no corre en este repo."
   echo "  Repo descartable: $destino_real (probe-ran/ ahi; mode-file probe-mode.txt, ahora: empty)"
   echo "  Sesion NUEVA de Codex en $destino_real; un modo por turno (pisa probe-mode.txt)."
+}
+
+# ============ Task 10.9: la fase de ARRANQUE en codex ========================
+# Por que hace falta tocar ~/.codex/hooks.json y no alcanza el shim de la 6.2:
+# el shim solo se despacha donde nuestro .ps1 YA esta registrado (UPS,
+# PostToolUse, Stop). En SessionStart no hay ninguna entrada nuestra que
+# delegue, y un <repo>/.codex/hooks.json nuevo no corre (6.1: config.toml exige
+# trusted_hash por entrada). Sin este append, la fase de arranque de Codex
+# mediria cero y lo leeriamos como "el probe fallo".
+#
+# La forma del command sale de lo que Codex YA ejecuta en esa misma fase en esta
+# maquina: uno de los dos grupos ajenos de SessionStart invoca `bash <ruta
+# POSIX>`. O sea que no hay que inventar wrapper de PowerShell — la forma esta
+# medida en produccion, en el evento que nos interesa.
+CODEX_ARRANQUE_ID="10.9"
+codex_hooks_json() { printf '%s' "${SAIKIT_CODEX_HOOKS_JSON:-$HOME/.codex/hooks.json}"; }
+
+codex_arranque_cmd() {
+  printf 'bash "%s" --saikit-probe-id %s --host codex --only-cwd "%s" --mode-file "%s/probe-mode.txt"' \
+    "$probe" "$CODEX_ARRANQUE_ID" "$destino_real" "$destino_real"
+}
+
+# Alta EXPLICITA (--registrar-arranque). La 6.2 dejo el invariante "--instalar
+# --host codex no toca ~/.codex" y ese invariante sigue valiendo para el camino
+# por defecto: escribir el config del operador se pide, no se hereda.
+codex_arranque_registrar() {
+  command -v jq >/dev/null 2>&1 || {
+    echo "probe-zcode-output: --registrar-arranque requiere jq (no encontrado)" >&2; exit 2; }
+  local hj hj_dir ts bak cmd tmp_new
+  # Este string se PERSISTE en el config del operador y Codex lo ejecuta en cada
+  # arranque, asi que una ruta con `"` o `$( )` seria una carga util viva en el
+  # perfil REAL (no en un repo descartable, que es donde escribe el shim).
+  #
+  # DECLARADO, precedente de la Task 2.2: esta llamada es HOY inalcanzable por su
+  # cuenta — codex_probe_instalar corre la misma guarda sobre los mismos dos
+  # valores antes de llegar aca, asi que ninguna mutacion la mata y ningun caso
+  # la acredita. Se conserva igual, y la razon no es simetria estetica: quitarla
+  # ata la seguridad de lo que se escribe en ~/.codex a que un llamador ajeno
+  # siga validando. Afirmacion sostenida por LECTURA, no por medicion.
+  codex_rechaza_metacaracteres "$destino_real" "$probe"
+  hj="$(codex_hooks_json)"
+  [ -f "$hj" ] || {
+    echo "probe-zcode-output: no existe $hj." >&2
+    echo "                   No lo creo de cero: el operador ya tiene el suyo." >&2
+    exit 2; }
+  jq -e . "$hj" >/dev/null 2>&1 || {
+    echo "probe-zcode-output: $hj no es JSON valido; no lo toco." >&2; exit 2; }
+
+  hj_dir="$(cd "$(dirname "$hj")" 2>/dev/null && pwd -P)"
+  [ -n "$hj_dir" ] || hj_dir="$(dirname "$hj")"
+  mkdir -p "$hj_dir/saikit-backups" || {
+    echo "probe-zcode-output: no pude crear $hj_dir/saikit-backups" >&2; exit 2; }
+  ts="$(date +%Y%m%d-%H%M%S)"
+  bak="$hj_dir/saikit-backups/hooks.json.$ts.bak"
+  cp "$hj" "$bak" || { echo "probe-zcode-output: fallo el backup de hooks.json" >&2; exit 2; }
+  cmp -s "$hj" "$bak" || {
+    echo "probe-zcode-output: el backup no calza con el original; no toco $hj" >&2; exit 2; }
+
+  # Idempotente POR MARKER, no por conteo: si ya hay un grupo nuestro, no agrega.
+  # Los grupos ajenos de SessionStart no se leen ni se tocan.
+  cmd="$(codex_arranque_cmd)"
+  tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
+  if ! jq --arg cmd "$cmd" --arg id "$CODEX_ARRANQUE_ID" '
+    def marker: "saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)";
+    def es_nuestro: any((.hooks // [])[]; ((.command // "") | test(marker)));
+    if any((.hooks.SessionStart // [])[]; es_nuestro) then .
+    else .hooks.SessionStart = ((.hooks.SessionStart // []) +
+      [ { hooks: [ { type: "command", command: $cmd, timeout: 30 } ] } ])
+    end' "$hj" > "$tmp_new"; then
+    echo "probe-zcode-output: jq fallo al appendear; $hj queda intacto" >&2
+    rm -f "$tmp_new"; exit 2
+  fi
+  if ! jq -e . "$tmp_new" >/dev/null 2>&1; then
+    echo "probe-zcode-output: el temp no es JSON valido; $hj queda intacto" >&2
+    rm -f "$tmp_new"; exit 2
+  fi
+  mv -f "$tmp_new" "$hj" || {
+    echo "probe-zcode-output: no pude escribir $hj" >&2; rm -f "$tmp_new"; exit 2; }
+  echo "  Arranque codex REGISTRADO en $hj (1 grupo SessionStart sin matcher, marker $CODEX_ARRANQUE_ID)."
+  echo "  Backup: $bak"
+}
+
+# Baja INCONDICIONAL: no pide la flag. Si el alta es explicita y la baja tambien,
+# olvidarse --registrar-arranque al quitar deja una entrada huerfana en el config
+# REAL del operador que ninguna herramienta saca. Es la misma leccion de la
+# asimetria de zcode, aplicada al reves a proposito.
+codex_arranque_quitar() {
+  local hj tmp_new n_antes n_desp
+  hj="$(codex_hooks_json)"
+  [ -f "$hj" ] || return 0
+  command -v jq >/dev/null 2>&1 || {
+    echo "probe-zcode-output: AVISO: sin jq no puedo limpiar $hj (grupo $CODEX_ARRANQUE_ID)" >&2
+    return 0; }
+  jq -e . "$hj" >/dev/null 2>&1 || {
+    echo "probe-zcode-output: AVISO: $hj no parsea; no lo toco (revisar a mano)" >&2
+    return 0; }
+  n_antes="$(jq --arg id "$CODEX_ARRANQUE_ID" '
+    [ (.hooks.SessionStart // [])[]
+      | select(any((.hooks // [])[]; ((.command // "") | test("saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)")))) ] | length' "$hj" 2>/dev/null)"
+  [ "${n_antes:-0}" -gt 0 ] 2>/dev/null || return 0
+  tmp_new="$(mktemp)" || return 0
+  if ! jq --arg id "$CODEX_ARRANQUE_ID" '
+    def marker: "saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)";
+    def es_nuestro: any((.hooks // [])[]; ((.command // "") | test(marker)));
+    .hooks.SessionStart = ((.hooks.SessionStart // []) | map(select(es_nuestro | not)))
+    ' "$hj" > "$tmp_new"; then
+    echo "probe-zcode-output: AVISO: jq fallo al limpiar $hj; queda intacto" >&2
+    rm -f "$tmp_new"; return 0
+  fi
+  jq -e . "$tmp_new" >/dev/null 2>&1 || { rm -f "$tmp_new"; return 0; }
+  mv -f "$tmp_new" "$hj" || { rm -f "$tmp_new"; return 0; }
+  n_desp="$(jq '[ (.hooks.SessionStart // [])[] ] | length' "$hj" 2>/dev/null)"
+  echo "  Arranque codex QUITADO de $hj (quedan $n_desp grupos SessionStart, todos ajenos)."
 }
 
 codex_probe_quitar() {
@@ -943,6 +1123,10 @@ codex_probe_quitar() {
     rm -f "$shim" || { echo "probe-zcode-output: no pude borrar $shim" >&2; exit 2; }
   fi
   rm -f "$marca"
+  # Baja INCONDICIONAL (no mira registrar_arranque): ver el comentario de
+  # codex_arranque_quitar. Si hiciera falta la flag tambien para quitar,
+  # olvidarsela dejaria una entrada viva en el perfil REAL del operador.
+  codex_arranque_quitar
   echo "Quitado el shim del probe codex ($shim) y la marca."
   echo "  probe-mode.txt y probe-ran/ quedan (la evidencia no se borra)."
   echo "  El harness REAL vuelve a correr en este repo."
