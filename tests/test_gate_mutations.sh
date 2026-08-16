@@ -54,6 +54,8 @@ G1|session_sin_reglas|la fase session vuelve a salir muda y las reglas permanent
 G1|session_pisa_gate|la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
 G1|fallback_sin_acotar|el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar
 G1|frontera_izquierda_floja|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
+G1|estado_inmortal|la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre
+G1|barrido_sin_ttl|el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -70,8 +72,11 @@ G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de co
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
-G2|tool_name_desacotado|tool_name se vuelve a leer del payload entero y un eco pytest en tool_response acredita
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
+G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
+G2|credito_por_mencion|la guarda de echo/printf se neutraliza y `echo pytest` vuelve a acreditar verificacion
+G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
@@ -87,6 +92,7 @@ G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
 G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
+G4|walker_sin_resets|el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente
 G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
 G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
 G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
@@ -105,6 +111,7 @@ G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex
 G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
 G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
+G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
 G1|phase_sin_user_prompt_submit|el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a "tool": nunca arma (D4)
 G2|toolresult_veto_quitado|el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)
@@ -183,6 +190,21 @@ mut_fallback_sin_acotar()       { sed 's/if \[ -z "$prompt_text" \] && \[ "$PHAS
 # la misma clase de caracteres — si los mutara a los dos, no se sabria cual caso
 # reacciona a que. Lo atrapa caso_g1_sentinel_con_frontera.
 mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_RE='(^|[^A-Za-z0-9_])-saikit([^A-Za-z0-9_-]|\$)'@"; }
+# Task 9.7 (C13) — una mutacion por MITAD. Las dos caen sobre el mismo caso
+# (caso_g1_estado_no_se_acumula) porque el arreglo solo sirve completo: podar sin
+# barrer deja las sesiones que nunca cerraron, y barrer sin podar deja la del
+# turno actual. Cada mutacion pone roja SU mitad del caso.
+#   estado_inmortal  -> neutraliza el rmdir: vuelve el dir vacio inmortal.
+#   barrido_sin_ttl  -> le saca el filtro de edad al barrido, asi que se lleva
+#                       tambien la hermana FRESCA. Esa es la direccion peligrosa
+#                       (es A4: borrarle el estado a una sesion viva), y por eso
+#                       la mutacion la ataca en vez de solo apagar el barrido.
+mut_estado_inmortal()           { sed 's@rmdir "$STATE_DIR"@true "$STATE_DIR"@'; }
+mut_barrido_sin_ttl()           { sed 's@ -mmin "+$SAIKIT_STATE_TTL_MIN"@@'; }
+# Task 9.6 (C12): saca los dos resets del walker. Con eso en_text/en_assistant
+# quedan en 1 para siempre y un valor top-level posterior a `message` vuelve a
+# contarse como texto del asistente — lo atrapa caso_g4_fuga_top_level_no_cierra.
+mut_walker_sin_resets()         { sed 's@if (depth < 4) en_text = 0@if (0) en_text = 0@; s@if (depth < 2) en_assistant = 0@if (0) en_assistant = 0@'; }
 
 # Nota (actualizada al aterrizar 9.4): el fallback SI tiene mutacion ahora
 # (mut_fallback_sin_acotar, arriba), pero cubre el acotamiento a `session`, no lo
@@ -192,6 +214,29 @@ mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_
 # porque ahi cursor arma de verdad. Queda atado por
 # caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas, que fija el
 # comportamiento de HOY y se pondra rojo el dia que alguien lo cambie.
+
+# Task 9.1 (C6) — una mutacion por via, cada una acreditada a su caso.
+#   falla_dotnet_quitada -> saca `failed` de la via B del CI; lo atrapa
+#     caso_g2_runner_fallido_dotnet_no_marca.
+#   falla_gradle_quitada -> saca los dos literales de gradle del CS; lo atrapa
+#     caso_g2_runner_fallido_gradle_no_marca.
+mut_falla_dotnet_quitada()   { sed 's@(failures?|errors?|failed)\[=:\]@(failures?|errors?)[=:]@'; }
+mut_falla_gradle_quitada()   { sed 's@|FAILURE: Build failed|BUILD FAILED@@'; }
+
+# Task 9.2 (C8): neutraliza la guarda del primer token. Con eso `echo pytest`
+# vuelve a acreditar verificacion sin correr nada — lo atrapa
+# caso_g2_runner_en_echo_no_marca.
+mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCHEA_ESTO'@"; }
+
+# CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
+# SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una
+# tool llamada como un runner acredita verificacion con un comando que no corre
+# nada. La atrapa caso_g2_tool_name_runner_con_comando_ajeno_no_marca, que para
+# esto necesita un fixture con el tool_name REAL (no un eco en tool_response).
+# El ancla NO puede llevar `printf '%s'`: sus comillas simples cortan el sed y
+# el `|` siguiente se vuelve una tuberia de shell (medido: `failed: command not
+# found`). Se ancla en la parte sin comillas simples.
+mut_credito_por_tool_name() { sed 's@"$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@"$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper
@@ -214,7 +259,20 @@ mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # marca_verificado y caso_g2_eco_de_command_en_tool_response_no_marca (command);
 # caso_g2_eco_de_tool_name_en_tool_response_no_marca (tool_name).
 mut_command_desacotado()   { sed 's/json_tool_input_string command/json_string_field command/'; }
-mut_tool_name_desacotado() { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
+mut_tool_name_desacotado()   { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
+# RETIRADA (PR #22): `mut_tool_name_desacotado` cambiaba el lector de tool_name
+# por el greedy. Dejo de tener detector cuando el credito de verificacion dejo
+# de mirar `tool_name` — que fue el arreglo de un agujero REAL (una tool MCP
+# llamada como un runner acreditaba sin correr nada). Con el credito fuera, un
+# tool_name greedy ya no cambia nada observable ahi: `combined` incluye $INPUT
+# entero, asi que la deteccion de fallas tampoco se mueve.
+#
+# DONDE SI SIGUE IMPORTANDO que el lector este acotado: la deteccion de
+# edicion del aviso RN (`^(edit|write|...)$` sobre tool_name). Cubrir ESO con
+# un caso vive en la zona de la Task 9.8, que esta tomada por otra sesion — se
+# deja anotado ahi en vez de invadirla. Se retira la mutacion en vez de
+# dejarla de adorno: una que ningun caso puede atrapar convierte la bateria en
+# teatro, que es justo lo que este archivo existe para evitar.
 # Task 9.10: neutraliza las DOS ramas nuevas (verbo shell + invocacion directa)
 # rompiendo el sufijo tests?/run\.sh que comparten — el resto de TEST_RUNNER_RE
 # queda intacto. Lo atrapa caso_g2_runner_bash_run_sh_marca (verde->rojo:
@@ -256,7 +314,10 @@ mut_falla_tsc_quitada()       { sed 's/error TS\[0-9\]/error TS_NUNCA/'; }
 # falla_phpunit_quitada: cambia el separador `[=:]` de vía B por `[Z]` (imposible
 # en `Failures: 1`, que usa `:`). Atrapa caso_g2_runner_fallido_phpunit_no_marca.
 # NO toca vía A (caso_g2_runner_fallido_pytest_summary_no_marca sigue matcheando).
-mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
+# NOTA (9.1): el patron incluye `|failed` porque la via B lo gano al agregar
+# dotnet. Sin actualizarlo, este sed dejaba de aplicar y la mutacion se volvia
+# teatro — lo detecto la suite completa, no el archivo suelto.
+mut_falla_phpunit_quitada()   { sed 's/(failures?|errors?|failed)\[=:\]/(ZZ_NUNCA_ZZ)[Z]/'; }
 # falla_cs_quitada: neutraliza el segundo grep (CS entero) cambiando el nombre
 # de la constante referenciada. Atrapa caso_g2_runner_fallido_cargo_no_marca
 # (tambien haria rojo al go, pero el driver corta en el primero; cargo va antes
@@ -375,6 +436,13 @@ mut_etiqueta_sin_frontera(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|.)/"; }
 # seis etiquetas — lo atrapa caso_g4_cita_del_feedback_no_satisface (ningun
 # otro caso de CASOS_G4 escribe etiquetas entre comillas).
 mut_frontera_acepta_comillas(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|[^[:alpha:]])/"; }
+# Task 9.8 (C14): devuelve el rm del aviso pendiente al elif de todo Stop —
+# la anotacion del flag se reemplaza por el rm directo, asi un Stop que
+# bloquea vuelve a llevarse el aviso ajeno. Lo atrapa
+# caso_g5_stop_fallido_no_borra_aviso_ajeno (su primera mitad). El patron es
+# unico: la comparacion del camino limpio lleva espacios y comillas
+# ("$rn_pendiente_borrable" = "1") y no matchea.
+mut_aviso_se_borra_en_fallo(){ sed 's#rn_pendiente_borrable=1#rm -f "$RN_PENDING_PATH" 2>/dev/null || true#'; }
 # Task 8.3 (C7): quita la alternativa markdown bold entre etiqueta y `:`.
 # Catch: caso_g4_recibo_bold_pasa (el recibo **Label**: vuelve a bloquear).
 mut_etiqueta_sin_bold()    { sed 's/(\\\*\\\*|__)?\[\[:space:\]\]\*:/[[:space:]]*:/'; }
