@@ -50,3 +50,65 @@ era el costo, no el valor.
    deployó el 2026-08-14 y no hubo uso real todavía. Objetivo: ≤ 15 min.
 3. Objetivo full: ≤ 1 h. Con el CI en ~1.5 min y la suite una-vez-por-cambio
    ya en el contrato, la parte mecánica dejó de ser la excusa.
+
+---
+
+# Datapoint 2: carril `fast` — Task 10.10 (2026-08-15)
+
+Primer uso real del carril `-saikit:fast`. Prompt que armó el turno:
+`-saikit:fast implementá la task 10.10 del plan`. Medido con el mismo método de
+gaps por evento sobre el transcript de la sesión, acotado a la ventana de la
+task (15:43:29 → 17:16:00 local).
+
+| Métrica | Valor |
+|---|---|
+| Span | **92.4 min** (objetivo del DoD: ≤ 15 min) |
+| Modelo pensando | 3.6 min — **4%** |
+| Herramientas | 88.9 min — 96% |
+| Llamadas a herramienta | 21 |
+| **Espera pura bloqueado** (`TaskOutput`) | **60.1 min — 68% del tiempo de herramientas** |
+
+Las diez llamadas de más de 1 minuto son 85.3 min, el 96% del tiempo de
+herramientas. Seis de ellas son `TaskOutput` de 10 min clavados: **una sola
+corrida de la batería completa, poleada seis veces**. Las otras cuatro (5.6 a
+6.8 min) son las corridas de red/green del archivo de casos — el trabajo real.
+
+## Qué dice el número (y qué NO dice)
+
+**La ceremonia no es el costo.** Con el modelo pensando 4% del span, no queda
+lugar donde esconder un sobrecosto de ceremonia: el carril `fast` hizo lo que
+prometía — cero subagentes, cero ciclos de revisión extra. Descontando la
+espera de la batería, el trabajo entero (entender la fila, escribir el fixture,
+el caso y la mutación, medir las dos direcciones, corregir dos veces) fue
+**~25 min**. Eso sí está en el orden del objetivo.
+
+**El costo es la batería local, y ya tiene arreglo.** La 10.5 dejó la suite
+corriendo en CI Linux en ~1m32s. Esta task la corrió **local**, donde tarda
+~10 min y además compitió por CPU con la corrida concurrente de la sesión de
+GLM (contención medida: 3×). El objetivo de 15 min no es inalcanzable — es
+inalcanzable *corriendo la batería local y esperándola*.
+
+## Evidencia directa para la fila 10.11
+
+Esta es la primera task ejecutada **después** de que la 10.6 empezara a
+inyectar las reglas permanentes en cada `SessionStart`. De las tres reglas:
+
+- **Regla 1** (batería completa UNA vez por tarea, al final; red/green sobre el
+  archivo que tocás) — **se cumplió**. Hubo una sola corrida completa; las
+  cuatro corridas intermedias fueron del archivo de casos.
+- **Regla 2** (no quedarse bloqueado esperando un job en background) — **se
+  violó**, y esa violación sola es el **65% del reloj de pared**.
+
+O sea: el texto alcanzó para la regla que cambia *qué* corrés, y no alcanzó
+para la que cambia *qué hacés mientras corre*. Ese es exactamente el dato que
+la 10.11 pedía antes de decidir si se construye un candado duro — con la
+lectura extra de que el candado no haría falta si la batería corriera en CI,
+que es donde la 10.5 ya la puso. **Antes de diseñar `PreToolUse`, la palanca
+barata es usar el CI que ya existe.**
+
+## Estado del cierre de la 10.4
+
+1. Task con `-saikit` (full) cronometrada — **sigue pendiente**: necesita que el
+   operador mande un turno armado sin `:fast` (candidata: 10.8).
+2. Task con `-saikit:fast` — **hecha**: 92.4 min, desglosada arriba.
+3. Objetivo full ≤ 1 h: no medido todavía.
