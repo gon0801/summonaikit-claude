@@ -131,6 +131,43 @@ n_jsonl="$(find "$fixtures" -name '*.jsonl' | wc -l | tr -d ' ')"
 [ "$n_json" -ge 40 ] || malo "esperaba decenas de *.json, encontre $n_json"
 [ "$n_jsonl" -ge 10 ] || malo "esperaba varios *.jsonl, encontre $n_jsonl"
 
+# Task 7.6 (hallazgo CodeRabbit r1, PR #31): los hosts emiten UN id por
+# invocacion de tool (medido: Claude/Codex/Grok unicos por paso). Un fixture
+# que reusa el id dentro del mismo escenario describe algo que el host jamas
+# emite, y ademas colapsaria la trazabilidad si un dia el hook deduplica por
+# ahi. El hook de HOY no lo lee -- esta guardia mantiene la fidelidad de la
+# forma para el dia que importe.
+caso "ningun escenario reusa un id de invocacion de tool (toolUseId/tool_use_id)"
+ids_repetidos="$("$python_bin" - "$fixtures" <<'PY'
+import json, pathlib, sys, collections
+raiz = pathlib.Path(sys.argv[1])
+for d in sorted(raiz.rglob("*")):
+    if not d.is_dir():
+        continue
+    pasos = sorted(d.glob("*.json"))
+    if len(pasos) < 2:
+        continue
+    vistos = collections.Counter()
+    for p in pasos:
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue  # su invalidez ya la reporta el caso de arriba
+        if not isinstance(data, dict):
+            continue
+        for k in ("toolUseId", "tool_use_id"):
+            v = data.get(k)
+            if isinstance(v, str) and v:
+                vistos[v] += 1
+    for v, n in vistos.items():
+        if n > 1:
+            print(f"{d}: {v} aparece {n} veces")
+PY
+)"
+if [ -n "$ids_repetidos" ]; then
+  while IFS= read -r l; do malo "$l"; done <<< "$ids_repetidos"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_fixtures_json: FAIL" >&2
   exit 1

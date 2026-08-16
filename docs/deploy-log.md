@@ -636,12 +636,14 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **Vivo vs origin/master:** cmp byte a byte idéntico.
 - **Operador:** Gon (sesión zcode).
 
-## 2026-08-16 — Task 7.6 (línea base grok + staging + PRIMER INSTALL de ~/.grok) — cuarto host en producción
+## 2026-08-16 — Task 7.6 (línea base grok + staging + install de ~/.grok) — VALIDACIÓN PRE-MERGE; el cuarto host queda en producción
 
-- **Contexto**: fila que cierra Phase 7. El install de `~/.grok` se ejecutó
-  DURANTE la task (pre-autorizado por el plan: 7.6 es la fila release); el
-  sync post-merge de AGENTS.md queda como no-op esperado — 7.6 no toca el
-  hook, solo tools/tests/fixtures.
+- **Contexto**: fila que cierra Phase 7. Esta entrada documenta la
+  **validación pre-merge** (instalación y turnos reales ejecutados DURANTE la
+  task, pre-autorizado por el plan: 7.6 es la fila release). El deploy/check
+  post-merge de AGENTS.md queda PENDIENTE del merge del PR #31 y se registra
+  como entrada propia cuando corra — no-op esperado para el hook: 7.6 no toca
+  código del hook, solo tools/tests/fixtures.
 - **`install-hook.sh --host grok`**: destino AUSENTE ⇒ publicado sin backup
   necesario. Hook + `summonaikit.json` (command PowerShell `& "bash.exe"
   "hook"`) bajo `~/.grok/hooks/`; `implementer.md`/`reviewer.md` con
