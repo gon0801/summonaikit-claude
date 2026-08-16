@@ -705,6 +705,21 @@ out="$(timeout 5 bash "$tool" --grok-hooks-dir 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'unknown' || malo "flag sin valor => unknown: $out"
 
+# r2/CodeRabbit: la ruta citada en el command puede tener espacios (un
+# 'C:/Users/John Doe/...' es un HOME real de Windows). Si la extraccion la
+# parte en el espacio, la afirmacion (2) reporta un falso 'NO existe' sobre
+# un hook que SI esta. El fixture cita la ruta ENTRE COMILLAS, como el JSON
+# canonico del instalador.
+caso "grok: hook nombrado bajo una ruta CON ESPACIOS cuenta entera (r2)"
+n_grok_reg=$((n_grok_reg + 1))
+grok_dir="$tmp/grok reg espacios $n_grok_reg"
+mkdir -p "$grok_dir/hooks"
+escribir_hook_grok
+escribir_grok_json "$(grok_cmd_json)" 'Task'
+out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "el hook bajo ruta con espacios existe y lleva marca: silencio, no $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

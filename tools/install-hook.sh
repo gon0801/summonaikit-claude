@@ -309,7 +309,7 @@ zcode_publicar_agente() {
 }
 
 zcode_archivar_agente() {
-  local dest="$1" dir backup_dir sello n backup
+  local dest="$1" backup_dir sello n backup
   dir="$(dirname "$dest")"
   backup_dir="$dir/saikit-backups"
   mkdir -p "$backup_dir" || return 1
@@ -322,8 +322,12 @@ zcode_archivar_agente() {
   done
   cp "$dest" "$backup" || return 1
   cmp -s "$backup" "$dest" || return 1
+  # Task 7.5: expone DONDE quedo el backup para que el rollback de grok pueda
+  # restaurar el estado pre-corrida de un agente reparado en esta corrida.
+  zcode_agent_backup="$backup"
   return 0
 }
+zcode_agent_backup=''
 
 # Valida plantillas y aplica los tres estados. Corre DESPUES de encontrar
 # bash.exe y ANTES de appendear el user-config: si faltan las plantillas
@@ -564,6 +568,10 @@ GROK_JSON_ESTADO=''
 GROK_JSON_BACKUP=''
 GROK_JSON_PUBLICADO=0
 GROK_HOOK_PUBLICADO=0
+# Lo publicado en ESTA corrida, para el rollback (r2/CodeRabbit): un agente
+# que ya se publico cuando otro falla tambien vuelve a su estado pre-corrida.
+GROK_AGENT_DESTS=()
+GROK_AGENT_BACKUPS=()
 
 grok_agents_dir() {
   printf '%s' "${SAIKIT_GROK_AGENTS_DIR:-${HOME:-}/.grok/agents}"
@@ -829,7 +837,7 @@ grok_publicar_json() {
 }
 
 grok_publicar_agentes() {
-  local src dir rol fuente trad dest estado
+  local src dir rol fuente trad dest estado bak
   src="$repo/agents"
   dir="$(grok_agents_dir)"
   for rol in $GROK_AGENT_ROLES; do
@@ -840,6 +848,10 @@ grok_publicar_agentes() {
     case "$estado" in
       AUSENTE)
         grok_escribir_agente "$trad" "$dest" || return 1
+        # Se registra DESPUES de escribir: si la escritura fallo, el archivo
+        # quedo intacto y no hay nada que revertir para este rol.
+        GROK_AGENT_DESTS+=("$dest")
+        GROK_AGENT_BACKUPS+=('')
         decir "[summonaikit] AGENTE GROK INSTALADO: $rol"
         decir "              destino: $dest (frontmatter traducido: sin la clave skills:)"
         ;;
@@ -847,7 +859,10 @@ grok_publicar_agentes() {
         : ;;
       NUESTRO_DISTINTO)
         zcode_archivar_agente "$dest" || return 1
+        bak="$zcode_agent_backup"
         grok_escribir_agente "$trad" "$dest" || return 1
+        GROK_AGENT_DESTS+=("$dest")
+        GROK_AGENT_BACKUPS+=("$bak")
         decir "[summonaikit] AGENTE GROK REPARADO: $rol"
         decir "              destino: $dest"
         ;;
@@ -863,8 +878,22 @@ grok_publicar_agentes() {
 
 # Vuelve atras lo publicado en ESTA corrida (design D1): cada destino vuelve al
 # estado pre-corrida — backup si lo habia, eliminacion si la corrida lo creo.
+# Incluye los AGENTES ya publicados cuando uno posterior falla (r2/CodeRabbit:
+# dejarlos seria un estado a medio cablear que ningun flujo vuelve a mirar).
 grok_rollback() {
   decir "[summonaikit] instalador: fallo publicar $1 — ROLLBACK de lo publicado en esta corrida."
+  local i dest bak
+  i=0
+  while [ "$i" -lt "${#GROK_AGENT_DESTS[@]}" ]; do
+    dest="${GROK_AGENT_DESTS[$i]}"
+    bak="${GROK_AGENT_BACKUPS[$i]}"
+    if [ -n "$bak" ] && [ -f "$bak" ]; then
+      cp "$bak" "$dest" && decir "              agente restaurado desde $bak"
+    else
+      rm -f "$dest" && decir "              agente retirado (esta corrida lo habia creado): $dest"
+    fi
+    i=$((i + 1))
+  done
   if [ "$GROK_JSON_PUBLICADO" -eq 1 ]; then
     if [ -n "$GROK_JSON_BACKUP" ] && [ -f "$GROK_JSON_BACKUP" ]; then
       cp "$GROK_JSON_BACKUP" "$(grok_json_path)" \

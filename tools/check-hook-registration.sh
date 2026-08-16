@@ -228,6 +228,16 @@ ptu_matchers = []
 # es escape y una ruta Windows ('C:\...\summonaikit-harness.sh') llegaria
 # mangleada a la verificacion de existencia.
 hook_paths = []
+
+def _hook_paths(comando):
+    # r2/CodeRabbit: la forma medida cita la ruta del hook ENTRE COMILLAS, y
+    # una ruta con espacios ('C:/Users/John Doe/...') partida en el espacio
+    # daria un falso 'NO existe'. Se extrae PRIMERO la porcion quoteda; el
+    # fallback sin comillas cubre los commands estilo Claude.
+    q = re.findall(r'"([^"]*summonaikit-harness\.sh)"', comando)
+    if q:
+        return q
+    return re.findall(r'[^\s"&|;]+summonaikit-harness\.sh', comando)
 # Task 5.4 (modo zcode): enabled != JSON true => los hooks de archivo no corren;
 # y un matcher en el grupo de UserPromptSubmit/Stop es error (el match value ahi
 # es texto/preview, no tool name). Solo se observan si el archivo se leyo.
@@ -276,7 +286,7 @@ for path in (settings, local):
                     # nombra de verdad. Limites declarados: no expande $VARS
                     # ni resuelve relativos; con un command sano sobra.
                     if modo == "grok":
-                        for tok in re.findall(r'[^\s"&|;]+summonaikit-harness\.sh', comando):
+                        for tok in _hook_paths(comando):
                             if tok not in hook_paths:
                                 hook_paths.append(tok)
             # El matcher vive en el GRUPO, no en la entrada. Solo importa para
@@ -347,7 +357,7 @@ matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; pr
 enabled_mal="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("enabled_mal",False))' 2>/dev/null)"
 fases_con_matcher="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fases_con_matcher",[])))' 2>/dev/null)"
 session_registrada="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("session_registrada",False))' 2>/dev/null)"
-hook_paths="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("hook_paths",[])))' 2>/dev/null)"
+hook_paths="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print("\n".join(json.load(sys.stdin).get("hook_paths",[])))' 2>/dev/null)"
 
 # Task 10.6 — afirmacion SEPARADA, y advisory: sin SessionStart el gate corre
 # igual; lo que no llega son las reglas permanentes, que valen arme o no el
@@ -434,7 +444,11 @@ reportar_hook_grok() {
   [ "$MODO" = "grok" ] || return 0
   [ -n "$hook_paths" ] || return 0
   local p p_norm
-  for p in $hook_paths; do
+  # r2/CodeRabbit: la lista viaja separada por SALTOS DE LINEA y se itera con
+  # read — un `for p in $hook_paths` la volveria a partir en los espacios y
+  # una ruta 'C:/Users/John Doe/...' daria falsos 'NO existe'.
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
     # La forma medida del command lleva la ruta con barras normales; una forma
     # Windows con backslashes se normaliza para poder mirarla desde bash.
     p_norm="$(printf '%s' "$p" | sed 's|\\|/|g')"
@@ -454,7 +468,9 @@ reportar_hook_grok() {
       reportar "              Un hook que el instalador no reconoce como suyo no se repara ni se quita:"
       reportar "              revisarlo, y si es de otro, no instalar encima."
     fi
-  done
+  done <<GROK_HOOK_PATHS
+$hook_paths
+GROK_HOOK_PATHS
   return 0
 }
 

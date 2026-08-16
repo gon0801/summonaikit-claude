@@ -945,6 +945,35 @@ out="$(host_grok 2>&1)"; rc=$?
 [ ! -e "$gk_json" ] || malo "el JSON publicado en esta corrida debia volver atras"
 printf '%s' "$out" | grep -qi 'rollback' || malo "debe reportar el ROLLBACK: $out"
 
+# r2/CodeRabbit: un agente publicado ANTES del fallo tambien vuelve atras —
+# si no, el perfil queda a medio cablear (hook y JSON retirados, agente suelto
+# que ningun flujo vuelve a mirar). El fallo se provoca en el archivado del
+# SEGUNDO rol (saikit-backups como archivo), despues de que implementer ya se
+# publico como AUSENTE.
+caso "grok: fallo a MITAD de agentes => ROLLBACK tambien del agente ya publicado"
+nuevo_home_grok
+{
+  printf '%s\n' '---'
+  printf '%s\n' 'name: verifier'
+  printf '%s\n' 'description: nuestro viejo'
+  printf '%s\n' 'saikit_owned: summonaikit-claude'
+  printf '%s\n' '---'
+  printf '%s\n' '# verifier viejo'
+} > "$gk_agents/verifier.md"
+ver_previo_sha="$(sha256sum < "$gk_agents/verifier.md")"
+: > "$gk_agents/saikit-backups"   # archivo donde va el dir de backups: archivar falla
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "el fallo de publicacion debe salir 5, dio $rc: $out"
+[ ! -e "$dest" ] || malo "el hook publicado en esta corrida debia volver atras"
+[ ! -e "$gk_json" ] || malo "el JSON publicado en esta corrida debia volver atras"
+[ ! -e "$gk_agents/implementer.md" ] \
+  || malo "implementer se publico en ESTA corrida y el rollback debia retirarlo"
+[ ! -e "$gk_agents/reviewer.md" ] \
+  || malo "reviewer nunca se llego a publicar y no debe existir"
+[ "$(sha256sum < "$gk_agents/verifier.md")" = "$ver_previo_sha" ] \
+  || malo "verifier debia quedar intacto (el fallo fue ANTES de escribirlo)"
+printf '%s' "$out" | grep -qi 'rollback' || malo "debe reportar el ROLLBACK: $out"
+
 caso "grok: --dest bajo ~/.grok SIN --host grok => rechazado"
 mkdir -p "$tmp/gk-guard/.grok/hooks"
 gd="$tmp/gk-guard/.grok/hooks/summonaikit-harness.sh"
