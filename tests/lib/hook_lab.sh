@@ -293,6 +293,15 @@ lab_payload_agent_anidado() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"delegacion anidada","prompt":"hace lo tuyo","subagent_type":"%s","run_in_background":false},"tool_response":{"status":"completed","agentType":"%s","content":"listo","resolvedModel":"claude-opus-5"},"tool_use_id":"toolu_01a7b8c9d0e1f2a3b4c5d6e7","duration_ms":4200}' "$2" "$1" "$1"
 }
 
+# Task 10.10: un evento de herramienta que NO edita (Read) pero cuyo
+# tool_response ECOA un tool_name de edicion. El tool_name real es `Read`; el
+# `Edit` solo aparece adentro de la respuesta. Sirve para atar que el lector de
+# tool_name esta ACOTADO al nivel correcto: con el lector greedy, el hook leeria
+# `Edit` y marcaria una edicion de codigo que nunca ocurrio. $1 = file_path.
+lab_payload_read_con_eco_tool_name() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"%s"},"tool_response":{"type":"text","file":{"filePath":"%s"},"eco_del_host":{"tool_name":"Edit"}},"tool_use_id":"toolu_01c3d4e5f60718293a4b5c6d","duration_ms":300}' "$1" "$1"
+}
+
 lab_payload_edit() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"filePath":"%s","oldString":"a","newString":"b","originalFile":"a","structuredPatch":[],"userModified":false,"replaceAll":false},"tool_use_id":"toolu_01d4e5f60718293a4b5c6d7e","duration_ms":1200}' "$1" "$1"
 }

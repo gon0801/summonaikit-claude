@@ -99,6 +99,7 @@ G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta me
 G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
 G4|transcript_sin_containment|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
 G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolverla con cd+pwd
+G5|tool_name_desacotado|tool_name vuelve al lector greedy y un eco en tool_response se lee como la herramienta del evento (marca una edicion que no ocurrio)
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
@@ -230,6 +231,12 @@ mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCH
 # el `|` siguiente se vuelve una tuberia de shell (medido: `failed: command not
 # found`). Se ancla en la parte sin comillas simples.
 mut_credito_por_tool_name() { sed 's@"$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@"$tool_name $command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE"@'; }
+
+# Task 10.10: REPUESTA. Se habia retirado al sacar `tool_name` del credito de
+# verificacion (9.2), porque ahi dejo de tener detector. Vuelve apuntando a
+# donde la propiedad SI es observable: la deteccion de edicion del aviso RN.
+# La atrapa caso_g5_tool_name_eco_no_marca_edicion.
+mut_tool_name_desacotado()   { sed 's/json_top_level_string tool_name/json_string_field tool_name/'; }
 
 mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # Las dos mitades del arreglo de A3 (Task 3.3). La primera revierte el wrapper

@@ -1771,7 +1771,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno"
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno caso_g5_tool_name_eco_no_marca_edicion"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
@@ -1830,6 +1830,33 @@ caso_g5_agotado_limpia_estado() {
 # con contadores observados y secuencia limpia (review >= edit), un Stop
 # fallido se llevaba el aviso que una sesion hermana dejo para el proximo
 # turno del proyecto (RN_PENDING_PATH es per-PROYECTO a proposito).
+# Task 10.10. El lector de `tool_name` esta acotado al nivel correcto del
+# payload, pero desde que la 9.2 saco `tool_name` del credito de verificacion
+# esa propiedad se quedo SIN ningun caso que la sostenga: la mutacion que
+# devolvia el lector greedy no la atrapaba nadie y hubo que retirarla.
+#
+# Donde SIGUE siendo observable es aca: la deteccion de edicion del aviso RN
+# mira `tool_name` contra `^(edit|write|...)$`. Con el lector greedy, un
+# `tool_name` ECOADO adentro de `tool_response` se lee como si fuera el del
+# evento, y el hook marca una edicion de codigo que nunca ocurrio — con lo que
+# el aviso RN reclamaria una re-revision por un archivo que solo se LEYO.
+caso_g5_tool_name_eco_no_marca_edicion() {
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit turno que arma para medir el aviso RN')"
+  rn_orden="${LAB_ESTADO_PATH%.env}-review-notice.env"
+
+  lab_run tool claude "$(lab_payload_read_con_eco_tool_name '/proyecto/src/app.ts')"
+
+  # MEDIDO al escribir el caso: el archivo de orden se crea en CADA evento con
+  # las tres claves, y `last_code_edit` queda VACIA salvo que se detecte una
+  # edicion real. Por eso el aserto mira el VALOR (`=.` = hay algo despues del
+  # igual), no la presencia de la clave — la primera version miraba la clave y
+  # daba rojo contra el hook sano.
+  if [ -f "$rn_orden" ] && grep -q '^last_code_edit=.' "$rn_orden" 2>/dev/null; then
+    _mal "un tool_name ECOADO en tool_response no puede contar como edicion: el evento fue un Read (valor: $(grep '^last_code_edit=' "$rn_orden"))"
+  fi
+}
+
 caso_g5_stop_fallido_no_borra_aviso_ajeno() {
   # Armado e incompleto (este Stop bloquea), con secuencia RN limpia observada:
   # el elif pre-9.8 disparaba aqui y borraba el aviso ajeno.
