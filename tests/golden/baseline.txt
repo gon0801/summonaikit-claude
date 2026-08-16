@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: fe5165f913042c274d8859b8a6e3c20673ce62c6ad53db08104edfe8b0bfd7f8
-# hook_bytes: 118023
-# hook_lineas: 2028
-# escenarios: 43
+# hook_sha256: 21cb2136eeffe0e50433af89d7bd39aa82d3667d259098e31dbcc3ede791e170
+# hook_bytes: 119620
+# hook_lineas: 2052
+# escenarios: 44
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -3792,3 +3792,41 @@ stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 02
 (sin estado)
+
+=== escenario 44-sesion-reglas-codex
+# Fase `session` en los OTROS dos hosts, la rama que la Task 10.9 movio. El
+# escenario 34 cubre el mismo camino con target claude; este existe porque el 34
+# NO lo cubre ni para codex ni para grok, y sin el la linea base volvia a dar
+# "cero divergencia" sobre una rama que SI cambio -- exactamente el hueco que la
+# 10.6 declaro y la 10.8 tuvo que cerrar despues.
+# 
+# Los dos pasos usan el MISMO payload a proposito: lo unico que cambia entre ellos
+# es el target, asi que el diff de la grabacion aisla la decision por host y nada
+# mas.
+# 
+# Paso 01, target codex: ACEPTADA (medido 2026-08-16 -- el nonce entro al rollout
+# como mensaje role:"developer" y el modelo devolvio el token literal). Se graba
+# que emite las reglas permanentes con hookEventName SessionStart -- la forma
+# limpia de Claude, que es la unica que Codex acepta porque su esquema es ESTRICTO
+# (medido en 6.2) -- y que NO crea estado. Si creara estado, el Stop gate exigiria
+# recibo en un turno que nadie armo (Core Rule 3).
+# 
+# Paso 02, target grok: IGNORADA (medido 2026-08-16 sobre Grok 1.0.4 -- las tres
+# formas emitieron y ninguna llego, ni a la respuesta ni a los archivos de sesion).
+# Se graba el SILENCIO. Es la mitad que impide habilitarlo por accidente: si
+# alguien ensancha la condicion, este paso deja de ser mudo y el diff lo muestra.
+# 
+# Sin `transcript_path`, por el mismo motivo que el 34: el sentinel se busca en el
+# payload entero, y una ruta de sandbox no determinista entraria al task_hash y
+# rompe la reproducibilidad de `--check` entre corridas.
+--- paso 01  phase=session target=codex  payload=01.session.codex.json
+exit 0
+stdout (sha 3242c59d21d132e9, 1416 bytes) identico a 34-sesion-reglas-permanentes/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+(sin estado)
+--- paso 02  phase=session target=grok  payload=02.session.grok.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios

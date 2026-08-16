@@ -1,0 +1,25 @@
+Fase `session` en los OTROS dos hosts, la rama que la Task 10.9 movio. El
+escenario 34 cubre el mismo camino con target claude; este existe porque el 34
+NO lo cubre ni para codex ni para grok, y sin el la linea base volvia a dar
+"cero divergencia" sobre una rama que SI cambio -- exactamente el hueco que la
+10.6 declaro y la 10.8 tuvo que cerrar despues.
+
+Los dos pasos usan el MISMO payload a proposito: lo unico que cambia entre ellos
+es el target, asi que el diff de la grabacion aisla la decision por host y nada
+mas.
+
+Paso 01, target codex: ACEPTADA (medido 2026-08-16 -- el nonce entro al rollout
+como mensaje role:"developer" y el modelo devolvio el token literal). Se graba
+que emite las reglas permanentes con hookEventName SessionStart -- la forma
+limpia de Claude, que es la unica que Codex acepta porque su esquema es ESTRICTO
+(medido en 6.2) -- y que NO crea estado. Si creara estado, el Stop gate exigiria
+recibo en un turno que nadie armo (Core Rule 3).
+
+Paso 02, target grok: IGNORADA (medido 2026-08-16 sobre Grok 1.0.4 -- las tres
+formas emitieron y ninguna llego, ni a la respuesta ni a los archivos de sesion).
+Se graba el SILENCIO. Es la mitad que impide habilitarlo por accidente: si
+alguien ensancha la condicion, este paso deja de ser mudo y el diff lo muestra.
+
+Sin `transcript_path`, por el mismo motivo que el 34: el sentinel se busca en el
+payload entero, y una ruta de sandbox no determinista entraria al task_hash y
+rompe la reproducibilidad de `--check` entre corridas.
