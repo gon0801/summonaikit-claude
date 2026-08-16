@@ -1,0 +1,6 @@
+grok, G5: dos Stops fallidos consumen los 2 ciclos; el tercero agota el
+presupuesto y sale con continue:false + stopReason + exit 0 — la forma que
+7.2 midio ACEPTADA en grok (prevent_continuation=true), o sea que a
+diferencia de codex/zcode el corte por budget SI mueve el Stop aqui. El
+estado igual se limpia (A4-c4) y el gemelo shutdown del final sale en
+silencio. Analogos del 23/33.

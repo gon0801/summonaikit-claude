@@ -1,0 +1,8 @@
+Escenario para probar que el arnes entiende el token `grok` del filename:
+exporta GROK_HOOK_EVENT (la senal del runner, medida 7.1 — el hook vivo la mira
+por SETNESS, D2) y SUMMONAIKIT_HOOK_TARGET=grok (el env map del JSON de
+registro, medido 7.1: llega en los 12 dumps). Doble senal como en produccion,
+a diferencia de zcode (solo ZCODE_*) y codex (solo TARGET). La fase es `auto`
+porque el registro de grok NO exporta SUMMONAIKIT_HOOK_PHASE: en produccion la
+fase deriva del hookEventName snake del payload (D4). El estado del falso tiene
+que registrar grok_event y target=grok, y la linea estado_host: grok.

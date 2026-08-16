@@ -1,0 +1,13 @@
+grok, G3 bloquea — D3 PRENDIDA (7.4): la ceremonia se exige con
+TARGET=grok. El rol acredita por los canales medidos 7.1 que viven en la
+sesion del turno principal: el DESPACHO spawn_subagent SI emite
+post_tool_use con toolInput.subagent_type (paso 2 — a diferencia de Codex)
+y SubagentStart trae subagentType de PRIMER nivel (paso 3). El paso 4 es
+un evento INTERNO del hijo con sessionId DEL HIJO (forma medida en la
+recaptura): el estado es por sesion y el guardia "sin tarea armada no se
+crea estado" lo deja silencioso — no acredita la ceremonia del turno
+principal, declarado; la forma queda pinchada en la linea base. Corrieron
+implementer y reviewer (dispatch), el verifier no; el recibo completo
+credita verificacion por prosa (Verify: pytest -q). El Stop bloquea SOLO
+por el verifier y el mensaje ofrece la escotilla ROLE FALLBACK (D4) con
+spawn_subagent como TOOL_HINT (7.4). Analogos del 20/30.

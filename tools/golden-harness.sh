@@ -279,8 +279,15 @@ generar() {
       # senal de host de zcode, medida Task 5.1). Sin esto, un --check corrido
       # DENTRO de zcode escribe state/zcode/... y uno desde Claude state/other/...
       # => divergencia falsa por host, no por comportamiento.
+      # Task 7.6: mismo determinismo para GROK_HOOK_EVENT / GROK_SESSION_ID (la
+      # senal del runner de Grok, medida 7.1; el hook vivo la mira por setness
+      # y GROK_SESSION_ID es su fallback de sesion). Sin esto, un --check
+      # corrido DENTRO de un hijo de Grok heredaria la senal del runner padre
+      # y TODOS los escenarios resolverian HOST=grok (state/grok/) — la misma
+      # divergencia falsa que 5.3 cerro para zcode. Igual que hook_lab (7.3).
       cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
+           -u GROK_HOOK_EVENT -u GROK_SESSION_ID
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
       # Task 5.5: el token `zcode` del filename NO exporta SUMMONAIKIT_HOOK_TARGET
@@ -290,10 +297,21 @@ generar() {
       # vivo (HOST=zcode + TARGET=claude por el fallback de 5.4), no un
       # TARGET=zcode inventado que nadie probo; si el fallback de 5.4 se
       # rompiera, este escenario lo delata. Las dos constantes son literales
-      # fijas (no la ruta del sandbox): si algo filtrara al estado, romperia
+      # fijos (no la ruta del sandbox): si algo filtrara al estado, romperia
       # --check entre corridas. auto/claude/cursor siguen como antes.
       if [ "$objetivo" = "zcode" ]; then
         cmd+=(ZCODE_SESSION_ID=sess_golden_zcode ZCODE_PROJECT_DIR=C:/dev/saikit-golden-zcode)
+      elif [ "$objetivo" = "grok" ]; then
+        # Task 7.6: el token `grok` pone las DOS senales que hay en produccion
+        # (medido 7.1, 12/12 dumps de env): GROK_HOOK_EVENT la inyecta el
+        # runner (el hook la mira por SETNESS, D2 — el valor es literal fijo
+        # a proposito, si el hook llegara a leerlo el --check lo delata) y
+        # SUMMONAIKIT_HOOK_TARGET=grok la trae el env map del JSON de
+        # registro (7.5). Asi el golden ejercita HOST=grok por la senal del
+        # runner (no por TARGET) y la ceremonia por TARGET=grok (7.4). Sin
+        # la primera, state/ quedaria bajo otro host; sin la segunda, el
+        # Stop no bloquearia con la forma grok (exit 0) ni exigiria ceremonia.
+        cmd+=(GROK_HOOK_EVENT=golden_grok_event SUMMONAIKIT_HOOK_TARGET=grok)
       elif [ "$objetivo" != "auto" ]; then
         cmd+=(SUMMONAIKIT_HOOK_TARGET="$objetivo")
       fi
@@ -330,7 +348,8 @@ generar() {
       # Task 6.6: mismo mecanismo para codex — el snapshot normaliza el segmento
       # host, asi que esta linea es lo UNICO que pinna en la linea base que el
       # estado quedo bajo state/codex/ (D2, Task 6.4) y no bajo other/claude.
-      if [ "$objetivo" = "zcode" ] || [ "$objetivo" = "codex" ]; then
+      # Task 7.6: idem grok (D2, Task 7.3): pinna state/grok/ en la linea base.
+      if [ "$objetivo" = "zcode" ] || [ "$objetivo" = "codex" ] || [ "$objetivo" = "grok" ]; then
         _hh="$(host_del_estado "$sb")"
         # if/then (no `[ ] && printf`): cuando no hay estado _hh queda vacio y
         # este bloque NO puede devolver non-zero, o se vuelve el exit status del

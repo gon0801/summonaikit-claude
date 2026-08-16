@@ -1,0 +1,15 @@
+grok, G1 no-arma + G6 permiso + el par end_turn/shutdown del turno headless.
+Un prompt sin sentinel (wrappeado en <user_query>, la forma medida 7.1) es
+mudo y sin estado; el tool no crea estado sin turno armado; el Stop de turno
+(reason=end_turn) deja pasar en silencio (emit_allow no imprime para grok) y
+su gemelo de cierre (reason=shutdown, SIN promptId ni lastAssistantMessage —
+medido 7.1, 5/5 pares) tambien. Analogos del 01/17/27.
+Payloads con la forma RECAPTURADA 2026-08-16 (los crudos de 7.1 no se
+commitearon y su repo fue limpiado; la recaptura headless salio del mismo
+binario, grok 1.0.3): envelope camel (sessionId, transcriptPath, toolName,
+toolInput, permissionMode) con literales snake de evento
+(user_prompt_submit/post_tool_use/stop), toolResult con exit_code NUMERO,
+workspaceRoot forward-slashes. La fase del filename es `auto` — el registro
+de grok no exporta SUMMONAIKIT_HOOK_PHASE, en produccion deriva del
+hookEventName snake (D4). El token grok del arnes exporta GROK_HOOK_EVENT +
+SUMMONAIKIT_HOOK_TARGET=grok (las dos senales de produccion, medidas 7.1).

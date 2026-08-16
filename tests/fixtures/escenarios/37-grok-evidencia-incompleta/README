@@ -1,0 +1,13 @@
+grok, G2/G3/G4 bloquean + LA FORMA DE SALIDA DE GROK (Task 7.4): el JSON
+decision:block viaja con exit 0 — 7.2 midio que exit 2 vuelve como 1 del
+wrapper PowerShell y Grok hace fail-open en Stop (IGNORADA); con exit 0
+bloquea de forma fiable (2 end_turn, el modelo recibe el reason). El
+CONTRATO va ADOSADO al reason (additionalContext es ignorado en las 4
+formas medidas): por eso el stdout del bloqueo grok NO es sha-identico a
+sus gemelos claude/zcode/codex — la diferencia visible ES la forma 7.4.
+Armado, una edicion con la tool nativa write (toolInput.file_path bajo el
+padre camel, forma medida), Stop sin recibo: bloquea reclamando recibo,
+verificacion y ceremonia. El Stop shutdown del final NO cuenta ciclo ni
+toca estado con estado persistente (D6, medido 7.2: la decision se ignora
+sin mutar estado) — el estado tras el paso 4 lo muestra. Analogos del
+07/19/29.

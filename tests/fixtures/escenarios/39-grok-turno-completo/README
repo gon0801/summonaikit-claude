@@ -1,0 +1,11 @@
+grok, G2+G3+G4 pasan: la secuencia implementer -> verifier -> reviewer
+acredita por los despachos spawn_subagent (toolInput.subagent_type) + el
+SubagentStart del implementer (los DOS canales que viven en la sesion del
+turno, medidos 7.1), el recibo en vinetas acredita verificacion por prosa
+(Verify: pytest -q — en grok el runner corre DENTRO del subagente, cuya
+sesion propia no acredita el estado del turno: la prosa del recibo es el
+camino vivo). El evento interno del hijo (paso 4, sessionId del hijo)
+queda como en un turno real: silencioso para el estado del turno. Stop
+end_turn allow: exit 0 en silencio y el estado se va; el gemelo shutdown
+no encuentra nada que tocar. Par de "pasa" contra el 38. Analogos del
+21/31.
