@@ -65,7 +65,7 @@ G2|falla_phpunit_quitada|la vía B (failures/errors: N) deja de matchear
 G2|falla_cs_quitada|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
 G2|falla_go_quitada|la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)
 G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
-G2|falla_excepciones_sin_dospuntos|se quita el `:` despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
+G2|falla_excepciones_sin_dospuntos|se quita el ':' despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
@@ -73,9 +73,9 @@ G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuel
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
-G2|falla_dotnet_quitada|`failed` sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
-G2|credito_por_mencion|la guarda de echo/printf se neutraliza y `echo pytest` vuelve a acreditar verificacion
+G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
