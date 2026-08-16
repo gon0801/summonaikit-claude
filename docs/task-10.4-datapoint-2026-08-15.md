@@ -112,3 +112,71 @@ barata es usar el CI que ya existe.**
    operador mande un turno armado sin `:fast` (candidata: 10.8).
 2. Task con `-saikit:fast` — **hecha**: 92.4 min, desglosada arriba.
 3. Objetivo full ≤ 1 h: no medido todavía.
+
+---
+
+# Datapoint 3: carril `full` — Task 10.8 (2026-08-15)
+
+Prompt que armó el turno: `-saikit implementá la task 10.8 del plan`. Mismo
+método de gaps por evento, ventana 17:39:50 → 20:14 local.
+
+| Métrica | Carril `fast` (10.10) | Carril `full` (10.8) |
+|---|---|---|
+| Span | 92.4 min | **154.2 min** |
+| Objetivo del DoD | ≤ 15 min | ≤ 60 min |
+| Modelo pensando | 3.6 min (4%) | **24.8 min (16%)** |
+| Herramientas del lead | 85 min (92%) | 35.9 min (23%) |
+| Subagentes | 0 | **3** (implementer, verifier, reviewer) |
+
+## Los dos carriles fallan su objetivo por motivos OPUESTOS
+
+En el carril `fast` el 68% del reloj era espera bloqueada sobre **una corrida
+de la batería local**. En el `full` las herramientas del lead bajan a 23% y lo
+que domina es otra cosa: el ~61% restante del span es **tiempo de pared de los
+subagentes**, que corren asincrónicos.
+
+Duraciones medidas de cada uno: implementer **52.5 min**, reviewer **23.7 min**,
+verifier ~24 min (lo maté yo, ver abajo). Los dos que rindieron suman **76 min**
+de pared. Ese es el piso de la ceremonia, y **ningún CI lo arregla**: no es
+cómputo esperando, es razonamiento de otro agente.
+
+Consecuencia directa para el objetivo: **≤ 1 h es inalcanzable mientras cada
+subagente tarde 25-50 min.** O se mueve el número, o se acota el alcance que se
+le delega a cada rol. Fingir que el objetivo se cumple sería el error que el
+propio DoD prohíbe ("si no se cumple, el residuo se mide y se decide").
+
+## Desglose honesto del residuo (154 min − 60 de objetivo = 94 de exceso)
+
+1. **Ceremonia propiamente dicha: ~76 min.** Es el costo real del carril.
+2. **Colisión entre sesiones: ~35-40 min, y NO es culpa del carril.** A mitad
+   de la task la otra sesión mergeó el PR #27 y **redeployó el hook vivo**. Eso
+   obligó a: mergear master, regrabar la línea base entera contra el hook nuevo
+   (6.5 min), re-auditar el diff, y **tirar los ~24 min del primer verifier**,
+   que estaba comparando una copia rota de MI hook contra el hook vivo de la
+   otra sesión — resultados inconsistentes por construcción.
+3. **Prueba negativa: 10 min.** No es residuo, es la evidencia que distingue un
+   escenario que sirve de red de uno decorativo.
+
+## Lo que el carril `full` compró por ese tiempo
+
+Esto es lo que el `fast` no habría dado, y conviene medirlo antes de decidir
+que la ceremonia "sobra":
+
+- El **implementer encontró un bug real** que yo no había previsto: en fase
+  `session` el `task_hash` es un cksum del input entero, así que el token
+  `__TRANSCRIPT__` metía una ruta de sandbox distinta por corrida y rompía la
+  reproducibilidad de `--check`. Lo detectó con un FAIL real, no por intuición.
+- El **reviewer refutó una objeción mía con evidencia**: yo sostenía que omitir
+  `transcript_path` dejaba al escenario 34 como única excepción; los escenarios
+  03 y 04 y el constructor canónico `hook_lab.sh:232` tampoco lo llevan. Mi
+  cambio propuesto habría *creado* la inconsistencia que yo creía evitar.
+- El pensamiento del lead sube de 3.6 a 24.8 min. No es desperdicio: ahí está
+  la auditoría del regrabado y la detección de la colisión.
+
+## Estado del cierre de la 10.4
+
+Las tres mediciones que la fila pedía están hechas: contrato (medido antes),
+carril `fast` (Datapoint 2) y carril `full` (este). Lo que queda es **una
+decisión, no otra medición**: mover los objetivos del DoD a números alcanzables
+o acotar lo que se delega. Con el dato en la mano, la lectura es que el `fast`
+se arregla con el CI de la 10.5 y el `full` no se arregla con infraestructura.
