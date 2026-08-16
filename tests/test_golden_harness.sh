@@ -224,6 +224,12 @@ grep -q '^| target=codex$' "$SANDBOX/cx_blk.txt" \
   || malo "el estado codex debio traer target=codex (el arnes no exporto TARGET)"
 grep -q '^| zcode_session=<sin-zcode>$' "$SANDBOX/cx_blk.txt" \
   || malo "el estado codex debio traer zcode_session=<sin-zcode> (regresion unset 5.3)"
+# Task 7.6: la contracara grok del unset de arriba. En CI (sin GROK_* en el
+# entorno) borrar el -u del arnes no cambia NINGUN veredicto y nadie se
+# enteraria; este pinnado negativo al menos declara la intencion y atrapa el
+# caso cuando la suite corre desde adentro de Grok.
+grep -q '^| grok_event=<sin-grok>$' "$SANDBOX/cx_blk.txt" \
+  || malo "el estado codex debio traer grok_event=<sin-grok> (regresion unset 7.6)"
 
 caso "target codex: un paso que deja estado trae 'estado_host: codex' (D2, 6.4)"
 grep -q '^estado_host: codex$' "$SANDBOX/cx_blk.txt" \
@@ -234,7 +240,9 @@ grep -q '^estado_host: codex$' "$SANDBOX/cx_blk.txt" \
 # (medidas 7.1): GROK_HOOK_EVENT (setness => HOST=grok), GROK_SESSION_ID y el
 # env map SUMMONAIKIT_HOOK_TARGET=grok. El estado del falso lo registra todo.
 caso "target grok: el estado trae target=grok, grok_event real y sin ZCODE_*"
-awk '/^=== escenario 05-grok/{f=1} f' "$SANDBOX/zc.txt" > "$SANDBOX/gk_blk.txt"
+# 05-grok acota al proximo `=== escenario` (misma forma que 04-codex arriba):
+# el dia que exista 06-*, correr hasta EOF volveria a leer estado ajeno.
+awk '/^=== escenario 05-grok/{f=1; print; next} /^=== escenario /{f=0} f' "$SANDBOX/zc.txt" > "$SANDBOX/gk_blk.txt"
 grep -q '^| target=grok$' "$SANDBOX/gk_blk.txt" \
   || malo "el estado grok debio traer target=grok (env map exportado)"
 grep -q '^| grok_event=user_prompt_submit$' "$SANDBOX/gk_blk.txt" \

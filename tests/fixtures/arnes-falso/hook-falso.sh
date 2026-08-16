@@ -23,10 +23,12 @@ HOST=other
 # medido: neutralizada esta linea, el caso 'estado_host: codex' se pone rojo.
 [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ] && HOST=codex
 # Task 7.6: espejo de D2 (7.3) — grok va por SETNESS de GROK_HOOK_EVENT (una
-# senal exportada VACIA cuenta; el valor no decide identidad) y ARRIBA de
-# codex/zcode, el mismo orden compuesto del hook vivo. Sin esta rama el caso
-# estado_host de grok seria vacuo (caeria en other), la misma trampa que 6.6
-# cerro para codex. ROJO medido: neutralizada esta linea, el caso
+# senal exportada VACIA cuenta; el valor no decide identidad). El falso
+# encadena asignaciones sueltas, no if/elif: grok gana sobre codex/zcode por
+# ser la ULTIMA asignacion, no la primera — el orden compuesto resultante
+# (grok > codex > zcode > other) es el mismo del hook vivo. Sin esta rama el
+# caso estado_host de grok seria vacuo (caeria en other), la misma trampa que
+# 6.6 cerro para codex. ROJO medido: neutralizada esta linea, el caso
 # 'estado_host: grok' se pone rojo.
 [ "${GROK_HOOK_EVENT+x}" = "x" ] && HOST=grok
 mkdir -p "$DIR/state/$HOST/$KEY"

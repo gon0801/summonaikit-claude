@@ -280,12 +280,14 @@ generar() {
       # DENTRO de zcode escribe state/zcode/... y uno desde Claude state/other/...
       # => divergencia falsa por host, no por comportamiento.
       # Task 7.6: misma leccion para grok — GROK_HOOK_EVENT / GROK_SESSION_ID
-      # las inyecta el runner de hooks de Grok en cada proceso (medido 7.1,
-      # 12/12 dumps), asi que un --check corrido desde adentro de Grok las
-      # hereda y clasificaria HOST=grok sin que ningun escenario lo pida.
+      # / GROK_WORKSPACE_ROOT las inyecta el runner de hooks de Grok en cada
+      # proceso (medido 7.1, 12/12 dumps; las tres, el mismo unset que hace
+      # tests/lib/hook_lab.sh), asi que un --check corrido desde adentro de
+      # Grok las hereda y clasificaria HOST=grok sin que ningun escenario lo
+      # pidiera.
       cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
-           -u GROK_HOOK_EVENT -u GROK_SESSION_ID
+           -u GROK_HOOK_EVENT -u GROK_SESSION_ID -u GROK_WORKSPACE_ROOT
            HOME="$sb/home" USERPROFILE="$sb/home")
       [ "$fase" != "auto" ] && cmd+=(SUMMONAIKIT_HOOK_PHASE="$fase")
       # Task 5.5: el token `zcode` del filename NO exporta SUMMONAIKIT_HOOK_TARGET

@@ -93,6 +93,14 @@ separador en blanco que pasa a quedar a mitad de archivo, no contenido);
 +1183 líneas = solo los bloques grok; `--check` reproducible 42/42 en dos
 corridas; `test_golden_baseline` OK; `test_fixtures_json` OK (169 json).
 
+**Segundo regrabado, tras el merge del PR #30** (master movió el hook a
+`cea9f4c1…` a mitad de esta task): conflicto de `baseline.txt` resuelto
+REGRABANDO contra el hook mergeado. Región 01-34 byte-identica a master
+(129283 bytes + línea separadora); bloque grok 35-42 con **0 veredictos
+movidos** — toda la deriva (1765 líneas de diff) es el texto del
+contrato/feedback que el PR #30 cambió. En el diff del PR final el bloque
+aparece como +1217 por esa deriva de texto, no por veredictos.
+
 Dos pines de cobertura que ningún otro bloque grok toca: el **37** graba el
 veto D5 del `exit_code` NUMERO (runner rojo: `verified=0` en el estado; su
 contracara verde vive en el 39) y el **42** graba que el Stop de cierre
@@ -191,6 +199,8 @@ Limpieza: TOML restaurado byte a byte (491), cksums del perfil idénticos.
 ## Pendiente tras merge (para el lead)
 
 - PR de `feat/7.6-grok-release`, CI (`suite` job) en verde como gate final.
-- Deploy post-merge según AGENTS.md **más `--host grok`** (el install ya está
-  en el perfil; el deploy lo re-verifica como YA AL DIA) y registro en
-  `docs/deploy-log.md`.
+- Deploy post-merge según AGENTS.md **más `--host grok`** y registro en
+  `docs/deploy-log.md`. OJO: el install verificado en esta task (02:21)
+  publicó el hook PRE-merge (`b8176b54…`); el PR trae el hook del PR #30
+  (`cea9f4c1…`) ⇒ el deploy **publicará** (backup + reemplazo, estado
+  "actualizado"), NO un no-op "YA AL DIA".
