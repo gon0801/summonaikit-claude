@@ -250,7 +250,11 @@ caso_g1_reglas_nombran_donde_correr_la_bateria() {
   lab_run session claude "$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
   _igual "exit code" "$LAB_RC" "0"
   _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
-  _contiene "stdout" "$LAB_OUT" 'push a branch and read the CI result'
+  _contiene "stdout" "$LAB_OUT" 'OPEN A PULL REQUEST'
+  # PR #33 (greptile P1): sin esta parte la regla manda a esperar un CI que
+  # nunca corre -- muchas configuraciones lo disparan en pull_request y no en
+  # un push de rama suelta.
+  _contiene "stdout" "$LAB_OUT" 'NOT on a bare feature-branch push'
   _contiene "stdout" "$LAB_OUT" 'if the repo has CI'
 }
 

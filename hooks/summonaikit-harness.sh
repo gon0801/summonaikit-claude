@@ -1011,6 +1011,15 @@ HARNESS_CONTEXT
 # el CI de Linux. La mencion va CONDICIONADA ("si el repo tiene CI") porque el
 # kit corre en repos que pueden no tenerlo.
 #
+# PR #33 (greptile P1): la regla nombra ABRIR EL PR, no solo empujar la rama.
+# Muchas configuraciones corren CI en pull_request pero NO en un push de rama
+# suelta -- medido en este mismo repo el 2026-08-16: se empujo
+# fix/paquete-A-gate-v2 y no se creo ninguna corrida hasta abrir el PR. Una
+# regla que mande a esperar un resultado que nunca llega es su propia perdida
+# de tiempo. Coderabbit pidio ademas exigir Linux; se tomo PARCIAL: exigirlo
+# dejaria la regla inaplicable en repos con CI de Windows o macOS, donde
+# sacarla de la maquina propia sigue conviniendo. Se nombra de donde sale el
+# ~6x sin convertirlo en requisito.
 # Contraste deliberado con la Task 10.11, que decidio NO construir un candado
 # porque el texto alcanzaba: aca el texto FALLO tres veces y la correccion
 # sigue siendo texto -- porque lo que fallo fue que estaba INCOMPLETO, no que
@@ -1018,7 +1027,7 @@ HARNESS_CONTEXT
 standing_rules() {
   cat <<'STANDING_RULES'
 SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn is armed with -saikit)
-- Run the FULL test battery ONCE per task, at the end, and run it WHERE it is cheapest: if the repo has CI, push a branch and read the CI result instead of running the battery on this machine. Locally, red/green ONLY the single test file you are changing, never the whole suite. Saying "once per task" without saying where is not enough: measured on a Windows machine, the same battery took ~10 min locally and 2m58s in Linux CI, and three tasks in a row paid the local price while technically obeying the rule.
+- Run the FULL test battery ONCE per task, at the end, and run it WHERE it is cheapest: if the repo has CI, push a branch, OPEN A PULL REQUEST, and read the CI result instead of running the battery on this machine. Opening the PR is not optional bookkeeping: many setups run CI on pull_request but NOT on a bare feature-branch push, so pushing alone leaves you waiting for a result that never arrives. Locally, red/green ONLY the single test file you are changing, never the whole suite. Saying "once per task" without saying where is not enough: measured on a Windows machine, the same battery took ~10 min locally and 2m58s in Linux CI (that ~6x is where the win comes from; other CI platforms still beat blocking your own machine), and three tasks in a row paid the local price while technically obeying the rule.
 - Do NOT sit blocked waiting on a background job. Start it, keep doing other work; you are notified when it finishes.
 - Before waiting on an external reviewer or CI, check whether it ALREADY finished instead of re-polling in a loop.
 STANDING_RULES

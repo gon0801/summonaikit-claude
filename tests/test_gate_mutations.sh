@@ -175,7 +175,7 @@ mut_desarma_con_prompt_vacio() { sed 's/\[ -n "$prompt_text" \]/true/'; }
 mut_marca_notificacion_laxa() { sed "s|'\^\[\[:space:\]\]\*<task-notification>'|'<task-notification>'|"; }
 # Task 10.16: podar la mencion al CI de la regla de la bateria. La atrapa
 # caso_g1_reglas_nombran_donde_correr_la_bateria.
-mut_reglas_no_dicen_donde() { sed 's/push a branch and read the CI result/run the battery/'; }
+mut_reglas_no_dicen_donde() { sed 's/OPEN A PULL REQUEST/run it/'; }
 mut_notificacion_no_se_reconoce() { sed 's/"\$SAIKIT_TASK_NOTIFICATION_RE"/"NUNCA_MATCHEA_ESTO_10_14"/'; }
 # session_id_greedy es el gemelo de mut_subagent_type_greedy para session_id:
 # volver al lector greedy del payload crudo tomaba la ULTIMA ocurrencia de la
