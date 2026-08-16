@@ -180,3 +180,76 @@ carril `fast` (Datapoint 2) y carril `full` (este). Lo que queda es **una
 decisión, no otra medición**: mover los objetivos del DoD a números alcanzables
 o acotar lo que se delega. Con el dato en la mano, la lectura es que el `fast`
 se arregla con el CI de la 10.5 y el `full` no se arregla con infraestructura.
+
+---
+
+# Decisión de cierre — Tasks 10.4 y 10.11 (2026-08-15)
+
+Las tres mediciones que la 10.4 pedía están hechas. Lo que sigue es la decisión
+que el DoD exigía tomar *con el número en la mano*, no otra medición.
+
+## Cumplimiento medido de las reglas permanentes (insumo de la 10.11)
+
+Medido sobre el transcript, acotado a las dos ventanas de tarea. Las reglas se
+empezaron a inyectar en cada `SessionStart` con la Task 10.6, así que ambas
+tareas las recibieron.
+
+| Regla | 10.10 (fast) | 10.8 (full) |
+|---|---|---|
+| 1 — una batería completa por tarea, al final | cumplida | cumplida (1 corrida) |
+| 2 — no quedarse bloqueado esperando un job | **violada**: 60.1 min, 6 sondeos | cumplida: **0 min** |
+| 3 — chequear si el revisor externo ya terminó | no ejercitada | no ejercitada |
+
+Corrección de método, para que el número sea auditable: el primer conteo dio
+"3 corridas de `tests/run.sh`" en la 10.8, pero **dos eran `grep` sobre ese
+archivo**, no ejecuciones. La cifra correcta es una sola corrida, al final.
+
+**Limitación declarada, y no es menor:** n=2, y las dos tareas las ejecutó el
+mismo agente en la misma sesión. La mejora de la regla 2 (60.1 min → 0) **no se
+puede atribuir limpiamente al texto de las reglas**: entre una tarea y otra este
+mismo agente escribió el datapoint que cuantificaba esa pérdida. No es un
+ensayo independiente. La regla 3 nunca se ejercitó: eso es `unknown`, no
+"se cumple".
+
+## Decisión 10.11: NO se construye el candado duro
+
+El DoD ofrecía dos salidas: si la violación persiste, se diseña el candado; si
+no, se cierra declarando que el texto alcanzó. El dato da un caso intermedio
+(1 violación en 2 tareas, con tendencia a la baja), y la decisión es **no
+construir**, por tres razones concretas:
+
+1. **La única regla violada dejó de violarse sin ningún candado.**
+2. **El candado es caro y estructural.** Exigiría que el kit registre
+   `PreToolUse`, una fase que hoy no registra en ningún host: instalador,
+   verificador y los cuatro hosts. Tamaño comparable a la 6.5 o la 7.5.
+3. **Lo que hacía tentador violar la regla 2 tiene un arreglo más barato que ya
+   existe.** Uno se queda mirando la batería porque tarda ~10 min en local; en
+   el CI de la 10.5 tarda ~1m32s. Quitado el incentivo, la regla se cumple sola.
+
+**Disparador de reapertura** (para que esto no sea una absolución permanente):
+si la regla 2 se viola de nuevo en cualquier tarea armada posterior, la fila se
+reabre y se diseña el candado. La decisión vale para el dato de hoy, no para
+siempre.
+
+## Decisión 10.4: los objetivos del DoD eran inalcanzables; se fijan medidos
+
+Los objetivos originales (fast ≤ 15 min, full ≤ 1 h) se pusieron sin medición
+previa. Con las tres mediciones hechas, quedan así:
+
+| Carril | Objetivo viejo | Medido | **Objetivo nuevo** | Palanca |
+|---|---|---|---|---|
+| `fast` | 15 min | 92 min | **30 min** | correr la batería en el CI de la 10.5 (saca ~60 min de espera) |
+| `full` | 60 min | 154 min | **2 h** | acotar el alcance de cada delegación |
+
+El objetivo del `fast` es condicional: **sin** el CI, el piso real es ~90 min y
+los 30 no se alcanzan. Con CI, el trabajo neto medido fue ~25 min.
+
+El del `full` no se arregla con infraestructura. El piso es el tiempo de pared
+de los subagentes: 52.5 min el implementer y 23.7 el reviewer, 76 min entre los
+dos. No es cómputo esperando, es razonamiento de otro agente. La única palanca
+real es delegar tramos más chicos.
+
+**Lo que NO se decide acá:** que la ceremonia sobre. En la 10.8 el implementer
+encontró un bug de no-determinismo que el lead no había previsto, y el reviewer
+refutó con evidencia una objeción equivocada del lead. Recortar el carril `full`
+tiene un costo de calidad que también está medido.
