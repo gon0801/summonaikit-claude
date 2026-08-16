@@ -883,7 +883,7 @@ Waiting on a subagent is not failing:
 Delegation rule:
 - Delegate the implement, verify, and review gates to subagents via $TOOL_HINT, in this exact sequence:
   1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.
-- If your host does not surface those project-level agents in the Task tool, delegate to its
+- If your host does not surface those project-level agents in $TOOL_HINT, delegate to its
   nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,
   a code-review agent to review. The gate maps host agent names to these roles by function, so a
   correctly-delegated turn still satisfies it.
