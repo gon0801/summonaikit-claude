@@ -1,0 +1,16 @@
+Fase `session`, target claude: la rama de la Task 10.6 (reglas permanentes)
+que ningun otro escenario alcanza -- 03 y 04 ya cubren `session`, pero con
+target cursor, asi que TARGET=claude jamas se ejercito y test_golden_baseline
+daba OK sin ver un solo byte de esta salida.
+Paso 1, SIN el sentinel: se graba que emite las reglas permanentes por
+stdout (hookEventName SessionStart) y que NO crea archivo de estado -- si lo
+creara, el Stop gate exigiria recibo en un turno que nadie armo (Core Rule 3).
+Paso 2, CON -saikit en `summary` (SessionStart no trae `prompt`; por la Task
+9.4 el sentinel se busca en el payload entero): se graba lo inverso, arma
+(crea estado) y NO emite las reglas. Las dos salidas son mutuamente
+excluyentes; este escenario es el unico que las deja una al lado de la otra.
+Sin `transcript_path`: por el mismo motivo (payload entero = texto
+escaneado), un valor con el token __TRANSCRIPT__ mete la ruta no
+determinista del sandbox en el task_hash y rompe la reproducibilidad de
+--check entre corridas. No hace falta ademas: la fase session armada no lo
+lee.

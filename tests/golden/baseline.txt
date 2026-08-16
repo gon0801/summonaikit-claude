@@ -11,7 +11,7 @@
 # hook_sha256: b8176b54f0f754ba70740e3e6c865cb0f03f6e65b9b5244fdd5ad541328934ab
 # hook_bytes: 106904
 # hook_lineas: 1873
-# escenarios: 33
+# escenarios: 34
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -2505,3 +2505,42 @@ stdout (sha 527f3355f667559c, 1718 bytes) identico a 08-ciclos-y-presupuesto/pas
 stderr (sha d9c5ceb904a8f1f6, 1666 bytes) identico a 08-ciclos-y-presupuesto/paso 04 (stderr)
 --- estado tras el paso 04
 (sin estado)
+
+=== escenario 34-sesion-reglas-permanentes
+# Fase `session`, target claude: la rama de la Task 10.6 (reglas permanentes)
+# que ningun otro escenario alcanza -- 03 y 04 ya cubren `session`, pero con
+# target cursor, asi que TARGET=claude jamas se ejercito y test_golden_baseline
+# daba OK sin ver un solo byte de esta salida.
+# Paso 1, SIN el sentinel: se graba que emite las reglas permanentes por
+# stdout (hookEventName SessionStart) y que NO crea archivo de estado -- si lo
+# creara, el Stop gate exigiria recibo en un turno que nadie armo (Core Rule 3).
+# Paso 2, CON -saikit en `summary` (SessionStart no trae `prompt`; por la Task
+# 9.4 el sentinel se busca en el payload entero): se graba lo inverso, arma
+# (crea estado) y NO emite las reglas. Las dos salidas son mutuamente
+# excluyentes; este escenario es el unico que las deja una al lado de la otra.
+# Sin `transcript_path`: por el mismo motivo (payload entero = texto
+# escaneado), un valor con el token __TRANSCRIPT__ mete la ruta no
+# determinista del sandbox en el task_hash y rompe la reproducibilidad de
+# --check entre corridas. No hace falta ademas: la fase session armada no lo
+# lee.
+--- paso 01  phase=session target=claude  payload=01.session.claude.json
+exit 0
+stdout (sha cfeee884c05a4f71, 554 bytes)
+| {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn is armed with -saikit)\n- Run the FULL test battery ONCE per task, at the end. Do red/green on the single test file you are changing, never on the whole suite.\n- Do NOT sit blocked waiting on a background job. Start it, keep doing other work; you are notified when it finishes.\n- Before waiting on an external reviewer or CI, check whether it ALREADY finished instead of re-polling in a loop."}}
+stderr <vacio>
+--- estado tras el paso 01
+(sin estado)
+--- paso 02  phase=session target=claude  payload=02.session.claude.json
+exit 0
+stdout (sha b6f6c943de7659a1, 11636 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/9f3c1a2e-6b4d-4e29-8a71-2c5d9e0f3b6a/harness-evidence.log
+| prompt task started: 2324016354
+hooks/state/<PROJECT_KEY>/9f3c1a2e-6b4d-4e29-8a71-2c5d9e0f3b6a/harness-state.env
+| task_hash=2324016354
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
