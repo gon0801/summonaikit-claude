@@ -813,7 +813,9 @@ grok_publicar_json() {
   [ "$GROK_JSON_ESTADO" = 'NUESTRO_IDENTICO' ] && return 0
   json="$(grok_json_path)"
   dir="$(dirname "$json")"
-  umask 077
+  # Sin umask global (r3/Greptile minor): mktemp ya crea el temporal 0600 y el
+  # mv preserva el modo, asi que el JSON publicado no queda legible por otros
+  # sin cambiar el umask del resto de la corrida (los agentes de abajo).
   canon="$(grok_json_canonico "$GROK_BASH_WIN")"
   tmp="$(mktemp "$dir/.saikit-grok-XXXXXX")" || return 1
   if ! printf '%s\n' "$canon" > "$tmp"; then rm -f "$tmp"; return 1; fi
@@ -880,37 +882,73 @@ grok_publicar_agentes() {
 # estado pre-corrida — backup si lo habia, eliminacion si la corrida lo creo.
 # Incluye los AGENTES ya publicados cuando uno posterior falla (r2/CodeRabbit:
 # dejarlos seria un estado a medio cablear que ningun flujo vuelve a mirar).
+# r3/Greptile P1: un cp/rm que FALLE no se disfraza de exito — el mensaje final
+# solo afirma "queda como estaba" si TODO volvio; si no, lo dice y senala los
+# backups, que siguen en disco para restaurar a mano.
 grok_rollback() {
   decir "[summonaikit] instalador: fallo publicar $1 — ROLLBACK de lo publicado en esta corrida."
-  local i dest bak
+  local i dest bak fallo=0
   i=0
   while [ "$i" -lt "${#GROK_AGENT_DESTS[@]}" ]; do
     dest="${GROK_AGENT_DESTS[$i]}"
     bak="${GROK_AGENT_BACKUPS[$i]}"
     if [ -n "$bak" ] && [ -f "$bak" ]; then
-      cp "$bak" "$dest" && decir "              agente restaurado desde $bak"
+      if cp "$bak" "$dest" 2>/dev/null; then
+        decir "              agente restaurado desde $bak"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $dest desde $bak"
+      fi
     else
-      rm -f "$dest" && decir "              agente retirado (esta corrida lo habia creado): $dest"
+      if rm -f "$dest" 2>/dev/null; then
+        decir "              agente retirado (esta corrida lo habia creado): $dest"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo retirar $dest"
+      fi
     fi
     i=$((i + 1))
   done
   if [ "$GROK_JSON_PUBLICADO" -eq 1 ]; then
     if [ -n "$GROK_JSON_BACKUP" ] && [ -f "$GROK_JSON_BACKUP" ]; then
-      cp "$GROK_JSON_BACKUP" "$(grok_json_path)" \
-        && decir "              JSON restaurado desde $GROK_JSON_BACKUP"
+      if cp "$GROK_JSON_BACKUP" "$(grok_json_path)" 2>/dev/null; then
+        decir "              JSON restaurado desde $GROK_JSON_BACKUP"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $(grok_json_path)"
+      fi
     else
-      rm -f "$(grok_json_path)" \
-        && decir "              JSON retirado (esta corrida lo habia creado)"
+      if rm -f "$(grok_json_path)" 2>/dev/null; then
+        decir "              JSON retirado (esta corrida lo habia creado)"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo retirar $(grok_json_path)"
+      fi
     fi
   fi
   if [ "$GROK_HOOK_PUBLICADO" -eq 1 ]; then
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      cp "$backup" "$DEST" && decir "              hook restaurado desde $backup"
+      if cp "$backup" "$DEST" 2>/dev/null; then
+        decir "              hook restaurado desde $backup"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST desde $backup"
+      fi
     else
-      rm -f "$DEST" && decir "              hook retirado (esta corrida lo habia creado)"
+      if rm -f "$DEST" 2>/dev/null; then
+        decir "              hook retirado (esta corrida lo habia creado)"
+      else
+        fallo=1
+        decir "              ROLLBACK INCOMPLETO: no se pudo retirar $DEST"
+      fi
     fi
   fi
-  decir "              El perfil queda como estaba antes de la corrida."
+  if [ "$fallo" -eq 0 ]; then
+    decir "              El perfil queda como estaba antes de la corrida."
+  else
+    decir "              ROLLBACK INCOMPLETO: algo quedo a medias — los backups de esta corrida"
+    decir "              siguen en <dir>/saikit-backups para restaurar a mano."
+  fi
 }
 
 grok_publicar() {

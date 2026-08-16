@@ -973,6 +973,10 @@ out="$(host_grok 2>&1)"; rc=$?
 [ "$(sha256sum < "$gk_agents/verifier.md")" = "$ver_previo_sha" ] \
   || malo "verifier debia quedar intacto (el fallo fue ANTES de escribirlo)"
 printf '%s' "$out" | grep -qi 'rollback' || malo "debe reportar el ROLLBACK: $out"
+# r3/Greptile P1: el mensaje de exito del rollback solo se afirma cuando TODO
+# volvio — con todo efectivamente restituido, la corrida lo dice.
+printf '%s' "$out" | grep -q 'El perfil queda como estaba antes de la corrida' \
+  || malo "el rollback completo debe afirmar que el perfil quedo como estaba: $out"
 
 caso "grok: --dest bajo ~/.grok SIN --host grok => rechazado"
 mkdir -p "$tmp/gk-guard/.grok/hooks"
