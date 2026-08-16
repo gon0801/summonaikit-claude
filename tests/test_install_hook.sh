@@ -339,6 +339,37 @@ assert canon("Stop", None), "Stop sin matcher"
 assert any("arranque-dummy" in h.get("command","") for g in ev.get("SessionStart",[]) for h in g.get("hooks",[])), "vecino SessionStart borrado"
 PY
 
+# --- B3.1-bis) la 4a fase NO se registra en zcode mientras siga `unknown` (10.9)
+# Este caso cierra un POLIZON medido el 2026-08-16: el guard de la 10.6 dice, en
+# su comentario, que las reglas permanentes salen "solo en Claude", pero el
+# codigo pregunta por TARGET=claude — y TARGET para zcode resuelve JUSTAMENTE a
+# `claude` por el fallback ZCODE_SESSION_ID/ZCODE_PROJECT_DIR (decision de la
+# 5.4: las formas de salida medidas en 5.2 son las mismas). O sea que zcode viaja
+# de polizon bajo el mismo valor, y lo unico que hoy lo frena es que el
+# instalador registra 3 fases y no la de arranque.
+#
+# La 10.9 midio que el SessionStart de zcode EXISTE y dispara, pero NO pudo medir
+# si el texto llega al modelo (el turno murio en provider_not_configured). Sin
+# ese veredicto, registrar la 4a fase seria emitir a ciegas, que es exactamente
+# lo que esta fila viene a impedir. El invariante vive aca hasta que haya
+# veredicto: cuando zcode se mida y de `aceptada`, este caso se INVIERTE a
+# proposito y su cambio es la declaracion de que la medicion existio.
+caso "zcode: NO registra la 4a fase (SessionStart) mientras zcode siga sin veredicto (10.9)"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+python - "$zcode_cfg" <<'PY' || malo "zcode: aparecio una entrada nuestra en SessionStart sin medicion que la habilite"
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+ev = d["hooks"]["events"]
+nuestras = [h for g in ev.get("SessionStart", []) for h in g.get("hooks", [])
+            if "saikit-harness-id 5.4" in h.get("command", "")]
+assert not nuestras, f"SessionStart tiene {len(nuestras)} entrada(s) canonica(s) y no debe tener ninguna"
+# La otra mitad: que no haya ninguna NUESTRA no puede lograrse borrando la ajena.
+vecino = [h for g in ev.get("SessionStart", []) for h in g.get("hooks", [])
+          if "arranque-dummy" in h.get("command", "")]
+assert vecino, "el vecino ajeno de SessionStart tiene que seguir ahi"
+PY
+
 # --- B3.2) idempotente + repara malformada
 caso "zcode: segunda vez no duplica (idempotencia por entrada canonica)"
 dest_listo; nuevo_zcode_cfg
