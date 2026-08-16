@@ -222,6 +222,28 @@ VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corr
 # - (failures?|errors?)[=:]([[:space:]]*)?[1-9]: phpunit `Failures: 1`,
 #   unittest Python `failures=1`, `Errors: 5`. El digito NO-cero evita
 #   `Failures: 0`.
+# Task 10.15 -- A11 VUELVE POR OTRA PUERTA. La 3.8 cerro A11 grepeando senales
+# de fracaso en la salida del runner, y eso funciona cuando la salida EXISTE.
+# En el evento de DESPACHO de un job en background todavia no hay salida: el
+# tool_response dice "Command running in background with ID: ..." y nada mas.
+# El guard de fallas no tiene que mirar, asi que acreditaba igual. MEDIDO en
+# vivo (2026-08-15): se lanzo `bash tests/run.sh`, el log anoto `verified:`
+# mientras el job corria, y esa bateria termino en FAIL. El gate dio por
+# verificado un turno cuya verificacion fallo -- exactamente A11.
+#
+# No existe un segundo evento donde mirar el resultado: cuando el job termina,
+# el aviso llega por la via del PROMPT como notificacion de tarea, no como un
+# PostToolUse (medido al implementar la 10.14). Y desde la 10.14 el hook ignora
+# esas notificaciones a proposito.
+#
+# Decision, siguiendo el precedente del spec (limites DECLARADOS en vez de
+# chequeos fingidos, ver la fila A11): si no hay resultado observable, NO se
+# acredita. Denegar credito falla del lado seguro; otorgarlo en falso es A11.
+# El resultado real sigue viajando por la prosa del recibo, que el gate ya
+# exige. Limite declarado: el grep va sobre el payload entero, asi que un
+# comando que mencione literalmente estas cadenas tampoco acredita -- falso
+# negativo, del lado seguro. Atado por caso_g2_runner_en_background_no_acredita.
+SAIKIT_DESPACHO_BG_RE='running in background|moved to the background'
 FAILURE_SIGNAL_RE_CI='failure_type|permission_denied|command not found|AssertionError:|AssertionFailedError:|Traceback \(most recent call last\)|SyntaxError:|TypeError:|ReferenceError:|RangeError:|error TS[0-9]|[1-9][0-9]*[[:space:]]+(failed|failing|failures?|errors?)|(failures?|errors?|failed)[=:]([[:space:]]*)?[1-9]'
 # CS (case-SENSITIVE, -Eq, sin -i): frases literales donde -i daria falso
 # positivo en prosa del log (`0 failures!`, `failed to connect`, `--- fail:`).
@@ -1512,6 +1534,7 @@ record_tool_evidence() {
      && { printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_WORD_RE" \
           || printf '%s' "$command_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
     if [ -z "$toolresult_err" ] \
+       && ! printf '%s' "$INPUT" | grep -Eiq "$SAIKIT_DESPACHO_BG_RE" \
        && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
               || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
       mark_evidence "verified" "${command_text:-verification command}"

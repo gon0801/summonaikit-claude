@@ -50,6 +50,7 @@ G1|desarma_con_prompt_vacio|la clausula que impide desarmar con prompt vacio se 
 G1|marca_notificacion_laxa|la marca de notificacion vuelve a la forma laxa (contiene) y un prompt humano que la menciona se queda sin gate
 G1|reglas_no_dicen_donde|la regla permanente de la bateria deja de nombrar el lugar y vuelve a decir solo cuantas veces
 G1|laxa_sin_cierre|la forma laxa deja de exigir la marca de cierre y una mencion humana casual suprime el desarme
+G2|despacho_bg_acredita|el guard del despacho en background se neutraliza y un job recien lanzado vuelve a acreditar verificacion sin resultado
 G1|notificacion_no_se_reconoce|el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
@@ -180,6 +181,9 @@ mut_reglas_no_dicen_donde() { sed 's/OPEN A PULL REQUEST/run it/'; }
 # PR #30: que la forma laxa se conforme con la marca de apertura. La atrapa
 # caso_g1_mencion_humana_sin_sentinel_si_desarma.
 mut_laxa_sin_cierre() { sed 's|grep -Eq "$SAIKIT_TASK_NOTIFICATION_CIERRE_RE"|true|'; }
+# Task 10.15: que un despacho en background vuelva a acreditar. La atrapa
+# caso_g2_runner_en_background_no_acredita.
+mut_despacho_bg_acredita() { sed 's|grep -Eiq "$SAIKIT_DESPACHO_BG_RE"|false|'; }
 mut_notificacion_no_se_reconoce() { sed 's/"\$SAIKIT_TASK_NOTIFICATION_RE"/"NUNCA_MATCHEA_ESTO_10_14"/'; }
 # session_id_greedy es el gemelo de mut_subagent_type_greedy para session_id:
 # volver al lector greedy del payload crudo tomaba la ULTIMA ocurrencia de la
