@@ -168,7 +168,7 @@ mut_desarmar_quita_borrado()   { sed 's/if \[ "\$PHASE" = "prompt" \] && \[ -f "
 # Task 10.14 (reviewer): la otra clausula del acotamiento, la que exige un
 # prompt NO vacio. Sin ella un UserPromptSubmit sin texto vuelve a desarmar.
 # La atrapa caso_g1_prompt_vacio_no_desarma.
-mut_desarma_con_prompt_vacio() { sed 's/\[ -n "$prompt_text" \]; then/true; then/'; }
+mut_desarma_con_prompt_vacio() { sed 's/\[ -n "$prompt_text" \]/true/'; }
 # PR #30 (greptile P1 + coderabbit Major): volver la marca a la forma laxa.
 # La atrapa caso_g1_mencion_humana_de_la_marca_sigue_armando.
 mut_marca_notificacion_laxa() { sed "s|'\^\[\[:space:\]\]\*<task-notification>'|'<task-notification>'|"; }
