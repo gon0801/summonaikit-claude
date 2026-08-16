@@ -852,7 +852,11 @@ write_state() {
 }
 
 harness_context() {
-  cat <<'HARNESS_CONTEXT'
+  # r2 (Greptile P1 / CR PR #28): el heredoc con delimitador entrecomillado NO
+  # expande $TOOL_HINT — llegaba LITERAL al modelo ("delegate via $TOOL_HINT").
+  # Sustitucion controlada a posteriori: unico punto donde la variable
+  # entra al contrato, el resto del heredoc sigue sin expansion.
+  _hc="$(cat <<'HARNESS_CONTEXT'
 SUMMONAIKIT HARNESS REQUIRED
 
 Who you are working for:
@@ -954,6 +958,8 @@ Review: findings, risks, or "no findings" with basis.
 Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
+)"
+  printf '%s' "${_hc//\$TOOL_HINT/$TOOL_HINT}"
 }
 
 # Task 10.1: los clasificadores del vendor (is_engineering_task,

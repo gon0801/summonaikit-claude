@@ -2286,6 +2286,7 @@ caso_g3_grok_ceremonia_incompleta_bloquea() {
   _contiene "el contrato viaja en el bloqueo (reason, 7.2)" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
   _contiene "el reason nombra la tool nativa de grok (CR PR #28)" "$LAB_OUT" 'spawn_subagent tool'
   case "$LAB_OUT" in *'Task tool'*) _mal "el reason grok nombra Task tool, que no existe en Grok (CR PR #28)" ;; esac
+  case '$LAB_OUT' in *'$TOOL_HINT'*) _mal 'el contrato emite TOOL_HINT literal: el heredoc no expande (r2 PR #28)' ;; esac
 }
 
 # Prueba negativa: SIN TARGET=grok la rama no aplica. Un Stop de cursor con la
