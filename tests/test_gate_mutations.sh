@@ -120,6 +120,7 @@ G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en t
 G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
 G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
+G3|ceremonia_sin_grok|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -405,6 +406,10 @@ mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 # sin la rama (y sin su prioridad), el lado grok resuelve HOST=claude y los dos
 # hosts comparten estado. Lo atrapa caso_g1_dos_hosts_grok_y_claude_no_comparten_estado.
 mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; then/if false; then/'; }
+# Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
+# inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
+# incompleto pasa a cerrar limpio y el decision:block desaparece).
+mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok)/case "$TARGET" in claude|codex)/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa

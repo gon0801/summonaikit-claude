@@ -1435,13 +1435,29 @@ emit_gate_failure() {
   fi
 
   escaped="$(json_escape "$feedback")"
+  # Task 7.4 (re-planificacion del armado, medido 7.2): additionalContext es
+  # IGNORADO por Grok en las 4 formas medidas, y UPS no esta en
+  # blockingEvents — el unico canal medido que llega al modelo es el REASON
+  # del decision:block (7.2: el modelo lo cito textual en el turno block0).
+  # Asi que en grok el contrato viaja ADOSADO a cada bloqueo del Stop: llega
+  # al primer Stop bloqueado en vez de al armado (declarado como limite), y
+  # llega completo cada vez (idempotente, el modelo relee lo que falto).
+  if [ "$TARGET" = "grok" ]; then
+    feedback="$feedback
+
+$(harness_context)"
+    escaped="$(json_escape "$feedback")"
+  fi
   printf '{"decision":"block","reason":"%s"}\n' "$escaped"
   printf '%s\n' "$feedback" >&2
   # Task 6.4 (medido 6.2, 12 turnos headless): Codex DESCARTA el stdout del
   # hook cuando el exit no es 0 — el mismo JSON con exit 2 no bloquea (1 Stop,
   # 0 hook_prompt) y con exit 0 bloquea (4 Stops, 3 hook_prompt). El bloqueo
   # de codex viaja con exit 0; claude/zcode conservan el exit 2 medido en 5.2.
-  if [ "$TARGET" = "codex" ]; then
+  # Task 7.4 (medido 7.2): grok igual que codex — PowerShell devuelve el
+  # exit 2 como 1 y Grok hace fail-open en Stop (exit 2 = IGNORADA); el JSON
+  # con exit 0 = ACEPTADA y mueve el Stop de forma fiable.
+  if [ "$TARGET" = "codex" ] || [ "$TARGET" = "grok" ]; then
     exit 0    # saikit-6.4-codex-block (mutacion: exit 0 -> exit 2)
   fi
   exit 2
@@ -1694,7 +1710,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # a Claude post-3.7), asi que la rama se prende — la condicion del diseno
   # ("solo si 6.1 mide que el rol llega") esta cumplida y medida. cursor y
   # other siguen fuera; zcode entra por su fallback TARGET=claude (5.4).
-  case "$TARGET" in claude|codex)
+  # Task 7.4 (D3): grok entra — 7.1 midio el rol por TRES canales
+  # (SubagentStart.subagentType top-level, despacho spawn_subagent con
+  # toolInput.subagent_type que SI emite post_tool_use, e internos del hijo
+  # con subagentType), y el env map entrega TARGET=grok en los 37 dumps. La
+  # condicion del diseño ("solo si 7.1 mide que el rol llega") cumplida por
+  # partida doble. Los tres canales ya los leia la 7.3.
+  case "$TARGET" in claude|codex|grok)
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
     # de herramienta) trababa el turno sin salida. La declaracion en el recibo
