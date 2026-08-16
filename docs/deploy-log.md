@@ -635,3 +635,23 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **`check-hook-registration.sh`:** 3 fases OK, exit 0.
 - **Vivo vs origin/master:** cmp byte a byte idéntico.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-16 — PR #32 / Task 7.6 (línea base grok + staging + install + turno real — cierre Phase 7) — deploy ACTUALIZA los tres vivos
+
+- **Cierre de Phase 7**: escenarios 35-42 en la línea base dorada (recaptura headless,
+  22 payloads, perfil byte a byte), staging real con hook de proyecto (disparó sin
+  tocar el global; grok corre AMBOS registros con estados separados), install verificado
+  (YA AL DIA con identidad sha256 — lo había publicado una sesión gemela paralela,
+  declarada) y turno real (`-saikit` armó bajo `state/grok/`, ceremonia completa,
+  cierre limpio; pelado no creó estado). El hook NO cambió en el PR (7.6 es
+  tests/tools-only; 7.3/7.4 lo dejaron listo). CI del PR: 5/5, `suite` verde (gate final).
+- **El vivo de Claude y Codex estaban un PR atrás** (el deploy post-PR #30 no se llegó
+  a correr): `install-hook.sh` REPARADO los tres perfiles con backup —
+  `~/.claude/…nuestro.20260816-075853.bak`, `~/.codex/…075856.bak`,
+  `~/.grok/…075901.bak`. Los tres quedaron en `cea9f4c1…` == master byte a byte.
+- **`check-hook-registration.sh`** en sus tres formas: claude (settings), codex
+  (`--codex-hooks-json`), grok (`--grok-hooks-dir`) — exit 0, silencio.
+- **verifier ajeno de grok**: DESCONOCIDO (no lleva marca), intacto — cksum `353659411`
+  (el de 7.1/7.2). Nuestros `implementer.md`/`reviewer.md` presentes con frontmatter
+  traducido.
+- **Operador:** Gon (sesión zcode).
