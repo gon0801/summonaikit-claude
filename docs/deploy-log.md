@@ -7,6 +7,26 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy del perfil Claude (master `727049d`, PR #35 / Task 10.15)
+
+- **Que se deployo:** el hook de `master` al perfil **Claude** con
+  `bash tools/install-hook.sh`. Destino clasificado NUESTRO-pero-distinto y
+  reparado con backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260816-114020.bak`.
+- **Que traia:** la Task 10.15 — un DESPACHO en background ya no acredita
+  verificacion. Es A11 volviendo por otra puerta: la 3.8 la cerro grepeando
+  senales de fracaso en la salida, y en el despacho de un job en background esa
+  salida todavia no existe.
+- **Despues:** vivo `2954439412 118023`, identico al repo (`cmp` byte a byte).
+- **Verificado:** `tools/check-hook-registration.sh` exit 0, y
+  `tests/test_golden_baseline.sh` **OK** contra el hook ya instalado. La linea
+  base NO se regrabo en este cambio: `--check` dio exit 0 porque ningun
+  escenario ejercita un despacho en background (deriva de identidad tolerada
+  por diseno, decision 2 del arnes).
+- **Efecto practico a tener presente:** a partir de ahora, lanzar la bateria en
+  background NO acredita verificacion por si solo. El resultado real se declara
+  en la prosa del recibo, que es donde de verdad se ve si paso o fallo.
+
 ## 2026-08-16 — Deploy del perfil Claude (master `5de0e27`, PRs #30, #33 y #34)
 
 - **Que se deployo:** el hook de `master` al perfil **Claude**, con
