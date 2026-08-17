@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-17 — Deploy a los tres perfiles con copia (Task 11.4, PR #42) + no-op (Task 11.5)
+
+- **Qué traía la 11.4 (PR #42, fix de review `8d3dadd`):** unknown honesto en
+  el Stop gate — con AMBOS canales de texto no observados (sin
+  last_assistant_message/lastAssistantMessage en el payload y transcript
+  ausente/ilegible/fuera de perfil), el gate cierra con diagnóstico por
+  stderr, exit 0 sin consumir ciclo y estado limpio (mismo desenlace que el
+  presupuesto agotado). Campo presente sin recibo sigue bloqueando. La 11.5
+  vive en summonaikit-kimi (PRs kimi#4/#5); acá no tocó el hook.
+- **Deploy por perfil:** claude, codex y grok **REPARADO** con backup
+  (`…nuestro.20260817-005026.bak`, `…005059.bak`, `…005103.bak`). zcode sin
+  copia propia (registro apunta a la de claude).
+- **Verificado:** `check-hook-registration.sh` en sus tres formas (default,
+  `--codex-hooks-json ~/.codex/hooks.json`, `--grok-hooks-dir ~/.grok/hooks`)
+  — exit 0 las tres. `tools/golden-harness.sh --check` contra el hook
+  instalado: OK, 44/44 sin veredictos movidos.
+- **Operador:** Gon; merge y deploy desde la sesión GLM/zcode (Task 11).
+
 ## 2026-08-16 — Deploy NO-OP + cierre Task 11.3 (espejo en summonaikit-kimi, PR kimi#3)
 
 - **Qué traía:** la Task 11.3 cierra EN el repo hermano: port de la guardia
