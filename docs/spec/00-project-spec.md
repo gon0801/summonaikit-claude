@@ -76,16 +76,19 @@ es el único host sin Stop medido: si careciera del campo y de transcript en
 perfil, entra al mismo desenlace unknown — misma clase de medición pendiente
 que la Task 11.6.
 
-**Límite declarado (revisión del plan, 2026-08-17): esta postura NO cierra, por
-sí sola, el fallo de campo que la motivó.** La rama exige el campo AUSENTE, y la
-única captura real de un Stop de zcode (Task 5.1, `docs/task-5.1-captura.md:35`)
-lo trae PRESENTE, con `responseText`/`responsePreview` al lado. Si eso vale en
-general, el turno de zcode que agotó el presupuesto vuelve a caer en ausencia
-OBSERVADA y sigue bloqueando: lo que falla ahí sería el CONTENIDO o la
-extracción del campo, no su presencia. Lo que esta postura sí cierra es la clase
-de host/turno donde el campo falta de verdad, y la Core Rule 2 adentro del gate.
-Distinguir las dos cosas es la Task 11.6(a); hasta esa medición, el fallo de
-campo de zcode se declara ABIERTO, no cerrado por la 11.4.
+**Alcance MEDIDO (Task 11.6, captura real 2026-08-17,
+`docs/task-11.6-captura.md`): esta rama NO alcanza a zcode.** El Stop real de
+zcode trae `last_assistant_message` COMPLETO (4522 chars, con el recibo adentro;
+el truncado es `responsePreview`, que el hook no lee) y el gate lo extrae y
+cierra limpio. Probado por falsificación sobre el mismo payload: hay que BORRAR
+la clave para que la rama dispare (exit 0 + diagnóstico), y con la clave y el
+recibo mutado el gate bloquea (exit 2, `cycle=1`). O sea que la postura es
+correcta como guarda de Core Rule 2 para la clase de host/turno donde el campo
+falte de verdad, y no es lo que cierra el fallo de campo que la motivó.
+**Residual declarado:** ese fallo (turno de zcode que agotó el presupuesto con
+recibo válido) queda SIN explicación medida — el canal no estaba ciego. Si
+reaparece, se captura el Stop del turno que falla; no se afirma una causa desde
+la no-observación.
 
 Extender la contención A6 al tmpdir de
 zcode (camino 1 del datapoint) NO se hace aquí: queda gateado por la medición
