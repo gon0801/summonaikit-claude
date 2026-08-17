@@ -1249,10 +1249,13 @@ start_harness() {
     # ser mudo y se rompe caso_g1_no_arma_sin_sentinel (esa es la regresion que
     # atrapa una rama mal acotada, por eso 10.6 no agrega un caso propio).
     # No arma, no escribe estado y no toca el gate del sentinel.
-    # Task 10.9: claude (10.6) + codex (medido 2026-08-16). grok NO: se midio y
-    # su additionalContext se ignora en esta fase. zcode viaja bajo TARGET=claude
-    # por el fallback de la 5.4, pero su 4a fase NO esta registrada y no se
-    # registra hasta que haya veredicto (atado en test_install_hook).
+    # Task 10.9: emiten claude (10.6), codex y zcode, los tres MEDIDOS. grok NO:
+    # se midio y su additionalContext se ignora en esta fase.
+    #
+    # zcode no aparece en la condicion y sin embargo emite: viaja bajo
+    # TARGET=claude por el fallback de la 5.4. Lo que lo habilito no fue este
+    # `if` sino su REGISTRO — install-hook.sh --host zcode pasa a registrar la
+    # 4a fase, atado en test_install_hook.
     if [ "$PHASE" = "session" ] && { [ "$TARGET" = "claude" ] || [ "$TARGET" = "codex" ]; }; then
       emit_standing_rules
     fi
