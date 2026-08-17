@@ -14,12 +14,21 @@ zcode no produce, y eso sigue declarado en su propio README. `responsePreview`
 va igual a `responseText` porque el truncado real (4003 de 4522) solo aparece en
 mensajes largos, y los de estos fixtures son cortos.
 
-**Lo que sigue SIN alinear, declarado:** los fixtures de `UserPromptSubmit` y
-`PostToolUse` de zcode. Sus formas medidas están en
-`docs/task-11.6-captura.md`, así que no hace falta otra captura; lo que falta es
-el trabajo, que no es cosmético — `toolResultPreview` duplica la salida de la
-herramienta dentro del payload y el guard de la Task 10.15 grepea el payload
-entero.
+**Las otras dos fases también quedaron alineadas (Task 11.10):** los 10
+`*.prompt.zcode.json` con sus 13 claves medidas (se quitó `prompt_id`) y los 22
+`*.tool.zcode.json` con sus 21 (se quitaron `duration_ms` y `effort`).
+`toolResultPreview` ahí es SINTÉTICO —los primeros 200 caracteres de la
+serialización del `tool_response`— y por eso se declara: el preview real de
+3637 chars es del turno capturado, no de estos escenarios. Ese cambio pisaba
+las dos zonas de riesgo (el `toolInput` camel duplica `subagent_type` en el
+payload crudo, terreno de A1; `toolResultPreview` duplica la salida de la
+herramienta, terreno del guard de la 10.15) y **se midió que no movió ningún
+veredicto**.
+
+**Lo que queda AFUERA a propósito:** los fixtures zcode de
+`tests/fixtures/arnes-falso/`. Son payloads mínimos para ejercitar la
+HERRAMIENTA (`golden-harness`) con un hook falso, no un corpus de lo que manda
+el host; el candado de forma los excluye y lo dice en el propio test.
 
 Lo de abajo es el estado anterior (Task 11.8) y se conserva porque explica por
 qué NO se tocaron antes de tener la medición: `docs/task-11.6-captura.md` registra
