@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy a los cuatro perfiles (master `544bc51`, PR #38 / Task 11.1)
+
+- **Qué traía:** la Task 11.1 (higiene de base de rama, hallazgo del run de
+  campo con Kimi) — bullet nuevo en las reglas permanentes (rama desde
+  `origin/<default>` con fetch previo; antes del PR, `git log
+  origin/<default>..HEAD` con SOLO los commits de la task) y la línea `Close:`
+  del recibo pide declararlo. Solo texto de contrato; cero cambios de lógica.
+- **Deploy por perfil:** claude ya estaba al día (GLM corrió `install-hook.sh`
+  desde la rama; el contenido del merge es idéntico). codex y grok estaban un
+  PR atrás ⇒ `install-hook.sh --host codex` y `--host grok`, ambos
+  **REPARADO** con backup en sus `saikit-backups/` (`…193428.bak` y
+  `…193432.bak`). zcode sin copia propia (su registro apunta a la de claude),
+  nada que hacer. El verifier ajeno de grok intacto, como siempre (D7).
+- **Después:** los tres perfiles con copia (`claude`, `codex`, `grok`) en
+  `1627467692 120958`, byte a byte iguales a `master` (`cmp`).
+- **Verificado:** `check-hook-registration.sh` en sus tres formas (claude,
+  `--codex-hooks-json`, `--grok-hooks-dir`) — exit 0 las tres.
+  `tests/test_golden_baseline.sh` contra el hook instalado: OK (la baseline
+  regrabada en el PR #38 describe exactamente lo que corre en los perfiles).
+- **Operador:** Gon; merge y deploy desde la sesión Claude que revisó el PR.
+
 ## 2026-08-16 — Deploy del perfil Grok: deuda vieja, no de la Task 10.9
 
 Encontrada al auditar los cuatro perfiles tras el deploy de la 10.9. **No es
