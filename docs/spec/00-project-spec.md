@@ -74,7 +74,20 @@ bloqueando como siempre (claude/codex medidos 1.4/6.2; glm hereda el payload
 de claude; grok sale antes por `reason` o trae `lastAssistantMessage`). Cursor
 es el único host sin Stop medido: si careciera del campo y de transcript en
 perfil, entra al mismo desenlace unknown — misma clase de medición pendiente
-que la Task 11.6. Extender la contención A6 al tmpdir de
+que la Task 11.6.
+
+**Límite declarado (revisión del plan, 2026-08-17): esta postura NO cierra, por
+sí sola, el fallo de campo que la motivó.** La rama exige el campo AUSENTE, y la
+única captura real de un Stop de zcode (Task 5.1, `docs/task-5.1-captura.md:35`)
+lo trae PRESENTE, con `responseText`/`responsePreview` al lado. Si eso vale en
+general, el turno de zcode que agotó el presupuesto vuelve a caer en ausencia
+OBSERVADA y sigue bloqueando: lo que falla ahí sería el CONTENIDO o la
+extracción del campo, no su presencia. Lo que esta postura sí cierra es la clase
+de host/turno donde el campo falta de verdad, y la Core Rule 2 adentro del gate.
+Distinguir las dos cosas es la Task 11.6(a); hasta esa medición, el fallo de
+campo de zcode se declara ABIERTO, no cerrado por la 11.4.
+
+Extender la contención A6 al tmpdir de
 zcode (camino 1 del datapoint) NO se hace aquí: queda gateado por la medición
 de la Task 11.6 (`%TEMP%` es el vector A7-bis, Task 0.2).
 
