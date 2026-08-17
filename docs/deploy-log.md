@@ -7,6 +7,19 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-17 — Deploy NO-OP + cierre Task 11.8 (escenario dorado de canales ciegos, PR #45)
+
+- **Qué traía:** la Task 11.8 (mitad ejecutable) — escenario dorado
+  `46-zcode-ambos-canales-ciegos` que ejercita la rama unknown honesto de la
+  11.4 en la capa que graba comportamiento, baseline 44→45 puramente aditiva,
+  prueba negativa medida dos veces (rama neutralizada ⇒ `--check` exit 1
+  señalando solo el 46) y declaración de fidelidad de los fixtures zcode
+  (`tests/fixtures/escenarios/README-zcode.md`; alineación = alcance restante
+  que se reabre con la 11.6).
+- **Este repo NO cambió su hook**: `install-hook.sh` ⇒ YA AL DIA.
+  `check-hook-registration.sh`: exit 0.
+- **Operador:** Gon; cierre desde la sesión GLM/zcode (Task 11).
+
 ## 2026-08-17 — Deploy NO-OP + cierre Task 11.7 (espejo en summonaikit-kimi, PR kimi#6)
 
 - **Qué traía:** la Task 11.7 cierra EN el repo hermano: port del unknown
