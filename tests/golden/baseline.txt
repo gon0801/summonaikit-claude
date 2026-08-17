@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 20ecee4fa0090134269db4cf6db7fc81c862073491f912c17c1f67c8391e8a93
-# hook_bytes: 122445
-# hook_lineas: 2083
-# escenarios: 44
+# hook_sha256: 02ff8d27ce38ba381e0ebd73dd2f6676d670dfcca1eaa0dadf3cf01f8d5ff11b
+# hook_bytes: 126707
+# hook_lineas: 2146
+# escenarios: 45
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -3834,3 +3834,122 @@ exit 0
 stdout <vacio>
 stderr <vacio>
 estado sin cambios
+
+=== escenario 46-zcode-ambos-canales-ciegos
+# Task 11.8 — el escenario dorado de la rama ambos-canales-ciegos de la 11.4.
+# Misma secuencia y evidencia completa que el 21 (turno completo), pero el Stop
+# NO trae last_assistant_message y su transcript_path apunta fuera del perfil
+# (ruta literal, sin companion): los DOS canales de texto del gate no
+# observados. Antes de la 11.4 este turno bloqueaba exigiendo recibo y quemaba
+# ciclo (ausencia afirmada desde la no-observacion); con el unknown honesto
+# cierra: exit 0, diagnostico por stderr y estado de sesion limpio. Es la
+# mitad ciega del borde; la mitad observada (campo presente sin recibo =>
+# bloquea) la pina el 22.
+--- paso 01  phase=prompt target=zcode  payload=01.prompt.zcode.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+estado_host: zcode
+--- paso 02  phase=tool target=zcode  payload=02.tool.zcode.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+estado_host: zcode
+--- paso 03  phase=tool target=zcode  payload=03.tool.zcode.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer
+| lane=full
+estado_host: zcode
+--- paso 04  phase=tool target=zcode  payload=04.tool.zcode.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: python -m pytest -q
+| agent: verifier
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier
+| lane=full
+estado_host: zcode
+--- paso 05  phase=tool target=zcode  payload=05.tool.zcode.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| verified: python -m pytest -q
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/sess_zcode_46/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+estado_host: zcode
+--- paso 06  phase=stop target=zcode  payload=06.stop.zcode.json
+exit 0
+stdout <vacio>
+stderr (sha 0b7bf191c634c8a5, 325 bytes)
+| summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.
+--- estado tras el paso 06
+(sin estado)

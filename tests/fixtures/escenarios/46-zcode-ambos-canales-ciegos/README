@@ -1,0 +1,9 @@
+Task 11.8 — el escenario dorado de la rama ambos-canales-ciegos de la 11.4.
+Misma secuencia y evidencia completa que el 21 (turno completo), pero el Stop
+NO trae last_assistant_message y su transcript_path apunta fuera del perfil
+(ruta literal, sin companion): los DOS canales de texto del gate no
+observados. Antes de la 11.4 este turno bloqueaba exigiendo recibo y quemaba
+ciclo (ausencia afirmada desde la no-observacion); con el unknown honesto
+cierra: exit 0, diagnostico por stderr y estado de sesion limpio. Es la
+mitad ciega del borde; la mitad observada (campo presente sin recibo =>
+bloquea) la pina el 22.
