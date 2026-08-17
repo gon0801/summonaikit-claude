@@ -100,6 +100,8 @@ G4|etiqueta_sin_bold|la alternativa markdown bold se quita y un recibo **Label**
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
 G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
+G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
+G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
 G4|walker_sin_resets|el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente
 G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
@@ -540,6 +542,25 @@ mut_delegado_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED/
 # caso_g4_delegado_incidental_en_recibo_roto_bloquea (el recibo roto con la
 # frase incidental vuelve a cerrar en silencio, exit 0 en vez de 2).
 mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT_NUNCA'/"; }
+# Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
+# !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
+# continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
+# grep del PAUSED, que solo aparece en la condicion de la escotilla (el texto
+# del contrato y el feedback del gate citan la frase sin "grep -Eiq '" delante,
+# asi que la mutacion no los toca). Sin la guardia, un recibo + PAUSED vuelve a
+# saltar el gate entero -- lo atrapa caso_g4_recibo_completo_mas_paused_cierra_limpio
+# (primero en el orden de CASOS_G4; el roto+PAUSED, caso_g4_recibo_roto_mas_
+# paused_sigue_exigiendo, reacciona igual).
+mut_paused_sin_guardia_de_recibo() { sed "/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/,+3c\\
+  if printf '%s' \"\$text_hatch\" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then emit_allow; fi"; }
+# Task 11.2, mitad 2: INVIERTA la guardia — la escotilla solo permite si hay
+# recibo PRESENTE (if anidado, sin `&&` para no pelear con el `&` de sed en el
+# reemplazo). Con eso, una pausa legitima SIN recibo (la unica que la escotilla
+# debe permitir) vuelve a bloquear -- lo atrapa caso_g4_pausa_permite (ningun
+# otro caso de CASOS_G4 pausa sin recibo: los nuevos de la 11.2 siempre lo
+# llevan puesto).
+mut_paused_exige_recibo() { sed "/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/,+3c\\
+  if printf '%s' \"\$text_hatch\" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then if printf '%s' \"\$text_hatch\" | grep -Eiq \"\$RECEIPT_MARKER_RE\"; then emit_allow; fi; fi"; }
 # Task 8.2 (C4): devuelve las escotillas al texto completo ($text incluye el
 # tail con turnos anteriores). Catch: caso_g4_pausa_vieja_solo_en_transcript_
 # bloquea (un PAUSED viejo vuelve a saltar el gate).
