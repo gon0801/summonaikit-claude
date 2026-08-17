@@ -25,3 +25,14 @@ Lo que SÍ entró en la 11.8: el escenario `46-zcode-ambos-canales-ciegos`,
 que ejercita en la capa dorada la rama de canales ciegos de la Task 11.4
 (hasta ahora cubierta solo por gate_cases + mutaciones — lección de la 10.17:
 cubierto por mutaciones != cubierto por la capa que graba COMPORTAMIENTO).
+
+**El 46 cae bajo esta misma declaración, y hay que decirlo** (review 11.8 del
+lead): es un fixture zcode NUEVO, con la misma reconstrucción snake_case que
+sus hermanos, y encima su Stop OMITE `last_assistant_message` — que es
+justamente lo que la 5.1 midió PRESENTE en un Stop real de zcode. O sea que el
+46 tampoco describe la forma del host: fija la CONDUCTA de la rama (qué hace
+el gate con los dos canales ciegos), que es lo que la capa dorada tiene que
+grabar. Se declara acá y en su propio README para que nadie lo lea como
+evidencia de que zcode manda Stops sin ese campo — si la 11.6 mide que el
+campo llega siempre, lo que queda abierto es si esa rama alcanza a zcode
+(Task 11.6(a)), no la validez de este escenario como candado de conducta.
