@@ -123,6 +123,64 @@ if [ -n "$rutas_malas" ]; then
   while IFS= read -r l; do malo "$l"; done <<< "$rutas_malas"
 fi
 
+# Task 11.9 — la forma del Stop de zcode esta MEDIDA (11.6), asi que se pinnea.
+#
+# Por que hace falta un test y no alcanza con la linea base dorada: se midio
+# (11.9) que alinear estos fixtures NO mueve ningun veredicto — `--check` sigue
+# en verde con los 45 escenarios. Eso es bueno para el cambio y malo como
+# candado: la baseline graba CONDUCTA, no payloads, asi que alguien podria
+# revertir la forma y la capa dorada no se enteraria. Este caso es el guardia
+# que falta.
+#
+# Las claves salen de docs/task-11.6-captura.md (captura real, 2026-08-17), no
+# de la generalizacion de la 5.1 — que para este evento resulto FALSA:
+# `lastAssistantMessage` NO existe. Se exige su ausencia a proposito: es lo que
+# mantiene ciego al escenario 46-zcode-ambos-canales-ciegos, cuya rama de la
+# 11.4 dispara solo si el gate no ve ningun canal de texto.
+caso "los *.stop.zcode.json llevan la forma medida del Stop de zcode (11.6)"
+forma_mala="$("$python_bin" - "$fixtures" <<'PY'
+import json, pathlib, sys
+
+# Medidas en la captura real de la 11.6. Las de texto van aparte porque el
+# escenario 46 las omite a proposito (modela un Stop sin canal de texto).
+BASE = {"cwd", "hookEventName", "hook_event_name", "mode", "permission_mode",
+        "sessionId", "session_id", "stopHookActive", "stop_hook_active",
+        "timestamp", "toolCallCount", "traceId", "transcriptPath",
+        "transcript_path", "turnId"}
+TEXTO = {"last_assistant_message", "responseText", "responsePreview"}
+# zcode NO manda estas. Las dos ultimas son de la forma de Claude (1.4) y se
+# habian colado por copia al reconstruir los fixtures en la Phase 5.
+PROHIBIDAS = {"lastAssistantMessage", "background_tasks", "session_crons"}
+
+salida = []
+raiz = pathlib.Path(sys.argv[1])
+vistos = 0
+for p in sorted(raiz.rglob("*.stop.zcode.json")):
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        continue  # su invalidez ya la reporta el primer caso
+    vistos += 1
+    claves = set(d)
+    faltan = BASE - claves
+    if faltan:
+        salida.append(f"{p}: faltan claves medidas: {', '.join(sorted(faltan))}")
+    sobran = PROHIBIDAS & claves
+    if sobran:
+        salida.append(f"{p}: trae claves que zcode NO manda: {', '.join(sorted(sobran))}")
+    # zcode manda el trio de texto junto: si esta el canal que el gate lee,
+    # tienen que estar sus dos companeros medidos.
+    if "last_assistant_message" in claves and not TEXTO <= claves:
+        salida.append(f"{p}: trae last_assistant_message sin {', '.join(sorted(TEXTO - claves))}")
+if vistos < 10:
+    salida.append(f"esperaba los ~12 stops de zcode, encontre {vistos}")
+print("\n".join(salida))
+PY
+)"
+if [ -n "$forma_mala" ]; then
+  while IFS= read -r l; do malo "$l"; done <<< "$forma_mala"
+fi
+
 # Sin esto, borrar el arbol de fixtures dejaria el test en verde con cobertura
 # cero: "0 archivos, 0 malos" no es lo mismo que "todos validos".
 caso "hay fixtures que revisar (un arbol vacio no pasa como verde)"

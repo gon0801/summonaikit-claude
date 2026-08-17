@@ -1,7 +1,28 @@
 # Fixtures zcode de la línea dorada — declaración de fidelidad (Task 11.8)
 
-**Estado (2026-08-17, tras la Task 11.6): la medición YA existe y la alineación
-está desbloqueada — vive en la fila 11.9.** `docs/task-11.6-captura.md` registra
+**Estado (2026-08-17, tras la Task 11.9): los `*.stop.zcode.json` YA están
+alineados a la forma medida.** Qué se hizo, para que nadie lo tenga que
+reconstruir: se agregaron los duplicados camel que zcode sí manda (`sessionId`,
+`transcriptPath`, `mode`, `stopHookActive`; `hookEventName` ya estaba), los
+extras medidos (`timestamp`, `toolCallCount`, `traceId`, `turnId`) y
+`responseText`/`responsePreview`; se quitaron `background_tasks` y
+`session_crons`, que venían de la forma de Claude (1.4) y el Stop real de zcode
+no trae. **NO se agregó `lastAssistantMessage`**: la 11.6 lo midió AUSENTE — y
+esa ausencia es justo lo que mantiene ciego al escenario 46. El 46 tampoco
+recibió las tres claves de texto: modela un Stop sin ningún canal de texto, que
+zcode no produce, y eso sigue declarado en su propio README. `responsePreview`
+va igual a `responseText` porque el truncado real (4003 de 4522) solo aparece en
+mensajes largos, y los de estos fixtures son cortos.
+
+**Lo que sigue SIN alinear, declarado:** los fixtures de `UserPromptSubmit` y
+`PostToolUse` de zcode. Sus formas medidas están en
+`docs/task-11.6-captura.md`, así que no hace falta otra captura; lo que falta es
+el trabajo, que no es cosmético — `toolResultPreview` duplica la salida de la
+herramienta dentro del payload y el guard de la Task 10.15 grepea el payload
+entero.
+
+Lo de abajo es el estado anterior (Task 11.8) y se conserva porque explica por
+qué NO se tocaron antes de tener la medición: `docs/task-11.6-captura.md` registra
 la forma real del Stop de zcode: 18 claves de primer nivel, con un matiz que
 cambia el trabajo pendiente — **no todas se duplican en camelCase**
 (`lastAssistantMessage` NO existe; sí se duplican `hook_event_name`,
