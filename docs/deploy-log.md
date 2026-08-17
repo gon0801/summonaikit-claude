@@ -7,6 +7,40 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy del perfil Claude (master `51110e0`, PR #37 / Task 10.9)
+
+- **Qué se mergeó:** PR #37 `feat/10.9-standing-rules-otros-hosts` → master. La
+  Task 10.9 saca a zcode, Codex y Grok de `unknown` respecto de las reglas
+  permanentes de la 10.6, **con la medición delante de cada decisión**.
+  Resultado: **zcode ACEPTADA, Codex ACEPTADA, Grok IGNORADA** — dos de tres
+  habilitan, y el resultado **no fue uniforme**, que es lo que justifica
+  retroactivamente que la 10.6 se negara a extrapolar desde Claude.
+- **Deploy:** `bash tools/install-hook.sh` ⇒ **REPARADO** (el destino era
+  nuestro y difería de la fuente). **No fue no-op:** el hook vivo pasó de
+  `2954439412 118023` a `112284225 120124`, byte a byte igual a `master`
+  (verificado por `cksum` antes y después). Backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260816-172627.bak`.
+- **Registro:** `bash tools/check-hook-registration.sh` ⇒ **exit 0 en silencio**
+  (las fases siguen registradas; sin advisory).
+- **Qué gana el perfil vivo:** la rama de `SessionStart` ahora también emite en
+  `TARGET=codex`. Para Claude el comportamiento no cambia.
+- **Lo que este deploy NO hace, y hay que decirlo:**
+  - **Codex no recibe nada todavía.** Su `SessionStart` sigue sin entrada
+    nuestra en `~/.codex/hooks.json`, y agregarla no alcanza: Codex 0.147.0
+    exige además un `trusted_hash` por handler en `~/.codex/config.toml` que
+    **acuña el host**, no una herramienta. Es acción de operador, mismo patrón
+    que la 10.6 en Claude y la 9.9 con el matcher de `Agent`.
+  - **zcode tampoco, hasta reinstalar ahí.** `install-hook.sh --host zcode`
+    ahora registra 4 fases, pero este deploy fue sobre el perfil **Claude**.
+  - **Regla operativa de Codex:** los índices son parte de la clave de
+    confianza, así que **no se reordena** el array de una fase — reordenar
+    desalinea el `trusted_hash` de los hooks ya registrados y los apaga en
+    silencio.
+- **Perfiles de medición, restaurados:** de los 8 archivos tocados durante la
+  medición, 7 volvieron byte a byte a su cksum previo. El octavo
+  (`~/.zcode/cli/config.json`) cambió **por acción del operador** —su `/login`
+  escribe ahí la API key— y se verificó por estructura, no por cksum.
+
 ## 2026-08-16 — Deploy del perfil Claude (master `727049d`, PR #35 / Task 10.15)
 
 - **Que se deployo:** el hook de `master` al perfil **Claude** con
