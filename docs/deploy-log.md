@@ -7,6 +7,40 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-17 — Deploy NO-OP + cierre de las Tasks 11.6, 11.9 y 11.10 (PRs #48, #49, #50) y residuales de kimi (PR kimi#9)
+
+- **Qué traía:**
+  - **11.6 (PR #48, `f1d4f68`)** — captura real de zcode con el operador
+    adelante. El `last_assistant_message` llega COMPLETO (4522 chars con el
+    recibo); el truncado es `responsePreview`, que el hook no lee;
+    `lastAssistantMessage` camel NO existe. **La rama de la 11.4 no alcanza a
+    zcode**, probado por falsificación sobre el mismo payload. El camino 1 (A6
+    al tmpdir) queda RECHAZADO. Residual declarado: el fallo original de GLM
+    queda sin explicación medida.
+  - **11.9 (PR #49, `b6eab45`)** — los 12 `*.stop.zcode.json` alineados a las
+    18 claves medidas, más el candado de forma en `test_fixtures_json.sh`
+    (la línea base graba conducta, no payloads, así que no podía custodiarlos).
+  - **11.10 (PR #50, `4b679ae`)** — los 10 `*.prompt.zcode.json` (13 claves) y
+    los 22 `*.tool.zcode.json` (21 claves). Cero veredictos movidos, MEDIDO,
+    aun pisando A1 (`subagent_type` duplicado en el payload crudo) y el guard
+    de la 10.15 (`toolResultPreview`).
+- **Este repo NO cambió su hook** en ninguno de los tres: `install-hook.sh` ⇒
+  **YA AL DIA** en los tres perfiles con copia (claude, codex, grok), `cmp`
+  byte a byte contra `master` en los tres. `check-hook-registration.sh` en sus
+  tres formas: exit 0.
+- **En `summonaikit-kimi` (PR #9, `4c44845`)**: cierre de los dos residuales
+  bajos de la 11.5. El del `awk` era **falso VERDE** (un heredoc impostor
+  después del real dejaba `check_absorbed.sh` en exit 0 sobre el bloque
+  equivocado), ahora con `anclas_unicas()`; el de la doble corrida **no se
+  reproduce** (medido sobre las 6 corridas reales). Tools/tests only:
+  `check_deploy` ⇒ AL DIA.
+- **Higiene:** ramas remotas mergeadas borradas en los dos repos; las dos que
+  tenían commits propios (`feat/7.6-grok-baseline`,
+  `fix/paquete-A-defectos-del-gate`) se verificaron superadas —master tiene el
+  mismo escenario grok con nombres reescritos— y también se borraron. Queda
+  `origin/master` solo.
+- **Operador:** Gon (sesión Claude).
+
 ## 2026-08-17 — Deploy NO-OP acá + deploy REAL en kimi (correcciones del review, PR #47 y PR kimi#8)
 
 - **Qué traía acá (PR #47, `126165c`):** declaración de que la forma del
