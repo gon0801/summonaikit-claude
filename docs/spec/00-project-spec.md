@@ -57,6 +57,22 @@ crear estado ni bloquear nada.
    permite distinguir "esto es nuestro" de "esto es del vendor" sin depender del
    hash del archivo entero, que cambia con cada edición legítima.
 
+**Postura del Stop gate ante canales de texto no observados (Task 11.4,
+2026-08-16).** El `stop_gate` juzga el recibo por dos canales de texto:
+`last_assistant_message` (o su alias camel) en el payload y el tail del
+transcript dentro del perfil (A6). La Core Rule 2 aplica también DENTRO del
+gate, no solo a sus herramientas: si AMBOS canales están no observados — campo
+ausente del payload y transcript ausente, ilegible o fuera del perfil —
+exigir el recibo afirma ausencia desde la no-observación y cada bloqueo
+consume ciclo de revisión. Postura: **fail-open declarado** — el gate emite un
+diagnóstico fuerte (`unknown honesto`, stderr + log), cierra con exit 0 SIN
+consumir ciclo y limpia el estado de la sesión (mismo desenlace que el
+presupuesto agotado, A4). La distinción que preserva los dientes del gate:
+campo PRESENTE sin recibo es ausencia OBSERVADA y sigue bloqueando como
+siempre (claude/codex medidos 1.4/6.2). Extender la contención A6 al tmpdir de
+zcode (camino 1 del datapoint) NO se hace aquí: queda gateado por la medición
+de la Task 11.6 (`%TEMP%` es el vector A7-bis, Task 0.2).
+
 ## Data And Contracts
 
 ### Qué se hereda y qué se corrige
