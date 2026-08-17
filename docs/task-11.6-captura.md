@@ -127,11 +127,33 @@ El cierre del camino 2 (la 11.4) queda como está, con su alcance ahora declarad
 `timestamp`, `toolCallCount`, `traceId`, `transcriptPath`, `transcript_path`,
 `turnId`.
 
-Los `*.stop.zcode.json` de los escenarios 17-25 y del 46 traen hoy un subconjunto
-snake_case. Alinearlos a esta forma es el alcance restante de la 11.8, que esta
-medición desbloquea — con el matiz que acaba de aparecer: **no todas las claves
-se duplican en camelCase**, así que la alineación se hace contra esta lista, no
+Los `*.stop.zcode.json` de los escenarios 17-25 y del 46 traían un subconjunto
+snake_case. Alinearlos a esta forma fue la Task 11.9, que esta medición
+desbloqueó — con el matiz que acaba de aparecer: **no todas las claves se
+duplican en camelCase**, así que la alineación se hizo contra esta lista, no
 contra la regla general de la 5.1.
+
+### Las otras dos fases, medidas en la misma captura
+
+Quedan REGISTRADAS acá para que alinear sus fixtures no necesite otra sesión con
+operador adelante:
+
+- **`UserPromptSubmit`** (13 claves): `cwd`, `hookEventName`, `hook_event_name`,
+  `mode`, `permission_mode`, `prompt`, `sessionId`, `session_id`, `timestamp`,
+  `traceId`, `transcriptPath`, `transcript_path`, `turnId`.
+- **`PostToolUse`** (19 claves): las de arriba menos `prompt`, más
+  `toolCallId`/`tool_use_id`, `toolInput`/`tool_input`, `toolName`/`tool_name`,
+  `toolResponse`/`tool_response` y `toolResultPreview`. Confirmado otra vez que
+  **no hay `agent_type` top-level**: el rol viaja en `tool_input.subagent_type`
+  y en `tool_response.agentType` (5.1). El `tool_response` real de un `Agent`
+  trae `status`, `agentId`, `agentType`, `content[]`, `totalToolUseCount`,
+  `totalDurationMs`, `totalTokens` y `usage`.
+
+**Alinear estas dos NO se hizo en la 11.9 y no es cosmético**: `toolResultPreview`
+duplica la salida de la herramienta dentro del payload, y el guard de señales de
+falla de la Task 10.15 grepea el payload ENTERO — meter esa copia puede mover
+veredictos de acreditación. Es trabajo con su propio riesgo, y por eso queda
+declarado en vez de colado.
 
 ## Cómo se midió / fuente
 
