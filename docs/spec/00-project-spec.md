@@ -65,11 +65,16 @@ gate, no solo a sus herramientas: si AMBOS canales están no observados — camp
 ausente del payload y transcript ausente, ilegible o fuera del perfil —
 exigir el recibo afirma ausencia desde la no-observación y cada bloqueo
 consume ciclo de revisión. Postura: **fail-open declarado** — el gate emite un
-diagnóstico fuerte (`unknown honesto`, stderr + log), cierra con exit 0 SIN
-consumir ciclo y limpia el estado de la sesión (mismo desenlace que el
-presupuesto agotado, A4). La distinción que preserva los dientes del gate:
-campo PRESENTE sin recibo es ausencia OBSERVADA y sigue bloqueando como
-siempre (claude/codex medidos 1.4/6.2). Extender la contención A6 al tmpdir de
+diagnóstico fuerte (`unknown honesto`, por stderr — sin log de sesión: el
+cierre lo borra una línea después y el presupuesto agotado tampoco loguea),
+cierra con exit 0 SIN consumir ciclo y limpia el estado de la sesión (mismo
+desenlace que el presupuesto agotado, A4). La distinción que preserva los
+dientes del gate: campo PRESENTE sin recibo es ausencia OBSERVADA y sigue
+bloqueando como siempre (claude/codex medidos 1.4/6.2; glm hereda el payload
+de claude; grok sale antes por `reason` o trae `lastAssistantMessage`). Cursor
+es el único host sin Stop medido: si careciera del campo y de transcript en
+perfil, entra al mismo desenlace unknown — misma clase de medición pendiente
+que la Task 11.6. Extender la contención A6 al tmpdir de
 zcode (camino 1 del datapoint) NO se hace aquí: queda gateado por la medición
 de la Task 11.6 (`%TEMP%` es el vector A7-bis, Task 0.2).
 

@@ -1938,9 +1938,12 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # observado — no dispara el unknown, o sea queda del lado que sigue
   # exigiendo. NO toca A6: el camino 1 (extender la contencion al tmpdir de
   # zcode) queda gateado por la medicion de la Task 11.6.
+  # NO se loguea a $LOG_PATH a proposito (review 11.4, hallazgo medio): el
+  # cierre borra el log de la sesion una linea mas abajo, asi que un append
+  # seria evidencia efimera que no hace lo que declara. El presupuesto agotado
+  # (A4) tampoco loguea; el diagnostico vivible es el stderr.
   if [ "$canal_payload_observed" -eq 0 ] && [ "$transcript_observed" -eq 0 ]; then
     printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
-    printf 'receipt: unknown honesto (ambos canales de texto no observados; cycle=%s no consumido)\n' "$cycle" >> "$LOG_PATH" 2>/dev/null || true
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
     podar_dir_sesion
     emit_allow
