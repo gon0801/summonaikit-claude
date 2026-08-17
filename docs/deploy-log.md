@@ -7,6 +7,22 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy a los tres perfiles con copia (Task 11.2, PR #39)
+
+- **Qué traía:** la Task 11.2 — la escotilla PAUSED gana la cláusula `!recibo`
+  (paridad con DELEGATED), bullet del contrato en "Asking is not failing" y
+  comentarios de ambas escotillas con el datapoint Kimi 2026-08-16. Único
+  cambio de lógica del PR: el `if` de la escotilla.
+- **Deploy por perfil:** claude YA AL DÍA (el install corrió desde la rama con
+  el fix de review; el merge es idéntico byte a byte). codex y grok
+  **REPARADO** con backup (`…220433.bak` y `…220438.bak`). zcode sin copia
+  propia (registro apunta a la de claude). Verifier ajeno de grok intacto (D7).
+- **Verificado:** `check-hook-registration.sh` en sus tres formas (default,
+  `--codex-hooks-json ~/.codex/hooks.json`, `--grok-hooks-dir ~/.grok/hooks`)
+  — exit 0 las tres. `tests/test_golden_baseline.sh` contra el hook
+  instalado: OK.
+- **Operador:** Gon; merge y deploy desde la sesión GLM/zcode (Task 11).
+
 ## 2026-08-16 — Deploy a los cuatro perfiles (master `544bc51`, PR #38 / Task 11.1)
 
 - **Qué traía:** la Task 11.1 (higiene de base de rama, hallazgo del run de
