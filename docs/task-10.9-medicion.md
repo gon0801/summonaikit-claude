@@ -226,10 +226,11 @@ resultado, no un acierto.
 | Grok | **sí, disparó** | **ignorada** (3 formas, oráculo agotado) | **no** |
 
 **El resultado no fue uniforme**, y ese es el punto de la fila: tres hosts con
-fase de arranque viva y tres respuestas distintas. Extrapolar de uno a otro
-—que es lo que la 10.6 se negó a hacer— habría acertado en Codex y fallado en
-Grok.
+fase de arranque viva y **dos** respuestas distintas. Extrapolar desde Claude
+—que es lo que la 10.6 se negó a hacer— habría acertado en zcode y Codex y
+fallado en Grok.
 
 La regla del plan §B se respeta sin excepción: **sin veredicto `aceptada` no se
-registra nada.** Grok tiene veredicto y es negativo; zcode no tiene veredicto.
-Los dos quedan afuera, por razones distintas y las dos escritas.
+registra nada.** zcode y Codex tienen veredicto `aceptada` y **habilitan
+emisión**; Grok tiene veredicto y es **negativo**, así que queda afuera — no por
+falta de medición, sino por lo que la medición dijo.

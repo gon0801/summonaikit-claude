@@ -1388,7 +1388,7 @@ es la instalada** y su revalidación es tarea propia, no de esta fila.
 **Codex 0.147.0 — registrar un hook NO es editar `hooks.json`.** Cada handler
 exige además un registro propio en `~/.codex/config.toml`:
 
-```
+```toml
 [hooks.state.'<ruta del hooks.json>:<evento_snake>:<indice_grupo>:<indice_hook>']
 trusted_hash = '…'
 enabled = true        # presente en algunos

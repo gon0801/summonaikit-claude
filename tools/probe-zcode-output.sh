@@ -1010,6 +1010,20 @@ codex_arranque_cmd() {
     "$probe" "$CODEX_ARRANQUE_ID" "$destino_real" "$destino_real"
 }
 
+# La AGUJA que identifica "nuestro grupo, de ESTE repo": el marker solo no
+# alcanza (lo llevan los registros de todos los repos, ver greptile P1 #1).
+#
+# Se arma entera en bash y se pasa a jq como UN argumento, y eso NO es estilo:
+# MSYS convierte un argumento que PARECE ruta POSIX (`/tmp/x`, `/c/dev/x`) a su
+# forma Windows antes de que jq.exe lo vea, asi que pasar el cwd pelado llegaba
+# como `C:/Users/...` y jamas matcheaba contra la ruta POSIX guardada en el JSON
+# -- filtro que no matchea nada = baja que no borra nada, en silencio. La cadena
+# de abajo lleva comillas y un espacio, asi que MSYS la deja intacta. Medido en
+# esta maquina; es la misma dependencia de MSYS que AGENTS.md declara.
+codex_arranque_aguja() {
+  printf -- '--only-cwd "%s"' "$destino_real"
+}
+
 # Alta EXPLICITA (--registrar-arranque). La 6.2 dejo el invariante "--instalar
 # --host codex no toca ~/.codex" y ese invariante sigue valiendo para el camino
 # por defecto: escribir el config del operador se pide, no se hereda.
@@ -1049,10 +1063,12 @@ codex_arranque_registrar() {
   # Idempotente POR MARKER, no por conteo: si ya hay un grupo nuestro, no agrega.
   # Los grupos ajenos de SessionStart no se leen ni se tocan.
   cmd="$(codex_arranque_cmd)"
+  aguja="$(codex_arranque_aguja)"
   tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
-  if ! jq --arg cmd "$cmd" --arg id "$CODEX_ARRANQUE_ID" '
+  if ! jq --arg cmd "$cmd" --arg id "$CODEX_ARRANQUE_ID" --arg aguja "$aguja" '
     def marker: "saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)";
-    def es_nuestro: any((.hooks // [])[]; ((.command // "") | test(marker)));
+    def es_nuestro: any((.hooks // [])[];
+      ((.command // "") | test(marker)) and ((.command // "") | contains($aguja)));
     if any((.hooks.SessionStart // [])[]; es_nuestro) then .
     else .hooks.SessionStart = ((.hooks.SessionStart // []) +
       [ { hooks: [ { type: "command", command: $cmd, timeout: 30 } ] } ])
@@ -1074,8 +1090,30 @@ codex_arranque_registrar() {
 # olvidarse --registrar-arranque al quitar deja una entrada huerfana en el config
 # REAL del operador que ninguna herramienta saca. Es la misma leccion de la
 # asimetria de zcode, aplicada al reves a proposito.
+#
+# Dos acotamientos que salieron de la review del PR #37 (greptile, 2 x P1), los
+# dos por la misma raiz: la primera version borraba POR MARKER y nada mas.
+#
+# (a) SOLO LO DE ESTE REPO. El marker `10.9` lo llevan todos los registros del
+#     probe, sea cual sea el repo al que apunten. Quitar el probe del repo B
+#     borraba tambien el del repo A, que dejaba de correr sin que nadie lo
+#     dijera. Ahora el filtro exige ADEMAS el --only-cwd de ESTE destino.
+#
+# (b) NO SE REORDENA EL ARRAY, que es la regla que esta misma task descubrio
+#     midiendo: en Codex la clave de confianza incluye el INDICE
+#     (`<archivo>:<evento>:<grupo>:<hook>`), asi que sacar un grupo corre a los
+#     que vienen despues y les rompe el trusted_hash EN SILENCIO. El alta hace
+#     append, asi que lo normal es que el nuestro sea el ULTIMO y sacarlo no
+#     mueva a nadie. Si NO es el ultimo (el operador registro algo despues), la
+#     baja se ABSTIENE y lo dice fuerte.
+#
+#     La postura elegida no es simetrica a proposito: dejar nuestro grupo puesto
+#     cuesta un proceso por arranque que sale 0 en silencio (--only-cwd lo vuelve
+#     inerte fuera de su repo); sacarlo mal apaga un hook AJENO del operador sin
+#     aviso. Entre un residuo inocuo y una rotura silenciosa, se elige el
+#     residuo. Atado por caso_arranque_no_reordena_indices.
 codex_arranque_quitar() {
-  local hj tmp_new n_antes n_desp
+  local hj tmp_new n_antes n_desp total_antes idx_nuestro
   hj="$(codex_hooks_json)"
   [ -f "$hj" ] || return 0
   command -v jq >/dev/null 2>&1 || {
@@ -1084,14 +1122,35 @@ codex_arranque_quitar() {
   jq -e . "$hj" >/dev/null 2>&1 || {
     echo "probe-zcode-output: AVISO: $hj no parsea; no lo toco (revisar a mano)" >&2
     return 0; }
-  n_antes="$(jq --arg id "$CODEX_ARRANQUE_ID" '
+  n_antes="$(jq --arg id "$CODEX_ARRANQUE_ID" --arg aguja "$(codex_arranque_aguja)" '
     [ (.hooks.SessionStart // [])[]
-      | select(any((.hooks // [])[]; ((.command // "") | test("saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)")))) ] | length' "$hj" 2>/dev/null)"
+      | select(any((.hooks // [])[]; ((.command // "") | test("saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)")) and ((.command // "") | contains($aguja)))) ] | length' "$hj" 2>/dev/null)"
   [ "${n_antes:-0}" -gt 0 ] 2>/dev/null || return 0
+
+  # (b): posicion del ultimo grupo nuestro vs. el total. Si no es el ultimo del
+  # array, sacarlo correria indices ajenos: no se toca.
+  total_antes="$(jq '[ (.hooks.SessionStart // [])[] ] | length' "$hj" 2>/dev/null)"
+  idx_nuestro="$(jq --arg id "$CODEX_ARRANQUE_ID" --arg aguja "$(codex_arranque_aguja)" '
+    [ (.hooks.SessionStart // []) | to_entries[]
+      | select(any((.value.hooks // [])[]; ((.command // "") | test("saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)")) and ((.command // "") | contains($aguja)))) ] | (max_by(.key).key // -1)' "$hj" 2>/dev/null)"
+  if [ "${idx_nuestro:--1}" -ne "$(( ${total_antes:-0} - 1 ))" ] 2>/dev/null; then
+    echo "probe-zcode-output: NO quito el grupo de arranque de $hj y hay que leer por que." >&2
+    echo "                   Nuestro grupo esta en el indice $idx_nuestro de $total_antes, o sea que NO es el ultimo." >&2
+    echo "                   En Codex la clave de confianza lleva el indice del grupo" >&2
+    echo "                   (<archivo>:<evento>:<grupo>:<hook> en config.toml), asi que sacarlo" >&2
+    echo "                   correria los que vienen despues y les romperia el trusted_hash EN SILENCIO." >&2
+    echo "                   El grupo que queda es INERTE fuera de su repo (--only-cwd), asi que el" >&2
+    echo "                   residuo es inocuo. Para sacarlo a mano: borra ESE grupo y revisa que las" >&2
+    echo "                   claves [hooks.state] de config.toml sigan apuntando al grupo correcto." >&2
+    return 0
+  fi
+
   tmp_new="$(mktemp)" || return 0
-  if ! jq --arg id "$CODEX_ARRANQUE_ID" '
+  if ! jq --arg id "$CODEX_ARRANQUE_ID" --arg aguja "$(codex_arranque_aguja)" '
     def marker: "saikit-probe-id " + ($id | gsub("\\."; "[.]")) + "( |$)";
-    def es_nuestro: any((.hooks // [])[]; ((.command // "") | test(marker)));
+    def es_nuestro: any((.hooks // [])[];
+      ((.command // "") | test(marker)) and
+      ((.command // "") | contains($aguja)));
     .hooks.SessionStart = ((.hooks.SessionStart // []) | map(select(es_nuestro | not)))
     ' "$hj" > "$tmp_new"; then
     echo "probe-zcode-output: AVISO: jq fallo al limpiar $hj; queda intacto" >&2

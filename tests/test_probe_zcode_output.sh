@@ -1015,6 +1015,50 @@ JSON
   jq -e '[.hooks.SessionStart[]]|length==2' "$cxhooks" >/dev/null \
     || malo "quitar no dejo los 2 grupos ajenos (quedaron $(jq -c '[.hooks.SessionStart[]]|length' "$cxhooks"))"
 
+  # --- greptile P1 #1 (PR #37): la baja borraba POR MARKER y nada mas, asi que
+  # quitar el probe del repo B se llevaba puesto el del repo A -- que dejaba de
+  # correr sin que nadie lo dijera. El marker `10.9` lo llevan los dos.
+  caso "codex --quitar: NO se lleva puesto el grupo de OTRO repo con el mismo marker"
+  fabricar_codex_hooks
+  otro_repo="$SANDBOX/codex-repo-B"; mkdir -p "$otro_repo"
+  ( cd "$otro_repo" && git init -q . >/dev/null 2>&1 ) || true
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$otro_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  n_dos="$(jq '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))]|length' "$cxhooks")"
+  [ "$n_dos" -eq 2 ] || malo "precondicion: esperaba 2 grupos 10.9 (uno por repo), hay $n_dos"
+  # Se quita el del repo B; el de A (que quedo PRIMERO) tiene que sobrevivir.
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --quitar "$otro_repo" --host codex >/dev/null 2>&1
+  # La aguja se arma ENTERA en bash, igual que en el tool y por la misma razon:
+  # MSYS convierte un argumento que parece ruta POSIX antes de que jq.exe lo vea,
+  # asi que pasar el cwd pelado da un filtro que no matchea nunca. Con comillas y
+  # espacio adentro, MSYS la deja pasar.
+  aguja_a="--only-cwd \"$(cd "$cp_repo" && pwd -P)\""
+  jq -e --arg n "$aguja_a" '[.hooks.SessionStart[]|select(any(.hooks[].command; contains($n)))]|length==1' "$cxhooks" >/dev/null \
+    || malo "quitar el probe de OTRO repo se llevo el grupo de este"
+  aguja_b="--only-cwd \"$(cd "$otro_repo" && pwd -P)\""
+  jq -e --arg n "$aguja_b" '[.hooks.SessionStart[]|select(any(.hooks[].command; contains($n)))]|length==0' "$cxhooks" >/dev/null \
+    || malo "quitar no saco el grupo del repo que se pidio"
+
+  # --- greptile P1 #2 (PR #37): sacar un grupo que NO es el ultimo corre los
+  # indices de los que vienen despues, y en Codex el indice es parte de la clave
+  # de confianza ([hooks.state.'<archivo>:<evento>:<grupo>:<hook>']). Eso apaga
+  # un hook AJENO en silencio. Es la regla que esta misma task descubrio
+  # midiendo, aplicada a nuestro propio codigo.
+  caso "codex --quitar: se ABSTIENE si nuestro grupo no es el ultimo (no corre indices ajenos)"
+  fabricar_codex_hooks
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  # El operador registra algo DESPUES del nuestro: ahora el nuestro esta al medio.
+  tmpc="$(mktemp)"
+  jq '.hooks.SessionStart += [{"hooks":[{"type":"command","command":"echo ajeno-posterior","timeout":5}]}]' "$cxhooks" > "$tmpc" && mv -f "$tmpc" "$cxhooks"
+  total_antes="$(jq '[.hooks.SessionStart[]]|length' "$cxhooks")"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --quitar "$cp_repo" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "abstenerse no es un error: esperaba exit 0, dio $rc"
+  [ "$(jq '[.hooks.SessionStart[]]|length' "$cxhooks")" = "$total_antes" ] \
+    || malo "quitar movio el array pese a que nuestro grupo no era el ultimo"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("ajeno-posterior")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "el grupo ajeno POSTERIOR desaparecio o se duplico"
+  printf '%s' "$out" | grep -q "NO es el ultimo" || malo "la abstencion tiene que decir por que (no callarse)"
+
   caso "codex --registrar-arranque: un hooks.json invalido no se pisa y sale != 0"
   fabricar_codex_hooks
   printf 'no-es-json' > "$cxhooks"

@@ -128,6 +128,22 @@ que el texto llegó. Cualquier otra combinación deja el host como está:
 - **Codex**: el guard necesita `TARGET=codex`, y el registro es **acción de
   operador** sobre `~/.codex/hooks.json` — mismo patrón que la 10.6 en Claude y
   que la 9.9 con el matcher de `Agent`. El instalador no escribe ahí.
+
+  **CORREGIDO tras medir (2026-08-16): editar `hooks.json` NO alcanza.** Codex
+  0.147.0 exige además un registro de confianza por handler en
+  `~/.codex/config.toml`:
+
+  ```toml
+  [hooks.state.'<ruta del hooks.json>:<evento_snake>:<indice_grupo>:<indice_hook>']
+  trusted_hash = '…'
+  ```
+
+  Un grupo sin ese registro **se saltea en silencio**, así que un operador que
+  siga sólo la primera mitad de esta fila creería haber registrado la fase y no
+  correría nada. El `trusted_hash` lo **acuña el host**, no una herramienta: es
+  su decisión de confianza. Y como la clave incluye el **índice del grupo**,
+  **los índices existentes no se pueden mover**: reordenar el array desalinea el
+  `trusted_hash` de los hooks ya registrados.
 - **Grok**: el guard necesita `TARGET=grok` y `grok_json_canonico` gana un grupo
   `SessionStart` (pasa de 5 a 6 eventos).
 
