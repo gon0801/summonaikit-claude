@@ -1828,7 +1828,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # receipt was evaluated, so a complete receipt skipped validation and left
   # live state on disk, and a broken one + PAUSED closed silently. With the
   # receipt present the turn falls through to the normal gate: complete =>
-  # clean close (state cleared), broken => missing-label feedback.
+  # clean close (state cleared), broken => missing-label feedback. Declared
+  # limit (same accepted trade-off as DELEGATED's): the marker match is an
+  # unanchored substring, so a legitimate pause that QUOTES the phrase
+  # "SUMMONAIKIT HARNESS RECEIPT" without a real receipt falls to the normal
+  # gate and may get blocked.
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
     emit_allow
