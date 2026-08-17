@@ -1,6 +1,15 @@
 # Fixtures zcode de la línea dorada — declaración de fidelidad (Task 11.8)
 
-**Estado: se conservan como están, y esto declara por qué.**
+**Estado (2026-08-17, tras la Task 11.6): la medición YA existe y la alineación
+está desbloqueada — vive en la fila 11.9.** `docs/task-11.6-captura.md` registra
+la forma real del Stop de zcode: 18 claves de primer nivel, con un matiz que
+cambia el trabajo pendiente — **no todas se duplican en camelCase**
+(`lastAssistantMessage` NO existe; sí se duplican `hook_event_name`,
+`session_id`, `transcript_path`, `permission_mode`, `stop_hook_active`). O sea
+que alinear contra la regla general de la 5.1 habría grabado otra adivinanza: se
+alinea contra la lista medida. Lo que sigue abajo es el razonamiento con el que
+se conservaron hasta esa medición, y se conserva porque explica por qué NO se
+tocaron antes.
 
 La captura real de la Task 5.1 (`docs/task-5.1-captura.md`) midió que zcode
 emite CADA clave en snake_case **y** camelCase y que su Stop trae además
