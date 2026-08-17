@@ -7,6 +7,30 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-17 — Deploy NO-OP acá + deploy REAL en kimi (correcciones del review, PR #47 y PR kimi#8)
+
+- **Qué traía acá (PR #47, `126165c`):** declaración de que la forma del
+  escenario 46 NO está medida (la 5.1 midió `last_assistant_message` PRESENTE en
+  un Stop real de zcode), `README-zcode.md` extendido para cubrirlo, y la fila
+  11.7 corregida (la mutación de kimi fue ad-hoc, no registrada). Regrabación de
+  la línea base porque el README del escenario vive DENTRO de ella: `--check`
+  ANTES exit 1 señalando solo el 46, `--record` 45 escenarios, `--check` DESPUÉS
+  exit 0; diff real 6 líneas agregadas / 0 quitadas.
+- **Este repo NO cambió su hook**: `install-hook.sh` ⇒ **YA AL DIA** en los tres
+  perfiles con copia (claude, codex, grok), los tres byte a byte iguales a
+  `master` (`cmp` OK). `check-hook-registration.sh` en sus tres formas
+  (settings / `--codex-hooks-json` / `--grok-hooks-dir`): exit 0.
+- **Sin tocar, declarado (D7):** el agente `verifier` de grok sigue reportándose
+  DESCONOCIDO — no lleva `saikit_owned`, es el mismo ajeno de 7.1/7.2.
+- **En `summonaikit-kimi` (PR #8, `c534e82`) el hook SÍ cambió** (comentario del
+  corte unknown honesto: declara que `implemented` sale del ESTADO y que por eso
+  el corte es más ancho que su padre; más el guard del seed del wire en dos
+  suites). Deploy allá corrido: `tools/install.sh` reinstaló el hook,
+  `tools/check_deploy.sh` ⇒ **AL DIA**, instalado == repo byte a byte.
+- **CI:** PR #47 con `quality`/`secrets`/`suite`/review verdes; PR kimi#8 con
+  `suite`/`drift-absorbed`/review verdes (`drift-upstream` es de cron).
+- **Operador:** Gon; correcciones del review del lead (sesión Claude).
+
 ## 2026-08-17 — Deploy NO-OP + cierre Task 11.8 (escenario dorado de canales ciegos, PR #45)
 
 - **Qué traía:** la Task 11.8 (mitad ejecutable) — escenario dorado
