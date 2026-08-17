@@ -1677,7 +1677,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -1873,6 +1873,37 @@ caso_g4_recibo_roto_mas_paused_sigue_exigiendo() {
   _igual "exit code recibo roto + PAUSED" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+}
+
+# Task 11.4 (datapoint post-11.3, host zcode 2026-08-16) — unknown honesto.
+# Un Stop cuyo payload NO trae last_assistant_message/lastAssistantMessage y
+# cuyo transcript es ilegible o esta fuera del perfil deja al gate SIN NINGUN
+# canal de texto: exigir el recibo ahi afirma ausencia desde la no-observacion
+# (Core Rule 2) y cada bloqueo consume ciclo — un turno completo y honesto
+# agoto los 2 ciclos pidiendo evidencia que el gate por diseño no podia ver.
+# Con AMBOS canales no observados, el gate cierra declarando unknown: exit 0,
+# diagnostico fuerte por stderr y estado limpio (mismo desenlace que el
+# presupuesto agotado, A4), SIN consumir ciclo.
+caso_g4_ambos_canales_ciegos_cierra_unknown() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"
+  _igual "exit code con ambos canales ciegos" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _contiene "diagnostico unknown" "$LAB_ERR" 'unknown honesto'
+  if lab_hay_estado; then _mal "el cierre unknown limpia el estado de la sesion (como el presupuesto agotado), no lo deja vivo cobrando recibo"; fi
+}
+
+# La distinción clave del mismo arreglo: campo PRESENTE sin recibo = ausencia
+# OBSERVADA. El gate sigue bloqueando como hoy — el unknown honesto no le quita
+# dientes a los hosts cuyo canal payload llega (claude/codex medidos 1.4/6.2).
+# Este caso pinna el borde exacto: canal payload observado, transcript
+# ilegible (la ruta por defecto del lab no existe) — hoy y siempre, exit 2.
+caso_g4_campo_presente_sin_recibo_sigue_bloqueando() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Ya quedo todo entregado, sin recibo.')"
+  _igual "exit code con canal payload observado" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: ausencia observada no es unknown"; fi
 }
 
 # Repone el atrapador de mut_etiqueta_sin_frontera que el caso A8 invertido le

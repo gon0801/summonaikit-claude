@@ -1791,8 +1791,16 @@ stop_gate() {
   # Fallback, no reemplazo: el snake sigue ganando.
   [ -n "$transcript_path" ] || transcript_path="$(json_top_level_string transcriptPath)"
   tail_text=""
-  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ] && transcript_en_perfil "$transcript_path"; then
-    tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
+  # Task 11.4: la observabilidad del canal transcript se decide ACA, una sola
+  # vez — observado = ruta presente + legible + dentro del perfil (A6). El
+  # flag lo consume el chequeo de unknown honesto de mas abajo; no se vuelve
+  # a llamar a transcript_en_perfil para no duplicar su diagnostico por stderr.
+  transcript_observed=0
+  if [ -n "$transcript_path" ] && [ -r "$transcript_path" ]; then
+    if transcript_en_perfil "$transcript_path"; then
+      transcript_observed=1
+      tail_text="$(tail -n 160 "$transcript_path" 2>/dev/null || true)"
+    fi
   fi
   # Task 3.2: $text se arma con SOLO texto del asistente, decodificado, de los
   # dos canales (last_assistant_message + content[].text role:assistant del tail).
@@ -1875,6 +1883,31 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     emit_allow
   fi
 
+  # Task 11.4 (datapoint post-11.3, host zcode 2026-08-16) — unknown honesto.
+  # El gate juzga el recibo por DOS canales de texto: last_assistant_message
+  # (o su alias camel) en el payload y el tail del transcript. Si AMBOS estan
+  # no observados — campo AUSENTE del payload y transcript ausente, ilegible o
+  # fuera del perfil (A6) — exigir el recibo afirma AUSENCIA desde la
+  # NO-OBSERVACION: Core Rule 2 violada adentro del propio stop_gate, y cada
+  # bloqueo consume ciclo (un turno completo y honesto agoto los 2 ciclos en
+  # zcode pidiendo evidencia que el gate por diseño no podia ver; el ROLE
+  # FALLBACK declarado en el recibo tampoco salva, porque el recibo viaja por
+  # el canal ciego). Postura: fail-open declarado — diagnostico fuerte por
+  # stderr y log, exit 0 SIN consumir ciclo, estado de la sesion limpio
+  # (mismo desenlace que el presupuesto agotado, A4).
+  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => el gate
+  # sigue bloqueando como siempre (claude/codex medidos 1.4/6.2 no pierden
+  # dientes). La deteccion de presencia es la misma subcadena que usa
+  # assistant_text_payload: una clave anidada (p.ej. en tool_input) cuenta como
+  # observado — no dispara el unknown, o sea queda del lado que sigue
+  # exigiendo. NO toca A6: el camino 1 (extender la contencion al tmpdir de
+  # zcode) queda gateado por la medicion de la Task 11.6.
+  canal_payload_observed=0
+  case "$INPUT" in
+    *"\"last_assistant_message\""*|*"\"lastAssistantMessage\""*) canal_payload_observed=1 ;;
+  esac
+  # (el chequeo del unknown honesto vive mas abajo, tras leer cycle del estado)
+
   implemented="$(read_state_value implemented)"
   verified="$(read_state_value verified)"
   cycle="$(read_state_value cycle)"
@@ -1885,6 +1918,36 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if [ -z "$verified" ]; then verified="0"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
+
+  # Task 11.4 (datapoint post-11.3, host zcode 2026-08-16) — unknown honesto.
+  # El gate juzga el recibo por DOS canales de texto: last_assistant_message
+  # (o su alias camel) en el payload y el tail del transcript. Si AMBOS estan
+  # no observados — campo AUSENTE del payload y transcript ausente, ilegible o
+  # fuera del perfil (A6) — exigir el recibo afirma AUSENCIA desde la
+  # NO-OBSERVACION: Core Rule 2 violada adentro del propio stop_gate, y cada
+  # bloqueo consume ciclo (un turno completo y honesto agoto los 2 ciclos en
+  # zcode pidiendo evidencia que el gate por diseño no podia ver; el ROLE
+  # FALLBACK declarado en el recibo tampoco salva, porque el recibo viaja por
+  # el canal ciego). Postura: fail-open declarado — diagnostico fuerte por
+  # stderr y log, exit 0 SIN consumir ciclo, estado de la sesion limpio
+  # (mismo desenlace que el presupuesto agotado, A4).
+  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => el gate
+  # sigue bloqueando como siempre (claude/codex medidos 1.4/6.2 no pierden
+  # dientes). La deteccion de presencia es la misma subcadena que usa
+  # assistant_text_payload: una clave anidada (p.ej. en tool_input) cuenta como
+  # observado — no dispara el unknown, o sea queda del lado que sigue
+  # exigiendo. NO toca A6: el camino 1 (extender la contencion al tmpdir de
+  # zcode) queda gateado por la medicion de la Task 11.6.
+  # NO se loguea a $LOG_PATH a proposito (review 11.4, hallazgo medio): el
+  # cierre borra el log de la sesion una linea mas abajo, asi que un append
+  # seria evidencia efimera que no hace lo que declara. El presupuesto agotado
+  # (A4) tampoco loguea; el diagnostico vivible es el stderr.
+  if [ "$canal_payload_observed" -eq 0 ] && [ "$transcript_observed" -eq 0 ]; then
+    printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
+    rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
+    podar_dir_sesion
+    emit_allow
+  fi
 
   missing=""
   if ! printf '%s' "$text" | grep -Eiq 'SUMMONAIKIT HARNESS RECEIPT'; then

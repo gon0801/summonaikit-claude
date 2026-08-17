@@ -110,6 +110,8 @@ G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta me
 G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
 G4|transcript_sin_containment|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
 G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolverla con cd+pwd
+G4|unknown_honesto_quitado|el cierre unknown honesto (11.4) se neutraliza y un Stop con ambos canales de texto ciegos vuelve a bloquear exigiendo evidencia no observable
+G4|unknown_ciega_al_payload|la deteccion del canal payload se apaga (11.4) y el unknown honesto dispara tambien con last_assistant_message PRESENTE (ausencia observada deja de bloquear)
 G5|tool_name_desacotado|tool_name vuelve al lector greedy y un eco en tool_response se lee como la herramienta del evento (marca una edicion que no ocurrio)
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
@@ -585,6 +587,22 @@ mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 =
 # :128-131); la forma del plan con \&\& y \| se probo a mano y muta de verdad.
 mut_transcript_sin_containment() { sed 's/transcript_en_perfil "$transcript_path"/true/'; }
 mut_containment_sin_resolver()   { sed 's|_tp_dir="$(cd "$(dirname "$1")" 2>/dev/null \&\& pwd)" \|\| _tp_dir=""|_tp_dir="$(dirname "$1")"|'; }
+
+# Task 11.4, mitad 1: neutraliza el cierre unknown honesto — la condicion del
+# if nunca se cumple y un Stop con AMBOS canales de texto ciegos vuelve al
+# gate normal: rc 2 consumiendo ciclo por evidencia que el gate no puede ver.
+# Lo atrapa caso_g4_ambos_canales_ciegos_cierra_unknown (espera rc 0 y estado
+# limpio; con la mutacion vuelve a bloquear con estado vivo).
+mut_unknown_honesto_quitado() { sed 's/\[ "$canal_payload_observed" -eq 0 \] \&\& \[ "$transcript_observed" -eq 0 \]/[ "$canal_payload_observed" -eq 1 ] \&\& [ "$transcript_observed" -eq 1 ]/'; }
+# Task 11.4, mitad 2: apaga SOLO la deteccion del canal payload — el flag ya
+# nunca marca observado, asi que el unknown honesto dispara tambien con
+# last_assistant_message PRESENTE sin recibo (ausencia OBSERVADA), que debe
+# seguir bloqueando. La atrapa caso_g4_campo_presente_sin_recibo_sigue_
+# bloqueando (espera rc 2 y estado vivo; con la mutacion cierra en exit 0);
+# la declaracion de la corrida puede nombrar antes a otro caso del gate que
+# tambien reacciona (p.ej. caso_g4_delegado_sin_rol_bloquea) — con el canal
+# payload ciego, TODO caso que espera bloqueo con campo presente se pone rojo.
+mut_unknown_ciega_al_payload() { sed 's/canal_payload_observed=1/canal_payload_observed=0/'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
 # Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A
