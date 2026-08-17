@@ -7,3 +7,9 @@ ciclo (ausencia afirmada desde la no-observacion); con el unknown honesto
 cierra: exit 0, diagnostico por stderr y estado de sesion limpio. Es la
 mitad ciega del borde; la mitad observada (campo presente sin recibo =>
 bloquea) la pina el 22.
+
+FORMA NO MEDIDA, declarado (review 11.8 del lead): la Task 5.1 capturo un Stop
+REAL de zcode y traia last_assistant_message, asi que este payload no describe
+la forma que manda el host — fija la CONDUCTA de la rama (los dos canales
+ciegos), no la realidad de zcode. Mismo criterio que README-zcode.md declara
+para los fixtures 17-25; la 11.6 es la que mide.
