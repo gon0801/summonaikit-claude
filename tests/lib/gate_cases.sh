@@ -156,6 +156,16 @@ _RECIBO_ROTO_CON_DELEGADO_INCIDENTAL='SUMMONAIKIT HARNESS RECEIPT\n- Understand:
 # recibo invita a comentar mejoras del harness ahi.
 _RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: el harness podria documentar mejor el patron SUMMONAIKIT HARNESS DELEGATED - awaiting verifier para subagentes largos.'
 
+# Task 11.2 (hallazgo de campo Kimi 2026-08-16): el agente termina el trabajo,
+# escribe el recibo y agrega la linea PAUSED al final para preguntar si hace
+# deploy. Antes del fix la escotilla PAUSED disparaba ANTES de evaluar el
+# recibo: un recibo completo cerraba sin borrar estado y uno roto cerraba en
+# silencio. Con la guardia !recibo (paridad con DELEGATED), el recibo presente
+# desactiva la escotilla y el turno cae al gate normal. Estos dos fixtures son
+# las dos mitades: completa (cierra limpio) y rota (sin Retro).
+_RECIBO_VINETAS_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
+_RECIBO_SIN_RETRO_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
+
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
 
@@ -1667,7 +1677,7 @@ caso_g3_turno_completo_por_eventos_permite() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -1834,6 +1844,35 @@ caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio() {
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un recibo completo tiene que cerrar limpio de verdad (estado borrado), no colgarse de la escotilla DELEGATED"; fi
+}
+
+# Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad "completo": un recibo
+# COMPLETO que termina con la linea PAUSED (trabajo hecho + pregunta de
+# decision: "deploy?") cerraba exit 0 PERO SIN BORRAR el estado — la escotilla
+# lo interceptaba antes del cierre limpio de verdad. Con la guardia !recibo
+# (misma clausula que DELEGATED desde la cross-review ciclo 1), el recibo
+# desactiva la escotilla y el turno cierra por el camino normal: estado
+# borrado. La regla de hierro (recibo completo = cierre limpio) tambien vale
+# con la linea PAUSED puesta al final.
+caso_g4_recibo_completo_mas_paused_cierra_limpio() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS_CON_PAUSED")"
+  _igual "exit code recibo completo + PAUSED" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un recibo completo tiene que cerrar limpio de verdad (estado borrado), no colgarse de la escotilla PAUSED"; fi
+}
+
+# La otra mitad del mismo hallazgo: un recibo ROTO (sin Retro) + linea PAUSED
+# cerraba en silencio con exit 0 y sin feedback — exactamente el
+# salteate-el-gate que la guardia de DELEGATED ya habia cerrado. Con la
+# guardia, el recibo (presente aunque roto) desactiva la escotilla y el gate
+# reclama lo que falta de verdad.
+caso_g4_recibo_roto_mas_paused_sigue_exigiendo() {
+  lab_sembrar 123456 0 0 0 ""
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_CON_PAUSED")"
+  _igual "exit code recibo roto + PAUSED" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
 }
 
 # Repone el atrapador de mut_etiqueta_sin_frontera que el caso A8 invertido le

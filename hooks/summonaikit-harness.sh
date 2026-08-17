@@ -909,6 +909,7 @@ Asking is not failing:
 - When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:
   SUMMONAIKIT HARNESS PAUSED - awaiting your answer
 - That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.
+- PAUSED is ONLY for when you cannot proceed yet. If the work is DONE and you are asking for a decision (deploy? merge?), write the full receipt and put your question after it — do NOT add the PAUSED line: the receipt closes the gate cleanly and your question stands on its own.
 
 Waiting on a subagent is not failing:
 - A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.
@@ -1819,8 +1820,17 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
 
   # A clarifying pause is a valid way to end the turn: the agent asked the
   # user a question and is waiting for the answer. Do not demand a receipt or
-  # the implement -> verify -> review sequence in that case.
-  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then
+  # the implement -> verify -> review sequence in that case. Task 11.2: the
+  # hatch now ALSO requires that no receipt is present -- same second clause
+  # DELEGATED got from the cross-review (cycle 1). Field datapoint (Kimi,
+  # 2026-08-16): an agent that finished the work wrote the full receipt AND
+  # added the PAUSED line to ask for a decision; the hatch fired before the
+  # receipt was evaluated, so a complete receipt skipped validation and left
+  # live state on disk, and a broken one + PAUSED closed silently. With the
+  # receipt present the turn falls through to the normal gate: complete =>
+  # clean close (state cleared), broken => missing-label feedback.
+  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED' \
+     && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
     emit_allow
   fi
 
@@ -1831,6 +1841,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # so it stays auditable instead of a blanket skip-the-gate (same discipline
   # ROLE FALLBACK already uses, see D4/Task 6.3 below). A DELEGATED line that
   # names no role does not match and falls through to the normal receipt gate.
+  # (Task 11.2 note: since the PAUSED hatch gained the same !receipt clause,
+  # "unlike PAUSED" no longer holds for the receipt half -- both hatches now
+  # require the receipt to be absent. It still holds for the role half: only
+  # DELEGATED names a role.)
   #
   # Bug found by cross-review (cycle 1), reproduced with execution, fixed
   # here: the hatch must ALSO require that no receipt is present yet. Without
