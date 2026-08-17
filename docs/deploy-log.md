@@ -7,6 +7,20 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy NO-OP + cierre Task 11.3 (espejo en summonaikit-kimi, PR kimi#3)
+
+- **Qué traía:** la Task 11.3 cierra EN el repo hermano: port de la guardia
+  `!recibo` de 11.2 a la escotilla PAUSED de `summonaikit-harness-kimi.sh`
+  (commit `1509821`, PR gon0801/summonaikit-kimi#3), con refresh del bloque
+  vendorizado, re-pin de su `check_drift.sh` (`20ecee4f…`) y absorciones de
+  drift que el re-pin destapó (nuestras 9.1+9.2 en `FAILURE_SIGNAL_RE_*`, el
+  ancla del heredoc de 7.4 r2 y el literal `$TOOL_HINT`).
+- **Este repo NO cambió su hook en la task**: `install-hook.sh` ⇒ YA AL DIA
+  (byte a byte, claude vivo == master). `check-hook-registration.sh`: exit 0.
+- **Deploy allá:** `tools/install.sh` + `tools/check_deploy.sh` en
+  summonaikit-kimi ⇒ AL DIA (instalado == repo).
+- **Operador:** Gon; cierre desde la sesión GLM/zcode (Task 11).
+
 ## 2026-08-16 — Deploy a los tres perfiles con copia (Task 11.2, PR #39)
 
 - **Qué traía:** la Task 11.2 — la escotilla PAUSED gana la cláusula `!recibo`
