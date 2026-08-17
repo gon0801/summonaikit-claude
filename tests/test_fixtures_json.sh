@@ -153,7 +153,11 @@ TEXTO = {"last_assistant_message", "responseText", "responsePreview"}
 PROHIBIDAS = {"lastAssistantMessage", "background_tasks", "session_crons"}
 
 salida = []
-raiz = pathlib.Path(sys.argv[1])
+# Solo el corpus dorado. El arbol `arnes-falso/` queda AFUERA a proposito: son
+# payloads minimos que existen para ejercitar la HERRAMIENTA (golden-harness)
+# con un hook falso, no para describir lo que manda zcode. Exigirles la forma
+# real seria pedirle fidelidad a un doble de prueba.
+raiz = pathlib.Path(sys.argv[1]) / "escenarios"
 vistos = 0
 for p in sorted(raiz.rglob("*.stop.zcode.json")):
     try:
@@ -179,6 +183,54 @@ PY
 )"
 if [ -n "$forma_mala" ]; then
   while IFS= read -r l; do malo "$l"; done <<< "$forma_mala"
+fi
+
+# Task 11.10 — las otras dos fases de zcode, mismo criterio que el caso de
+# arriba y mismas fuentes (docs/task-11.6-captura.md). Se separan del Stop
+# porque sus claves son otras, no porque el riesgo sea menor: el `toolInput`
+# camel hace que `subagent_type` aparezca DOS veces en el payload crudo, que es
+# justo el terreno de A1, y `toolResultPreview` duplica la salida de la
+# herramienta adentro del payload, que es el terreno del guard de la 10.15.
+caso "los *.prompt.zcode.json y *.tool.zcode.json llevan la forma medida (11.6)"
+forma_fases="$("$python_bin" - "$fixtures" <<'PY'
+import json, pathlib, sys
+
+PROMPT = {"cwd", "hookEventName", "hook_event_name", "mode", "permission_mode",
+          "prompt", "sessionId", "session_id", "timestamp", "traceId",
+          "transcriptPath", "transcript_path", "turnId"}
+TOOL = PROMPT - {"prompt"} | {"toolCallId", "toolInput", "toolName",
+                              "toolResponse", "toolResultPreview", "tool_input",
+                              "tool_name", "tool_response", "tool_use_id"}
+# Medidas ausentes en los 9 PostToolUse y los 2 UserPromptSubmit reales de la
+# captura. Venian de la forma de Claude / de la reconstruccion de la Phase 5.
+NO_MANDA = {"*.prompt.zcode.json": {"prompt_id"},
+            "*.tool.zcode.json": {"duration_ms", "effort"}}
+
+salida = []
+raiz = pathlib.Path(sys.argv[1]) / "escenarios"   # arnes-falso afuera, ver arriba
+for patron, esperadas, minimo in (("*.prompt.zcode.json", PROMPT, 10),
+                                  ("*.tool.zcode.json", TOOL, 20)):
+    vistos = 0
+    for p in sorted(raiz.rglob(patron)):
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        vistos += 1
+        claves = set(d)
+        faltan = esperadas - claves
+        if faltan:
+            salida.append(f"{p}: faltan claves medidas: {', '.join(sorted(faltan))}")
+        sobran = NO_MANDA[patron] & claves
+        if sobran:
+            salida.append(f"{p}: trae claves que zcode NO manda: {', '.join(sorted(sobran))}")
+    if vistos < minimo:
+        salida.append(f"esperaba >= {minimo} de {patron}, encontre {vistos}")
+print("\n".join(salida))
+PY
+)"
+if [ -n "$forma_fases" ]; then
+  while IFS= read -r l; do malo "$l"; done <<< "$forma_fases"
 fi
 
 # Sin esto, borrar el arbol de fixtures dejaria el test en verde con cobertura

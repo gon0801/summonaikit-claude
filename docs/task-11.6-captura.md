@@ -141,7 +141,7 @@ operador adelante:
 - **`UserPromptSubmit`** (13 claves): `cwd`, `hookEventName`, `hook_event_name`,
   `mode`, `permission_mode`, `prompt`, `sessionId`, `session_id`, `timestamp`,
   `traceId`, `transcriptPath`, `transcript_path`, `turnId`.
-- **`PostToolUse`** (19 claves): las de arriba menos `prompt`, más
+- **`PostToolUse`** (21 claves): las de arriba menos `prompt`, más
   `toolCallId`/`tool_use_id`, `toolInput`/`tool_input`, `toolName`/`tool_name`,
   `toolResponse`/`tool_response` y `toolResultPreview`. Confirmado otra vez que
   **no hay `agent_type` top-level**: el rol viaja en `tool_input.subagent_type`
