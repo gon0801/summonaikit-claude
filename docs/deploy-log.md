@@ -7,6 +7,38 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy del perfil Grok: deuda vieja, no de la Task 10.9
+
+Encontrada al auditar los cuatro perfiles tras el deploy de la 10.9. **No es
+deuda de esa fila**: Grok se midió `ignorada` y por diseño NO recibe las reglas
+permanentes. Lo que estaba mal es otra cosa y venía de antes.
+
+- **Qué estaba desactualizado:** `~/.grok/hooks/summonaikit-harness.sh` seguía en
+  `2129441864 113112`, la versión de la Phase 7.6 (`SAIKIT-CLAUDE-OWNED
+  summonaikit-claude 1.0.0`). Le faltaban **50 commits** al hook — toda la
+  Phase 8, la 9 y la 10. O sea que el gate de Grok corría con los defectos que
+  esas fases cerraron.
+- **Deploy:** `bash tools/install-hook.sh --host grok` ⇒ **REPARADO**. Quedó en
+  `112284225 120124`, byte a byte igual a `master`. Backup en
+  `~/.grok/hooks/saikit-backups/`.
+- **El JSON de registro NO cambió** (`464166032 1894`, byte a byte): los 5
+  eventos canónicos de la 7.5 siguen igual, porque la 10.9 no le agrega la fase
+  de arranque a Grok — su veredicto es `ignorada`.
+- **El instalador se abstuvo donde debía:** reportó `AGENTE GROK DESCONOCIDO:
+  verifier — no se toco. No lleva saikit_owned`. Ese perfil de agente lo editó
+  el operador a mano; el instalador no lo pisa (D7).
+- **Verificado con turno real**, y las dos mitades importan porque el salto fue
+  de 50 commits:
+  - el turno cierra normal (`rc=0`, el modelo responde) y **sin errores de
+    hook** — o sea que las fases 8-10 no rompieron nada en Grok;
+  - la sesión nueva tiene **0 ocurrencias** de `SUMMONAIKIT STANDING RULES`, que
+    es lo correcto: Grok NO debe recibirlas. (Cuidado con el falso positivo: hay
+    4 archivos de sesión viejos que sí contienen ese texto, de turnos donde Grok
+    **leyó el repo** — el string vive en el código fuente del hook y en los docs.
+    Se distinguen por fecha.)
+- **Estado de los cuatro perfiles tras esto:** claude, codex y grok con el hook
+  de `master`; zcode sin copia propia (su registro apunta a la de claude).
+
 ## 2026-08-16 — Deploy a los perfiles zcode y Codex (cierre de la Task 10.9)
 
 Completa el deploy de la 10.9 en los dos hosts que la medición habilitó. El
