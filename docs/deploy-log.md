@@ -7,6 +7,40 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-16 — Deploy a los perfiles zcode y Codex (cierre de la Task 10.9)
+
+Completa el deploy de la 10.9 en los dos hosts que la medición habilitó. El
+artefacto de producción de este repo es el perfil **Claude** (`AGENTS.md`), así
+que estos dos van como cierre de la fila y no como deploy obligatorio.
+
+- **zcode:** `bash tools/install-hook.sh --host zcode` ⇒ registro de **3 a 4
+  fases** (id 5.4). El grupo ajeno de `SessionStart` sobrevivió. Backup en
+  `~/.zcode/cli/saikit-backups/`. **No verificado en vivo por este lado:** el
+  login del operador quedó en un almacén que el TUI lee y el `--prompt` headless
+  no (`config.json` no tiene `apiKey`), así que la comprobación end-to-end en
+  zcode queda pendiente de un turno del operador. Lo que **sí** está medido es
+  que la inyección llega (turno real del TUI durante la medición).
+- **Codex:** cerrado y **verificado end-to-end**. Hicieron falta **DOS** cosas, y
+  la primera entrada de este día sólo nombró una:
+  1. La entrada `SessionStart` en `~/.codex/hooks.json`, apendeada al FINAL
+     (índice nuevo = el último, así los `trusted_hash` de los ajenos no se
+     mueven), más el **trust concedido por el operador** desde una sesión
+     interactiva. Verificado: los registros `hooks.json:session_start` de
+     `config.toml` pasaron de **2 a 3**, y la traza del host pasó de imprimir
+     **dos** `hook: SessionStart` a **tres**.
+  2. **La copia del harness del propio perfil Codex estaba vieja.** `~/.codex/
+     hooks/summonaikit-harness.sh` estaba en `2129441864 113112`, sin la rama de
+     la 10.9: el hook corría y no emitía nada. `install-hook.sh --host codex` lo
+     dejó en `112284225 120124`, byte a byte igual a `master`.
+- **Prueba final (Codex), turno real:** el texto de `SUMMONAIKIT STANDING RULES`
+  aparece en el rollout de la sesión como `role: "developer"`, en
+  `.payload.content[0].text` — **la misma forma que la 6.2 midió para UPS**, que
+  es lo que la medición de la 10.9 había predicho para esta fase.
+- **Lección para el próximo deploy multi-host:** "el hook está registrado" y "el
+  hook emite" son dos cosas distintas, y cada perfil tiene **su propia copia**
+  del archivo. Verificar el registro sin verificar la salida deja pasar
+  exactamente este caso.
+
 ## 2026-08-16 — Deploy del perfil Claude (master `51110e0`, PR #37 / Task 10.9)
 
 - **Qué se mergeó:** PR #37 `feat/10.9-standing-rules-otros-hosts` → master. La
@@ -24,14 +58,9 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   (las fases siguen registradas; sin advisory).
 - **Qué gana el perfil vivo:** la rama de `SessionStart` ahora también emite en
   `TARGET=codex`. Para Claude el comportamiento no cambia.
-- **Lo que este deploy NO hace, y hay que decirlo:**
-  - **Codex no recibe nada todavía.** Su `SessionStart` sigue sin entrada
-    nuestra en `~/.codex/hooks.json`, y agregarla no alcanza: Codex 0.147.0
-    exige además un `trusted_hash` por handler en `~/.codex/config.toml` que
-    **acuña el host**, no una herramienta. Es acción de operador, mismo patrón
-    que la 10.6 en Claude y la 9.9 con el matcher de `Agent`.
-  - **zcode tampoco, hasta reinstalar ahí.** `install-hook.sh --host zcode`
-    ahora registra 4 fases, pero este deploy fue sobre el perfil **Claude**.
+- **Lo que este deploy NO hizo (y se completó después; ver la entrada de cierre
+  más abajo):** los perfiles de zcode y Codex quedaron fuera, porque este paso
+  fue sobre el perfil **Claude**.
   - **Regla operativa de Codex:** los índices son parte de la clave de
     confianza, así que **no se reordena** el array de una fase — reordenar
     desalinea el `trusted_hash` de los hooks ya registrados y los apaga en
