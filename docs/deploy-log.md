@@ -7,6 +7,19 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-17 — Deploy NO-OP + cierre Task 11.7 (espejo en summonaikit-kimi, PR kimi#6)
+
+- **Qué traía:** la Task 11.7 cierra EN el repo hermano: port del unknown
+  honesto de la 11.4 a su stop_gate (wire ausente ⇒ stderr + exit 0 sin ciclo
+  + estado limpio; wire hallado sin recibo sigue bloqueando). Commits
+  `a0134c1`+`d11984d`+`8eefd54`, mergeado por PR kimi#6; fila cerrada con el
+  PR kimi#7.
+- **Este repo NO cambió su hook**: `install-hook.sh` ⇒ YA AL DIA (claude vivo
+  == master). `check-hook-registration.sh`: exit 0.
+- **Deploy allá:** `tools/install.sh` + `tools/check_deploy.sh` en
+  summonaikit-kimi ⇒ AL DIA.
+- **Operador:** Gon; cierre desde la sesión GLM/zcode (Task 11).
+
 ## 2026-08-17 — Deploy a los tres perfiles con copia (Task 11.4, PR #42) + no-op (Task 11.5)
 
 - **Qué traía la 11.4 (PR #42, fix de review `8d3dadd`):** unknown honesto en
