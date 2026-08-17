@@ -266,7 +266,8 @@ printf '%s' "$out" | grep -qi 'REGISTRO' \
 # Task 5.4 — --host zcode: append-only al user-config de zcode (no toca DEST)
 # ============================================================================
 # La segunda forma de registro (hooks.events.*) vive en ~/.zcode/cli/config.json.
-# --host zcode appendea las 3 fases ahi; NO instala el archivo (va antes, sin
+# --host zcode appendea las 4 fases ahi (la 4a, SessionStart, la habilito la
+# medicion de la Task 10.9); NO instala el archivo (va antes, sin
 # --host). Preflight: config JSON, enabled==true estricto, DEST NUESTRO_IDENTICO
 # + linea de codigo 5.3. --quitar-zcode saca solo las entradas 5.4 (nivel entrada,
 # r2.2) sin ese preflight (r3.3). Task 5.6: ademas instala/quita los
@@ -312,8 +313,8 @@ host_zcode() {
     bash "$tool" --host zcode --dest "$dest" "$@"
 }
 
-# --- B3.1) appendea 3 fases, sin matcher UPS/Stop, PTU cubre Task|Agent; no toca DEST
-caso "zcode: --host zcode appendea 3 fases y NO toca DEST"
+# --- B3.1) appendea 4 fases, sin matcher UPS/Stop/SessionStart, PTU cubre Task|Agent; no toca DEST
+caso "zcode: --host zcode appendea 4 fases y NO toca DEST"
 dest_listo; nuevo_zcode_cfg
 dest_ck="$(cksum < "$dest")"
 out="$(host_zcode 2>&1)"; rc=$?
@@ -336,7 +337,51 @@ def canon(fase, matcher_esperado):
 assert canon("UserPromptSubmit", None), "UPS sin matcher / type command / timeout 15"
 assert canon("PostToolUse", "Bash|Edit|Write|Read|apply_patch|Task|Agent"), "PTU matcher"
 assert canon("Stop", None), "Stop sin matcher"
+assert canon("SessionStart", None), "SessionStart sin matcher (4a fase, Task 10.9)"
 assert any("arranque-dummy" in h.get("command","") for g in ev.get("SessionStart",[]) for h in g.get("hooks",[])), "vecino SessionStart borrado"
+PY
+
+# --- B3.1-bis) la 4a fase SI se registra en zcode, y solo porque se MIDIO (10.9)
+# Este caso nacio invertido y se dio vuelta el mismo dia, a proposito.
+#
+# El POLIZON: el guard de la 10.6 dice, en su comentario, que las reglas
+# permanentes salen "solo en Claude", pero el codigo pregunta por TARGET=claude —
+# y TARGET para zcode resuelve JUSTAMENTE a `claude` por el fallback
+# ZCODE_SESSION_ID/ZCODE_PROJECT_DIR (decision de la 5.4: las formas de salida
+# medidas en 5.2 son las mismas). O sea que el hook YA emitiria en zcode; lo
+# unico que lo frenaba era que el instalador registraba 3 fases y no la de
+# arranque, equilibrio que ningun caso sostenia.
+#
+# Mientras zcode estuvo `unknown` este caso exigia lo CONTRARIO (que la 4a fase
+# NO se registrara), y dejaba escrito que se invertiria cuando hubiera veredicto
+# — para que el cambio de este archivo fuera la declaracion de que la medicion
+# existio, en vez de un aflojamiento silencioso. El veredicto llego el
+# 2026-08-16 y es ACEPTADA, con los dos oraculos en la misma linea del rollout:
+# el texto entra al request del modelo como mensaje role="system" con el prefijo
+# `SessionStart hook additional context:` y numeracion `#1` (la MISMA forma que
+# 5.2 midio para UPS, solo cambia el nombre de la fase), y el modelo devolvio el
+# token literal que ese texto le pedia.
+#
+# Las dos mitades siguen exigidas: que este la nuestra NO puede lograrse pisando
+# la ajena.
+caso "zcode: registra la 4a fase (SessionStart) — habilitado por la medicion de la 10.9"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+python - "$zcode_cfg" <<'PY' || malo "zcode: la 4a fase no quedo registrada como la medicion habilito"
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+ev = d["hooks"]["events"]
+grupos = [g for g in ev.get("SessionStart", [])
+          if any("saikit-harness-id 5.4" in h.get("command", "") for h in g.get("hooks", []))]
+assert len(grupos) == 1, f"SessionStart debe tener exactamente 1 grupo canonico, tiene {len(grupos)}"
+assert "matcher" not in grupos[0], "el grupo de SessionStart va sin matcher (vacuo = startup y resume)"
+hs = grupos[0]["hooks"]
+assert len(hs) == 1 and hs[0].get("type") == "command" and hs[0].get("timeout") == 15, \
+    "la entrada de SessionStart tiene que ser canonica igual que las otras tres"
+# La otra mitad: registrar la nuestra no puede lograrse pisando la ajena.
+vecino = [h for g in ev.get("SessionStart", []) for h in g.get("hooks", [])
+          if "arranque-dummy" in h.get("command", "")]
+assert vecino, "el vecino ajeno de SessionStart tiene que seguir ahi"
 PY
 
 # --- B3.2) idempotente + repara malformada
@@ -381,7 +426,7 @@ PY
 out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 n=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
-[ "$n" = "3" ] || malo "deben quedar 3 entradas 5.4, hay $n"
+[ "$n" = "4" ] || malo "deben quedar 4 entradas 5.4, hay $n"
 
 # --- B3.4) --dest bajo ~/.zcode => exit 2 (una sola copia, hallazgo 6)
 caso "zcode: --dest bajo ~/.zcode => exit 2 (con y sin --host)"

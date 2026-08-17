@@ -488,6 +488,7 @@ zcode_instalar() {
     | asegurar("UserPromptSubmit"; "")
     | asegurar("PostToolUse"; "Bash|Edit|Write|Read|apply_patch|Task|Agent")
     | asegurar("Stop"; "")
+    | asegurar("SessionStart"; "")
   ' "$user_config" > "$tmp_new"; then
     rm -f "$tmp_new"
     decir "[summonaikit] instalador: jq fallo al appendear; el config original queda intacto."; exit 5; fi
@@ -497,7 +498,7 @@ zcode_instalar() {
   if ! mv -f "$tmp_new" "$user_config"; then
     rm -f "$tmp_new"
     decir "[summonaikit] instalador: el mv final fallo; config intacto."; exit 5; fi
-  decir "[summonaikit] REGISTRADO: harness en el user-config de zcode (3 fases, id 5.4)."
+  decir "[summonaikit] REGISTRADO: harness en el user-config de zcode (4 fases, id 5.4)."
   decir "              config:  $user_config"
   decir "              backup:  $bak"
 }

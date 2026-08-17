@@ -84,7 +84,71 @@ stdout_is_empty
 grep -q 'PROBE-EXIT2-FFFF' "$EF" || malo "exit2: stderr sin el nonce"
 [ -f "$(ok_of FFFF)" ] || malo "exit2: no escribio .ok"
 
+# ====================================== §A2.6 familia session (Task 10.9)
+# El canal de las reglas permanentes (10.6) sale por la fase de ARRANQUE, que
+# ningun modo previo ejercita: context/extra son UPS y el resto son Stop. Los
+# tres modos de acá son las tres formas que la 10.9 tiene que distinguir para no
+# declarar `ignored` sin agotar el oraculo (leccion del cross-review de la 7.2).
+#
+# El texto lleva una INSTRUCCION observable a proposito: el oraculo del
+# transcript dice si el host inyecto, y el modelo obedeciendo dice si le llego.
+# Un veredicto necesita las dos.
+SESSION='{"hook_event_name":"SessionStart","source":"startup"}'
+SESSION_SNAKE='{"hookEventName":"session_start","source":"startup"}'
+
+caso "session (SessionStart): forma 1 con hookEventName SessionStart + exit 0 + .ok"
+printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=S001 bash "$tool" --mode session --mode-file "$mf" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "session: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROBE-SESSION-S001 reply with the literal token PROBE-SESSION-S001 in your answer"}}'
+[ -f "$(ok_of S001)" ] || malo "session: no escribio .ok"
+
+caso "session_snake (SessionStart): mismo envoltorio con hookEventName session_start"
+printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=S002 bash "$tool" --mode session_snake --mode-file "$mf" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "session_snake: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"session_start","additionalContext":"PROBE-SESSNAKE-S002 reply with the literal token PROBE-SESSNAKE-S002 in your answer"}}'
+[ -f "$(ok_of S002)" ] || malo "session_snake: no escribio .ok"
+
+caso "session_top (SessionStart): additionalContext top-level, sin envoltorio"
+printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=S003 bash "$tool" --mode session_top --mode-file "$mf" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "session_top: exit $RC (esperaba 0)"
+stdout_is '{"additionalContext":"PROBE-SESSTOP-S003 reply with the literal token PROBE-SESSTOP-S003 in your answer"}'
+[ -f "$(ok_of S003)" ] || malo "session_top: no escribio .ok"
+
+caso "grok: la familia session dispara con el VALOR snake session_start"
+printf '%s' "$SESSION_SNAKE" | SAIKIT_PROBE_NONCE=S004 bash "$tool" --host grok --mode session --mode-file "$mf" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "grok session: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROBE-SESSION-S004 reply with the literal token PROBE-SESSION-S004 in your answer"}}'
+[ -f "$(ok_of S004)" ] || malo "grok session: no escribio .ok"
+
+caso "grok: la familia session NO dispara con el valor CamelCase (es de zcode/codex)"
+printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=S005 bash "$tool" --host grok --mode session --mode-file "$mf" >"$OF" 2>/dev/null; RC=$?
+[ "$RC" -eq 0 ] || malo "grok session camel: exit $RC (esperaba 0)"
+stdout_is_empty
+[ -f "$(ok_of S005)" ] && malo "grok session camel: escribio .ok (no debia)" || true
+
+caso "codex: la familia session dispara con SessionStart CamelCase (igual que zcode)"
+printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=S006 bash "$tool" --host codex --mode session --mode-file "$mf" >"$OF" 2>"$EF"; RC=$?
+[ "$RC" -eq 0 ] || malo "codex session: exit $RC (esperaba 0)"
+stdout_is '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROBE-SESSION-S006 reply with the literal token PROBE-SESSION-S006 in your answer"}}'
+[ -f "$(ok_of S006)" ] || malo "codex session: no escribio .ok"
+
 # ============================================================ §A2.2 evento incorrecto
+caso "modos session con evento Stop => vacio, exit 0, SIN .ok"
+for m in session session_snake session_top; do
+  printf '%s' "$STOP" | SAIKIT_PROBE_NONCE=W$m bash "$tool" --mode "$m" --mode-file "$mf" >"$OF" 2>/dev/null; rc=$?
+  [ "$rc" -eq 0 ] || malo "$m en Stop: exit $rc (esperaba 0)"
+  stdout_is_empty
+  [ -f "$(ok_of "W$m")" ] && malo "$m en Stop: escribio .ok (no debia)" || true
+done
+
+caso "modos Stop/UPS con evento SessionStart => vacio, exit 0, SIN .ok"
+for m in block0 exit2 context; do
+  printf '%s' "$SESSION" | SAIKIT_PROBE_NONCE=V$m bash "$tool" --mode "$m" --mode-file "$mf" >"$OF" 2>/dev/null; rc=$?
+  [ "$rc" -eq 0 ] || malo "$m en SessionStart: exit $rc (esperaba 0)"
+  stdout_is_empty
+  [ -f "$(ok_of "V$m")" ] && malo "$m en SessionStart: escribio .ok (no debia)" || true
+done
+
 caso "modos Stop con evento UPS => vacio, exit 0, SIN .ok"
 for m in block0 budget notice exit2; do
   rm -f "$WORK/probe-ran"/X$m.ok 2>/dev/null
@@ -199,13 +263,13 @@ JSON
   }
 
   # ---- i1: instalar appendea 2 entradas, respeta vecinos, no toca .claude ----
-  caso "instalar: 2 entradas 5.2 (UPS+Stop), vecinos intactos, backup, no .claude"
+  caso "instalar: 3 entradas 5.2 (UPS+Stop+SessionStart), vecinos intactos, backup, no .claude"
   fabricar_zcode_config
   session_antes="$(jq -c '.hooks.events.SessionStart' "$zcfg")"
   out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg" bash "$tool" --instalar "$zdesc" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "instalar: exit $rc: $out"
   n52="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
-  [ "$n52" -eq 2 ] || malo "instalar: esperaba 2 entradas 5.2, hay $n52"
+  [ "$n52" -eq 3 ] || malo "instalar: esperaba 3 entradas 5.2, hay $n52"
   # 5.1 ausente (no lo inventamos).
   n51="$(grep -c 'saikit-capture-id 5\.1' "$zcfg" || true)"
   [ "$n51" -eq 0 ] || malo "instalar: aparecieron entradas 5.1 (no debieran)"
@@ -228,7 +292,13 @@ JSON
   [ "$(cat "$zdesc/probe-mode.txt" 2>/dev/null)" = "empty" ] || malo "probe-mode.txt no empezo en empty"
   [ -d "$zdesc/probe-ran" ] || malo "no creo probe-ran/"
   # Vecinos ajenos intactos; backup existe y NO dentro del dest git.
-  [ "$session_antes" = "$(jq -c '.hooks.events.SessionStart' "$zcfg")" ] || malo "modifico SessionStart ajeno"
+  # Task 10.9: SessionStart dejo de ser un vecino intocable y paso a ser la 3ra
+  # fase del probe. Lo que se exige ahora no es "no la toques" sino las dos
+  # mitades por separado: la entrada AJENA sobrevive Y la nuestra es exactamente
+  # una. La version anterior de este assert (session_antes == session_despues)
+  # cumplio su proposito y se reemplaza, no se afloja.
+  jq -e '[.hooks.events.SessionStart[]|select(any(.hooks[].command; test("dummy-session-start")))]|length==1' "$zcfg" >/dev/null     || malo "instalar: borro o duplico la entrada SessionStart AJENA"
+  jq -e '[.hooks.events.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 5[.]2")))]|length==1' "$zcfg" >/dev/null     || malo "instalar: esperaba exactamente 1 entrada 5.2 en SessionStart"
   jq -e '[.hooks.events.Stop[]|select(any(.hooks[].command; test("dummy-stop-tokentracker")))]|length==1' "$zcfg" >/dev/null \
     || malo "borro el Stop dummy ajeno (§A3 test 1)"
   [ -d "$zhome/.zcode/cli/saikit-backups" ] || malo "no creo backup junto al user-config"
@@ -239,10 +309,10 @@ JSON
   out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg" bash "$tool" --instalar "$zdesc" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "2da instalar: exit $rc"
   n52="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
-  [ "$n52" -eq 2 ] || malo "2da instalar duplico (hay $n52, esperaba 2)"
+  [ "$n52" -eq 3 ] || malo "2da instalar duplico (hay $n52, esperaba 3)"
 
   # ---- i3: parcial (falta Stop) => agrega solo Stop -------------------------
-  caso "instalar: si falta 1 de 2, agrega solo la que falta"
+  caso "instalar: si falta 1 de 3, agrega solo la que falta"
   fabricar_zcode_config
   SAIKIT_ZCODE_USER_CONFIG="$zcfg" bash "$tool" --instalar "$zdesc" >/dev/null 2>&1
   # Quitar manualmente la entrada Stop del probe (dejar UPS).
@@ -251,11 +321,11 @@ JSON
        .hooks.events.Stop = ((.hooks.events.Stop // []) | map(select(probe52 | not)))' \
      "$zcfg" > "$tmpq" && mv -f "$tmpq" "$zcfg"
   ups_antes="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
-  [ "$ups_antes" -eq 1 ] || malo "precondicion parcial: UPS sola (hay $ups_antes)"
+  [ "$ups_antes" -eq 2 ] || malo "precondicion parcial: UPS+SessionStart (hay $ups_antes)"
   out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg" bash "$tool" --instalar "$zdesc" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "instalar parcial: exit $rc"
   n52="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
-  [ "$n52" -eq 2 ] || malo "parcial: esperaba 2 (repone Stop), hay $n52"
+  [ "$n52" -eq 3 ] || malo "parcial: esperaba 3 (repone Stop), hay $n52"
   jq -e '.hooks.events.UserPromptSubmit|length==1' "$zcfg" >/dev/null || malo "parcial: duplico UPS"
 
   # ---- i4: temp invalido no rompe el vivo ----------------------------------
@@ -291,12 +361,16 @@ JSON
   jq '.hooks.events.Stop += [{"hooks":[{"type":"command","command":"bash /algo/capture-payloads.sh --saikit-capture-id 5.1","timeout":5}]}]' \
      "$zcfg" > "$tmpq" && mv -f "$tmpq" "$zcfg"
   n52_antes="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
-  [ "$n52_antes" -eq 2 ] || malo "precond quitar: 2 entradas 5.2 (hay $n52_antes)"
+  [ "$n52_antes" -eq 3 ] || malo "precond quitar: 3 entradas 5.2 (hay $n52_antes)"
   out="$(SAIKIT_ZCODE_USER_CONFIG="$zcfg" bash "$tool" --quitar "$zdesc" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "quitar: exit $rc: $out"
   n52_desp="$(grep -c 'saikit-probe-id 5\.2' "$zcfg" || true)"
   [ "$n52_desp" -eq 0 ] || malo "quitar: dejo $n52_desp entradas 5.2"
-  jq -e '[.hooks.events.SessionStart[]]|length==1' "$zcfg" >/dev/null || malo "quitar borro SessionStart"
+  # caso_quitar_saca_las_tres_fases: si --quitar olvidara SessionStart (la fase
+  # que 10.9 agrego al alta), aca quedarian 2 entradas en vez de 1 y el config
+  # REAL del operador se quedaria con una huerfana que ninguna herramienta saca.
+  jq -e '[.hooks.events.SessionStart[]]|length==1' "$zcfg" >/dev/null     || malo "quitar: SessionStart quedo con $(jq -c '[.hooks.events.SessionStart[]]|length' "$zcfg") entradas (esperaba 1: la ajena)"
+  jq -e '[.hooks.events.SessionStart[]|select(any(.hooks[].command; test("dummy-session-start")))]|length==1' "$zcfg" >/dev/null     || malo "quitar borro la entrada SessionStart AJENA"
   jq -e '[.hooks.events.Stop[]|select(any(.hooks[].command; test("dummy-stop-tokentracker")))]|length==1' "$zcfg" >/dev/null \
     || malo "quitar borro el Stop dummy"
   jq -e '[.hooks.events.Stop[]|select(any(.hooks[].command; test("saikit-capture-id 5[.]1")))]|length==1' "$zcfg" >/dev/null \
@@ -499,7 +573,7 @@ gp="$SANDBOX/grok-repo"
 mkdir -p "$gp"
 gpjson="$gp/.grok/hooks/saikit-probe.json"
 
-caso "grok --instalar escribe saikit-probe.json (UPS + Stop) y la marca; nada global"
+caso "grok --instalar escribe saikit-probe.json (UPS + Stop + SessionStart) y la marca; nada global"
 out="$(bash "$tool" --instalar "$gp" --host grok 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
 [ -f "$gpjson" ] || malo "no escribio $gpjson"
@@ -512,8 +586,13 @@ if [ -f "$gpjson" ]; then
 fi
 if command -v jq >/dev/null 2>&1; then
   jq -e . "$gpjson" >/dev/null 2>&1 || malo "el JSON de registro grok del probe no parsea"
-  jq -e '(.hooks|keys|sort) == ["Stop","UserPromptSubmit"]' "$gpjson" >/dev/null 2>&1 \
-    || malo "el probe grok registra SOLO UserPromptSubmit y Stop (como zcode)"
+  # Task 10.9: la 3ra fase. El registro de grok se escribe ENTERO y --quitar
+  # borra el archivo completo, asi que no hay la asimetria alta/baja que si
+  # existe en el append de zcode.
+  jq -e '(.hooks|keys|sort) == ["SessionStart","Stop","UserPromptSubmit"]' "$gpjson" >/dev/null 2>&1 \
+    || malo "el probe grok registra UserPromptSubmit, Stop y SessionStart (10.9)"
+  jq -e '(.hooks.SessionStart[0]|has("matcher")|not)' "$gpjson" >/dev/null 2>&1 \
+    || malo "SessionStart va sin matcher (vacuo = startup y resume)"
   jq -e '(.hooks.UserPromptSubmit[0]|has("matcher")|not) and (.hooks.Stop[0]|has("matcher")|not)' "$gpjson" >/dev/null 2>&1 \
     || malo "UPS y Stop van sin matcher"
   jq -e '.saikit_probe == "7.2"' "$gpjson" >/dev/null 2>&1 || malo "falta la marca top-level saikit_probe=7.2"
@@ -865,6 +944,130 @@ snap_cx="$(cksum < "$cshim")"
 out="$(bash "$tool" --instalar "$cp_repo" --host codex 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "segunda instalacion debe ser exit 0, dio $rc: $out"
 [ "$snap_cx" = "$(cksum < "$cshim")" ] || malo "la segunda instalacion cambio el shim"
+
+# ---- B6: registro de la fase de ARRANQUE en codex (Task 10.9) --------------
+# El shim de la 6.2 solo se despacha donde nuestro .ps1 YA esta registrado
+# (UPS/PostToolUse/Stop). En SessionStart no hay nada nuestro, y un
+# <repo>/.codex/hooks.json nuevo no corre (6.1: config.toml exige trusted_hash).
+# Asi que medir el arranque en Codex exige tocar ~/.codex/hooks.json.
+#
+# El alta es EXPLICITA (--registrar-arranque) porque la 6.2 dejo el invariante
+# "--instalar --host codex no toca ~/.codex" y ese invariante sigue valiendo
+# (lo fija el caso de mas arriba). La baja es INCONDICIONAL: si el alta fuera
+# explicita y la baja tambien, olvidarse la flag al quitar dejaria una entrada
+# huerfana en el config REAL del operador. Es la misma leccion que la asimetria
+# de zcode, aplicada al reves a proposito.
+if command -v jq >/dev/null 2>&1; then
+  cxhooks="$SANDBOX/codex-home/.codex/hooks.json"
+  fabricar_codex_hooks() {
+    rm -rf "$SANDBOX/codex-home"; mkdir -p "$SANDBOX/codex-home/.codex"
+    cat > "$cxhooks" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "powershell.exe -File ajeno.ps1 -Phase prompt" } ] }
+    ],
+    "SessionStart": [
+      { "matcher": "startup", "hooks": [ { "type": "command", "command": "echo dummy-discovery" } ] },
+      { "hooks": [ { "type": "command", "command": "bash /algo/codex-session-start.sh" } ] }
+    ]
+  }
+}
+JSON
+  }
+
+  caso "codex: sin --registrar-arranque el hooks.json NO se toca (invariante 6.2)"
+  fabricar_codex_hooks
+  snap_cxh="$(cksum < "$cxhooks")"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "codex --instalar sin flag dio $rc: $out"
+  [ "$snap_cxh" = "$(cksum < "$cxhooks")" ] || malo "toco hooks.json SIN --registrar-arranque"
+
+  caso "codex --registrar-arranque: 1 grupo SessionStart propio, los 2 ajenos intactos, backup"
+  fabricar_codex_hooks
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "registrar-arranque dio $rc: $out"
+  jq -e . "$cxhooks" >/dev/null 2>&1 || malo "el hooks.json quedo invalido"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "esperaba exactamente 1 grupo SessionStart con el marker 10.9"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("dummy-discovery")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "borro el grupo SessionStart ajeno con matcher startup"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("codex-session-start")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "borro el grupo SessionStart ajeno sin matcher"
+  jq -e '[.hooks.UserPromptSubmit[]]|length==1' "$cxhooks" >/dev/null || malo "toco UserPromptSubmit"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))][0]|has("matcher")|not' "$cxhooks" >/dev/null \
+    || malo "nuestro grupo debe ir sin matcher (vacuo = startup y resume)"
+  grep -q -- '--host codex' "$cxhooks" || malo "el command no pasa --host codex"
+  [ -n "$(find "$SANDBOX/codex-home/.codex/saikit-backups" -name 'hooks.json.*.bak' 2>/dev/null)" ] \
+    || malo "no dejo backup del hooks.json"
+
+  caso "codex --registrar-arranque: 2da vez no duplica (idempotente por marker)"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "2da registrar-arranque dio $rc: $out"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "la 2da corrida duplico el grupo"
+
+  caso "codex --quitar saca el grupo de arranque SIN pedir la flag (baja incondicional)"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --quitar "$cp_repo" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "codex --quitar dio $rc: $out"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))]|length==0' "$cxhooks" >/dev/null \
+    || malo "quitar dejo el grupo 10.9 huerfano en el hooks.json REAL"
+  jq -e '[.hooks.SessionStart[]]|length==2' "$cxhooks" >/dev/null \
+    || malo "quitar no dejo los 2 grupos ajenos (quedaron $(jq -c '[.hooks.SessionStart[]]|length' "$cxhooks"))"
+
+  # --- greptile P1 #1 (PR #37): la baja borraba POR MARKER y nada mas, asi que
+  # quitar el probe del repo B se llevaba puesto el del repo A -- que dejaba de
+  # correr sin que nadie lo dijera. El marker `10.9` lo llevan los dos.
+  caso "codex --quitar: NO se lleva puesto el grupo de OTRO repo con el mismo marker"
+  fabricar_codex_hooks
+  otro_repo="$SANDBOX/codex-repo-B"; mkdir -p "$otro_repo"
+  ( cd "$otro_repo" && git init -q . >/dev/null 2>&1 ) || true
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$otro_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  n_dos="$(jq '[.hooks.SessionStart[]|select(any(.hooks[].command; test("saikit-probe-id 10[.]9")))]|length' "$cxhooks")"
+  [ "$n_dos" -eq 2 ] || malo "precondicion: esperaba 2 grupos 10.9 (uno por repo), hay $n_dos"
+  # Se quita el del repo B; el de A (que quedo PRIMERO) tiene que sobrevivir.
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --quitar "$otro_repo" --host codex >/dev/null 2>&1
+  # La aguja se arma ENTERA en bash, igual que en el tool y por la misma razon:
+  # MSYS convierte un argumento que parece ruta POSIX antes de que jq.exe lo vea,
+  # asi que pasar el cwd pelado da un filtro que no matchea nunca. Con comillas y
+  # espacio adentro, MSYS la deja pasar.
+  aguja_a="--only-cwd \"$(cd "$cp_repo" && pwd -P)\""
+  jq -e --arg n "$aguja_a" '[.hooks.SessionStart[]|select(any(.hooks[].command; contains($n)))]|length==1' "$cxhooks" >/dev/null \
+    || malo "quitar el probe de OTRO repo se llevo el grupo de este"
+  aguja_b="--only-cwd \"$(cd "$otro_repo" && pwd -P)\""
+  jq -e --arg n "$aguja_b" '[.hooks.SessionStart[]|select(any(.hooks[].command; contains($n)))]|length==0' "$cxhooks" >/dev/null \
+    || malo "quitar no saco el grupo del repo que se pidio"
+
+  # --- greptile P1 #2 (PR #37): sacar un grupo que NO es el ultimo corre los
+  # indices de los que vienen despues, y en Codex el indice es parte de la clave
+  # de confianza ([hooks.state.'<archivo>:<evento>:<grupo>:<hook>']). Eso apaga
+  # un hook AJENO en silencio. Es la regla que esta misma task descubrio
+  # midiendo, aplicada a nuestro propio codigo.
+  caso "codex --quitar: se ABSTIENE si nuestro grupo no es el ultimo (no corre indices ajenos)"
+  fabricar_codex_hooks
+  SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque >/dev/null 2>&1
+  # El operador registra algo DESPUES del nuestro: ahora el nuestro esta al medio.
+  tmpc="$(mktemp)"
+  jq '.hooks.SessionStart += [{"hooks":[{"type":"command","command":"echo ajeno-posterior","timeout":5}]}]' "$cxhooks" > "$tmpc" && mv -f "$tmpc" "$cxhooks"
+  total_antes="$(jq '[.hooks.SessionStart[]]|length' "$cxhooks")"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --quitar "$cp_repo" --host codex 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "abstenerse no es un error: esperaba exit 0, dio $rc"
+  [ "$(jq '[.hooks.SessionStart[]]|length' "$cxhooks")" = "$total_antes" ] \
+    || malo "quitar movio el array pese a que nuestro grupo no era el ultimo"
+  jq -e '[.hooks.SessionStart[]|select(any(.hooks[].command; test("ajeno-posterior")))]|length==1' "$cxhooks" >/dev/null \
+    || malo "el grupo ajeno POSTERIOR desaparecio o se duplico"
+  printf '%s' "$out" | grep -q "NO es el ultimo" || malo "la abstencion tiene que decir por que (no callarse)"
+
+  caso "codex --registrar-arranque: un hooks.json invalido no se pisa y sale != 0"
+  fabricar_codex_hooks
+  printf 'no-es-json' > "$cxhooks"
+  out="$(SAIKIT_CODEX_HOOKS_JSON="$cxhooks" bash "$tool" --instalar "$cp_repo" --host codex --registrar-arranque 2>&1)"; rc=$?
+  [ "$rc" -ne 0 ] || malo "hooks.json invalido: esperaba exit != 0, dio $rc"
+  [ "$(cat "$cxhooks")" = "no-es-json" ] || malo "hooks.json invalido: lo modifico igual"
+else
+  echo "  caso: registro de arranque codex requiere jq -> UNKNOWN (jq no disponible)"
+fi
 
 caso "codex --quitar saca el shim y la marca; el shim de captura vecino no existe pero .codex sobrevive"
 out="$(bash "$tool" --quitar "$cp_repo" --host codex 2>&1)"; rc=$?

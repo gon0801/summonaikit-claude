@@ -58,6 +58,8 @@ G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \
 G1|fast_no_se_detecta|el lane fast deja de detectarse y todo arma full
 G1|session_sin_reglas|la fase session vuelve a salir muda y las reglas permanentes no se inyectan
 G1|session_pisa_gate|la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
+G1|session_sin_codex|se saca codex de la emision de reglas, el host que la medicion de la 10.9 habilito
+G1|session_tambien_en_grok|se agrega grok a la emision de reglas, el host que la medicion de la 10.9 descarto por ignorar additionalContext
 G1|fallback_sin_acotar|el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar
 G1|frontera_izquierda_floja|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
 G1|estado_inmortal|la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre
@@ -219,7 +221,20 @@ mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 # la razon por la que 10.6 no agrega un caso propio de "prompt sigue mudo": el
 # caso que ya existe es la regresion, y la mutacion lo demuestra.
 mut_session_sin_reglas()        { sed 's/^      emit_standing_rules$/      :/'; }
-mut_session_pisa_gate()         { sed 's/\[ "$PHASE" = "session" \] && \[ "$TARGET" = "claude" \]/[ "$TARGET" = "claude" ]/'; }
+# ACTUALIZADA por la Task 10.9: su sed apuntaba al literal
+# `[ "$PHASE" = "session" ] && [ "$TARGET" = "claude" ]`, que esta fila movio al
+# sumar codex. Sin actualizarla quedaba INERTE —no cambiaria un byte— y la
+# guardia 2 de la bateria (toda mutacion tiene que modificar el archivo)
+# reventaba. Mismo tropiezo que ya tuvieron la 6.4 y la 9.3.
+mut_session_pisa_gate()         { sed 's/\[ "$PHASE" = "session" \] && { \[ "$TARGET" = "claude" \] || \[ "$TARGET" = "codex" \]; }/{ [ "$TARGET" = "claude" ] || [ "$TARGET" = "codex" ]; }/'; }
+# Task 10.9 — una mutacion por cada mitad del veredicto nuevo.
+# session_sin_codex saca el host que la medicion HABILITO: lo atrapa
+# caso_g1_session_inyecta_reglas_codex. session_tambien_en_grok agrega el host
+# que la medicion DESCARTO: lo atrapa caso_g1_session_no_inyecta_en_grok, y es
+# la direccion que importa — habilitar de mas es el error que esta fila existe
+# para impedir, y sin esta mutacion nadie probaria que el caso lo detecta.
+mut_session_sin_codex()         { sed 's/ || \[ "$TARGET" = "codex" \]; }/; }/'; }
+mut_session_tambien_en_grok()   { sed 's/\[ "$TARGET" = "codex" \]; }/[ "$TARGET" = "codex" ] || [ "$TARGET" = "grok" ]; }/'; }
 # Task 9.4 (C9): revierte el acotamiento del fallback al payload crudo. Sin el,
 # un payload sin campo `prompt` busca el sentinel en el PAYLOAD ENTERO y un
 # -saikit en un campo de resumen arma la ceremonia — lo atrapa

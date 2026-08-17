@@ -173,7 +173,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -195,6 +195,63 @@ caso_g1_session_inyecta_reglas() {
   # La fase session NO arma: si creara estado, el Stop gate empezaria a exigir
   # recibo en sesiones que nadie armo — es el defecto A4 en version nueva.
   if lab_hay_estado; then _mal "la fase session NO debe crear estado (el Stop gate se activaria solo)"; fi
+}
+
+# Task 10.9 — Codex entra, y entra MEDIDO (2026-08-16, repo descartable,
+# `codex exec` con la confianza de hooks salteada por invocacion).
+#
+# Los DOS oraculos coincidieron, que es lo que la regla de decision exige: el
+# nonce entro al rollout de la sesion como mensaje `role:"developer"` (la misma
+# forma que la 6.2 midio para UPS) Y el modelo devolvio el token literal que el
+# texto le pedia. Una sola de las dos señales habria dejado el veredicto en
+# `unknown`.
+#
+# La forma emitida es la MISMA que en Claude y eso no es casualidad ni pereza:
+# 6.2 midio que el esquema de Codex es ESTRICTO (una clave extra invalida la
+# salida entera), asi que la forma limpia es la unica candidata y es justo la que
+# emit_standing_rules ya produce.
+#
+# El REGISTRO no viene con esto: en Codex un hook nuevo exige un `trusted_hash`
+# en config.toml que solo el host acuña, asi que registrar la fase es accion de
+# operador — mismo patron que la 10.6 en Claude y que la 9.9 con el matcher de
+# `Agent`. El .ps1 del perfil ya acepta `-Phase session` y ya exporta
+# TARGET=codex: la plomeria estaba lista, faltaba el veredicto.
+caso_g1_session_inyecta_reglas_codex() {
+  lab_run session codex "$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" '"hookSpecificOutput"'
+  _contiene "stdout" "$LAB_OUT" '"hookEventName":"SessionStart"'
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
+  if lab_hay_estado; then _mal "la fase session NO debe crear estado tampoco en codex"; fi
+}
+
+# Task 10.9 — Grok NO entra, y esta es la mitad que impide habilitarlo por
+# accidente. Medido el 2026-08-16 sobre Grok 1.0.4: las TRES formas
+# (`hookSpecificOutput` con hookEventName camel, con hookEventName snake, y
+# `additionalContext` top-level) emitieron —el .ok del probe lo prueba— y
+# ninguna llego: ni a la respuesta del modelo, ni a los archivos de sesion.
+#
+# Coincide con lo que la doc de 1.0.4 declara de esa fase ("its output is
+# recorded but does not change control flow") y extiende a SessionStart lo que
+# 7.2 midio en UPS y Stop. Emitirle seria texto muerto en cada arranque.
+#
+# Si alguna version futura de Grok empieza a aplicar additionalContext ahi, este
+# caso NO se pone rojo solo — el veredicto se re-mide y el caso se invierte a
+# proposito, igual que el del instalador de zcode.
+caso_g1_session_no_inyecta_en_grok() {
+  # CONTROL POSITIVO primero, con el MISMO payload: sin esto el caso pasaria
+  # vacuamente si el payload dejara de llegar a la rama de session (un cambio de
+  # forma del fixture, un typo en la fase) y leeriamos "grok no emite" cuando lo
+  # que pasa es que no corre nada. Si esta mitad falla, la negativa de abajo no
+  # significa nada.
+  local payload; payload="$(lab_payload_session 'arranca la sesion sin pedir nada especial')"
+  lab_run session claude "$payload"
+  _contiene "control: stdout de claude" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
+
+  lab_run session grok "$payload"
+  _igual "exit code" "$LAB_RC" "0"
+  _no_contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT STANDING RULES'
+  if lab_hay_estado; then _mal "la fase session NO debe crear estado tampoco en grok"; fi
 }
 
 # Task 9.4 (C9). El fallback `prompt_text="$INPUT"` no estaba acotado: si el

@@ -1367,6 +1367,72 @@ orden final de identidad es `grok > codex > zcode > claude > other`. Hasta que
 los turnos vivos de 6.6/7.6 cierren, Codex y Grok son **alcance aprobado**, no
 capacidad observada; `not_observed != absent` sigue aplicando.
 
+### Medido 2026-08-16, Task 10.9 (la fase de arranque en los otros tres hosts)
+
+La 10.6 acotó las reglas permanentes a `TARGET=claude` porque era el único host
+con `SessionStart` medido. Esta medición saca a los otros tres de la hipótesis.
+Detalle y evidencia: `docs/task-10.9-medicion.md`.
+
+**Los tres tienen fase de arranque y disparó en los tres** (`.ok` del probe, no
+lectura de documentación). El literal del evento sigue la misma tabla por host
+que 7.1: `SessionStart` en zcode y Codex, **`session_start`** en Grok.
+
+**Grok 1.0.4 — `additionalContext` IGNORADO en la fase de arranque.** Las tres
+formas (envoltorio camel, envoltorio snake, top-level) emitieron y ninguna llegó:
+ni a la respuesta del modelo ni a los archivos de sesión. El oráculo se agotó
+antes de declarar `ignored`. Extiende a `SessionStart` lo que 7.2 midió en
+UPS/Stop, y lo hace sobre **1.0.4** — 7.2 fue sobre 1.0.3, y esa diferencia de
+versión queda declarada: **los veredictos de 7.2 describen una versión que ya no
+es la instalada** y su revalidación es tarea propia, no de esta fila.
+
+**Codex 0.147.0 — registrar un hook NO es editar `hooks.json`.** Cada handler
+exige además un registro propio en `~/.codex/config.toml`:
+
+```toml
+[hooks.state.'<ruta del hooks.json>:<evento_snake>:<indice_grupo>:<indice_hook>']
+trusted_hash = '…'
+enabled = true        # presente en algunos
+```
+
+Un grupo sin ese registro **se saltea en silencio**: sin error, sin aviso y sin
+línea en la traza del host. Se llegó descartando de a un turno real por
+hipótesis: no es el cwd, no es el matcher, no son las comillas de la ruta y no es
+la posición en el array. Es la misma familia que el hallazgo de la 6.1
+(«`config.toml` exige `trusted_hash` por entrada y uno nuevo no corre»), medido
+allá para un `<repo>/.codex/hooks.json` y **confirmado acá para el `hooks.json`
+GLOBAL**. Consecuencia operativa: **los índices son parte de la clave de
+confianza**, así que reordenar el array de una fase desalinea el `trusted_hash`
+de los hooks ya registrados — no se reordena.
+
+**zcode 3.7.5-11 — ACEPTADA, y sin rama nueva.** Turno real con el operador
+adelante: el texto entra al request del modelo como mensaje `role="system"` con
+el prefijo `SessionStart hook additional context:` y numeración `#1` —**la misma
+forma que la 5.2 midió para UPS**, sólo cambia el nombre de la fase— y el modelo
+devolvió el token literal que ese texto le pedía. `TARGET` para zcode resuelve a
+`claude` (fallback `ZCODE_SESSION_ID`/`ZCODE_PROJECT_DIR`, decisión de la 5.4),
+así que la condición del hook ya lo cubría: lo que cambió es el **registro**,
+`install-hook.sh --host zcode` pasa de 3 a 4 fases.
+
+Eso cierra de paso un **polizón**: el guard de la 10.6 —que su comentario
+describe como «sólo Claude»— también cubría zcode, y lo único que lo frenaba era
+que el instalador no registraba la fase de arranque, equilibrio que ningún caso
+sostenía. El caso que lo ata nació exigiendo lo contrario (que la 4.ª fase NO se
+registrara mientras zcode fuera `unknown`) y **se invirtió el mismo día**, con el
+veredicto en la mano: el cambio de ese archivo es la declaración de que la
+medición existió, en vez de un aflojamiento silencioso.
+
+**Dos de tres habilitan emisión, y el resultado no fue uniforme** — que es
+exactamente por lo que la fila mide en vez de extrapolar. zcode y Codex aceptan;
+Grok se midió y da `ignorada`, así que no se registra: sería texto muerto en cada
+arranque de ese host. `not_observed != absent`: en los tres la fase existe y
+corre.
+
+**Límite operativo de zcode, declarado:** su `/login` escribe la API key en
+`~/.zcode/cli/config.json`, el mismo archivo donde el instalador y el probe hacen
+su append. Cualquier verificación de integridad sobre ese archivo tiene que ser
+**por estructura** (conteo de entradas por marker, vecinos ajenos, JSON válido),
+no por cksum ni por diff de contenido.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

@@ -1055,12 +1055,37 @@ SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn
 STANDING_RULES
 }
 
-# Acotado a TARGET=claude a proposito: es el unico host donde se MIDIO que
-# SessionStart acepta hookSpecificOutput.additionalContext y que el texto llega
-# al modelo (repo descartable + claude -p headless; docs/task-10.6-plan.md).
-# zcode, Codex y Grok quedan `unknown`, no "no lo tienen": registrarlos a ciegas
-# es el error que la 6.2 evito por un pelo — ahi Codex resulto DESCARTAR el
-# stdout cuando el exit no es 0, algo que ninguna otra fase sugeria.
+# Acotado a los hosts con VEREDICTO, uno por uno. La 10.6 dejo solo claude (unico
+# medido entonces); la 10.9 midio los otros tres el 2026-08-16 y el resultado NO
+# fue uniforme — que es justo por lo que se mide en vez de extrapolar:
+#
+#   claude  ACEPTADA (10.6)  repo descartable + `claude -p` headless.
+#   codex   ACEPTADA (10.9)  los dos oraculos coinciden: el nonce entra al
+#                            rollout como mensaje role:"developer" (la forma que
+#                            6.2 midio para UPS) y el modelo devuelve el token
+#                            literal que el texto le pedia.
+#   grok    IGNORADA (10.9)  las 3 formas emitieron y ninguna llego, ni a la
+#                            respuesta ni a los archivos de sesion (1.0.4).
+#   zcode   ACEPTADA (10.9)  turno real con el operador adelante. El texto entra
+#                            al request del modelo como mensaje role="system" con
+#                            el prefijo `SessionStart hook additional context:` y
+#                            numeracion `#1` — la MISMA forma que 5.2 midio para
+#                            UPS, solo cambia el nombre de la fase — y el modelo
+#                            devolvio el token literal que ese texto le pedia.
+#                            NO necesita rama propia: zcode resuelve a
+#                            TARGET=claude por el fallback de la 5.4, asi que
+#                            esta condicion ya lo cubre. Lo que cambio es el
+#                            REGISTRO: install-hook.sh --host zcode pasa de 3 a 4
+#                            fases, atado en test_install_hook.
+#
+# Registrarlos a ciegas es el error que la 6.2 evito por un pelo, y esta fila
+# volvio a mostrarlo desde otro angulo: en Codex un hook nuevo ni siquiera CORRE
+# sin su trusted_hash en config.toml, y se saltea en silencio.
+#
+# La forma emitida es UNA sola para los dos hosts que emiten, y eso esta medido,
+# no supuesto: 6.2 midio que el esquema de Codex es ESTRICTO (una clave extra
+# invalida la salida entera), asi que la forma limpia de Claude es tambien la
+# unica que Codex acepta.
 #
 # Emite JSON completo y sale por su cuenta: el emit_allow que sigue no imprime
 # nada para claude, asi que esta funcion es la unica salida de este camino.
@@ -1224,7 +1249,14 @@ start_harness() {
     # ser mudo y se rompe caso_g1_no_arma_sin_sentinel (esa es la regresion que
     # atrapa una rama mal acotada, por eso 10.6 no agrega un caso propio).
     # No arma, no escribe estado y no toca el gate del sentinel.
-    if [ "$PHASE" = "session" ] && [ "$TARGET" = "claude" ]; then
+    # Task 10.9: emiten claude (10.6), codex y zcode, los tres MEDIDOS. grok NO:
+    # se midio y su additionalContext se ignora en esta fase.
+    #
+    # zcode no aparece en la condicion y sin embargo emite: viaja bajo
+    # TARGET=claude por el fallback de la 5.4. Lo que lo habilito no fue este
+    # `if` sino su REGISTRO — install-hook.sh --host zcode pasa a registrar la
+    # 4a fase, atado en test_install_hook.
+    if [ "$PHASE" = "session" ] && { [ "$TARGET" = "claude" ] || [ "$TARGET" = "codex" ]; }; then
       emit_standing_rules
     fi
     # <<< SAIKIT-STANDING-RULES v1 <<<
