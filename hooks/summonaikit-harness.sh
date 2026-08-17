@@ -996,7 +996,7 @@ Understand: in one or two plain sentences, what the user asked for, plus any que
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
 Verify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. "No corri los candados" counts; "PASS" or od/wc alone does not.
 Review: findings, risks, or "no findings" with basis.
-Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no).
+Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits.
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
 )"
@@ -1046,10 +1046,15 @@ HARNESS_CONTEXT
 # porque el texto alcanzaba: aca el texto FALLO tres veces y la correccion
 # sigue siendo texto -- porque lo que fallo fue que estaba INCOMPLETO, no que
 # se ignorara. Atado por caso_g1_reglas_nombran_donde_correr_la_bateria.
+# Task 11.1: datapoint de campo Kimi 2026-08-16 — una rama cortada de un master
+# LOCAL llevo un commit no pusheado al PR sin que nadie lo decidiera; el bullet
+# nuevo exige base origin/<default> + verificacion de git log antes del PR.
+# Atado por caso_g1_reglas_exigen_base_de_rama_limpia.
 standing_rules() {
   cat <<'STANDING_RULES'
 SUMMONAIKIT STANDING RULES (session-wide — these apply whether or not the turn is armed with -saikit)
 - Run the FULL test battery ONCE per task, at the end, and run it WHERE it is cheapest: if the repo has CI, push a branch, OPEN A PULL REQUEST, and read the CI result instead of running the battery on this machine. Opening the PR is not optional bookkeeping: many setups run CI on pull_request but NOT on a bare feature-branch push, so pushing alone leaves you waiting for a result that never arrives. If that CI run does not actually include the full battery, run the battery locally instead: the invariant is that the FULL battery runs once SOMEWHERE, not that CI was consulted. Locally, red/green ONLY the single test file you are changing, never the whole suite. Saying "once per task" without saying where is not enough: measured on a Windows machine, the same battery took ~10 min locally and 2m58s in Linux CI (that ~6x is where the win comes from; other CI platforms still beat blocking your own machine), and three tasks in a row paid the local price while technically obeying the rule.
+- Create the task branch from origin/<default> (git fetch first), NEVER from your local default branch. Before opening the PR, verify `git log origin/<default>..HEAD` lists ONLY this task's commits; anything else means your base was dirty — rebase onto origin/<default> before the PR. Measured failure mode: a branch cut from a local master carried an unpushed local commit straight into the PR without anyone deciding it.
 - Do NOT sit blocked waiting on a background job. Start it, keep doing other work; you are notified when it finishes.
 - Before waiting on an external reviewer or CI, check whether it ALREADY finished instead of re-polling in a loop.
 STANDING_RULES

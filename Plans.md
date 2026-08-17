@@ -241,6 +241,21 @@ comparable, total ≤ 1 h sin perder ningún gate. Diseño completo en
 
 ---
 
+## Phase 11 — Hallazgos del run de campo con Kimi (2026-08-16)
+
+**Propósito:** un run real bajo el host Kimi devolvió 4 hallazgos; los 2
+accionables se cierran acá (los otros 2 quedaron declarados como trade-offs
+aceptados en `docs/task-11-plan-hallazgos-kimi.md`). Ejecuta GLM; revisa el
+lead.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| 11.1 | `[Guardrail]` `[lane:fast]` `[tdd:required]` **Higiene de base de rama.** Kimi ramificó desde un master local con un commit no pusheado y el commit se coló al PR. Las reglas permanentes ganan el bullet "rama desde origin/<default> con fetch previo; antes del PR, `git log origin/<default>..HEAD` contiene SOLO los commits de esta task", y la línea Close del recibo pide declararlo. Detalle: `docs/task-11-plan-hallazgos-kimi.md` | Las reglas emitidas en SessionStart contienen la regla nueva (`caso_g1_reglas_exigen_base_de_rama_limpia`); 1 mutación nueva atrapada; escenarios SessionStart de la baseline regrabados con diff auditado y cero veredictos movidos en el resto; install corrido | 10.9 | cc:WIP |
+| 11.2 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **La escotilla PAUSED gana la guardia `!recibo` (paridad con DELEGATED).** Recibo completo + PAUSED hoy se salta la validación y no limpia estado; recibo ROTO + PAUSED cierra en silencio — la clase de bug ya arreglada en la escotilla hermana. Con la guardia, recibo presente cae al gate normal; el contrato aclara que PAUSED es solo para cuando NO se puede avanzar. Resuelve la ambigüedad reportada por Kimi sin sentinel nuevo. Detalle: `docs/task-11-plan-hallazgos-kimi.md` | `caso_g4_recibo_completo_mas_paused_cierra_limpio` (exit 0 + estado borrado) y `caso_g4_recibo_roto_mas_paused_sigue_exigiendo` (exit 2) en verde; 2 mutaciones nuevas atrapadas (28→30); escenario `09-pausa-declarada` sin moverse en `--check`; install corrido; límite de subcadena declarado | - | cc:TODO |
+| 11.3 | `[Guardrail]` `[lane:gate]` `[tdd:required]` **Espejo de 11.2 en `summonaikit-kimi` + re-pin del drift.** El port reproduce la asimetría (`summonaikit-harness-kimi.sh:1152` sin guardia); misma cláusula, tests espejo, y el texto de contrato de 11.1/11.2 entra por su mecanismo de extracción (no a mano) con re-pin de `check_drift.sh`. El commit vive en ese repo; acá queda el puntero (precedente Task 4.2) | Los dos casos espejo en verde en la suite de ese repo; `check_drift.sh` exit 0 tras el re-pin; batería de ese repo corrida una vez; fila cerrada con el hash del commit de `summonaikit-kimi` | 11.1, 11.2 | cc:TODO |
+
+---
+
 ## Clasificación del alcance
 
 **Required** — Phases 0 a 3. El 0 es urgente e independiente; el 1 tiene valor
