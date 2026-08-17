@@ -226,3 +226,53 @@ lead.
 - El datapoint "citar texto con `-saikit` arma el gate" (medido en esta misma
   sesión): queda anotado, sin task — la decisión vigente ("si lo escribiste, lo
   quieres") es deliberada y cambiarla pide su propia medición.
+
+---
+
+## Post-11.3 — datapoints para futuras tasks (sesión GLM/zcode, 2026-08-16)
+
+Registralos al cerrar la Task 11.3 desde el host zcode. Origen medido: el gate
+falló 3 veces (agotó sus 2 ciclos de revisión) con `transcript_path fuera del
+perfil del host (...Temp\zcode-claude-hook-*\transcript.jsonl); se ignora,
+transcript=unknown (fail-open)` sobre un turno COMPLETO y honesto — recibo
+válido + subagentes despachados de verdad. Es la misma clase de punto ciego
+que el "sin wire.jsonl" documentado para Kimi (comentario del branch
+`wire_found=0` de su hook).
+
+### Propuesta Task 11.4 — contención del transcript de zcode (o unknown honesto)
+
+Un turno completo es indistinguible de uno sin evidencia: el gate reporta
+"Missing SUMMONAIKIT HARNESS RECEIPT" y "Missing <rol> subagent run" aunque
+todo eso exista, y quema el presupuesto. El `ROLE FALLBACK` declarado en el
+recibo tampoco sirve: el gate no puede leer el recibo que lo declara — el
+mecanismo de escape depende del mismo canal ciego. Dos caminos a evaluar con
+medición:
+
+1. Extender la contención A6 (`transcript_en_perfil`) con la forma de ruta de
+   zcode (`%TEMP%\zcode-claude-hook-*\transcript.jsonl`) si se considera un
+   path legítimo del host (precedente: alias camel de Grok, 7.3/D4).
+2. Si NO se acepta el path (un tmpdir es menos auditable que un perfil), el
+   fail-open es correcto pero el MENSAJE y el PRESUPUESTO deben reflejarlo:
+   un turno con transcript=unknown no debería consumir ciclos exigiendo
+   evidencia que por diseño no puede ver (el branch "sin wire" de Kimi ya lo
+   loguea como diagnóstico, no como fallo).
+
+DoD: caso de test con transcript_path en tmpdir estilo zcode ⇒ el gate lo lee,
+o reporta unknown sin consumir presupuesto; cero regresiones en A6.
+
+### Propuesta Task 11.5 — `check_drift.sh` como job de CI de summonaikit-kimi
+
+El re-pin de la 11.3 destapó TRES absorciones pendientes del port que llevaban
+días en silencio (`FAILURE_SIGNAL_RE_CI/CS` de 9.1+9.2, ancla del heredoc de
+7.4 r2, literal `$TOOL_HINT`): el detector existe y funciona, pero solo corre
+a mano — entre pins la deuda se acumula invisible. Propuesta: job del workflow
+de kimi que corra `bash tools/check_drift.sh` en cada push/PR. A resolver: el
+script compara contra el hook VIVO de Claude, que no existe en el runner —
+apuntar `SAIKIT_CLAUDE_HOOK` a la copia pineada (`docs/pinned/`) contrastada
+contra el hook de master de summonaikit-claude (checkout del repo hermano), o
+declarar el caso runner como unknown/fail-open (el script ya lo hace sin
+hook). DRIFT accionable (exit 1) rompe el CI; el AVISO no.
+
+DoD: un cambio que mueva una región copiada pone el job en rojo; el flujo
+normal queda verde; el caso "hook de Claude inaccesible en runner" declarado.
+Vive en `summonaikit-kimi`; acá queda el puntero (precedente 4.2/11.3).
