@@ -270,10 +270,30 @@ de esta fase, incluido en `~/.agents/agents/`, que es de kimi. Cerrarlo exige
 decidir antes si esos dos roles deben ser tipos de agente o quedarse como
 secciones del recibo — es una tarea propia, no un arreglo al pasar.
 
-**Advertencia a declarar en el spec:** el CLI del kit puede volver a escribir
-esos perfiles en un `saikit-update` posterior. La posesión no impide la
-sobrescritura; hace que la siguiente corrida del instalador la detecte y la
-repare. Es reparación, no exclusividad.
+**Advertencia a declarar en el spec, y su límite exacto.** El CLI del kit puede
+volver a escribir esos perfiles en un `saikit-update` posterior. La posesión no
+impide la sobrescritura. Y la reparación **no es incondicional**: el instalador
+sólo re-adopta un archivo cuyo hash esté en `agents/vendor-manifest.sha256`.
+
+Las dos ramas, medidas contra la máquina de estados:
+
+- El update reescribe el perfil con los **mismos bytes** que el manifiesto ya
+  lista ⇒ `VENDOR_CONOCIDO` ⇒ archiva y repara. La promesa vale.
+- El update trae un perfil **distinto** (el vendor cambió el texto) ⇒ hash
+  desconocido, sin `saikit_owned` ⇒ **`DESCONOCIDO` ⇒ no se toca y se
+  reporta.** La promesa NO vale: el ruteo se pierde en silencio hasta que
+  alguien mire el reporte.
+
+Ese segundo caso no es un defecto de la máquina de estados — es lo correcto: no
+se pisa un archivo que nadie miró. Pero significa que **el manifiesto necesita
+una vía de refresco**: un procedimiento declarado para agregar el hash nuevo del
+vendor después de revisar el diff, no un `--force` que adopte cualquier cosa.
+Sin esa vía, la fase entrega un ruteo que un update ajeno puede desactivar sin
+ruido.
+
+Enunciado honesto para el spec: *la posesión repara mientras el vendor no cambie
+sus perfiles; cuando los cambia, el instalador se planta y lo reporta, y hace
+falta refrescar el manifiesto a mano.*
 
 ### D6 — Codex queda fuera
 

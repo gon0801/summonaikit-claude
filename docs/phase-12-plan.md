@@ -110,10 +110,19 @@ host permite y ya hay precedente.
 - [ ] **Step 1: Localizar el bundle y fijar su versión**
 
 ```bash
+# La huella del directorio de agentes va PRIMERO: el step 5 la compara contra
+# esta. Sin tomarla aca, la verificacion de no-mutacion no se puede hacer.
+find "$HOME/.zcode/agents" -type f -print0 2>/dev/null \
+  | sort -z | xargs -0 cksum > /tmp/zcode-agents-antes.txt
+wc -l /tmp/zcode-agents-antes.txt
+
 find "$HOME/.zcode" -name 'zcode*.cjs' -o -name 'zcode*.js' | head
 # Registrar ruta, tamaño y sha256 en el documento. La versión medida por la 5.6
 # fue 3.7.5-11; si difiere, se anota — no se asume paridad.
 ```
+
+Esta tarea es **sólo lectura** (inspección del bundle), así que el árbol de
+agentes no debería cambiar. La huella existe para probarlo, no para suponerlo.
 
 - [ ] **Step 2: Encontrar el parser de frontmatter de agentes**
 
@@ -149,10 +158,12 @@ modelo de la UI, o el endpoint que el bundle nombre) y registrá cuál usaste.
 - [ ] **Step 5: Verificar que no se tocó nada**
 
 ```bash
-find "$HOME/.zcode/agents" -type f -print0 | sort -z | xargs -0 cksum
-# Comparar con la huella tomada ANTES del step 1. Cualquier diferencia => la
-# medición no vale y se reporta.
+find "$HOME/.zcode/agents" -type f -print0 2>/dev/null \
+  | sort -z | xargs -0 cksum > /tmp/zcode-agents-despues.txt
+diff /tmp/zcode-agents-antes.txt /tmp/zcode-agents-despues.txt && echo "AGENTES INTACTOS"
 ```
+
+`diff` no vacío ⇒ la medición no vale y se reporta qué quedó cambiado.
 
 - [ ] **Step 6: Escribir `docs/task-12.1-medicion.md` y commitear**
 
@@ -185,15 +196,48 @@ host es la captura de payloads reales.
 
 - [ ] **Step 1: Huella del perfil ANTES**
 
+**La huella NO puede ser del perfil entero.** Correr `grok -p` escribe sesiones,
+logs e índices por diseño: `find "$HOME/.grok" -type f` antes y después **nunca**
+va a dar igual, y el chequeo gritaría en falso en cada corrida. Se vigila lo que
+la medición no debe tocar, excluyendo lo que el host reescribe solo — la 7.1 hizo
+exactamente eso.
+
+Los steps de esta tarea corren en shells distintas (hay corridas interactivas en
+el medio), así que el helper y las rutas van a un archivo que cada step
+**sourcea**. Definirlos sueltos en el step 1 los pierde y el step 6 falla con
+`command not found` — o peor, `rm -rf ""` sobre una variable vacía.
+
 ```bash
-find "$HOME/.grok" -type f -print0 | sort -z | xargs -0 cksum > /tmp/grok-antes.txt
-wc -l /tmp/grok-antes.txt
+cat > /tmp/probe-122.env <<'EOF'
+# Repo descartable con nombre UNICO: nunca una ruta fija. Una ruta fija se
+# puede pisar y despues borrar con rm -rf un repo preexistente del operador
+# (en /c/dev ya conviven saikit-probe-109-zcode, saikit-captura y otros).
+probe="$(mktemp -d /c/dev/saikit-probe-122-XXXXXX)"
+huella_grok() {   # el perfil MENOS lo que el runtime reescribe solo
+  find "$HOME/.grok" -type d \( -name sessions -o -name logs -o -name tmp \
+                                -o -name cache -o -name telemetry \) -prune -o \
+       -type f -print0 2>/dev/null | sort -z | xargs -0 cksum
+}
+EOF
+. /tmp/probe-122.env
+huella_grok > /tmp/grok-antes.txt
+wc -l /tmp/grok-antes.txt; echo "repo descartable: $probe"
 ```
+
+`mktemp -d` falla si no puede crear un directorio nuevo, así que `$probe` nunca
+apunta a algo preexistente y el `rm -rf` del final sólo puede borrar lo que esta
+medición creó. Cada step siguiente arranca con `. /tmp/probe-122.env`.
+
+Antes de confiar en esa lista de podas, **verificá contra este perfil** qué
+subdirectorios existen y cuáles cambian con una corrida en vacío: los nombres de
+arriba salen de lo observado, y un directorio dinámico que no esté podado
+produce el mismo falso positivo.
 
 - [ ] **Step 2: Repo descartable y trust declarado**
 
 ```bash
-mkdir -p /c/dev/saikit-probe-122 && cd /c/dev/saikit-probe-122 && git init -q
+. /tmp/probe-122.env
+cd "$probe" && git init -q
 # Declarar el trust del repo en Grok. Se REVOCA en el step 6 — no queda abierto.
 ```
 
@@ -220,7 +264,7 @@ Este archivo es el ÚNICO cambio al perfil y se borra en el step 6.
 - [ ] **Step 4: Despachar el agente y capturar**
 
 ```bash
-cd /c/dev/saikit-probe-122
+. /tmp/probe-122.env; cd "$probe"
 grok -p 'Usá spawn_subagent con subagent_type=saikit-probe-122.' 2>&1 | tee /tmp/grok-122.log
 ```
 
@@ -231,8 +275,9 @@ Qué mirar en la salida y en los logs del host:
 - [ ] **Step 5: Repetir con un valor DESCONOCIDO**
 
 ```bash
+. /tmp/probe-122.env
 sed -i 's/^model: grok-4.5$/model: modelo-que-no-existe-122/' "$HOME/.grok/agents/saikit-probe-122.md"
-cd /c/dev/saikit-probe-122
+. /tmp/probe-122.env; cd "$probe"
 grok -p 'Usá spawn_subagent con subagent_type=saikit-probe-122.' 2>&1 | tee /tmp/grok-122-malo.log
 ```
 
@@ -243,11 +288,12 @@ el default; falla el despacho con error; cae a un default distinto en silencio.
 - [ ] **Step 6: Limpiar, revocar trust, verificar huella**
 
 ```bash
+. /tmp/probe-122.env
 rm -f "$HOME/.grok/agents/saikit-probe-122.md"
 # Revocar el trust del repo descartable en Grok.
-find "$HOME/.grok" -type f -print0 | sort -z | xargs -0 cksum > /tmp/grok-despues.txt
+huella_grok > /tmp/grok-despues.txt
 diff /tmp/grok-antes.txt /tmp/grok-despues.txt && echo "PERFIL INTACTO"
-rm -rf /c/dev/saikit-probe-122
+rm -rf "$probe"
 ```
 
 `diff` no vacío ⇒ la medición no vale y se reporta qué quedó cambiado.
@@ -284,10 +330,31 @@ inspección estática equivalente a `zcode.cjs`.
 
 - [ ] **Step 1: Huella ANTES de los dos directorios en juego**
 
+Misma disciplina que la 12.2, y por la misma razón: `~/.kimi-code/` tiene
+`sessions/`, `logs/`, `cache/`, `telemetry/`, `updates/` y `search-index/`, que
+el runtime reescribe solo. Una huella del árbol completo **nunca** vuelve a dar
+igual y el chequeo gritaría en falso siempre.
+
 ```bash
-find "$HOME/.agents" "$HOME/.kimi-code" -type f -print0 2>/dev/null \
-  | sort -z | xargs -0 cksum > /tmp/kimi-antes.txt
+cat > /tmp/probe-123.env <<'EOF'
+probe="$(mktemp -d /c/dev/saikit-probe-123-XXXXXX)"
+huella_kimi() {
+  find "$HOME/.agents" "$HOME/.kimi-code" \
+       -type d \( -name sessions -o -name logs -o -name cache -o -name telemetry \
+                  -o -name updates -o -name search-index -o -name tmp \
+                  -o -name user-history -o -name server \) -prune -o \
+       -type f -print0 2>/dev/null | sort -z | xargs -0 cksum
+}
+EOF
+. /tmp/probe-123.env
+huella_kimi > /tmp/kimi-antes.txt
+wc -l /tmp/kimi-antes.txt; echo "repo descartable: $probe"
 ```
+
+Verificá la lista de podas contra este perfil antes de confiar en ella: un
+directorio dinámico sin podar da el mismo falso positivo que la huella completa.
+Lo que **sí** tiene que quedar bajo vigilancia es `~/.agents/agents/`, que es
+justo lo que la medición toca.
 
 - [ ] **Step 2: Confirmar PRIMERO que kimi-code lee `~/.agents/agents/`**
 
@@ -305,7 +372,8 @@ saikit_owned: summonaikit-claude
 
 Respondé exactamente: PROBE-123-OK. Nada más.
 EOF
-cd /c/dev && mkdir -p saikit-probe-123 && cd saikit-probe-123 && git init -q
+. /tmp/probe-123.env
+cd "$probe" && git init -q
 kimi -p 'Delegá al subagente saikit-probe-123.' 2>&1 | tee /tmp/kimi-123.log
 ```
 
@@ -316,7 +384,7 @@ steps 3–4, y la fila `kimi` queda vacía con su razón.
 
 ```bash
 sed -i '/^tools: Read$/a model: kimi-code/k3\neffort: low' "$HOME/.agents/agents/saikit-probe-123.md"
-cd /c/dev/saikit-probe-123
+. /tmp/probe-123.env; cd "$probe"
 kimi -p 'Delegá al subagente saikit-probe-123.' 2>&1 | tee /tmp/kimi-123-model.log
 ```
 
@@ -328,7 +396,7 @@ frontmatter pisa ese default por agente, o si se ignora.
 
 ```bash
 sed -i 's|^model: kimi-code/k3$|model: sonnet|' "$HOME/.agents/agents/saikit-probe-123.md"
-cd /c/dev/saikit-probe-123
+. /tmp/probe-123.env; cd "$probe"
 kimi -p 'Delegá al subagente saikit-probe-123.' 2>&1 | tee /tmp/kimi-123-sonnet.log
 ```
 
@@ -340,10 +408,10 @@ producción, no uno hipotético.
 
 ```bash
 rm -f "$HOME/.agents/agents/saikit-probe-123.md"
-find "$HOME/.agents" "$HOME/.kimi-code" -type f -print0 2>/dev/null \
-  | sort -z | xargs -0 cksum > /tmp/kimi-despues.txt
+. /tmp/probe-123.env
+huella_kimi > /tmp/kimi-despues.txt
 diff /tmp/kimi-antes.txt /tmp/kimi-despues.txt && echo "PERFILES INTACTOS"
-rm -rf /c/dev/saikit-probe-123
+rm -rf "$probe"
 ```
 
 - [ ] **Step 6: Escribir `docs/task-12.3-medicion.md` y commitear**
@@ -442,6 +510,20 @@ for args in "--host marte --role implementer" \
   [ -z "$out" ]   || malo "[$args]: exit 2 no debe imprimir por stdout, obtuve [$out]"
 done
 
+caso "--role invalido NO se cuela por venir junto a un --tier valido"
+out="$(bash "$router" --host claude --role astronauta --tier review 2>/dev/null)"; rc=$?
+[ "$rc" -eq 2 ] || malo "un rol invalido debe salir 2 aunque el tier sea valido (obtuve $rc)"
+printf '%s' "$out" | grep -q 'astronauta' && malo "no debe acreditar un rol inventado en la salida"
+
+caso "una bandera sin valor NO cuelga el proceso (bucle infinito de shift 2)"
+# Reproducido: `shift 2` con el valor ausente no shiftea y devuelve != 0; bajo
+# `set -u` sin `-e` el while re-procesa la misma bandera para siempre.
+for flag in --host --role --tier --field --format; do
+  out="$(timeout 10 bash "$router" "$flag" 2>/dev/null)"; rc=$?
+  [ "$rc" -eq 124 ] && malo "[$flag] sin valor colgo el proceso (bucle infinito)"
+  [ "$rc" -eq 2 ]   || malo "[$flag] sin valor deberia salir 2, obtuve $rc"
+done
+
 caso "el rol desconocido NO se pierde adentro de una sustitucion (trampa de set -u)"
 # Bajo `set -u` sin `-e`, X="$(f)" con `exit 2` adentro deja X vacio y sigue.
 # El router tiene que salir 2 de verdad, no imprimir vacio y salir 0.
@@ -449,8 +531,16 @@ bash "$router" --host claude --role astronauta >/dev/null 2>&1
 [ "$?" -eq 2 ] || malo "un rol desconocido tiene que salir 2 desde el proceso, no desde un subshell"
 
 caso "candado: ningun ID de modelo vive fuera del router"
+# Cubre tests/ ademas de tools/ y agents/: la primera version solo miraba esos
+# dos y por ahi se colaba un `model: claude-opus-5` hardcodeado en
+# test_install_hook.sh -- que es exactamente lo que la regla existe para evitar,
+# porque obliga a editar dos archivos cada vez que cambia la tabla.
+# Se excluye ESTE archivo (es el que declara la tabla) y los fixtures del vendor
+# (son copias byte a byte de lo que el CLI del kit escribio: evidencia, no
+# configuracion; editarlas invalidaria el manifiesto).
 otros="$(grep -rlE 'claude-(sonnet|opus|haiku|fable)-[0-9]|glm-[0-9]|grok-[0-9]|kimi-code/' \
-           "$repo/tools" "$repo/agents" 2>/dev/null | grep -v 'model-routing.sh')"
+           "$repo/tools" "$repo/agents" "$repo/tests" 2>/dev/null \
+         | grep -vE 'model-routing\.sh|test_model_routing\.sh|tests/fixtures/vendor-agents/')"
 [ -z "$otros" ] || malo "IDs de modelo fuera del router: $otros"
 
 if [ "$fail" -ne 0 ]; then
@@ -514,17 +604,28 @@ perfil y el agente hereda del padre. Host, rol o tier desconocido => exit 2.
 EOF
 }
 
+# `shift 2` con el valor AUSENTE no shiftea nada y devuelve != 0. Bajo `set -u`
+# sin `-e` eso no aborta: el while vuelve a procesar la misma bandera, para
+# siempre. Reproducido: `--host` como ultimo argumento => bucle infinito. El
+# valor se exige ANTES de shiftear.
+requiere_valor() {  # $1=bandera  $2=args restantes ($#)
+  if [ "$2" -lt 2 ]; then
+    decir "[summonaikit] model-routing: $1 necesita un valor"
+    exit 2
+  fi
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --host)   HOST="${2:-}"; shift 2 ;;
+    --host)   requiere_valor --host "$#";   HOST="$2";   shift 2 ;;
     --host=*) HOST="${1#*=}"; shift ;;
-    --role)   ROLE="${2:-}"; shift 2 ;;
+    --role)   requiere_valor --role "$#";   ROLE="$2";   shift 2 ;;
     --role=*) ROLE="${1#*=}"; shift ;;
-    --tier)   TIER="${2:-}"; shift 2 ;;
+    --tier)   requiere_valor --tier "$#";   TIER="$2";   shift 2 ;;
     --tier=*) TIER="${1#*=}"; shift ;;
-    --field)   FIELD="${2:-}"; shift 2 ;;
+    --field)   requiere_valor --field "$#";  FIELD="$2";  shift 2 ;;
     --field=*) FIELD="${1#*=}"; shift ;;
-    --format)   FORMAT="${2:-}"; shift 2 ;;
+    --format)   requiere_valor --format "$#"; FORMAT="$2"; shift 2 ;;
     --format=*) FORMAT="${1#*=}"; shift ;;
     -h|--help) uso; exit 0 ;;
     *) decir "[summonaikit] model-routing: argumento desconocido: $1"; uso >&2; exit 2 ;;
@@ -542,15 +643,21 @@ rol_a_tier() {
   return 0
 }
 
-if [ -z "$TIER" ]; then
-  if [ -z "$ROLE" ]; then
-    decir "[summonaikit] model-routing: hace falta --role o --tier"
-    exit 2
-  fi
-  TIER="$(rol_a_tier "$ROLE")" || {
+# El rol se valida SIEMPRE que venga, aunque tambien venga --tier. Si la
+# validacion viviera solo adentro del `if [ -z "$TIER" ]`, entonces
+# `--role astronauta --tier review` saldria 0 y ademas imprimiria
+# `"role":"astronauta"` en el JSON: un rol inventado acreditado por el router.
+if [ -n "$ROLE" ]; then
+  ROLE_TIER="$(rol_a_tier "$ROLE")" || {
     decir "[summonaikit] model-routing: rol desconocido: $ROLE"
     exit 2
   }
+  [ -z "$TIER" ] && TIER="$ROLE_TIER"
+fi
+
+if [ -z "$TIER" ]; then
+  decir "[summonaikit] model-routing: hace falta --role o --tier"
+  exit 2
 fi
 
 # Un tier que ningun rol mapea no existe: no se define "por las dudas".
@@ -781,7 +888,11 @@ depende del resultado de una medición.
 bash tests/test_install_hook.sh
 ```
 
-Esperado: FAIL con `agente_traducido: command not found`.
+Esperado: FAIL, pero **no** por `command not found` — los casos van por la CLI y
+no llaman funciones internas. El rojo real es el `grep` que no encuentra
+`model:` en el perfil instalado ("el perfil de zcode no lleva el modelo
+ruteado"), porque todavía no hay inyección. Si ves `command not found`, tenés un
+caso mal escrito, no el rojo que buscabas.
 
 - [ ] **Step 3: Generalizar la traducción**
 
@@ -804,16 +915,27 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
   local host="$1" fuente="$2" rol inyectar router
   rol="$(zcode_agente_frontmatter "$fuente" | sed -n 's/^name: //p' | head -1)"
   if [ -z "$rol" ]; then
-    decir "[summonaikit] instalador: $fuente no declara name: en el frontmatter"
+    # `decir` imprime por STDOUT (install-hook.sh:176). Los llamadores redirigen
+    # el stdout de esta funcion a un temporal que borran ante el error, asi que
+    # un `decir` aca desaparece y el operador ve un exit 2 sin razon. Va a
+    # stderr explicito.
+    printf '[summonaikit] instalador: %s no declara name: en el frontmatter\n' "$fuente" >&2
     return 1
   fi
   # Costura de test, mismo mecanismo que SAIKIT_INSTALL_TOOL: la suite apunta el
   # router a un stub con las filas llenas y asi prueba la INYECCION aunque las
   # mediciones 12.1/12.2/12.3 hayan dejado alguna fila vacia.
   router="${SAIKIT_MODEL_ROUTING_TOOL:-$repo/tools/model-routing.sh}"
-  inyectar="$("$router" --host "$host" --role "$rol" --format frontmatter)" || return 1
+  # `bash "$router"`, NO "$router" a secas: los 7 scripts de tools/ estan
+  # versionados 100644, sin bit de ejecucion (git ls-files -s tools/*.sh), asi
+  # que la invocacion directa muere con "Permission denied" en Linux -- que es
+  # donde corre el CI.
+  inyectar="$(bash "$router" --host "$host" --role "$rol" --format frontmatter)" || return 1
 
-  local omitir='^$'
+  # `^$` NO sirve como "regex que no matchea nada": matchea las lineas vacias y
+  # se las comeria del frontmatter, y ahi el instalado dejaria de ser la fuente
+  # traducida. `a^` no matchea nunca.
+  local omitir='a^'
   [ "$host" = 'grok' ] && omitir='^skills:'
 
   awk -v omitir="$omitir" -v inyectar="$inyectar" '
@@ -952,6 +1074,13 @@ para el hook: un manifiesto de hashes conocidos del vendor.
 archivar y reemplazar. `DESCONOCIDO` (ni marca ni hash) ⇒ **no se toca**. Que el
 comando se llame "instalar" no lo habilita a destruir el cambio de otro.
 
+**Límite que hay que escribir, no descubrir después.** La reparación tras un
+`saikit-update` sólo funciona si el update reescribe con los **mismos bytes** que
+el manifiesto ya lista. Si el vendor cambia el texto de sus perfiles, el hash
+nuevo no está, el archivo no lleva `saikit_owned`, y la clasificación correcta es
+`DESCONOCIDO`: no se toca. El ruteo queda desactivado hasta que alguien lea el
+reporte. Por eso el paso siguiente no es opcional.
+
 - [ ] **Step 1: Escribir los casos que fallan**
 
 Todo por la CLI, como el resto del archivo. Helper y fixture, al lado de
@@ -966,6 +1095,12 @@ nuevo_claude_agents() {   # dir de agentes limpio por caso
   rm -rf "$claude_agents"; mkdir -p "$claude_agents"
 }
 host_claude() {
+  SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+  SAIKIT_MODEL_ROUTING_TOOL="$router_stub" \
+    bash "$tool" --host claude --dest "$dest" "$@"
+}
+# Variante con el router REAL, solo para el caso de cableado de punta a punta.
+host_claude_real() {
   SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" bash "$tool" --host claude --dest "$dest" "$@"
 }
 # Copia un perfil del vendor congelado en fixtures al dir del caso.
@@ -978,12 +1113,26 @@ dest_listo; nuevo_claude_agents
 out="$(host_claude 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, obtuve $rc: $out"
 [ -f "$claude_agents/reviewer.md" ] || malo "no instalo reviewer.md"
-grep -q '^model: claude-opus-5$' "$claude_agents/reviewer.md" \
-  || malo "el perfil instalado no lleva el modelo ruteado"
-grep -q '^effort: xhigh$' "$claude_agents/reviewer.md" \
-  || malo "el perfil instalado no lleva el effort ruteado"
+grep -q '^model: modelo-de-prueba-claude-reviewer$' "$claude_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva el modelo que emitio el router"
+grep -q '^effort: low$' "$claude_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva el effort que emitio el router"
 grep -q '^saikit_owned: summonaikit-claude$' "$claude_agents/reviewer.md" \
   || malo "el perfil instalado no lleva la marca"
+
+caso "claude: cableado de punta a punta con el router REAL"
+# El valor esperado se le PREGUNTA al router, no se hardcodea: la regla global
+# del plan es que los IDs de modelo viven solo en tools/model-routing.sh, y un
+# test que los copie obliga a editar dos archivos cada vez que cambia la tabla.
+dest_listo; nuevo_claude_agents
+host_claude_real >/dev/null 2>&1
+esperado_model="$(bash "$repo/tools/model-routing.sh" --host claude --role reviewer --field model)"
+esperado_effort="$(bash "$repo/tools/model-routing.sh" --host claude --role reviewer --field effort)"
+[ -n "$esperado_model" ] || malo "la fila claude del router no deberia estar vacia"
+grep -q "^model: ${esperado_model}\$" "$claude_agents/reviewer.md" \
+  || malo "el perfil no lleva el modelo que el router real emite ($esperado_model)"
+grep -q "^effort: ${esperado_effort}\$" "$claude_agents/reviewer.md" \
+  || malo "el perfil no lleva el effort que el router real emite ($esperado_effort)"
 
 caso "claude: instalar dos veces NO reescribe"
 antes="$(find "$claude_agents" -type f -print0 | sort -z | xargs -0 cksum)"
@@ -1054,7 +1203,10 @@ editan: son la evidencia de qué se adoptó.
 bash tests/test_install_hook.sh
 ```
 
-Esperado: FAIL con `claude_instalar_agentes: command not found`.
+Esperado: FAIL, y el rojo concreto es el `exit 2` del instalador —
+`--host solo acepta "zcode", "codex" o "grok"` (`tools/install-hook.sh:108`)—
+porque `claude` todavía no está en la lista aceptada. **No** es
+`command not found`: los casos van por la CLI.
 
 - [ ] **Step 4: Implementar**
 
@@ -1094,17 +1246,31 @@ agente_estado_con_vendor() {  # $1=dest  $2=traducida  $3=rol
 claude_instalar_agentes() {
   local dest_dir rol fuente dest trad estado
   dest_dir="$(claude_agents_dir)"
-  mkdir -p "$dest_dir" || {
-    decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+
+  # PRIMERO valida las TRES plantillas, DESPUES escribe. Es el orden que
+  # `zcode_instalar_agentes` ya usa (dos bucles separados) y no es estilo:
+  # validando y escribiendo en el mismo bucle, una plantilla invalida en el
+  # tercer rol deja los dos primeros ya publicados -- una instalacion a medias.
+  # La validacion de `name:` va aca tambien: sin ella, un reviewer.md cuyo
+  # frontmatter diga `name: implementer` se publicaria como reviewer con el
+  # modelo del implementer.
   for rol in $CLAUDE_AGENT_ROLES; do
     fuente="$repo/agents/$rol.md"
-    dest="$dest_dir/$rol.md"
     if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
       decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
       exit 2
     fi
     zcode_agente_tiene_marca "$fuente" || {
       decir "[summonaikit] instalador: la plantilla $fuente no lleva saikit_owned."; exit 2; }
+    zcode_agente_frontmatter "$fuente" | grep -q "^name: ${rol}$" || {
+      decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."; exit 2; }
+  done
+
+  mkdir -p "$dest_dir" || {
+    decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+  for rol in $CLAUDE_AGENT_ROLES; do
+    fuente="$repo/agents/$rol.md"
+    dest="$dest_dir/$rol.md"
     trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
     agente_traducido claude "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
     estado="$(agente_estado_con_vendor "$dest" "$trad" "$rol")"
@@ -1157,6 +1323,29 @@ claude_archivar_vendor() {  # $1=dest
   return 0
 }
 ```
+
+- [ ] **Step 4b: Vía de refresco del manifiesto**
+
+Sin esto, un `saikit-update` que cambie los perfiles del vendor deja el ruteo
+apagado sin ruido. La vía es **deliberadamente manual** — un `--force` que
+adopte cualquier hash convierte el cuarto estado en el bypass que la máquina de
+tres estados existe para evitar.
+
+Agregar a `tools/` un modo que **reporte, no adopte**:
+
+```bash
+# tools/install-hook.sh --host claude --refrescar-manifiesto
+#
+# NO escribe el manifiesto. Imprime el sha256 actual de cada perfil DESCONOCIDO
+# junto al diff contra la plantilla del repo, para que una persona mire el
+# cambio y decida. Adoptar es pegar ese hash en agents/vendor-manifest.sha256
+# en un commit propio, con el diff a la vista en la revision.
+```
+
+El caso de test: con un perfil `DESCONOCIDO` presente, el modo imprime su hash y
+**el manifiesto queda byte a byte igual**.
+
+Documentar el procedimiento en el README junto a la tabla de estados (Task 12.8).
 
 - [ ] **Step 5: Cablear `--host claude` en el parseo de argumentos**
 
@@ -1283,20 +1472,41 @@ llamen: dos copias del mismo bucle es cómo se arregla una sola.
 
 Agregar `kimi` a la lista aceptada de `--host`. No cambia `DEST`.
 
-- [ ] **Step 5: Correr el test y verificar que pasa**
+- [ ] **Step 5: Llenar la fila `kimi` del router**
+
+**Sin este step la tarea no sirve para nada.** La 12.5 llena las filas de zcode
+y grok, pero `kimi` se mide en la 12.3 y **ningún otro step la carga**: el
+router seguiría devolviendo vacío y los perfiles de kimi se instalarían sin
+`model:` — heredando el modelo del padre aunque la medición diga que el host sí
+acepta ruteo.
+
+En `tools/model-routing.sh`, reemplazar el `: ;;` del host `kimi` por su
+`case "$TIER"` con los valores de `docs/task-12.3-medicion.md`, y agregar sus
+casos a `tests/test_model_routing.sh` con la misma forma que los de claude:
+
+```bash
+caso "la tabla del host kimi, valor por valor"
+igual "<modelo medido>" "$(bash "$router" --host kimi --role reviewer --field model)" "kimi/reviewer/model"
+```
+
+Si la 12.3 midió que kimi **ignora** `effort:`, la fila lleva sólo `MODEL=` y el
+comentario cita la medición. Y el caso "fila vacía" de `tests/test_model_routing.sh`
+deja de aplicar a `kimi`: sacalo de ese bucle o el test queda mintiendo.
+
+- [ ] **Step 6: Correr el test y verificar que pasa**
 
 ```bash
 bash tests/test_install_hook.sh
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add tools/install-hook.sh tests/test_install_hook.sh
 git commit -m "feat(12.7): posesion de los perfiles de kimi en ~/.agents/agents"
 ```
 
-- [ ] **Step 7: PR y batería en CI**
+- [ ] **Step 8: PR y batería en CI**
 
 ```bash
 git push -u origin HEAD && gh pr create --fill
