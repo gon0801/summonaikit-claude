@@ -46,10 +46,10 @@ Estas mediciones son la base del alcance. Si alguna cae, la fase se re-planifica
 (`implementer`, `verifier`, `reviewer`, `closer`, `retro`), los cinco con
 `model: sonnet`.
 
-La ruta `.agents/**` aparece como literal en `~/.kimi-code/bin/kimi.exe`, y
-`~/.agents/agents/` existe en disco con esos cinco perfiles. Que kimi-code los
-**lea** es inferencia de esas dos señales, no una carga observada: la 12.3 lo
-mide.
+**Medido 2026-08-18 (Task 12.3, `docs/task-12.3-medicion.md`):** kimi-code
+**sí lee** `~/.agents/agents/`. Ya no es inferencia — un perfil sonda instalado
+ahí resolvió como `subagent_type` y el lead citó su `description` del
+frontmatter, o sea que abrió y parseó el archivo.
 
 ### La ausencia de `model:` en la fuente del repo es deliberada
 
@@ -64,26 +64,45 @@ Una fuente compartida por varios hosts no puede llevar un ID de modelo: los
 nombres son de cada host. Ese es el hecho que obliga a que el valor se resuelva
 en la instalación y no en la plantilla.
 
-### Ya hay una fuga de modelo cross-host, hoy, en producción
+### La "fuga" de modelo cross-host existe, pero es INERTE (medido 12.3)
 
-`~/.agents/agents/*.md` — el directorio asociado a kimi-code — trae
-`model: sonnet` en los cinco perfiles. `sonnet` no es un modelo de Kimi. Qué
-hace kimi-code con ese valor (lo ignora, lo respeta, falla) **no está medido**.
-El defecto contra el que esta fase diseña ya existe.
+`~/.agents/agents/*.md` — el directorio que kimi-code lee — trae `model: sonnet`
+en los cinco perfiles, y `sonnet` no es un modelo de Kimi.
 
-### Kimi tiene effort, pero no por agente
+**Medido 2026-08-18:** kimi lo **ignora por completo**. Su parser de frontmatter
+lee un conjunto cerrado de claves y `model` no está entre ellas, así que la
+clave es inerte: no cambia el binding ni produce error. Sacarla sigue siendo
+correcto —el archivo afirma algo que no es cierto— pero es **higiene, no la
+corrección de un defecto activo**, y no tiene urgencia.
 
-`~/.kimi-code/config.toml`, medido:
+### Kimi no acepta modelo ni effort por agente (medido 12.3)
 
-```toml
-[models."kimi-code/k3"]
-max_context_size = 1048576
-support_efforts = [ "low", "high", "max" ]
-default_effort  = "high"
+Ésta es la premisa que más cambió al medirla. El parser de agentes del binario
+(`parseAgentFileText`) acepta exactamente:
+
+```
+name, description, whenToUse, override, tools, disallowedTools,
+subagents, model_preference
 ```
 
-Es **por modelo y global**, no por agente. Si kimi no honra un `effort:` de
-frontmatter, ese host recibe sólo `model:` y el límite se declara.
+**`model` y `effort` no están.** La única palanca de modelo es
+`model_preference`, que admite exactamente `"primary"` o `"secondary"` — una
+abstracción de **dos slots**, no un ID de modelo. El effort sale de la entrada
+`[models]` de `config.toml` (`support_efforts` / `default_effort`), es global
+por modelo, y se hereda del padre.
+
+Medido con los `wire.jsonl` por agente, que registran `profile.bind` y
+`llm.request` con `modelAlias` y `thinkingEffort`: con y sin las claves, el
+binding del subagente es idéntico al del lead (`kimi-code/k3-256k`, `high`).
+
+**Riesgo nuevo que la medición descubrió, y que este diseño no había previsto:**
+un valor *inválido* en una clave *conocida* no falla ruidoso — el archivo deja
+de parsear y **el agente desaparece del registro sin error visible**. Con
+`model_preference: sonnet`, el tipo dejó de existir y el lead improvisó con uno
+genérico. Si eso le pasara a `implementer`, `verifier` o `reviewer`, la
+ceremonia se quedaría sin roles y el gate no tendría a quién acreditar. Cualquier
+escritura futura de esa clave necesita un caso que verifique que **el tipo sigue
+resolviendo**, no sólo que el archivo se escribió.
 
 ### La costura de traducción ya existe
 
@@ -204,9 +223,15 @@ bajar de modelo, y evita el techo de contexto del tier más barato.
 
 | tier | claude | zcode (GLM) | grok | kimi |
 |---|---|---|---|---|
-| `standard` | `claude-sonnet-5` / `medium` | 12.1 | 12.2 | 12.3 |
-| `verify` | `claude-sonnet-5` / `low` | 12.1 | 12.2 | 12.3 |
-| `review` | `claude-opus-5` / `xhigh` | 12.1 | 12.2 | 12.3 |
+| `standard` | `claude-sonnet-5` / `medium` | 12.1 | 12.2 | **no aplica** |
+| `verify` | `claude-sonnet-5` / `low` | 12.1 | 12.2 | **no aplica** |
+| `review` | `claude-opus-5` / `xhigh` | 12.1 | 12.2 | **no aplica** |
+
+**La fila `kimi` queda vacía de forma DEFINITIVA, no provisoria** (medido 12.3):
+el host no acepta un ID de modelo ni un effort por agente, así que no hay valor
+que poner. Sus perfiles se instalan sin esas claves y el subagente hereda del
+lead — que es lo que ya hace hoy. La posesión del archivo (D5) conserva sentido
+por la marca `saikit_owned` y por sacar el `model: sonnet` inerte; el ruteo, no.
 
 **Una celda sin valor ⇒ la clave se omite del perfil ⇒ el agente hereda del
 padre.** Ese es exactamente el comportamiento que zcode tiene hoy y que la 5.6
@@ -336,10 +361,12 @@ Vía de medición por host, elegida por lo que cada uno permite:
 - **12.2 — grok.** Captura headless estilo 7.1 sobre repo descartable. El
   harness observó `grok-4.5` y `grok-composer-2.5-fast` (2026-07-09, CLI
   0.2.93); el catálogo de esta cuenta se confirma, no se hereda.
-- **12.3 — kimi.** `kimi.exe` son ~141 MB compilados: no hay inspección estática
-  equivalente a `zcode.cjs`, así que va **captura viva**. Catálogo de
-  `config.toml`: `kimi-code/k3` (1M de contexto), `k3-256k`,
-  `kimi-for-coding`, `kimi-for-coding-highspeed`.
+- **12.3 — kimi. CERRADA (2026-08-18, `docs/task-12.3-medicion.md`).** Fue
+  captura viva más lectura del parser adentro del binario. Resultado: la premisa
+  de lectura de `~/.agents/agents/` se confirmó, y el host **no acepta modelo ni
+  effort por agente** — su fila queda vacía de forma definitiva. Catálogo
+  observado: `kimi-code/k3` (1M), `k3-256k` (256K, el de sesión), y
+  `kimi-for-coding` / `-highspeed`.
 
 **Condición no negociable:** los valores de la tabla D3 salen de estas
 mediciones, no de documentación ni de inferencia. Un host cuya medición no
@@ -368,7 +395,7 @@ tools/install-hook.sh
 | `claude` | `--host claude` (nuevo) | manifiesto de vendor | completa |
 | `zcode` | `--host zcode` (5.6) | ya es nuestro | pendiente 12.1 |
 | `grok` | `--host grok` (7.5) | ya es nuestro | pendiente 12.2 |
-| `kimi` | `--host kimi` (nuevo) | manifiesto de vendor | pendiente 12.3 |
+| `kimi` | `--host kimi` (nuevo) | manifiesto de vendor | **no aplica** (medido 12.3) |
 | `codex` | — | fuera de alcance (D6) | — |
 
 ## Tests
@@ -405,3 +432,7 @@ En la suite del instalador, casos nuevos para:
 - **`effort` fuera de claude no se escribe hasta medirlo.** Un `effort:` que el
   host ignora deja el perfil diciendo una cosa y el runtime haciendo otra — el
   tipo exacto de mentira que el resto de este spec persigue.
+- **`kimi` no recibe ruteo de modelo ni de effort** (medido 12.3): el host no
+  tiene esas claves por agente. Su `--host kimi` existe sólo por la posesión del
+  archivo y la marca. Llevarlo a `model_preference` + `[secondaryModel]` daría
+  **dos** niveles, no tres, y es una decisión de producto que esta fase no toma.

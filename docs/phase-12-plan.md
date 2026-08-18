@@ -209,10 +209,19 @@ el medio), así que el helper y las rutas van a un archivo que cada step
 
 ```bash
 cat > /tmp/probe-122.env <<'EOF'
+# IDEMPOTENTE: sourcear este archivo dos veces NO puede crear un segundo
+# directorio ni perder la referencia al primero. Medido al ejecutar la 12.3:
+# sin persistir la ruta, cada `source` corria mktemp de nuevo y quedaba un
+# huerfano. La ruta se guarda la primera vez y se reusa despues.
 # Repo descartable con nombre UNICO: nunca una ruta fija. Una ruta fija se
 # puede pisar y despues borrar con rm -rf un repo preexistente del operador
 # (en /c/dev ya conviven saikit-probe-109-zcode, saikit-captura y otros).
-probe="$(mktemp -d /c/dev/saikit-probe-122-XXXXXX)"
+if [ -s /tmp/probe-122.path ]; then
+  probe="$(cat /tmp/probe-122.path)"
+else
+  probe="$(mktemp -d /c/dev/saikit-probe-122-XXXXXX)"
+  printf '%s' "$probe" > /tmp/probe-122.path
+fi
 huella_grok() {   # el perfil MENOS lo que el runtime reescribe solo
   find "$HOME/.grok" -type d \( -name sessions -o -name logs -o -name tmp \
                                 -o -name cache -o -name telemetry \) -prune -o \
@@ -313,7 +322,20 @@ git commit -m "test(12.2): medición de model/effort en los perfiles de agente d
 
 ## Task 12.3: Medición kimi — ¿honra `model:` y `effort:`?
 
-`[Test]` `[lane:gate]` `[tdd:required]`
+`[Test]` `[lane:gate]` `[tdd:required]` — **CERRADA 2026-08-18.**
+Resultado en `docs/task-12.3-medicion.md`, rama `test/12.3-medicion-kimi`.
+
+**Qué salió, en una línea:** la premisa de lectura se confirmó (kimi-code sí lee
+`~/.agents/agents/`), pero el host **no acepta modelo ni effort por agente** —
+su parser tiene un conjunto cerrado de claves y `model`/`effort` no están. La
+fila `kimi` del router queda vacía de forma definitiva. Consecuencias aplicadas
+en la Task 12.7 y en el diseño.
+
+Los steps de abajo quedan como registro de lo que se ejecutó. **Dos defectos
+propios que aparecieron al correrlos y que ya están corregidos acá y en la 12.2:**
+el `/tmp/probe-*.env` creaba un `mktemp -d` nuevo en cada `source` (dejó un
+directorio huérfano), y la lista de podas de la huella no cubría tres archivos
+de contabilidad del runtime.
 
 **Files:**
 - Create: `docs/task-12.3-medicion.md`
@@ -337,13 +359,29 @@ igual y el chequeo gritaría en falso siempre.
 
 ```bash
 cat > /tmp/probe-123.env <<'EOF'
-probe="$(mktemp -d /c/dev/saikit-probe-123-XXXXXX)"
+# IDEMPOTENTE: sourcear este archivo dos veces NO puede crear un segundo
+# directorio ni perder la referencia al primero. Medido al ejecutar la 12.3:
+# sin persistir la ruta, cada `source` corria mktemp de nuevo y quedaba un
+# huerfano. La ruta se guarda la primera vez y se reusa despues.
+if [ -s /tmp/probe-123.path ]; then
+  probe="$(cat /tmp/probe-123.path)"
+else
+  probe="$(mktemp -d /c/dev/saikit-probe-123-XXXXXX)"
+  printf '%s' "$probe" > /tmp/probe-123.path
+fi
 huella_kimi() {
+  # Los tres -name de la ultima linea salieron de EJECUTAR la 12.3: de 385
+  # archivos vigilados cambiaron exactamente esos tres, y son contabilidad del
+  # runtime (refresco de token, registro de sesiones, registro de workspaces).
+  # Sin podarlos el chequeo de no-mutacion grita en falso en cada corrida.
   find "$HOME/.agents" "$HOME/.kimi-code" \
        -type d \( -name sessions -o -name logs -o -name cache -o -name telemetry \
                   -o -name updates -o -name search-index -o -name tmp \
-                  -o -name user-history -o -name server \) -prune -o \
-       -type f -print0 2>/dev/null | sort -z | xargs -0 cksum
+                  -o -name user-history -o -name server -o -name bin \
+                  -o -name .claude \) -prune -o \
+       -type f \! -name kimi-code.json \! -name session_index.jsonl \
+                  \! -name workspaces.json -print0 2>/dev/null \
+    | sort -z | xargs -0 cksum
 }
 EOF
 . /tmp/probe-123.env
@@ -484,7 +522,10 @@ igual "standard" "$(bash "$router" --host claude --role implementer --field tier
 igual "verify"   "$(bash "$router" --host claude --role verifier --field tier)"    "verifier"
 igual "review"   "$(bash "$router" --host claude --role reviewer --field tier)"    "reviewer"
 
-caso "una fila de host sin medir devuelve VACIO con exit 0, no un default"
+caso "una fila de host sin valor devuelve VACIO con exit 0, no un default"
+# zcode y grok: vacias hasta que 12.1 y 12.2 las llenen.
+# kimi: vacia DEFINITIVA -- la 12.3 midio que el host no acepta model ni effort
+# por agente, asi que esa fila no se llena nunca y este caso queda permanente.
 for h in zcode grok kimi; do
   out="$(bash "$router" --host "$h" --role implementer --field model)"; rc=$?
   [ "$rc" -eq 0 ] || malo "$h: esperaba exit 0, obtuve $rc"
@@ -1393,9 +1434,27 @@ git log origin/master..HEAD --oneline
 - Produces: `--host kimi` escribe `~/.agents/agents/{implementer,verifier,reviewer}.md`.
   Override de test: `SAIKIT_KIMI_AGENTS_DIR`.
 
-**Gate de entrada:** esta tarea **no arranca** si la Task 12.3 no confirmó que
-kimi-code lee `~/.agents/agents/`. Sin esa confirmación, escribir ahí es escribir
-en un directorio que nadie lee — la definición exacta de un staging que miente.
+**Gate de entrada: LEVANTADO.** La Task 12.3 confirmó (2026-08-18) que kimi-code
+lee `~/.agents/agents/` y parsea el frontmatter. La tarea puede correr.
+
+**Pero su alcance se achicó, y hay que decirlo antes de empezar.** La misma
+medición mostró que kimi **no acepta `model:` ni `effort:` por agente**: su
+parser tiene un conjunto cerrado de claves y ninguna de las dos está. Entonces:
+
+- **Esta tarea ya NO instala ruteo.** Instala los tres perfiles con la marca
+  `saikit_owned` y nada más. La fila `kimi` del router queda vacía a propósito y
+  el subagente hereda del lead, como hoy.
+- **Lo que sí sigue justificándola**: el archivo pasa a ser nuestro (reparable,
+  versionado, con la misma máquina de estados que los otros hosts) y se le saca
+  el `model: sonnet` del vendor, que afirma algo falso.
+- **La urgencia bajó**: ese `model: sonnet` es **inerte**, no un defecto activo.
+  Si hay que priorizar, esta tarea va última.
+
+**Riesgo específico de este host, medido en la 12.3:** un valor inválido en una
+clave *conocida* no falla ruidoso — el archivo deja de parsear y **el agente
+desaparece del registro sin error visible**. Por eso el test de esta tarea no
+alcanza con verificar que el archivo se escribió: tiene que verificar que **el
+tipo sigue resolviendo**.
 
 **`~/.agents/` no es de un solo host.** El directorio tiene `agents/`, `hooks/`,
 `plugins/` y `skills/`, y es la convención compartida del kit. El guard es
@@ -1422,14 +1481,40 @@ host_kimi() {
 Más estos dos, que son propios del host:
 
 ```bash
-caso "kimi: se arregla la fuga de model: sonnet del vendor"
+caso "kimi: al adoptar se saca el model: sonnet del vendor (higiene)"
+# NO es la correccion de un defecto activo: la 12.3 midio que kimi ignora la
+# clave `model` por completo, asi que ese valor es INERTE. Se saca porque el
+# archivo afirma algo falso, no porque cambie el comportamiento.
 dest_listo; nuevo_kimi_agents
 cp "$repo/tests/fixtures/vendor-agents/reviewer.md" "$kimi_agents/reviewer.md"
 grep -q '^model: sonnet$' "$kimi_agents/reviewer.md" \
-  || malo "el fixture del vendor deberia traer model: sonnet (es el defecto medido en 12.3)"
+  || malo "el fixture del vendor deberia traer model: sonnet (es lo que hay hoy en disco)"
 host_kimi >/dev/null 2>&1
 grep -q '^model: sonnet$' "$kimi_agents/reviewer.md" \
   && malo "sigue el model: sonnet del vendor despues de adoptar"
+
+caso "kimi: el perfil instalado NO lleva model: ni effort:"
+# La fila kimi del router esta vacia a proposito (12.3): el host no acepta esas
+# claves. Escribirlas seria poner en el archivo algo que el runtime ignora --
+# exactamente la mentira que el resto del spec persigue.
+grep -q '^model:'  "$kimi_agents/reviewer.md" && malo "kimi no debe llevar model:"
+grep -q '^effort:' "$kimi_agents/reviewer.md" && malo "kimi no debe llevar effort:"
+
+caso "kimi: el frontmatter instalado SIGUE PARSEANDO (el tipo no puede desaparecer)"
+# El modo de falla medido en la 12.3: un valor invalido en una clave conocida no
+# da error -- el agente se cae del registro en silencio. Un test que solo mire
+# que el archivo existe no lo atrapa. Se verifica contra el contrato del parser:
+# claves permitidas y, si aparece model_preference, su valor.
+for rol in implementer verifier reviewer; do
+  fm="$(sed -n '/^---/,/^---/p' "$kimi_agents/$rol.md" | sed '1d;$d')"
+  printf '%s' "$fm" | grep -q "^name: ${rol}\$"   || malo "$rol: falta name: correcto"
+  printf '%s' "$fm" | grep -q '^description:'     || malo "$rol: falta description (el parser la exige)"
+  mp="$(printf '%s' "$fm" | sed -n 's/^model_preference: //p')"
+  case "${mp:-primary}" in
+    primary|secondary) ;;
+    *) malo "$rol: model_preference invalido ($mp) — el agente desaparece del registro" ;;
+  esac
+done
 
 caso "kimi: no se toca nada fuera de los tres roles"
 dest_listo; nuevo_kimi_agents
@@ -1472,26 +1557,36 @@ llamen: dos copias del mismo bucle es cómo se arregla una sola.
 
 Agregar `kimi` a la lista aceptada de `--host`. No cambia `DEST`.
 
-- [ ] **Step 5: Llenar la fila `kimi` del router**
+- [ ] **Step 5: Sellar la fila `kimi` del router como vacía DEFINITIVA**
 
-**Sin este step la tarea no sirve para nada.** La 12.5 llena las filas de zcode
-y grok, pero `kimi` se mide en la 12.3 y **ningún otro step la carga**: el
-router seguiría devolviendo vacío y los perfiles de kimi se instalarían sin
-`model:` — heredando el modelo del padre aunque la medición diga que el host sí
-acepta ruteo.
+Este step reemplaza al que decía "llenar la fila". La 12.3 midió que no hay nada
+que llenar: kimi no acepta modelo ni effort por agente. Pero la fila no puede
+quedar como un `: ;;` mudo — un lector futuro lo leería como "pendiente de
+medir" y volvería a intentarlo.
 
-En `tools/model-routing.sh`, reemplazar el `: ;;` del host `kimi` por su
-`case "$TIER"` con los valores de `docs/task-12.3-medicion.md`, y agregar sus
-casos a `tests/test_model_routing.sh` con la misma forma que los de claude:
+En `tools/model-routing.sh`, dejar la rama del host con la razón escrita:
 
 ```bash
-caso "la tabla del host kimi, valor por valor"
-igual "<modelo medido>" "$(bash "$router" --host kimi --role reviewer --field model)" "kimi/reviewer/model"
+  kimi)
+    # Fila VACIA DEFINITIVA, no pendiente. Medido en la Task 12.3
+    # (docs/task-12.3-medicion.md, kimi-code 0.34.0): el parser de agentes
+    # acepta un conjunto CERRADO de claves --name, description, whenToUse,
+    # override, tools, disallowedTools, subagents, model_preference-- y ni
+    # `model` ni `effort` estan. La unica palanca es model_preference, que
+    # admite solo "primary"|"secondary": dos slots, no un ID de modelo.
+    # Escribir aca un modelo seria emitir una clave que el host ignora.
+    : ;;
 ```
 
-Si la 12.3 midió que kimi **ignora** `effort:`, la fila lleva sólo `MODEL=` y el
-comentario cita la medición. Y el caso "fila vacía" de `tests/test_model_routing.sh`
-deja de aplicar a `kimi`: sacalo de ese bucle o el test queda mintiendo.
+Y en `tests/test_model_routing.sh`, el caso de "fila vacía" pasa a nombrar a
+`kimi` como permanente en vez de provisorio:
+
+```bash
+caso "la fila de kimi esta vacia de forma DEFINITIVA (12.3), no pendiente"
+igual "" "$(bash "$router" --host kimi --role reviewer --field model)"  "kimi/model"
+igual "" "$(bash "$router" --host kimi --role reviewer --field effort)" "kimi/effort"
+igual "" "$(bash "$router" --host kimi --role implementer --format frontmatter)" "kimi/frontmatter"
+```
 
 - [ ] **Step 6: Correr el test y verificar que pasa**
 
@@ -1563,11 +1658,11 @@ cierra corre en el mismo tier que un verifier que corre comandos. Diseño en
 |------|------|-----|---------|--------|
 | 12.1 | `[Test]` `[lane:gate]` `[tdd:required]` **Medición zcode.** ¿El loader de agentes honra `model:` y `effort:` en frontmatter, qué hace con un valor desconocido, y cuál es el catálogo real de la cuenta? Vía: inspección de `zcode.cjs`, la misma que usó la 5.6. El catálogo que hoy se conoce (`glm-4.6`, `5-turbo`, `5.1`, `5.2`, `5.3`) salió de un grep a `db.sqlite`: son menciones históricas, no el catálogo de la cuenta | `docs/task-12.1-medicion.md` responde las cuatro preguntas, cada una con la cita del bundle que la sostiene; lo que no se pudo observar queda declarado **no observado**; huella de `~/.zcode/agents` idéntica antes y después | — | TODO |
 | 12.2 | `[Test]` `[lane:gate]` `[tdd:required]` **Medición grok.** Las mismas cuatro preguntas por captura headless estilo 7.1 sobre repo descartable, con un perfil sonda que lleva `model:`/`effort:` y una segunda corrida con un ID inexistente | `docs/task-12.2-medicion.md` con los dos logs; el catálogo del harness (`grok-4.5`, `grok-composer-2.5-fast`, 2026-07-09) se **confirma contra esta cuenta, no se hereda**; perfil `~/.grok` byte a byte intacto (cksum antes/después) y trust del repo descartable declarado y revocado | — | TODO |
-| 12.3 | `[Test]` `[lane:gate]` `[tdd:required]` **Medición kimi.** `kimi.exe` son ~141 MB compilados: no hay inspección estática, va captura viva. Antes que nada confirma la premisa que sostiene toda la fila — que kimi-code **lee** `~/.agents/agents/`, hoy inferido del literal `.agents/**` en el binario más los perfiles en disco. Incluye qué hace hoy con el `model: sonnet` que el kit ya tiene plantado ahí | `docs/task-12.3-medicion.md`; si la premisa de lectura cae, la fila `kimi` queda vacía con su razón y la 12.7 no arranca; huella de `~/.agents` y `~/.kimi-code` idéntica antes y después | — | TODO |
+| 12.3 | `[Test]` `[lane:gate]` `[tdd:required]` **Medición kimi — CERRADA.** `kimi.exe` son ~141 MB compilados: no hay inspección estática, va captura viva. Antes que nada confirma la premisa que sostiene toda la fila — que kimi-code **lee** `~/.agents/agents/`, hoy inferido del literal `.agents/**` en el binario más los perfiles en disco. Incluye qué hace hoy con el `model: sonnet` que el kit ya tiene plantado ahí | `docs/task-12.3-medicion.md`. Premisa CONFIRMADA (kimi lee ese directorio y parsea el frontmatter), pero el host **no acepta `model:` ni `effort:` por agente**: parser con claves cerradas, única palanca `model_preference` ∈ {primary, secondary}. Fila `kimi` vacía **definitiva**. Hallazgo extra: un valor inválido en clave conocida borra el agente del registro sin error. `~/.agents/agents/` byte a byte idéntico | — | **cc:完了** |
 | 12.4 | `[Feature]` `[lane:gate]` `[tdd:required]` **`tools/model-routing.sh`**: `rol → tier → (modelo, effort)` por host, único lugar del repo con IDs de modelo. Nace con la fila `claude` completa y las otras tres vacías. Diverge del router del harness en un punto obligado: acá los scripts corren con `set -u` **sin** `-e`, donde un `exit 2` adentro de `$( )` deja la variable vacía y sigue — las funciones devuelven código y el llamador lo chequea | `tests/test_model_routing.sh` en verde con la tabla de claude valor por valor, `exit 2` en host/rol/tier desconocido **sin imprimir por stdout**, fila vacía ⇒ stdout vacío con exit 0, el caso de la trampa de `set -u`, y el candado de que ningún ID de modelo vive fuera del router | — | TODO |
 | 12.5 | `[Feature]` `[lane:gate]` `[tdd:required]` **Traducción por host e inyección.** `grok_agente_traducido` → `agente_traducido <host> <fuente>`: omite lo que el host no acepta e inyecta `model:`/`effort:` del router. **En el mismo cambio**, zcode pasa a clasificar y publicar contra la plantilla **traducida**: hoy compara contra la cruda y con inyección reescribiría el perfil en cada corrida, dejando un backup cada vez | `tests/test_install_hook.sh` en verde por la CLI (nunca sourceando el instalador): inyección dentro del primer bloque frontmatter y una sola vez, fila vacía ⇒ sin clave, `skills:` sigue omitido en grok, y **dos corridas seguidas no reescriben ni dejan backup**. Costura `SAIKIT_MODEL_ROUTING_TOOL` para probar la inyección con filas llenas | 12.1, 12.2, 12.4 | TODO |
 | 12.6 | `[Setup]` `[lane:gate]` `[tdd:required]` **Posesión en claude.** `--host claude` escribe los tres perfiles en `~/.claude/agents/`. Los del vendor no llevan `saikit_owned`, así que sin vía de adopción quedarían `DESCONOCIDO` para siempre: se agrega el cuarto estado **`VENDOR_CONOCIDO`** por hash en `agents/vendor-manifest.sha256`, el mismo mecanismo que el instalador del hook ya usa | Los cinco estados con su caso: `AUSENTE` instala con el modelo ruteado y la marca, dos corridas no reescriben, `VENDOR_CONOCIDO` archiva (`.vendor.<sello>.bak`) y reemplaza, `DESCONOCIDO` **no toca y reporta**, un hash fuera del manifiesto **no se adopta**, `closer`/`retro` intactos, y `--host claude` no toca DEST | 12.4, 12.5 | TODO |
-| 12.7 | `[Setup]` `[lane:gate]` `[tdd:required]` **Posesión en kimi.** `--host kimi` escribe los tres perfiles en `~/.agents/agents/`, reusando el cuarto estado de la 12.6. `~/.agents/` es la convención compartida del kit (tiene `hooks/`, `plugins/`, `skills/` al lado): se tocan **sólo** los tres `<rol>.md`, nunca el directorio | Los siete casos de la 12.6 más dos propios: la fuga de `model: sonnet` del vendor queda cerrada tras adoptar, y nada fuera de los tres roles se toca — incluido un archivo en `../skills/`. **No arranca si la 12.3 no confirmó que kimi-code lee ese directorio** | 12.3, 12.6 | TODO |
+| 12.7 | `[Setup]` `[lane:gate]` **Posesión en kimi — alcance REDUCIDO por la 12.3.** No instala ruteo (el host no lo acepta): sólo toma posesión del archivo con la marca y saca el `model: sonnet` del vendor, que está **inerte**. `--host kimi` escribe los tres perfiles en `~/.agents/agents/`, reusando el cuarto estado de la 12.6. `~/.agents/` es la convención compartida del kit (tiene `hooks/`, `plugins/`, `skills/` al lado): se tocan **sólo** los tres `<rol>.md`, nunca el directorio | Los siete casos de la 12.6 más dos propios: la fuga de `model: sonnet` del vendor queda cerrada tras adoptar, y nada fuera de los tres roles se toca — incluido un archivo en `../skills/`. Más un caso propio del host: que el frontmatter instalado **siga parseando**, porque un valor inválido tira el agente del registro en silencio (12.3) | 12.6 | TODO |
 | 12.8 | `[Setup]` `[lane:fast]` **Spec, ledger y README.** Declara la reapertura de propiedad sobre los perfiles de `claude` y `kimi` con su razón y su vuelta atrás, qué compra la posesión (reparación, **no** exclusividad frente a un `saikit-update`), y los límites uno por línea | El spec incorpora los hechos medidos por 12.1/12.2/12.3 con su fecha y tarea, en el formato `### Medido AAAA-MM-DD, Task N.N`; `Plans.md` con las 8 filas cerradas; README con `--host claude`/`--host kimi` y el estado `VENDOR_CONOCIDO`; `python tools/check_context_docs.py . --sweep` sin hallazgos nuevos | 12.1–12.7 | TODO |
 ```
 
@@ -1613,20 +1708,24 @@ git log origin/master..HEAD --oneline
 
 ## Orden sugerido y paralelismo
 
-| Tarea | Depende de | Puede correr en paralelo con |
-|---|---|---|
-| 12.4 (router) | — | 12.1, 12.2, 12.3 |
-| 12.1 (med. zcode) | — | 12.2, 12.3, 12.4 |
-| 12.2 (med. grok) | — | 12.1, 12.3, 12.4 |
-| 12.3 (med. kimi) | — | 12.1, 12.2, 12.4 |
-| 12.5 (traducción) | 12.1, 12.2, 12.4 | — |
-| 12.6 (claude) | 12.4, 12.5 | — |
-| 12.7 (kimi) | 12.3, 12.6 | — |
-| 12.8 (docs) | todas | — |
+| Tarea | Estado | Depende de | Puede correr en paralelo con |
+|---|---|---|---|
+| 12.3 (med. kimi) | **CERRADA 2026-08-18** | — | — |
+| 12.4 (router) | pendiente | — | 12.1, 12.2 |
+| 12.1 (med. zcode) | pendiente | — | 12.2, 12.4 |
+| 12.2 (med. grok) | pendiente | — | 12.1, 12.4 |
+| 12.5 (traducción) | pendiente | 12.1, 12.2, 12.4 | — |
+| 12.6 (claude) | pendiente | 12.4, 12.5 | — |
+| 12.7 (kimi) | pendiente, **alcance reducido** | 12.6 | — |
+| 12.8 (docs) | pendiente | todas | — |
 
-Las tres mediciones son independientes entre sí y del router: cuatro tareas
-pueden arrancar el primer día. **12.7 no arranca si 12.3 no confirmó que
-kimi-code lee `~/.agents/agents/`.**
+Las mediciones que quedan (12.1, 12.2) son independientes entre sí y del router:
+tres tareas pueden correr en paralelo.
+
+**12.7 ya no depende de 12.3** (cerrada) y bajó de prioridad: al no haber ruteo
+posible en kimi, su único aporte es la posesión del archivo y sacar un
+`model: sonnet` que está inerte. Si hay que recortar la fase, es la primera
+candidata a diferir.
 
 ## Qué NO hace este plan
 
@@ -1635,4 +1734,7 @@ kimi-code lee `~/.agents/agents/`.**
 - No crea variantes de perfil (`implementer-light`, etc.).
 - No entra Codex.
 - No rutea `closer` ni `retro`.
+- **No rutea `kimi`** (medido 12.3): el host no acepta modelo ni effort por
+  agente. Llevarlo a `model_preference` + `[secondaryModel]` daría dos niveles,
+  no tres, y es una decisión de producto que esta fase no toma.
 - No promete que el CLI del kit deje de pisar los perfiles.
