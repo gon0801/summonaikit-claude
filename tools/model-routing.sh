@@ -130,11 +130,36 @@ case "$HOST" in
     esac
     ;;
   zcode)
-    # Fila pendiente: Task 12.1. Hasta entonces, hereda GLM del padre.
+    # Fila VACIA A PROPOSITO (medido en la Task 12.1, docs/task-12.1-medicion.md):
+    # el parser SI lee model: (clave oficial), pero el catalogo real de la
+    # cuenta quedo NO OBSERVADO -- los IDs glm-5.x salieron de un grep debil
+    # contra el bundle, no del entitlement confirmado de la cuenta. Ademas,
+    # "effort" en frontmatter no existe como tal: el parser destructura
+    # thoughtLevel:, no effort: (escribir effort: seria texto muerto). Sin
+    # catalogo confirmado no hay valor que poner en la celda -- Core Rule del
+    # diseno ("un host cuya medicion no cierre queda con su fila vacia y
+    # hereda del padre", docs/phase-12-model-routing-design.md §D3/§Medicion
+    # primero). Hereda GLM del padre, igual que hoy.
     : ;;
   grok)
-    # Fila pendiente: Task 12.2.
-    : ;;
+    # Medido en la Task 12.2 (docs/task-12.2-medicion.md, 2026-08-24): grok SI
+    # honra model: y effort: por agente -- evidencia de registro interno
+    # (subagents/<id>/meta.json: effective_model_id; chat_history.jsonl:
+    # model_id/reasoning_effort del subagente, distintos del padre e iguales
+    # al frontmatter declarado). Catalogo real de ESTA cuenta (models_cache.json,
+    # 2026-08-24): grok-4.6 (default de config.toml) y grok-4.5. La medicion no
+    # comparo capacidad entre los dos IDs -- solo confirmo que ambos se aplican
+    # literalmente -- asi que no hay evidencia para preferir uno sobre otro por
+    # tier. Se usa el mismo grok-4.6 (el default confirmado de la cuenta) en
+    # los tres tiers y se varia solo el effort, mismo criterio que claude entre
+    # standard/verify (D2 del diseno: mismo modelo, effort mas bajo evita
+    # inventar una jerarquia de modelos no medida).
+    case "$TIER" in
+      standard) MODEL='grok-4.6'; EFFORT='medium' ;;
+      verify)   MODEL='grok-4.6'; EFFORT='low' ;;
+      review)   MODEL='grok-4.6'; EFFORT='xhigh' ;;
+    esac
+    ;;
   kimi)
     # Fila VACIA DEFINITIVA, no pendiente (medido en la Task 12.3): el host
     # no acepta model: ni effort: por agente. Ver tests/test_model_routing.sh.
