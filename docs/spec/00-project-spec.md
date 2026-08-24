@@ -1512,7 +1512,7 @@ que otro proceso escriba esos archivos entre corridas del instalador.
   hash nuevo del vendor es pegarlo en `agents/vendor-manifest.sha256` en un
   commit propio, con el diff a la vista en la revisión — no hay `--force`.
 
-### Medido 2026-08-24, Task 12.1
+### Medido 2026-08-23, Task 12.1
 
 **zcode (`docs/task-12.1-medicion.md`, inspección estática de `zcode.cjs`
 3.7.5-11, misma vía que la 5.6).** `model:` **sí** es clave oficial del
