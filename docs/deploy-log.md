@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-24 — Deploy NO-OP + PR #64 (Greptile P1 + reviews de bots) — follow-up 13.1
+
+- **Qué traía:** **PR #64** (`0ddb3ba` + `25b94f0`, docs-only) — el P1 de
+  Greptile del PR #63 ("el escaneo mezcla sesiones") integrado como fix de
+  diseño: alcance del escaneo POR SESIÓN (rutas registradas como escritas
+  por el adversary + mtime `>=` época de armado); el armado inicializa
+  época/rutas/violación (no appendea); evasión por `touch -t` declarada
+  (instancia del hueco Bash); caso DoD bidireccional + tick + touch -t.
+  Además se atendieron los reviews de bots: CodeRabbit (2 Major + 1 Minor,
+  los tres aceptados) y Greptile P2 (igualdad de tick). Previo: cross-review
+  externo de 2 rondas (r1 codex+claude: 17 hallazgos; r2 kimi+qwen: 5 bajos
+  — commits directos `ee13d87`/`cb22564`, CI en verde en ambos pushes).
+- **Deploy:** NO-OP — el hook no cambió. `install-hook.sh`: "YA AL DIA";
+  `check-hook-registration.sh`: exit 0.
+- **CI del PR #64:** suite/quality/secrets verde en ambos pushes (runs
+  32789684601, 32790280765).
+- **Operador:** Gon (sesión zcode).
+
 ## 2026-08-24 — Deploy NO-OP + cierre de la Task 13.1 (PR #63, `b91c7a3`) — arranque Phase 13
 
 - **Qué traía:** **13.1 (PR #63, `b91c7a3`)** — diseño medido del cuarto rol
