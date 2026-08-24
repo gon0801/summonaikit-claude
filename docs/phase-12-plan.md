@@ -224,9 +224,11 @@ else
 fi
 huella_grok() {   # el perfil MENOS lo que el runtime reescribe solo
   find "$HOME/.grok" -type d \( -name sessions -o -name logs -o -name tmp \
-                                -o -name cache -o -name telemetry \) -prune -o \
+                                -o -name cache -o -name telemetry \
+                                -o -name debug \) -prune -o \
        -type f -print0 2>/dev/null | sort -z | xargs -0 cksum
 }
+# debug: (--debug escribe ~/.grok/debug/*.txt por invocación — medido en la 12.2)
 EOF
 . /tmp/probe-122.env
 huella_grok > /tmp/grok-antes.txt
