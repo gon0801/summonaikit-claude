@@ -1207,6 +1207,143 @@ sed -n '/^---/,/^---/p' "$gk_agents/reviewer.md" | grep -q '^skills:' \
 grep -q '^model: modelo-de-prueba-grok-reviewer$' "$gk_agents/reviewer.md" \
   || malo "el perfil de grok no lleva el modelo ruteado"
 
+# ============================================================================
+# Task 12.6 — posesion en claude: manifiesto de vendor + --host claude
+# ============================================================================
+# El problema que resuelve: ~/.claude/agents/ lo escribe el CLI del kit y esos
+# perfiles NO llevan saikit_owned, asi que la maquina de tres estados los deja
+# DESCONOCIDO para siempre. La via de adopcion es el CUARTO estado
+# VENDOR_CONOCIDO por hash en agents/vendor-manifest.sha256 (fixtures
+# congelados en tests/fixtures/vendor-agents/, generados desde el perfil vivo
+# del kit -- SOLO LECTURA, nunca se edita a mano ni se re-lee en el test).
+claude_agents=''
+n_ca=0
+nuevo_claude_agents() {   # dir de agentes limpio por caso
+  n_ca=$((n_ca + 1))
+  claude_agents="$tmp/cagents-$n_ca"
+  rm -rf "$claude_agents"; mkdir -p "$claude_agents"
+}
+host_claude() {
+  SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+  SAIKIT_MODEL_ROUTING_TOOL="$router_stub" \
+    bash "$tool" --host claude --dest "$dest" "$@"
+}
+# Variante con el router REAL, solo para el caso de cableado de punta a punta.
+host_claude_real() {
+  SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" bash "$tool" --host claude --dest "$dest" "$@"
+}
+# Copia un perfil del vendor congelado en fixtures al dir del caso.
+poner_vendor() { cp "$repo/tests/fixtures/vendor-agents/$1.md" "$claude_agents/$1.md"; }
+
+caso "claude: AUSENTE => instala con el modelo ruteado y la marca"
+dest_listo; nuevo_claude_agents
+out="$(host_claude 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, obtuve $rc: $out"
+[ -f "$claude_agents/reviewer.md" ] || malo "no instalo reviewer.md"
+grep -q '^model: modelo-de-prueba-claude-reviewer$' "$claude_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva el modelo que emitio el router"
+grep -q '^effort: low$' "$claude_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva el effort que emitio el router"
+grep -q '^saikit_owned: summonaikit-claude$' "$claude_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva la marca"
+
+caso "claude: cableado de punta a punta con el router REAL"
+# El valor esperado se le PREGUNTA al router, no se hardcodea: la regla global
+# del plan es que los IDs de modelo viven solo en tools/model-routing.sh, y un
+# test que los copie obliga a editar dos archivos cada vez que cambia la tabla.
+dest_listo; nuevo_claude_agents
+host_claude_real >/dev/null 2>&1
+esperado_model="$(bash "$repo/tools/model-routing.sh" --host claude --role reviewer --field model)"
+esperado_effort="$(bash "$repo/tools/model-routing.sh" --host claude --role reviewer --field effort)"
+[ -n "$esperado_model" ] || malo "la fila claude del router no deberia estar vacia"
+grep -q "^model: ${esperado_model}\$" "$claude_agents/reviewer.md" \
+  || malo "el perfil no lleva el modelo que el router real emite ($esperado_model)"
+grep -q "^effort: ${esperado_effort}\$" "$claude_agents/reviewer.md" \
+  || malo "el perfil no lleva el effort que el router real emite ($esperado_effort)"
+
+caso "claude: instalar dos veces NO reescribe"
+# Desviacion declarada del plan: se agrega una primera instalacion propia con
+# el MISMO router (host_claude / stub) antes de capturar "antes". El caso tal
+# como esta en el plan reutiliza el $claude_agents del caso anterior, que
+# quedo poblado con el router REAL (host_claude_real) -- comparar esa salida
+# contra una segunda corrida con el router STUB siempre difiere (modelo/effort
+# distintos) y el caso fallaria por una inconsistencia de fixture, no por un
+# defecto de idempotencia. Mismo patron que "12.5 zcode: instalar dos veces
+# seguidas NO reescribe": primero una instalacion propia y consistente, recien
+# ahi se mide que la segunda no reescribe.
+dest_listo; nuevo_claude_agents
+host_claude >/dev/null 2>&1
+antes="$(find "$claude_agents" -type f -print0 | sort -z | xargs -0 cksum)"
+host_claude >/dev/null 2>&1
+[ "$antes" = "$(find "$claude_agents" -type f -print0 | sort -z | xargs -0 cksum)" ] \
+  || malo "la segunda corrida reescribio"
+
+# Los TRES roles del manifiesto, uno por uno: el hash de cada linea de
+# agents/vendor-manifest.sha256 tiene que ser adoptable, no solo el de
+# reviewer -- un typo al generar (o un fixture re-guardado tras el
+# sha256sum) en la linea de implementer o verifier dejaria ese rol
+# DESCONOCIDO para siempre, en silencio, y ningun caso lo hubiera atrapado
+# (hallazgo del review de PR #58).
+for rol in implementer verifier reviewer; do
+  caso "claude: VENDOR_CONOCIDO => archiva y reemplaza ($rol)"
+  dest_listo; nuevo_claude_agents; poner_vendor "$rol"
+  out="$(host_claude 2>&1)"
+  grep -q '^saikit_owned:' "$claude_agents/$rol.md" || malo "no adopto el perfil del vendor ($rol)"
+  ls "$claude_agents/saikit-backups/""$rol".md.vendor.*.bak >/dev/null 2>&1 \
+    || malo "no archivo el perfil del vendor antes de pisarlo ($rol)"
+  printf '%s' "$out" | grep -q 'ADOPTADO' || malo "no reporto la adopcion ($rol)"
+done
+
+caso "claude: DESCONOCIDO => no se toca, y se reporta"
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: reviewer\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/reviewer.md"
+antes="$(cksum < "$claude_agents/reviewer.md")"
+out="$(host_claude 2>&1)"
+[ "$antes" = "$(cksum < "$claude_agents/reviewer.md")" ] || malo "un perfil ajeno no se debe tocar"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el estado DESCONOCIDO"
+
+caso "claude: closer y retro NO se tocan (la fuente cubre tres roles)"
+dest_listo; nuevo_claude_agents; poner_vendor closer; poner_vendor retro
+antes_closer="$(cksum < "$claude_agents/closer.md")"
+antes_retro="$(cksum < "$claude_agents/retro.md")"
+host_claude >/dev/null 2>&1
+[ "$antes_closer" = "$(cksum < "$claude_agents/closer.md")" ] || malo "closer.md se toco"
+[ "$antes_retro" = "$(cksum < "$claude_agents/retro.md")" ] || malo "retro.md se toco"
+
+# Mismo blindaje que arriba, para el rechazo: los TRES roles tienen que
+# quedar DESCONOCIDO (no solo reviewer) cuando su hash no figura en el
+# manifiesto.
+for rol in implementer verifier reviewer; do
+  caso "claude: un hash que no esta en el manifiesto NO se adopta ($rol)"
+  dest_listo; nuevo_claude_agents; poner_vendor "$rol"
+  printf '\n' >> "$claude_agents/$rol.md"   # un byte de mas => otro hash
+  antes="$(cksum < "$claude_agents/$rol.md")"
+  out="$(host_claude 2>&1)"
+  [ "$antes" = "$(cksum < "$claude_agents/$rol.md")" ] || malo "un vendor no listado no se debe pisar ($rol)"
+  printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "un vendor no listado tiene que reportarse DESCONOCIDO ($rol)"
+done
+
+caso "claude: --host claude NO toca DEST"
+dest_listo; nuevo_claude_agents
+dest_ck="$(cksum < "$dest")"
+host_claude >/dev/null 2>&1
+[ "$dest_ck" = "$(cksum < "$dest")" ] || malo "--host claude no debe tocar DEST"
+
+# --refrescar-manifiesto (Step 4b): reporta el hash + diff de un DESCONOCIDO,
+# NUNCA adopta. El caso de test es que el manifiesto queda byte a byte igual.
+caso "claude: --refrescar-manifiesto reporta el hash de un DESCONOCIDO y NO adopta (manifiesto intacto)"
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: reviewer\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/reviewer.md"
+manifiesto_antes="$(cksum < "$repo/agents/vendor-manifest.sha256")"
+out="$(SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+       bash "$tool" --host claude --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--refrescar-manifiesto no deberia fallar solo por reportar: rc=$rc: $out"
+manifiesto_hash="$(sha256sum "$claude_agents/reviewer.md" | cut -d' ' -f1)"
+printf '%s' "$out" | grep -q "$manifiesto_hash" \
+  || malo "--refrescar-manifiesto no imprimio el hash del perfil DESCONOCIDO"
+[ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
+  || malo "--refrescar-manifiesto NO debe escribir el manifiesto (solo reporta)"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1
