@@ -85,16 +85,22 @@ caso "candado: ningun ID de modelo vive fuera del router"
 # dos y por ahi se colaba un `model: claude-opus-5` hardcodeado en
 # test_install_hook.sh -- que es exactamente lo que la regla existe para evitar,
 # porque obliga a editar dos archivos cada vez que cambia la tabla.
+# hooks/ y docs/ quedan FUERA del escaneo por decision del diseno aprobado
+# (docs/phase-12-model-routing-design.md): el candado audita configuracion
+# ejecutable de ruteo (tools/, agents/, tests/), no documentacion narrativa ni
+# el hook -- que esta fase declara explicitamente intocado.
 # Se excluye ESTE archivo (es el que declara la tabla), los fixtures del vendor
 # (son copias byte a byte de lo que el CLI del kit escribio: evidencia, no
 # configuracion; editarlas invalidaria el manifiesto), y los payloads
-# sinteticos de PostToolUse/hook_lab (tests/fixtures/escenarios/,
-# tests/lib/hook_lab.sh): son datos de ejemplo de un `resolvedModel` que el
-# host ya devolvio en un evento de hook, preexistentes a esta fase y sin
-# relacion con la tabla de ruteo -- tambien evidencia, no configuracion.
+# sinteticos de PostToolUse/hook_lab con un `resolvedModel` de ejemplo,
+# preexistentes a esta fase y sin relacion con la tabla de ruteo -- tambien
+# evidencia, no configuracion. La exclusion de escenarios se acota al naming
+# real de esos fixtures (NN.tool.<host>.json / NN.stop.<host>.transcript.jsonl,
+# verificado contra los 38 archivos que la motivan), no al directorio entero,
+# para que un README o script futuro ahi SI quede cubierto por el candado.
 otros="$(grep -rlE 'claude-(sonnet|opus|haiku|fable)-[0-9]|glm-[0-9]|grok-[0-9]|kimi-code/' \
            "$repo/tools" "$repo/agents" "$repo/tests" 2>/dev/null \
-         | grep -vE 'model-routing\.sh|test_model_routing\.sh|tests/fixtures/vendor-agents/|tests/fixtures/escenarios/|tests/lib/hook_lab\.sh')"
+         | grep -vE 'model-routing\.sh|test_model_routing\.sh|tests/fixtures/vendor-agents/|tests/fixtures/escenarios/.*\.(tool\.[a-z]+\.json|stop\.[a-z]+\.transcript\.jsonl)$|tests/lib/hook_lab\.sh')"
 [ -z "$otros" ] || malo "IDs de modelo fuera del router: $otros"
 
 if [ "$fail" -ne 0 ]; then

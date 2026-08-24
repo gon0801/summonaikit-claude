@@ -136,7 +136,8 @@ case "$HOST" in
     # Fila pendiente: Task 12.2.
     : ;;
   kimi)
-    # Fila pendiente: Task 12.3.
+    # Fila VACIA DEFINITIVA, no pendiente (medido en la Task 12.3): el host
+    # no acepta model: ni effort: por agente. Ver tests/test_model_routing.sh.
     : ;;
   '')
     decir "[summonaikit] model-routing: hace falta --host"
