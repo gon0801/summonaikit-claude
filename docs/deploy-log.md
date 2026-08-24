@@ -10,8 +10,9 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 ## 2026-08-24 — Deploy NO-OP + cierre de la Task 13.1 (PR #63, `b91c7a3`) — arranque Phase 13
 
 - **Qué traía:** **13.1 (PR #63, `b91c7a3`)** — diseño medido del cuarto rol
-  `adversary` (`docs/phase-13-adversary-design.md`, 609 líneas, docs-only).
-  Decisiones: modo degradado (detección post-hoc + bloqueo en Stop; sin
+  `adversary` (`docs/phase-13-adversary-design.md`, 609 líneas al momento
+  del merge; 685+ tras el cross-review externo de la misma task — entradas
+  históricas posteriores lo dejan claro aquí, docs-only). Decisiones: modo degradado (detección post-hoc + bloqueo en Stop; sin
   `PreToolUse` en ningún host), atribución interna medida en claude/grok/codex
   (zcode/kimi `unknown` declarados; despacho zcode confirmado EN VIVO en la
   sesión que escribió el doc — los tres despachos de la ceremonia acreditados

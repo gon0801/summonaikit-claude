@@ -67,7 +67,11 @@ del adversary? Los canales son los mismos que el hook ya lee hoy
 | `claude` | **medido** — `Task` con `tool_input.subagent_type` (Task 1.4; lector en el hook `:1461`) | **medido** — `agent_type`/`agent_id` de PRIMER NIVEL en PostToolUse internos (Tasks 1.4 y 3.7; fixture `tests/fixtures/escenarios/16-eventos-dentro-de-subagente/02.tool.claude.json`: payload real con `agent_type: "implementer"` top-level en un PostToolUse de `Edit`; lector `:1481`) | NO (sin `PreToolUse`) |
 | `grok` | **medido** — `toolInput.subagent_type` en el despacho `spawn_subagent` (7.1 ronda 5, `docs/phase-7-grok-design.md:41`; lector `:1467`) | **medido** — `subagentType` top-level en los eventos internos (7.1; `docs/phase-7-grok-design.md:41`; lectores `:1468-1469`) | NO |
 | `codex` | **sin identidad** — el despacho NO emite `subagent_type` (Task 7.3 D4, comentario del hook `:1462-1465`: "el despacho spawn_subagent SI emite post_tool_use con toolInput.subagent_type (a diferencia de Codex)") | **medido** — `agent_type` de primer nivel, forma idéntica a claude (Task 6.1; comentario Task 6.4 D3, `hooks/summonaikit-harness.sh:1995-1999`) | NO |
-| `zcode` | **medido** — `Agent` con `tool_input.subagent_type` (Task 5.5; fixture `tests/fixtures/escenarios/21-zcode-turno-completo/02.tool.zcode.json`: `tool_name: "Agent"` con `tool_input.subagent_type: "implementer"` — ÉSTE es el citable; corroboración adicional, NO citable como artefacto: la sesión que escribió este doc observó sus tres despachos de ceremonia acreditados en orden en su propio `harness-state.env` vivo, archivo efímero que el cierre limpio borra y que por eso no se lista como evidencia) | **unknown** — no existe captura de un evento interno zcode. La golden zcode modela el turno sólo con eventos de despacho (escenario 21: tres `Agent` + un `Bash` del lead — `02`/`04`/`05` Agent, `03` Bash — sin eventos internos). El log de evidencia vivo no registra identidad por evento, así que tampoco distingue ediciones del lead de las del subagente. No se asume | NO |
+| `zcode` | **medido** — `Agent` con `tool_input.subagent_type` (Task 5.5; fixture `tests/fixtures/escenarios/21-zcode-turno-completo/02.tool.zcode.json`: `tool_name: "Agent"` con `tool_input.subagent_type: "implementer"` — ÉSTE es el citable; corroboración adicional, NO citable como artefacto (re-etiquetada así por
+claude #10): la sesión que escribió este doc observó sus tres despachos de
+ceremonia acreditados en orden en su propio `harness-state.env` vivo,
+archivo efímero que el cierre limpio borra y que por eso no se lista como
+evidencia) | **unknown** — no existe captura de un evento interno zcode. La golden zcode modela el turno sólo con eventos de despacho (escenario 21: tres `Agent` + un `Bash` del lead — `02`/`04`/`05` Agent, `03` Bash — sin eventos internos). El log de evidencia vivo no registra identidad por evento, así que tampoco distingue ediciones del lead de las del subagente. No se asume | NO |
 | `kimi` | **resolución de tipo medida; identidad en el payload unknown** — la sonda 12.7 probó que kimi resuelve el `subagent_type` del perfil y lo despacha (`docs/spec/00-project-spec.md:1590-1599`, PROBE-127-OK), y la tabla de `docs/phase-12-model-routing-design.md:38-42` documenta que registra `Agent` + `SubagentStart`/`SubagentStop`; pero NINGUNA captura de hook-payload kimi existe en el repo para afirmar el CAMPO de identidad — unknown, no se asume | **unknown** — 12.3 midió `wire.jsonl` de binding de modelo (`docs/task-12.3-medicion.md:36`), no payloads de hook. No se asume | NO |
 
 Nota de disciplina sobre zcode: el `tool_response` del despacho en el fixture
@@ -157,11 +161,15 @@ llaveado por sesión (`hooks/summonaikit-harness.sh:328-333` y
 `:361-362`: `SESSION_KEY` → `STATE_DIR`), así
 que una sesión que no lo invocó no escanea ni bloquea nada, aunque el repo
 tenga artefactos de sesiones anteriores. **Límite de host declarado
-(cross-review, claude #2):** en kimi, con despacho-interno unknown, NINGÚN
-canal acreditado puede llegar a `agents_seen` — ahí la capa 2 no corre y el
-riesgo #4 queda cubierto SOLO por la capa 1 (perfil) más el gitignore;
-declarado, no prometido. En codex el despacho no emite identidad pero el
-interno sí (`agent_type`, medido 6.1), así que `agents_seen` sí se puebla.
+(cross-review, claude #2; dirección corregida por kimi r2 #1):** en kimi
+ningún canal MEDIDO acredita al adversary — se PROYECTA que ni la capa 2
+ni el gitignore corren ahí, pero es proyección sobre unknown, no ausencia
+afirmada (Core Rule 2 aplicada pareja): si un canal no medido existiera y
+llegara, los mecanismos correrían DE MÁS (más enforcement, no menos —
+dirección fail-safe), el riesgo #4 quedaría cubierto por más capas, y el
+gate D4 pasaría a exigir la línea `ADVERSARY:`. En codex el despacho no
+emite identidad pero el interno sí (`agent_type`, medido 6.1), así que
+`agents_seen` sí se puebla.
 
 Volverlo obligatorio queda como perilla explícita del operador, no como
 default (decisión del operador 2026-08-24, `docs/phase-13-adversary-plan.md:29-32`).
@@ -290,9 +298,10 @@ CUALQUIER canal medido — despacho (`tool_input.subagent_type`) O interno
 (`agent_type`/`subagentType` top-level). Anclarlo sólo al despacho dejaba a
 codex sin gitignore para siempre (su despacho no emite identidad,
 § premisas); su canal interno sí trae `agent_type` medido, así que el
-disparador any-channel lo cubre. En kimi ambos canales son unknown ⇒ límite
-declarado: hasta que se mida un canal kimi, NI el gitignore NI la capa 2
-corren ahí (el riesgo #4 queda cubierto SOLO por la capa 1, el perfil).
+disparador any-channel lo cubre. En kimi ambos canales son unknown ⇒
+proyección declarada (kimi r2 #1): se espera que ni el gitignore ni la
+capa 2 corran ahí hasta que un canal se mida — pero si un canal no medido
+llegara, correrían de más (dirección fail-safe), no de menos.
 Al disparar, el hook crea si ausente `.saikit/` + `.saikit/findings/` +
 `.saikit/findings/.gitignore` con contenido `*` (cross-review claude #6 /
 codex #4: DENTRO de `findings/` — un `*` en `.saikit/` raíz ignoraría el
@@ -359,7 +368,11 @@ perfil de 13.2 describe es ÉSTE, no un PreToolUse prometido.
   violación produce una entrada **unsatisfiable-by-label**: ningún label del
   recibo la perdona. Bloquea los 2 ciclos; luego el camino de presupuesto
   agotado existente informa al usuario. **SIN git en el Stop** — no se agrega
-  maquinaria de desbloqueo.
+  maquinaria de desbloqueo. **Remedio del operador (nombrado por qwen r2
+  #4, simetría con la ruta de fuga del secreto):** inspeccionar y revertir
+  la escritura no autorizada (p.ej. `git restore <archivo>` o borrar el
+  archivo creado) y re-cerrar o informar; el bloqueo NO verifica la
+  reversión (eso sería git en el Stop) — el remedio es manual, declarado.
 - **Domicilio del flag de violación (hallazgo M3 del review):** la violación
   vive en el estado de la sesión que la registró, y 13.4 DEBE hacerlo en un
   archivo que los caminos de limpieza EXISTENTES ya borran — extender
@@ -533,15 +546,23 @@ textual.
 
 ## Límites declarados (consolidado)
 
+**Procedencia de los IDs de hallazgo (aclarado por qwen r2 #2):** en este
+doc conviven DOS esquemas de numeración, de DOS rondas distintas. `A1/A2/
+M1–M3/B1–B3` son los 8 hallazgos del reviewer SUBAGENTE de la ceremonia
+(pre-merge, PR #63). `claude #N` (12) y `codex #N` (5) son los 17 de la
+ronda externa 1; `kimi r2 #N` y `qwen r2 #N` los de la ronda externa 2
+(4 únicos tras convergencia). Total externo: 21.
+
 Lo que esta fase NO cubre, declarado desde el diseño:
 
 - **Sin canal de negación:** ningún host registra `PreToolUse`; el candado es
   detección post-hoc + bloqueo en el Stop (D3).
 - **Candado ciego en zcode/kimi:** atribución interna unknown en ambos hosts;
   fail-open declarado, sin bloqueos por atribución ahí (D3). **Consecuencia
-  kimi específica (claude #2):** sin NINGÚN canal medido (ni despacho ni
-  interno), en kimi ni la capa 2 ni el gitignore corren — el riesgo #4 queda
-  cubierto sólo por la capa 1 (perfil), hasta que un canal se mida.
+  kimi específica (claude #2, dirección kimi r2 #1):** sin canal medido, se
+  PROYECTA que ni la capa 2 ni el gitignore corren en kimi (riesgo #4
+  cubierto sólo por la capa 1); proyección sobre unknown — si un canal no
+  medido existiera, los mecanismos correrían de más, no de menos.
 - **Bash best-effort:** redirección/heredoc/tee obvios; el resto son huecos
   declarados al spec, misma familia que G2 (D3). Parser de shell completo:
   Reject.
