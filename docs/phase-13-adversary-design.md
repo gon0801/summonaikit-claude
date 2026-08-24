@@ -67,7 +67,7 @@ del adversary? Los canales son los mismos que el hook ya lee hoy
 | `claude` | **medido** — `Task` con `tool_input.subagent_type` (Task 1.4; lector en el hook `:1461`) | **medido** — `agent_type`/`agent_id` de PRIMER NIVEL en PostToolUse internos (Tasks 1.4 y 3.7; fixture `tests/fixtures/escenarios/16-eventos-dentro-de-subagente/02.tool.claude.json`: payload real con `agent_type: "implementer"` top-level en un PostToolUse de `Edit`; lector `:1481`) | NO (sin `PreToolUse`) |
 | `grok` | **medido** — `toolInput.subagent_type` en el despacho `spawn_subagent` (7.1 ronda 5, `docs/phase-7-grok-design.md:41`; lector `:1467`) | **medido** — `subagentType` top-level en los eventos internos (7.1; `docs/phase-7-grok-design.md:41`; lectores `:1468-1469`) | NO |
 | `codex` | **sin identidad** — el despacho NO emite `subagent_type` (Task 7.3 D4, comentario del hook `:1462-1465`: "el despacho spawn_subagent SI emite post_tool_use con toolInput.subagent_type (a diferencia de Codex)") | **medido** — `agent_type` de primer nivel, forma idéntica a claude (Task 6.1; comentario Task 6.4 D3, `hooks/summonaikit-harness.sh:1995-1999`) | NO |
-| `zcode` | **medido** — `Agent` con `tool_input.subagent_type` (Task 5.5; fixture `tests/fixtures/escenarios/21-zcode-turno-completo/02.tool.zcode.json`: `tool_name: "Agent"` con `tool_input.subagent_type: "implementer"`; confirmado EN VIVO 2026-08-24: los tres despachos de la ceremonia quedaron acreditados en orden en el estado de la sesión que escribió este doc) | **unknown** — no existe captura de un evento interno zcode. La golden zcode modela el turno sólo con eventos de despacho (escenario 21: tres `Agent` + un `Bash` del lead — `02`/`04`/`05` Agent, `03` Bash — sin eventos internos). El log de evidencia vivo no registra identidad por evento, así que tampoco distingue ediciones del lead de las del subagente. No se asume | NO |
+| `zcode` | **medido** — `Agent` con `tool_input.subagent_type` (Task 5.5; fixture `tests/fixtures/escenarios/21-zcode-turno-completo/02.tool.zcode.json`: `tool_name: "Agent"` con `tool_input.subagent_type: "implementer"` — ÉSTE es el citable; corroboración adicional, NO citable como artefacto: la sesión que escribió este doc observó sus tres despachos de ceremonia acreditados en orden en su propio `harness-state.env` vivo, archivo efímero que el cierre limpio borra y que por eso no se lista como evidencia) | **unknown** — no existe captura de un evento interno zcode. La golden zcode modela el turno sólo con eventos de despacho (escenario 21: tres `Agent` + un `Bash` del lead — `02`/`04`/`05` Agent, `03` Bash — sin eventos internos). El log de evidencia vivo no registra identidad por evento, así que tampoco distingue ediciones del lead de las del subagente. No se asume | NO |
 | `kimi` | **resolución de tipo medida; identidad en el payload unknown** — la sonda 12.7 probó que kimi resuelve el `subagent_type` del perfil y lo despacha (`docs/spec/00-project-spec.md:1590-1599`, PROBE-127-OK), y la tabla de `docs/phase-12-model-routing-design.md:38-42` documenta que registra `Agent` + `SubagentStart`/`SubagentStop`; pero NINGUNA captura de hook-payload kimi existe en el repo para afirmar el CAMPO de identidad — unknown, no se asume | **unknown** — 12.3 midió `wire.jsonl` de binding de modelo (`docs/task-12.3-medicion.md:36`), no payloads de hook. No se asume | NO |
 
 Nota de disciplina sobre zcode: el `tool_response` del despacho en el fixture
@@ -81,6 +81,12 @@ Conclusión de la tabla: la atribución INTERNA (la que el candado necesita para
 saber que una escritura vino del adversary) está medida en 3 de 5 hosts
 (claude, grok, codex). En zcode y kimi el candado queda declarado ciego —
 fail-open con diagnóstico, ver D3.
+
+**Nota sobre las citas de línea (cross-review, claude #11):** las ~40 citas
+`hooks/summonaikit-harness.sh:NNNN` de este doc corresponden al hook en
+`cbfb6c9` (2026-08-24). 13.4/13.5 editarán el hook y las desfasarán — son
+fotografías de la fecha, no anclas vivas; 13.9 re-verifica las que copie al
+spec.
 
 ### La sesión no se propaga: el único canal pre-despacho que el modelo lee
 
@@ -144,11 +150,18 @@ Sin invocación, cero costo nuevo: ningún host, ningún gate, ningún perfil
 cambia de comportamiento. **Alcance exacto del "cero costo" (hallazgo A1 del
 review):** todos los mecanismos nuevos de esta fase (escaneo de secretos,
 violaciones, gitignore) disparan SOLO en sesiones cuyo estado registra
-`,adversary,` en `agents_seen` o un evento que resuelva a adversary — el
-estado es llaveado por sesión (`hooks/summonaikit-harness.sh:328-333` y
+`,adversary,` en `agents_seen` — esto es, un despacho o evento interno
+acreditado por cualquiera de los canales MEDIDOS de la tabla de premisas —
+o una violación/artefacto ya registrado por el candado. El estado es
+llaveado por sesión (`hooks/summonaikit-harness.sh:328-333` y
 `:361-362`: `SESSION_KEY` → `STATE_DIR`), así
 que una sesión que no lo invocó no escanea ni bloquea nada, aunque el repo
-tenga artefactos de sesiones anteriores.
+tenga artefactos de sesiones anteriores. **Límite de host declarado
+(cross-review, claude #2):** en kimi, con despacho-interno unknown, NINGÚN
+canal acreditado puede llegar a `agents_seen` — ahí la capa 2 no corre y el
+riesgo #4 queda cubierto SOLO por la capa 1 (perfil) más el gitignore;
+declarado, no prometido. En codex el despacho no emite identidad pero el
+interno sí (`agent_type`, medido 6.1), así que `agents_seen` sí se puebla.
 
 Volverlo obligatorio queda como perilla explícita del operador, no como
 default (decisión del operador 2026-08-24, `docs/phase-13-adversary-plan.md:29-32`).
@@ -200,16 +213,22 @@ ids, así que esa clase de riesgo no aplica a la convención en sí.
 el turno, su despacho del reviewer NOMBRA el artefacto a adjudicar (el lead lo
 conoce — es quien recibió del adversary la línea de resumen y quien puede
 listar el directorio). Eso cierra el staleness SECUENCIAL (hallazgo M2 del
-review): sin nombre explícito, un reviewer de un turno SIN adversary
-adjudicaría el artefacto viejo de otra task contra el cambio nuevo. Forma
-degradada (el lead no nombró nada): el reviewer adjudica el `*.json` de MAYOR
-mtime del directorio (mtime, no el timestamp del nombre — divergen justo en
-la re-escritura TOCTOU, que cambia mtime y no el nombre; B3 del review), y lo
-declara así en su veredicto. Ambigüedad de sesiones CONCURRENTES declarada
+review + codex #2): sin nombre explícito, un reviewer de un turno SIN
+adversary adjudicaría el artefacto viejo de otra task contra el cambio
+nuevo — contradiciendo la promesa de comportamiento intacto sin invocación
+(D1). **Regla que lo cierra (fija, para 13.3/13.6): un turno que NO corrió
+adversary NO adjudica NADA** — no hay sección de adjudicación sin adversary
+en el turno, y el fallback de abajo jamás se alcanza desde un turno sin
+invocación. Forma degradada (el lead SÍ corrió adversary pero no nombró el
+archivo): el reviewer adjudica el `*.json` de MAYOR mtime del directorio
+(mtime, no el timestamp del nombre — divergen justo en la re-escritura
+TOCTOU, que cambia mtime y no el nombre; B3 del review), y lo declara así
+en su veredicto. Ambigüedad de sesiones CONCURRENTES declarada
 como límite — misma familia declarada que la colisión del saneo de
 `SESSION_KEY` (dos ids que sanean al mismo nombre): se declara, no se promete
 unicidad (`docs/phase-13-adversary-plan.md:80-82`). El contrato de 13.6 fija
-la forma del despacho que nombra el artefacto.
+la forma del despacho que nombra el artefacto y la instrucción negativa
+("si este turno no corrió adversary, no adjudiques artefacto alguno").
 
 **Integridad post-adjudicación (TOCTOU): límite DECLARADO, sin sellado.**
 Razón: no hay canal de negación (§ premisas), así que append-only o sellado no
@@ -232,18 +251,29 @@ conservando un orden de `agents_seen` válido — caso con nombre en 13.5
    del review): SOLO cuando el estado de ESTA sesión registra `,adversary,`
    en `agents_seen` — una sesión que no lo invocó jamás escanea, aunque el
    repo tenga artefactos acumulados. Con adversary en la sesión: se escanean
-   los `*.json` bajo `.saikit/findings/` con la familia de regexes de
-   `tools/check-secrets.sh` (motor grep best-effort: los mismos patrones de
-   `redact_secrets` más los formatos conocidos de token,
-   `tools/check-secrets.sh:1-30`). Match ⇒ **bloqueo (fail-closed JUSTIFICADO
-   por riesgo** — secreto persistido en el working tree; excepción declarada
-   a Core Rule 1, misma disciplina que el instalador,
-   `docs/spec/00-project-spec.md:449`). Archivo ilegible ⇒ no bloquea
-   (fail-open, Core Rule 1). **Ruta de fuga del FALSO POSITIVO (declarada,
-   A1):** el bloqueo nombra archivo y NÚMERO de línea, jamás el contenido
-   (misma disciplina de `tools/check-secrets.sh:24-25`); el remedio es
-   manual y declarado — redactar o borrar el artefacto y re-cerrar (2 ciclos
-   + presupuesto si no se atiende, camino existente).
+   TODOS los archivos bajo `.saikit/findings/`, CUALQUIER extensión
+   (cross-review codex #1 / claude #1, la alta convergente: el candado de
+   ruta permite cualquier archivo del directorio — filtrar el escaneo a
+   `*.json` dejaba un `leak.txt` pasar el candado y evadir el control). La
+   familia de patrones es la que el hook YA lleva inline (`redact_secrets`,
+   `hooks/summonaikit-harness.sh:1343-1347`) — cross-review claude #3: el
+   hook corre en el repo CONSUMER, donde `tools/check-secrets.sh` NO existe;
+   los formatos extendidos de token de ese checker no están disponibles en
+   runtime y NO se duplican al hook (una segunda copia sin candado de
+   fuente única es drift garantizado). Capa reducida, declarada. Match ⇒
+   **bloqueo (fail-closed JUSTIFICADO por riesgo** — secreto persistido en
+   el working tree; excepción declarada a Core Rule 1, misma disciplina que
+   el instalador, `docs/spec/00-project-spec.md:449`). Archivo ilegible ⇒ no
+   bloquea (fail-open, Core Rule 1). **Ruta de fuga del FALSO POSITIVO
+   (declarada, A1):** el bloqueo nombra archivo y NÚMERO de línea, jamás el
+   contenido (misma disciplina de `tools/check-secrets.sh:24-25`); el
+   remedio es manual y declarado — redactar o borrar el artefacto y
+   re-cerrar (2 ciclos + presupuesto si no se atiende, camino existente).
+   **Persistencia cross-sesión declarada (cross-review claude #7 / codex
+   #3):** como no hay auto-borrado, un match histórico (secreto real o falso
+   positivo) bloquea CADA sesión futura que invoque adversary hasta que
+   alguien lo redacte o borre — el remedio manual es la única salida y el
+   bloqueo se repite; declarado, no prometido auto-limitado.
 3. **Gitignore del consumer** (abajo).
 
 **Residual declarado (en ambos sentidos, hallazgo A1 del review):** falso
@@ -261,10 +291,12 @@ CUALQUIER canal medido — despacho (`tool_input.subagent_type`) O interno
 codex sin gitignore para siempre (su despacho no emite identidad,
 § premisas); su canal interno sí trae `agent_type` medido, así que el
 disparador any-channel lo cubre. En kimi ambos canales son unknown ⇒ límite
-declarado: hasta que se mida un canal kimi, el gitignore puede no crearse
-ahí (el riesgo #4 queda cubierto sólo por las capas 1 y 2 en ese host).
+declarado: hasta que se mida un canal kimi, NI el gitignore NI la capa 2
+corren ahí (el riesgo #4 queda cubierto SOLO por la capa 1, el perfil).
 Al disparar, el hook crea si ausente `.saikit/` + `.saikit/findings/` +
-`.saikit/.gitignore` con contenido `*`.
+`.saikit/findings/.gitignore` con contenido `*` (cross-review claude #6 /
+codex #4: DENTRO de `findings/` — un `*` en `.saikit/` raíz ignoraría el
+namespace entero, no sólo los hallazgos).
 
 Esto es una **clase de efecto NUEVA para el hook**: hoy sólo escribe bajo su
 propio state dir (`hooks/summonaikit-harness.sh:341-346`). Se declara como tal,
@@ -274,11 +306,17 @@ commiteada — el modo de falla exacto del riesgo #4 del plan. Límites del
 mecanismo declarados: `*` no afecta archivos ya trackeados (git sólo ignora
 untracked) y `git add -f` lo pisa. Idempotente: crea si ausente, jamás
 reescribe un gitignore existente (mismo criterio conservador que la máquina de
-tres estados del instalador: lo no reconocido no se toca). **Ventana de
-primera corrida declarada (B2 del review):** el PostToolUse del disparador
-llega al COMPLETAR el evento — el artefacto pudo escribirse un instante antes
-de que el gitignore exista, y asoma en el `git status` hasta que el evento se
-procesa. Ventana angosta y autocerrada; declarada, no prometida cerrada.
+tres estados del instalador: lo no reconocido no se toca) — **lo que incluye
+el gitignore AJENO ya presente (codex #4): si un `.saikit/findings/.gitignore`
+preexistente ajeno no cubre los artefactos, quedan expuestos; el hook jamás
+edita archivos ajenos, límite declarado**. **Ventana de exposición por host
+(corregida, cross-review claude #5 — B2 estaba subestimada):** el PostToolUse
+del despacho llega al RETORNAR la herramienta, o sea al TERMINAR la corrida
+del subagente. En claude/grok/codex el disparador any-channel se enciende
+antes, con el primer evento INTERNO del adversary (a mitad de corrida); en
+zcode, donde sólo el despacho está medido, el gitignore llega recién al FINAL
+— el artefacto asoma en el `git status` durante la corrida ENTERA en ese
+host. Declarado por host, no prometido angosto.
 
 **Ciclo de vida: sin auto-borrado.** Destruir evidencia post-adjudicación
 sería el hook borrando registros de lo que encontró el rol que existe para
@@ -304,7 +342,20 @@ perfil de 13.2 describe es ÉSTE, no un PreToolUse prometido.
   (top-level `agent_type` en claude/codex, `subagentType` en grok — § tabla de
   premisas) cuyo `file_path` canonicalizado cae FUERA de `.saikit/findings/`
   ⇒ se registra la violación. Canonicalización obligatoria: traversal `../`,
-  ruta absoluta, symlink (el spec ya midió esa familia en A6). En el Stop, la
+  ruta absoluta, symlink (el spec ya midió esa familia en A6). **Ancla de la
+  comparación (cross-review claude #4):** el prefijo permitido se ancla al
+  `PROJECT_ROOT` que el hook YA resuelve para su propio state
+  (`hooks/summonaikit-harness.sh:325-346`) — no al cwd del proceso, que un
+  `cd` del turno puede mover; un `file_path` relativo se resuelve contra
+  esa raíz. Si el host entrega un cwd distinto de la raíz real del repo
+  (familia A6), la familia de normalización existente es la que decide;
+  declarado, no git (el hook no llama git para esto). **Symlink del propio
+  directorio (cross-review claude #9):** si `.saikit/findings/` ES un
+  symlink (plantable por el hueco de `Bash` ya declarado), canonicalizar
+  ambos lados con realpath hace pasar todo — 13.4 RECHAZA un `findings/`
+  que sea symlink (la comparación se hace sobre el prefijo SIN resolver el
+  directorio, o el symlink se trata como violación de setup, no como ruta
+  permitida). En el Stop, la
   violación produce una entrada **unsatisfiable-by-label**: ningún label del
   recibo la perdona. Bloquea los 2 ciclos; luego el camino de presupuesto
   agotado existente informa al usuario. **SIN git en el Stop** — no se agrega
@@ -343,12 +394,17 @@ perfil de 13.2 describe es ÉSTE, no un PreToolUse prometido.
   el instalador, `docs/spec/00-project-spec.md:449` — la única excepción
   declarada a Core Rule 1 hasta hoy):
   1. **Violación detectada** — escritura atribuible al adversary fuera de
-     `.saikit/findings/` (entrada unsatisfiable-by-label, arriba).
-  2. **Secreto matcheado en el artefacto** por el escaneo de D2 capa 2.
+     `.saikit/findings/` (entrada unsatisfiable-by-label, arriba): defecto
+     PROBADO por el propio evento que lo reporta.
+  2. **Secreto matcheado en el artefacto** por el escaneo de D2 capa 2 —
+     aquí el "probado" NO aplica al match individual (un regex tiene falsos
+     positivos, claude #8): la excepción se justifica por RIESGO ALTO con
+     ruta de fuga manual declarada (secreto persistido en el working tree a
+     un commit de distancia), no por certeza.
 
-  Ambas cierran porque son defectos PROBADOS por el propio evento que las
-  reporta, no inferencias desde la no-observación — la distinción que Core
-  Rule 2 exige antes de bloquear.
+  La primera cierra sobre un defecto probado; la segunda sobre riesgo alto
+  con escape. Ninguna bloquea desde inferencia de no-observación — la
+  distinción que Core Rule 2 exige antes de bloquear.
 
 ### D4 — Gate condicional: orden con adversary + línea de recibo label-only
 
@@ -482,7 +538,10 @@ Lo que esta fase NO cubre, declarado desde el diseño:
 - **Sin canal de negación:** ningún host registra `PreToolUse`; el candado es
   detección post-hoc + bloqueo en el Stop (D3).
 - **Candado ciego en zcode/kimi:** atribución interna unknown en ambos hosts;
-  fail-open declarado, sin bloqueos por atribución ahí (D3).
+  fail-open declarado, sin bloqueos por atribución ahí (D3). **Consecuencia
+  kimi específica (claude #2):** sin NINGÚN canal medido (ni despacho ni
+  interno), en kimi ni la capa 2 ni el gitignore corren — el riesgo #4 queda
+  cubierto sólo por la capa 1 (perfil), hasta que un canal se mida.
 - **Bash best-effort:** redirección/heredoc/tee obvios; el resto son huecos
   declarados al spec, misma familia que G2 (D3). Parser de shell completo:
   Reject.
@@ -493,20 +552,27 @@ Lo que esta fase NO cubre, declarado desde el diseño:
   limpio sin `ADVERSARY:` (D1).
 - **Ambigüedad de sesiones concurrentes en el artefacto** (degradado: mayor
   mtime gana, se declara; el canal primario es el lead nombrando el artefacto
-  en el despacho del reviewer, D2/M2) y **staleness secuencial**: sin nombre
-  explícito del lead, un reviewer sin adversary en el turno adjudica el
-  artefacto más nuevo aunque sea de otra task (declarado; mitigado por el
-  canal primario). **Colisión posible del saneo de id** si algún día un id
+  en el despacho del reviewer, D2/M2). **Staleness secuencial RESUELTO por
+  regla (codex #2):** un turno sin adversary NO adjudica nada; el fallback
+  por mtime sólo existe para turnos que SÍ lo corrieron y no nombraron
+  archivo. **Colisión posible del saneo de id** si algún día un id
   keyed entra en una ruta (D2; la disciplina `:361` sigue siendo obligatoria
   para ese caso).
 - **Residual de redacción en ambos sentidos:** falso negativo (PII/secreto que
   la familia de regexes no matchee) y falso positivo (repro que matchea patrón
   de token) con ruta de fuga manual declarada — archivo:línea, redactar/borrar,
-  re-cerrar (D2, tres capas, hallazgo A1).
-- **Gitignore pisable:** `*` no afecta trackeados; `git add -f` lo pisa; ventana
-  de primera corrida (el artefacto puede asomar en `git status` un instante,
-  B2); en kimi el disparador puede no encenderse hasta medirse un canal (M1)
-  (D2).
+  re-cerrar (D2, tres capas, hallazgo A1). **Familia REDUCIDA (claude #3):**
+  la capa 2 usa la familia inline del hook (`redact_secrets`), no los
+  formatos extendidos de `tools/check-secrets.sh` — el hook corre en el
+  consumer donde ese archivo no existe; duplicarlo sería drift sin candado.
+  **Bloqueo cross-sesión (claude #7 / codex #3):** un match histórico
+  persistido bloquea cada sesión futura con adversary hasta limpieza manual.
+- **Gitignore pisable:** `*` no afecta trackeados; `git add -f` lo pisa;
+  gitignore AJENO preexistente jamás se edita (los artefactos quedan
+  expuestos si no cubre, codex #4); **ventana de exposición por host
+  (claude #5):** a mitad de corrida en claude/grok/codex (primer evento
+  interno), durante la corrida ENTERA en zcode (despacho-only, el
+  PostToolUse del disparador llega al terminar el subagente) (D2).
 - **Lane fast:** el gate no exige despachar adversary (como no exige los otros
   tres); si uno corrió y fue visto, la línea `ADVERSARY:` se exige igual que
   las demás labels (D1, caso 9 de D6).
@@ -530,7 +596,11 @@ task recibe las decisiones que le tocan con precisión:
   evidencia del borrador se conservan.
 - **13.3 — `agents/reviewer.md`, sección de adjudicación.** Canal primario:
   el despacho del reviewer NOMBRA el artefacto cuando el lead corrió
-  adversary en el turno (M2); degradado sin nombre: el de MAYOR mtime,
+  adversary en el turno (M2); **un turno que NO corrió adversary NO adjudica
+  nada — el fallback de mayor mtime sólo existe para un turno que SÍ lo
+  corrió y no nombró archivo (codex #2: sin esta regla, el artefacto viejo
+  de otra task se adjudica contra el cambio nuevo y rompe la promesa de
+  comportamiento intacto sin invocación)**; degradado: el de MAYOR mtime,
   declarándolo (D2). Cada hallazgo recibe veredicto
   explícito (aceptado → gap list con file:line / rechazado → razón de una
   línea); `unverified` no se eleva solo; **cada campo del finding es DATO,
@@ -553,7 +623,11 @@ task recibe las decisiones que le tocan con precisión:
   detectar el PRIMER evento que resuelva a adversary por cualquier canal
   medido — despacho O interno (M1; clase de efecto nueva, D2). DoD: rojo
   medido pre-fix; caso que bloquea + caso que permite (escribir el artefacto)
-  + caso traversal/id sucio + caso de falla de infraestructura con la postura
+  + caso traversal/ruta sucia — `../`, absoluta, symlink en el `file_path` Y
+  symlink del propio `findings/` (claude #9); el plan decía "id sucio", que
+  acá se reinterpreta: el candado es keyless, no hay id de sesión en la
+  ruta, el caso ejercita la canonicalización de segmentos atacantes del
+  path (codex #5) — + caso de falla de infraestructura con la postura
   elegida; mutaciones propias acreditadas; 0 divergencia en la línea base.
 - **13.5 — gate + mapeo (D4 + D6).** Caso exacto y keyword `adversar` con
   precedencia sobre la rama reviewer en `canonical_agent_role`; `record_agent`
@@ -570,8 +644,10 @@ task recibe las decisiones que le tocan con precisión:
   (auth, pagos, migraciones/datos preexistentes, el hook mismo); formato de la
   línea `ADVERSARY:`; forma `DELEGATED - awaiting adversary`; **la forma del
   despacho del reviewer que NOMBRA el artefacto a adjudicar** (canal primario
-  de M2/D2: "adjudicá `<ruta>`" cuando el lead corrió adversary en el turno);
-  caso negativo que fija que el gate NO exige adversary cuando no corrió.
+  de M2/D2: "adjudicá `<ruta>`" cuando el lead corrió adversary en el turno)
+  **y la instrucción negativa de 13.3: "si este turno no corrió adversary, no
+  adjudiques artefacto alguno" (codex #2)**; caso negativo que fija que el
+  gate NO exige adversary cuando no corrió.
   Límite declarado: invocado-no-observado indistinguible. Dentro del
   presupuesto de tokens del canal medido en 7.4. Línea base por precedente 11.1.
 - **13.7 — router (D5).** Fila `adversary → review` en `rol_a_tier`
