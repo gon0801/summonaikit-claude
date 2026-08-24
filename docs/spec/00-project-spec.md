@@ -1511,6 +1511,23 @@ que otro proceso escriba esos archivos entre corridas del instalador.
 - `--refrescar-manifiesto` reporta (hash + diff), JAMÁS adopta. Adoptar un
   hash nuevo del vendor es pegarlo en `agents/vendor-manifest.sha256` en un
   commit propio, con el diff a la vista en la revisión — no hay `--force`.
+- La fila `claude` del router (`tools/model-routing.sh`) no tiene medición
+  viva propia como zcode/grok/kimi (12.1/12.2/12.3): la evidencia es **cita**
+  de documentación oficial del vendor (`https://code.claude.com/docs/en/sub-agents.md`
+  y `https://code.claude.com/docs/en/model-config.md`, 2026-08-24), no
+  captura contra un runtime, y se acota a lo citable (corrección del review
+  cruzado de CodeRabbit sobre el PR #62, que encontró la primera redacción
+  sobre-afirmando): el frontmatter de subagentes soporta `model:` y `effort:`
+  (`low`/`medium`/`high`/`xhigh`/`max`, hereda por default); un `model:`
+  override se valida contra la allowlist `availableModels` de la sesión —
+  si el valor pedido queda excluido, la doc describe sustitución dentro de la
+  MISMA familia permitida o, si no hay sustituto, mantener/heredar el modelo
+  de la sesión. La conducta exacta ante un `model:` completamente
+  desconocido (hay rutas documentadas donde falla la petición, no sólo
+  fallback) y ante una clave de frontmatter no reconocida queda
+  **NO OBSERVADA**: sin sonda reproducible contra el runtime no se afirma —
+  misma disciplina que este spec ya aplica a captura viva (12.1/12.3), ahora
+  también a cita de documentación de vendor.
 
 ### Medido 2026-08-23, Task 12.1
 

@@ -39,7 +39,10 @@
 #   bash tools/install-hook.sh --host zcode [--quitar-zcode]
 #   bash tools/install-hook.sh --host codex
 #   bash tools/install-hook.sh --host grok [--quitar-grok]
-#   bash tools/install-hook.sh --host kimi
+#   bash tools/install-hook.sh --host kimi [--dry-run]
+#   bash tools/install-hook.sh --host claude [--dry-run]
+#   bash tools/install-hook.sh --host claude --refrescar-manifiesto
+#   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
 #
 # Exit codes (cualquier != 0 significa que el destino quedo INTACTO):
 #   0  instalado / reparado / restaurado / ya estaba al dia
@@ -121,8 +124,13 @@ if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOS
   printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok", "claude" o "kimi" (recibido: %s)\n' "$HOST" >&2
   exit 2
 fi
-if [ "$REFRESCAR_MANIFIESTO" -eq 1 ] && [ "$HOST" != "claude" ]; then
-  printf '[summonaikit] instalador: --refrescar-manifiesto requiere --host claude\n' >&2
+# Task 12.9 (hallazgo #6, grok): kimi reusa el MISMO manifiesto
+# (agents/vendor-manifest.sha256 no es por-host, mapea hash -> rol) pero antes
+# no tenia via de refresco -- un saikit-update que cambiara los perfiles de
+# kimi los dejaba DESCONOCIDO para siempre sin el procedimiento que el propio
+# --refrescar-manifiesto promete. Mismo modo reporta-jamas-adopta que claude.
+if [ "$REFRESCAR_MANIFIESTO" -eq 1 ] && [ "$HOST" != "claude" ] && [ "$HOST" != "kimi" ]; then
+  printf '[summonaikit] instalador: --refrescar-manifiesto requiere --host claude o --host kimi\n' >&2
   exit 2
 fi
 if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
@@ -840,7 +848,7 @@ grok_archivar_json() {  # $1=json (mismo contrato de nombre que el hook)
 # bash.exe, o si una plantilla no valida. Un agente DESCONOCIDO no planta
 # (D7); NO_OBSERVABLE si: no se escribe alrededor de lo que no se pudo mirar.
 grok_preflight() {
-  local json canon estado_json rol fuente src dest_agente
+  local json canon estado_json rol fuente src dest_agente trad_probe
   command -v jq >/dev/null 2>&1 || {
     decir "[summonaikit] instalador: --host grok requiere jq (no encontrado)."; exit 2; }
   GROK_BASH_WIN="$(grok_bash_win)" || {
@@ -882,7 +890,17 @@ grok_preflight() {
       exit 2
     fi
     dest_agente="$(grok_agents_dir)/$rol.md"
-    estado_json="$(grok_agente_estado "$dest_agente" "$(agente_traducido grok "$fuente")")"
+    # Task 12.9 (hallazgo #5, grok): el rc de agente_traducido NO se puede
+    # ignorar -- si el router falla (p. ej. tools/model-routing.sh roto),
+    # `agente_traducido` imprimia stdout vacio y esta linea lo tomaba como
+    # traduccion valida. Con un perfil grok existente eso clasificaba
+    # NUESTRO_DISTINTO contra "casi nada" y grok_publicar_agentes terminaba
+    # archivando el perfil real para pisarlo con contenido vacio.
+    trad_probe="$(agente_traducido grok "$fuente")" || {
+      decir "[summonaikit] instalador: fallo agente_traducido para grok/$rol; no se toco nada."
+      exit 2
+    }
+    estado_json="$(grok_agente_estado "$dest_agente" "$trad_probe")"
     if [ "$estado_json" = 'NO_OBSERVABLE' ]; then
       decir "[summonaikit] unknown — no se pudo clasificar el agente $dest_agente; no se escribio nada."
       exit 4
@@ -926,7 +944,23 @@ grok_publicar_agentes() {
   dir="$(grok_agents_dir)"
   for rol in $GROK_AGENT_ROLES; do
     fuente="$src/$rol.md"
-    trad="$(agente_traducido grok "$fuente")"
+    # Task 12.9 (hallazgo #5, grok): mismo bug que en grok_preflight, ahora en
+    # el punto que SI escribe. Sin el `|| return 1`, un router roto entre el
+    # preflight y esta publicacion (o si el preflight se saltea) pisaria un
+    # perfil real con casi-nada; con el `|| return 1` el llamador
+    # (grok_publicar) hace el ROLLBACK completo de esta corrida, como ya hace
+    # zcode (linea ~383) y el bucle vendor unificado.
+    #
+    # Guard DEFENSIVO, declarado (revision interna del PR #62): grok_preflight
+    # ya llama a agente_traducido para el MISMO rol/fuente antes de que el
+    # flujo normal llegue aca, asi que un router que falla sale por ahi
+    # primero (exit 2) y este `|| return 1` no es ejercitable con un caso de
+    # test que pase por el camino normal (--host grok completo). Queda igual
+    # a proposito -- defensa en profundidad si algun llamador futuro invoca
+    # grok_publicar_agentes sin pasar antes por grok_preflight -- y es la
+    # razon por la que el caso "12.9 #5" de la suite prueba el sintoma
+    # observable (el perfil no se pisa, exit != 0), no esta linea puntual.
+    trad="$(agente_traducido grok "$fuente")" || return 1
     dest="$dir/$rol.md"
     estado="$(grok_agente_estado "$dest" "$trad")"
     case "$estado" in
@@ -1241,30 +1275,76 @@ claude_agents_dir() {
   printf '%s' "${SAIKIT_CLAUDE_AGENTS_DIR:-${HOME:-}/.claude/agents}"
 }
 
-# Cuarto estado, solo para los directorios del vendor (claude por ahora). El
-# hash del manifiesto es la UNICA via de adopcion: sin el, un perfil sin marca
-# es DESCONOCIDO y no se toca.
-agente_es_vendor_conocido() {  # $1=dest  $2=rol
-  local manifiesto hash esperado
+# Cuarto estado, solo para los directorios del vendor (claude/kimi). El hash
+# del manifiesto es la UNICA via de adopcion: sin el, un perfil sin marca es
+# DESCONOCIDO y no se toca.
+#
+# Task 12.9 (hallazgos #2 y #3, codex+grok): reusa sha_de()/hash_en_manifiesto()
+# ya definidos mas arriba (linea ~1123/1147) en vez de un `sha256sum "$1"`
+# suelto -- mismo binario, mismo strip de `\r`, y sobre todo distingue
+# "no se pudo mirar" (Core Rule 2) de "se miro y no esta": antes, un
+# manifiesto ilegible o un sha256 que fallara devolvia `return 1` a secas, que
+# el llamador leia como DESCONOCIDO. Y el lookup ahora compara hash Y rol
+# LINEA POR LINEA con awk, no concatenando todo `$2 == r {print $1}` en una
+# sola variable multilinea: eso rompia la igualdad en cuanto el manifiesto
+# tenia DOS hashes para el mismo rol (el propio `--refrescar-manifiesto`
+# invita a agregar hashes, asi que dos entradas por rol es el caso normal de
+# uso, no un borde).
+#
+#   0 = el hash figura para ESE rol
+#   1 = se miro y NO figura para ese rol
+#   2 = no se pudo mirar (manifiesto ilegible o sha256 no calculable)
+agente_hash_en_manifiesto() {  # $1=archivo  $2=rol
+  local archivo="$1" rol="$2" manifiesto sha
   manifiesto="$repo/agents/vendor-manifest.sha256"
-  [ -r "$manifiesto" ] || return 1
-  hash="$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1)"
-  [ -n "$hash" ] || return 1
-  esperado="$(awk -v r="$2.md" '$2 == r {print $1}' "$manifiesto")"
-  [ -n "$esperado" ] && [ "$hash" = "$esperado" ]
+  if [ -z "$sha_bin" ]; then
+    motivo_manifiesto="no hay sha256sum ni shasum para comparar contra el manifiesto de agentes"
+    return 2
+  fi
+  if [ ! -r "$manifiesto" ]; then
+    motivo_manifiesto="el manifiesto de agentes no se puede leer: $manifiesto"
+    return 2
+  fi
+  sha="$(sha_de "$archivo")" || sha=''
+  if [ -z "$sha" ]; then
+    motivo_manifiesto="no se pudo calcular el sha256 de $archivo"
+    return 2
+  fi
+  if awk -v h="$sha" -v r="${rol}.md" '
+        { sub(/\r$/, "") }
+        /^[[:space:]]*(#|$)/ { next }
+        $1 == h && $2 == r { found = 1; exit }
+        END { exit found ? 0 : 1 }' "$manifiesto"; then
+    return 0
+  fi
+  motivo_manifiesto="sha256 $sha, que no figura en el manifiesto para $rol"
+  return 1
 }
 
-# Como zcode_agente_estado, mas el estado VENDOR_CONOCIDO.
+# Retrocompatibilidad de nombre para quien ya llame a la version booleana.
+agente_es_vendor_conocido() {  # $1=dest  $2=rol
+  agente_hash_en_manifiesto "$1" "$2"
+}
+
+# Como zcode_agente_estado, mas el estado VENDOR_CONOCIDO. Task 12.9
+# (hallazgo #2): el NO_OBSERVABLE del manifiesto/sha ya no cae en DESCONOCIDO
+# -- se propaga tal cual para que el llamador lo trate como "no se pudo
+# clasificar" (exit 5), no como "se miro y no esta" (exit 0, DESCONOCIDO).
 agente_estado_con_vendor() {  # $1=dest  $2=traducida  $3=rol
-  local dest="$1" trad="$2" rol="$3"
+  local dest="$1" trad="$2" rol="$3" rc
   if [ ! -e "$dest" ]; then printf 'AUSENTE'; return 0; fi
   if [ ! -f "$dest" ] || [ ! -r "$dest" ]; then printf 'NO_OBSERVABLE'; return 0; fi
   if zcode_agente_tiene_marca "$dest"; then
     if cmp -s "$dest" "$trad"; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
     return 0
   fi
-  if agente_es_vendor_conocido "$dest" "$rol"; then printf 'VENDOR_CONOCIDO'; return 0; fi
-  printf 'DESCONOCIDO'
+  agente_hash_en_manifiesto "$dest" "$rol"
+  rc=$?
+  case "$rc" in
+    0) printf 'VENDOR_CONOCIDO' ;;
+    1) printf 'DESCONOCIDO' ;;
+    *) printf 'NO_OBSERVABLE' ;;
+  esac
 }
 
 # El sello `.vendor.` distingue el backup de adopcion del de reparacion
@@ -1286,6 +1366,20 @@ claude_archivar_vendor() {  # $1=dest
   return 0
 }
 
+# Trads que quedan pendientes de limpiar entre la clasificacion y la
+# publicacion de instalar_agentes_con_vendor. Global (no local a la funcion)
+# a proposito: no es reentrante ni recursiva, y asi limpiar_trads_vendor()
+# puede llamarse desde cualquier punto de salida sin depender de scoping
+# dinamico de bash.
+TRADS_VENDOR_PENDIENTES=()
+limpiar_trads_vendor() {
+  local t
+  for t in "${TRADS_VENDOR_PENDIENTES[@]:-}"; do
+    [ -n "$t" ] && rm -f "$t"
+  done
+  TRADS_VENDOR_PENDIENTES=()
+}
+
 # Unifica claude_instalar_agentes y kimi_instalar_agentes (Task 12.7): mismo
 # bucle de validar+publicar con el CUARTO estado (VENDOR_CONOCIDO), solo
 # cambia el host que agente_traducido() traduce, el directorio destino y la
@@ -1295,7 +1389,8 @@ claude_archivar_vendor() {  # $1=dest
 # fixture congelado. Dos copias del mismo bucle es como se arregla una sola.
 instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
   local host="$1" dest_dir="$2" etiqueta="$3"
-  local rol fuente dest trad estado
+  local rol fuente dest trad estado i
+  local -a roles=() dests=() trads=() estados=()
 
   # PRIMERO valida las TRES plantillas, DESPUES escribe. Es el orden que
   # zcode_instalar_agentes ya usa (dos bucles separados) y no es estilo:
@@ -1316,28 +1411,77 @@ instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
       decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."; exit 2; }
   done
 
-  mkdir -p "$dest_dir" || {
+  [ "$DRY_RUN" -eq 1 ] || mkdir -p "$dest_dir" || {
     decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+
+  # Task 12.9 (hallazgo #1, codex): clasificar los TRES destinos ANTES de
+  # publicar cualquiera de ellos. Antes, cada rol se clasificaba Y se
+  # publicaba en la MISMA vuelta del bucle: un NO_OBSERVABLE en el rol 3
+  # (p. ej. un permiso raro en reviewer.md) salia exit 5 con implementer.md y
+  # verifier.md YA escritos -- una instalacion a medias que ademas afirma,
+  # con el exit != 0, que "el destino quedo intacto" (la promesa del header
+  # de este archivo). Dos bucles separados, como ya hace la validacion de
+  # fuentes arriba: si CUALQUIER rol da NO_OBSERVABLE, se sale sin publicar
+  # nada de nada.
+  #
+  # Ventana TOCTOU declarada (revision interna del PR #62): entre este bucle
+  # de clasificacion y el de publicacion mas abajo, otro proceso podria
+  # escribir $dest_dir y invalidar el estado ya leido. Aceptada por el
+  # modelo de amenaza de esta herramienta: CLI local de un solo operador,
+  # invocada a mano o desde un install de un solo host, sin concurrencia
+  # esperada sobre el MISMO dest_dir. Igual que el resto de este archivo
+  # declara sus supuestos en vez de dejarlos implicitos.
+  limpiar_trads_vendor
   for rol in $CLAUDE_AGENT_ROLES; do
     fuente="$repo/agents/$rol.md"
     dest="$dest_dir/$rol.md"
-    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
-    agente_traducido "$host" "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
+    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || { limpiar_trads_vendor; exit 5; }
+    TRADS_VENDOR_PENDIENTES+=("$trad")
+    agente_traducido "$host" "$fuente" > "$trad" || { limpiar_trads_vendor; exit 2; }
     estado="$(agente_estado_con_vendor "$dest" "$trad" "$rol")"
+    if [ "$estado" = 'NO_OBSERVABLE' ]; then
+      limpiar_trads_vendor
+      decir "[summonaikit] instalador: no se pudo clasificar $dest."; exit 5
+    fi
+    roles+=("$rol"); dests+=("$dest"); trads+=("$trad"); estados+=("$estado")
+  done
+
+  # Task 12.9 (hallazgo #4, grok): --dry-run tambien vale para --host
+  # claude/--host kimi -- antes solo se consultaba en el flujo del hook, y
+  # esta funcion escribia igual pese al README prometer "no escribe". Reporta
+  # la clasificacion YA hecha arriba, sin volver a tocar el destino.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    for i in "${!roles[@]}"; do
+      rol="${roles[$i]}"; dest="${dests[$i]}"; estado="${estados[$i]}"
+      case "$estado" in
+        AUSENTE)          decir "[summonaikit] dry-run: AGENTE ${etiqueta} AUSENTE: $rol; se instalaria." ;;
+        NUESTRO_IDENTICO) decir "[summonaikit] dry-run: AGENTE ${etiqueta} ya al dia: $rol." ;;
+        NUESTRO_DISTINTO) decir "[summonaikit] dry-run: AGENTE ${etiqueta} NUESTRO distinto: $rol; se repararia (con backup)." ;;
+        VENDOR_CONOCIDO)  decir "[summonaikit] dry-run: AGENTE ${etiqueta} VENDOR CONOCIDO: $rol; se archivaria y reemplazaria." ;;
+        DESCONOCIDO)      decir "[summonaikit] dry-run: AGENTE ${etiqueta} DESCONOCIDO: $rol; no se tocaria." ;;
+      esac
+      decir "              destino: $dest"
+    done
+    limpiar_trads_vendor
+    return 0
+  fi
+
+  for i in "${!roles[@]}"; do
+    rol="${roles[$i]}"; dest="${dests[$i]}"; trad="${trads[$i]}"; estado="${estados[$i]}"
     case "$estado" in
       AUSENTE)
-        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
         decir "[summonaikit] AGENTE ${etiqueta} INSTALADO: $rol"
         ;;
       NUESTRO_IDENTICO) : ;;
       NUESTRO_DISTINTO)
-        zcode_archivar_agente "$dest" || { rm -f "$trad"; exit 5; }
-        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        zcode_archivar_agente "$dest" || { limpiar_trads_vendor; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
         decir "[summonaikit] AGENTE ${etiqueta} REPARADO: $rol"
         ;;
       VENDOR_CONOCIDO)
-        claude_archivar_vendor "$dest" || { rm -f "$trad"; exit 5; }
-        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        claude_archivar_vendor "$dest" || { limpiar_trads_vendor; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
         decir "[summonaikit] AGENTE ${etiqueta} ADOPTADO (vendor conocido): $rol"
         ;;
       DESCONOCIDO)
@@ -1345,13 +1489,9 @@ instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
         decir "              destino: $dest"
         decir "              Ni marca ni hash de vendor conocido. Puede ser un cambio legitimo."
         ;;
-      NO_OBSERVABLE)
-        rm -f "$trad"
-        decir "[summonaikit] instalador: no se pudo clasificar $dest."; exit 5
-        ;;
     esac
-    rm -f "$trad"
   done
+  limpiar_trads_vendor
 }
 
 claude_instalar_agentes() {
@@ -1379,17 +1519,40 @@ kimi_instalar_agentes() {
 # el cuarto estado en el bypass que la maquina de tres estados existe para
 # evitar. Adoptar es pegar el hash reportado en agents/vendor-manifest.sha256
 # en un commit propio, con el diff a la vista en la revision.
-claude_refrescar_manifiesto() {
-  local dest_dir rol dest hash
-  dest_dir="$(claude_agents_dir)"
+#
+# Task 12.9 (hallazgo #6, grok): generalizada de claude_refrescar_manifiesto a
+# refrescar_manifiesto_vendor(dest_dir, etiqueta) para que --host kimi tenga
+# la MISMA via de refresco que claude. kimi reusa el mismo manifiesto
+# (agents/vendor-manifest.sha256 no es por-host), asi que sin esto un
+# saikit-update que cambiara los perfiles de kimi los dejaba DESCONOCIDO para
+# siempre sin el procedimiento que el propio flag promete.
+refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
+  local dest_dir="$1" etiqueta="$2" rol dest hash
   for rol in $CLAUDE_AGENT_ROLES; do
     dest="$dest_dir/$rol.md"
     [ -f "$dest" ] && [ -r "$dest" ] || continue
     zcode_agente_tiene_marca "$dest" && continue
     agente_es_vendor_conocido "$dest" "$rol" && continue
-    hash="$(sha256sum "$dest" 2>/dev/null | cut -d' ' -f1)"
-    [ -n "$hash" ] || continue
-    decir "[summonaikit] REFRESCAR MANIFIESTO — $rol: DESCONOCIDO"
+    # Hallazgo inline de Greptile en el PR #62, sobre el mismo defecto que el
+    # fix #2 ya cerro en la adopcion (agente_hash_en_manifiesto), pero aca en
+    # el path de REFRESCO: un `sha256sum "$dest"` suelto, sin pasar por
+    # sha_de()/sha_bin, es el mismo salto silencioso en un sistema con
+    # `shasum` y sin `sha256sum` (o sin ninguno de los dos). La correccion
+    # LITERAL de "cambiar a sha_de() pero seguir con `|| hash=''; continue`"
+    # preserva el defecto de fondo: --refrescar-manifiesto existe para que un
+    # humano VEA el hash de un DESCONOCIDO, y saltarlo mudo cuando el calculo
+    # falla es exactamente lo que Core Rule 2 prohibe (no observable != no
+    # esta). Se reporta el rol como no observable (con el motivo) y se sigue
+    # con el resto de los roles -- el procedimiento entero sigue devolviendo
+    # 0 porque --refrescar-manifiesto es puramente advisory.
+    hash="$(sha_de "$dest")" || hash=''
+    if [ -z "$hash" ]; then
+      decir "[summonaikit] unknown — REFRESCAR MANIFIESTO (${etiqueta}) — $rol: no se pudo calcular el hash."
+      decir "              destino: $dest"
+      decir "              No se afirma que sea DESCONOCIDO: no se pudo mirar (Core Rule 2)."
+      continue
+    fi
+    decir "[summonaikit] REFRESCAR MANIFIESTO (${etiqueta}) — $rol: DESCONOCIDO"
     decir "              destino: $dest"
     decir "              sha256: $hash"
     decir "              diff contra la plantilla del repo:"
@@ -1403,7 +1566,7 @@ claude_refrescar_manifiesto() {
 
 if [ "$HOST" = "claude" ]; then
   if [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
-    claude_refrescar_manifiesto
+    refrescar_manifiesto_vendor "$(claude_agents_dir)" CLAUDE
     exit $?
   fi
   claude_instalar_agentes
@@ -1415,6 +1578,10 @@ fi
 # No toca DEST -- el hook global de kimi-code se instala por el flujo normal
 # (sin --host), igual que claude.
 if [ "$HOST" = "kimi" ]; then
+  if [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
+    refrescar_manifiesto_vendor "$(kimi_agents_dir)" KIMI
+    exit $?
+  fi
   kimi_instalar_agentes
   exit $?
 fi
