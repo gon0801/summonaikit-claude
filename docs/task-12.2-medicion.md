@@ -151,6 +151,12 @@ La sonda `saikit-probe-122` ya corrió y contestó en una sola línea:
 `PROBE-122-OK`
 ```
 
+Transcripción íntegra de `/tmp/grok-122.log` (4 líneas, sin banner ni
+telemetría — el modo `-p` con `--output-format plain`, el default, no emite
+ninguno de los dos): el original trae las tres primeras oraciones
+concatenadas en una sola línea sin salto; se reformateó acá con saltos
+manuales por legibilidad, sin omitir ni recortar ningún carácter.
+
 El agente **resolvió** el subagent_type sin error (`spawn_subagent` lo
 encontró por su `description`, igual que kimi-code en la Task 12.3). La
 señal fuerte no está en la salida de texto sino en el registro interno del
@@ -197,6 +203,12 @@ $ grok -p 'Usá spawn_subagent con subagent_type=saikit-probe-122.'
 Voy a lanzar el subagente `saikit-probe-122` ahora. PROBE-122-OK
 La sonda `saikit-probe-122` ya corrió y contestó: **PROBE-122-OK**
 ```
+
+Transcripción íntegra de `/tmp/grok-122-malo.log` (4 líneas, sin banner ni
+telemetría, mismo motivo que en el Step 4: `-p` con el `--output-format
+plain` default no emite ninguno de los dos). Igual que en el Step 4, las dos
+primeras oraciones venían concatenadas sin salto de línea en el archivo
+original; se reformateó acá por legibilidad, sin omitir contenido.
 
 De los tres desenlaces posibles que el plan reconoce como medición válida
 (lo ignora y corre con el default / falla el despacho / cae a un default
@@ -248,6 +260,13 @@ poder correlacionar el `meta.json`, lo que generó estos tres archivos). Con
 `debug` agregado a la poda, la huella habría quedado estable igual que las
 otras categorías de runtime — queda documentado para la próxima medición en
 este host.
+
+**Adjudicación:** Se declara la medición VÁLIDA pese a la letra del Step 6
+("diff no vacío ⇒ no vale"): el diff es estrictamente aditivo
+(`438a439,441`), ajeno a `agents/` (cksum idéntico), y es efecto necesario
+del `--debug` que produjo la evidencia de registro (`meta.json` /
+`chat_history.jsonl`) que la Task 12.5 exige. Adjudicado por el Lead con el
+reviewer de la 12.2.
 
 El directorio `~/.grok/agents/` volvió a los 3 perfiles originales, mismos
 `cksum`:
