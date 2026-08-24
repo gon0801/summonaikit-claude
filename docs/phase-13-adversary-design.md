@@ -258,8 +258,20 @@ conservando un orden de `agents_seen` válido — caso con nombre en 13.5
 2. **Escaneo en el Stop (13.4):** disparo acotado a la sesión (hallazgo A1
    del review): SOLO cuando el estado de ESTA sesión registra `,adversary,`
    en `agents_seen` — una sesión que no lo invocó jamás escanea, aunque el
-   repo tenga artefactos acumulados. Con adversary en la sesión: se escanean
-   TODOS los archivos bajo `.saikit/findings/`, CUALQUIER extensión
+   repo tenga artefactos acumulados. **Alcance acotado a los artefactos de
+   ESTA sesión (Greptile P1 del PR #63 — cierra el "escaneo mezcla
+   sesiones"):** se escanea (a) cada ruta bajo `.saikit/findings/` que el
+   candado REGISTRÓ como escrita por el adversary de esta sesión (el hook
+   ya procesa esos PostToolUse para el candado; las escrituras permitidas
+   bajo el dir se anotan en el estado de la sesión), más (b) cualquier
+   archivo del directorio cuyo mtime sea POSTERIOR al armado de la sesión
+   (época guardada en el estado al armar) — eso cubre al artefacto escrito
+   por `Bash` del adversary, que el candado no ve como Edit/Write. Un
+   artefacto HISTÓRICO de otra task ya no bloquea este turno: el problema
+   de persistencia cross-sesión queda reducido a los artefactos de esta
+   sesión (y a los frescos de una sesión CONCURRENTE — mtime posterior al
+   armado —, que es la ambigüedad concurrente ya declarada, en dirección
+   fail-safe: escanea de más, no de menos). CUALQUIER extensión
    (cross-review codex #1 / claude #1, la alta convergente: el candado de
    ruta permite cualquier archivo del directorio — filtrar el escaneo a
    `*.json` dejaba un `leak.txt` pasar el candado y evadir el control). La
@@ -277,11 +289,11 @@ conservando un orden de `agents_seen` válido — caso con nombre en 13.5
    contenido (misma disciplina de `tools/check-secrets.sh:24-25`); el
    remedio es manual y declarado — redactar o borrar el artefacto y
    re-cerrar (2 ciclos + presupuesto si no se atiende, camino existente).
-   **Persistencia cross-sesión declarada (cross-review claude #7 / codex
-   #3):** como no hay auto-borrado, un match histórico (secreto real o falso
-   positivo) bloquea CADA sesión futura que invoque adversary hasta que
-   alguien lo redacte o borre — el remedio manual es la única salida y el
-   bloqueo se repite; declarado, no prometido auto-limitado.
+   **Persistencia residual ACOTADA (cross-review claude #7 / codex #3 +
+   Greptile P1):** sin auto-borrado, un match en un artefacto de ESTA
+   sesión bloquea los siguientes Stops de ESTA sesión hasta redactarlo o
+   borrarlo; los artefactos de sesiones ANTERIORES ya no bloquean (alcance
+   por sesión, arriba). Declarado, no prometido auto-limitado.
 3. **Gitignore del consumer** (abajo).
 
 **Residual declarado (en ambos sentidos, hallazgo A1 del review):** falso
@@ -418,7 +430,6 @@ perfil de 13.2 describe es ÉSTE, no un PreToolUse prometido.
   La primera cierra sobre un defecto probado; la segunda sobre riesgo alto
   con escape. Ninguna bloquea desde inferencia de no-observación — la
   distinción que Core Rule 2 exige antes de bloquear.
-
 ### D4 — Gate condicional: orden con adversary + línea de recibo label-only
 
 Si `,adversary,` ∈ `agents_seen` ⇒ el orden exigido pasa a
@@ -586,8 +597,10 @@ Lo que esta fase NO cubre, declarado desde el diseño:
   la capa 2 usa la familia inline del hook (`redact_secrets`), no los
   formatos extendidos de `tools/check-secrets.sh` — el hook corre en el
   consumer donde ese archivo no existe; duplicarlo sería drift sin candado.
-  **Bloqueo cross-sesión (claude #7 / codex #3):** un match histórico
-  persistido bloquea cada sesión futura con adversary hasta limpieza manual.
+  **Bloqueo cross-sesión ACOTADO (claude #7 / codex #3 / Greptile P1):** el
+  alcance del escaneo es por sesión (rutas registradas + mtime posterior al
+  armado) — un match de ESTA sesión bloquea sus siguientes Stops hasta
+  limpieza manual; los artefactos de sesiones ANTERIORES ya no bloquean.
 - **Gitignore pisable:** `*` no afecta trackeados; `git add -f` lo pisa;
   gitignore AJENO preexistente jamás se edita (los artefactos quedan
   expuestos si no cubre, codex #4); **ventana de exposición por host
@@ -639,12 +652,20 @@ task recibe las decisiones que le tocan con precisión:
   chequeos de violación y secreto ANTES de las escotillas tempranas
   PAUSED/DELEGATED** (A2, orden de evaluación de D3); `Bash` best-effort; escaneo de
   secretos en el Stop — disparo acotado a sesiones con `,adversary,` en
-  `agents_seen` (A1), fail-closed por match (archivo:línea, jamás contenido),
-  fail-open por ilegible; creación idempotente del gitignore del consumer al
+  `agents_seen` (A1), **alcance por sesión: rutas registradas como escritas
+  por el adversary de la sesión + archivos de mtime posterior a la época de
+  armado guardada en el estado (Greptile P1: los artefactos históricos de
+  otras tareas no vuelven a bloquear)**, fail-closed por match
+  (archivo:línea, jamás contenido), fail-open por ilegible; creación
+  idempotente del gitignore del consumer al
   detectar el PRIMER evento que resuelva a adversary por cualquier canal
-  medido — despacho O interno (M1; clase de efecto nueva, D2). DoD: rojo
+  medido — despacho O interno (M1; clase de efecto nueva, D2). La época de
+  armado y las rutas registradas viajan en el MISMO estado que la violación
+  (disciplina M3: extendido por `write_state`, limpiado por los caminos
+  existentes). DoD: rojo
   medido pre-fix; caso que bloquea + caso que permite (escribir el artefacto)
-  + caso traversal/ruta sucia — `../`, absoluta, symlink en el `file_path` Y
+  + **caso Greptile P1: artefacto histórico de otra sesión con match NO
+  bloquea (alcance por sesión)** + caso traversal/ruta sucia — `../`, absoluta, symlink en el `file_path` Y
   symlink del propio `findings/` (claude #9); el plan decía "id sucio", que
   acá se reinterpreta: el candado es keyless, no hay id de sesión en la
   ruta, el caso ejercita la canonicalización de segmentos atacantes del
