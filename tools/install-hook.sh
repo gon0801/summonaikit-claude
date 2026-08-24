@@ -723,7 +723,7 @@ grok_json_estado() {  # $1=json  $2=canonico
 # es contenido, no configuracion. La fuente del repo queda intacta: una sola
 # fuente, sin dos sabores.
 agente_traducido() {  # $1=host  $2=fuente → stdout
-  local host="$1" fuente="$2" rol inyectar router
+  local host="$1" fuente="$2" rol inyectar router effort_key desechar
   rol="$(zcode_agente_frontmatter "$fuente" | sed -n 's/^name: //p' | head -1)"
   if [ -z "$rol" ]; then
     # `decir` imprime por STDOUT (install-hook.sh:176). Los llamadores redirigen
@@ -742,6 +742,16 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
   # que la invocacion directa muere con "Permission denied" en Linux -- que es
   # donde corre el CI.
   inyectar="$(bash "$router" --host "$host" --role "$rol" --format frontmatter)" || return 1
+  # El NOMBRE de la clave del effort no es 'effort:' para todos los hosts
+  # (Task 12.1: zcode lee thoughtLevel:, nunca effort: -- escribir effort:
+  # seria texto muerto). El router ya emite --format frontmatter con la clave
+  # correcta (arriba); esto es SOLO para saber que linea preexistente de la
+  # FUENTE hay que descartar mas abajo. Si el router falla aca (no deberia,
+  # ya se valido host/rol arriba), 'effort' es un fallback seguro: como mucho
+  # deja de descartar una linea que hoy ninguna fuente tiene.
+  effort_key="$(bash "$router" --host "$host" --role "$rol" --field effort-key 2>/dev/null)" \
+    || effort_key='effort'
+  [ -z "$effort_key" ] && effort_key='effort'
 
   # `^$` NO sirve como "regex que no matchea nada": matchea las lineas vacias y
   # se las comeria del frontmatter, y ahi el instalado dejaria de ser la fuente
@@ -749,7 +759,14 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
   local omitir='a^'
   [ "$host" = 'grok' ] && omitir='^skills:'
 
-  awk -v omitir="$omitir" -v inyectar="$inyectar" '
+  # Claves nuestras que ya vinieran en la fuente se descartan: manda el
+  # router. `model`/`effort` siempre; el nombre de clave especifico del host
+  # (thoughtLevel en zcode) se suma solo si es distinto de 'effort', para no
+  # armar una alternancia vacia en el regex.
+  desechar='model|effort'
+  [ "$effort_key" != 'effort' ] && desechar="$desechar|$effort_key"
+
+  awk -v omitir="$omitir" -v inyectar="$inyectar" -v desechar="$desechar" '
     /^---[[:space:]]*\r?$/ {
       n++
       # El cierre del primer bloque: inyectar JUSTO ANTES.
@@ -757,8 +774,7 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
       print; next
     }
     n == 1 && $0 ~ omitir { next }
-    # Una clave nuestra que ya viniera en la fuente se descarta: manda el router.
-    n == 1 && /^(model|effort):/ { next }
+    n == 1 && $0 ~ ("^(" desechar "):") { next }
     { print }
   ' "$fuente"
 }

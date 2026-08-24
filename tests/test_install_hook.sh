@@ -1108,6 +1108,80 @@ linea_model="$(grep -n '^model: ' "$zcode_agents/reviewer.md" | cut -d: -f1)"
 linea_cierre="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut -d: -f1)"
 [ "$linea_model" -lt "$linea_cierre" ] || malo "model: cayo fuera del frontmatter"
 
+caso "12.5 zcode: un --- EXTRA en el BODY no rompe: la inyeccion sigue cayendo UNA sola vez, antes del cierre REAL del frontmatter"
+src_extra_dash="$tmp/agents-extra-dash"
+mkdir -p "$src_extra_dash"
+for rol in implementer verifier reviewer; do
+  {
+    cat "$agentes_fuente/$rol.md"
+    printf '\n---\n'
+    printf 'Una linea de ejemplo con una raya --- que no es un cierre de frontmatter.\n'
+  } > "$src_extra_dash/$rol.md"
+done
+dest_listo; nuevo_zcode_cfg
+out_ed="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+          SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+          SAIKIT_ZCODE_AGENTS_SOURCE="$src_extra_dash" \
+          SAIKIT_MODEL_ROUTING_TOOL="$router_stub" \
+          bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc_ed=$?
+[ "$rc_ed" -eq 0 ] || malo "esperaba exit 0, dio $rc_ed: $out_ed"
+n_model_ed="$(grep -c '^model: ' "$zcode_agents/reviewer.md")"
+[ "$n_model_ed" = "1" ] || malo "un --- extra en el body duplico la inyeccion: hay $n_model_ed lineas model:"
+linea_model_ed="$(grep -n '^model: ' "$zcode_agents/reviewer.md" | cut -d: -f1)"
+linea_cierre_ed="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut -d: -f1)"
+[ "$linea_model_ed" -lt "$linea_cierre_ed" ] \
+  || malo "model: no cayo antes del cierre REAL del frontmatter (con un --- extra en el body)"
+[ "$(grep -c '^---' "$zcode_agents/reviewer.md")" = "3" ] \
+  || malo "el --- extra del body debia conservarse (apertura + cierre + la del body = 3)"
+
+caso "12.5 zcode: agente_traducido descarta un thoughtLevel: preexistente de la fuente (no lo duplica) y usa el nombre de clave del router (Task 12.1)"
+src_thoughtlevel="$tmp/agents-thoughtlevel"
+mkdir -p "$src_thoughtlevel"
+for rol in implementer verifier reviewer; do
+  awk '/^name: /{print; print "thoughtLevel: viejo-de-la-fuente"; next} {print}' \
+    "$agentes_fuente/$rol.md" > "$src_thoughtlevel/$rol.md"
+done
+router_stub_tl="$tmp/router-stub-thoughtlevel.sh"
+cat > "$router_stub_tl" <<'STUB'
+#!/usr/bin/env bash
+set -u
+host=''; role=''; format='json'; field=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host) host="$2"; shift 2 ;;
+    --role) role="$2"; shift 2 ;;
+    --format) format="$2"; shift 2 ;;
+    --field) field="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ "$field" = 'effort-key' ]; then
+  if [ "$host" = 'zcode' ]; then printf 'thoughtLevel\n'; else printf 'effort\n'; fi
+  exit 0
+fi
+[ "$format" = 'frontmatter' ] || exit 0
+if [ "$host" = 'zcode' ]; then
+  printf 'model: modelo-de-prueba-zcode-%s\nthoughtLevel: nuevo-del-router\n' "$role"
+else
+  printf 'model: modelo-de-prueba-%s-%s\neffort: low\n' "$host" "$role"
+fi
+STUB
+dest_listo; nuevo_zcode_cfg
+out_tl="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+          SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+          SAIKIT_ZCODE_AGENTS_SOURCE="$src_thoughtlevel" \
+          SAIKIT_MODEL_ROUTING_TOOL="$router_stub_tl" \
+          bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc_tl=$?
+[ "$rc_tl" -eq 0 ] || malo "esperaba exit 0, dio $rc_tl: $out_tl"
+n_tl="$(grep -c '^thoughtLevel:' "$zcode_agents/reviewer.md")"
+[ "$n_tl" = "1" ] \
+  || malo "esperaba 1 sola linea thoughtLevel: (la del router, sin duplicar la de la fuente), hay $n_tl"
+grep -q '^thoughtLevel: nuevo-del-router$' "$zcode_agents/reviewer.md" \
+  || malo "el thoughtLevel: instalado no es el del router (debia reemplazar el de la fuente)"
+if grep -q '^effort:' "$zcode_agents/reviewer.md"; then
+  malo "zcode no debe llevar effort: -- la clave real que lee el parser es thoughtLevel: (Task 12.1)"
+fi
+
 caso "12.5 zcode: una fila de host vacia no inyecta ninguna clave (router real, zcode sin medir: docs/task-12.1-medicion.md)"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1   # router REAL, no el stub

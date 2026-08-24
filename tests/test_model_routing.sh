@@ -58,6 +58,17 @@ igual "model: grok-4.6
 effort: xhigh" "$(bash "$router" --host grok --role reviewer --format frontmatter)" "grok/reviewer"
 igual "" "$(bash "$router" --host zcode --role reviewer --format frontmatter)" "zcode sin medir"
 
+caso "--field effort-key: el nombre de CLAVE del effort es por host, no siempre 'effort'"
+# Medido en la Task 12.1 (docs/task-12.1-medicion.md): el parser de zcode
+# NUNCA lee effort:, solo thoughtLevel:. Este campo tiene que estar disponible
+# aunque la fila de zcode este vacia hoy (EFFORT=''), porque el DIA que se
+# llene, agente_traducido() necesita saber que clave usar sin tocar el
+# instalador -- si esto solo se supiera con la fila llena, el candado no
+# podria correr hoy.
+igual "effort"      "$(bash "$router" --host claude --role reviewer --field effort-key)" "claude"
+igual "effort"      "$(bash "$router" --host grok --role reviewer --field effort-key)"   "grok"
+igual "thoughtLevel" "$(bash "$router" --host zcode --role reviewer --field effort-key)"  "zcode"
+
 caso "--format json"
 esperado='{"host":"claude","role":"reviewer","tier":"review","model":"claude-opus-5","effort":"xhigh"}'
 igual "$esperado" "$(bash "$router" --host claude --role reviewer --format json)" "json"
