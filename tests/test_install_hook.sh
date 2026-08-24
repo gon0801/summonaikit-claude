@@ -32,7 +32,24 @@ caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/saikit-2-2-XXXXXX")" || exit 1
-trap 'rm -rf "$tmp"' EXIT
+
+# CodeRabbit (PR #62, CR2): el caso de lookup multi-hash muta TEMPORALMENTE
+# el manifiesto TRACKEADO del repo (agents/vendor-manifest.sha256) para
+# probar el lookup real -- necesario porque el instalador no tiene una
+# costura de manifiesto de agentes por env (a diferencia de --manifest para
+# el del hook). Sin proteccion, una interrupcion a mitad del caso deja ese
+# archivo sucio en el arbol real. MANIFEST_AGENTES_BACKUP se declara ANTES
+# del trap de salida principal y se restaura ahi, antes de borrar $tmp (que
+# es donde vive el backup) -- cubre exit normal, exit por error y la mayoria
+# de las señales de interrupcion (bash sigue corriendo el trap EXIT incluso
+# terminando por señal, salvo SIGKILL/SIGSTOP).
+MANIFEST_AGENTES_BACKUP=''
+restaurar_manifiesto_agentes() {
+  if [ -n "$MANIFEST_AGENTES_BACKUP" ] && [ -f "$MANIFEST_AGENTES_BACKUP" ]; then
+    cp "$MANIFEST_AGENTES_BACKUP" "$repo/agents/vendor-manifest.sha256" 2>/dev/null
+  fi
+}
+trap 'restaurar_manifiesto_agentes; rm -rf "$tmp"' EXIT
 
 if [ ! -f "$tool" ]; then
   echo "    FAIL: no existe el instalador en $tool" >&2
@@ -1521,11 +1538,12 @@ dest_listo; nuevo_claude_agents; poner_vendor reviewer
 printf '\n' >> "$claude_agents/reviewer.md"   # variante del vendor: un hash DISTINTO al que ya esta en el manifiesto
 segundo_hash="$(sha256sum "$claude_agents/reviewer.md" | cut -d' ' -f1)"
 manifest_path="$repo/agents/vendor-manifest.sha256"
-manifest_backup="$tmp/vendor-manifest-backup.sha256"
-cp "$manifest_path" "$manifest_backup"
+MANIFEST_AGENTES_BACKUP="$tmp/vendor-manifest-backup.sha256"
+cp "$manifest_path" "$MANIFEST_AGENTES_BACKUP"
 printf '%s  reviewer.md\n' "$segundo_hash" >> "$manifest_path"
 out="$(host_claude 2>&1)"; rc=$?
-cp "$manifest_backup" "$manifest_path"
+restaurar_manifiesto_agentes
+MANIFEST_AGENTES_BACKUP=''
 printf '%s' "$out" | grep -q 'ADOPTADO' \
   || malo "un manifiesto con DOS hashes de reviewer no adopto el segundo (lookup multi-hash roto): $out"
 grep -q '^saikit_owned:' "$claude_agents/reviewer.md" \
@@ -1586,10 +1604,67 @@ printf '%s' "$out" | grep -q "$manifiesto_hash" \
 [ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
   || malo "--refrescar-manifiesto (kimi) NO debe escribir el manifiesto (solo reporta)"
 
+caso "12.9 #6-b (greptile, inline en el PR #62): --refrescar-manifiesto con sha256sum roto reporta unknown por rol, NUNCA salta mudo con exit 0 silencioso"
+# Mismo defecto que el fix #2 (arriba) pero en el path de REFRESCO:
+# refrescar_manifiesto_vendor() calculaba el hash con un `sha256sum "$dest"`
+# suelto, sin pasar por sha_de()/sha_bin -- en un sistema con `shasum` y sin
+# `sha256sum` (o con AMBOS rotos, como este fake_sha_dir simula), el `[ -n
+# "$hash" ] || continue` original saltaba el rol EN SILENCIO y el
+# procedimiento entero salia 0 sin haber reportado nada, pese a que el
+# proposito del flag es justo que un humano VEA el hash de cada DESCONOCIDO.
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: reviewer\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/reviewer.md"
+out="$(PATH="$fake_sha_dir:$PATH" SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+       bash "$tool" --host claude --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--refrescar-manifiesto no deberia fallar solo porque un hash no se pueda calcular: rc=$rc: $out"
+printf '%s' "$out" | grep -qi 'unknown' \
+  || malo "un sha256 no calculable en el refresco debe reportarse (unknown), no saltarse mudo"
+printf '%s' "$out" | grep -q 'reviewer' \
+  || malo "el reporte de unknown en el refresco no menciona el rol afectado (reviewer)"
+
 caso "12.9 #7 (grok): --help lista --host claude y --refrescar-manifiesto"
 out="$(bash "$tool" --help 2>&1)"
 printf '%s' "$out" | grep -q -- '--host claude' || malo "el --help no lista --host claude"
 printf '%s' "$out" | grep -q -- '--refrescar-manifiesto' || malo "el --help no lista --refrescar-manifiesto"
+
+# ----------------------------------------------------------------------------
+# Followups de la revision interna del PR #62 (no bloqueantes, mismo push)
+# ----------------------------------------------------------------------------
+
+caso "12.9 followup (revision interna): --refrescar-manifiesto sin --host valido (claude/kimi) => exit 2"
+out="$(bash "$tool" --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--refrescar-manifiesto sin --host deberia dar exit 2, dio $rc: $out"
+out="$(bash "$tool" --host zcode --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--refrescar-manifiesto --host zcode (host valido pero sin via de refresco) deberia dar exit 2, dio $rc: $out"
+
+caso "12.9 followup (revision interna): --dry-run sobre dest_dir INEXISTENTE (claude) no lo crea"
+dest_listo
+inexistente="$tmp/cagents-dry-inexistente"
+rm -rf "$inexistente"
+out="$(SAIKIT_CLAUDE_AGENTS_DIR="$inexistente" SAIKIT_MODEL_ROUTING_TOOL="$router_stub" \
+       bash "$tool" --host claude --dry-run --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run sobre dest_dir inexistente no deberia fallar: rc=$rc: $out"
+[ -e "$inexistente" ] && malo "dry-run creo el dest_dir que no existia (mkdir -p bajo --dry-run)"
+
+caso "12.9 followup (revision interna): --dry-run sobre VENDOR_CONOCIDO no escribe ni archiva"
+dest_listo; nuevo_claude_agents; poner_vendor reviewer
+antes="$(cksum < "$claude_agents/reviewer.md")"
+out="$(host_claude --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run sobre VENDOR_CONOCIDO no deberia fallar: rc=$rc: $out"
+[ "$antes" = "$(cksum < "$claude_agents/reviewer.md")" ] || malo "dry-run sobre VENDOR_CONOCIDO modifico el archivo"
+[ -d "$claude_agents/saikit-backups" ] && malo "dry-run sobre VENDOR_CONOCIDO creo un backup"
+printf '%s' "$out" | grep -qi 'VENDOR CONOCIDO' || malo "dry-run sobre VENDOR_CONOCIDO no reporto el estado"
+
+caso "12.9 followup (revision interna): --dry-run sobre NUESTRO_DISTINTO no escribe ni archiva"
+dest_listo; nuevo_claude_agents
+host_claude >/dev/null 2>&1
+printf '\nlinea distinta\n' >> "$claude_agents/reviewer.md"
+antes="$(cksum < "$claude_agents/reviewer.md")"
+out="$(host_claude --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run sobre NUESTRO_DISTINTO no deberia fallar: rc=$rc: $out"
+[ "$antes" = "$(cksum < "$claude_agents/reviewer.md")" ] || malo "dry-run sobre NUESTRO_DISTINTO modifico el archivo"
+[ -d "$claude_agents/saikit-backups" ] && malo "dry-run sobre NUESTRO_DISTINTO creo un backup"
+printf '%s' "$out" | grep -qi 'NUESTRO distinto' || malo "dry-run sobre NUESTRO_DISTINTO no reporto el estado"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2

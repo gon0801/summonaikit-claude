@@ -950,6 +950,16 @@ grok_publicar_agentes() {
     # perfil real con casi-nada; con el `|| return 1` el llamador
     # (grok_publicar) hace el ROLLBACK completo de esta corrida, como ya hace
     # zcode (linea ~383) y el bucle vendor unificado.
+    #
+    # Guard DEFENSIVO, declarado (revision interna del PR #62): grok_preflight
+    # ya llama a agente_traducido para el MISMO rol/fuente antes de que el
+    # flujo normal llegue aca, asi que un router que falla sale por ahi
+    # primero (exit 2) y este `|| return 1` no es ejercitable con un caso de
+    # test que pase por el camino normal (--host grok completo). Queda igual
+    # a proposito -- defensa en profundidad si algun llamador futuro invoca
+    # grok_publicar_agentes sin pasar antes por grok_preflight -- y es la
+    # razon por la que el caso "12.9 #5" de la suite prueba el sintoma
+    # observable (el perfil no se pisa, exit != 0), no esta linea puntual.
     trad="$(agente_traducido grok "$fuente")" || return 1
     dest="$dir/$rol.md"
     estado="$(grok_agente_estado "$dest" "$trad")"
@@ -1413,6 +1423,14 @@ instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
   # de este archivo). Dos bucles separados, como ya hace la validacion de
   # fuentes arriba: si CUALQUIER rol da NO_OBSERVABLE, se sale sin publicar
   # nada de nada.
+  #
+  # Ventana TOCTOU declarada (revision interna del PR #62): entre este bucle
+  # de clasificacion y el de publicacion mas abajo, otro proceso podria
+  # escribir $dest_dir y invalidar el estado ya leido. Aceptada por el
+  # modelo de amenaza de esta herramienta: CLI local de un solo operador,
+  # invocada a mano o desde un install de un solo host, sin concurrencia
+  # esperada sobre el MISMO dest_dir. Igual que el resto de este archivo
+  # declara sus supuestos en vez de dejarlos implicitos.
   limpiar_trads_vendor
   for rol in $CLAUDE_AGENT_ROLES; do
     fuente="$repo/agents/$rol.md"
@@ -1515,8 +1533,25 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
     [ -f "$dest" ] && [ -r "$dest" ] || continue
     zcode_agente_tiene_marca "$dest" && continue
     agente_es_vendor_conocido "$dest" "$rol" && continue
-    hash="$(sha256sum "$dest" 2>/dev/null | cut -d' ' -f1)"
-    [ -n "$hash" ] || continue
+    # Hallazgo inline de Greptile en el PR #62, sobre el mismo defecto que el
+    # fix #2 ya cerro en la adopcion (agente_hash_en_manifiesto), pero aca en
+    # el path de REFRESCO: un `sha256sum "$dest"` suelto, sin pasar por
+    # sha_de()/sha_bin, es el mismo salto silencioso en un sistema con
+    # `shasum` y sin `sha256sum` (o sin ninguno de los dos). La correccion
+    # LITERAL de "cambiar a sha_de() pero seguir con `|| hash=''; continue`"
+    # preserva el defecto de fondo: --refrescar-manifiesto existe para que un
+    # humano VEA el hash de un DESCONOCIDO, y saltarlo mudo cuando el calculo
+    # falla es exactamente lo que Core Rule 2 prohibe (no observable != no
+    # esta). Se reporta el rol como no observable (con el motivo) y se sigue
+    # con el resto de los roles -- el procedimiento entero sigue devolviendo
+    # 0 porque --refrescar-manifiesto es puramente advisory.
+    hash="$(sha_de "$dest")" || hash=''
+    if [ -z "$hash" ]; then
+      decir "[summonaikit] unknown — REFRESCAR MANIFIESTO (${etiqueta}) — $rol: no se pudo calcular el hash."
+      decir "              destino: $dest"
+      decir "              No se afirma que sea DESCONOCIDO: no se pudo mirar (Core Rule 2)."
+      continue
+    fi
     decir "[summonaikit] REFRESCAR MANIFIESTO (${etiqueta}) — $rol: DESCONOCIDO"
     decir "              destino: $dest"
     decir "              sha256: $hash"
