@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-24 — Deploy NO-OP + cierre de la Task 13.1 (PR #63, `b91c7a3`) — arranque Phase 13
+
+- **Qué traía:** **13.1 (PR #63, `b91c7a3`)** — diseño medido del cuarto rol
+  `adversary` (`docs/phase-13-adversary-design.md`, 609 líneas, docs-only).
+  Decisiones: modo degradado (detección post-hoc + bloqueo en Stop; sin
+  `PreToolUse` en ningún host), atribución interna medida en claude/grok/codex
+  (zcode/kimi `unknown` declarados; despacho zcode confirmado EN VIVO en la
+  sesión que escribió el doc — los tres despachos de la ceremonia acreditados
+  en orden), artefacto dir-scoped keyless `.saikit/findings/` (diverge del
+  borrador: el `session_id` no tiene canal uniforme de propagación, grok ignora
+  `additionalContext` — 7.2), fail-open default + 2 excepciones fail-closed
+  justificadas, tier `review`, mapeo de rol con keyword `adversar` con
+  precedencia sobre la rama reviewer, escotillas DELEGATED/ROLE FALLBACK
+  extendidas, 9 casos con nombre para 13.5.
+- **Deploy:** NO-OP — el merge no tocó `hooks/summonaikit-harness.sh`.
+  `tools/install-hook.sh`: "YA AL DIA: el destino es nuestro y byte a byte
+  igual a la fuente". `tools/check-hook-registration.sh`: exit 0.
+- **CI del PR:** suite/quality/secrets en verde (run 32785920816) — batería
+  completa una vez, en CI (política 2026-08-15).
+- **Operador:** Gon (sesión zcode).
+
 ## 2026-08-17 — Deploy NO-OP + cierre de las Tasks 11.6, 11.9 y 11.10 (PRs #48, #49, #50) y residuales de kimi (PR kimi#9)
 
 - **Qué traía:**
