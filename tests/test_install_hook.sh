@@ -1278,13 +1278,21 @@ host_claude >/dev/null 2>&1
 [ "$antes" = "$(find "$claude_agents" -type f -print0 | sort -z | xargs -0 cksum)" ] \
   || malo "la segunda corrida reescribio"
 
-caso "claude: VENDOR_CONOCIDO => archiva y reemplaza"
-dest_listo; nuevo_claude_agents; poner_vendor reviewer
-out="$(host_claude 2>&1)"
-grep -q '^saikit_owned:' "$claude_agents/reviewer.md" || malo "no adopto el perfil del vendor"
-ls "$claude_agents/saikit-backups/"reviewer.md.vendor.*.bak >/dev/null 2>&1 \
-  || malo "no archivo el perfil del vendor antes de pisarlo"
-printf '%s' "$out" | grep -q 'ADOPTADO' || malo "no reporto la adopcion"
+# Los TRES roles del manifiesto, uno por uno: el hash de cada linea de
+# agents/vendor-manifest.sha256 tiene que ser adoptable, no solo el de
+# reviewer -- un typo al generar (o un fixture re-guardado tras el
+# sha256sum) en la linea de implementer o verifier dejaria ese rol
+# DESCONOCIDO para siempre, en silencio, y ningun caso lo hubiera atrapado
+# (hallazgo del review de PR #58).
+for rol in implementer verifier reviewer; do
+  caso "claude: VENDOR_CONOCIDO => archiva y reemplaza ($rol)"
+  dest_listo; nuevo_claude_agents; poner_vendor "$rol"
+  out="$(host_claude 2>&1)"
+  grep -q '^saikit_owned:' "$claude_agents/$rol.md" || malo "no adopto el perfil del vendor ($rol)"
+  ls "$claude_agents/saikit-backups/""$rol".md.vendor.*.bak >/dev/null 2>&1 \
+    || malo "no archivo el perfil del vendor antes de pisarlo ($rol)"
+  printf '%s' "$out" | grep -q 'ADOPTADO' || malo "no reporto la adopcion ($rol)"
+done
 
 caso "claude: DESCONOCIDO => no se toca, y se reporta"
 dest_listo; nuevo_claude_agents
@@ -1302,13 +1310,18 @@ host_claude >/dev/null 2>&1
 [ "$antes_closer" = "$(cksum < "$claude_agents/closer.md")" ] || malo "closer.md se toco"
 [ "$antes_retro" = "$(cksum < "$claude_agents/retro.md")" ] || malo "retro.md se toco"
 
-caso "claude: un hash que no esta en el manifiesto NO se adopta"
-dest_listo; nuevo_claude_agents; poner_vendor reviewer
-printf '\n' >> "$claude_agents/reviewer.md"   # un byte de mas => otro hash
-antes="$(cksum < "$claude_agents/reviewer.md")"
-out="$(host_claude 2>&1)"
-[ "$antes" = "$(cksum < "$claude_agents/reviewer.md")" ] || malo "un vendor no listado no se debe pisar"
-printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "un vendor no listado tiene que reportarse DESCONOCIDO"
+# Mismo blindaje que arriba, para el rechazo: los TRES roles tienen que
+# quedar DESCONOCIDO (no solo reviewer) cuando su hash no figura en el
+# manifiesto.
+for rol in implementer verifier reviewer; do
+  caso "claude: un hash que no esta en el manifiesto NO se adopta ($rol)"
+  dest_listo; nuevo_claude_agents; poner_vendor "$rol"
+  printf '\n' >> "$claude_agents/$rol.md"   # un byte de mas => otro hash
+  antes="$(cksum < "$claude_agents/$rol.md")"
+  out="$(host_claude 2>&1)"
+  [ "$antes" = "$(cksum < "$claude_agents/$rol.md")" ] || malo "un vendor no listado no se debe pisar ($rol)"
+  printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "un vendor no listado tiene que reportarse DESCONOCIDO ($rol)"
+done
 
 caso "claude: --host claude NO toca DEST"
 dest_listo; nuevo_claude_agents
