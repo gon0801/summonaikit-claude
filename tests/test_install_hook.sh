@@ -1443,7 +1443,9 @@ caso "kimi: el frontmatter instalado SIGUE PARSEANDO (el tipo no puede desaparec
 # concreto. Medicion directa 2026-08-24 (adaptada de la 12.3, mismo binario
 # kimi-code 0.34.0): se planto `~/.agents/agents/saikit-probe-127.md` con
 # `name/description/tools` (subconjunto del set cerrado) MAS `saikit_owned:
-# summonaikit-claude` -- exactamente la forma que instala este instalador --
+# summonaikit-claude` -- un subconjunto representativo de la forma instalada
+# (name/description/tools + saikit_owned; skills: queda cubierto por la
+# observacion de la 12.3 sobre el vendor file, no por esta sonda) --
 # y `kimi -p 'Delega al subagente saikit-probe-127...'` RESOLVIO el tipo y
 # devolvio la respuesta esperada:
 #   • Respuesta literal del subagente:

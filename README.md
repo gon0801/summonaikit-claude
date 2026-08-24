@@ -33,6 +33,43 @@ Cualquier exit ≠ 0 significa lo mismo: **el destino quedó intacto**. El
 instalador es la excepción declarada al fail-open del spec: escribir a ciegas
 sobre el archivo que gatea cada turno no admite "dejar pasar".
 
+### Perfiles de agente por rol (Phase 12)
+
+Además del hook, el instalador también puede plantar los tres perfiles de rol
+(`implementer`, `verifier`, `reviewer`) con el modelo y el `effort` que le
+corresponden por rol, resueltos en `tools/model-routing.sh`:
+
+```bash
+bash tools/install-hook.sh --host claude   # perfiles de agente en ~/.claude/agents
+bash tools/install-hook.sh --host kimi     # perfiles de agente en ~/.agents/agents
+```
+
+Estos dos hosts no llevan la marca `saikit_owned` en los perfiles del vendor,
+así que la máquina de tres estados de arriba se amplía a un **cuarto
+estado**, `VENDOR_CONOCIDO`, con la misma vía de adopción que ya tiene el
+hook (`agents/vendor-manifest.sha256`):
+
+| Estado | Qué hace |
+|---|---|
+| **Ausente** | Instala el perfil ruteado y lo marca `saikit_owned`. |
+| **Nuestro, idéntico** | No reescribe. |
+| **Nuestro, distinto** | Archiva y repara. |
+| **Vendor conocido** (su sha256 está en `agents/vendor-manifest.sha256`) | Archiva y **reemplaza**. |
+| **Desconocido** (ni marca ni hash de vendor conocido) | **No toca nada** y reporta — puede ser un cambio legítimo. |
+
+`--host kimi` **no** instala ruteo de modelo ni de `effort`: kimi no acepta
+esas claves por agente (medido en la Task 12.3, ver `docs/spec/00-project-spec.md`
+§Ampliación de propiedad — Phase 12), así que ese `--host` sólo posesiona el
+archivo y saca el `model: sonnet` inerte del vendor. `closer` y `retro` no
+están cubiertos por ninguno de los dos `--host`: siguen con el `model: sonnet`
+del vendor.
+
+`--refrescar-manifiesto` (requiere `--host claude`) **reporta** hash y diff de
+cada perfil `DESCONOCIDO` contra la fuente del repo; **jamás adopta por sí
+mismo**. Adoptar un hash nuevo del vendor es pegarlo a mano en
+`agents/vendor-manifest.sha256`, en un commit propio, con el diff a la vista
+en la revisión.
+
 Después de instalar, el script corre `tools/check-hook-registration.sh` contra
 el `settings.json` hermano del destino. Ese aviso es **advisory**: un archivo
 perfecto con el registro roto deja el gate inexistente, y el verificador no
