@@ -1470,13 +1470,129 @@ su append. Cualquier verificación de integridad sobre ese archivo tiene que ser
 **por estructura** (conteo de entradas por marker, vecinos ajenos, JSON válido),
 no por cksum ni por diff de contenido.
 
+## Ampliación de propiedad — Phase 12
+
+**La reapertura, declarada.** Este repo pasa a ser dueño de los perfiles de
+agente en `claude` (`~/.claude/agents/`) y `kimi` (`~/.agents/agents/`). Es el
+mismo movimiento que la Phase 6 al reabrir `.codex`: se escribe con su razón —
+que el gasto siga al riesgo, rol por rol, en vez de que los cinco perfiles del
+kit corran todos en `model: sonnet` sin `effort` declarado— y su vuelta atrás,
+que es la misma máquina de tres estados del hook: `--host claude
+--restore-vendor`-equivalente no existe todavía como flag propio, pero el
+backup del vendor archivado (`.vendor.<sello>.bak`, ver *Los límites* abajo)
+es la evidencia recuperable si hay que revertir a mano.
+
+**Qué compra la posesión y qué no.** El CLI del kit puede volver a escribir
+esos perfiles en cualquier `saikit-update` posterior. La posesión hace que la
+siguiente corrida del instalador lo **detecte y repare** — un archivo con la
+marca `saikit_owned` que difiere de la fuente se archiva y se reescribe en la
+corrida siguiente. Es **reparación, no exclusividad**: nada en este repo evita
+que otro proceso escriba esos archivos entre corridas del instalador.
+
+**Los límites**, uno por línea con su razón:
+
+- `closer` y `retro` siguen con el `model: sonnet` del vendor. La fuente
+  versionada de este repo cubre tres roles (`implementer`, `verifier`,
+  `reviewer`); la posesión es por archivo, no por directorio, así que los dos
+  que la fuente no cubre quedan `DESCONOCIDO` e intactos.
+- Codex queda fuera. No tiene instalación de perfiles de agente y su
+  ceremonia sigue condicionada a lo que mida la Task 6.1.
+- Fable 5 fuera del ruteo automático. `review` en claude usa Opus 5 ($5/$25
+  por millón contra $10/$50 de Fable 5, el doble en salida); Fable queda
+  disponible como escalada manual.
+- `effort` sólo donde se midió. Un `effort:` que el host ignora deja el
+  perfil diciendo una cosa y el runtime haciendo otra — el tipo exacto de
+  mentira que el resto de este spec persigue.
+- La adopción por hash sólo repara si el vendor reescribe con los MISMOS
+  bytes que ya están en `agents/vendor-manifest.sha256`. Si el vendor cambia
+  el texto del perfil, el hash deja de matchear y el instalador cae a
+  `DESCONOCIDO`: no toca nada y reporta, en vez de pisar un cambio que nadie
+  miró.
+- `--refrescar-manifiesto` reporta (hash + diff), JAMÁS adopta. Adoptar un
+  hash nuevo del vendor es pegarlo en `agents/vendor-manifest.sha256` en un
+  commit propio, con el diff a la vista en la revisión — no hay `--force`.
+
+### Medido 2026-08-24, Task 12.1
+
+**zcode (`docs/task-12.1-medicion.md`, inspección estática de `zcode.cjs`
+3.7.5-11, misma vía que la 5.6).** `model:` **sí** es clave oficial del
+frontmatter de agentes (`a=h5i(Vj(o.model))` en el parser `ezt`). `effort:`
+**NO existe** como clave de frontmatter — la clave real que el parser
+destructura es `thoughtLevel:` (aunque `/effort` sí exista como slash command
+de sesión, de cara al usuario, sin relación con el parser de agentes). Un
+valor desconocido en `model` o `thoughtLevel` **pasa sin validar**: ninguno de
+los dos tiene guardia como sí la tienen `color`/`permissionMode` (`Set`
+fijo) — `h5i` sólo trata el literal `"inherit"` como "sin valor". El catálogo
+real de la cuenta (entitlement) quedó **NO OBSERVADO**: el catálogo de
+referencia embebido en el bundle es multi-proveedor genérico (contiene IDs de
+proveedores ajenos a Z.AI) y su sola presencia ahí no confirma qué puede usar
+esta cuenta. `~/.zcode/agents` byte a byte idéntico antes/después.
+
+### Medido 2026-08-24, Task 12.2
+
+**grok (`docs/task-12.2-medicion.md`, captura headless sobre repo
+descartable, host grok 1.0.5).** grok **sí** honra `model:` y `effort:` por
+agente — verificado por registro interno del host (`subagents/<id>/meta.json`
+→ `effective_model_id`; `chat_history.jsonl` → `model_id`/`reasoning_effort`
+del subagente), no por inferencia de la respuesta del modelo: el subagente
+sonda corrió con `grok-4.5-build`/`low` mientras el turno padre corría con
+`grok-4.6-build`/`xhigh` (los defaults de `config.toml`). Un `model:` con un
+ID inexistente **cae en silencio al modelo por defecto del padre** — el
+despacho NO falla, no hay error visible en la CLI ni en el `meta.json` — pero
+el `effort:` válido de la misma sonda **se sigue aplicando** de forma
+independiente (no cae al `xhigh` del padre). Catálogo real de esta cuenta,
+2026-08-24 (`models_cache.json`, refrescado por el propio CLI en cada
+invocación): `grok-4.6` (default) y `grok-4.5`; reemplaza al listado
+2026-07-09 (`grok-4.5`, `grok-composer-2.5-fast`) que era de otra cuenta y
+otra versión de CLI (0.2.93 contra 1.0.5 medido acá) y no se hereda. Perfil
+`~/.grok/agents/` byte a byte intacto; el diff de huella completo quedó
+estrictamente aditivo (tres logs nuevos bajo `~/.grok/debug/`, generados por
+el `--debug` necesario para correlacionar el registro interno), adjudicado
+por el Lead con el reviewer de la 12.2.
+
+### Medido 2026-08-18, Task 12.3
+
+**kimi (`docs/task-12.3-medicion.md`, captura viva, kimi-code 0.34.0).** La
+premisa que gateaba la tarea — que kimi-code **lee** `~/.agents/agents/` —
+quedó **CONFIRMADA**: no es inferencia, el lead resolvió un subagente sonda
+citando su `description` del frontmatter. Pero el host **no acepta `model:`
+ni `effort:` por agente**: el parser (`parseAgentFileText`) lee un conjunto
+**cerrado** de claves (`name`, `description`, `whenToUse`, `override`,
+`tools`, `disallowedTools`, `subagents`, `model_preference`), y ninguna de las
+dos está ahí. La única palanca de modelo es `model_preference` ∈ {`primary`,
+`secondary`} — dos slots, no un ID. La fila `kimi` de `tools/model-routing.sh`
+queda **vacía de forma definitiva**, no provisoria. Hallazgo extra con más
+consecuencia operativa: una **clave desconocida** (`model:`, `effort:`) se
+ignora en silencio y el agente carga normal, pero un **valor inválido en una
+clave conocida** (p. ej. `model_preference: sonnet`) hace que el archivo **no
+parsee y el agente desaparezca del registro sin error visible en la CLI** —
+si le pasara a `implementer`, `verifier` o `reviewer`, la ceremonia se queda
+sin roles y el gate no tiene a quién acreditar. `~/.agents/agents/` byte a
+byte idéntico (los 5 perfiles del vendor y la sonda borrada).
+
+**Medido 2026-08-24, Task 12.7 (sonda directa contra el parser real de
+kimi).** Gap señalado por el review del PR #59: el candado original de
+`tests/test_install_hook.sh` verificaba con grep/sed, sin ejercer el parser
+real de kimi, si `saikit_owned:` — la única clave que este instalador agrega
+al perfil, ausente del conjunto cerrado que la 12.3 midió arriba — se
+comporta como el resto de las claves desconocidas (se ignora en silencio) o
+como un valor inválido en clave conocida (borra el agente del registro). Se
+plantó `~/.agents/agents/saikit-probe-127.md` con `name`/`description`/`tools`
+(subconjunto del set cerrado) más `saikit_owned: summonaikit-claude`, y
+`kimi -p 'Delega al subagente saikit-probe-127...'` **resolvió el tipo y
+devolvió la respuesta esperada** (`PROBE-127-OK`): `saikit_owned` cae en el
+caso "clave desconocida, se ignora en silencio", confirmado contra el parser
+real y no sólo por lectura de código. Huella de `~/.agents` y `~/.kimi-code`
+idéntica antes/después (podada de contabilidad de runtime).
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
-- **No se adoptan `.cursor` ni `.agents`** en este alcance. `.codex` se reabre de
-  forma explícita en Phase 6 y Grok (`~/.grok`) entra como host distinto en
-  Phase 7; ninguna de esas ampliaciones autoriza a tocar los dos perfiles que
-  siguen fuera.
+- **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
+  explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
+  y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y
+  `.agents` (kimi) — ver *Ampliación de propiedad — Phase 12* arriba. Ninguna
+  de esas ampliaciones autoriza a tocar `.cursor`, que sigue fuera.
 - **No se persigue que el gate sea un control de seguridad.** Es advisory: aun
   corregidos A1 y A2, quien controla el texto del turno puede influirlo. Se
   documenta; no se promete lo contrario.

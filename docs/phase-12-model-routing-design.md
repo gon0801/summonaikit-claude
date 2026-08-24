@@ -223,15 +223,36 @@ bajar de modelo, y evita el techo de contexto del tier más barato.
 
 | tier | claude | zcode (GLM) | grok | kimi |
 |---|---|---|---|---|
-| `standard` | `claude-sonnet-5` / `medium` | 12.1 | 12.2 | **no aplica** |
-| `verify` | `claude-sonnet-5` / `low` | 12.1 | 12.2 | **no aplica** |
-| `review` | `claude-opus-5` / `xhigh` | 12.1 | 12.2 | **no aplica** |
+| `standard` | `claude-sonnet-5` / `medium` | *(vacía)* | `grok-4.6` / `medium` | **no aplica** |
+| `verify` | `claude-sonnet-5` / `low` | *(vacía)* | `grok-4.6` / `low` | **no aplica** |
+| `review` | `claude-opus-5` / `xhigh` | *(vacía)* | `grok-4.6` / `xhigh` | **no aplica** |
+
+**zcode queda vacía por catálogo NO OBSERVADO, no por falta de soporte**
+(medido 12.1, `docs/task-12.1-medicion.md`): el parser de agentes sí lee
+`model:` como clave oficial, pero el entitlement real de la cuenta (qué IDs
+`glm-5.x` puede usar) no se pudo confirmar por ninguna vía headless — el
+catálogo de referencia embebido en el bundle es multi-proveedor genérico, no
+un listado de entitlement. Nota aparte, no de catálogo: el nombre de clave de
+`effort` en zcode **no es `effort:`** — el parser destructura `thoughtLevel:`
+(`EFFORT_KEY='thoughtLevel'` en `tools/model-routing.sh`); escribir `effort:`
+sería texto muerto aunque el catálogo se confirmara mañana.
+
+**grok se llenó con el catálogo confirmado de la cuenta** (medido 12.2,
+`docs/task-12.2-medicion.md`, 2026-08-24): `grok-4.6` (default de
+`config.toml`) y `grok-4.5`. La medición no comparó capacidad entre los dos
+IDs — sólo confirmó que ambos se aplican literalmente por registro interno —
+así que no hay evidencia para preferir uno sobre otro por tier: se usa
+`grok-4.6` en los tres tiers y se varía sólo el `effort`, mismo criterio que
+claude entre `standard`/`verify`.
 
 **La fila `kimi` queda vacía de forma DEFINITIVA, no provisoria** (medido 12.3):
-el host no acepta un ID de modelo ni un effort por agente, así que no hay valor
-que poner. Sus perfiles se instalan sin esas claves y el subagente hereda del
-lead — que es lo que ya hace hoy. La posesión del archivo (D5) conserva sentido
-por la marca `saikit_owned` y por sacar el `model: sonnet` inerte; el ruteo, no.
+el host no acepta un ID de modelo ni un effort por agente — su parser sólo
+tiene `model_preference` ∈ {`primary`, `secondary`}, dos slots, no un ID por
+rol — así que no hay valor que poner. Sus perfiles se instalan sin esas claves
+y el subagente hereda del lead — que es lo que ya hace hoy. La posesión del
+archivo (D5) conserva sentido por la marca `saikit_owned` y por sacar el
+`model: sonnet` inerte; el ruteo, no. Sellado: no hay ruta de ruteo real en
+kimi dentro del alcance de esta fase (ver Non-Goals).
 
 **Una celda sin valor ⇒ la clave se omite del perfil ⇒ el agente hereda del
 padre.** Ese es exactamente el comportamiento que zcode tiene hoy y que la 5.6
@@ -431,7 +452,12 @@ En la suite del instalador, casos nuevos para:
   manual.
 - **`effort` fuera de claude no se escribe hasta medirlo.** Un `effort:` que el
   host ignora deja el perfil diciendo una cosa y el runtime haciendo otra — el
-  tipo exacto de mentira que el resto de este spec persigue.
+  tipo exacto de mentira que el resto de este spec persigue. **Actualizado tras
+  12.1/12.2:** grok ya se midió (12.2) y su `effort:` **sí** se escribe —
+  aplicado y confirmado por registro interno del host. zcode sigue sin
+  escribirlo, no porque el host lo ignore (`thoughtLevel:` sí se lee), sino
+  porque el catálogo real de la cuenta (12.1) quedó no observado y no hay un
+  ID que rutear con confianza.
 - **`kimi` no recibe ruteo de modelo ni de effort** (medido 12.3): el host no
   tiene esas claves por agente. Su `--host kimi` existe sólo por la posesión del
   archivo y la marca. Llevarlo a `model_preference` + `[secondaryModel]` daría
