@@ -1431,6 +1431,28 @@ caso "kimi: el frontmatter instalado SIGUE PARSEANDO (el tipo no puede desaparec
 # da error -- el agente se cae del registro en silencio. Un test que solo mire
 # que el archivo existe no lo atrapa. Se verifica contra el contrato del parser:
 # claves permitidas y, si aparece model_preference, su valor.
+#
+# Gap del review de PR #59: este grep/sed no ejerce el parser REAL de kimi, y
+# `saikit_owned:` (la UNICA clave que esta instalacion agrega al perfil) no
+# esta en el conjunto cerrado que la 12.3 midio (name, description, whenToUse,
+# override, tools, disallowedTools, subagents, model_preference). La 12.3 SI
+# midio que una clave DESCONOCIDA (probo con model:/effort:) se ignora en
+# silencio y el agente carga normal -- distinto de un VALOR INVALIDO en una
+# clave CONOCIDA, que es lo que rompe el registro. saikit_owned cae en el
+# primer caso (clave desconocida), pero nunca se habia probado esa clave en
+# concreto. Medicion directa 2026-08-24 (adaptada de la 12.3, mismo binario
+# kimi-code 0.34.0): se planto `~/.agents/agents/saikit-probe-127.md` con
+# `name/description/tools` (subconjunto del set cerrado) MAS `saikit_owned:
+# summonaikit-claude` -- exactamente la forma que instala este instalador --
+# y `kimi -p 'Delega al subagente saikit-probe-127...'` RESOLVIO el tipo y
+# devolvio la respuesta esperada:
+#   • Respuesta literal del subagente:
+#     ```
+#     PROBE-127-OK
+#     ```
+# Huella de ~/.agents y ~/.kimi-code (podada de contabilidad de runtime, misma
+# lista de la 12.3) identica antes/despues; la sonda se borro al cerrar. Log
+# completo y huella en el body del PR #59.
 dest_listo; nuevo_kimi_agents
 host_kimi >/dev/null 2>&1
 for rol in implementer verifier reviewer; do
