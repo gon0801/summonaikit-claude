@@ -1478,6 +1478,119 @@ host_kimi >/dev/null 2>&1
 [ "$antes_a" = "$(cksum < "$kimi_agents/otro-agente.md")" ] || malo "un agente ajeno se toco"
 [ "$antes_s" = "$(cksum < "$kimi_agents/../skills/x.md")" ] || malo "se toco algo fuera de agents/"
 
+# ============================================================================
+# Task 12.9 — correcciones del cross-review externo (codex + grok, 1 ronda)
+# ============================================================================
+# Los 7 hallazgos con caso propio: instalacion a medias (#1), NO_OBSERVABLE
+# confundido con DESCONOCIDO en el manifiesto de agentes (#2), lookup
+# multi-hash roto (#3), --dry-run ignorado en claude/kimi (#4), rc de
+# agente_traducido ignorado en grok (#5), --refrescar-manifiesto sin via para
+# kimi (#6) y el --help incompleto (#7). #8 y #9 son declaraciones (README y
+# Plans.md), sin caso de test.
+
+caso "12.9 #1 (codex): NO_OBSERVABLE en el TERCER rol no deja los dos primeros publicados (instalacion a medias)"
+dest_listo; nuevo_claude_agents
+# reviewer es el TERCER rol de CLAUDE_AGENT_ROLES ('implementer verifier
+# reviewer'): un directorio en su lugar es NO_OBSERVABLE (no es un archivo
+# regular). implementer/verifier estan AUSENTES y publicarian si el bucle
+# clasificara-y-publicara en el mismo paso.
+mkdir -p "$claude_agents/reviewer.md"
+out="$(host_claude 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "esperaba exit 5 (NO_OBSERVABLE), dio $rc: $out"
+[ -e "$claude_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
+[ -e "$claude_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
+
+caso "12.9 #2 (codex+grok): sha256 no calculable en el manifiesto de agentes => NO_OBSERVABLE (exit 5), NUNCA DESCONOCIDO silencioso"
+# sha256sum FALSO que siempre falla: command -v lo encuentra (existe y es
+# ejecutable), pero no puede calcular el hash. Reusa sha_de()/hash_en_manifiesto()
+# como pide el hallazgo: "no se pudo mirar" no es lo mismo que "se miro y no
+# esta" (Core Rule 2, ya vale para el manifiesto del HOOK y tiene que valer
+# igual para el de agentes).
+fake_sha_dir="$tmp/fake-sha-no-observable"
+mkdir -p "$fake_sha_dir"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$fake_sha_dir/sha256sum"
+chmod +x "$fake_sha_dir/sha256sum"
+dest_listo; nuevo_claude_agents; poner_vendor reviewer
+out="$(PATH="$fake_sha_dir:$PATH" host_claude 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "un sha256 no calculable deberia dar NO_OBSERVABLE (exit 5), dio $rc: $out"
+printf '%s' "$out" | grep -qi 'desconocid' && malo "no observable no debe reportarse como DESCONOCIDO (Core Rule 2)"
+[ -e "$claude_agents/implementer.md" ] && malo "instalo implementer.md pese a que el manifiesto de agentes no se pudo consultar para reviewer"
+
+caso "12.9 #3 (codex): manifiesto con DOS hashes para el MISMO rol adopta el que coincide (lookup multi-hash)"
+dest_listo; nuevo_claude_agents; poner_vendor reviewer
+printf '\n' >> "$claude_agents/reviewer.md"   # variante del vendor: un hash DISTINTO al que ya esta en el manifiesto
+segundo_hash="$(sha256sum "$claude_agents/reviewer.md" | cut -d' ' -f1)"
+manifest_path="$repo/agents/vendor-manifest.sha256"
+manifest_backup="$tmp/vendor-manifest-backup.sha256"
+cp "$manifest_path" "$manifest_backup"
+printf '%s  reviewer.md\n' "$segundo_hash" >> "$manifest_path"
+out="$(host_claude 2>&1)"; rc=$?
+cp "$manifest_backup" "$manifest_path"
+printf '%s' "$out" | grep -q 'ADOPTADO' \
+  || malo "un manifiesto con DOS hashes de reviewer no adopto el segundo (lookup multi-hash roto): $out"
+grep -q '^saikit_owned:' "$claude_agents/reviewer.md" \
+  || malo "no adopto el perfil pese al segundo hash presente en el manifiesto"
+
+caso "12.9 #4 (grok): --dry-run en --host claude no escribe nada y reporta por rol"
+dest_listo; nuevo_claude_agents
+out="$(host_claude --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run (claude) no deberia fallar: $out"
+for rol in implementer verifier reviewer; do
+  [ -e "$claude_agents/$rol.md" ] && malo "dry-run (claude) escribio $rol.md"
+done
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (claude) no reporto lo que haria"
+
+caso "12.9 #4 (grok): --dry-run en --host kimi no escribe nada"
+dest_listo; nuevo_kimi_agents
+out="$(host_kimi --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run (kimi) no deberia fallar: $out"
+[ -e "$kimi_agents/implementer.md" ] && malo "dry-run (kimi) escribio implementer.md"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (kimi) no reporto lo que haria"
+
+caso "12.9 #5 (grok): agente_traducido fallando (router roto) NO pisa el perfil grok existente"
+router_break="$tmp/router-break.sh"
+cat > "$router_break" <<'STUB'
+#!/usr/bin/env bash
+set -u
+format='json'
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --format) format="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ "$format" = 'frontmatter' ]; then
+  printf 'router kaboom\n' >&2
+  exit 1
+fi
+exit 0
+STUB
+nuevo_home_grok
+mkdir -p "$gk_agents"
+printf -- '---\nname: reviewer\ndescription: mio\nsaikit_owned: summonaikit-claude\n---\nperfil existente\n' > "$gk_agents/reviewer.md"
+antes="$(cksum < "$gk_agents/reviewer.md")"
+out="$(SAIKIT_MODEL_ROUTING_TOOL="$router_break" host_grok 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "el router roto deberia hacer fallar la instalacion (rc de agente_traducido ignorado), dio 0"
+[ "$antes" = "$(cksum < "$gk_agents/reviewer.md")" ] \
+  || malo "el perfil grok existente se piso con el router roto (rc de agente_traducido ignorado)"
+
+caso "12.9 #6 (grok): --refrescar-manifiesto acepta --host kimi (mismo modo reporta-jamas-adopta)"
+dest_listo; nuevo_kimi_agents
+printf -- '---\nname: reviewer\ndescription: mio\n---\ncambio ajeno\n' > "$kimi_agents/reviewer.md"
+manifiesto_antes="$(cksum < "$repo/agents/vendor-manifest.sha256")"
+out="$(SAIKIT_KIMI_AGENTS_DIR="$kimi_agents" bash "$tool" --host kimi --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--refrescar-manifiesto (kimi) no deberia fallar solo por reportar: rc=$rc: $out"
+manifiesto_hash="$(sha256sum "$kimi_agents/reviewer.md" | cut -d' ' -f1)"
+printf '%s' "$out" | grep -q "$manifiesto_hash" \
+  || malo "--refrescar-manifiesto (kimi) no imprimio el hash del perfil DESCONOCIDO"
+[ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
+  || malo "--refrescar-manifiesto (kimi) NO debe escribir el manifiesto (solo reporta)"
+
+caso "12.9 #7 (grok): --help lista --host claude y --refrescar-manifiesto"
+out="$(bash "$tool" --help 2>&1)"
+printf '%s' "$out" | grep -q -- '--host claude' || malo "el --help no lista --host claude"
+printf '%s' "$out" | grep -q -- '--refrescar-manifiesto' || malo "el --help no lista --refrescar-manifiesto"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

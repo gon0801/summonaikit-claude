@@ -42,6 +42,8 @@ corresponden por rol, resueltos en `tools/model-routing.sh`:
 ```bash
 bash tools/install-hook.sh --host claude   # perfiles de agente en ~/.claude/agents
 bash tools/install-hook.sh --host kimi     # perfiles de agente en ~/.agents/agents
+bash tools/install-hook.sh --host claude --dry-run   # dice que HARIA por rol; no escribe
+bash tools/install-hook.sh --host kimi --dry-run     # idem, sobre ~/.agents/agents
 ```
 
 Estos dos hosts no llevan la marca `saikit_owned` en los perfiles del vendor,
@@ -55,7 +57,12 @@ hook (`agents/vendor-manifest.sha256`):
 | **Nuestro, idéntico** | No reescribe. |
 | **Nuestro, distinto** | Archiva y repara. |
 | **Vendor conocido** (su sha256 está en `agents/vendor-manifest.sha256`) | Archiva y **reemplaza**. |
-| **Desconocido** (ni marca ni hash de vendor conocido) | **No toca nada** y reporta — puede ser un cambio legítimo. |
+| **Desconocido** (ni marca ni hash de vendor conocido) | **No toca nada** y reporta — puede ser un cambio legítimo. **Esto no es un error**: el comando reporta y sale 0 por diseño (no tocar el cambio de otro no es un fallo del comando). Auditar la salida (o correr `--refrescar-manifiesto`) es el paso humano que sigue. |
+
+Los TRES perfiles se clasifican ANTES de escribir ninguno: si cualquiera de
+`implementer`/`verifier`/`reviewer` no se puede clasificar (manifiesto o
+destino no observables), la corrida entera sale sin tocar nada — nunca deja
+una instalación a medias (Task 12.9).
 
 `--host kimi` **no** instala ruteo de modelo ni de `effort`: kimi no acepta
 esas claves por agente (medido en la Task 12.3, ver `docs/spec/00-project-spec.md`
@@ -64,11 +71,14 @@ archivo y saca el `model: sonnet` inerte del vendor. `closer` y `retro` no
 están cubiertos por ninguno de los dos `--host`: siguen con el `model: sonnet`
 del vendor.
 
-`--refrescar-manifiesto` (requiere `--host claude`) **reporta** hash y diff de
-cada perfil `DESCONOCIDO` contra la fuente del repo; **jamás adopta por sí
-mismo**. Adoptar un hash nuevo del vendor es pegarlo a mano en
+`--refrescar-manifiesto` (requiere `--host claude` o `--host kimi`) **reporta**
+hash y diff de cada perfil `DESCONOCIDO` contra la fuente del repo; **jamás
+adopta por sí mismo**. Adoptar un hash nuevo del vendor es pegarlo a mano en
 `agents/vendor-manifest.sha256`, en un commit propio, con el diff a la vista
-en la revisión.
+en la revisión. El manifiesto no es por-host (mapea hash → rol), así que
+puede llevar más de un hash para el mismo rol — por ejemplo, dos versiones
+vivas distintas del `reviewer.md` del vendor — y cualquiera de los dos se
+adopta.
 
 Después de instalar, el script corre `tools/check-hook-registration.sh` contra
 el `settings.json` hermano del destino. Ese aviso es **advisory**: un archivo

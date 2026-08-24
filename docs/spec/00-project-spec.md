@@ -1511,6 +1511,16 @@ que otro proceso escriba esos archivos entre corridas del instalador.
 - `--refrescar-manifiesto` reporta (hash + diff), JAMÁS adopta. Adoptar un
   hash nuevo del vendor es pegarlo en `agents/vendor-manifest.sha256` en un
   commit propio, con el diff a la vista en la revisión — no hay `--force`.
+- La fila `claude` del router (`tools/model-routing.sh`) no tiene medición
+  viva propia como zcode/grok/kimi (12.1/12.2/12.3): la evidencia es **cita**
+  de documentación oficial del vendor (`https://code.claude.com/docs/en/sub-agents.md`,
+  secciones `model-configuration` y `effort`, 2026-08-24), no captura contra
+  un runtime — el frontmatter de subagentes soporta `model:` (alias
+  `sonnet`/`opus`/`haiku`/`fable`, IDs completos como `claude-sonnet-5`, e
+  `inherit`) y `effort:` (`low`/`medium`/`high`/`xhigh`/`max`, hereda por
+  default); un `model:` desconocido valida contra el catálogo y cae al
+  heredado, y una clave no reconocida se ignora en silencio — misma familia de
+  hallazgo que 12.1/12.3, distinta clase de evidencia y declarada como tal.
 
 ### Medido 2026-08-23, Task 12.1
 
