@@ -73,6 +73,14 @@ QUITAR_GROK=0
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
 VIO_DEST=0
+# Task 12.6: --host claude instala implementer/verifier/reviewer en
+# ~/.claude/agents con la via de adopcion del CUARTO estado (VENDOR_CONOCIDO
+# por hash en agents/vendor-manifest.sha256). No toca DEST: el hook global ya
+# vive ahi por el flujo normal (sin --host).
+# --refrescar-manifiesto REPORTA (hash + diff), JAMAS adopta: adoptar es un
+# commit propio que pega el hash nuevo en el manifiesto, con el diff a la
+# vista en la revision.
+REFRESCAR_MANIFIESTO=0
 
 # Posicion y formato fijos, como los declara el spec (§ La adopcion). La linea 1
 # es el shebang: un marcador antes de el rompe la ejecucion. Se lee UNA linea,
@@ -92,6 +100,7 @@ while [ $# -gt 0 ]; do
     --host)     HOST="${2:-}"; shift 2 ;;
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
     --quitar-grok) QUITAR_GROK=1; shift ;;
+    --refrescar-manifiesto) REFRESCAR_MANIFIESTO=1; shift ;;
     -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
       printf '[summonaikit] instalador: opcion desconocida: %s\n' "$1" >&2
@@ -100,12 +109,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Task 5.4 / 6.5 / 7.5: --host acepta zcode (registro-only, no toca DEST),
-# codex (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal de
-# DEST) y grok (TERCERA copia en ~/.grok/hooks + JSON propio + agentes).
-# Otro valor no se acepta: falla antes de tocar el archivo o el config.
-if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ]; then
-  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex" o "grok" (recibido: %s)\n' "$HOST" >&2
+# Task 5.4 / 6.5 / 7.5 / 12.6: --host acepta zcode (registro-only, no toca
+# DEST), codex (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal
+# de DEST), grok (TERCERA copia en ~/.grok/hooks + JSON propio + agentes) y
+# claude (agentes en ~/.claude/agents, no toca DEST). Otro valor no se acepta:
+# falla antes de tocar el archivo o el config.
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ] && [ "$HOST" != "claude" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok" o "claude" (recibido: %s)\n' "$HOST" >&2
+  exit 2
+fi
+if [ "$REFRESCAR_MANIFIESTO" -eq 1 ] && [ "$HOST" != "claude" ]; then
+  printf '[summonaikit] instalador: --refrescar-manifiesto requiere --host claude\n' >&2
   exit 2
 fi
 if [ "$QUITAR_ZCODE" -eq 1 ] && [ "$HOST" != "zcode" ]; then
@@ -1208,6 +1222,161 @@ if [ "$HOST" = "zcode" ]; then
     exit $?
   fi
   zcode_instalar
+  exit $?
+fi
+
+# ------------------------------------------------- Task 12.6: --host claude
+# El problema: ~/.claude/agents/ lo escribe el CLI del kit y esos perfiles NO
+# llevan saikit_owned, asi que la maquina de tres estados los deja DESCONOCIDO
+# para siempre. La via de adopcion es el CUARTO estado, VENDOR_CONOCIDO, por
+# hash contra agents/vendor-manifest.sha256 (fixtures congelados de
+# tests/fixtures/vendor-agents/, generados desde el perfil vivo del CLI).
+# DESCONOCIDO (ni marca ni hash) => no se toca, se reporta.
+CLAUDE_AGENT_ROLES='implementer verifier reviewer'
+
+claude_agents_dir() {
+  printf '%s' "${SAIKIT_CLAUDE_AGENTS_DIR:-${HOME:-}/.claude/agents}"
+}
+
+# Cuarto estado, solo para los directorios del vendor (claude por ahora). El
+# hash del manifiesto es la UNICA via de adopcion: sin el, un perfil sin marca
+# es DESCONOCIDO y no se toca.
+agente_es_vendor_conocido() {  # $1=dest  $2=rol
+  local manifiesto hash esperado
+  manifiesto="$repo/agents/vendor-manifest.sha256"
+  [ -r "$manifiesto" ] || return 1
+  hash="$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1)"
+  [ -n "$hash" ] || return 1
+  esperado="$(awk -v r="$2.md" '$2 == r {print $1}' "$manifiesto")"
+  [ -n "$esperado" ] && [ "$hash" = "$esperado" ]
+}
+
+# Como zcode_agente_estado, mas el estado VENDOR_CONOCIDO.
+agente_estado_con_vendor() {  # $1=dest  $2=traducida  $3=rol
+  local dest="$1" trad="$2" rol="$3"
+  if [ ! -e "$dest" ]; then printf 'AUSENTE'; return 0; fi
+  if [ ! -f "$dest" ] || [ ! -r "$dest" ]; then printf 'NO_OBSERVABLE'; return 0; fi
+  if zcode_agente_tiene_marca "$dest"; then
+    if cmp -s "$dest" "$trad"; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
+    return 0
+  fi
+  if agente_es_vendor_conocido "$dest" "$rol"; then printf 'VENDOR_CONOCIDO'; return 0; fi
+  printf 'DESCONOCIDO'
+}
+
+# El sello `.vendor.` distingue el backup de adopcion del de reparacion
+# (`.nuestro.`), igual que hace el instalador del hook.
+claude_archivar_vendor() {  # $1=dest
+  local dest="$1" dir backup_dir sello backup n
+  dir="$(dirname "$dest")"
+  backup_dir="$dir/saikit-backups"
+  mkdir -p "$backup_dir" || return 1
+  sello="$(date +%Y%m%d-%H%M%S)"
+  backup="$backup_dir/$(basename "$dest").vendor.$sello.bak"
+  n=2
+  while [ -e "$backup" ]; do
+    backup="$backup_dir/$(basename "$dest").vendor.$sello-$n.bak"
+    n=$((n + 1))
+  done
+  cp "$dest" "$backup" || return 1
+  cmp -s "$backup" "$dest" || return 1
+  return 0
+}
+
+claude_instalar_agentes() {
+  local dest_dir rol fuente dest trad estado
+  dest_dir="$(claude_agents_dir)"
+
+  # PRIMERO valida las TRES plantillas, DESPUES escribe. Es el orden que
+  # zcode_instalar_agentes ya usa (dos bucles separados) y no es estilo:
+  # validando y escribiendo en el mismo bucle, una plantilla invalida en el
+  # tercer rol deja los dos primeros ya publicados -- una instalacion a medias.
+  # La validacion de name: va aca tambien: sin ella, un reviewer.md cuyo
+  # frontmatter diga name: implementer se publicaria como reviewer con el
+  # modelo del implementer.
+  for rol in $CLAUDE_AGENT_ROLES; do
+    fuente="$repo/agents/$rol.md"
+    if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
+      decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
+      exit 2
+    fi
+    zcode_agente_tiene_marca "$fuente" || {
+      decir "[summonaikit] instalador: la plantilla $fuente no lleva saikit_owned."; exit 2; }
+    zcode_agente_frontmatter "$fuente" | grep -q "^name: ${rol}$" || {
+      decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."; exit 2; }
+  done
+
+  mkdir -p "$dest_dir" || {
+    decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+  for rol in $CLAUDE_AGENT_ROLES; do
+    fuente="$repo/agents/$rol.md"
+    dest="$dest_dir/$rol.md"
+    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
+    agente_traducido claude "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
+    estado="$(agente_estado_con_vendor "$dest" "$trad" "$rol")"
+    case "$estado" in
+      AUSENTE)
+        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        decir "[summonaikit] AGENTE CLAUDE INSTALADO: $rol"
+        ;;
+      NUESTRO_IDENTICO) : ;;
+      NUESTRO_DISTINTO)
+        zcode_archivar_agente "$dest" || { rm -f "$trad"; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        decir "[summonaikit] AGENTE CLAUDE REPARADO: $rol"
+        ;;
+      VENDOR_CONOCIDO)
+        claude_archivar_vendor "$dest" || { rm -f "$trad"; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
+        decir "[summonaikit] AGENTE CLAUDE ADOPTADO (vendor conocido): $rol"
+        ;;
+      DESCONOCIDO)
+        decir "[summonaikit] AGENTE CLAUDE DESCONOCIDO: $rol — no se toco."
+        decir "              destino: $dest"
+        decir "              Ni marca ni hash de vendor conocido. Puede ser un cambio legitimo."
+        ;;
+      NO_OBSERVABLE)
+        rm -f "$trad"
+        decir "[summonaikit] instalador: no se pudo clasificar $dest."; exit 5
+        ;;
+    esac
+    rm -f "$trad"
+  done
+}
+
+# --refrescar-manifiesto: REPORTA (hash + diff), JAMAS adopta. Es
+# deliberadamente manual -- un --force que adopte cualquier hash convertiria
+# el cuarto estado en el bypass que la maquina de tres estados existe para
+# evitar. Adoptar es pegar el hash reportado en agents/vendor-manifest.sha256
+# en un commit propio, con el diff a la vista en la revision.
+claude_refrescar_manifiesto() {
+  local dest_dir rol dest hash
+  dest_dir="$(claude_agents_dir)"
+  for rol in $CLAUDE_AGENT_ROLES; do
+    dest="$dest_dir/$rol.md"
+    [ -f "$dest" ] && [ -r "$dest" ] || continue
+    zcode_agente_tiene_marca "$dest" && continue
+    agente_es_vendor_conocido "$dest" "$rol" && continue
+    hash="$(sha256sum "$dest" 2>/dev/null | cut -d' ' -f1)"
+    [ -n "$hash" ] || continue
+    decir "[summonaikit] REFRESCAR MANIFIESTO — $rol: DESCONOCIDO"
+    decir "              destino: $dest"
+    decir "              sha256: $hash"
+    decir "              diff contra la plantilla del repo:"
+    diff -u "$repo/agents/$rol.md" "$dest" 2>&1 | while IFS= read -r linea; do
+      decir "              $linea"
+    done
+    decir "              No se adopto nada: --refrescar-manifiesto solo reporta."
+  done
+  return 0
+}
+
+if [ "$HOST" = "claude" ]; then
+  if [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
+    claude_refrescar_manifiesto
+    exit $?
+  fi
+  claude_instalar_agentes
   exit $?
 fi
 
