@@ -334,7 +334,7 @@ zcode_agent_backup=''
 # no se cablea. DESCONOCIDO avisa y sigue (el tipo ya existe en el host;
 # no se aborta el registro — un implementer.md custom sigue siendo el tipo).
 zcode_instalar_agentes() {
-  local src dest_dir rol fuente dest estado
+  local src dest_dir rol fuente dest estado trad
   src="$(zcode_agents_source)"
   dest_dir="$(zcode_agents_dir)"
   for rol in $ZCODE_AGENT_ROLES; do
@@ -359,10 +359,16 @@ zcode_instalar_agentes() {
   for rol in $ZCODE_AGENT_ROLES; do
     fuente="$src/$rol.md"
     dest="$dest_dir/$rol.md"
-    estado="$(zcode_agente_estado "$dest" "$fuente")"
+    # Task 12.5: clasifica y publica contra la TRADUCIDA, no la cruda. Con
+    # inyeccion de model:/effort: por host, comparar contra la cruda daria
+    # NUESTRO_DISTINTO en cada corrida y reescribiria el perfil siempre.
+    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
+    agente_traducido zcode "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
+    estado="$(zcode_agente_estado "$dest" "$trad")"
     case "$estado" in
       AUSENTE)
-        zcode_publicar_agente "$fuente" "$dest" || {
+        zcode_publicar_agente "$trad" "$dest" || {
+          rm -f "$trad"
           decir "[summonaikit] instalador: no se pudo escribir $dest"; exit 5; }
         decir "[summonaikit] AGENTE ZCODE INSTALADO: $rol"
         decir "              destino: $dest"
@@ -371,8 +377,10 @@ zcode_instalar_agentes() {
         : ;;
       NUESTRO_DISTINTO)
         zcode_archivar_agente "$dest" || {
+          rm -f "$trad"
           decir "[summonaikit] instalador: no se pudo respaldar $dest"; exit 5; }
-        zcode_publicar_agente "$fuente" "$dest" || {
+        zcode_publicar_agente "$trad" "$dest" || {
+          rm -f "$trad"
           decir "[summonaikit] instalador: no se pudo reparar $dest"; exit 5; }
         decir "[summonaikit] AGENTE ZCODE REPARADO: $rol"
         decir "              destino: $dest"
@@ -383,10 +391,12 @@ zcode_instalar_agentes() {
         decir "              No lleva saikit_owned. Puede ser un cambio legitimo."
         ;;
       NO_OBSERVABLE)
+        rm -f "$trad"
         decir "[summonaikit] instalador: no se pudo clasificar $dest (no es un archivo legible)."
         exit 5
         ;;
     esac
+    rm -f "$trad"
   done
 }
 
@@ -699,20 +709,74 @@ grok_json_estado() {  # $1=json  $2=canonico
   if [ "$(cat "$1")" = "$2" ]; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
 }
 
-# Traduccion OBLIGATORIA de frontmatter (D7 + 7.1): el frontmatter del repo
-# lleva `skills:` como string y el loader de Grok espera una secuencia (error
-# medido: `skills: invalid type: string ..., expected a sequence`). La
-# traduccion que esta task fija, medida como la segura: OMITIR la clave
-# `skills:` de la copia instalada — name/description/tools/saikit_owned no
-# rompieron nada medido. Solo el PRIMER bloque frontmatter: una linea skills:
-# en el body es contenido, no configuracion. La fuente del repo queda intacta
-# (una sola fuente, sin dos sabores).
-grok_agente_traducido() {  # $1=fuente → stdout
-  awk '
-    /^---[[:space:]]*\r?$/ { n++; print; next }
-    n == 1 && /^skills:/ { next }
+# Traduccion de frontmatter por host (D7 + 7.1, generalizada en la Task 12.5).
+# Dos operaciones, en este orden:
+#
+#   1. OMITIR claves que el host no acepta. Medido en la 7.1: el loader de
+#      Grok espera `skills:` como secuencia y la fuente lo declara como string
+#      (error medido: `skills: invalid type: string ..., expected a sequence`).
+#   2. INYECTAR model:/effort: del router (Task 12.4, tools/model-routing.sh).
+#      Una fila de host sin medir no inyecta nada, y el agente hereda del
+#      padre — que es como zcode se comporta desde la 5.6.
+#
+# Solo el PRIMER bloque frontmatter: una linea `skills:` o `model:` en el body
+# es contenido, no configuracion. La fuente del repo queda intacta: una sola
+# fuente, sin dos sabores.
+agente_traducido() {  # $1=host  $2=fuente → stdout
+  local host="$1" fuente="$2" rol inyectar router effort_key desechar
+  rol="$(zcode_agente_frontmatter "$fuente" | sed -n 's/^name: //p' | head -1)"
+  if [ -z "$rol" ]; then
+    # `decir` imprime por STDOUT (install-hook.sh:176). Los llamadores redirigen
+    # el stdout de esta funcion a un temporal que borran ante el error, asi que
+    # un `decir` aca desaparece y el operador ve un exit 2 sin razon. Va a
+    # stderr explicito.
+    printf '[summonaikit] instalador: %s no declara name: en el frontmatter\n' "$fuente" >&2
+    return 1
+  fi
+  # Costura de test, mismo mecanismo que SAIKIT_INSTALL_TOOL: la suite apunta el
+  # router a un stub con las filas llenas y asi prueba la INYECCION aunque las
+  # mediciones 12.1/12.2/12.3 hayan dejado alguna fila vacia.
+  router="${SAIKIT_MODEL_ROUTING_TOOL:-$repo/tools/model-routing.sh}"
+  # `bash "$router"`, NO "$router" a secas: los 7 scripts de tools/ estan
+  # versionados 100644, sin bit de ejecucion (git ls-files -s tools/*.sh), asi
+  # que la invocacion directa muere con "Permission denied" en Linux -- que es
+  # donde corre el CI.
+  inyectar="$(bash "$router" --host "$host" --role "$rol" --format frontmatter)" || return 1
+  # El NOMBRE de la clave del effort no es 'effort:' para todos los hosts
+  # (Task 12.1: zcode lee thoughtLevel:, nunca effort: -- escribir effort:
+  # seria texto muerto). El router ya emite --format frontmatter con la clave
+  # correcta (arriba); esto es SOLO para saber que linea preexistente de la
+  # FUENTE hay que descartar mas abajo. Si el router falla aca (no deberia,
+  # ya se valido host/rol arriba), 'effort' es un fallback seguro: como mucho
+  # deja de descartar una linea que hoy ninguna fuente tiene.
+  effort_key="$(bash "$router" --host "$host" --role "$rol" --field effort-key 2>/dev/null)" \
+    || effort_key='effort'
+  [ -z "$effort_key" ] && effort_key='effort'
+
+  # `^$` NO sirve como "regex que no matchea nada": matchea las lineas vacias y
+  # se las comeria del frontmatter, y ahi el instalado dejaria de ser la fuente
+  # traducida. `a^` no matchea nunca.
+  local omitir='a^'
+  [ "$host" = 'grok' ] && omitir='^skills:'
+
+  # Claves nuestras que ya vinieran en la fuente se descartan: manda el
+  # router. `model`/`effort` siempre; el nombre de clave especifico del host
+  # (thoughtLevel en zcode) se suma solo si es distinto de 'effort', para no
+  # armar una alternancia vacia en el regex.
+  desechar='model|effort'
+  [ "$effort_key" != 'effort' ] && desechar="$desechar|$effort_key"
+
+  awk -v omitir="$omitir" -v inyectar="$inyectar" -v desechar="$desechar" '
+    /^---[[:space:]]*\r?$/ {
+      n++
+      # El cierre del primer bloque: inyectar JUSTO ANTES.
+      if (n == 2 && inyectar != "") print inyectar
+      print; next
+    }
+    n == 1 && $0 ~ omitir { next }
+    n == 1 && $0 ~ ("^(" desechar "):") { next }
     { print }
-  ' "$1"
+  ' "$fuente"
 }
 
 grok_agente_estado() {  # $1=dest  $2=contenido traducido
@@ -801,7 +865,7 @@ grok_preflight() {
       exit 2
     fi
     dest_agente="$(grok_agents_dir)/$rol.md"
-    estado_json="$(grok_agente_estado "$dest_agente" "$(grok_agente_traducido "$fuente")")"
+    estado_json="$(grok_agente_estado "$dest_agente" "$(agente_traducido grok "$fuente")")"
     if [ "$estado_json" = 'NO_OBSERVABLE' ]; then
       decir "[summonaikit] unknown — no se pudo clasificar el agente $dest_agente; no se escribio nada."
       exit 4
@@ -845,7 +909,7 @@ grok_publicar_agentes() {
   dir="$(grok_agents_dir)"
   for rol in $GROK_AGENT_ROLES; do
     fuente="$src/$rol.md"
-    trad="$(grok_agente_traducido "$fuente")"
+    trad="$(agente_traducido grok "$fuente")"
     dest="$dir/$rol.md"
     estado="$(grok_agente_estado "$dest" "$trad")"
     case "$estado" in

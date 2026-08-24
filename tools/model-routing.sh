@@ -33,7 +33,7 @@ uso() {
 Uso:
   tools/model-routing.sh --host claude|zcode|grok|kimi
                          (--role implementer|verifier|reviewer | --tier standard|verify|review)
-                         [--field model|effort|tier]
+                         [--field model|effort|effort-key|tier]
                          [--format json|frontmatter]
 
 Una fila de host sin medir devuelve VACIO con exit 0: la clave se omite del
@@ -105,6 +105,17 @@ esac
 
 MODEL=''
 EFFORT=''
+# Nombre de CLAVE de frontmatter para el effort, por host. Default 'effort'
+# (claude, grok, kimi). Medido en la Task 12.1 (docs/task-12.1-medicion.md):
+# el parser de zcode NUNCA destructura `effort:` -- la clave real que lee es
+# `thoughtLevel:`. Escribir `effort:` en zcode seria texto muerto, aunque el
+# valor en si sea correcto. Esto se fija ACA, en el emisor, y no en el
+# instalador: si zcode llegara a llenar su fila algun dia, el ID de modelo y
+# el nombre de clave viven en el mismo lugar (Core Rule: los IDs de modelo
+# viven SOLO en este archivo -- lo mismo aplica al nombre de la clave que los
+# porta). Se fija SIEMPRE por host, sin importar si la fila esta vacia hoy:
+# asi `--field effort-key` es candeable aunque EFFORT todavia sea ''.
+EFFORT_KEY='effort'
 
 # --- Tablas por host ---------------------------------------------------------
 # Una fila vacia NO es un error: es "todavia no medido" (Task 12.1/12.2/12.3).
@@ -130,11 +141,42 @@ case "$HOST" in
     esac
     ;;
   zcode)
-    # Fila pendiente: Task 12.1. Hasta entonces, hereda GLM del padre.
-    : ;;
+    # Fila VACIA A PROPOSITO (medido en la Task 12.1, docs/task-12.1-medicion.md):
+    # el parser SI lee model: (clave oficial), pero el catalogo real de la
+    # cuenta quedo NO OBSERVADO -- los IDs glm-5.x salieron de un grep debil
+    # contra el bundle, no del entitlement confirmado de la cuenta. Ademas,
+    # "effort" en frontmatter no existe como tal: el parser destructura
+    # thoughtLevel:, no effort: (escribir effort: seria texto muerto). Sin
+    # catalogo confirmado no hay valor que poner en la celda -- Core Rule del
+    # diseno ("un host cuya medicion no cierre queda con su fila vacia y
+    # hereda del padre", docs/phase-12-model-routing-design.md §D3/§Medicion
+    # primero). Hereda GLM del padre, igual que hoy.
+    #
+    # EFFORT_KEY SI se fija aunque la fila este vacia: es el nombre de clave
+    # que el emisor --format frontmatter usaria si algun dia EFFORT dejara de
+    # estar vacio, y el que agente_traducido() usa para descartar una linea
+    # preexistente con ese nombre en la fuente (Task 12.5).
+    EFFORT_KEY='thoughtLevel'
+    ;;
   grok)
-    # Fila pendiente: Task 12.2.
-    : ;;
+    # Medido en la Task 12.2 (docs/task-12.2-medicion.md, 2026-08-24): grok SI
+    # honra model: y effort: por agente -- evidencia de registro interno
+    # (subagents/<id>/meta.json: effective_model_id; chat_history.jsonl:
+    # model_id/reasoning_effort del subagente, distintos del padre e iguales
+    # al frontmatter declarado). Catalogo real de ESTA cuenta (models_cache.json,
+    # 2026-08-24): grok-4.6 (default de config.toml) y grok-4.5. La medicion no
+    # comparo capacidad entre los dos IDs -- solo confirmo que ambos se aplican
+    # literalmente -- asi que no hay evidencia para preferir uno sobre otro por
+    # tier. Se usa el mismo grok-4.6 (el default confirmado de la cuenta) en
+    # los tres tiers y se varia solo el effort, mismo criterio que claude entre
+    # standard/verify (D2 del diseno: mismo modelo, effort mas bajo evita
+    # inventar una jerarquia de modelos no medida).
+    case "$TIER" in
+      standard) MODEL='grok-4.6'; EFFORT='medium' ;;
+      verify)   MODEL='grok-4.6'; EFFORT='low' ;;
+      review)   MODEL='grok-4.6'; EFFORT='xhigh' ;;
+    esac
+    ;;
   kimi)
     # Fila VACIA DEFINITIVA, no pendiente (medido en la Task 12.3): el host
     # no acepta model: ni effort: por agente. Ver tests/test_model_routing.sh.
@@ -151,9 +193,10 @@ esac
 
 case "$FIELD" in
   '') ;;
-  model)  printf '%s\n' "$MODEL";  exit 0 ;;
-  effort) printf '%s\n' "$EFFORT"; exit 0 ;;
-  tier)   printf '%s\n' "$TIER";   exit 0 ;;
+  model)       printf '%s\n' "$MODEL";      exit 0 ;;
+  effort)      printf '%s\n' "$EFFORT";     exit 0 ;;
+  effort-key)  printf '%s\n' "$EFFORT_KEY"; exit 0 ;;
+  tier)        printf '%s\n' "$TIER";       exit 0 ;;
   *) decir "[summonaikit] model-routing: --field desconocido: $FIELD"; exit 2 ;;
 esac
 
@@ -163,10 +206,12 @@ case "$FORMAT" in
            "$HOST" "$ROLE" "$TIER" "$MODEL" "$EFFORT"
     ;;
   frontmatter)
-    # Cero, una o dos lineas. Nunca `model:` con valor vacio: eso seria escribir
-    # una clave que miente en vez de omitirla.
+    # Cero, una o dos lineas. Nunca `model:`/EFFORT_KEY: con valor vacio: eso
+    # seria escribir una clave que miente en vez de omitirla. La clave del
+    # effort NO es literal 'effort:' para todos los hosts: EFFORT_KEY la fija
+    # por host (Task 12.1/12.5: zcode lee thoughtLevel:, nunca effort:).
     [ -n "$MODEL" ]  && printf 'model: %s\n' "$MODEL"
-    [ -n "$EFFORT" ] && printf 'effort: %s\n' "$EFFORT"
+    [ -n "$EFFORT" ] && printf '%s: %s\n' "$EFFORT_KEY" "$EFFORT"
     ;;
   *) decir "[summonaikit] model-routing: --format desconocido: $FORMAT"; exit 2 ;;
 esac

@@ -24,6 +24,8 @@ repo="$(cd "$here/.." && pwd)"
 tool="${SAIKIT_INSTALL_TOOL:-$repo/tools/install-hook.sh}"
 fuente="$repo/hooks/summonaikit-harness.sh"
 manifiesto="$repo/hooks/vendor-manifest.sha256"
+# Task 12.5: el router de modelo/effort que agente_traducido() consume.
+router="$repo/tools/model-routing.sh"
 
 fail=0
 caso() { printf '  caso: %s\n' "$1"; }
@@ -848,19 +850,27 @@ sin_grok_temporales "$dest" || malo "dejo temporales sueltos junto al hook grok"
 printf '%s' "$out" | grep -q 'REGISTRO GROK' || malo "no reporta la publicacion del JSON: $out"
 
 # El caso que ATA la traduccion de frontmatter (D7 + 7.1: skills: como string
-# no parsea en Grok). La copia instalada debe ser la fuente MENOS exactamente
-# la linea skills: — ni una linea mas, ni una menos.
-caso "grok: perfiles instalados = fuente MENOS exactamente la clave skills:"
+# no parsea en Grok) Y la inyeccion de model:/effort: (Task 12.5, Task 12.2
+# midio que grok SI las honra). La copia instalada debe ser la fuente MENOS
+# exactamente la linea skills: MAS exactamente las dos lineas model:/effort:
+# que emite tools/model-routing.sh para ese rol — ni una linea de mas, ni de
+# menos, en ninguna de las dos direcciones.
+caso "grok: perfiles instalados = fuente MENOS skills: MAS model:/effort: del router"
 for rol in implementer verifier reviewer; do
   [ -f "$gk_agents/$rol.md" ] || { malo "falta $rol.md en ~/.grok/agents"; continue; }
+  esperado_model="$(bash "$router" --host grok --role "$rol" --field model)"
+  esperado_effort="$(bash "$router" --host grok --role "$rol" --field effort)"
   d_out="$(diff "$agentes_fuente/$rol.md" "$gk_agents/$rol.md")"
   [ "$(printf '%s' "$d_out" | grep -c '^<')" -eq 1 ] \
     || malo "$rol: la traduccion debe quitar EXACTAMENTE una linea: $d_out"
   printf '%s' "$d_out" | grep -q '^< skills: ' \
     || malo "$rol: la unica linea quitada debe ser skills: (no parsea en Grok)"
-  if printf '%s' "$d_out" | grep -q '^>'; then
-    malo "$rol: la traduccion no debe AGREGAR lineas: $d_out"
-  fi
+  [ "$(printf '%s' "$d_out" | grep -c '^>')" -eq 2 ] \
+    || malo "$rol: la traduccion debe agregar EXACTAMENTE model:/effort: del router: $d_out"
+  printf '%s' "$d_out" | grep -q "^> model: $esperado_model\$" \
+    || malo "$rol: no inyecto el model: ruteado ($esperado_model): $d_out"
+  printf '%s' "$d_out" | grep -q "^> effort: $esperado_effort\$" \
+    || malo "$rol: no inyecto el effort: ruteado ($esperado_effort): $d_out"
   grep -Eq '^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$' "$gk_agents/$rol.md" \
     || malo "$rol.md instalado no lleva la marca saikit_owned"
   grep -q "^name: $rol\$" "$gk_agents/$rol.md" || malo "$rol.md no declara name: $rol"
@@ -1046,6 +1056,156 @@ out="$(HOME="$home_gk" USERPROFILE="$home_gk" \
        SAIKIT_GROK_BASH_WIN="$bash_gk" SAIKIT_GROK_AGENTS_DIR="$gk_agents" \
        bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "el aviso de registro no debe cambiar el exit code (dio $rc): $out"
+
+# ============================================================================
+# Task 12.5 — traduccion por host generalizada + inyeccion de model:/effort:
+# ============================================================================
+# grok_agente_traducido() se generaliza a agente_traducido <host> <fuente>: la
+# traduccion sigue omitiendo lo que el host no acepta (skills: en grok, Task
+# 7.5) y ADEMAS inyecta model:/effort: del router (Task 12.4). zcode pasa a
+# clasificar y publicar contra la plantilla TRADUCIDA (antes comparaba contra
+# la cruda, Task 5.6): con inyeccion por host, comparar contra la cruda daria
+# NUESTRO_DISTINTO en cada corrida y reescribiria el perfil siempre, con
+# backup cada vez — el defecto que este cambio introduce si se hace a medias.
+#
+# Costura: router de prueba con las cuatro filas llenas, mismo mecanismo que
+# SAIKIT_INSTALL_TOOL. Sin esto, si 12.1/12.2 dejaron alguna fila vacia (zcode:
+# catalogo real de la cuenta NO OBSERVADO, docs/task-12.1-medicion.md), estos
+# casos solo probarian la medicion, no la INYECCION.
+router_stub="$tmp/router-stub.sh"
+cat > "$router_stub" <<'STUB'
+#!/usr/bin/env bash
+set -u
+host=''; role=''; format='json'
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host) host="$2"; shift 2 ;;
+    --role) role="$2"; shift 2 ;;
+    --format) format="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ "$format" = 'frontmatter' ] || exit 0
+printf 'model: modelo-de-prueba-%s-%s\neffort: low\n' "$host" "$role"
+STUB
+
+host_zcode_stub() {
+  SAIKIT_MODEL_ROUTING_TOOL="$router_stub" host_zcode "$@"
+}
+
+caso "12.5 zcode: el perfil instalado lleva el model/effort que emite el router"
+dest_listo; nuevo_zcode_cfg
+host_zcode_stub >/dev/null 2>&1
+grep -q '^model: modelo-de-prueba-zcode-reviewer$' "$zcode_agents/reviewer.md" \
+  || malo "el perfil de zcode no lleva el modelo ruteado"
+grep -q '^effort: low$' "$zcode_agents/reviewer.md" \
+  || malo "el perfil de zcode no lleva el effort ruteado"
+
+caso "12.5 zcode: la inyeccion cae DENTRO del primer bloque frontmatter, una sola vez"
+n="$(grep -c '^model: ' "$zcode_agents/reviewer.md")"
+[ "$n" = "1" ] || malo "esperaba 1 linea model:, hay $n"
+linea_model="$(grep -n '^model: ' "$zcode_agents/reviewer.md" | cut -d: -f1)"
+linea_cierre="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut -d: -f1)"
+[ "$linea_model" -lt "$linea_cierre" ] || malo "model: cayo fuera del frontmatter"
+
+caso "12.5 zcode: un --- EXTRA en el BODY no rompe: la inyeccion sigue cayendo UNA sola vez, antes del cierre REAL del frontmatter"
+src_extra_dash="$tmp/agents-extra-dash"
+mkdir -p "$src_extra_dash"
+for rol in implementer verifier reviewer; do
+  {
+    cat "$agentes_fuente/$rol.md"
+    printf '\n---\n'
+    printf 'Una linea de ejemplo con una raya --- que no es un cierre de frontmatter.\n'
+  } > "$src_extra_dash/$rol.md"
+done
+dest_listo; nuevo_zcode_cfg
+out_ed="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+          SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+          SAIKIT_ZCODE_AGENTS_SOURCE="$src_extra_dash" \
+          SAIKIT_MODEL_ROUTING_TOOL="$router_stub" \
+          bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc_ed=$?
+[ "$rc_ed" -eq 0 ] || malo "esperaba exit 0, dio $rc_ed: $out_ed"
+n_model_ed="$(grep -c '^model: ' "$zcode_agents/reviewer.md")"
+[ "$n_model_ed" = "1" ] || malo "un --- extra en el body duplico la inyeccion: hay $n_model_ed lineas model:"
+linea_model_ed="$(grep -n '^model: ' "$zcode_agents/reviewer.md" | cut -d: -f1)"
+linea_cierre_ed="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut -d: -f1)"
+[ "$linea_model_ed" -lt "$linea_cierre_ed" ] \
+  || malo "model: no cayo antes del cierre REAL del frontmatter (con un --- extra en el body)"
+[ "$(grep -c '^---' "$zcode_agents/reviewer.md")" = "3" ] \
+  || malo "el --- extra del body debia conservarse (apertura + cierre + la del body = 3)"
+
+caso "12.5 zcode: agente_traducido descarta un thoughtLevel: preexistente de la fuente (no lo duplica) y usa el nombre de clave del router (Task 12.1)"
+src_thoughtlevel="$tmp/agents-thoughtlevel"
+mkdir -p "$src_thoughtlevel"
+for rol in implementer verifier reviewer; do
+  awk '/^name: /{print; print "thoughtLevel: viejo-de-la-fuente"; next} {print}' \
+    "$agentes_fuente/$rol.md" > "$src_thoughtlevel/$rol.md"
+done
+router_stub_tl="$tmp/router-stub-thoughtlevel.sh"
+cat > "$router_stub_tl" <<'STUB'
+#!/usr/bin/env bash
+set -u
+host=''; role=''; format='json'; field=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host) host="$2"; shift 2 ;;
+    --role) role="$2"; shift 2 ;;
+    --format) format="$2"; shift 2 ;;
+    --field) field="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ "$field" = 'effort-key' ]; then
+  if [ "$host" = 'zcode' ]; then printf 'thoughtLevel\n'; else printf 'effort\n'; fi
+  exit 0
+fi
+[ "$format" = 'frontmatter' ] || exit 0
+if [ "$host" = 'zcode' ]; then
+  printf 'model: modelo-de-prueba-zcode-%s\nthoughtLevel: nuevo-del-router\n' "$role"
+else
+  printf 'model: modelo-de-prueba-%s-%s\neffort: low\n' "$host" "$role"
+fi
+STUB
+dest_listo; nuevo_zcode_cfg
+out_tl="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+          SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+          SAIKIT_ZCODE_AGENTS_SOURCE="$src_thoughtlevel" \
+          SAIKIT_MODEL_ROUTING_TOOL="$router_stub_tl" \
+          bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc_tl=$?
+[ "$rc_tl" -eq 0 ] || malo "esperaba exit 0, dio $rc_tl: $out_tl"
+n_tl="$(grep -c '^thoughtLevel:' "$zcode_agents/reviewer.md")"
+[ "$n_tl" = "1" ] \
+  || malo "esperaba 1 sola linea thoughtLevel: (la del router, sin duplicar la de la fuente), hay $n_tl"
+grep -q '^thoughtLevel: nuevo-del-router$' "$zcode_agents/reviewer.md" \
+  || malo "el thoughtLevel: instalado no es el del router (debia reemplazar el de la fuente)"
+if grep -q '^effort:' "$zcode_agents/reviewer.md"; then
+  malo "zcode no debe llevar effort: -- la clave real que lee el parser es thoughtLevel: (Task 12.1)"
+fi
+
+caso "12.5 zcode: una fila de host vacia no inyecta ninguna clave (router real, zcode sin medir: docs/task-12.1-medicion.md)"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1   # router REAL, no el stub
+if grep -q '^model:' "$zcode_agents/reviewer.md"; then
+  malo "un host sin fila medida no debe llevar model:"
+fi
+
+caso "12.5 zcode: instalar dos veces seguidas NO reescribe (el defecto de comparar contra la cruda)"
+dest_listo; nuevo_zcode_cfg
+host_zcode_stub >/dev/null 2>&1
+antes="$(find "$zcode_agents" -type f -print0 | sort -z | xargs -0 cksum)"
+host_zcode_stub >/dev/null 2>&1
+despues="$(find "$zcode_agents" -type f -print0 | sort -z | xargs -0 cksum)"
+[ "$antes" = "$despues" ] || malo "la segunda corrida reescribio los perfiles"
+[ -d "$zcode_agents/saikit-backups" ] && malo "la segunda corrida dejo un backup: esta reescribiendo"
+
+caso "12.5 grok: sigue omitiendo skills: (traduccion de la 7.5, no se pierde) y SI lleva model: del router"
+nuevo_home_grok
+out_gk="$(SAIKIT_MODEL_ROUTING_TOOL="$router_stub" host_grok 2>&1)"; rc_gk=$?
+[ "$rc_gk" -eq 0 ] || malo "esperaba exit 0, dio $rc_gk: $out_gk"
+sed -n '/^---/,/^---/p' "$gk_agents/reviewer.md" | grep -q '^skills:' \
+  && malo "grok no debe llevar skills: en el frontmatter"
+grep -q '^model: modelo-de-prueba-grok-reviewer$' "$gk_agents/reviewer.md" \
+  || malo "el perfil de grok no lleva el modelo ruteado"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
