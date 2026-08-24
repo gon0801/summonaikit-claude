@@ -39,6 +39,7 @@
 #   bash tools/install-hook.sh --host zcode [--quitar-zcode]
 #   bash tools/install-hook.sh --host codex
 #   bash tools/install-hook.sh --host grok [--quitar-grok]
+#   bash tools/install-hook.sh --host kimi
 #
 # Exit codes (cualquier != 0 significa que el destino quedo INTACTO):
 #   0  instalado / reparado / restaurado / ya estaba al dia
@@ -109,13 +110,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Task 5.4 / 6.5 / 7.5 / 12.6: --host acepta zcode (registro-only, no toca
-# DEST), codex (instala la SEGUNDA copia en ~/.codex/hooks por el flujo normal
-# de DEST), grok (TERCERA copia en ~/.grok/hooks + JSON propio + agentes) y
-# claude (agentes en ~/.claude/agents, no toca DEST). Otro valor no se acepta:
-# falla antes de tocar el archivo o el config.
-if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ] && [ "$HOST" != "claude" ]; then
-  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok" o "claude" (recibido: %s)\n' "$HOST" >&2
+# Task 5.4 / 6.5 / 7.5 / 12.6 / 12.7: --host acepta zcode (registro-only, no
+# toca DEST), codex (instala la SEGUNDA copia en ~/.codex/hooks por el flujo
+# normal de DEST), grok (TERCERA copia en ~/.grok/hooks + JSON propio +
+# agentes), claude (agentes en ~/.claude/agents, no toca DEST) y kimi
+# (agentes en ~/.agents/agents, no toca DEST; la 12.3 midio que el host no
+# acepta model:/effort: por agente, asi que --host kimi NO instala ruteo).
+# Otro valor no se acepta: falla antes de tocar el archivo o el config.
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ] && [ "$HOST" != "claude" ] && [ "$HOST" != "kimi" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok", "claude" o "kimi" (recibido: %s)\n' "$HOST" >&2
   exit 2
 fi
 if [ "$REFRESCAR_MANIFIESTO" -eq 1 ] && [ "$HOST" != "claude" ]; then
@@ -1283,9 +1286,16 @@ claude_archivar_vendor() {  # $1=dest
   return 0
 }
 
-claude_instalar_agentes() {
-  local dest_dir rol fuente dest trad estado
-  dest_dir="$(claude_agents_dir)"
+# Unifica claude_instalar_agentes y kimi_instalar_agentes (Task 12.7): mismo
+# bucle de validar+publicar con el CUARTO estado (VENDOR_CONOCIDO), solo
+# cambia el host que agente_traducido() traduce, el directorio destino y la
+# etiqueta de los mensajes. El manifiesto (agents/vendor-manifest.sha256) NO
+# es por-host: mapea hash -> rol, asi que agente_es_vendor_conocido() ya sirve
+# tal cual para cualquier vendor cuyo perfil vivo coincida byte a byte con el
+# fixture congelado. Dos copias del mismo bucle es como se arregla una sola.
+instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
+  local host="$1" dest_dir="$2" etiqueta="$3"
+  local rol fuente dest trad estado
 
   # PRIMERO valida las TRES plantillas, DESPUES escribe. Es el orden que
   # zcode_instalar_agentes ya usa (dos bucles separados) y no es estilo:
@@ -1312,26 +1322,26 @@ claude_instalar_agentes() {
     fuente="$repo/agents/$rol.md"
     dest="$dest_dir/$rol.md"
     trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
-    agente_traducido claude "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
+    agente_traducido "$host" "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
     estado="$(agente_estado_con_vendor "$dest" "$trad" "$rol")"
     case "$estado" in
       AUSENTE)
         zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
-        decir "[summonaikit] AGENTE CLAUDE INSTALADO: $rol"
+        decir "[summonaikit] AGENTE ${etiqueta} INSTALADO: $rol"
         ;;
       NUESTRO_IDENTICO) : ;;
       NUESTRO_DISTINTO)
         zcode_archivar_agente "$dest" || { rm -f "$trad"; exit 5; }
         zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
-        decir "[summonaikit] AGENTE CLAUDE REPARADO: $rol"
+        decir "[summonaikit] AGENTE ${etiqueta} REPARADO: $rol"
         ;;
       VENDOR_CONOCIDO)
         claude_archivar_vendor "$dest" || { rm -f "$trad"; exit 5; }
         zcode_publicar_agente "$trad" "$dest" || { rm -f "$trad"; exit 5; }
-        decir "[summonaikit] AGENTE CLAUDE ADOPTADO (vendor conocido): $rol"
+        decir "[summonaikit] AGENTE ${etiqueta} ADOPTADO (vendor conocido): $rol"
         ;;
       DESCONOCIDO)
-        decir "[summonaikit] AGENTE CLAUDE DESCONOCIDO: $rol — no se toco."
+        decir "[summonaikit] AGENTE ${etiqueta} DESCONOCIDO: $rol — no se toco."
         decir "              destino: $dest"
         decir "              Ni marca ni hash de vendor conocido. Puede ser un cambio legitimo."
         ;;
@@ -1342,6 +1352,26 @@ claude_instalar_agentes() {
     esac
     rm -f "$trad"
   done
+}
+
+claude_instalar_agentes() {
+  instalar_agentes_con_vendor claude "$(claude_agents_dir)" CLAUDE
+}
+
+# ------------------------------------------------------- Task 12.7: --host kimi
+# ~/.agents/agents es la convencion COMPARTIDA del kit (hooks/, plugins/,
+# skills/ al lado): el guard es estricto, solo se tocan los tres <rol>.md, y
+# eso ya lo garantiza instalar_agentes_con_vendor (no itera el directorio
+# padre, solo escribe dest_dir/$rol.md). Alcance reducido por la 12.3: kimi no
+# acepta model:/effort: por agente, asi que agente_traducido() no inyecta nada
+# (fila vacia del router) -- esta llamada solo posesiona + saca el model:
+# inerte del vendor.
+kimi_agents_dir() {
+  printf '%s' "${SAIKIT_KIMI_AGENTS_DIR:-${HOME:-}/.agents/agents}"
+}
+
+kimi_instalar_agentes() {
+  instalar_agentes_con_vendor kimi "$(kimi_agents_dir)" KIMI
 }
 
 # --refrescar-manifiesto: REPORTA (hash + diff), JAMAS adopta. Es
@@ -1377,6 +1407,15 @@ if [ "$HOST" = "claude" ]; then
     exit $?
   fi
   claude_instalar_agentes
+  exit $?
+fi
+
+# Task 12.7: --host kimi termina aca, igual que --host claude: solo posesiona
+# los tres perfiles en ~/.agents/agents (via SAIKIT_KIMI_AGENTS_DIR en tests).
+# No toca DEST -- el hook global de kimi-code se instala por el flujo normal
+# (sin --host), igual que claude.
+if [ "$HOST" = "kimi" ]; then
+  kimi_instalar_agentes
   exit $?
 fi
 

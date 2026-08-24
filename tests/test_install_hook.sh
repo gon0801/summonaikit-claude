@@ -1344,6 +1344,138 @@ printf '%s' "$out" | grep -q "$manifiesto_hash" \
 [ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
   || malo "--refrescar-manifiesto NO debe escribir el manifiesto (solo reporta)"
 
+# ============================================================================
+# Task 12.7 — posesion en kimi: --host kimi, alcance reducido por la 12.3
+# ============================================================================
+# El problema que resuelve: igual que ~/.claude/agents (12.6), kimi-code
+# escribe ~/.agents/agents/ sin marca propia, y los tres perfiles quedarian
+# DESCONOCIDO para siempre. Misma via de adopcion (CUARTO estado,
+# VENDOR_CONOCIDO por hash), MISMO manifiesto (agents/vendor-manifest.sha256
+# no es por-host: mapea hash -> rol). La 12.3 midio que kimi-code NO acepta
+# `model:` ni `effort:` por agente (conjunto cerrado de claves), asi que esta
+# tarea NO instala ruteo -- solo posesion + higiene (saca el model: sonnet
+# inerte del vendor).
+kimi_agents=''
+n_ka=0
+nuevo_kimi_agents() {
+  n_ka=$((n_ka + 1))
+  kimi_agents="$tmp/kagents-$n_ka"
+  rm -rf "$kimi_agents"; mkdir -p "$kimi_agents"
+}
+host_kimi() {
+  SAIKIT_KIMI_AGENTS_DIR="$kimi_agents" bash "$tool" --host kimi --dest "$dest" "$@"
+}
+
+caso "kimi: AUSENTE => instala con la marca, sin model:/effort: (fila vacia)"
+dest_listo; nuevo_kimi_agents
+out="$(host_kimi 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, obtuve $rc: $out"
+[ -f "$kimi_agents/reviewer.md" ] || malo "no instalo reviewer.md"
+grep -q '^saikit_owned: summonaikit-claude$' "$kimi_agents/reviewer.md" \
+  || malo "el perfil instalado no lleva la marca"
+
+caso "kimi: instalar dos veces NO reescribe"
+dest_listo; nuevo_kimi_agents
+host_kimi >/dev/null 2>&1
+antes="$(find "$kimi_agents" -type f -print0 | sort -z | xargs -0 cksum)"
+host_kimi >/dev/null 2>&1
+[ "$antes" = "$(find "$kimi_agents" -type f -print0 | sort -z | xargs -0 cksum)" ] \
+  || malo "la segunda corrida reescribio"
+
+for rol in implementer verifier reviewer; do
+  caso "kimi: VENDOR_CONOCIDO => archiva y reemplaza ($rol)"
+  dest_listo; nuevo_kimi_agents
+  cp "$repo/tests/fixtures/vendor-agents/$rol.md" "$kimi_agents/$rol.md"
+  out="$(host_kimi 2>&1)"
+  grep -q '^saikit_owned:' "$kimi_agents/$rol.md" || malo "no adopto el perfil del vendor ($rol)"
+  ls "$kimi_agents/saikit-backups/""$rol".md.vendor.*.bak >/dev/null 2>&1 \
+    || malo "no archivo el perfil del vendor antes de pisarlo ($rol)"
+  printf '%s' "$out" | grep -q 'ADOPTADO' || malo "no reporto la adopcion ($rol)"
+done
+
+caso "kimi: DESCONOCIDO => no se toca, y se reporta"
+dest_listo; nuevo_kimi_agents
+printf -- '---\nname: reviewer\ndescription: mio\n---\ncambio ajeno\n' > "$kimi_agents/reviewer.md"
+antes="$(cksum < "$kimi_agents/reviewer.md")"
+out="$(host_kimi 2>&1)"
+[ "$antes" = "$(cksum < "$kimi_agents/reviewer.md")" ] || malo "un perfil ajeno no se debe tocar"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el estado DESCONOCIDO"
+
+caso "kimi: --host kimi NO toca DEST"
+dest_listo; nuevo_kimi_agents
+dest_ck="$(cksum < "$dest")"
+host_kimi >/dev/null 2>&1
+[ "$dest_ck" = "$(cksum < "$dest")" ] || malo "--host kimi no debe tocar DEST"
+
+caso "kimi: al adoptar se saca el model: sonnet del vendor (higiene)"
+# NO es la correccion de un defecto activo: la 12.3 midio que kimi ignora la
+# clave `model` por completo, asi que ese valor es INERTE. Se saca porque el
+# archivo afirma algo falso, no porque cambie el comportamiento.
+dest_listo; nuevo_kimi_agents
+cp "$repo/tests/fixtures/vendor-agents/reviewer.md" "$kimi_agents/reviewer.md"
+grep -q '^model: sonnet$' "$kimi_agents/reviewer.md" \
+  || malo "el fixture del vendor deberia traer model: sonnet (es lo que hay hoy en disco)"
+host_kimi >/dev/null 2>&1
+grep -q '^model: sonnet$' "$kimi_agents/reviewer.md" \
+  && malo "sigue el model: sonnet del vendor despues de adoptar"
+
+caso "kimi: el perfil instalado NO lleva model: ni effort:"
+# La fila kimi del router esta vacia a proposito (12.3): el host no acepta esas
+# claves. Escribirlas seria poner en el archivo algo que el runtime ignora --
+# exactamente la mentira que el resto del spec persigue.
+grep -q '^model:'  "$kimi_agents/reviewer.md" && malo "kimi no debe llevar model:"
+grep -q '^effort:' "$kimi_agents/reviewer.md" && malo "kimi no debe llevar effort:"
+
+caso "kimi: el frontmatter instalado SIGUE PARSEANDO (el tipo no puede desaparecer)"
+# El modo de falla medido en la 12.3: un valor invalido en una clave conocida no
+# da error -- el agente se cae del registro en silencio. Un test que solo mire
+# que el archivo existe no lo atrapa. Se verifica contra el contrato del parser:
+# claves permitidas y, si aparece model_preference, su valor.
+#
+# Gap del review de PR #59: este grep/sed no ejerce el parser REAL de kimi, y
+# `saikit_owned:` (la UNICA clave que esta instalacion agrega al perfil) no
+# esta en el conjunto cerrado que la 12.3 midio (name, description, whenToUse,
+# override, tools, disallowedTools, subagents, model_preference). La 12.3 SI
+# midio que una clave DESCONOCIDA (probo con model:/effort:) se ignora en
+# silencio y el agente carga normal -- distinto de un VALOR INVALIDO en una
+# clave CONOCIDA, que es lo que rompe el registro. saikit_owned cae en el
+# primer caso (clave desconocida), pero nunca se habia probado esa clave en
+# concreto. Medicion directa 2026-08-24 (adaptada de la 12.3, mismo binario
+# kimi-code 0.34.0): se planto `~/.agents/agents/saikit-probe-127.md` con
+# `name/description/tools` (subconjunto del set cerrado) MAS `saikit_owned:
+# summonaikit-claude` -- exactamente la forma que instala este instalador --
+# y `kimi -p 'Delega al subagente saikit-probe-127...'` RESOLVIO el tipo y
+# devolvio la respuesta esperada:
+#   • Respuesta literal del subagente:
+#     ```
+#     PROBE-127-OK
+#     ```
+# Huella de ~/.agents y ~/.kimi-code (podada de contabilidad de runtime, misma
+# lista de la 12.3) identica antes/despues; la sonda se borro al cerrar. Log
+# completo y huella en el body del PR #59.
+dest_listo; nuevo_kimi_agents
+host_kimi >/dev/null 2>&1
+for rol in implementer verifier reviewer; do
+  fm="$(sed -n '/^---/,/^---/p' "$kimi_agents/$rol.md" | sed '1d;$d')"
+  printf '%s' "$fm" | grep -q "^name: ${rol}\$"   || malo "$rol: falta name: correcto"
+  printf '%s' "$fm" | grep -q '^description:'     || malo "$rol: falta description (el parser la exige)"
+  mp="$(printf '%s' "$fm" | sed -n 's/^model_preference: //p')"
+  case "${mp:-primary}" in
+    primary|secondary) ;;
+    *) malo "$rol: model_preference invalido ($mp) — el agente desaparece del registro" ;;
+  esac
+done
+
+caso "kimi: no se toca nada fuera de los tres roles"
+dest_listo; nuevo_kimi_agents
+printf 'ajeno\n' > "$kimi_agents/otro-agente.md"
+mkdir -p "$kimi_agents/../skills" && printf 'ajeno\n' > "$kimi_agents/../skills/x.md"
+antes_a="$(cksum < "$kimi_agents/otro-agente.md")"
+antes_s="$(cksum < "$kimi_agents/../skills/x.md")"
+host_kimi >/dev/null 2>&1
+[ "$antes_a" = "$(cksum < "$kimi_agents/otro-agente.md")" ] || malo "un agente ajeno se toco"
+[ "$antes_s" = "$(cksum < "$kimi_agents/../skills/x.md")" ] || malo "se toco algo fuera de agents/"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1
