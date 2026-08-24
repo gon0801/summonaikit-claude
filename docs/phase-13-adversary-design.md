@@ -264,14 +264,33 @@ conservando un orden de `agents_seen` válido — caso con nombre en 13.5
    candado REGISTRÓ como escrita por el adversary de esta sesión (el hook
    ya procesa esos PostToolUse para el candado; las escrituras permitidas
    bajo el dir se anotan en el estado de la sesión), más (b) cualquier
-   archivo del directorio cuyo mtime sea POSTERIOR al armado de la sesión
-   (época guardada en el estado al armar) — eso cubre al artefacto escrito
-   por `Bash` del adversary, que el candado no ve como Edit/Write. Un
+   archivo del directorio cuyo mtime sea POSTERIOR O IGUAL al armado de la
+   sesión (época guardada en el estado al armar) — eso cubre al artefacto
+   escrito por `Bash` del adversary, que el candado no ve como Edit/Write.
+   **Igualdad de tick (Greptile P2 del PR #64):** `>=`, no estricto — una
+   escritura en el mismo tick del filesystem que el armado sigue dentro
+   del escaneo; la resolución límite de algunos filesystems (1 s) hace la
+   igualdad plausible, no teórica. **Contrato del filtro mtime (CodeRabbit
+   Major #64-a):** la cobertura vía mtime vale para escrituras cuyo mtime
+   sea OBSERVABLE — un adversary que escriba con redirección y luego
+   RETROCEDA el mtime (`touch -t` a antes del armado) evade el escaneo;
+   esa evasión es instancia del hueco `Bash` best-effort ya declarado
+   (D3): el escaneo atrapa persistencia ACCIDENTAL de secretos, no a un
+   evasor deliberado — que derrota cualquier escaneo best-effort
+   (codifica, parte en archivos, escribe fuera del dir por el mismo
+   hueco); perseguirlo es trabajo del reviewer leyendo el artefacto, no
+   del grep del Stop. Un
    artefacto HISTÓRICO de otra task ya no bloquea este turno: el problema
    de persistencia cross-sesión queda reducido a los artefactos de esta
    sesión (y a los frescos de una sesión CONCURRENTE — mtime posterior al
    armado —, que es la ambigüedad concurrente ya declarada, en dirección
-   fail-safe: escanea de más, no de menos). CUALQUIER extensión
+   fail-safe: escanea de más, no de menos). **El armado INICIALIZA el
+   estado de sesión (CodeRabbit Major #64-b):** al armar, época, conjunto
+   de rutas registradas y violación se REEMPLAZAN (nunca se appendean a
+   un estado previo sobreviviente), y la época se captura ANTES del
+   primer evento del adversary — sin esto, un estado huérfano de una
+   sesión muerta resurrectaría rutas y violaciones viejas, exactamente el
+   bloqueo histórico que este alcance existe para cerrar. CUALQUIER extensión
    (cross-review codex #1 / claude #1, la alta convergente: el candado de
    ruta permite cualquier archivo del directorio — filtrar el escaneo a
    `*.json` dejaba un `leak.txt` pasar el candado y evadir el control). La
@@ -598,9 +617,12 @@ Lo que esta fase NO cubre, declarado desde el diseño:
   formatos extendidos de `tools/check-secrets.sh` — el hook corre en el
   consumer donde ese archivo no existe; duplicarlo sería drift sin candado.
   **Bloqueo cross-sesión ACOTADO (claude #7 / codex #3 / Greptile P1):** el
-  alcance del escaneo es por sesión (rutas registradas + mtime posterior al
-  armado) — un match de ESTA sesión bloquea sus siguientes Stops hasta
-  limpieza manual; los artefactos de sesiones ANTERIORES ya no bloquean.
+  alcance del escaneo es por sesión (rutas registradas + mtime `>=` época de
+  armado; el armado inicializa el estado) — un match de ESTA sesión bloquea
+  sus siguientes Stops hasta limpieza manual; los artefactos de sesiones
+  ANTERIORES ya no bloquean. **Evasión por mtime retrocedido (CodeRabbit
+  #64-a):** un `touch -t` pre-armado saca al artefacto del escaneo —
+  instancia del hueco Bash best-effort, declarada.
 - **Gitignore pisable:** `*` no afecta trackeados; `git add -f` lo pisa;
   gitignore AJENO preexistente jamás se edita (los artefactos quedan
   expuestos si no cubre, codex #4); **ventana de exposición por host
@@ -664,8 +686,15 @@ task recibe las decisiones que le tocan con precisión:
   (disciplina M3: extendido por `write_state`, limpiado por los caminos
   existentes). DoD: rojo
   medido pre-fix; caso que bloquea + caso que permite (escribir el artefacto)
-  + **caso Greptile P1: artefacto histórico de otra sesión con match NO
-  bloquea (alcance por sesión)** + caso traversal/ruta sucia — `../`, absoluta, symlink en el `file_path` Y
+  + **caso Greptile P1 BIDIRECCIONAL con el escaneo realmente corrido
+  (CodeRabbit Minor #64): sesión armada con `,adversary,` en `agents_seen`;
+  un artefacto con match de una sesión ANTERIOR no bloquea, y otro con
+  match de la sesión ACTUAL sí bloquea — incluyendo la variante con estado
+  de una sesión previa presente en disco (el armado lo inicializa,
+  CodeRabbit Major #64-b)** + caso del límite de tick (mtime IGUAL a la
+  época escanea, Greptile P2) + caso de mtime retrocedido (`touch -t`) que
+  NO escanea, con el límite citado (CodeRabbit Major #64-a) + caso
+  traversal/ruta sucia — `../`, absoluta, symlink en el `file_path` Y
   symlink del propio `findings/` (claude #9); el plan decía "id sucio", que
   acá se reinterpreta: el candado es keyless, no hay id de sesión en la
   ruta, el caso ejercita la canonicalización de segmentos atacantes del
