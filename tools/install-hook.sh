@@ -68,6 +68,8 @@ RESTORE=0
 # Task 5.6: ademas instala implementer/verifier/reviewer en ~/.zcode/agents
 # (el runtime de zcode solo conoce tipos registrados ahi; sin ellos el
 # candado de secuencia es inalcanzable). No toca DEST.
+# Task 13.8: adversary se suma como cuarto perfil instalado (zcode, grok,
+# claude y kimi via CLAUDE_AGENT_ROLES).
 HOST=''
 QUITAR_ZCODE=0
 # Task 7.5: --quitar-grok es la vuelta atras del host grok (JSON propio + hook
@@ -78,9 +80,9 @@ QUITAR_GROK=0
 # el host declara".
 VIO_DEST=0
 # Task 12.6: --host claude instala implementer/verifier/reviewer en
-# ~/.claude/agents con la via de adopcion del CUARTO estado (VENDOR_CONOCIDO
-# por hash en agents/vendor-manifest.sha256). No toca DEST: el hook global ya
-# vive ahi por el flujo normal (sin --host).
+# ~/.claude/agents (adversary desde la 13.8) con la via de adopcion del
+# CUARTO estado (VENDOR_CONOCIDO por hash en agents/vendor-manifest.sha256).
+# No toca DEST: el hook global ya vive ahi por el flujo normal (sin --host).
 # --refrescar-manifiesto REPORTA (hash + diff), JAMAS adopta: adoptar es un
 # commit propio que pega el hash nuevo en el manifiesto, con el diff a la
 # vista en la revision.
@@ -278,14 +280,14 @@ zcode_user_config() {
 # Task 5.6: perfiles de subagente. zcode (3.7.5-11) carga:
 #   {storageRoot}/agents/*.md          → ~/.zcode/agents/<name>.md
 #   {cwd}/.zcode/agents/*.md           → project (Settings Beta no lo edita)
-# Built-ins fijos: general-purpose, Explore. Sin implementer/verifier/reviewer
+# Built-ins fijos: general-purpose, Explore. Sin los perfiles del kit
 # registrados, Agent type 'implementer' not found y el Stop no puede pasar.
 # Fuente = agents/ del repo (no ~/.claude/agents: Core Rule 4). Destino
 # overrideable para tests. Tres estados, igual que DEST: AUSENTE instala,
 # NUESTRO_IDENTICO no reescribe, NUESTRO_DISTINTO repara con backup,
 # DESCONOCIDO no se toca (el tipo ya existe; el hook igual se registra —
 # no es "no se puede satisfacer la ceremonia", es un perfil de otro).
-ZCODE_AGENT_ROLES='implementer verifier reviewer'
+ZCODE_AGENT_ROLES='implementer verifier reviewer adversary'
 ZCODE_AGENT_MARCA_RE='^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$'
 
 zcode_agents_source() {
@@ -366,7 +368,7 @@ zcode_instalar_agentes() {
     fuente="$src/$rol.md"
     if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
       decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
-      decir "              --host zcode no cablea un host sin implementer/verifier/reviewer."
+      decir "              --host zcode no cablea un host sin los perfiles del kit."
       exit 2
     fi
     if ! zcode_agente_tiene_marca "$fuente"; then
@@ -598,7 +600,7 @@ zcode_quitar() {
 # Un agente desconocido NO aborta (D7): se instala el resto y se reporta.
 # Si una publicacion posterior falla, se hace rollback con los backups de esta
 # corrida (design D1).
-GROK_AGENT_ROLES='implementer verifier reviewer'
+GROK_AGENT_ROLES='implementer verifier reviewer adversary'
 GROK_BASH_WIN=''
 GROK_JSON_ESTADO=''
 GROK_JSON_BACKUP=''
@@ -877,7 +879,7 @@ grok_preflight() {
     fuente="$src/$rol.md"
     if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
       decir "[summonaikit] instalador: falta la plantilla de agente $fuente"
-      decir "              --host grok no cablea un host sin implementer/verifier/reviewer."
+      decir "              --host grok no cablea un host sin los perfiles del kit."
       exit 2
     fi
     if ! zcode_agente_tiene_marca "$fuente"; then
@@ -1269,7 +1271,12 @@ fi
 # hash contra agents/vendor-manifest.sha256 (fixtures congelados de
 # tests/fixtures/vendor-agents/, generados desde el perfil vivo del CLI).
 # DESCONOCIDO (ni marca ni hash) => no se toca, se reporta.
-CLAUDE_AGENT_ROLES='implementer verifier reviewer'
+# Task 13.8: adversary se suma como cuarto rol. Es kit-owned (lleva
+# saikit_owned en la fuente) y NO tiene entrada en el manifiesto de vendor:
+# un adversary.md sin marca es DESCONOCIDO y no se toca -- adoptarlo
+# exigiria una entrada en el manifiesto, que adversary no tiene por ser
+# kit-owned (--refrescar-manifiesto solo REPORTARIA su hash, jamas adopta).
+CLAUDE_AGENT_ROLES='implementer verifier reviewer adversary'
 
 claude_agents_dir() {
   printf '%s' "${SAIKIT_CLAUDE_AGENTS_DIR:-${HOME:-}/.claude/agents}"
@@ -1392,10 +1399,10 @@ instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
   local rol fuente dest trad estado i
   local -a roles=() dests=() trads=() estados=()
 
-  # PRIMERO valida las TRES plantillas, DESPUES escribe. Es el orden que
+  # PRIMERO valida TODAS las plantillas, DESPUES escribe. Es el orden que
   # zcode_instalar_agentes ya usa (dos bucles separados) y no es estilo:
   # validando y escribiendo en el mismo bucle, una plantilla invalida en el
-  # tercer rol deja los dos primeros ya publicados -- una instalacion a medias.
+  # ultimo rol deja los anteriores ya publicados -- una instalacion a medias.
   # La validacion de name: va aca tambien: sin ella, un reviewer.md cuyo
   # frontmatter diga name: implementer se publicaria como reviewer con el
   # modelo del implementer.
@@ -1414,11 +1421,11 @@ instalar_agentes_con_vendor() {  # $1=host  $2=dest_dir  $3=etiqueta (log)
   [ "$DRY_RUN" -eq 1 ] || mkdir -p "$dest_dir" || {
     decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
 
-  # Task 12.9 (hallazgo #1, codex): clasificar los TRES destinos ANTES de
+  # Task 12.9 (hallazgo #1, codex): clasificar TODOS los destinos ANTES de
   # publicar cualquiera de ellos. Antes, cada rol se clasificaba Y se
-  # publicaba en la MISMA vuelta del bucle: un NO_OBSERVABLE en el rol 3
-  # (p. ej. un permiso raro en reviewer.md) salia exit 5 con implementer.md y
-  # verifier.md YA escritos -- una instalacion a medias que ademas afirma,
+  # publicaba en la MISMA vuelta del bucle: un NO_OBSERVABLE en el ultimo rol
+  # (p. ej. un permiso raro en reviewer.md) salia exit 5 con los anteriores
+  # YA escritos -- una instalacion a medias que ademas afirma,
   # con el exit != 0, que "el destino quedo intacto" (la promesa del header
   # de este archivo). Dos bucles separados, como ya hace la validacion de
   # fuentes arriba: si CUALQUIER rol da NO_OBSERVABLE, se sale sin publicar
@@ -1500,8 +1507,9 @@ claude_instalar_agentes() {
 
 # ------------------------------------------------------- Task 12.7: --host kimi
 # ~/.agents/agents es la convencion COMPARTIDA del kit (hooks/, plugins/,
-# skills/ al lado): el guard es estricto, solo se tocan los tres <rol>.md, y
-# eso ya lo garantiza instalar_agentes_con_vendor (no itera el directorio
+# skills/ al lado): el guard es estricto, solo se tocan los <rol>.md de
+# CLAUDE_AGENT_ROLES, y eso ya lo garantiza instalar_agentes_con_vendor (no
+# itera el directorio
 # padre, solo escribe dest_dir/$rol.md). Alcance reducido por la 12.3: kimi no
 # acepta model:/effort: por agente, asi que agente_traducido() no inyecta nada
 # (fila vacia del router) -- esta llamada solo posesiona + saca el model:
@@ -1574,7 +1582,7 @@ if [ "$HOST" = "claude" ]; then
 fi
 
 # Task 12.7: --host kimi termina aca, igual que --host claude: solo posesiona
-# los tres perfiles en ~/.agents/agents (via SAIKIT_KIMI_AGENTS_DIR en tests).
+# los perfiles en ~/.agents/agents (via SAIKIT_KIMI_AGENTS_DIR en tests).
 # No toca DEST -- el hook global de kimi-code se instala por el flujo normal
 # (sin --host), igual que claude.
 if [ "$HOST" = "kimi" ]; then
