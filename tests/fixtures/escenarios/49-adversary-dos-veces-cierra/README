@@ -1,0 +1,3 @@
+D6 caso 3 (Task 13.5): adversary despachado dos veces. El dedupe conserva la posicion de
+la primera aparicion y el turno cierra. La re-escritura del JSON post-adjudicacion es el
+TOCTOU declarado de D2: el gate es label-only, jamas lee el artefacto.

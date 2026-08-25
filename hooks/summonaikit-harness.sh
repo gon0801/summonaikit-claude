@@ -855,6 +855,16 @@ rn_take_pending() {
 # estado sin el campo (sembrado por el banco, o escrito por un hook previo a la
 # 10.1) lee lane="" — y "" != "fast", o sea que el default ausente es el lado
 # SEGURO: ceremonia completa. Ningun call site inventa un lane.
+# Task 13.4: write_state persiste ADEMAS el estado del candado adversary —
+# epoca de armado (ISO UTC), rutas permitidas registradas, flag de violacion y
+# rutas violadas, |-separadas. Disciplina M3 del design de la Phase 13: viven
+# en el PROPIO harness-state.env que los caminos de limpieza existentes
+# (A4-c2/c4) ya borran; un archivo nuevo huerfano bajo $STATE_DIR resurrectaria
+# la violacion en el proximo armado y esta prohibido por diseno. El armado
+# (start_harness) REEMPLAZA estos campos — jamas appendea a un estado previo
+# sobreviviente (CodeRabbit Major #64-b). La epoca viaja en ISO UTC porque es
+# la forma que el arnes de salida dorada ya normaliza (<TS>): en segundos la
+# linea base dejaria de ser reproducible entre corridas.
 write_state() {
   task_hash="$1"
   cycle="$2"
@@ -862,6 +872,10 @@ write_state() {
   verified="$4"
   agents_seen="$5"
   lane="$6"
+  adv_epoch="$7"
+  adv_paths="$8"
+  adv_violation="$9"
+  adv_violation_paths="${10}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   {
     printf 'task_hash=%s\n' "$task_hash"
@@ -870,6 +884,10 @@ write_state() {
     printf 'verified=%s\n' "$verified"
     printf 'agents_seen=%s\n' "$agents_seen"
     printf 'lane=%s\n' "$lane"
+    printf 'adv_epoch=%s\n' "$adv_epoch"
+    printf 'adv_paths=%s\n' "$adv_paths"
+    printf 'adv_violation=%s\n' "$adv_violation"
+    printf 'adv_violation_paths=%s\n' "$adv_violation_paths"
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -915,7 +933,7 @@ Waiting on a subagent is not failing:
 - A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.
 - While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:
   SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>
-  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.
+  where <ROLE> is implementer, verifier, reviewer, or adversary — naming one of those is what makes the line count.
 - That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
 Delegation rule:
@@ -927,6 +945,7 @@ Delegation rule:
   correctly-delegated turn still satisfies it.
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
+- The adversary is an OPTIONAL fourth role, opt-in — a turn that does not dispatch it closes exactly as today. Delegate it between the verifier and the reviewer via $TOOL_HINT when the change touches auth, payments, migrations or pre-existing data, or this harness itself (the same bar that triggers a cross-review). It reports findings to an artifact under .saikit/findings/ and never repairs. When you ran an adversary this turn, dispatch the reviewer NAMING the artifact to adjudicate (e.g. "adjudica .saikit/findings/<file>.json"); if this turn did NOT run an adversary, the reviewer adjudicates nothing. Declared limit: an adversary whose invocation is never observed is indistinguishable from not invoked.
 - Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
 
 Fast lane (-saikit:fast):
@@ -990,6 +1009,7 @@ Verify: ...
 Review: ...
 Close: ...
 Retro: ...
+ADVERSARY: N findings, highest severity X — required ONLY in receipts of turns where an adversary actually ran (any lane); presence only, the numbers are never checked. ROLE FALLBACK: ADVERSARY (reason) substitutes the line when the dispatched adversary died without reporting.
 
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
@@ -1290,7 +1310,13 @@ start_harness() {
   rm -f "$RN_ORDER_PATH" 2>/dev/null || true
   rn_pending_text="$(rn_take_pending)"
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-  write_state "$task_hash" "0" "0" "0" "" "$lane"
+  # Task 13.4: el armado INICIALIZA el estado del candado adversary — epoca
+  # capturada ACA, antes de que exista cualquier evento del adversary, y los
+  # tres campos restantes REEMPLAZADOS en vacio (jamas appendeados a un estado
+  # previo sobreviviente de una sesion muerta con la misma llave, CodeRabbit
+  # Major #64-b). ISO UTC: es la forma que la linea base dorada normaliza.
+  adv_epoch_armado="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+  write_state "$task_hash" "0" "0" "0" "" "$lane" "$adv_epoch_armado" "" "" ""
   # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
   # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni
   # por el skip explicito. Fail-open: si no hay `find`, no se barre nada.
@@ -1346,9 +1372,73 @@ redact_secrets() {
     -e 's,://[^[:space:]@/?#]*@,://[REDACTED]@,g'
 }
 
-mark_evidence() {
-  kind="$1"
-  detail="$2"
+# >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
+# Candado del rol adversary (D3 + D2 capas 2-3, docs/phase-13-adversary-design.md).
+# 13.1 midio CERO PreToolUse en todos los hosts: no existe canal de negacion
+# previa, asi que el candado es DETECCION POST-HOC de escrituras atribuidas al
+# adversary fuera de .saikit/findings/ + bloqueo en el Stop. Posturas de falla:
+# fail-open por defecto (Core Rule 1) para todo lo de infraestructura; fail-
+# closed SOLO por (1) violacion detectada — defecto probado por el propio evento
+# que lo reporta — y (2) secreto matcheado en un artefacto de ESTA sesion —
+# riesgo alto con ruta de fuga manual declarada (archivo:linea, redactar o
+# borrar, re-cerrar). La atribucion usa los canales que $subagent ya resuelve
+# (despacho o interno, M1); en hosts con canal interno unknown (zcode/kimi) el
+# candado queda CIEGO declarado — no bloquea por atribucion ahi.
+#
+# Alcance por sesion (A1 + Greptile P1): todos estos mecanismos corren solo en
+# sesiones armadas cuyo estado registra al adversary; el escaneo mira las rutas
+# que ESTA sesion registro mas los archivos con mtime >= SU epoca de armado —
+# los artefactos historicos de otras tareas no vuelven a bloquear nada.
+# kimi #1 (cross-review r2 del PR #65): PROJECT_ROOT puede venir de `git
+# rev-parse` en forma C:/ (Git Bash) mientras los blancos se canonicalizan con
+# cd+pwd -P (forma /c/) — el prefijo se ancla con la MISMA maquinaria FISICA
+# que canonicaliza los blancos, o el candado bloquea al reves TODA escritura
+# legitima en Windows. codex #1: -P ademas resuelve dirs symlink intermedios.
+# Fallback textual si el root no existe (fail-open, familia A6).
+ADV_PROJECT_CANON="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || ADV_PROJECT_CANON=""
+ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
+
+# Familia de patrones del escaneo de secretos = la MISMA que redact_secrets
+# lleva inline (claude #3 del cross-review): el hook corre en el repo CONSUMER,
+# donde tools/check-secrets.sh no existe; duplicar sus formatos extendidos ser-
+# ia drift sin candado de fuente unica. Capa reducida, declarada: falso
+# negativo por regex que no matchea y falso positivo por repro legitimo, ambos
+# con la ruta de fuga manual de arriba.
+# El valor exige AL MENOS un caracter ([^[:space:]]): un `token=` pelado no
+# persiste nada. Y las formas YA redactadas se DESCUENTAN antes de grepear
+# (lead + kimi #2, r2 PR #65): el artefacto redactado EXACTAMENTE como manda
+# el perfil (token=[REDACTED], ://[REDACTED]@) no es un secreto persistido —
+# sin el descuento, la disciplina de la capa 1 disparaba la capa 2 y el camino
+# documentado como correcto bloqueaba el cierre. El sed preserva lineas (los
+# numeros del reporte siguen validos) y una linea MIXTA (valor real junto al
+# redactado) sigue matcheando por el vecino.
+SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@'
+SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/=/g; s|://\[REDACTED\]@|://|g'
+
+# Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
+# aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento
+# que resuelva a adversary por cualquier canal medido, despacho o interno (M1:
+# anclarlo solo al despacho dejaba a codex sin gitignore para siempre). Idem-
+# potente y conservador como el instalador: crea si ausente, JAMAS reescribe
+# uno existente (aunque no cubra los artefactos: limite declarado, codex #4).
+# Un .gitignore que sea symlink tampoco se toca (-L ademas de -e): escribir a
+# traves de un enlace seria exactamente la escritura-fuera-del-dir que este
+# candado existe para impedir.
+adv_ensure_gitignore() {
+  # codex #1a (r2 PR #65): jamas crear a TRAVES de un enlace — un .saikit (o
+  # un findings) symlink mandaria el gitignore fisico fuera del repo. Fail-open.
+  if [ -L "${ADV_FINDINGS_DIR%/*}" ] || [ -L "$ADV_FINDINGS_DIR" ]; then return 0; fi
+  mkdir -p "$ADV_FINDINGS_DIR" 2>/dev/null || return 0
+  if [ ! -e "$ADV_FINDINGS_DIR/.gitignore" ] && [ ! -L "$ADV_FINDINGS_DIR/.gitignore" ]; then
+    printf '*\n' > "$ADV_FINDINGS_DIR/.gitignore" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# Reescribe el estado preservando los 6 campos clasicos y poniendo los 4 del
+# candado ($1 epoca, $2 rutas permitidas, $3 violacion, $4 rutas violadas);
+# $5 opcional reemplaza el ciclo (lo usa el bloque temprano del Stop).
+adv_reescribir_estado() {
   task_hash="$(read_state_value task_hash)"
   cycle="$(read_state_value cycle)"
   implemented="$(read_state_value implemented)"
@@ -1359,16 +1449,241 @@ mark_evidence() {
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
   if [ -z "$verified" ]; then verified="0"; fi
+  if [ -n "${5:-}" ]; then cycle="$5"; fi
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4"
+}
+
+adv_registrar_violacion() {
+  advv_nueva="$1"
+  advv_epoch="$(read_state_value adv_epoch)"
+  advv_paths="$(read_state_value adv_paths)"
+  advv_lista="$(read_state_value adv_violation_paths)"
+  if [ "$(read_state_value adv_violation)" != "1" ]; then
+    printf 'adversary-write-violation: %s\n' "$(redact_secrets "$advv_nueva")" >> "$LOG_PATH" 2>/dev/null || true
+  fi
+  case "|$advv_lista|" in
+    *"|$advv_nueva|"*) ;;
+    *) if [ -n "$advv_lista" ]; then advv_lista="$advv_lista|$advv_nueva"; else advv_lista="$advv_nueva"; fi ;;
+  esac
+  adv_reescribir_estado "$advv_epoch" "$advv_paths" "1" "$advv_lista"
+}
+
+adv_registrar_path_permitido() {
+  advp_nueva="$1"
+  advp_epoch="$(read_state_value adv_epoch)"
+  advp_lista="$(read_state_value adv_paths)"
+  case "|$advp_lista|" in
+    *"|$advp_nueva|"*) return 0 ;;
+  esac
+  if [ -n "$advp_lista" ]; then advp_lista="$advp_lista|$advp_nueva"; else advp_lista="$advp_nueva"; fi
+  adv_reescribir_estado "$advp_epoch" "$advp_lista" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)"
+}
+
+# Canonicaliza el blanco de una escritura: backslashes de Windows a slashes
+# (los lectores json_* no decodifican escapes y transcript_path ya midio esa
+# forma), relativas ancladas al PROJECT_ROOT que el hook resuelve para su
+# propio state (claude #4 — no al cwd del proceso, que un cd del turno puede
+# mover), y resolucion FISICA de ../ y symlinks via cd+pwd -P — pwd LOGICO no
+# resuelve un dir symlink intermedio (codex #1 / qwen #5, r2 PR #65) —, la
+# familia de normalizacion A6/Task 3.6. Si el dir del blanco no existe (archivo borrado
+# entre evento y chequeo), colapso textual de segmentos — sin dir no hay
+# enlace que seguir. Vacio = no se pudo canonicalizar: el caller hace
+# fail-open y lo declara por stderr.
+adv_canon_path() {
+  advc_p="${1//\\//}"
+  case "$advc_p" in
+    /*) ;;
+    [A-Za-z]:/*) ;;
+    *) advc_p="$PROJECT_ROOT/$advc_p" ;;
+  esac
+  advc_dir="$(cd "$(dirname "$advc_p")" 2>/dev/null && pwd -P)" || advc_dir=""
+  if [ -n "$advc_dir" ]; then
+    printf '%s/%s' "${advc_dir%/}" "$(basename "$advc_p")"
+    return 0
+  fi
+  case "$advc_p" in
+    [A-Za-z]:/*)
+      if command -v cygpath >/dev/null 2>&1; then
+        advc_p="$(cygpath -u "$advc_p" 2>/dev/null || printf '%s' "$advc_p")"
+      fi
+      ;;
+  esac
+  printf '%s' "$advc_p" | awk '
+    $0 !~ /^\// { print ""; exit }
+    {
+      n = split($0, seg, "/"); sp = 0
+      for (i = 1; i <= n; i++) {
+        if (seg[i] == "" || seg[i] == ".") continue
+        if (seg[i] == "..") { if (sp > 0) sp--; continue }
+        pila[++sp] = seg[i]
+      }
+      out = ""
+      for (i = 1; i <= sp; i++) out = out "/" pila[i]
+      print out
+    }'
+}
+
+# ¿El blanco canonico cae bajo findings/? La comparacion es sobre el prefijo
+# LITERAL, sin resolver el directorio: un findings/ que SEA symlink es
+# violacion de setup, no ruta permitida (claude #9 — canonicalizar ambos lados
+# con realpath haria pasar todo a traves de un enlace plantado por el hueco de
+# Bash). Y si el propio blanco es un symlink, se resuelve su destino real
+# (readlink -f) antes de comparar: un enlace DENTRO de findings apuntando afuera
+# escribe afuera.
+adv_path_dentro() {
+  # r2 PR #65 (codex #1a): el PADRE enlazado tambien es setup violado — sin
+  # este check, un .saikit -> afuera dejaba el prefijo textual adentro.
+  if [ -L "${ADV_FINDINGS_DIR%/*}" ]; then return 1; fi
+  if [ -L "$ADV_FINDINGS_DIR" ]; then return 1; fi
+  case "$1" in
+    "$ADV_FINDINGS_DIR"/*) ;;
+    *) return 1 ;;
+  esac
+  if [ -L "$1" ]; then
+    advd_real="$(readlink -f "$1" 2>/dev/null || true)"
+    [ -n "$advd_real" ] || return 1
+    case "$advd_real" in
+      "$ADV_FINDINGS_DIR"/*) return 0 ;;
+    esac
+    return 1
+  fi
+  return 0
+}
+
+# Deteccion post-hoc de Edit/Write (D3). El vocabulario de tools de edicion es
+# el MISMO que usa la senal de orden del review-notice (Task 7.3 D5): una sola
+# definicion de "que es una edicion" en el hook. La escritura PERMITIDA tambien
+# se registra (adv_paths): es el alcance explicito del escaneo de secretos.
+adv_guard_edit() {
+  [ -n "$2" ] || return 0
+  printf '%s' "$1" | grep -Eiq '^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file|search_replace)$' || return 0
+  advg_canon="$(adv_canon_path "$2")"
+  if [ -z "$advg_canon" ]; then
+    printf 'summonaikit-harness: adversary: ruta no canonicalizable (%s); candado fail-open para ese evento\n' "$2" >&2
+    return 0
+  fi
+  if adv_path_dentro "$advg_canon"; then
+    adv_registrar_path_permitido "$advg_canon"
+  else
+    adv_registrar_violacion "$advg_canon"
+  fi
+  return 0
+}
+
+# Bash best-effort (D3): redireccion/heredoc/tee OBVIOS en comandos atribuidos
+# al adversary. MISMA familia declarada que la guardia G2 de runners: no es un
+# parser de shell. Antes de extraer blancos se limpian los tramos ENTRECOMILLA-
+# DOS (un programa awk con un > comparativo no es una redireccion) y se
+# descartan blancos con expansion ($, backtick) o dup de fd (&N): no son
+# "obvios". /dev/null no es una escritura de archivo. cp/mv/dd quedan fuera
+# del vocabulario — huecos declarados al spec, como los runners encadenados.
+SAIKIT_ADV_BASH_REDIRECT_RE=">>?[[:space:]]*[^;&|<>[:space:]\"']+"
+SAIKIT_ADV_BASH_TEE_RE="(^|[;&|([[:space:]])tee([[:space:]]+-a)?[[:space:]]+[^;&|<>[:space:]\"']+"
+adv_guard_bash() {
+  [ -n "$2" ] || return 0
+  printf '%s' "$1" | grep -Eiq '^(bash|run_terminal_command)$' || return 0
+  advb_cmd="$(printf '%s' "$2" | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")"
+  advb_blancos="$(
+    {
+      printf '%s' "$advb_cmd" | grep -Eo "$SAIKIT_ADV_BASH_REDIRECT_RE" | sed -E 's/^>>?[[:space:]]*//'
+      printf '%s' "$advb_cmd" | grep -Eo "$SAIKIT_ADV_BASH_TEE_RE" | sed -E 's/^.*tee([[:space:]]+-a)?[[:space:]]+//'
+    } | sort -u)"
+  [ -n "$advb_blancos" ] || return 0
+  while IFS= read -r advb_b; do
+    [ -n "$advb_b" ] || continue
+    case "$advb_b" in
+      /dev/null|'&'*) continue ;;
+      *'$'*|*'`'*) continue ;;
+    esac
+    advb_canon="$(adv_canon_path "$advb_b")"
+    [ -n "$advb_canon" ] || continue
+    if ! adv_path_dentro "$advb_canon"; then
+      adv_registrar_violacion "$advb_canon"
+    fi
+  done <<EOF
+$advb_blancos
+EOF
+  return 0
+}
+
+# Escaneo de secretos del Stop (D2 capa 2). Disparo: SOLO sesiones con
+# ,adversary, en agents_seen (el caller filtro; hallazgo A1). Alcance por
+# sesion (Greptile P1): rutas REGISTRADAS por el candado como escritas por el
+# adversary de esta sesion + cualquier archivo del dir con mtime posterior o
+# IGUAL a la epoca de armado (igualdad de tick incluida, Greptile P2: -newermt
+# estricto sobre epoca-1 deja dentro todo mtime >= epoca). Asi cae el artefacto
+# escrito por Bash, que el candado de Edit/Write no ve. Match => fail-closed
+# nombrando archivo y NUMERO de linea, JAMAS el contenido (misma disciplina que
+# tools/check-secrets.sh:24-25); ilegible => fail-open; sin dir o sin epoca
+# legible => rama fuera, fail-open declarado. Un evasor que RETROCEDA el mtime
+# con touch escapa: instancia del hueco Bash declarado (CodeRabbit #64-a) —
+# este escaneo persigue persistencia ACCIDENTAL, no evasores deliberados.
+# Imprime el motivo de bloqueo, o vacio si no hay match.
+adv_chequear_secretos() {
+  advs_candidatos="$(read_state_value adv_paths | tr '|' '\n')"
+  advs_epoca="$(date -u -d "$(read_state_value adv_epoch)" +%s 2>/dev/null || true)"
+  # qwen #3 (r2 PR #65): D3 exige fail-open + DIAGNOSTICO en fallas de infra;
+  # sin GNU date (BSD/macOS) la rama de mtime se salta y hay que decirlo.
+  if [ -z "$advs_epoca" ]; then
+    printf 'summonaikit-harness: adversary: epoca de armado ilegible (GNU date -d ausente?); escaneo por mtime omitido — fail-open declarado\n' >&2
+  fi
+  if [ -n "$advs_epoca" ] && [ -d "$ADV_FINDINGS_DIR" ]; then
+    advs_candidatos="$advs_candidatos
+$(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null || true)"
+  fi
+  advs_vistos=""
+  while IFS= read -r advs_f; do
+    [ -n "$advs_f" ] || continue
+    # Pipe de cierre en la comparacion: sin el, el ULTIMO agregado nunca
+    # deduplicaba y se grepeaba dos veces (kimi #4, r2 PR #65).
+    case "$advs_vistos|" in
+      *"|$advs_f|"*) continue ;;
+    esac
+    advs_vistos="$advs_vistos|$advs_f"
+    [ -f "$advs_f" ] || continue
+    [ -r "$advs_f" ] || continue
+    advs_linea="$(sed -E "$SAIKIT_ADV_REDACTED_STRIP" "$advs_f" 2>/dev/null | grep -En "$SAIKIT_ADV_SECRET_RE" | head -n 1 | cut -d: -f1)"
+    if [ -n "$advs_linea" ]; then
+      # CodeRabbit r2: el NOMBRE del artefacto lo eligio el adversary y puede
+      # cargar un valor con pinta de secreto — el path viaja REDACTADO, misma
+      # disciplina que la rama de violacion y la linea de log.
+      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
+      return 0
+    fi
+  done <<EOF
+$advs_candidatos
+EOF
+  return 0
+}
+# <<< SAIKIT-ADVERSARY-LOCK v1 <<<
+
+mark_evidence() {
+  kind="$1"
+  detail="$2"
+  task_hash="$(read_state_value task_hash)"
+  cycle="$(read_state_value cycle)"
+  implemented="$(read_state_value implemented)"
+  verified="$(read_state_value verified)"
+  agents_seen="$(read_state_value agents_seen)"
+  lane="$(read_state_value lane)"
+  adv_epoch="$(read_state_value adv_epoch)"
+  adv_paths="$(read_state_value adv_paths)"
+  adv_violation="$(read_state_value adv_violation)"
+  adv_violation_paths="$(read_state_value adv_violation_paths)"
+  if [ -z "$task_hash" ]; then task_hash="unknown"; fi
+  if [ -z "$cycle" ]; then cycle="0"; fi
+  if [ -z "$implemented" ]; then implemented="0"; fi
+  if [ -z "$verified" ]; then verified="0"; fi
 
   if [ "$kind" = "implemented" ]; then implemented="1"; fi
   if [ "$kind" = "verified" ]; then verified="1"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths"
   printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
 }
 
 # Map a host's agent/subagent name onto a canonical harness role
-# (implementer | verifier | reviewer | closer | retro), or empty when the name
-# carries no harness role. Hosts surface different agent names: Claude Code's
+# (implementer | verifier | reviewer | adversary | closer | retro), or empty
+# when the name carries no harness role. Hosts surface different agent names: Claude Code's
 # global set exposes backend-engineer / test-engineer / code-reviewer rather than
 # the project-level implementer / verifier / reviewer files SummonAI Kit installs,
 # and Cursor/Aider/others differ again. Matching is by role KEYWORD, not a
@@ -1392,9 +1707,18 @@ canonical_agent_role() {
     implementer) printf 'implementer'; return 0 ;;
     verifier) printf 'verifier'; return 0 ;;
     reviewer) printf 'reviewer'; return 0 ;;
+    adversary) printf 'adversary'; return 0 ;;
     closer) printf 'closer'; return 0 ;;
     retro) printf 'retro'; return 0 ;;
   esac
+  # Task 13.4/13.5 (D6): el keyword adversar va ANTES de la rama reviewer. La
+  # trampa medida: `adversarial-audit` matcheaba `audit` y acreditaba REVIEWER
+  # sin review real — un nombre adversario llenaba el slot de review. Con esta
+  # precedencia, adversarial-* resuelve a adversary (con su orden y su linea de
+  # recibo propios) y el slot de reviewer sigue exigiendo su propio despacho.
+  # El stem queda en `adversar`, tan acotado como el vocabulario del rol: NO se
+  # amplian a attack/exploit/... (falsos positivos con herramientas de seguridad).
+  if printf '%s' "$name" | grep -Eq '(^|[^a-z])adversar'; then printf 'adversary'; return 0; fi
   if printf '%s' "$name" | grep -Eq '(^|[^a-z])(review|critique|critic|audit)'; then printf 'reviewer'; return 0; fi
   if printf '%s' "$name" | grep -Eq '(^|[^a-z])(verif|test|qa|quality|validat)'; then printf 'verifier'; return 0; fi
   if printf '%s' "$name" | grep -Eq '(^|[^a-z])(implement|engineer|developer|coder|build|debug|backend|frontend|fullstack|refactor)'; then printf 'implementer'; return 0; fi
@@ -1413,6 +1737,10 @@ record_agent() {
   verified="$(read_state_value verified)"
   agents_seen="$(read_state_value agents_seen)"
   lane="$(read_state_value lane)"
+  adv_epoch="$(read_state_value adv_epoch)"
+  adv_paths="$(read_state_value adv_paths)"
+  adv_violation="$(read_state_value adv_violation)"
+  adv_violation_paths="$(read_state_value adv_violation_paths)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
@@ -1423,7 +1751,7 @@ record_agent() {
       if [ -z "$agents_seen" ]; then agents_seen="$agent"; else agents_seen="$agents_seen,$agent"; fi
       ;;
   esac
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths"
   printf 'agent: %s\n' "$agent" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -1480,6 +1808,21 @@ record_tool_evidence() {
   # no cuando se pidio.
   if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
   if [ -n "$subagent" ]; then record_agent "$subagent"; fi
+  # >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
+  # El candado corre solo en sesiones armadas (el early-exit de arriba ya lo
+  # acoto, A1) y solo para eventos que resuelvan a adversary por cualquiera de
+  # los canales medidos — $subagent ya lleva el despacho o el interno (M1).
+  # Orden: primero el gitignore del consumer (el dir conviene que exista antes
+  # de canonicalizar escrituras dentro), despues los guards de Edit/Write y
+  # Bash. Los guards reescriben el estado preservando todo lo demas.
+  adv_event_role=""
+  if [ -n "$subagent" ]; then adv_event_role="$(canonical_agent_role "$subagent")"; fi
+  if [ "$adv_event_role" = "adversary" ]; then
+    adv_ensure_gitignore
+    adv_guard_edit "$tool_name" "$file_path"
+    adv_guard_bash "$tool_name" "$command_text"
+  fi
+  # <<< SAIKIT-ADVERSARY-LOCK v1 <<<
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   rn_order_now="$(rn_bump_counter)"
   if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ]; then
@@ -1826,6 +2169,47 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   text_hatch="$(last_assistant_text)"
   if [ -z "$text_hatch" ]; then text_hatch="$text"; fi
 
+  # >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
+  # Chequeos de violacion y secreto ANTES de las escotillas tempranas (A2 del
+  # review de 13.1): PAUSED y DELEGATED hacen emit_allow sin senal, y sin este
+  # orden un lead cuyo adversary escribio fuera del dir cerraba el turno con
+  # una frase de pausa — la unica entrada fail-closed del diseno, eludida por
+  # una escotilla escrita para otro proposito. Con adv_early activo se bloquea
+  # aca mismo y las escotillas de abajo quedan inalcanzables (el bloque sale
+  # con exit; no hace falta condicionarlas). Sin adversary ni violacion en el
+  # estado, este bloque es no-op y el Stop sigue byte-identico al de hoy.
+  adv_early_missing=""
+  adv_st_violation="$(read_state_value adv_violation)"
+  adv_st_agents="$(read_state_value agents_seen)"
+  adv_adv_presente=0
+  case ",$adv_st_agents," in
+    *,adversary,*) adv_adv_presente=1 ;;
+  esac
+  if [ "$adv_st_violation" = "1" ]; then
+    # qwen #1 / codex #2 (r2 PR #65): el remedio prometido tiene que ser el
+    # que FUNCIONA. El flag persiste a proposito toda la sesion (limpiarlo sin
+    # verificar el revert seria perdonar la escritura; verificarlo seria git
+    # en el Stop) — la salida real es revertir y RE-ARMAR (-saikit) en un
+    # turno nuevo, cuyo armado reinicia el estado; o agotar el presupuesto.
+    # qwen #7: los paths viajan REDACTADOS al feedback, como en la linea de log.
+    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it).\n"
+  elif [ "$adv_adv_presente" = "1" ]; then
+    adv_early_missing="$(adv_chequear_secretos)"
+  fi
+  if [ -n "$adv_early_missing" ]; then
+    adv_cycle="$(read_state_value cycle)"
+    case "$adv_cycle" in ''|*[!0-9]*) adv_cycle=0 ;; esac
+    if [ "$adv_cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
+      rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
+      podar_dir_sesion
+      emit_budget_exhausted "$adv_early_missing"
+    fi
+    adv_reescribir_estado "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" "$((adv_cycle + 1))"
+    feedback="$(build_gate_feedback "$adv_early_missing" "$((adv_cycle + 1))")"
+    emit_gate_failure "$feedback"
+  fi
+  # <<< SAIKIT-ADVERSARY-LOCK v1 <<<
+
   # A clarifying pause is a valid way to end the turn: the agent asked the
   # user a question and is waiting for the answer. Do not demand a receipt or
   # the implement -> verify -> review sequence in that case. Task 11.2: the
@@ -1878,7 +2262,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # HARNESS DELEGATED - awaiting <role>" without having genuinely delegated
   # would still close the turn. Accepted on purpose, same reason the gate as
   # a whole is advisory/fail-open by design.
-  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer)' \
+  # Task 13.5 (D6): la alternancia gana a adversary — un lead que delega
+  # adversary en vivo y escribe la forma exacta caia al gate normal y quemaba
+  # un ciclo (hallazgo alto del cross-review del plan). Mismo trade-off
+  # declarado de siempre: substring sin anclar sobre texto sin recibo.
+  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
     emit_allow
   fi
@@ -1971,6 +2359,23 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
     missing="$missing- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
+  # Task 13.5 (D4/B1): la linea ADVERSARY del recibo se exige cuando ESTE turno
+  # corrio un adversary (,adversary, en agents_seen), en CUALQUIER lane — los
+  # labels del recibo ya se exigen en fast y este no es excepcion. Sin adversary
+  # en agents_seen este bloque no corre y el recibo sigue exactamente igual
+  # (anti-regresion del costo, D1). Label-only: el gate NUNCA valida N contra
+  # el JSON del artefacto (validarlo exigiria parsear en el Stop un archivo que
+  # otro modelo reescribio — TOCTOU declarado de D2). ROLE FALLBACK: ADVERSARY
+  # sustituye la linea para el despacho que acredito agents_seen pero murio sin
+  # reportar — misma disciplina substring sin anclar de los otros tres roles.
+  case ",$agents_seen," in
+    *,adversary,*)
+      if ! has_receipt_label "ADVERSARY" "ADVERSARIO" "$text" \
+         && ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *ADVERSARY'; then
+        missing="$missing- Missing ADVERSARY line (this turn ran an adversary subagent: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n"
+      fi
+      ;;
+  esac
   # VERIFY_SKIP_RE: EN+IT historicos + ES natural. Vivo 2026-08-13: zcode
   # escribio "No corri los candados" y el gate lo rechazo porque solo
   # aceptaba skipped/not run. "se corrio la bateria" NO matchea (falta "no ").
@@ -2030,6 +2435,17 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
       if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then
         missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\n"
+      fi
+    fi
+    # Task 13.5 (D4): con adversary en agents_seen, la secuencia exigida lo
+    # incluye ENTRE verifier y reviewer. La regex de 3 roles de arriba ya
+    # matcheaba con adversary en el medio — ESTA es la que exige su posicion:
+    # rechaza adversary-antes-de-verifier y adversary-despues-de-reviewer. El
+    # "adversary sin verifier previo" sin verifier en agents_seen lo atrapa la
+    # rama missing-verifier de arriba; con verifier tardio, esta.
+    if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q adversary && printf '%s' "$agents_seen" | grep -q reviewer; then
+      if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*adversary.*reviewer'; then
+        missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> adversary -> reviewer.\n"
       fi
     fi
   ;;
@@ -2113,7 +2529,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   fi
 
   next_cycle=$((cycle + 1))
-  write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane"
+  write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)"
   feedback="$(build_gate_feedback "$missing" "$next_cycle")"
   emit_gate_failure "$feedback"
 }

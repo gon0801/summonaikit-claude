@@ -134,6 +134,13 @@ G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y 
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
 G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
 G3|ceremonia_sin_grok|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
+G3|adv_keyword_sin_precedencia|la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)
+G3|adv_delegated_sin_adversary|la escotilla DELEGATED vuelve a no perdonar awaiting adversary y una delegacion viva quema un ciclo (D6, Task 13.5)
+G3|adv_linea_no_se_exige|la linea ADVERSARY del recibo deja de exigirse y un turno fast con adversary cierra sin reporte (D4/B1, Task 13.5)
+G3|adv_fallback_sin_adversary|la sustitucion ROLE FALLBACK: ADVERSARY deja de aceptarse y un adversary caido vuelve a bloquear el cierre (D4/D6, Task 13.5)
+G3|adv_orden_sin_adversary|el chequeo de orden con adversary deja de correr y un adversary fuera de posicion cierra igual (D4, Task 13.5)
+G1|adv_contrato_criterio_roto|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
+G1|adv_contrato_despacho_roto|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -642,6 +649,24 @@ mut_budget_zcode_sigue_0()  { sed '/saikit-5.4-zcode-budget/s/exit 2/exit 0/'; }
 # caso_g3_role_fallback_verifier_permite (ningun otro caso de CASOS_G3 escribe
 # "ROLE FALLBACK: " en su recibo, asi que ningun otro reacciona).
 mut_role_fallback_quitada() { sed "s/grep -Eiq 'ROLE FALLBACK: /grep -Eiq 'ROLE_FALLBACK_NUNCA: /"; }
+
+# Task 13.5 (D4/D6) — una mutacion por condicion nueva del rol adversary, cada
+# una acreditada a su caso del gate G3 (los 9 casos D6 viven al final de
+# CASOS_G3). Anclas: la rama adversar de canonical_agent_role, la alternancia
+# DELEGATED, la etiqueta ADVERSARY, la sustitucion ROLE FALLBACK y el trigger
+# de orden de 4 roles — cada literal aparece una sola vez en el hook.
+mut_adv_keyword_sin_precedencia() { sed "s@grep -Eq '(^|\[^a-z\])adversar'@grep -Eq '(^|[^a-z])adversarZ'@"; }
+mut_adv_delegated_sin_adversary() { sed "s@reviewer|adversary)'@reviewer)'@"; }
+mut_adv_linea_no_se_exige()       { sed 's/has_receipt_label "ADVERSARY" "ADVERSARIO"/has_receipt_label "ADVERSARY-NUNCA" "ADVERSARIO-NUNCA"/'; }
+mut_adv_fallback_sin_adversary()  { sed "s/'ROLE FALLBACK: \*ADVERSARY'/'ROLE FALLBACK: *ADVERSARYNUNCA'/"; }
+mut_adv_orden_sin_adversary()     { sed 's/grep -q adversary \&\& printf/grep -q adversaryNUNCA \&\& printf/'; }
+
+# Task 13.6 (D1) — el contrato de armado es el canal que invoca el rol: si el
+# texto pierde el criterio de delegacion o la forma del despacho que nombra el
+# artefacto, el mecanismo entero queda sin disparador. Ambas las atrapa
+# caso_g1_contrato_nombra_adversary (grepea el stdout del armado).
+mut_adv_contrato_criterio_roto()  { sed 's/OPTIONAL fourth role/OPTIONAL third role/'; }
+mut_adv_contrato_despacho_roto()  { sed 's/NAMING the artifact to adjudicate/NAMING the artifact to discard/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

@@ -1,0 +1,3 @@
+D6 caso 4 (Task 13.5): adversary sin verifier previo (dispatches implementer, adversary,
+reviewer). Bloquea por la rama missing-verifier existente; la variante con verifier tardio
+la cubre el caso del lab (gate_cases).

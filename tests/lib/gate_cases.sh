@@ -166,6 +166,15 @@ _RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand
 _RECIBO_VINETAS_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 _RECIBO_SIN_RETRO_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
+# Task 13.5 (D4) — el recibo del turno con adversary lleva su linea label-only
+# (el gate jamas valida N contra el JSON del artefacto, limite declarado). La
+# evidencia de Verify nombra pytest para que la prosa cuente sola si hace falta.
+_RECIBO_ADV='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
+
+# D4/D6 — el adversary despachado que murio sin reportar: la declaracion
+# sustituye la linea ADVERSARY (misma disciplina substring de los otros tres).
+_RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado. ROLE FALLBACK: ADVERSARY (429).\n- Retro: none.'
+
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
 
@@ -183,7 +192,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -402,6 +411,24 @@ caso_g1_contrato_muestra_forma_recibo() {
   _contiene "stdout" "$LAB_OUT" 'Review: ...'
   _contiene "stdout" "$LAB_OUT" 'Close: ...'
   _contiene "stdout" "$LAB_OUT" 'Retro: ...'
+}
+
+# Task 13.6 (D1 + formas de D4/D6): el contrato de armado nombra el disparador
+# opt-in del adversary (mismo criterio que el cross-review), la forma del
+# despacho del reviewer que NOMBRA el artefacto, la instruccion negativa (un
+# turno sin adversary no adjudica nada), la extension de la escotilla DELEGATED
+# y la linea ADVERSARY del recibo. Cada string afirmado es el que el lead lee
+# al armar — sin el, nadie invoca el rol y todo lo demas es codigo muerto.
+caso_g1_contrato_nombra_adversary() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'OPTIONAL fourth role'
+  _contiene "stdout" "$LAB_OUT" 'auth, payments, migrations or pre-existing data'
+  _contiene "stdout" "$LAB_OUT" 'NAMING the artifact to adjudicate'
+  _contiene "stdout" "$LAB_OUT" 'adjudicates nothing'
+  _contiene "stdout" "$LAB_OUT" 'reviewer, or adversary'
+  _contiene "stdout" "$LAB_OUT" 'ADVERSARY: N findings, highest severity X'
+  _contiene "stdout" "$LAB_OUT" 'ROLE FALLBACK: ADVERSARY'
 }
 
 # El sentinel pide fronteras a los dos lados. Sin ellas, cualquier archivo o
@@ -1369,7 +1396,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -1671,6 +1698,125 @@ caso_g3_turno_completo_por_eventos_permite() {
   _vacio "stdout" "$LAB_OUT"
   _vacio "stderr" "$LAB_ERR"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# ============================== Task 13.5 — adversary (los 9 casos D6, Phase 13)
+# El rol es OPT-IN (D1): ningun caso sin adversary puede cambiar de veredicto.
+# Con adversary en agents_seen: orden implementer -> verifier -> adversary ->
+# reviewer (D4) y linea de recibo ADVERSARY label-only. La linea se exige
+# lane-independiente (B1: en fast los labels ya se exigen; este no es excepcion).
+
+# Caso D6-1: turno completo CON adversary cierra limpio con su linea.
+caso_g3_adversary_turno_completo_cierra() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  lab_run tool claude "$(lab_payload_agent 'adversary')"
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  _igual "agents_seen" "$(lab_estado agents_seen)" "implementer,verifier,adversary,reviewer"
+
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Caso D6-2: adversary DESPUES del reviewer esta fuera de orden (la regex nueva
+# es la que exige la POSICION: la vieja de 3 roles ya matcheaba con adversary en
+# el medio). Se siembra: el orden es lo unico bajo prueba.
+caso_g3_adversary_fuera_de_orden_bloquea() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer,adversary"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo (fuera de orden con adversary)" "$LAB_OUT" 'out of order'
+  _contiene "motivo (nombra la secuencia con adversary)" "$LAB_OUT" 'adversary'
+}
+
+# Caso D6-3: adversary dos veces — el dedupe conserva la posicion de la primera
+#aparicion y el turno cierra. La re-escritura del JSON post-adjudicacion es el
+# TOCTOU DECLARADO de D2: el gate es label-only y jamas lee el artefacto.
+caso_g3_adversary_dos_veces_cierra() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  lab_run tool claude "$(lab_payload_agent 'adversary')"
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  lab_run tool claude "$(lab_payload_agent 'adversary')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  _igual "agents_seen (dedupe: una sola aparicion)" "$(lab_estado agents_seen)" "implementer,verifier,adversary,reviewer"
+
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code" "$LAB_RC" "0"
+}
+
+# Caso D6-4: adversary sin verifier previo. Dos formas: sin verifier en
+# agents_seen (la rama missing-verifier existente) y con verifier TARDIO (la
+# regex nueva de orden — adversary camino al slot del reviewer antes de tiempo).
+caso_g3_adversary_sin_verifier_previo_bloquea() {
+  lab_sembrar 123456 0 1 1 "implementer,adversary,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code (sin verifier)" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing verifier subagent run'
+
+  lab_sembrar 123456 0 1 1 "implementer,adversary,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code (verifier tardio)" "$LAB_RC" "2"
+  _contiene "motivo (orden)" "$LAB_OUT" 'out of order'
+}
+
+# Caso D6-5: la trampa medida de precedencia — `adversarial-audit` hoy resolvia
+# a REVIEWER por el keyword audit. Con la rama adversar ANTES, acredita
+# adversary y el slot de reviewer sigue exigiendo su propio despacho.
+caso_g3_adversarial_audit_no_acredita_reviewer() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio')"
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'adversarial-audit')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  _igual "agents_seen (adversarial-* mapea a adversary)" "$(lab_estado agents_seen)" "implementer,adversary,verifier"
+
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo (el slot de reviewer no se lleno con un nombre adversario)" "$LAB_OUT" 'Missing reviewer subagent run'
+}
+
+# Caso D6-6: la escotilla DELEGATED extendida — un lead con adversary corriendo
+# en vivo escribe la forma exacta y el Stop se perdona (sin quemar un ciclo).
+caso_g3_delegated_adversary_permite() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier"
+  lab_run stop claude "$(lab_payload_stop 'Delegue el ataque y sigue corriendo.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting adversary')"
+  _igual "exit code" "$LAB_RC" "0"
+  if ! lab_hay_estado; then _mal "la delegacion no cierra el turno: el estado tiene que seguir"; fi
+}
+
+# Caso D6-7: ROLE FALLBACK: ADVERSARY — el despacho se acredito (agents_seen)
+# pero el adversary murio sin reportar; la declaracion sustituye la linea.
+caso_g3_role_fallback_adversary_cierra() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,adversary,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROLE_FALLBACK_ADVERSARY")"
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Caso D6-8: anti-regresion del costo (D1) — sin adversary, el turno cierra
+# exactamente como hoy: ni orden nuevo ni linea ADVERSARY exigida.
+caso_g3_sin_adversary_cierra_igual() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+}
+
+# Caso D6-9: lane fast con adversary visto exige la linea (B1 — los labels del
+# recibo ya se exigen en fast; este no es una excepcion). La ceremonia NO se
+# exige en fast: el bloqueo es solo por la linea faltante.
+caso_g3_fast_con_adversary_exige_linea() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:fast ataca el cambio con adversary')"
+  lab_run tool claude "$(lab_payload_agent 'adversary')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code (fast exige la linea ADVERSARY)" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'ADVERSARY'
+  _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
 # ================================================================ G4 — recibo
