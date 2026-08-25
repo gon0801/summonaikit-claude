@@ -493,6 +493,24 @@ advlock_mensaje_redacta_paths() {
   _igual "exit code" "$LAB_RC" "2"
   _no_contiene "el valor no viaja al feedback" "$LAB_ERR" 'abc123secreto'
   _contiene "la forma redactada si viaja" "$LAB_ERR" 'token=[REDACTED]'
+  # CodeRabbit r2 (hook:1647): el gemelo del caso anterior en el MENSAJE DEL
+  # ESCANEO — un NOMBRE de artefacto elegido por el adversary puede cargar un
+  # valor con pinta de secreto; el path del mensaje va redactado igual que en
+  # la rama de violacion y en la linea de log.
+  if [ "$ADV_EPOCA_OK" = "1" ]; then
+    lab_limpiar_estado
+    rm -rf "$LAB/proyecto/.saikit"
+    mkdir -p "$LAB/proyecto/.saikit/findings"
+    adv_armar
+    adv_despachar
+    printf 'password=real-fuga-999\n' > "$LAB/proyecto/.saikit/findings/adversary-token=fugafilename.json"
+    lab_run stop claude "$(lab_payload_stop 'Listo.')"
+    _igual "exit (secreto con nombre-secreto)" "$LAB_RC" "2"
+    _no_contiene "el nombre no filtra su valor" "$LAB_ERR" 'fugafilename'
+    _contiene "nombre redactado en el mensaje del escaneo" "$LAB_ERR" 'token=[REDACTED]'
+  else
+    printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'
+  fi
 }
 advlock_mensaje_redacta_paths; fin_caso "advlock_mensaje_redacta_paths"
 

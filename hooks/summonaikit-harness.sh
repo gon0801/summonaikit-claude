@@ -1644,7 +1644,10 @@ $(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null |
     [ -r "$advs_f" ] || continue
     advs_linea="$(sed -E "$SAIKIT_ADV_REDACTED_STRIP" "$advs_f" 2>/dev/null | grep -En "$SAIKIT_ADV_SECRET_RE" | head -n 1 | cut -d: -f1)"
     if [ -n "$advs_linea" ]; then
-      printf '%s\n' "- Possible secret persisted in adversary artifact $advs_f:$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
+      # CodeRabbit r2: el NOMBRE del artefacto lo eligio el adversary y puede
+      # cargar un valor con pinta de secreto — el path viaja REDACTADO, misma
+      # disciplina que la rama de violacion y la linea de log.
+      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
       return 0
     fi
   done <<EOF
