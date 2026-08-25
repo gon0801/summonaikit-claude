@@ -359,6 +359,14 @@ advlock_bash_best_effort() {
   # /dev/null y dup de fd: no son escrituras de archivo.
   lab_run tool claude "$(lab_payload_bash_en_subagente adversary 'pytest -q 2>/dev/null > /dev/null')"
   _no_contiene "dev/null no es violacion" "$(lab_estado adv_violation_paths)" 'dev/null'
+  # EN VIVO (13.9, segundo hallazgo del estreno): el candado bloqueo al LEAD
+  # con `/dev/null)` (subshell: el paren entra al token del regex) y con
+  # `/dev/null` + \n literal del JSON pegado al blanco. La exclusion exacta
+  # no los cubria; ahora es por prefijo.
+  lab_run tool claude "$(lab_payload_bash_en_subagente adversary '(pytest -q > /dev/null)')"
+  _no_contiene "dev/null en subshell no es violacion" "$(lab_estado adv_violation_paths)" 'dev/null'
+  lab_run tool claude "$(lab_payload_bash_en_subagente adversary 'grep -r x . 2>/dev/null\necho listo')"
+  _no_contiene "dev/null con \\n literal no es violacion" "$(lab_estado adv_violation_paths)" 'dev/null'
   # tee fuera: violacion.
   lab_run tool claude "$(lab_payload_bash_en_subagente adversary 'cat data/x | tee src/log.txt')"
   _contiene "tee fuera" "$(lab_estado adv_violation_paths)" 'src/log.txt'
@@ -470,6 +478,13 @@ advlock_artefacto_redactado_no_bloquea() {
   printf 'evidence: token=[REDACTED]\nuri: https://[REDACTED]@host/db\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _no_contiene "redactado no bloquea" "$LAB_ERR" 'adversary-redactado.json'
+  # Adversary r1 EN VIVO (13.9, hallazgo HIGH): el formato JSON que el propio
+  # contrato exige cierra el string con comilla PEGADA al marcador — el strip
+  # viejo dejaba `token="` y el regex volvia a matchear. El fixture de texto
+  # plano de arriba (marcador al final de linea) era la UNICA forma cubierta.
+  printf '{"evidence":"token=[REDACTED]","uri":"https://[REDACTED]@host/db"}\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-json.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _no_contiene "redactado en JSON no bloquea" "$LAB_ERR" 'adversary-redactado-json.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino).
   printf 'mix: token=[REDACTED] password=hunter2-real\n' > "$LAB/proyecto/.saikit/findings/adversary-mixto.json"
