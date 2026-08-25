@@ -7,7 +7,7 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
-## 2026-08-25 — PR (número pendiente, el lead lo pone al abrir) / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
+## 2026-08-25 — PR #67 / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
 
 - **Qué traía:** Phase 13 completa mergeada a master — diseño (PR #63 + fix
   #64), 13.2–13.6 (PR #65, merge `1d05905`, con los fixes del cross-review r2
