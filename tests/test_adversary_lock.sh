@@ -84,7 +84,10 @@ adv_payload_edit_interno() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"adv00000-0000-4000-8000-000000000001","permission_mode":"auto","agent_id":"aadv00001adversa","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","replace_all":false},"tool_response":{"filePath":"%s","structuredPatch":[]},"tool_use_id":"toolu_01a4d5e6f7a8b9c0d1e2f3a4","duration_ms":1200}' "$1" "$2" "$2"
 }
 
-_ADV_RECIBO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- Retro: none.'
+# Recibo del turno con adversary: desde 13.5 el gate exige la linea ADVERSARY
+# cuando el turno corrio un adversary (label-only), asi que el recibo verde la
+# lleva — igual que _RECIBO_ADV del gate_cases.
+_ADV_RECIBO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
 
 _TEXTO_PAUSA='Espere: SUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
