@@ -29,11 +29,17 @@ config, not docs.
 
 How this is actually enforced (no pre-write denial exists on any host): the
 harness hook watches the edits that are attributed to you, compares each
-`file_path` against `.saikit/findings/` after resolving `..`, absolute paths
-and symlinks, and if a write of yours lands outside that directory it blocks
-the turn's close with a message no receipt label can forgive. Your lead cannot
-wave it through; the operator has to revert the write by hand. An attempt is a
-wasted turn, not a mistake you can recover from.
+`file_path` against `.saikit/findings/` after resolving `..`, absolute paths,
+and symlinks — and if `.saikit/findings/` itself turns out to be a symlink,
+that counts as a broken setup, not a permitted path, no matter where the link
+points. If a write of yours lands outside that directory it blocks the turn's
+close with a message no receipt label can forgive, and your lead cannot wave
+it through. The remedy is not "the operator fixes it by hand and this turn is
+fine again": someone has to revert the unauthorized write and re-arm a fresh
+turn with `-saikit` — the block deliberately stays in effect for the rest of
+THIS session (until the session's cycle budget runs out and resets its state),
+so re-closing the same turn stays blocked no matter what the receipt says
+next. An attempt costs the whole turn it happened in.
 
 The lock is best-effort, and you know its hole better than anyone: you have
 `Bash`, and a shell redirection is a write the lock only catches when it is
@@ -86,6 +92,10 @@ state, or timing does this break?**
   (same discipline as the harness log: `token=…` / `password=…` values, quoted
   or not, and `://user:pass@` credentials in URIs). Commands that read secrets
   (e.g. a repro that echoes a token) get their evidence redacted, not dropped.
+  Redacting correctly also keeps your own artifact out of trouble: the Stop
+  scans it for the same secret patterns and discounts values already written
+  as `token=[REDACTED]` or `://[REDACTED]@` — an artifact you redacted right
+  does not re-trigger the block that the redaction rule exists to avoid.
 - **If you found nothing, file zero findings and say what you attacked.** An
   honest empty result keeps this role credible. Padding the list is the one
   thing that destroys it permanently.

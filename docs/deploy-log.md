@@ -7,6 +7,81 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-25 — PR (número pendiente, el lead lo pone al abrir) / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
+
+- **Qué traía:** Phase 13 completa mergeada a master — diseño (PR #63 + fix
+  #64), 13.2–13.6 (PR #65, merge `1d05905`, con los fixes del cross-review r2
+  en el mismo PR), 13.7–13.8 (PR #66, merge `411abf2`, implementó kimi +
+  fixes del cross-review r1). El hook SÍ cambió (candado adversary 13.4 +
+  gate condicional 13.5).
+- **Deploy del hook (tres pasadas):** primera con sha
+  `12a02885902733864c682b399a04997aa4b983fcd8a6be5611b837f5eeae2b86` —
+  REPARADO con backup en los tres vivos — `~/.claude/hooks`
+  (backup `.nuestro.20260825-101053.bak`), `~/.codex/hooks`
+  (`.nuestro.20260825-101056.bak`), `~/.grok/hooks`
+  (`.nuestro.20260825-101103.bak`). El estreno EN VIVO del rol adversary
+  sobre este mismo cierre (abajo) halló un HIGH en el hook → fix + segunda
+  pasada (backups `.nuestro.20260825-104959/105003/105008.bak`, sha
+  `064997a2…`). El candado recién deployado bloqueó después al PROPIO lead
+  con un falso positivo del guard de Bash (bug vivo #4, abajo) → fix +
+  tercera pasada (backups `.nuestro.20260825-105452/105457/105503.bak`),
+  **sha final
+  `d0639d196b06721ab075f4a0cc789d1ef6003f10b4379dc92dfdd8cece548036`**,
+  `cmp` byte a byte IDÉNTICO los tres contra la fuente.
+- **Perfiles:** `adversary.md` INSTALADO con marca `saikit_owned` en
+  `~/.claude/agents`, `~/.zcode/agents`, `~/.grok/agents` (frontmatter
+  traducido, sin `skills:`) y `~/.agents/agents` (kimi, sin `model:`/
+  `effort:` — sellado 12.3). En claude y kimi, los tres perfiles preexistentes
+  del vendor quedaron ADOPTADOS (`VENDOR_CONOCIDO`) y ahora llevan el ruteo
+  del router. `verifier` ajeno de grok intacto (cksum 353659411, el mismo de
+  7.1/7.2). zcode re-REGISTRADO (4 fases, id 5.4) en TRES corridas de
+  escritura — backups `config.json.zcode.20260825-101124.bak` (la corrida
+  que gritó `command not found`, bug #1), `…-101611.bak` (re-deploy limpio
+  post-fix) y `…-110955.bak` (cuarta pasada, abajo); el `…-102205.bak` lo
+  dejó el `--dry-run` que escribía (bug #2). **Cuarta pasada (solo
+  perfiles):** la reconciliación de `agents/adversary.md` y el fix del LOW
+  del estreno se editaron DESPUÉS de la primera instalación de perfiles —
+  REPARADO en claude/zcode/kimi (grok ya lo tenía por la tercera pasada);
+  verificado: los 4 vivos llevan el texto reconciliado.
+- **BUGS VIVOS atrapados por el propio deploy (cuatro):**
+  1. `--host zcode` gritó `limpiar_trads_vendor: command not found` — la
+     función se declaraba DESPUÉS del dispatch de zcode (regresión del fix
+     two-phase del PR #66; invisible para tests y CI porque no movía ningún
+     veredicto: solo stderr sucio y trads sin limpiar). Corregido
+     (declaración movida junto a `ZCODE_AGENT_ROLES` + caso que afirma la
+     ausencia de `command not found`); re-deploy de zcode limpio, rc=0.
+  2. Un `--host zcode --dry-run` de verificación dejó un backup REAL del
+     user-config (`config.json.zcode.20260825-102205.bak`): el dispatch de
+     zcode nunca miraba `DRY_RUN` (el 12.9 #4 solo cubrió claude/kimi) —
+     un dry-run que escribe. Corregido (guard con reporte de clasificación
+     por rol, sin tocar agentes/config/backups) + caso nuevo.
+  3. **Estreno EN VIVO del rol adversary sobre su propio cierre** (artefacto
+     `.saikit/findings/adversary-20260825T174034Z.json`, 4 hallazgos, máx.
+     HIGH; el gitignore de la capa 3 apareció solo con su primer evento —
+     D2 verificada en vivo): el HIGH — el descuento de `=[REDACTED]` dejaba
+     la comilla de cierre pegada al `=` en el formato JSON que el propio
+     contrato exige, y el artefacto bien redactado volvía a bloquear el
+     Stop. Corregido en el hook (el strip deja un espacio) + caso con el
+     fixture JSON; los dos LOW (el perfil omitía la salida por presupuesto;
+     esta misma entrada omitía la registración de las 10:22) corregidos acá
+     mismo. El MEDIUM (el fixture de texto plano era la única forma
+     cubierta) quedó cerrado por el mismo caso JSON.
+  4. **El candado bloqueó al PROPIO lead** en el primer turno armado tras
+     el deploy: el guard best-effort de Bash registró como "escrituras"
+     los blancos `/dev/null)` (el paréntesis de un subshell entra al token
+     del regex) y `/dev/null/necho` (un `\n` literal del JSON pegado al
+     blanco, con la `\` vuelta `/` por la canonicalización) — la exclusión
+     solo cubría `/dev/null` exacto. Falso positivo en la entrada
+     fail-closed: la sesión del lead quedó bloqueada y salió por el camino
+     de presupuesto agotado (la salida documentada, ejercida en vivo).
+     Corregido (exclusión por prefijo `/dev/null*`, dirección segura del
+     best-effort: nada real se escribe "bajo" un archivo) + dos asserts
+     nuevos en el caso de Bash best-effort.
+- **`check-hook-registration.sh` en sus tres formas:** claude (settings)
+  rc=0; codex (`--codex-hooks-json ~/.codex/hooks.json`) rc=0 en silencio;
+  grok (`--grok-hooks-dir ~/.grok/hooks`) rc=0.
+- **Operador:** Gon (sesión claude; deploy ejecutado por el lead).
+
 ## 2026-08-24 — Deploy NO-OP + PR #64 (Greptile P1 + reviews de bots) — follow-up 13.1
 
 - **Qué traía:** **PR #64** (`0ddb3ba` + `25b94f0`, docs-only) — el P1 de

@@ -1602,6 +1602,172 @@ caso "clave desconocida, se ignora en silencio", confirmado contra el parser
 real y no sólo por lectura de código. Huella de `~/.agents` y `~/.kimi-code`
 idéntica antes/después (podada de contabilidad de runtime).
 
+## El cuarto rol — adversary (Phase 13)
+
+**Qué es.** `adversary` es un cuarto rol OPT-IN de la ceremonia: corre
+DESPUÉS del verifier y ANTES del reviewer (`implementer → verifier →
+adversary → reviewer`). Ataca el cambio — entradas no manejadas, datos
+preexistentes, tests que no discriminan, blast radius, falla parcial, trust
+boundary — y SOLO reporta a un artefacto: jamás repara, jamás toca fuente. El
+disparador es una decisión del lead con el MISMO criterio que ya dispara el
+cross-review — el cambio toca auth, pagos, migraciones o datos preexistentes,
+o el hook mismo. **Sin invocación, el comportamiento del turno es
+byte-idéntico al de los tres roles de siempre**: ningún host, gate ni perfil
+cambia de comportamiento.
+
+**Enforcement REAL, no prometido.** Ningún host registra `PreToolUse`: no
+existe canal para negar una escritura antes de que ocurra, así que el candado
+es detección post-hoc + bloqueo en el Stop, no un guardia preventivo.
+
+- Única zona de escritura permitida: `.saikit/findings/` — un prefijo de
+  DIRECTORIO, no una ruta con clave (dir-scoped keyless), porque el
+  `session_id` no se propaga a ningún subagente en ningún host medido; un
+  candado que dependiera de un id que el escritor no puede conocer no cierra
+  nada.
+- Canonicalización FÍSICA de ambos lados de la comparación (`cd` + `pwd -P`,
+  no `pwd` lógico): cierra la forma `C:/` (Windows, vía `git rev-parse`)
+  contra la forma `/c/` (Git Bash) del mismo path, y resuelve directorios
+  symlink intermedios en la cadena — sin esto, la comparación fallaría
+  siempre en Windows o dejaría pasar un symlink plantado.
+- `.saikit` o `.saikit/findings/` como symlink es violación de SETUP, no ruta
+  permitida: el candado la rechaza en vez de resolverla — resolverla con
+  `realpath` haría pasar cualquier escritura a través de un enlace plantado
+  por el hueco de `Bash` de abajo.
+- El hook crea un `.gitignore` con `*` dentro de `.saikit/findings/` al
+  primer evento que resuelva a adversary por cualquier canal medido (despacho
+  o interno) — clase de efecto NUEVA para el hook (hasta hoy solo escribía
+  bajo su propio directorio de estado). Idempotente: crea si está ausente,
+  jamás reescribe uno existente, ni siquiera uno ajeno que no cubra los
+  artefactos.
+- Escaneo de secretos por sesión en el Stop: mira las rutas que el candado
+  registró como escritas por el adversary de esta sesión más cualquier
+  archivo del directorio con mtime posterior o igual a la ÉPOCA de armado
+  guardada en el estado — el armado INICIALIZA ese estado (época, rutas y
+  violación se reemplazan, nunca se heredan de una sesión anterior muerta).
+  Las formas ya redactadas por el perfil (`token=[REDACTED]`,
+  `://[REDACTED]@`) se DESCUENTAN antes de grepear: un artefacto redactado
+  como manda el perfil no vuelve a disparar el escaneo que esa misma
+  redacción existe para satisfacer.
+- Fail-closed SOLO en dos entradas — el resto del candado es fail-open como
+  el resto del hook: (1) una escritura atribuida al adversary detectada fuera
+  de `.saikit/findings/` — defecto PROBADO por el propio evento que lo
+  reporta; (2) un secreto matcheado en un artefacto de esta sesión — riesgo
+  alto, no certeza (un regex tiene falsos positivos), con ruta de fuga MANUAL
+  declarada: el mensaje nombra archivo y número de línea, jamás el
+  contenido, y el remedio es redactar o borrar el artefacto y re-cerrar.
+- El recibo lleva una línea `ADVERSARY: N findings, highest severity X` —
+  label-only: presencia exigida por el gate cuando el adversary corrió,
+  contenido NUNCA validado contra el artefacto (el gate no parsea el JSON en
+  el Stop ni confía en un archivo que otro modelo pudo haber reescrito).
+- El gate exige el orden `implementer → verifier → adversary → reviewer`
+  SOLO cuando `adversary` aparece en `agents_seen` de la sesión; sin eso, el
+  gate y el orden quedan exactamente como hoy.
+- Dos escotillas nuevas: `DELEGATED - awaiting adversary` (el lead delegó en
+  vivo y sigue esperando) y `ROLE FALLBACK: ADVERSARY` (el adversary fue
+  despachado y murió sin reportar) — misma disciplina que las escotillas ya
+  usadas por los otros tres roles.
+
+**Los límites**, uno por línea con su razón — el consolidado completo de las
+tasks 13.1–13.8 y sus cross-reviews (incluidos los del PR #63/#64) vive en
+`docs/phase-13-adversary-design.md` § "Límites declarados (consolidado)"; acá
+va la versión de cierre, con los hallazgos posteriores al diseño (cross-review
+de los PRs #65 y #66) ya sumados:
+
+- `Bash` es best-effort, no un parser de shell: detecta redirección/heredoc/
+  `tee` OBVIOS en comandos atribuidos al adversary; `cp`/`mv`/`dd` y las
+  expansiones de variable quedan fuera del vocabulario a propósito — un
+  parser de shell completo es el pantano que este spec ya rechazó para otras
+  guardias.
+- El candado queda ciego en `zcode` y `kimi`: la atribución INTERNA (la que
+  dice que un Edit/Write vino del adversary, no del lead) es `unknown` en
+  esos dos hosts — fail-open declarado, sin bloqueos por atribución ahí. Si
+  un canal no medido apareciera mañana, el candado correría DE MÁS, nunca de
+  menos.
+- TOCTOU del artefacto: sin canal de negación no hay forma de sellarlo ni de
+  hacerlo append-only — una re-corrida del adversary DESPUÉS de que el
+  reviewer adjudicó puede reescribir el JSON conservando un `agents_seen`
+  válido. El ancla real es el VEREDICTO del reviewer en el transcript, no el
+  JSON: el gate jamás valida N contra el archivo, mismo límite que la línea
+  `ADVERSARY:` label-only.
+- Invocado-no-observado es indistinguible de no invocado: un nombre sin
+  mapear o un host sin canal de atribución interna cierra el turno limpio,
+  sin la línea `ADVERSARY:` — no se promete detectarlo.
+- Ambigüedad de sesiones concurrentes: el canal primario de adjudicación es
+  el LEAD nombrando el artefacto en el despacho del reviewer; degradado (no
+  lo nombró), el reviewer toma el `*.json` de MAYOR mtime del directorio —
+  dos sesiones corriendo a la vez pueden confundirse ahí. Es fail-safe:
+  escanea de más, no de menos.
+- Evasión por mtime retrocedido: un `touch -t` a una fecha anterior al armado
+  saca al artefacto del escaneo de secretos por completo — instancia del
+  mismo hueco de `Bash` de arriba, no uno nuevo: el escaneo atrapa
+  persistencia ACCIDENTAL, no a un evasor deliberado.
+- Falso negativo y falso positivo del escaneo de secretos: la familia de
+  patrones es la MISMA que el hook ya usa inline (`redact_secrets`) —
+  reducida a propósito, porque `tools/check-secrets.sh` no existe en el repo
+  consumer donde el hook corre y duplicar sus formatos extendidos ahí sería
+  una segunda copia sin candado de fuente única. Un secreto con forma no
+  reconocida pasa; un valor con pinta de secreto que no lo es (p. ej. un
+  `token=abc` de un test de auth) bloquea, con la misma ruta de fuga manual.
+- Las rutas de fuga fail-closed viajan redactadas: el mensaje de violación,
+  el de secreto matcheado y la línea de log usan `redact_secrets` sobre el
+  PATH del artefacto, no solo sobre su contenido — el nombre del archivo lo
+  elige el propio adversary y puede llevar pinta de secreto; sin esto, el
+  canal que reporta una fuga podría abrir una segunda.
+- El escaneo por mtime depende de GNU `date -d`: sin él (por ejemplo en BSD o
+  macOS), esa rama se omite con diagnóstico por stderr — fail-open declarado
+  de una falla de infraestructura, no de una decisión de producto.
+- El remedio de una violación es revertir + RE-ARMAR un turno nuevo con
+  `-saikit`, no re-cerrar el mismo turno: el flag de violación persiste a
+  propósito toda la sesión y el bloqueo nunca verifica el revert (verificarlo
+  sería correr git dentro del Stop); limpiarlo sin verificar perdonaría la
+  escritura. Re-cerrar el turno bloqueado sigue bloqueado; solo un armado
+  nuevo reinicia el estado. Agotar el presupuesto de 2 ciclos también
+  resetea — mismo desenlace que cualquier otro presupuesto agotado del gate.
+- El `.gitignore` del consumer es pisable: `*` no afecta archivos ya
+  trackeados, y `git add -f` lo pisa igual; un `.gitignore` AJENO
+  preexistente jamás se edita, así que si no cubre los artefactos quedan
+  expuestos. La ventana de exposición varía por host: en `claude`/`grok`/
+  `codex` el gitignore aparece a mitad de la corrida (con el primer evento
+  interno del adversary); en `zcode`, donde solo el despacho tiene canal
+  medido, aparece recién al TERMINAR la corrida entera.
+- La superficie de eco de `ROLE FALLBACK: ADVERSARY` creció con el contrato:
+  mismo trade-off ya aceptado para los otros tres roles — el match es una
+  subcadena sin anclar sobre texto del asistente.
+- El lane `fast` se salta la ceremonia entera, adversary incluido — el gate
+  no exige despacharlo ahí, igual que no exige los otros tres roles. Pero si
+  un turno `fast` SÍ lo despachó y quedó visto en `agents_seen`, la línea
+  `ADVERSARY:` se exige igual que las demás etiquetas del recibo: no es una
+  excepción.
+- `kimi` instala el PERFIL sin ruteo: la posesión del archivo viaja por la
+  costura sellada en la Phase 12 (12.6/12.7); el ruteo de modelo/effort no
+  aplica ahí porque el host no acepta esas claves por agente (sellado,
+  12.3) — no confundir las dos cosas.
+- `zcode` hereda la fila vacía del padre en el router de modelo (12.1): sin
+  catálogo observado, el tier `review` no tiene valores propios para este
+  host.
+- `codex` NO tiene costura de perfiles: `--host codex` instala solo la
+  segunda copia del hook, no perfiles de agente — queda `unknown` declarado
+  hasta que un canal de atribución interna se mida ahí, no se afirma.
+- `adversary` es kit-owned SIN entrada de vendor: un `adversary.md` ajeno en
+  el destino es DESCONOCIDO — nunca adoptable por hash como el resto de los
+  perfiles, porque no hay un vendor que lo publique; `--refrescar-manifiesto`
+  lo reporta como tal y advierte que ese camino de adopción no existe para
+  este rol.
+- El descuento de formas redactadas es best-effort con una arista declarada:
+  un valor REAL pegado al marcador sin separador (`token=[REDACTED]sk-…`)
+  matcheaba antes del espacio del strip y ya no — quien pegue un secreto
+  vivo inmediatamente después de un marcador de redacción evade el escaneo
+  (misma familia que el evasor deliberado de mtime: el escaneo persigue
+  persistencia accidental).
+- `--quitar-zcode`/`--quitar-grok` IGNORAN `--dry-run` (escriben backup,
+  config y borran perfiles igual): límite preexistente a la Phase 13,
+  declarado acá — la promesa "dry-run no escribe" del README hoy solo está
+  cumplida y testeada para los caminos de INSTALACIÓN (claude/kimi por
+  12.9 #4, zcode por 13.9).
+- El residual `#8` del spec (reparadores silenciosos) PERSISTE para
+  verifier/reviewer: esta fase le puso un candado al rol NUEVO; los dos
+  roles que ya existían conservan `Edit, Write` sin cambios.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
