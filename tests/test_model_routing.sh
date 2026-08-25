@@ -25,11 +25,16 @@ igual "claude-sonnet-5" "$(bash "$router" --host claude --role verifier --field 
 igual "low"             "$(bash "$router" --host claude --role verifier --field effort)"   "verifier/effort"
 igual "claude-opus-5"   "$(bash "$router" --host claude --role reviewer --field model)"    "reviewer/model"
 igual "xhigh"           "$(bash "$router" --host claude --role reviewer --field effort)"   "reviewer/effort"
+# Task 13.7: adversary rutea al tier review (D5 del diseno 13) -- mismos
+# valores que reviewer, sin tier propio.
+igual "claude-opus-5"   "$(bash "$router" --host claude --role adversary --field model)"   "adversary/model"
+igual "xhigh"           "$(bash "$router" --host claude --role adversary --field effort)"  "adversary/effort"
 
 caso "rol -> tier"
 igual "standard" "$(bash "$router" --host claude --role implementer --field tier)" "implementer"
 igual "verify"   "$(bash "$router" --host claude --role verifier --field tier)"    "verifier"
 igual "review"   "$(bash "$router" --host claude --role reviewer --field tier)"    "reviewer"
+igual "review"   "$(bash "$router" --host claude --role adversary --field tier)"   "adversary"
 
 caso "la tabla del host grok, valor por valor (Task 12.2)"
 igual "grok-4.6" "$(bash "$router" --host grok --role implementer --field model)" "implementer/model"
@@ -38,6 +43,9 @@ igual "grok-4.6" "$(bash "$router" --host grok --role verifier --field model)"  
 igual "low"      "$(bash "$router" --host grok --role verifier --field effort)"   "verifier/effort"
 igual "grok-4.6" "$(bash "$router" --host grok --role reviewer --field model)"    "reviewer/model"
 igual "xhigh"    "$(bash "$router" --host grok --role reviewer --field effort)"   "reviewer/effort"
+# Task 13.7: adversary hereda la fila review de grok (grok-4.6/xhigh, 12.2).
+igual "grok-4.6" "$(bash "$router" --host grok --role adversary --field model)"   "adversary/model"
+igual "xhigh"    "$(bash "$router" --host grok --role adversary --field effort)"  "adversary/effort"
 
 caso "una fila de host sin valor devuelve VACIO con exit 0, no un default"
 # zcode: vacia A PROPOSITO -- la 12.1 midio que el catalogo real de la cuenta
@@ -46,9 +54,12 @@ caso "una fila de host sin valor devuelve VACIO con exit 0, no un default"
 # kimi: vacia DEFINITIVA -- la 12.3 midio que el host no acepta model ni effort
 # por agente, asi que esa fila no se llena nunca y este caso queda permanente.
 for h in zcode kimi; do
-  out="$(bash "$router" --host "$h" --role implementer --field model)"; rc=$?
-  [ "$rc" -eq 0 ] || malo "$h: esperaba exit 0, obtuve $rc"
-  [ -z "$out" ]   || malo "$h: esperaba stdout vacio, obtuve [$out]"
+  # Task 13.7: adversary tambien hereda la fila vacia de zcode y kimi (12.1/12.3).
+  for rol in implementer adversary; do
+    out="$(bash "$router" --host "$h" --role "$rol" --field model)"; rc=$?
+    [ "$rc" -eq 0 ] || malo "$h/$rol: esperaba exit 0, obtuve $rc"
+    [ -z "$out" ]   || malo "$h/$rol: esperaba stdout vacio, obtuve [$out]"
+  done
 done
 
 caso "--format frontmatter"
@@ -57,6 +68,15 @@ effort: xhigh" "$(bash "$router" --host claude --role reviewer --format frontmat
 igual "model: grok-4.6
 effort: xhigh" "$(bash "$router" --host grok --role reviewer --format frontmatter)" "grok/reviewer"
 igual "" "$(bash "$router" --host zcode --role reviewer --format frontmatter)" "zcode sin medir"
+# Task 13.7: adversary en frontmatter -- claude con model+effort del tier
+# review, zcode vacio (fila sin medir).
+igual "model: claude-opus-5
+effort: xhigh" "$(bash "$router" --host claude --role adversary --format frontmatter)" "claude/adversary"
+# El vacio de zcode tiene que venir con exit 0 (fila sin medir), no con un
+# exit 2 por rol desconocido: sin el chequeo de rc el caso no discrimina.
+out="$(bash "$router" --host zcode --role adversary --format frontmatter)"; rc=$?
+[ "$rc" -eq 0 ] || malo "zcode/adversary frontmatter: esperaba exit 0, obtuve $rc"
+igual "" "$out" "zcode/adversary sin medir"
 
 caso "--field effort-key: el nombre de CLAVE del effort es por host, no siempre 'effort'"
 # Medido en la Task 12.1 (docs/task-12.1-medicion.md): el parser de zcode
@@ -68,10 +88,16 @@ caso "--field effort-key: el nombre de CLAVE del effort es por host, no siempre 
 igual "effort"      "$(bash "$router" --host claude --role reviewer --field effort-key)" "claude"
 igual "effort"      "$(bash "$router" --host grok --role reviewer --field effort-key)"   "grok"
 igual "thoughtLevel" "$(bash "$router" --host zcode --role reviewer --field effort-key)"  "zcode"
+# Task 13.7: adversary comparte el nombre de clave del tier review por host.
+igual "effort"       "$(bash "$router" --host claude --role adversary --field effort-key)" "claude/adversary"
+igual "thoughtLevel" "$(bash "$router" --host zcode --role adversary --field effort-key)"  "zcode/adversary"
 
 caso "--format json"
 esperado='{"host":"claude","role":"reviewer","tier":"review","model":"claude-opus-5","effort":"xhigh"}'
 igual "$esperado" "$(bash "$router" --host claude --role reviewer --format json)" "json"
+# Task 13.7: adversary acredita su rol real y el tier review en el json.
+esperado='{"host":"claude","role":"adversary","tier":"review","model":"claude-opus-5","effort":"xhigh"}'
+igual "$esperado" "$(bash "$router" --host claude --role adversary --format json)" "json/adversary"
 
 caso "desconocido => exit 2, y NO imprime nada por stdout"
 for args in "--host marte --role implementer" \
