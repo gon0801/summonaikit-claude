@@ -35,9 +35,16 @@ sobre el archivo que gatea cada turno no admite "dejar pasar".
 
 ### Perfiles de agente por rol (Phase 12)
 
-Además del hook, el instalador también puede plantar los tres perfiles de rol
-(`implementer`, `verifier`, `reviewer`) con el modelo y el `effort` que le
-corresponden por rol, resueltos en `tools/model-routing.sh`:
+Además del hook, el instalador también puede plantar los cuatro perfiles de rol
+(`implementer`, `verifier`, `reviewer`, `adversary`) con el modelo y el
+`effort` que le corresponden por rol, resueltos en `tools/model-routing.sh`.
+
+`adversary` es un cuarto rol opt-in: solo corre cuando el lead lo despacha a
+propósito, en cambios delicados (autenticación, pagos, datos ya existentes, o
+el propio hook). Cuando corre, escribe lo que encuentra en un archivo aparte
+— dentro del repo pero invisible para git, nunca en el código — y es el
+reviewer, no él mismo, quien decide si cada hallazgo cuenta de verdad. Sin
+invocación, nada cambia.
 
 ```bash
 bash tools/install-hook.sh --host claude   # perfiles de agente en ~/.claude/agents
@@ -59,10 +66,12 @@ hook (`agents/vendor-manifest.sha256`):
 | **Vendor conocido** (su sha256 está en `agents/vendor-manifest.sha256`) | Archiva y **reemplaza**. |
 | **Desconocido** (ni marca ni hash de vendor conocido) | **No toca nada** y reporta — puede ser un cambio legítimo. **Esto no es un error**: el comando reporta y sale 0 por diseño (no tocar el cambio de otro no es un fallo del comando). Auditar la salida (o correr `--refrescar-manifiesto`) es el paso humano que sigue. |
 
-Los TRES perfiles se clasifican ANTES de escribir ninguno: si cualquiera de
-`implementer`/`verifier`/`reviewer` no se puede clasificar (manifiesto o
-destino no observables), la corrida entera sale sin tocar nada — nunca deja
-una instalación a medias (Task 12.9).
+Los CUATRO perfiles se clasifican ANTES de escribir ninguno: si cualquiera de
+`implementer`/`verifier`/`reviewer`/`adversary` no se puede clasificar
+(manifiesto o destino no observables), la corrida entera sale sin tocar nada —
+nunca deja una instalación a medias (Task 12.9). `adversary` es kit-owned y no
+tiene entrada propia en el manifiesto de vendor: un archivo ajeno con ese
+nombre siempre clasifica `DESCONOCIDO` (Task 13.8).
 
 `--host kimi` **no** instala ruteo de modelo ni de `effort`: kimi no acepta
 esas claves por agente (medido en la Task 12.3, ver `docs/spec/00-project-spec.md`

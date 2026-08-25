@@ -290,6 +290,24 @@ zcode_user_config() {
 ZCODE_AGENT_ROLES='implementer verifier reviewer adversary'
 ZCODE_AGENT_MARCA_RE='^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$'
 
+# Trads que quedan pendientes de limpiar entre la clasificacion y la
+# publicacion (bucles two-phase de zcode y de instalar_agentes_con_vendor).
+# Global (no local a la funcion) a proposito: no es reentrante ni recursiva,
+# y asi limpiar_trads_vendor() puede llamarse desde cualquier punto de salida
+# sin depender de scoping dinamico de bash. VIVE ACA (antes del dispatch de
+# zcode) porque bash resuelve funciones al LLAMARLAS: declarado mas abajo, el
+# dispatch de zcode lo usaba antes de que existiera — `command not found`
+# atrapado en vivo por el deploy de 13.9, invisible para los tests porque no
+# movia ningun veredicto (solo ensuciaba stderr y dejaba trads sin limpiar).
+TRADS_VENDOR_PENDIENTES=()
+limpiar_trads_vendor() {
+  local t
+  for t in "${TRADS_VENDOR_PENDIENTES[@]:-}"; do
+    [ -n "$t" ] && rm -f "$t"
+  done
+  TRADS_VENDOR_PENDIENTES=()
+}
+
 zcode_agents_source() {
   printf '%s' "${SAIKIT_ZCODE_AGENTS_SOURCE:-$repo/agents}"
 }
@@ -498,6 +516,66 @@ zcode_instalar() {
   # quedan perfiles huerfanos con el hook sin registrar.
   bash_win="$(zcode_bash_win)" || {
     decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command."; exit 2; }
+  # 13.9 (adversary r1 EN VIVO): --dry-run tambien vale para --host zcode — el
+  # dispatch nunca miraba DRY_RUN y una corrida de verificacion "sin escribir"
+  # dejo un backup REAL del user-config (config.json.zcode.20260825-102205.bak).
+  # Los preflights de arriba son read-only y se conservan (un dry-run que no
+  # valida miente por omision). Aca se REPORTA lo que se haria — clasificacion
+  # real por rol, como el dry-run de claude/kimi (12.9 #4) — y se sale sin
+  # tocar agentes, config ni backups.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    local dr_src dr_dest_dir dr_rol dr_fuente dr_dest dr_trad dr_estado dr_padre
+    dr_src="$(zcode_agents_source)"
+    dr_dest_dir="$(zcode_agents_dir)"
+    # Greptile P1 del PR #67: sin esta sonda, un dest_dir inexistente cuyo
+    # padre no es escribible clasificaba todo AUSENTE y el dry-run prometia
+    # un plan que la corrida real (mkdir -p || exit 5) no puede ejecutar.
+    # Sonda READ-ONLY: -d/-w, sin crear nada.
+    if [ ! -d "$dr_dest_dir" ]; then
+      dr_padre="$(dirname "$dr_dest_dir")"
+      if [ ! -d "$dr_padre" ] || [ ! -w "$dr_padre" ]; then
+        decir "[summonaikit] dry-run: el dir de agentes no existe y no se podria crear ($dr_dest_dir); la corrida real fallaria (exit 5)."
+        exit 5
+      fi
+      decir "[summonaikit] dry-run: crearia el dir de agentes $dr_dest_dir."
+    fi
+    for dr_rol in $ZCODE_AGENT_ROLES; do
+      dr_fuente="$dr_src/$dr_rol.md"
+      dr_dest="$dr_dest_dir/$dr_rol.md"
+      # Reviewer 13.9 #4: las MISMAS validaciones de fuente del camino real
+      # (plantilla legible, marca, name:), con los mismos exit 2 — "un
+      # dry-run que no valida miente por omision".
+      if [ ! -f "$dr_fuente" ] || [ ! -r "$dr_fuente" ]; then
+        decir "[summonaikit] instalador: falta la plantilla de agente $dr_fuente"; exit 2; fi
+      zcode_agente_tiene_marca "$dr_fuente" || {
+        decir "[summonaikit] instalador: la plantilla $dr_fuente no lleva saikit_owned."; exit 2; }
+      zcode_agente_frontmatter "$dr_fuente" | grep -q "^name: ${dr_rol}$" || {
+        decir "[summonaikit] instalador: la plantilla $dr_fuente no declara name: $dr_rol."; exit 2; }
+      dr_trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || {
+        decir "[summonaikit] instalador: no se pudo crear el temporal del dry-run."; exit 5; }
+      if ! agente_traducido zcode "$dr_fuente" > "$dr_trad"; then
+        rm -f "$dr_trad"
+        decir "[summonaikit] instalador: agente_traducido fallo en dry-run ($dr_rol)."; exit 2
+      fi
+      dr_estado="$(zcode_agente_estado "$dr_dest" "$dr_trad")"
+      rm -f "$dr_trad"
+      # NO_OBSERVABLE: mismo exit 5 del camino real — pintarlo como un estado
+      # mas prometeria una corrida real que va a fallar.
+      if [ "$dr_estado" = 'NO_OBSERVABLE' ]; then
+        decir "[summonaikit] instalador: no se pudo clasificar $dr_dest (no es un archivo legible)."; exit 5; fi
+      # Formato del patron 12.9 #4 (como claude/kimi), no el estado crudo.
+      case "$dr_estado" in
+        AUSENTE)          decir "[summonaikit] dry-run: AGENTE ZCODE AUSENTE: $dr_rol; se instalaria." ;;
+        NUESTRO_IDENTICO) decir "[summonaikit] dry-run: AGENTE ZCODE ya al dia: $dr_rol." ;;
+        NUESTRO_DISTINTO) decir "[summonaikit] dry-run: AGENTE ZCODE NUESTRO distinto: $dr_rol; se repararia (con backup)." ;;
+        DESCONOCIDO)      decir "[summonaikit] dry-run: AGENTE ZCODE DESCONOCIDO: $dr_rol; no se tocaria." ;;
+      esac
+      decir "              destino: $dr_dest"
+    done
+    decir "[summonaikit] dry-run: registraria el harness en el user-config de zcode (4 fases, id 5.4); no se escribio nada."
+    return 0
+  fi
+
   # Task 5.6: perfiles ANTES del append al config. Si faltan las plantillas
   # no se cablea un host que no puede satisfacer implementer→verifier→reviewer.
   zcode_instalar_agentes
@@ -1389,19 +1467,10 @@ claude_archivar_vendor() {  # $1=dest
   return 0
 }
 
-# Trads que quedan pendientes de limpiar entre la clasificacion y la
-# publicacion de instalar_agentes_con_vendor. Global (no local a la funcion)
-# a proposito: no es reentrante ni recursiva, y asi limpiar_trads_vendor()
-# puede llamarse desde cualquier punto de salida sin depender de scoping
-# dinamico de bash.
-TRADS_VENDOR_PENDIENTES=()
-limpiar_trads_vendor() {
-  local t
-  for t in "${TRADS_VENDOR_PENDIENTES[@]:-}"; do
-    [ -n "$t" ] && rm -f "$t"
-  done
-  TRADS_VENDOR_PENDIENTES=()
-}
+# (TRADS_VENDOR_PENDIENTES y limpiar_trads_vendor viven ARRIBA, junto a
+# ZCODE_AGENT_ROLES: el bucle two-phase de zcode tambien los usa y su dispatch
+# corre ANTES de esta seccion — el deploy de 13.9 atrapo en vivo el
+# `command not found` de tenerlos declarados aca.)
 
 # Unifica claude_instalar_agentes y kimi_instalar_agentes (Task 12.7): mismo
 # bucle de validar+publicar con el CUARTO estado (VENDOR_CONOCIDO), solo

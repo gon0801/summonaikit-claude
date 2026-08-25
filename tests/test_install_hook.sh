@@ -564,6 +564,12 @@ caso "zcode: --host zcode instala implementer/verifier/reviewer/adversary en AGE
 dest_listo; nuevo_zcode_cfg
 out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+# Deploy 13.9 (bug vivo): limpiar_trads_vendor se declaraba DESPUES del
+# dispatch de zcode y el instalador gritaba `command not found` sin mover
+# ningun veredicto (trads sin limpiar, stderr sucio). Ningun caso lo
+# atrapaba porque todos afirman strings esperados, no ausencia de ruido.
+printf '%s' "$out" | grep -q 'command not found' \
+  && malo "el instalador grito 'command not found' (funcion usada antes de declararse): $out"
 for rol in implementer verifier reviewer adversary; do
   [ -f "$zcode_agents/$rol.md" ] || malo "falta $rol.md en AGENTS_DIR"
   cmp_agente "$rol" || malo "$rol.md no quedo byte a byte igual a agents/$rol.md"
@@ -1720,6 +1726,23 @@ out="$(host_kimi --dry-run 2>&1)"; rc=$?
 [ -e "$kimi_agents/implementer.md" ] && malo "dry-run (kimi) escribio implementer.md"
 [ -e "$kimi_agents/adversary.md" ] && malo "dry-run (kimi) escribio adversary.md"
 printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (kimi) no reporto lo que haria"
+
+caso "13.9 (adversary r1 vivo): --dry-run en --host zcode NO escribe nada — ni agentes ni registro ni backup"
+# Rojo medido EN VIVO: durante el deploy de 13.9, una corrida `--host zcode
+# --dry-run` de verificacion dejo un backup real del user-config
+# (config.json.zcode.20260825-102205.bak) — el dispatch de zcode nunca miro
+# DRY_RUN (el 12.9 #4 solo cubrio claude/kimi). Un dry-run que escribe es
+# la mentira exacta que el README prohibe.
+dest_listo; nuevo_zcode_cfg
+cfg_antes="$(cksum < "$zcode_cfg")"
+out="$(host_zcode --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run (zcode) esperaba exit 0, dio $rc: $out"
+[ "$cfg_antes" = "$(cksum < "$zcode_cfg")" ] || malo "dry-run (zcode) ESCRIBIO el user-config"
+[ -e "$zcode_agents/adversary.md" ] && malo "dry-run (zcode) escribio adversary.md"
+[ -e "$zcode_agents/implementer.md" ] && malo "dry-run (zcode) escribio implementer.md"
+[ -n "$(find "$(dirname "$zcode_cfg")/saikit-backups" -type f 2>/dev/null)" ] \
+  && malo "dry-run (zcode) dejo backup del config"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (zcode) no reporto lo que haria"
 
 caso "12.9 #5 (grok): agente_traducido fallando (router roto) NO pisa el perfil grok existente"
 router_break="$tmp/router-break.sh"

@@ -1413,7 +1413,13 @@ ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
 # numeros del reporte siguen validos) y una linea MIXTA (valor real junto al
 # redactado) sigue matcheando por el vecino.
 SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@'
-SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/=/g; s|://\[REDACTED\]@|://|g'
+# El reemplazo deja un ESPACIO donde estaba el marcador (adversary r1 EN VIVO,
+# 13.9, hallazgo HIGH): sin el, un marcador que cierra un string JSON — la
+# forma que el propio contrato del artefacto exige — dejaba `token="` con la
+# comilla pegada al `=` y el regex volvia a matchear: el camino documentado
+# como correcto bloqueaba en su formato canonico. El espacio corta el match
+# ([^[:space:]]) sin romper la preservacion de lineas ni la linea mixta.
+SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/= /g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento
@@ -1592,7 +1598,14 @@ adv_guard_bash() {
   while IFS= read -r advb_b; do
     [ -n "$advb_b" ] || continue
     case "$advb_b" in
-      /dev/null|'&'*) continue ;;
+      # /dev/null* (no solo exacto): el candado EN VIVO bloqueo al lead con
+      # los blancos `/dev/null)` (el `)` de un subshell entra al token — el
+      # regex no lo excluye) y `/dev/null/necho` (un `\n` literal del JSON —
+      # los lectores json_* no decodifican escapes — pegado al blanco, con la
+      # `\` vuelta `/` por la canonicalizacion). Nada real se escribe "bajo"
+      # /dev/null (es un archivo): excluir el prefijo entero es la direccion
+      # segura del best-effort, declarada.
+      /dev/null*|'&'*) continue ;;
       *'$'*|*'`'*) continue ;;
     esac
     advb_canon="$(adv_canon_path "$advb_b")"
