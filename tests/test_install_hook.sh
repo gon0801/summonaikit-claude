@@ -594,6 +594,19 @@ printf '%s' "$out" | grep -qi 'desconocid' \
   || malo "no reporta el adversary desconocido: $out"
 cmp_agente reviewer || malo "reviewer.md tenia que instalarse (solo adversary era ajeno)"
 
+caso "zcode: NO_OBSERVABLE en el ULTIMO rol no deja los tres primeros publicados (grok r1 #1 / codex r1 #1)"
+# El mismo 12.9 #1 que claude/kimi ya cerraron, aplicado a zcode: el bucle
+# clasificaba el DESTINO y publicaba en la misma vuelta — un adversary.md
+# NO_OBSERVABLE (directorio) salia exit 5 con los tres anteriores YA
+# escritos: instalacion a medias que el exit != 0 ademas desmiente.
+dest_listo; nuevo_zcode_cfg
+mkdir -p "$zcode_agents/adversary.md"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "esperaba exit 5 (NO_OBSERVABLE), dio $rc: $out"
+[ -e "$zcode_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
+[ -e "$zcode_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
+[ -e "$zcode_agents/reviewer.md" ] && malo "reviewer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
+
 caso "zcode: segunda vez no reescribe agentes identicos (mtime intacto)"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1
@@ -1456,6 +1469,25 @@ printf '%s' "$out" | grep -q "$manifiesto_hash" \
 [ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
   || malo "--refrescar-manifiesto NO debe escribir el manifiesto (solo reporta)"
 
+caso "claude: --refrescar-manifiesto marca a adversary como kit-owned (su hash NO va al manifiesto) (grok r1 #3)"
+# adversary es kit-owned y no tiene ni debe tener entrada de vendor: el
+# reporte con hash+diff en el MISMO formato que los candidatos legitimos
+# invitaba al operador a pegar un hash que, adoptado, dejaria al kit pisar
+# un adversary.md ajeno como VENDOR_CONOCIDO. El reporte lleva la
+# advertencia explicita.
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: adversary\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/adversary.md"
+manifiesto_antes="$(cksum < "$repo/agents/vendor-manifest.sha256")"
+out="$(SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+       bash "$tool" --host claude --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--refrescar-manifiesto no deberia fallar por reportar adversary: rc=$rc: $out"
+printf '%s' "$out" | grep -qi 'kit-owned' \
+  || malo "el reporte del adversary DESCONOCIDO debe advertir que es kit-owned"
+printf '%s' "$out" | grep -qi 'NO va al manifiesto' \
+  || malo "el reporte del adversary debe decir que su hash NO va al manifiesto"
+[ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
+  || malo "--refrescar-manifiesto NO debe escribir el manifiesto (adversary)"
+
 # ============================================================================
 # Task 12.7 — posesion en kimi: --host kimi, alcance reducido por la 12.3
 # ============================================================================
@@ -1624,19 +1656,21 @@ host_kimi >/dev/null 2>&1
 # kimi (#6) y el --help incompleto (#7). #8 y #9 son declaraciones (README y
 # Plans.md), sin caso de test.
 
-caso "12.9 #1 (codex): NO_OBSERVABLE en el TERCER rol no deja los dos primeros publicados (instalacion a medias)"
+caso "12.9 #1 (codex): NO_OBSERVABLE en el ULTIMO rol no deja los tres primeros publicados (instalacion a medias)"
 dest_listo; nuevo_claude_agents
-# reviewer es el TERCER rol de CLAUDE_AGENT_ROLES ('implementer verifier
-# reviewer adversary' desde la 13.8): un directorio en su lugar es
-# NO_OBSERVABLE (no es un archivo regular). implementer/verifier/adversary
+# grok r1 #2 (cross-review del PR #66): el NO_OBSERVABLE va plantado en el
+# ULTIMO rol de CLAUDE_AGENT_ROLES (adversary desde la 13.8), no en el
+# tercero — con el fallo en el rol 3, adversary iba DESPUES del punto de
+# fallo y ni el bucle mixto viejo lo habria escrito: la asercion no
+# discriminaba nada. Con el fallo en el ULTIMO rol, los tres anteriores
 # estan AUSENTES y publicarian si el bucle clasificara-y-publicara en el
 # mismo paso.
-mkdir -p "$claude_agents/reviewer.md"
+mkdir -p "$claude_agents/adversary.md"
 out="$(host_claude 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] || malo "esperaba exit 5 (NO_OBSERVABLE), dio $rc: $out"
-[ -e "$claude_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
-[ -e "$claude_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
-[ -e "$claude_agents/adversary.md" ] && malo "adversary.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
+[ -e "$claude_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
+[ -e "$claude_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
+[ -e "$claude_agents/reviewer.md" ] && malo "reviewer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
 
 caso "12.9 #2 (codex+grok): sha256 no calculable en el manifiesto de agentes => NO_OBSERVABLE (exit 5), NUNCA DESCONOCIDO silencioso"
 # sha256sum FALSO que siempre falla: command -v lo encuentra (existe y es

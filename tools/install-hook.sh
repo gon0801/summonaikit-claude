@@ -383,19 +383,40 @@ zcode_instalar_agentes() {
   done
   mkdir -p "$dest_dir" || {
     decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+  # grok r1 #1 / codex r1 #1 (cross-review del PR #66): clasificar TODOS los
+  # destinos ANTES de publicar cualquiera — el mismo 12.9 #1 que claude/kimi
+  # ya cierran en instalar_agentes_con_vendor. Antes, cada rol se clasificaba
+  # y publicaba en la MISMA vuelta: un adversary.md NO_OBSERVABLE (ultimo rol)
+  # salia exit 5 con implementer/verifier/reviewer YA escritos — instalacion a
+  # medias que el exit != 0 ademas desmiente. Misma ventana TOCTOU declarada
+  # que la version vendor (CLI local de un solo operador, sin concurrencia
+  # esperada sobre el mismo dest_dir).
+  local -a z_roles=() z_dests=() z_trads=() z_estados=()
+  local i
+  limpiar_trads_vendor
   for rol in $ZCODE_AGENT_ROLES; do
     fuente="$src/$rol.md"
     dest="$dest_dir/$rol.md"
     # Task 12.5: clasifica y publica contra la TRADUCIDA, no la cruda. Con
     # inyeccion de model:/effort: por host, comparar contra la cruda daria
     # NUESTRO_DISTINTO en cada corrida y reescribiria el perfil siempre.
-    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || exit 5
-    agente_traducido zcode "$fuente" > "$trad" || { rm -f "$trad"; exit 2; }
+    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || { limpiar_trads_vendor; exit 5; }
+    TRADS_VENDOR_PENDIENTES+=("$trad")
+    agente_traducido zcode "$fuente" > "$trad" || { limpiar_trads_vendor; exit 2; }
     estado="$(zcode_agente_estado "$dest" "$trad")"
+    if [ "$estado" = 'NO_OBSERVABLE' ]; then
+      limpiar_trads_vendor
+      decir "[summonaikit] instalador: no se pudo clasificar $dest (no es un archivo legible)."
+      exit 5
+    fi
+    z_roles+=("$rol"); z_dests+=("$dest"); z_trads+=("$trad"); z_estados+=("$estado")
+  done
+  for i in "${!z_roles[@]}"; do
+    rol="${z_roles[$i]}"; dest="${z_dests[$i]}"; trad="${z_trads[$i]}"; estado="${z_estados[$i]}"
     case "$estado" in
       AUSENTE)
         zcode_publicar_agente "$trad" "$dest" || {
-          rm -f "$trad"
+          limpiar_trads_vendor
           decir "[summonaikit] instalador: no se pudo escribir $dest"; exit 5; }
         decir "[summonaikit] AGENTE ZCODE INSTALADO: $rol"
         decir "              destino: $dest"
@@ -404,10 +425,10 @@ zcode_instalar_agentes() {
         : ;;
       NUESTRO_DISTINTO)
         zcode_archivar_agente "$dest" || {
-          rm -f "$trad"
+          limpiar_trads_vendor
           decir "[summonaikit] instalador: no se pudo respaldar $dest"; exit 5; }
         zcode_publicar_agente "$trad" "$dest" || {
-          rm -f "$trad"
+          limpiar_trads_vendor
           decir "[summonaikit] instalador: no se pudo reparar $dest"; exit 5; }
         decir "[summonaikit] AGENTE ZCODE REPARADO: $rol"
         decir "              destino: $dest"
@@ -417,14 +438,9 @@ zcode_instalar_agentes() {
         decir "              destino: $dest"
         decir "              No lleva saikit_owned. Puede ser un cambio legitimo."
         ;;
-      NO_OBSERVABLE)
-        rm -f "$trad"
-        decir "[summonaikit] instalador: no se pudo clasificar $dest (no es un archivo legible)."
-        exit 5
-        ;;
     esac
-    rm -f "$trad"
   done
+  limpiar_trads_vendor
 }
 
 # Solo borra los que llevan nuestra marca. Un implementer.md de otro se queda.
@@ -1563,6 +1579,14 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
     decir "[summonaikit] REFRESCAR MANIFIESTO (${etiqueta}) — $rol: DESCONOCIDO"
     decir "              destino: $dest"
     decir "              sha256: $hash"
+    # grok r1 #3 (cross-review del PR #66): adversary es kit-owned y NO tiene
+    # ni debe tener entrada de vendor — reportarlo en el mismo formato que los
+    # candidatos legitimos invitaba al operador a pegar un hash que, adoptado,
+    # dejaria al kit pisar un adversary.md ajeno como VENDOR_CONOCIDO.
+    if [ "$rol" = "adversary" ]; then
+      decir "              OJO: adversary es kit-owned y NO tiene entrada de vendor:"
+      decir "              este hash NO va al manifiesto (pegado, el kit pisaria este archivo como VENDOR_CONOCIDO)."
+    fi
     decir "              diff contra la plantilla del repo:"
     diff -u "$repo/agents/$rol.md" "$dest" 2>&1 | while IFS= read -r linea; do
       decir "              $linea"
