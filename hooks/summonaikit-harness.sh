@@ -933,7 +933,7 @@ Waiting on a subagent is not failing:
 - A delegated implementer/verifier/reviewer subagent can take a long time to answer (tens of minutes is normal). Do not stall the turn waiting on it, and do not close it with a receipt you cannot honestly write yet.
 - While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:
   SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>
-  where <ROLE> is implementer, verifier, or reviewer — naming one of those three is what makes the line count.
+  where <ROLE> is implementer, verifier, reviewer, or adversary — naming one of those is what makes the line count.
 - That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
 Delegation rule:
@@ -945,6 +945,7 @@ Delegation rule:
   correctly-delegated turn still satisfies it.
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
+- The adversary is an OPTIONAL fourth role, opt-in — a turn that does not dispatch it closes exactly as today. Delegate it between the verifier and the reviewer via $TOOL_HINT when the change touches auth, payments, migrations or pre-existing data, or this harness itself (the same bar that triggers a cross-review). It reports findings to an artifact under .saikit/findings/ and never repairs. When you ran an adversary this turn, dispatch the reviewer NAMING the artifact to adjudicate (e.g. "adjudica .saikit/findings/<file>.json"); if this turn did NOT run an adversary, the reviewer adjudicates nothing. Declared limit: an adversary whose invocation is never observed is indistinguishable from not invoked.
 - Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
 
 Fast lane (-saikit:fast):
@@ -1008,6 +1009,7 @@ Verify: ...
 Review: ...
 Close: ...
 Retro: ...
+ADVERSARY: N findings, highest severity X — required ONLY in receipts of turns where an adversary actually ran (any lane); presence only, the numbers are never checked. ROLE FALLBACK: ADVERSARY (reason) substitutes the line when the dispatched adversary died without reporting.
 
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT

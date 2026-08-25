@@ -422,7 +422,7 @@ caso_g1_contrato_muestra_forma_recibo() {
 caso_g1_contrato_nombra_adversary() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
   _igual "exit code" "$LAB_RC" "0"
-  _contiene "stdout" "$LAB_OUT" 'optional fourth role'
+  _contiene "stdout" "$LAB_OUT" 'OPTIONAL fourth role'
   _contiene "stdout" "$LAB_OUT" 'auth, payments, migrations or pre-existing data'
   _contiene "stdout" "$LAB_OUT" 'NAMING the artifact to adjudicate'
   _contiene "stdout" "$LAB_OUT" 'adjudicates nothing'

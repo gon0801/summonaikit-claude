@@ -665,7 +665,7 @@ mut_adv_orden_sin_adversary()     { sed 's/grep -q adversary \&\& printf/grep -q
 # texto pierde el criterio de delegacion o la forma del despacho que nombra el
 # artefacto, el mecanismo entero queda sin disparador. Ambas las atrapa
 # caso_g1_contrato_nombra_adversary (grepea el stdout del armado).
-mut_adv_contrato_criterio_roto()  { sed 's/optional fourth role/optional third role/'; }
+mut_adv_contrato_criterio_roto()  { sed 's/OPTIONAL fourth role/OPTIONAL third role/'; }
 mut_adv_contrato_despacho_roto()  { sed 's/NAMING the artifact to adjudicate/NAMING the artifact to discard/'; }
 
 # ------------------------------------------------------------ costura de testeo
