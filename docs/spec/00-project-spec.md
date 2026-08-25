@@ -1682,7 +1682,14 @@ de los PRs #65 y #66) ya sumados:
   dice que un Edit/Write vino del adversary, no del lead) es `unknown` en
   esos dos hosts — fail-open declarado, sin bloqueos por atribución ahí. Si
   un canal no medido apareciera mañana, el candado correría DE MÁS, nunca de
-  menos.
+  menos. **Actualización kimi (2026-08-25, lectura cruzada de capturas del
+  port `summonaikit-kimi`, kimi-code 0.34.0):** el DESPACHO sí lleva
+  `tool_input.subagent_type` (misma forma snake que claude/zcode — el lector
+  actual lo acreditaría sin cambios) y los internos llevan `agent_name` solo
+  en `SubagentStart/Stop`; los tool-events de adentro del subagente no
+  aparecieron en la captura (`not_observed`). Matiz que reencuadra el límite:
+  kimi no corre ESTE hook — corre el del port; encender el rol ahí es tarea
+  del port (ver `docs/smoke-adversary-hosts-2026-08-25.md`).
 - TOCTOU del artefacto: sin canal de negación no hay forma de sellarlo ni de
   hacerlo append-only — una re-corrida del adversary DESPUÉS de que el
   reviewer adjudicó puede reescribir el JSON conservando un `agents_seen`

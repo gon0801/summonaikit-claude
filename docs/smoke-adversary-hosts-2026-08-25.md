@@ -62,6 +62,32 @@ Turno headless `zcode --cwd <repo> --prompt="Tarea -saikit: …"`.
   Z.AI en `/login` del TUI, o un turno interactivo del operador. Saltado por
   decisión del operador (2026-08-25).
 
+## kimi — medición por LECTURA CRUZADA del port (sin turno nuevo)
+
+La medición pendiente ("¿qué campo lleva la identidad del subagente en los
+payloads de kimi?") resultó ya respondida por evidencia existente: el port
+`summonaikit-kimi` capturó los payloads CRUDOS de kimi-code 0.34.0 el
+2026-08-07 (una sesión `kimi -p` real, hook de captura registrado en el
+`config.toml` del sandbox, stdin sin retocar —
+`summonaikit-kimi/tests/fixtures/*.json` + su README de procedencia).
+
+- **Despacho**: el `PostToolUse` del tool `Agent` lleva
+  **`tool_input.subagent_type`** (`"explore"` en la captura) — la MISMA forma
+  snake que claude/zcode: el lector actual de este repo lo acreditaría sin
+  cambio alguno.
+- **Eventos internos**: `SubagentStart`/`SubagentStop` llevan **`agent_name`**
+  (no `agent_type` ni `subagentType`); los tool-events DE ADENTRO del
+  subagente **no aparecen en la captura** (el explore leyó un archivo y ningún
+  `PostToolUse` suyo llegó al hook) — si kimi entrega esos eventos, y con qué
+  identidad, queda `not_observed`.
+- **La consecuencia que reencuadra el pendiente**: kimi no corre ESTE hook —
+  corre el del port (`summonaikit-kimi/hooks/summonaikit-harness-kimi.sh`);
+  este repo solo le instala PERFILES (12.7). "Candado ciego en kimi" es
+  trivialmente cierto (el candado no está ahí), y encender el rol adversary
+  en kimi = **portar D4–D6 + el candado al port**, con el gate acreditando
+  por despacho (canal medido ✓) y el candado de escrituras declarado
+  best-effort/ciego para internos hasta observar esos eventos.
+
 ## Gotcha de invocación (para el que repita esto)
 
 Un prompt que EMPIEZA con `-saikit` es tratado como flag por los parsers de
@@ -77,5 +103,5 @@ frontera del regex está fijada por golden) y valor con `=`.
 | claude | Turno completo (estreno del cierre 13.9: HIGH real hallado + candado mordiendo en vivo) | — |
 | grok | Mecanismo completo del rol (artefacto, capa 3, gate, escotillas, candado) | recibo final (límite de `--single`; va por sesión interactiva) |
 | zcode | Armado + init del candado sobre payload real | ceremonia (bloqueada en auth del host, saltada por el operador) |
-| kimi | nada — canales de payload sin medir | medición de payloads (siguiente tarea) |
+| kimi | canales MEDIDOS por lectura cruzada del port: despacho con `tool_input.subagent_type` ✓; internos `agent_name` solo en SubagentStart/Stop | portar el rol al hook del port `summonaikit-kimi` (D4–D6 + candado); tool-events internos `not_observed` |
 | codex | no aplica (sin costura de perfiles) | decisión futura de costura |
