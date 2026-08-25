@@ -524,9 +524,21 @@ zcode_instalar() {
   # real por rol, como el dry-run de claude/kimi (12.9 #4) — y se sale sin
   # tocar agentes, config ni backups.
   if [ "$DRY_RUN" -eq 1 ]; then
-    local dr_src dr_dest_dir dr_rol dr_fuente dr_dest dr_trad dr_estado
+    local dr_src dr_dest_dir dr_rol dr_fuente dr_dest dr_trad dr_estado dr_padre
     dr_src="$(zcode_agents_source)"
     dr_dest_dir="$(zcode_agents_dir)"
+    # Greptile P1 del PR #67: sin esta sonda, un dest_dir inexistente cuyo
+    # padre no es escribible clasificaba todo AUSENTE y el dry-run prometia
+    # un plan que la corrida real (mkdir -p || exit 5) no puede ejecutar.
+    # Sonda READ-ONLY: -d/-w, sin crear nada.
+    if [ ! -d "$dr_dest_dir" ]; then
+      dr_padre="$(dirname "$dr_dest_dir")"
+      if [ ! -d "$dr_padre" ] || [ ! -w "$dr_padre" ]; then
+        decir "[summonaikit] dry-run: el dir de agentes no existe y no se podria crear ($dr_dest_dir); la corrida real fallaria (exit 5)."
+        exit 5
+      fi
+      decir "[summonaikit] dry-run: crearia el dir de agentes $dr_dest_dir."
+    fi
     for dr_rol in $ZCODE_AGENT_ROLES; do
       dr_fuente="$dr_src/$dr_rol.md"
       dr_dest="$dr_dest_dir/$dr_rol.md"

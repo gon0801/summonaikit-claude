@@ -486,7 +486,13 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _no_contiene "redactado en JSON no bloquea" "$LAB_ERR" 'adversary-redactado-json.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
-  # descuento no puede tragarse el secreto vecino).
+  # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
+  # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
+  # llegaba con cycle=2 y caia al camino de presupuesto agotado (informa con
+  # exit 0) en vez del bloqueo — el caso media el presupuesto, no el escaneo.
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
   printf 'mix: token=[REDACTED] password=hunter2-real\n' > "$LAB/proyecto/.saikit/findings/adversary-mixto.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "mixto bloquea" "$LAB_RC" "2"
