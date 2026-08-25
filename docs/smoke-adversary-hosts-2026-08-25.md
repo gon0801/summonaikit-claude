@@ -10,7 +10,9 @@ laboratorio; esto es lo vivo).
 
 ## grok — el mecanismo del rol completo, EN VIVO
 
-Turno headless `grok --cwd <repo> --always-approve --single "Tarea -saikit: …"`.
+Host: grok 1.0.5 (5115b46bc9). Turno headless
+`grok --cwd <repo> --always-approve --single="Tarea -saikit: …"` (la forma
+exacta que corrió — ver el gotcha de invocación abajo).
 Evidencia: stdout del turno + transcript
 (`~/.grok/sessions/…smoke-adv-grok/01a03a8e-…/chat_history.jsonl`, 66 eventos)
 + el árbol del repo descartable.
@@ -31,19 +33,21 @@ Evidencia: stdout del turno + transcript
 - **Implementer real**: docstring aplicado con checkpoint medido
   (`python -c "…assert saluda.__doc__…"` → `ok`, exit 0).
 
-**Límite del HOST descubierto (no del hook):** `grok --single` NO reanuda el
-loop del modelo cuando un subagente termina — la notificación llega como
-evento sintético de usuario SIN sentinel, el gate se desarma POR DISEÑO (A5:
-prompt sin `-saikit` = stand down; el estado quedó con la firma exacta del
-desarme A4-c2: archivos borrados, dir vacío en
-`~/.grok/hooks/state/grok/1747054581/01a03a8e-…/`) y la sesión termina sin
-recibo final. **La ceremonia completa con recibo en grok requiere sesión
-interactiva/multi-turn, no `--single`.** El transcript no contiene
-`ADVERSARY:` fuera del contrato inyectado, consistente con ese corte.
+**Límite observado EN ESTA EJECUCIÓN (del host, no del hook):** `--single` no
+reanudó el loop del modelo cuando el subagente terminó — la notificación llegó
+como evento sintético de usuario SIN sentinel, el gate se desarmó POR DISEÑO
+(A5: prompt sin `-saikit` = stand down; el estado quedó con la firma exacta
+del desarme A4-c2: archivos borrados, dir vacío en
+`~/.grok/hooks/state/grok/1747054581/01a03a8e-…/`) y la sesión terminó sin
+recibo final. El transcript no contiene `ADVERSARY:` fuera del contrato
+inyectado, consistente con ese corte. **Una sola corrida: generalizarlo a
+regla de `--single` queda `unknown`** — la vía con recibo que sí se conoce es
+la sesión interactiva/multi-turn.
 
 ## zcode — el hook armó en vivo; el turno murió en el host
 
-Turno headless `zcode --cwd <repo> --prompt="Tarea -saikit: …"`.
+Host: zcode 0.16.1. Turno headless
+`zcode --cwd <repo> --prompt="Tarea -saikit: …"`.
 
 - **El hook ARMÓ sobre un payload real de zcode**: quedó
   `harness-state.env` con `lane=full`, `task_hash`, y los 4 campos del candado
@@ -55,9 +59,12 @@ Turno headless `zcode --cwd <repo> --prompt="Tarea -saikit: …"`.
   `AiSdkModelAdapterError: Model provider is missing an API key: zai`. El
   modo headless de zcode no toma el login OAuth compartido (y
   `zcode login` por browser está capado en Windows: "requires macOS for the
-  registered zcode:// callback"). Mismo síntoma que la 12.1 vio con
-  `--prompt "/model"` — es del host, no del contrato del kit (falla igual sin
-  `-saikit`).
+  registered zcode:// callback"). La 12.1 ya había visto fallar un headless
+  SIN `-saikit` (`--prompt "/model"`) con el MISMO error genérico, pero sin
+  establecer la causa; **la causa (la key) se estableció recién acá con
+  `--verbose`**. Esta ejecución no alcanza para atribuir el fallo al kit ni
+  para descartarlo por completo: el control "headless con causa medida y sin
+  `-saikit`" queda `not_observed`.
 - **Pendiente declarado**: ceremonia viva en zcode requiere o la API key de
   Z.AI en `/login` del TUI, o un turno interactivo del operador. Saltado por
   decisión del operador (2026-08-25).
@@ -91,17 +98,23 @@ payloads de kimi?") resultó ya respondida por evidencia existente: el port
 ## Gotcha de invocación (para el que repita esto)
 
 Un prompt que EMPIEZA con `-saikit` es tratado como flag por los parsers de
-ambos CLIs (clap de grok: "a value is required for '--single <PROMPT>'";
-zcode: imprime el help). Forma que funciona: `--single="Tarea -saikit: …"` /
-`--prompt="Tarea -saikit: …"` — sentinel a mitad del prompt (arma igual: la
-frontera del regex está fijada por golden) y valor con `=`.
+ambos CLIs. Formas OBSERVADAS (por CLI y versión; lo no probado queda
+`unknown`, no se afirma):
+
+| CLI | Falló | Funcionó | No observado |
+|---|---|---|---|
+| grok 1.0.5 | `-p '-saikit …'` (espacio + valor con guión inicial → "a value is required for '--single <PROMPT>'") | `--single="Tarea -saikit: …"` (igual + sin guión inicial) | espacio + sin guión inicial; `=` + guión inicial |
+| zcode 0.16.1 | `--prompt '-saikit …'` (espacio + guión inicial → imprime el help) | `--prompt="Tarea -saikit: …"` (igual + sin guión inicial; llegó al host) | espacio + sin guión inicial; `=` + guión inicial |
+
+El sentinel a mitad del prompt arma igual: la frontera del regex está fijada
+por golden.
 
 ## Cobertura viva acumulada del rol, por host
 
 | Host | Vivo probado | Queda |
 |---|---|---|
 | claude | Turno completo (estreno del cierre 13.9: HIGH real hallado + candado mordiendo en vivo) | — |
-| grok | Mecanismo completo del rol (artefacto, capa 3, gate, escotillas, candado) | recibo final (límite de `--single`; va por sesión interactiva) |
+| grok | Mecanismo completo del rol (artefacto, capa 3, gate, escotillas, candado) | recibo final — en esta ejecución `--single` no reanudó tras subagentes (regla general `unknown`); va por sesión interactiva |
 | zcode | Armado + init del candado sobre payload real | ceremonia (bloqueada en auth del host, saltada por el operador) |
 | kimi | canales MEDIDOS por lectura cruzada del port: despacho con `tool_input.subagent_type` ✓; internos `agent_name` solo en SubagentStart/Stop | portar el rol al hook del port `summonaikit-kimi` (D4–D6 + candado); tool-events internos `not_observed` |
 | codex | no aplica (sin costura de perfiles) | decisión futura de costura |
