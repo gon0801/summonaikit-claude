@@ -1,0 +1,2 @@
+D6 caso 7 (Task 13.5): el despacho acredito agents_seen pero el adversary murio sin
+reportar; ROLE FALLBACK: ADVERSARY sustituye la linea y el turno cierra limpio.

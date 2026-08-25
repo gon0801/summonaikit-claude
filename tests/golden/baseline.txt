@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: f0edfa115c38da3c290dc45f50a505801f18ee9d09c6f3cf313cd06139ca7b60
-# hook_bytes: 144158
-# hook_lineas: 2490
-# escenarios: 45
+# hook_sha256: 464078fb46b7d3c52fb66ccc7d7f78965f1345feb0cfda2d5bd1b9455ed2b8af
+# hook_bytes: 146688
+# hook_lineas: 2522
+# escenarios: 54
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -4519,3 +4519,1304 @@ stderr (sha 0b7bf191c634c8a5, 325 bytes)
 | summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.
 --- estado tras el paso 06
 (sin estado)
+
+=== escenario 47-adversary-turno-completo-cierra
+# D6 caso 1 (Task 13.5): turno completo implementer -> verifier -> adversary -> reviewer,
+# escritura del artefacto PERMITIDA bajo .saikit/findings/ (evento interno con
+# agent_type), runner y recibo con la linea ADVERSARY. Cierra limpio.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: adversary
+| implemented: .saikit/findings/adversary-20260824T120000Z.json
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=4
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer,verifier,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=<SANDBOX>/47-adversary-turno-completo-cierra/proyecto/.saikit/findings/adversary-20260824T120000Z.json
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: adversary
+| implemented: .saikit/findings/adversary-20260824T120000Z.json
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=5
+| last_code_edit=4
+| last_review=5
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=<SANDBOX>/47-adversary-turno-completo-cierra/proyecto/.saikit/findings/adversary-20260824T120000Z.json
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 07  phase=tool target=claude  payload=07.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 07
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: adversary
+| implemented: .saikit/findings/adversary-20260824T120000Z.json
+| agent: reviewer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=6
+| last_code_edit=4
+| last_review=5
+hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=1
+| verified=1
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=<SANDBOX>/47-adversary-turno-completo-cierra/proyecto/.saikit/findings/adversary-20260824T120000Z.json
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 08  phase=stop target=claude  payload=08.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 08
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 48-adversary-fuera-de-orden-bloquea
+# D6 caso 2 (Task 13.5): adversary despues del reviewer. La regex de 3 roles ya matcheaba
+# con adversary en el medio; la nueva es la que exige su posicion. Bloquea.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: reviewer
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,reviewer,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 06  phase=stop target=claude  payload=06.stop.claude.json
+exit 2
+stdout (sha b8d187ef6b3a9d36, 912 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Subagents ran out of order; required sequence is implementer -> verifier -> adversary -> reviewer.\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha dc22c10e30cf5c8f, 856 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Subagents ran out of order; required sequence is implementer -> verifier -> adversary -> reviewer.\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: reviewer
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,reviewer,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 49-adversary-dos-veces-cierra
+# D6 caso 3 (Task 13.5): adversary despachado dos veces. El dedupe conserva la posicion de
+# la primera aparicion y el turno cierra. La re-escritura del JSON post-adjudicacion es el
+# TOCTOU declarado de D2: el gate es label-only, jamas lee el artefacto.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: reviewer
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=5
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 07  phase=stop target=claude  payload=07.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 07
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 50-adversary-sin-verifier-previo-bloquea
+# D6 caso 4 (Task 13.5): adversary sin verifier previo (dispatches implementer, adversary,
+# reviewer). Bloquea por la rama missing-verifier existente; la variante con verifier tardio
+# la cubre el caso del lab (gate_cases).
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: adversary
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 05  phase=stop target=claude  payload=05.stop.claude.json
+exit 2
+stdout (sha 01b19f15c5fc68c0, 987 bytes) identico a 20-zcode-falta-verifier/paso 05
+stderr (sha f7198d86c9645698, 931 bytes) identico a 20-zcode-falta-verifier/paso 05 (stderr)
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: adversary
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=1
+| implemented=0
+| verified=0
+| agents_seen=implementer,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 51-adversarial-audit-no-acredita-reviewer
+# D6 caso 5 (Task 13.5): la trampa medida de precedencia. adversarial-audit hoy resolvia a
+# reviewer por el keyword audit; con la rama adversar ANTES, acredita adversary y el slot de
+# reviewer sigue bloqueando.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 467566069
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
+| task_hash=467566069
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 467566069
+| agent: implementer
+| implemented: file edit
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
+| task_hash=467566069
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 467566069
+| agent: implementer
+| implemented: file edit
+| agent: adversary
+| implemented: file edit
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
+| task_hash=467566069
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 467566069
+| agent: implementer
+| implemented: file edit
+| agent: adversary
+| implemented: file edit
+| agent: verifier
+| implemented: file edit
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
+| task_hash=467566069
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=implementer,adversary,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 05  phase=stop target=claude  payload=05.stop.claude.json
+exit 2
+stdout (sha a21881af49186776, 981 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha 05b80592aca4b729, 925 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing reviewer subagent run (delegate review via the Task tool, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 467566069
+| agent: implementer
+| implemented: file edit
+| agent: adversary
+| implemented: file edit
+| agent: verifier
+| implemented: file edit
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
+| task_hash=467566069
+| cycle=1
+| implemented=1
+| verified=0
+| agents_seen=implementer,adversary,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 52-delegated-adversary-permite
+# D6 caso 6 (Task 13.5): la escotilla DELEGATED extendida a adversary. Un lead con el
+# adversary corriendo en vivo no quema ciclo de revision.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40006-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=stop target=claude  payload=04.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+estado sin cambios
+
+=== escenario 53-role-fallback-adversary-cierra
+# D6 caso 7 (Task 13.5): el despacho acredito agents_seen pero el adversary murio sin
+# reportar; ROLE FALLBACK: ADVERSARY sustituye la linea y el turno cierra limpio.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 06  phase=tool target=claude  payload=06.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 35487042
+| agent: implementer
+| agent: verifier
+| agent: adversary
+| agent: reviewer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=5
+| last_code_edit=
+| last_review=4
+hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
+| task_hash=35487042
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,adversary,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 07  phase=stop target=claude  payload=07.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 07
+proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 54-sin-adversary-cierra-igual
+# D6 caso 8 (Task 13.5): anti-regresion del costo. Sin invocation de adversary el turno
+# cierra exactamente como hoy: ni orden nuevo ni linea ADVERSARY exigida (D1).
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2415293084
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 04  phase=tool target=claude  payload=04.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| agent: reviewer
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=3
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 05  phase=tool target=claude  payload=05.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 05
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2415293084
+| agent: implementer
+| agent: verifier
+| agent: reviewer
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=4
+| last_code_edit=
+| last_review=3
+hooks/state/<PROJECT_KEY>/e5d40008-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2415293084
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=implementer,verifier,reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 06  phase=stop target=claude  payload=06.stop.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 06
+(sin estado)
+
+=== escenario 55-fast-adversary-exige-linea
+# D6 caso 9 (Task 13.5): lane fast con adversary visto. La ceremonia no se exige en fast,
+# pero los labels del recibo si, y la linea ADVERSARY no es excepcion (B1). Bloquea solo
+# por la linea faltante.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 165009383b28d295, 12586 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2176983542
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2176983542
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=fast
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2176983542
+| agent: adversary
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2176983542
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=adversary
+| lane=fast
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 03  phase=tool target=claude  payload=03.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 03
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2176983542
+| agent: adversary
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2176983542
+| cycle=0
+| implemented=0
+| verified=1
+| agents_seen=adversary
+| lane=fast
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *
+--- paso 04  phase=stop target=claude  payload=04.stop.claude.json
+exit 2
+stdout (sha 651bcca14a3c843f, 1168 bytes)
+| {"decision":"block","reason":"SUMMONAIKIT HARNESS GATE\n\nFailed gates:\n- Missing ADVERSARY line (this turn ran an adversary subagent: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\\n\n\nStructured revision required:\n1. Return to the first missing gate.\n2. Use real evidence, not a marker file or a claim.\n3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.\n4. End with the required SUMMONAIKIT HARNESS RECEIPT.\n\nRevision loop on failure:\n- Current revision cycle: 1/2.\n- Budget: 2 cycles max.\n- Do not blindly retry.\n\nRequired receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):\nSUMMONAIKIT HARNESS RECEIPT\nUnderstand: ...\nImplement: ...\nVerify: ...\nReview: ...\nClose: ...\nRetro: ..."}
+stderr (sha b0c5159f7a592f02, 1112 bytes)
+| SUMMONAIKIT HARNESS GATE
+| 
+| Failed gates:
+| - Missing ADVERSARY line (this turn ran an adversary subagent: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n
+| 
+| Structured revision required:
+| 1. Return to the first missing gate.
+| 2. Use real evidence, not a marker file or a claim.
+| 3. Preserve the Context7 split: Context7 for library basics, skill references for repo gotchas.
+| 4. End with the required SUMMONAIKIT HARNESS RECEIPT.
+| 
+| Revision loop on failure:
+| - Current revision cycle: 1/2.
+| - Budget: 2 cycles max.
+| - Do not blindly retry.
+| 
+| Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
+| SUMMONAIKIT HARNESS RECEIPT
+| Understand: ...
+| Implement: ...
+| Verify: ...
+| Review: ...
+| Close: ...
+| Retro: ...
+--- estado tras el paso 04
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 2176983542
+| agent: adversary
+| verified: python -m pytest -q
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=2
+| last_code_edit=
+| last_review=
+hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
+| task_hash=2176983542
+| cycle=1
+| implemented=0
+| verified=1
+| agents_seen=adversary
+| lane=fast
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+proyecto/.saikit/findings/.gitignore
+| *

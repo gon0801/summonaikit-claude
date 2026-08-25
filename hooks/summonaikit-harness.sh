@@ -2221,7 +2221,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # HARNESS DELEGATED - awaiting <role>" without having genuinely delegated
   # would still close the turn. Accepted on purpose, same reason the gate as
   # a whole is advisory/fail-open by design.
-  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer)' \
+  # Task 13.5 (D6): la alternancia gana a adversary — un lead que delega
+  # adversary en vivo y escribe la forma exacta caia al gate normal y quemaba
+  # un ciclo (hallazgo alto del cross-review del plan). Mismo trade-off
+  # declarado de siempre: substring sin anclar sobre texto sin recibo.
+  if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
     emit_allow
   fi
@@ -2314,6 +2318,23 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
     missing="$missing- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
+  # Task 13.5 (D4/B1): la linea ADVERSARY del recibo se exige cuando ESTE turno
+  # corrio un adversary (,adversary, en agents_seen), en CUALQUIER lane — los
+  # labels del recibo ya se exigen en fast y este no es excepcion. Sin adversary
+  # en agents_seen este bloque no corre y el recibo sigue exactamente igual
+  # (anti-regresion del costo, D1). Label-only: el gate NUNCA valida N contra
+  # el JSON del artefacto (validarlo exigiria parsear en el Stop un archivo que
+  # otro modelo reescribio — TOCTOU declarado de D2). ROLE FALLBACK: ADVERSARY
+  # sustituye la linea para el despacho que acredito agents_seen pero murio sin
+  # reportar — misma disciplina substring sin anclar de los otros tres roles.
+  case ",$agents_seen," in
+    *,adversary,*)
+      if ! has_receipt_label "ADVERSARY" "ADVERSARIO" "$text" \
+         && ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *ADVERSARY'; then
+        missing="$missing- Missing ADVERSARY line (this turn ran an adversary subagent: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n"
+      fi
+      ;;
+  esac
   # VERIFY_SKIP_RE: EN+IT historicos + ES natural. Vivo 2026-08-13: zcode
   # escribio "No corri los candados" y el gate lo rechazo porque solo
   # aceptaba skipped/not run. "se corrio la bateria" NO matchea (falta "no ").
@@ -2373,6 +2394,17 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
       if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then
         missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\n"
+      fi
+    fi
+    # Task 13.5 (D4): con adversary en agents_seen, la secuencia exigida lo
+    # incluye ENTRE verifier y reviewer. La regex de 3 roles de arriba ya
+    # matcheaba con adversary en el medio — ESTA es la que exige su posicion:
+    # rechaza adversary-antes-de-verifier y adversary-despues-de-reviewer. El
+    # "adversary sin verifier previo" sin verifier en agents_seen lo atrapa la
+    # rama missing-verifier de arriba; con verifier tardio, esta.
+    if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q adversary && printf '%s' "$agents_seen" | grep -q reviewer; then
+      if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*adversary.*reviewer'; then
+        missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> adversary -> reviewer.\n"
       fi
     fi
   ;;

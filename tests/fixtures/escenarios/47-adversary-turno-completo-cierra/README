@@ -1,0 +1,3 @@
+D6 caso 1 (Task 13.5): turno completo implementer -> verifier -> adversary -> reviewer,
+escritura del artefacto PERMITIDA bajo .saikit/findings/ (evento interno con
+agent_type), runner y recibo con la linea ADVERSARY. Cierra limpio.
