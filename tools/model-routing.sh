@@ -32,7 +32,7 @@ uso() {
   cat <<'EOF'
 Uso:
   tools/model-routing.sh --host claude|zcode|grok|kimi
-                         (--role implementer|verifier|reviewer | --tier standard|verify|review)
+                         (--role implementer|verifier|reviewer|adversary | --tier standard|verify|review)
                          [--field model|effort|effort-key|tier]
                          [--format json|frontmatter]
 
@@ -75,6 +75,9 @@ rol_a_tier() {
     implementer) printf 'standard' ;;
     verifier)    printf 'verify' ;;
     reviewer)    printf 'review' ;;
+    # Task 13.7: adversary comparte el tier review con reviewer (D5 del
+    # diseno 13) -- no tiene tier propio.
+    adversary)   printf 'review' ;;
     *) return 1 ;;
   esac
   return 0

@@ -1396,7 +1396,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -1817,6 +1817,82 @@ caso_g3_fast_con_adversary_exige_linea() {
   _igual "exit code (fast exige la linea ADVERSARY)" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'ADVERSARY'
   _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
+}
+
+# ===================== Task 13.8 — gate condicional POR TARGET (codex r1 #2)
+# El plan de 13.8 exige "casos por target del gate condicional": el cableado
+# del rol en zcode y grok probado de punta a punta por sus canales MEDIDOS
+# (zcode: despacho con tool_input.subagent_type, Task 5.5; grok: spawn con
+# toolInput.subagent_type + interno subagentType, 7.1). El caso que DISCRIMINA
+# es el negativo: el Stop solo exige la linea ADVERSARY si el canal del host
+# acredito al adversary en agents_seen.
+
+# zcode target: turno completo con adversary cierra con su linea.
+caso_g3_zcode_adversary_ceremonia_cierra() {
+  LAB_ZCODE_SESSION_ID="sess_z_adv"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'adversary')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run tool auto "$(lab_payload_bash 'pytest -q')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_ADV")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "zcode: cierre con adversary y su linea" "$LAB_RC" "0"
+}
+
+# zcode target (el que discrimina): adversary acreditado por el DESPACHO
+# zcode y recibo completo SIN la linea ADVERSARY => bloquea nombrandola.
+caso_g3_zcode_adversary_sin_linea_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_adv2"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'adversary')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run tool auto "$(lab_payload_bash 'pytest -q')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "zcode: sin linea ADVERSARY bloquea" "$LAB_RC" "2"
+  _contiene "zcode: el motivo nombra la linea" "$LAB_OUT" 'ADVERSARY'
+}
+
+# grok target: ceremonia completa con adversary (spawn) cierra con su linea.
+caso_g3_grok_adversary_ceremonia_cierra() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit ataca el cambio con adversary')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  lab_run auto grok "$(lab_payload_grok_interno verifier 'npm test')"
+  lab_run auto grok "$(lab_payload_grok_spawn adversary)"
+  lab_run auto grok "$(lab_payload_grok_spawn reviewer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_ADV" end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "grok: exit 0 (forma grok)" "$LAB_RC" "0"
+  _no_contiene "grok: cierre limpio sin block" "$LAB_OUT" '"decision":"block"'
+}
+
+# grok target (el que discrimina): adversary acreditado por spawn_subagent y
+# recibo completo SIN la linea => bloquea con la forma grok nombrandola.
+caso_g3_grok_adversary_sin_linea_bloquea() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit ataca el cambio con adversary')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  lab_run auto grok "$(lab_payload_grok_bash 'pytest -q' 0)"
+  lab_run auto grok "$(lab_payload_grok_edit '/proyecto/src/sesion.py')"
+  lab_run auto grok "$(lab_payload_grok_interno verifier 'npm test')"
+  lab_run auto grok "$(lab_payload_grok_spawn adversary)"
+  lab_run auto grok "$(lab_payload_grok_spawn reviewer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "grok: bloqueo con exit 0 (7.2)" "$LAB_RC" "0"
+  _contiene "grok: decision:block" "$LAB_OUT" '"decision":"block"'
+  _contiene "grok: el motivo nombra la linea ADVERSARY" "$LAB_ERR" 'ADVERSARY'
 }
 
 # ================================================================ G4 — recibo

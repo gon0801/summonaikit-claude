@@ -302,7 +302,7 @@ nuevo_zcode_cfg() {
   zcode_cfg="$c/config.json"
   # Core Rule 4: nunca escribir ~/.zcode/agents del HOME real. El override
   # apunta al sandbox de ESTE caso. El instalador post-5.6 instala ahi los
-  # perfiles implementer/verifier/reviewer.
+  # perfiles implementer/verifier/reviewer (y adversary desde la Task 13.8).
   zcode_agents="$c/agents"
   # config minimo con enabled:true + vecinos (SessionStart dummy, Stop tokentracker)
   cat > "$zcode_cfg" <<'JSON'
@@ -557,11 +557,14 @@ cmp_agente() {
   cmp -s "$agentes_fuente/$1.md" "$zcode_agents/$1.md"
 }
 
-caso "zcode: --host zcode instala implementer/verifier/reviewer en AGENTS_DIR"
+caso "zcode: --host zcode instala implementer/verifier/reviewer/adversary en AGENTS_DIR"
+# Task 13.8: adversary es el cuarto perfil. Corre con el router REAL y la
+# fila zcode esta vacia a proposito (12.1): el adversary instalado NO lleva
+# claves de ruteo y hereda del padre.
 dest_listo; nuevo_zcode_cfg
 out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   [ -f "$zcode_agents/$rol.md" ] || malo "falta $rol.md en AGENTS_DIR"
   cmp_agente "$rol" || malo "$rol.md no quedo byte a byte igual a agents/$rol.md"
   grep -q '^name: '"$rol"'$' "$zcode_agents/$rol.md" \
@@ -569,8 +572,40 @@ for rol in implementer verifier reviewer; do
   grep -Eq '^saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$' "$zcode_agents/$rol.md" \
     || malo "$rol.md no lleva el marcador saikit_owned"
 done
+grep -q '^model:' "$zcode_agents/adversary.md" \
+  && malo "adversary.md en zcode no debe llevar model: (fila vacia, 12.1)"
+grep -q '^thoughtLevel:' "$zcode_agents/adversary.md" \
+  && malo "adversary.md en zcode no debe llevar thoughtLevel: (fila vacia, 12.1)"
 printf '%s' "$out" | grep -qi 'AGENTE' \
   || malo "no reporta la instalacion de agentes: $out"
+
+caso "zcode: adversary DESCONOCIDO no se pisa y el resto se instala"
+# Misma regla de la linea base (5.6) aplicada al cuarto rol: un adversary.md
+# ajeno (sin marca) no se toca, se reporta, y no aborta nada.
+dest_listo; nuevo_zcode_cfg
+printf '%s\n' '---' 'name: adversary' 'description: de otro' '---' '# custom' \
+  > "$zcode_agents/adversary.md"
+antes_sha="$(sha256sum < "$zcode_agents/adversary.md")"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "adversary DESCONOCIDO no debe abortar, dio $rc: $out"
+[ "$(sha256sum < "$zcode_agents/adversary.md")" = "$antes_sha" ] \
+  || malo "piso un adversary.md DESCONOCIDO"
+printf '%s' "$out" | grep -qi 'desconocid' \
+  || malo "no reporta el adversary desconocido: $out"
+cmp_agente reviewer || malo "reviewer.md tenia que instalarse (solo adversary era ajeno)"
+
+caso "zcode: NO_OBSERVABLE en el ULTIMO rol no deja los tres primeros publicados (grok r1 #1 / codex r1 #1)"
+# El mismo 12.9 #1 que claude/kimi ya cerraron, aplicado a zcode: el bucle
+# clasificaba el DESTINO y publicaba en la misma vuelta — un adversary.md
+# NO_OBSERVABLE (directorio) salia exit 5 con los tres anteriores YA
+# escritos: instalacion a medias que el exit != 0 ademas desmiente.
+dest_listo; nuevo_zcode_cfg
+mkdir -p "$zcode_agents/adversary.md"
+out="$(host_zcode 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] || malo "esperaba exit 5 (NO_OBSERVABLE), dio $rc: $out"
+[ -e "$zcode_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
+[ -e "$zcode_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
+[ -e "$zcode_agents/reviewer.md" ] && malo "reviewer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (zcode a medias)"
 
 caso "zcode: segunda vez no reescribe agentes identicos (mtime intacto)"
 dest_listo; nuevo_zcode_cfg
@@ -633,6 +668,7 @@ out="$(host_zcode --quitar-zcode 2>&1)"; rc=$?
   || malo "quitar reescribio el implementer DESCONOCIDO"
 [ ! -e "$zcode_agents/verifier.md" ] || malo "quitar debio borrar verifier.md (era nuestro)"
 [ ! -e "$zcode_agents/reviewer.md" ] || malo "quitar debio borrar reviewer.md (era nuestro)"
+[ ! -e "$zcode_agents/adversary.md" ] || malo "quitar debio borrar adversary.md (era nuestro)"
 backup="$(find "$zcode_agents" -type f -name 'verifier.md*.bak' 2>/dev/null | head -n 1)"
 [ -n "$backup" ] || malo "quitar borro verifier.md sin dejar backup"
 [ -n "$backup" ] && [ "$(sha256sum < "$backup")" = "$ver_sha" ] \
@@ -685,7 +721,7 @@ caso "zcode: plantilla con CRLF en name: sigue siendo valida"
 dest_listo; nuevo_zcode_cfg
 src_crlf="$tmp/agents-crlf"
 mkdir -p "$src_crlf"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   python - "$agentes_fuente/$rol.md" "$src_crlf/$rol.md" <<'PY'
 import sys
 src, dst = sys.argv[1], sys.argv[2]
@@ -726,6 +762,9 @@ SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
 # y la misma escritura atomica del flujo normal — a diferencia de --host zcode,
 # que es registro-only y nunca toca DEST. ~/.zcode sigue rechazado siempre;
 # ~/.codex se habilita SOLO con --host codex.
+# Task 13.8: codex NO tiene costura de perfiles (--host codex instala solo la
+# segunda copia del hook); como se instalaria/rutearia adversary en codex queda
+# UNKNOWN declarado — no medido, no se afirma nada aca.
 n_codex=0
 home_cx=''
 nuevo_home_codex() {
@@ -873,7 +912,7 @@ printf '%s' "$out" | grep -q 'REGISTRO GROK' || malo "no reporta la publicacion 
 # que emite tools/model-routing.sh para ese rol — ni una linea de mas, ni de
 # menos, en ninguna de las dos direcciones.
 caso "grok: perfiles instalados = fuente MENOS skills: MAS model:/effort: del router"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   [ -f "$gk_agents/$rol.md" ] || { malo "falta $rol.md en ~/.grok/agents"; continue; }
   esperado_model="$(bash "$router" --host grok --role "$rol" --field model)"
   esperado_effort="$(bash "$router" --host grok --role "$rol" --field effort)"
@@ -893,6 +932,40 @@ for rol in implementer verifier reviewer; do
   grep -q "^name: $rol\$" "$gk_agents/$rol.md" || malo "$rol.md no declara name: $rol"
 done
 printf '%s' "$out" | grep -q 'AGENTE GROK' || malo "no reporta los agentes instalados: $out"
+
+caso "grok: adversary instalado lleva model:/effort: del router y NO skills: (13.8)"
+# La fuente agents/adversary.md SI declara skills:; la traduccion 7.5 la
+# omite en grok (el loader no la acepta como string). Los valores esperados
+# se derivan del router REAL (tier review, fila grok medida en la 12.2) --
+# los IDs de modelo viven solo en tools/model-routing.sh.
+nuevo_home_grok
+grep -q '^skills:' "$agentes_fuente/adversary.md" \
+  || malo "la fuente agents/adversary.md deberia declarar skills: (premisa del caso)"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+[ -f "$gk_agents/adversary.md" ] || malo "no instalo adversary.md en ~/.grok/agents"
+sed -n '/^---/,/^---/p' "$gk_agents/adversary.md" | grep -q '^skills:' \
+  && malo "adversary.md en grok no debe llevar skills: en el frontmatter"
+esp_model="$(bash "$router" --host grok --role adversary --field model)"
+esp_effort="$(bash "$router" --host grok --role adversary --field effort)"
+[ -n "$esp_model" ] || malo "la fila grok/adversary del router no deberia estar vacia"
+grep -q "^model: ${esp_model}\$" "$gk_agents/adversary.md" \
+  || malo "adversary.md no lleva el model: que emite el router ($esp_model)"
+grep -q "^effort: ${esp_effort}\$" "$gk_agents/adversary.md" \
+  || malo "adversary.md no lleva el effort: que emite el router ($esp_effort)"
+
+caso "grok: adversary DESCONOCIDO no aborta el resto ni se pisa (13.8)"
+nuevo_home_grok
+printf '%s\n' '---' 'name: adversary' 'description: del operador' '---' '# adversary propio' \
+  > "$gk_agents/adversary.md"
+antes_sha="$(sha256sum < "$gk_agents/adversary.md")"
+out="$(host_grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un adversary desconocido NO aborta (D7), dio $rc: $out"
+cmp -s "$dest" "$fuente" || malo "el hook tenia que instalarse igual"
+[ -f "$gk_agents/reviewer.md" ] || malo "reviewer tenia que instalarse"
+[ "$(sha256sum < "$gk_agents/adversary.md")" = "$antes_sha" ] \
+  || malo "piso el adversary.md ajeno (D7: no se toca)"
+printf '%s' "$out" | grep -qi 'desconocid' || malo "debe reportar el adversary desconocido: $out"
 
 caso "grok: JSON DESCONOCIDO => exit != 0, hook NO publicado, CERO cambios"
 nuevo_home_grok
@@ -988,6 +1061,7 @@ out="$(host_grok --quitar-grok 2>&1)"; rc=$?
 [ ! -e "$dest" ] || malo "no retiro el hook nuestro"
 [ ! -e "$gk_agents/implementer.md" ] || malo "no retiro implementer.md (era nuestro)"
 [ ! -e "$gk_agents/reviewer.md" ] || malo "no retiro reviewer.md (era nuestro)"
+[ ! -e "$gk_agents/adversary.md" ] || malo "no retiro adversary.md (era nuestro)"
 [ "$(sha256sum < "$gk_agents/verifier.md")" = "$ver_sha" ] \
   || malo "--quitar-grok toco el verifier ajeno"
 [ -n "$(find "$home_gk/.grok/hooks/saikit-backups" -type f -name 'summonaikit.json*.bak' 2>/dev/null)" ] \
@@ -1042,6 +1116,8 @@ out="$(host_grok 2>&1)"; rc=$?
   || malo "implementer se publico en ESTA corrida y el rollback debia retirarlo"
 [ ! -e "$gk_agents/reviewer.md" ] \
   || malo "reviewer nunca se llego a publicar y no debe existir"
+[ ! -e "$gk_agents/adversary.md" ] \
+  || malo "adversary nunca se llego a publicar (va despues del punto de fallo) y no debe existir"
 [ "$(sha256sum < "$gk_agents/verifier.md")" = "$ver_previo_sha" ] \
   || malo "verifier debia quedar intacto (el fallo fue ANTES de escribirlo)"
 printf '%s' "$out" | grep -qi 'rollback' || malo "debe reportar el ROLLBACK: $out"
@@ -1128,7 +1204,7 @@ linea_cierre="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut -d:
 caso "12.5 zcode: un --- EXTRA en el BODY no rompe: la inyeccion sigue cayendo UNA sola vez, antes del cierre REAL del frontmatter"
 src_extra_dash="$tmp/agents-extra-dash"
 mkdir -p "$src_extra_dash"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   {
     cat "$agentes_fuente/$rol.md"
     printf '\n---\n'
@@ -1154,7 +1230,7 @@ linea_cierre_ed="$(grep -n '^---' "$zcode_agents/reviewer.md" | sed -n 2p | cut 
 caso "12.5 zcode: agente_traducido descarta un thoughtLevel: preexistente de la fuente (no lo duplica) y usa el nombre de clave del router (Task 12.1)"
 src_thoughtlevel="$tmp/agents-thoughtlevel"
 mkdir -p "$src_thoughtlevel"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   awk '/^name: /{print; print "thoughtLevel: viejo-de-la-fuente"; next} {print}' \
     "$agentes_fuente/$rol.md" > "$src_thoughtlevel/$rol.md"
 done
@@ -1278,6 +1354,38 @@ grep -q "^model: ${esperado_model}\$" "$claude_agents/reviewer.md" \
 grep -q "^effort: ${esperado_effort}\$" "$claude_agents/reviewer.md" \
   || malo "el perfil no lleva el effort que el router real emite ($esperado_effort)"
 
+caso "claude: adversary instalado con la marca y el model:/effort: del router REAL (13.8)"
+# adversary rutea al tier review (13.7): los valores esperados se le
+# PREGUNTAN al router, igual que en el caso de reviewer de arriba -- los IDs
+# de modelo viven solo en tools/model-routing.sh.
+dest_listo; nuevo_claude_agents
+out="$(host_claude_real 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, obtuve $rc: $out"
+[ -f "$claude_agents/adversary.md" ] || malo "no instalo adversary.md"
+grep -q '^saikit_owned: summonaikit-claude$' "$claude_agents/adversary.md" \
+  || malo "adversary.md instalado no lleva la marca"
+esp_model="$(bash "$router" --host claude --role adversary --field model)"
+esp_effort="$(bash "$router" --host claude --role adversary --field effort)"
+[ -n "$esp_model" ] || malo "la fila claude/adversary del router no deberia estar vacia"
+grep -q "^model: ${esp_model}\$" "$claude_agents/adversary.md" \
+  || malo "adversary.md no lleva el model: que el router real emite ($esp_model)"
+grep -q "^effort: ${esp_effort}\$" "$claude_agents/adversary.md" \
+  || malo "adversary.md no lleva el effort: que el router real emite ($esp_effort)"
+
+caso "claude: adversary DESCONOCIDO no se toca, se reporta, y el resto se instala (13.8)"
+# adversary es kit-owned y NO tiene entrada en agents/vendor-manifest.sha256:
+# un adversary.md sin marca ni hash de vendor es DESCONOCIDO, no adoptable.
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: adversary\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/adversary.md"
+antes="$(cksum < "$claude_agents/adversary.md")"
+out="$(host_claude 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "adversary DESCONOCIDO no debe abortar la corrida, dio $rc: $out"
+[ "$antes" = "$(cksum < "$claude_agents/adversary.md")" ] \
+  || malo "un adversary.md ajeno no se debe tocar"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el adversary DESCONOCIDO"
+grep -q '^saikit_owned:' "$claude_agents/reviewer.md" \
+  || malo "reviewer.md tenia que instalarse (solo adversary era ajeno)"
+
 caso "claude: instalar dos veces NO reescribe"
 # Desviacion declarada del plan: se agrega una primera instalacion propia con
 # el MISMO router (host_claude / stub) antes de capturar "antes". El caso tal
@@ -1319,7 +1427,7 @@ out="$(host_claude 2>&1)"
 [ "$antes" = "$(cksum < "$claude_agents/reviewer.md")" ] || malo "un perfil ajeno no se debe tocar"
 printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el estado DESCONOCIDO"
 
-caso "claude: closer y retro NO se tocan (la fuente cubre tres roles)"
+caso "claude: closer y retro NO se tocan (la fuente cubre cuatro roles, ellos no son de los nuestros)"
 dest_listo; nuevo_claude_agents; poner_vendor closer; poner_vendor retro
 antes_closer="$(cksum < "$claude_agents/closer.md")"
 antes_retro="$(cksum < "$claude_agents/retro.md")"
@@ -1361,6 +1469,25 @@ printf '%s' "$out" | grep -q "$manifiesto_hash" \
 [ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
   || malo "--refrescar-manifiesto NO debe escribir el manifiesto (solo reporta)"
 
+caso "claude: --refrescar-manifiesto marca a adversary como kit-owned (su hash NO va al manifiesto) (grok r1 #3)"
+# adversary es kit-owned y no tiene ni debe tener entrada de vendor: el
+# reporte con hash+diff en el MISMO formato que los candidatos legitimos
+# invitaba al operador a pegar un hash que, adoptado, dejaria al kit pisar
+# un adversary.md ajeno como VENDOR_CONOCIDO. El reporte lleva la
+# advertencia explicita.
+dest_listo; nuevo_claude_agents
+printf -- '---\nname: adversary\ndescription: mio\n---\ncambio ajeno\n' > "$claude_agents/adversary.md"
+manifiesto_antes="$(cksum < "$repo/agents/vendor-manifest.sha256")"
+out="$(SAIKIT_CLAUDE_AGENTS_DIR="$claude_agents" \
+       bash "$tool" --host claude --refrescar-manifiesto --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--refrescar-manifiesto no deberia fallar por reportar adversary: rc=$rc: $out"
+printf '%s' "$out" | grep -qi 'kit-owned' \
+  || malo "el reporte del adversary DESCONOCIDO debe advertir que es kit-owned"
+printf '%s' "$out" | grep -qi 'NO va al manifiesto' \
+  || malo "el reporte del adversary debe decir que su hash NO va al manifiesto"
+[ "$manifiesto_antes" = "$(cksum < "$repo/agents/vendor-manifest.sha256")" ] \
+  || malo "--refrescar-manifiesto NO debe escribir el manifiesto (adversary)"
+
 # ============================================================================
 # Task 12.7 — posesion en kimi: --host kimi, alcance reducido por la 12.3
 # ============================================================================
@@ -1391,6 +1518,18 @@ out="$(host_kimi 2>&1)"; rc=$?
 grep -q '^saikit_owned: summonaikit-claude$' "$kimi_agents/reviewer.md" \
   || malo "el perfil instalado no lleva la marca"
 
+caso "kimi: adversary instalado con la marca y SIN model:/effort: (13.8)"
+# La fila kimi del router es vacia DEFINITIVA (12.3: el host no acepta ruteo
+# por agente): el PERFIL de adversary si se instala, el ruteo no.
+dest_listo; nuevo_kimi_agents
+out="$(host_kimi 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, obtuve $rc: $out"
+[ -f "$kimi_agents/adversary.md" ] || malo "no instalo adversary.md"
+grep -q '^saikit_owned: summonaikit-claude$' "$kimi_agents/adversary.md" \
+  || malo "adversary.md instalado no lleva la marca"
+grep -q '^model:'  "$kimi_agents/adversary.md" && malo "kimi: adversary.md no debe llevar model:"
+grep -q '^effort:' "$kimi_agents/adversary.md" && malo "kimi: adversary.md no debe llevar effort:"
+
 caso "kimi: instalar dos veces NO reescribe"
 dest_listo; nuevo_kimi_agents
 host_kimi >/dev/null 2>&1
@@ -1417,6 +1556,18 @@ antes="$(cksum < "$kimi_agents/reviewer.md")"
 out="$(host_kimi 2>&1)"
 [ "$antes" = "$(cksum < "$kimi_agents/reviewer.md")" ] || malo "un perfil ajeno no se debe tocar"
 printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el estado DESCONOCIDO"
+
+caso "kimi: adversary DESCONOCIDO no se toca y se reporta (13.8)"
+dest_listo; nuevo_kimi_agents
+printf -- '---\nname: adversary\ndescription: mio\n---\ncambio ajeno\n' > "$kimi_agents/adversary.md"
+antes="$(cksum < "$kimi_agents/adversary.md")"
+out="$(host_kimi 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "adversary DESCONOCIDO no debe abortar la corrida, dio $rc: $out"
+[ "$antes" = "$(cksum < "$kimi_agents/adversary.md")" ] \
+  || malo "un adversary.md ajeno no se debe tocar"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' || malo "no reporto el adversary DESCONOCIDO"
+grep -q '^saikit_owned:' "$kimi_agents/reviewer.md" \
+  || malo "reviewer.md tenia que instalarse (solo adversary era ajeno)"
 
 caso "kimi: --host kimi NO toca DEST"
 dest_listo; nuevo_kimi_agents
@@ -1474,7 +1625,7 @@ caso "kimi: el frontmatter instalado SIGUE PARSEANDO (el tipo no puede desaparec
 # completo y huella en el body del PR #59.
 dest_listo; nuevo_kimi_agents
 host_kimi >/dev/null 2>&1
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   fm="$(sed -n '/^---/,/^---/p' "$kimi_agents/$rol.md" | sed '1d;$d')"
   printf '%s' "$fm" | grep -q "^name: ${rol}\$"   || malo "$rol: falta name: correcto"
   printf '%s' "$fm" | grep -q '^description:'     || malo "$rol: falta description (el parser la exige)"
@@ -1485,7 +1636,7 @@ for rol in implementer verifier reviewer; do
   esac
 done
 
-caso "kimi: no se toca nada fuera de los tres roles"
+caso "kimi: no se toca nada fuera de los cuatro roles"
 dest_listo; nuevo_kimi_agents
 printf 'ajeno\n' > "$kimi_agents/otro-agente.md"
 mkdir -p "$kimi_agents/../skills" && printf 'ajeno\n' > "$kimi_agents/../skills/x.md"
@@ -1505,17 +1656,21 @@ host_kimi >/dev/null 2>&1
 # kimi (#6) y el --help incompleto (#7). #8 y #9 son declaraciones (README y
 # Plans.md), sin caso de test.
 
-caso "12.9 #1 (codex): NO_OBSERVABLE en el TERCER rol no deja los dos primeros publicados (instalacion a medias)"
+caso "12.9 #1 (codex): NO_OBSERVABLE en el ULTIMO rol no deja los tres primeros publicados (instalacion a medias)"
 dest_listo; nuevo_claude_agents
-# reviewer es el TERCER rol de CLAUDE_AGENT_ROLES ('implementer verifier
-# reviewer'): un directorio en su lugar es NO_OBSERVABLE (no es un archivo
-# regular). implementer/verifier estan AUSENTES y publicarian si el bucle
-# clasificara-y-publicara en el mismo paso.
-mkdir -p "$claude_agents/reviewer.md"
+# grok r1 #2 (cross-review del PR #66): el NO_OBSERVABLE va plantado en el
+# ULTIMO rol de CLAUDE_AGENT_ROLES (adversary desde la 13.8), no en el
+# tercero — con el fallo en el rol 3, adversary iba DESPUES del punto de
+# fallo y ni el bucle mixto viejo lo habria escrito: la asercion no
+# discriminaba nada. Con el fallo en el ULTIMO rol, los tres anteriores
+# estan AUSENTES y publicarian si el bucle clasificara-y-publicara en el
+# mismo paso.
+mkdir -p "$claude_agents/adversary.md"
 out="$(host_claude 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] || malo "esperaba exit 5 (NO_OBSERVABLE), dio $rc: $out"
-[ -e "$claude_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
-[ -e "$claude_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del rol 3 (instalacion a medias)"
+[ -e "$claude_agents/implementer.md" ] && malo "implementer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
+[ -e "$claude_agents/verifier.md" ] && malo "verifier.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
+[ -e "$claude_agents/reviewer.md" ] && malo "reviewer.md quedo instalado pese al NO_OBSERVABLE del ultimo rol (instalacion a medias)"
 
 caso "12.9 #2 (codex+grok): sha256 no calculable en el manifiesto de agentes => NO_OBSERVABLE (exit 5), NUNCA DESCONOCIDO silencioso"
 # sha256sum FALSO que siempre falla: command -v lo encuentra (existe y es
@@ -1553,7 +1708,7 @@ caso "12.9 #4 (grok): --dry-run en --host claude no escribe nada y reporta por r
 dest_listo; nuevo_claude_agents
 out="$(host_claude --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run (claude) no deberia fallar: $out"
-for rol in implementer verifier reviewer; do
+for rol in implementer verifier reviewer adversary; do
   [ -e "$claude_agents/$rol.md" ] && malo "dry-run (claude) escribio $rol.md"
 done
 printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (claude) no reporto lo que haria"
@@ -1563,6 +1718,7 @@ dest_listo; nuevo_kimi_agents
 out="$(host_kimi --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run (kimi) no deberia fallar: $out"
 [ -e "$kimi_agents/implementer.md" ] && malo "dry-run (kimi) escribio implementer.md"
+[ -e "$kimi_agents/adversary.md" ] && malo "dry-run (kimi) escribio adversary.md"
 printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run (kimi) no reporto lo que haria"
 
 caso "12.9 #5 (grok): agente_traducido fallando (router roto) NO pisa el perfil grok existente"
