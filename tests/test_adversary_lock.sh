@@ -138,6 +138,14 @@ if date -u -d '2026-01-01T00:00:00Z' +%s >/dev/null 2>&1 \
 fi
 rm -f "$_adv_touch_probe"
 
+# Symlinks reales disponibles? Gatea los casos y las MUTACIONES que los
+# necesitan (MSYS copia por default; el CI de Linux siempre los tiene).
+ADV_SYMLINK_OK=0
+if adv_symlink_o_skip "$tmp" "$tmp/.symprobe"; then
+  ADV_SYMLINK_OK=1
+  rm -f "$tmp/.symprobe" 2>/dev/null || true
+fi
+
 # -------------------------------------------------------------------- casos
 
 caso "advlock_permite_escribir_el_artefacto"
@@ -170,6 +178,11 @@ advlock_bloquea_escritura_fuera() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_ERR" 'adversary'
+  # qwen #1 / codex #2 (cross-review r2 del PR #65): el remedio que el mensaje
+  # promete tiene que ser el que FUNCIONA — revertir y RE-ARMAR; el re-close de
+  # la misma sesion siempre vuelve a bloquear (el flag no se limpia a proposito
+  # y solo el armado nuevo lo reinicia).
+  _contiene "remedio: re-armar, no re-close" "$LAB_ERR" 're-arm'
 }
 advlock_bloquea_escritura_fuera; fin_caso "advlock_bloquea_escritura_fuera"
 
@@ -408,6 +421,81 @@ advlock_falla_infra_fail_open() {
 }
 advlock_falla_infra_fail_open; fin_caso "advlock_falla_infra_fail_open"
 
+caso "advlock_symlink_subdir_y_saikit_enlazado"
+advlock_symlink_subdir_y_saikit_enlazado() {
+  # codex #1 / qwen #5 (cross-review r2 del PR #65): cd+pwd LOGICO no resolvia
+  # un subdirectorio symlink bajo findings/ — la escritura aterrizaba fisica
+  # AFUERA con el canon textual adentro y el candado la aceptaba. Con pwd -P el
+  # canon es fisico y cae fuera del prefijo => violacion.
+  mkdir -p "$LAB/proyecto/.saikit/findings" "$LAB/afuera2"
+  adv_armar
+  adv_despachar
+  if adv_symlink_o_skip "$LAB/afuera2" "$LAB/proyecto/.saikit/findings/sub"; then
+    lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/sub/escapa.json')"
+    _igual "subdir symlink es violacion" "$(lab_estado adv_violation)" "1"
+  else
+    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux lo ejercita\n'
+  fi
+  # (b) .saikit MISMO es un symlink (codex #1a): el gitignore no debe crearse a
+  # TRAVES del enlace (aterrizaria fuera del repo) y escribir a traves es
+  # violacion, igual que el findings/ enlazado de claude #9.
+  lab_limpiar_estado
+  rm -rf "$LAB/proyecto/.saikit"
+  mkdir -p "$LAB/afuera3"
+  if adv_symlink_o_skip "$LAB/afuera3" "$LAB/proyecto/.saikit"; then
+    adv_armar
+    adv_despachar
+    if [ -e "$LAB/afuera3/findings/.gitignore" ]; then
+      _mal ".saikit symlink: el gitignore no debe crearse a traves del enlace"
+    fi
+    lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/x.json')"
+    _igual ".saikit symlink: escribir a traves es violacion" "$(lab_estado adv_violation)" "1"
+  else
+    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux lo ejercita\n'
+  fi
+}
+advlock_symlink_subdir_y_saikit_enlazado; fin_caso "advlock_symlink_subdir_y_saikit_enlazado"
+
+caso "advlock_artefacto_redactado_no_bloquea"
+advlock_artefacto_redactado_no_bloquea() {
+  # Hallazgo del lead + kimi #2 (r2): el regex matcheaba la CLAVE (token=/
+  # password=) sin importar el valor, asi que el artefacto redactado EXACTAMENTE
+  # como manda el perfil (token=[REDACTED], ://[REDACTED]@) bloqueaba el cierre
+  # — la disciplina de la capa 1 disparaba la capa 2. El escaneo ahora descuenta
+  # las formas redactadas y exige un valor real.
+  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  mkdir -p "$LAB/proyecto/.saikit/findings"
+  adv_armar
+  adv_despachar
+  printf 'evidence: token=[REDACTED]\nuri: https://[REDACTED]@host/db\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _no_contiene "redactado no bloquea" "$LAB_ERR" 'adversary-redactado.json'
+  # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
+  # descuento no puede tragarse el secreto vecino).
+  printf 'mix: token=[REDACTED] password=hunter2-real\n' > "$LAB/proyecto/.saikit/findings/adversary-mixto.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "mixto bloquea" "$LAB_RC" "2"
+  _contiene "nombra el mixto" "$LAB_ERR" 'adversary-mixto.json'
+}
+advlock_artefacto_redactado_no_bloquea; fin_caso "advlock_artefacto_redactado_no_bloquea"
+
+caso "advlock_mensaje_redacta_paths"
+advlock_mensaje_redacta_paths() {
+  # qwen #7 (r2): el mensaje de bloqueo interpolaba adv_violation_paths CRUDO;
+  # un path con pinta de secreto viajaba sin redactar al feedback visible.
+  # Misma disciplina que la linea de log: redact_secrets tambien en el mensaje.
+  mkdir -p "$LAB/proyecto/src"
+  adv_armar
+  adv_despachar
+  lab_run tool claude "$(adv_payload_edit_interno adversary 'src/token=abc123secreto.ts')"
+  _igual "violacion registrada" "$(lab_estado adv_violation)" "1"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "exit code" "$LAB_RC" "2"
+  _no_contiene "el valor no viaja al feedback" "$LAB_ERR" 'abc123secreto'
+  _contiene "la forma redactada si viaja" "$LAB_ERR" 'token=[REDACTED]'
+}
+advlock_mensaje_redacta_paths; fin_caso "advlock_mensaje_redacta_paths"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_adversary_lock: FAIL (casos)" >&2
   exit 1
@@ -424,16 +512,40 @@ mut_advlock_secreto_ciego()          { sed 's/^adv_chequear_secretos() {$/adv_ch
 mut_advlock_epoca_no_se_inicializa() { sed 's/"\$adv_epoch_armado" "" "" ""$/"ADV-MUT" "" "" ""/'; }
 mut_advlock_prefijo_roto()           { sed 's|"\$ADV_FINDINGS_DIR"/\*)|*)|'; }
 mut_advlock_bash_ciego()             { sed 's/^adv_guard_bash() {$/adv_guard_bash() {\n  return 0/'; }
+# Fixes del cross-review r2 del PR #65: revertir la resolucion FISICA de paths
+# (pwd -P -> pwd logico, codex #1/kimi #1) y el descuento de formas redactadas
+# (lead/kimi #2) tienen que poner rojo a su caso. canon_logico se gatea por
+# symlinks reales y redactado_cuenta por GNU date — SKIP declarado donde
+# falten; el CI de Linux corre ambos siempre.
+mut_advlock_canon_logico()           { sed 's/pwd -P/pwd/g'; }
+mut_advlock_redactado_cuenta()       { sed 's/"\$SAIKIT_ADV_REDACTED_STRIP"/"s|z-nunca-z|z-nunca-z|"/'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
 secreto_ciego|advlock_secreto_sesion_actual_bloquea_y_anterior_no
 epoca_no_se_inicializa|advlock_armado_inicializa_estado_previo
 prefijo_roto|advlock_traversal_y_ruta_absoluta
-bash_ciego|advlock_bash_best_effort"
+bash_ciego|advlock_bash_best_effort
+canon_logico|advlock_symlink_subdir_y_saikit_enlazado
+redactado_cuenta|advlock_artefacto_redactado_no_bloquea"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
+  # CodeRabbit #65-b: una mutacion cuyo caso acreditado se declara SKIP por
+  # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
+  # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
+  case "$nombre" in
+    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta)
+      if [ "$ADV_EPOCA_OK" != "1" ]; then
+        printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
+        continue
+      fi ;;
+    canon_logico)
+      if [ "$ADV_SYMLINK_OK" != "1" ]; then
+        printf '    SKIP declarado: la mutacion %s necesita symlinks reales\n' "$nombre"
+        continue
+      fi ;;
+  esac
   mutado="$tmp/hook-$nombre.sh"
   "mut_advlock_$nombre" < "$vivo" > "$mutado"
   if cmp -s "$vivo" "$mutado"; then

@@ -1389,7 +1389,14 @@ redact_secrets() {
 # sesiones armadas cuyo estado registra al adversary; el escaneo mira las rutas
 # que ESTA sesion registro mas los archivos con mtime >= SU epoca de armado —
 # los artefactos historicos de otras tareas no vuelven a bloquear nada.
-ADV_FINDINGS_DIR="$PROJECT_ROOT/.saikit/findings"
+# kimi #1 (cross-review r2 del PR #65): PROJECT_ROOT puede venir de `git
+# rev-parse` en forma C:/ (Git Bash) mientras los blancos se canonicalizan con
+# cd+pwd -P (forma /c/) — el prefijo se ancla con la MISMA maquinaria FISICA
+# que canonicaliza los blancos, o el candado bloquea al reves TODA escritura
+# legitima en Windows. codex #1: -P ademas resuelve dirs symlink intermedios.
+# Fallback textual si el root no existe (fail-open, familia A6).
+ADV_PROJECT_CANON="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || ADV_PROJECT_CANON=""
+ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
 
 # Familia de patrones del escaneo de secretos = la MISMA que redact_secrets
 # lleva inline (claude #3 del cross-review): el hook corre en el repo CONSUMER,
@@ -1397,7 +1404,16 @@ ADV_FINDINGS_DIR="$PROJECT_ROOT/.saikit/findings"
 # ia drift sin candado de fuente unica. Capa reducida, declarada: falso
 # negativo por regex que no matchea y falso positivo por repro legitimo, ambos
 # con la ruta de fuga manual de arriba.
-SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=|://[^[:space:]@/?#]*@'
+# El valor exige AL MENOS un caracter ([^[:space:]]): un `token=` pelado no
+# persiste nada. Y las formas YA redactadas se DESCUENTAN antes de grepear
+# (lead + kimi #2, r2 PR #65): el artefacto redactado EXACTAMENTE como manda
+# el perfil (token=[REDACTED], ://[REDACTED]@) no es un secreto persistido —
+# sin el descuento, la disciplina de la capa 1 disparaba la capa 2 y el camino
+# documentado como correcto bloqueaba el cierre. El sed preserva lineas (los
+# numeros del reporte siguen validos) y una linea MIXTA (valor real junto al
+# redactado) sigue matcheando por el vecino.
+SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@'
+SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/=/g; s|://\[REDACTED\]@|://|g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento
@@ -1409,6 +1425,9 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=|:
 # traves de un enlace seria exactamente la escritura-fuera-del-dir que este
 # candado existe para impedir.
 adv_ensure_gitignore() {
+  # codex #1a (r2 PR #65): jamas crear a TRAVES de un enlace — un .saikit (o
+  # un findings) symlink mandaria el gitignore fisico fuera del repo. Fail-open.
+  if [ -L "${ADV_FINDINGS_DIR%/*}" ] || [ -L "$ADV_FINDINGS_DIR" ]; then return 0; fi
   mkdir -p "$ADV_FINDINGS_DIR" 2>/dev/null || return 0
   if [ ! -e "$ADV_FINDINGS_DIR/.gitignore" ] && [ ! -L "$ADV_FINDINGS_DIR/.gitignore" ]; then
     printf '*\n' > "$ADV_FINDINGS_DIR/.gitignore" 2>/dev/null || true
@@ -1464,8 +1483,9 @@ adv_registrar_path_permitido() {
 # (los lectores json_* no decodifican escapes y transcript_path ya midio esa
 # forma), relativas ancladas al PROJECT_ROOT que el hook resuelve para su
 # propio state (claude #4 — no al cwd del proceso, que un cd del turno puede
-# mover), y resolucion REAL de ../ y symlinks via cd+pwd, la familia de
-# normalizacion A6/Task 3.6. Si el dir del blanco no existe (archivo borrado
+# mover), y resolucion FISICA de ../ y symlinks via cd+pwd -P — pwd LOGICO no
+# resuelve un dir symlink intermedio (codex #1 / qwen #5, r2 PR #65) —, la
+# familia de normalizacion A6/Task 3.6. Si el dir del blanco no existe (archivo borrado
 # entre evento y chequeo), colapso textual de segmentos — sin dir no hay
 # enlace que seguir. Vacio = no se pudo canonicalizar: el caller hace
 # fail-open y lo declara por stderr.
@@ -1476,7 +1496,7 @@ adv_canon_path() {
     [A-Za-z]:/*) ;;
     *) advc_p="$PROJECT_ROOT/$advc_p" ;;
   esac
-  advc_dir="$(cd "$(dirname "$advc_p")" 2>/dev/null && pwd)" || advc_dir=""
+  advc_dir="$(cd "$(dirname "$advc_p")" 2>/dev/null && pwd -P)" || advc_dir=""
   if [ -n "$advc_dir" ]; then
     printf '%s/%s' "${advc_dir%/}" "$(basename "$advc_p")"
     return 0
@@ -1511,6 +1531,9 @@ adv_canon_path() {
 # (readlink -f) antes de comparar: un enlace DENTRO de findings apuntando afuera
 # escribe afuera.
 adv_path_dentro() {
+  # r2 PR #65 (codex #1a): el PADRE enlazado tambien es setup violado — sin
+  # este check, un .saikit -> afuera dejaba el prefijo textual adentro.
+  if [ -L "${ADV_FINDINGS_DIR%/*}" ]; then return 1; fi
   if [ -L "$ADV_FINDINGS_DIR" ]; then return 1; fi
   case "$1" in
     "$ADV_FINDINGS_DIR"/*) ;;
@@ -1599,6 +1622,11 @@ EOF
 adv_chequear_secretos() {
   advs_candidatos="$(read_state_value adv_paths | tr '|' '\n')"
   advs_epoca="$(date -u -d "$(read_state_value adv_epoch)" +%s 2>/dev/null || true)"
+  # qwen #3 (r2 PR #65): D3 exige fail-open + DIAGNOSTICO en fallas de infra;
+  # sin GNU date (BSD/macOS) la rama de mtime se salta y hay que decirlo.
+  if [ -z "$advs_epoca" ]; then
+    printf 'summonaikit-harness: adversary: epoca de armado ilegible (GNU date -d ausente?); escaneo por mtime omitido — fail-open declarado\n' >&2
+  fi
   if [ -n "$advs_epoca" ] && [ -d "$ADV_FINDINGS_DIR" ]; then
     advs_candidatos="$advs_candidatos
 $(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null || true)"
@@ -1606,13 +1634,15 @@ $(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null |
   advs_vistos=""
   while IFS= read -r advs_f; do
     [ -n "$advs_f" ] || continue
-    case "$advs_vistos" in
+    # Pipe de cierre en la comparacion: sin el, el ULTIMO agregado nunca
+    # deduplicaba y se grepeaba dos veces (kimi #4, r2 PR #65).
+    case "$advs_vistos|" in
       *"|$advs_f|"*) continue ;;
     esac
     advs_vistos="$advs_vistos|$advs_f"
     [ -f "$advs_f" ] || continue
     [ -r "$advs_f" ] || continue
-    advs_linea="$(grep -En "$SAIKIT_ADV_SECRET_RE" "$advs_f" 2>/dev/null | head -n 1 | cut -d: -f1)"
+    advs_linea="$(sed -E "$SAIKIT_ADV_REDACTED_STRIP" "$advs_f" 2>/dev/null | grep -En "$SAIKIT_ADV_SECRET_RE" | head -n 1 | cut -d: -f1)"
     if [ -n "$advs_linea" ]; then
       printf '%s\n' "- Possible secret persisted in adversary artifact $advs_f:$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
       return 0
@@ -2153,7 +2183,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     *,adversary,*) adv_adv_presente=1 ;;
   esac
   if [ "$adv_st_violation" = "1" ]; then
-    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(read_state_value adv_violation_paths)). No receipt label satisfies this entry: the operator must inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file) and re-close. The block does not verify the revert — remedio manual, declarado.\n"
+    # qwen #1 / codex #2 (r2 PR #65): el remedio prometido tiene que ser el
+    # que FUNCIONA. El flag persiste a proposito toda la sesion (limpiarlo sin
+    # verificar el revert seria perdonar la escritura; verificarlo seria git
+    # en el Stop) — la salida real es revertir y RE-ARMAR (-saikit) en un
+    # turno nuevo, cuyo armado reinicia el estado; o agotar el presupuesto.
+    # qwen #7: los paths viajan REDACTADOS al feedback, como en la linea de log.
+    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it).\n"
   elif [ "$adv_adv_presente" = "1" ]; then
     adv_early_missing="$(adv_chequear_secretos)"
   fi
