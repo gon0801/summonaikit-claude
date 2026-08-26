@@ -1396,7 +1396,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -1817,6 +1817,35 @@ caso_g3_fast_con_adversary_exige_linea() {
   _igual "exit code (fast exige la linea ADVERSARY)" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'ADVERSARY'
   _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
+}
+
+# Trampa de orden hallada por Greptile en el port (PR #12 de summonaikit-kimi,
+# 2026-08-26) y confirmada aca: el dedupe conserva la posicion de la PRIMERA
+# aparicion, asi que un lead que ya corrio la ceremonia y DESPUES agrega el
+# adversary queda con `implementer,verifier,reviewer,adversary` — orden invalido
+# para la regex de 4 roles — y NINGUN re-despacho lo arregla: el turno solo sale
+# agotando presupuesto. Es el camino honesto castigado (el lead que reacciona a
+# "esto tocaba auth, mejor lo ataco"), asi que el gate tiene que distinguirlo de
+# la falla real. La falla real es "el adversary corrio y NADIE adjudico despues";
+# eso lo sigue fijando caso_g3_adversary_fuera_de_orden_bloquea, que siembra el
+# mismo agents_seen SIN re-despachar reviewer y debe seguir bloqueando.
+caso_g3_adversary_tardio_con_re_review_cierra() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  # El lead reacciona: el cambio tocaba zona delicada, despacha adversary TARDE.
+  lab_run tool claude "$(lab_payload_agent 'adversary')"
+  # Y vuelve a despachar al reviewer para que adjudique el artefacto.
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  # El re-despacho del reviewer lo mueve al final: la adjudicacion ocurrio
+  # DESPUES del ataque, que es lo que la regla de orden protege.
+  _igual "agents_seen (el re-despacho reubica al reviewer)" "$(lab_estado agents_seen)" "implementer,verifier,adversary,reviewer"
+
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
+  _igual "exit code (el reviewer SI adjudico despues del adversary)" "$LAB_RC" "0"
+  _no_contiene "no reclama orden" "$LAB_OUT" 'out of order'
 }
 
 # ===================== Task 13.8 — gate condicional POR TARGET (codex r1 #2)
