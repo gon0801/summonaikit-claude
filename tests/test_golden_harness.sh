@@ -75,6 +75,40 @@ correr "$SANDBOX/rec.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --basel
 correr "$SANDBOX/chk.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base" --check
 [ "$rc" -eq 0 ] || malo "--check contra el mismo hook debio salir 0, dio $rc: $(cat "$SANDBOX/chk.txt")"
 
+# --------------------- 3b) la identidad grabada no arrastra el escape de GNU
+# `sha256sum RUTA` antepone `\` a la linea cuando la ruta trae un backslash: ahi
+# coreutils devuelve el nombre ESCAPADO y avisa con ese marcador. El marcador se
+# colaba al `# hook_sha256:` de la linea base, y la identidad terminaba
+# describiendo un archivo que no existe -- mismo hook, huella distinta segun
+# COMO se lo nombre. Eso deja mudo el aviso de cambio de identidad: pasa a
+# gritar deriva en cada corrida, con lo cual deja de significar nada.
+# La forma inmune es leer por stdin (`sha256sum < RUTA`), sin ruta en la salida:
+# es la que `sha_de()` de tools/install-hook.sh ya usa desde la Task 12.9.
+caso "el sha grabado no arrastra el marcador de escape de GNU (ruta con backslash)"
+hook_bs=''
+if cp "$hook_falso" "$SANDBOX/hook\\raro.sh" 2>/dev/null; then
+  hook_bs="$SANDBOX/hook\\raro.sh"
+elif command -v cygpath >/dev/null 2>&1; then
+  hook_bs="$(cygpath -w "$hook_falso" 2>/dev/null)"
+fi
+base_bs="$SANDBOX/baseline-bs.txt"
+if [ -z "$hook_bs" ] || [ ! -r "$hook_bs" ]; then
+  # Core Rule 2: no haber podido montar el caso no es haberlo visto pasar.
+  printf '    unknown: esta maquina no deja nombrar el hook con un backslash; el caso no se pudo medir\n'
+else
+  correr "$SANDBOX/rec_bs.txt" --hook "$hook_bs" --scenarios "$esc_falsos" --baseline "$base_bs" --record
+  if [ ! -s "$base_bs" ]; then
+    printf '    unknown: --record no acepto la ruta con backslash; el caso no se pudo medir\n'
+  else
+    sha_grabado="$(grep -m1 '^# hook_sha256: ' "$base_bs" | sed 's/^# hook_sha256: //')"
+    sha_esperado="$(sha256sum < "$hook_falso" | cut -d' ' -f1)"
+    printf '%s\n' "$sha_grabado" | grep -qE '^[0-9a-f]{64}$' \
+      || malo "el sha grabado no son 64 hex limpios: [$sha_grabado]"
+    [ "$sha_grabado" = "$sha_esperado" ] \
+      || malo "el sha grabado no es el del archivo: grabado [$sha_grabado] esperado [$sha_esperado]"
+  fi
+fi
+
 # ------------------------------------- 4) mutation-test: detecta la diferencia
 caso "hook MUTADO => --check falla (1) y nombra el escenario divergente"
 mutado="$SANDBOX/hook-mutado.sh"

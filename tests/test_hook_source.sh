@@ -155,7 +155,10 @@ else
       # apoya en este aviso: la sostienen `test_golden_baseline.sh` (la linea
       # base contra el vivo) y el `cmp` de la mitad 3).
       sha_base="$(grep -m1 '^# hook_sha256: ' "$base" | sed 's/^# hook_sha256: //')"
-      sha_fuente="$(sha256sum "$fuente" 2>/dev/null | cut -d' ' -f1)"
+      # Por STDIN, igual que `sha_de()` del arnes: con la ruta como argumento,
+      # coreutils antepone `\` cuando el nombre trae un backslash, y los dos
+      # lados de esta comparacion dejarian de ser comparables.
+      sha_fuente="$(sha256sum < "$fuente" 2>/dev/null | cut -d' ' -f1)"
       if [ -z "$sha_base" ] || [ -z "$sha_fuente" ]; then
         # No poder mirar no es haber visto ausencia (Core Rule 2): sin uno de los
         # dos shas no se sabe cual estado corresponde, y exigir cualquiera de los
