@@ -558,19 +558,22 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "cola tras delimitador bloquea" "$LAB_RC" "2"
   _contiene "nombra la cola tras delimitador" "$LAB_ERR" 'adversary-cola-delimitador.json'
-  # DOS signos entre el delimitador y el secreto (`;!sk-real`, `",!sk-real`).
-  # La primera version del guardia miraba si el caracter siguiente "podia ser
-  # continuacion de secreto" (`[^A-Za-z0-9_-]`), o sea UN solo caracter: un `!`
-  # de relleno la salteaba y el secreto volvia a salir (Greptile P1, PR #79).
-  # El guardia ESTRUCTURAL no tiene ese problema — `!` no cierra ningun valor,
-  # asi que no habilita el descuento por mas relleno que se le ponga.
+  # RELLENO entre el delimitador y el secreto. Dos guardias anteriores murieron
+  # aca, los dos por mirar UN SOLO caracter (Greptile y CodeRabbit, PR #79):
+  #   - "lo que sigue no puede ser continuacion de secreto" (`[^A-Za-z0-9_-]`)
+  #     lo saltea `;!sk-real`, porque `!` no es alfanumerico;
+  #   - "lo que sigue es ESTRUCTURAL" lo saltea `;]sk-real`, porque `]` si lo es.
+  # Ningun guardia de un caracter sirve para `;` y `)`: siempre hay un relleno
+  # que lo satisface. Por eso esos dos entran por la rama (c), que exige ESPACIO
+  # o fin de linea — no rellenable por construccion, porque cualquier caracter
+  # de relleno, por definicion, no es espacio.
   lab_limpiar_estado
   rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
   adv_armar
   adv_despachar
-  printf 'evade5: token=[REDACTED];!sk-vivo-555\nevade6: token="[REDACTED]",!sk-vivo-444\n' > "$LAB/proyecto/.saikit/findings/adversary-cola-relleno.json"
+  printf 'evade5: token=[REDACTED];!sk-vivo-555\nevade6: token="[REDACTED]",!sk-vivo-444\nevade7: token=[REDACTED];]sk-vivo-333\n' > "$LAB/proyecto/.saikit/findings/adversary-cola-relleno.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
-  _igual "cola con relleno de puntuacion bloquea" "$LAB_RC" "2"
+  _igual "cola con relleno bloquea" "$LAB_RC" "2"
   _contiene "nombra la cola con relleno" "$LAB_ERR" 'adversary-cola-relleno.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
@@ -706,13 +709,12 @@ mut_advlock_redactado_cuenta()       { sed 's/"\$SAIKIT_ADV_REDACTED_STRIP"/"s|z
 # Moraleja: anclar en la parte mas ESTABLE de la linea (el patron, no el
 # reemplazo ni la lista) y correr un `cmp` despues de cada cambio al hook.
 mut_advlock_redactado_comillas_ciego() { sed 's|s/="|s/=z|g'; }
-# Saca `;` y `)` de la lista blanca, o sea la devuelve a la version incompleta
-# de la primera vuelta. Sin esta mutacion, el sub-caso de los signos pasaba
-# igual con la lista corta o con la completa en cualquier maquina donde no se
-# hubiera medido a mano: nada probaba que discriminara. Con ella, acortar la
-# lista pone rojo al caso — que es lo que le pasaba al artefacto BIEN redactado
-# con `;` o `)` (Greptile P1, PR #75).
-mut_advlock_redactado_lista_corta() { sed 's|,;)}|,}|g'; }
+# Mata la rama (c): `;` y `)` dejan de admitirse, o sea el strip vuelve a la
+# lista de la primera vuelta. Con ella, un artefacto BIEN redactado con `;` o
+# `)` vuelve a bloquear — que es exactamente el hallazgo original de Greptile
+# en el PR #75. Sin esta mutacion, el sub-caso de los signos pasaba igual con
+# la rama o sin ella: nada probaba que discriminara.
+mut_advlock_redactado_rama_estricta_muerta() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|\[;)\]|[zz]|g'; }
 # Afloja el guardia ESTRUCTURAL de la cola metiendole alfanumericos a la clase:
 # la rama (b) pasa a descontar aunque despues del delimitador siga un secreto
 # pegado. Es la mutacion que acredita los sub-casos de cola; sin ella, nada
@@ -732,7 +734,7 @@ bash_ciego|advlock_bash_best_effort
 canon_logico|advlock_symlink_subdir_y_saikit_enlazado
 redactado_cuenta|advlock_artefacto_redactado_no_bloquea
 redactado_comillas_ciego|advlock_artefacto_redactado_no_bloquea
-redactado_lista_corta|advlock_artefacto_redactado_no_bloquea
+redactado_rama_estricta_muerta|advlock_artefacto_redactado_no_bloquea
 redactado_cola_ciega|advlock_artefacto_redactado_no_bloquea"
 
 while IFS='|' read -r nombre caso_atrapa; do
@@ -741,7 +743,7 @@ while IFS='|' read -r nombre caso_atrapa; do
   # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
   # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
   case "$nombre" in
-    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_corta|redactado_cola_ciega)
+    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_rama_estricta_muerta|redactado_cola_ciega)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
         printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
         continue

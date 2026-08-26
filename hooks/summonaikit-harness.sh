@@ -1459,28 +1459,40 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #      delimitador esta, asi que la regla de arriba descontaba y la cola con el
 #      secreto sobrevivia. Esto NO lo trajeron `;` y `)` — pasaba igual con `,`,
 #      `"` y `}` desde antes (Greptile P1, PR #79; medido sobre las dos listas).
-#      Por eso el delimitador va en DOS ramas:
+#      Por eso el delimitador va en TRES ramas, y cada una admite un conjunto
+#      distinto con una exigencia distinta:
 #        a) espacio o fin de linea: descuenta siempre. Ahi el valor termino y lo
 #           que siga es otra cosa; exigirle algo mas bloquearia la prosa normal
 #           (`token=[REDACTED] aparecio en config`).
-#        b) cualquier otro delimitador: descuenta SOLO si lo que sigue es otro
-#           caracter ESTRUCTURAL (`] " [ { } , ; : ) >` o espacio) o fin de
-#           linea. Asi `token=[REDACTED]","uri"...` —forma JSON, la del camino
-#           real— se descuenta, y `token=[REDACTED],sk-real` no.
+#        b) delimitadores de ESTRUCTURA (`] " [ , } >`): descuentan solo si lo
+#           que sigue es otro caracter estructural o fin de linea. Asi
+#           `token=[REDACTED]","uri"...` —forma JSON, la del camino real— se
+#           descuenta, y `token=[REDACTED],sk-real` no.
+#        c) `;` y `)`: descuentan solo si despues viene ESPACIO o fin de linea.
 #
-#      La rama (b) se escribio primero como "lo que sigue no puede ser
-#      continuacion de secreto" (`[^A-Za-z0-9_-]`), y esa version mira UN solo
-#      caracter: `token=[REDACTED];!sk-real` la saltea con un `!` de por medio
-#      (Greptile P1, PR #79). La lista ESTRUCTURAL no tiene ese problema porque
-#      `!` no cierra ningun valor. Medida contra la version original, la
-#      estructural es mejor o igual en las 11 formas probadas: arregla los dos
-#      bloqueos falsos, cierra dos fugas que ya existian (`,sk-real` y
-#      `,!sk-real`) y no abre ninguna.
-#      Se probo tambien exigir espacio/fin DESPUES del delimitador: esa si
-#      rompe la forma JSON, que es la del camino real.
+#      Por que (c) es mas estricta que (b), que es el punto fino de todo esto:
+#      `;` y `)` no estaban en la lista original, asi que meterlos como
+#      delimitadores comunes ABRE caminos que antes no existian para ellos, y
+#      ningun guardia de UN caracter alcanza — siempre hay un relleno que lo
+#      satisface. Medido: con el guardia "no puede ser continuacion de secreto"
+#      (`[^A-Za-z0-9_-]`) lo saltea `token=[REDACTED];!sk-real`, y con el
+#      guardia ESTRUCTURAL lo saltea `token=[REDACTED];]sk-real` — un `]` es
+#      estructural (Greptile y CodeRabbit, PR #79). Exigir espacio/fin de linea
+#      no se puede rellenar por construccion: cualquier caracter de relleno, por
+#      definicion, no es espacio. Cubre las formas reales (`;` o `)` cerrando la
+#      linea o seguidos de prosa) sin abrir nada.
+#
+#      Medida contra la version original en 16 formas: mejor o igual en todas,
+#      peor en ninguna. Arregla los bloqueos falsos de `;` y `)`, y cierra dos
+#      fugas que ya existian (`,sk-real` y `,!sk-real`).
+#      Queda ABIERTO —igual que antes, no es regresion— el relleno estructural
+#      tras un delimitador de (b): `token=[REDACTED],]sk-real`. Cerrarlo pide
+#      inspeccionar la cola entera con conciencia del formato, que es otra
+#      tarea; la forma JSON legitima tambien trae letras despues del
+#      delimitador, asi que ninguna regex de una pasada las distingue.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([[:space:]]|$)/= "\1/g; s/="\[REDACTED\]"([]"[,;)}>])([]"[{},;:)>[:space:]]|$)/= "\1\2/g; s/=\[REDACTED\]([[:space:]]|$)/= \1/g; s/=\[REDACTED\]([]"[,;)}>])([]"[{},;:)>[:space:]]|$)/= \1\2/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([[:space:]]|$)/= "\1/g; s/="\[REDACTED\]"([]"[,}>])([]"[{},;:)>[:space:]]|$)/= "\1\2/g; s/="\[REDACTED\]"([;)])([[:space:]]|$)/= "\1\2/g; s/=\[REDACTED\]([[:space:]]|$)/= \1/g; s/=\[REDACTED\]([]"[,}>])([]"[{},;:)>[:space:]]|$)/= \1\2/g; s/=\[REDACTED\]([;)])([[:space:]]|$)/= \1\2/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

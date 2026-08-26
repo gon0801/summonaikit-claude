@@ -1795,10 +1795,10 @@ de los PRs #65 y #66) ya sumados:
   trajeron `;` y `)`**: pasaba igual con `,`, `"` y `}` desde antes de la
   Phase 13. Medido sobre las tres versiones:
 
-  Medido contra la versión original, en las 11 formas probadas la regla nueva es
-  **mejor o igual en todas y peor en ninguna**:
+  Medido contra la versión original en 16 formas, la regla nueva es **mejor o
+  igual en todas y peor en ninguna**:
 
-  | entrada | original | dos ramas + guardia estructural |
+  | entrada | original | tres ramas |
   |---|---|---|
   | `token=[REDACTED];` (correcto) | BLOQUEA | **PASA** |
   | `fn(password=[REDACTED])` (correcto) | BLOQUEA | **PASA** |
@@ -1806,22 +1806,38 @@ de los PRs #65 y #66) ya sumados:
   | `token=[REDACTED],!sk-real` | PASA | **BLOQUEA** |
   | `token=[REDACTED];sk-real` | BLOQUEA | BLOQUEA |
   | `token=[REDACTED];!sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED];]sk-real` | BLOQUEA | BLOQUEA |
   | `token=[REDACTED]sk-real` | BLOQUEA | BLOQUEA |
   | `token=[REDACTED]","uri"…` (JSON) | PASA | PASA |
   | `token=[REDACTED] apareció en config` | PASA | PASA |
+  | `token=[REDACTED],]sk-real` | PASA | PASA |
 
-  El delimitador va en **dos ramas**: (a) espacio o fin de línea descuenta
-  siempre —ahí el valor terminó, y exigirle algo más bloquearía la prosa
-  normal—; (b) cualquier otro delimitador descuenta **sólo** si lo que sigue es
-  otro carácter **estructural** (`] " [ { } , ; : ) >` o espacio) o fin de
-  línea. Así la forma JSON (`","`), que es la del camino real, se sigue
-  descontando, y la cola pegada no.
+  El delimitador va en **tres ramas**, cada una con un conjunto y una exigencia
+  distintos:
 
-  La rama (b) se escribió primero como "lo que sigue no puede ser continuación
-  de secreto" (`[^A-Za-z0-9_-]`), y esa versión mira **un solo** carácter:
-  `token=[REDACTED];!sk-real` la saltea con un `!` de relleno. La lista
-  estructural no tiene ese problema, porque `!` no cierra ningún valor por más
-  relleno que se ponga.
+  - **(a)** espacio o fin de línea: descuenta siempre. Ahí el valor terminó, y
+    exigirle algo más bloquearía la prosa normal.
+  - **(b)** delimitadores de estructura (`] " [ , } >`): descuentan sólo si lo
+    que sigue es otro carácter estructural o fin de línea. Así la forma JSON
+    (`","`), que es la del camino real, se sigue descontando, y
+    `token=[REDACTED],sk-real` no.
+  - **(c)** `;` y `)`: descuentan sólo si después viene **espacio o fin de
+    línea**.
+
+  Por qué (c) es más estricta, que es el punto fino: `;` y `)` no estaban en la
+  lista original, así que meterlos como delimitadores comunes **abre caminos que
+  antes no existían para ellos**, y ningún guardia de **un** carácter alcanza —
+  siempre hay un relleno que lo satisface. Medido: el guardia "no puede ser
+  continuación de secreto" (`[^A-Za-z0-9_-]`) lo saltea `;!sk-real`; el guardia
+  "estructural" lo saltea `;]sk-real`, porque `]` sí es estructural. Exigir
+  espacio o fin de línea no se puede rellenar **por construcción**: cualquier
+  carácter de relleno, por definición, no es espacio.
+
+  **Límite que sigue abierto** (igual que antes — no es regresión): el relleno
+  estructural tras un delimitador de (b), `token=[REDACTED],]sk-real`. Cerrarlo
+  pide inspeccionar la cola entera con conciencia del formato, que es otra
+  tarea: la forma JSON legítima también trae letras después del delimitador, así
+  que ninguna regex de una pasada las distingue.
 
   Nota sobre lo que el bloqueo *original* hacía, porque explica por qué la lista
   corta no era la respuesta: cuando "bloqueaba" `token=[REDACTED];sk-real` no
