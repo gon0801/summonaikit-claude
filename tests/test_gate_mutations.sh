@@ -374,10 +374,11 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 # prefijo VERIFIED BY SUBAGENT, asi que ningun otro reacciona; los negativos
 # siguen bloqueando porque bloquean por igual sin el label reconocido).
 # host_a_cualquiera afloja la condicion de host ciego `[ "$HOST" = "zcode" ]` a
-# `true` (cualquier host): el label acredita tambien en claude — lo atrapa
-# caso_g2_claude_verif_subagente_no_acredita (el label ya acredita en zcode, asi
-# que el caso de ACREDITA sigue verde; solo el caso que espera BLOQUEO en host no
-# ciego se pone rojo).
+# `true` (cualquier host). El sed reemplaza las DOS ocurrencias (la del helper
+# saikit_verif_subagente_credita y la de saikit_verif_evidence_ok): el label
+# acredita tambien en claude — lo atrapa caso_g2_claude_verif_subagente_no_acredita
+# (el label ya acredita en zcode, asi que el caso de ACREDITA sigue verde; solo el
+# caso que espera BLOQUEO en host no ciego se pone rojo).
 mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
 mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex

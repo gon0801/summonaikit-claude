@@ -1797,7 +1797,12 @@ las 5 condiciones:
    vocabulario de runners + `py_compile`/`compileall`/`dotnet build`/`bash -n`/
    `sh -n`/`node --check`/`git diff --check`) **y un resultado de ÉXITO**
    (`exit 0`, `N passed`, `ok`, `en verde`, `0 failed`, …). Un nombre genérico
-   ("batería", "checks") NO cuenta.
+   ("batería", "checks") NO cuenta. **El predicado corre sobre TODO el texto del
+   recibo (`$text`), como el diseño §4.3** — no exige que el comando/resultado
+   estén pegados al label: el comando y el resultado pueden vivir en cualquier
+   línea del recibo. Límite declarado (así lo fija el diseño §4.3): la
+   verificación humana audita el recibo completo; el gate lo toma de toda la
+   superficie de texto del asistente.
 3. **Host con canal interno ciego** — evaluado sobre `$HOST` (JAMÁS `$TARGET`:
    en zcode el fallback 5.4 deja `TARGET=claude`). En este repo es `$HOST=zcode`.
    `kimi` es **candidato** con canal interno `unknown` declarado — el label ahí
@@ -1816,13 +1821,15 @@ constantes garantiza por construcción que el label jamás sea MÁS LAXO que el
 raíl del evento y hereda sus mejoras sin drift.
 
 **Refinamiento sobre el pseudocódigo §3 del diseño (derivado del caso Greptile,
-ver `Plans.md` 14.2).** Cuando el label `VERIFIED BY SUBAGENT:` está **presente**,
-la evidencia la juzga SOLO el predicado §4.3 (con el veto de fallo) — **NO** se
-consulta el fallback de prosa/runner. Sin esto, `VERIFIED BY SUBAGENT: pytest -q,
-12 passed, failed: 1` acreditaría por la vía laxa de prosa (A11), contraviniendo
-la promesa §4.3 de "nunca más laxo que el raíl". Sin label, la evidencia se juzga
-exactamente como antes. El fallback de prosa (que acredita fallos, A11) permanece
-para los recibos SIN label.
+ver `Plans.md` 14.2).** Cuando el label `VERIFIED BY SUBAGENT:` está **presente en
+un host de canal interno ciego (`$HOST=zcode`)**, la evidencia la juzga SOLO el
+predicado §4.3 (con el veto de fallo) — **NO** se consulta el fallback de
+prosa/runner. Sin esto, `VERIFIED BY SUBAGENT: pytest -q, 12 passed, failed: 1`
+acreditaría por la vía laxa de prosa (A11), contraviniendo la promesa §4.3 de
+"nunca más laxo que el raíl". Sin label (o en un host NO ciego), la evidencia se
+juzga exactamente como antes — el label NO cambia el comportamiento de
+claude/codex/grok (la condición de host ciego lo acota). El fallback de prosa
+(que acredita fallos, A11) permanece para los recibos SIN label.
 
 **Límites declarados (no se pretenden cerrar).** El label es texto del
 asistente, subcadena sin anclar (mismo trade-off que `ROLE FALLBACK`/`DELEGATED`).

@@ -208,7 +208,10 @@ SAIKIT_VERIFIED_SUBAGENT_RE='VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:'
 # legitimas. Con fronteras de palabra: "bateria"/"checks" NO cuentan.
 SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
 # Resultado de EXITO que el label DEBE declarar (el veto de fallo aparte, abajo).
-SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:]]+(pass(ed|ing)|ok|okay)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|en[[:space:]]+verde|todo[[:space:]]+verde|sin[[:space:]]+errores|0[[:space:]]+(failed|failing|failures?|errors?)'
+# OJO a la frontera izquierda de la rama "0 failed": esta DENTRO del grupo con
+# frontera, asi "10 failed" NO matchea (el "0" va precedido por "1", un word char;
+# ademas el veto FAILURE_SIGNAL_RE_CI lo atrapa por la rama [1-9]... failed).
+SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|en[[:space:]]+verde|todo[[:space:]]+verde|sin[[:space:]]+errores'
 
 # Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
 # verificacion en este turno (host con canal interno ciego + verifier
@@ -219,7 +222,7 @@ SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:
 # EXPANDIDAS y la CS case-SENSITIVE. NUNCA con comillas simples (buscaria el
 # literal del nombre y el veto jamas dispararia — design §4.3).
 saikit_verif_subagente_credita() {
-  saikit_text="$1"
+  local saikit_text="$1"
   [ "$HOST" = "zcode" ] || return 1
   printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
   printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE" || return 1
@@ -238,15 +241,17 @@ saikit_verif_subagente_credita() {
 # label, comportamiento identico al de antes (design 14.1 §3/§4.3).
 saikit_verif_evidence_ok() {
   local saikit_ok_text="$1"
-  if printf '%s' "$saikit_ok_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE"; then
+  # El label solo es juez en hosts de canal interno ciego (zcode). En cualquier
+  # otro host (o sin label), la evidencia se juzga por el camino de antes
+  # (prosa runner|skip OR runner en posicion de comando) — asi el label no cambia
+  # el comportamiento en claude/codex/grok (la frase no los toca).
+  if [ "$HOST" = "zcode" ] && printf '%s' "$saikit_ok_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE"; then
     saikit_verif_subagente_credita "$saikit_ok_text"
   else
     { printf '%s' "$saikit_ok_text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE" \
       || printf '%s' "$saikit_ok_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }
   fi
 }
-
-
 
 # Failure-signal patterns for the verification guard (record_tool_evidence).
 # A11 (medido 59/59, Task 1.4): el tool_response real de Bash NO trae exitCode,

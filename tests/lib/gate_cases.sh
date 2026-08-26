@@ -136,7 +136,6 @@ _RECIBO_VERIF_SUBAGENTE_SIN_COMANDO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: 
 # (b) label con resultado FALLIDO (12 passed, failed: 1) — el caso de Greptile.
 _RECIBO_VERIF_SUBAGENTE_FALLIDO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, failed: 1.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
 
-
 _TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
 _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
