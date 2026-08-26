@@ -511,7 +511,14 @@ advlock_artefacto_redactado_no_bloquea() {
   # spec. El strip nuevo exige un DELIMITADOR despues del marcador, asi que
   # esta forma NO se descuenta y el secreto se detecta. La lecccion vino del
   # port (summonaikit-kimi PR #13), cuyo descuento ya lo exigia.
+  # El escaneo devuelve el PRIMER match y corta, y el orden de `find` NO es
+  # portable: en Windows salio primero el artefacto de este sub-caso y en el CI
+  # de Linux salio antes el `adversary-mixto.json` del anterior — el turno
+  # bloqueaba igual (rc=2) pero nombrando el archivo equivocado, y la asercion
+  # del nombre fallaba solo en Linux. Se limpian los artefactos previos: el
+  # sub-caso afirma sobre un directorio con UN solo candidato.
   lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
   adv_armar
   adv_despachar
   printf 'evade: token=[REDACTED]sk-vivo-999\n' > "$LAB/proyecto/.saikit/findings/adversary-pegado.json"
@@ -524,7 +531,10 @@ advlock_artefacto_redactado_no_bloquea() {
   # el secreto intacto pero separado del `token=` — hallado por Greptile en el
   # PR #75, cuando la regla del NO entrecomillado ya lo exigia. Las dos reglas
   # exigen delimitador; cualquier regla nueva tiene que hacerlo tambien.
+  # Mismo motivo que el sub-caso anterior: un solo candidato en el directorio,
+  # o la asercion del NOMBRE depende del orden de `find`.
   lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
   adv_armar
   adv_despachar
   printf 'evade2: token="[REDACTED]"sk-vivo-888\n' > "$LAB/proyecto/.saikit/findings/adversary-pegado-comillas.json"
