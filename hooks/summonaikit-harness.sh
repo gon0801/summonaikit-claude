@@ -1427,9 +1427,13 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #   2. Marcador seguido de DELIMITADOR: sin exigirlo, `token=[REDACTED]sk-real`
 #      se descontaba entero y el secreto pegado EVADIA el escaneo — era un
 #      limite residual declarado en el spec, y deja de serlo.
+#      El delimitador lo exigen las DOS reglas: la 1 sin el dejaba pasar
+#      `token="[REDACTED]"sk-real` (Greptile, PR #75) — el mismo agujero por
+#      la puerta de al lado. Cualquier regla nueva que se agregue acá tiene
+#      que exigirlo tambien, o reabre esta familia.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"/= "/g; s/=\[REDACTED\]([]"[[:space:]",}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

@@ -518,6 +518,19 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "secreto pegado al marcador bloquea" "$LAB_RC" "2"
   _contiene "nombra el pegado" "$LAB_ERR" 'adversary-pegado.json'
+  # La MISMA evasion por la puerta de al lado: pegado tras la comilla de
+  # cierre del marcador entrecomillado (`token="[REDACTED]"sk-real`). La regla
+  # del entrecomillado no exigia delimitador y producia `token= "sk-real`, con
+  # el secreto intacto pero separado del `token=` — hallado por Greptile en el
+  # PR #75, cuando la regla del NO entrecomillado ya lo exigia. Las dos reglas
+  # exigen delimitador; cualquier regla nueva tiene que hacerlo tambien.
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
+  printf 'evade2: token="[REDACTED]"sk-vivo-888\n' > "$LAB/proyecto/.saikit/findings/adversary-pegado-comillas.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "secreto pegado tras la comilla bloquea" "$LAB_RC" "2"
+  _contiene "nombra el pegado-comillas" "$LAB_ERR" 'adversary-pegado-comillas.json'
 }
 advlock_artefacto_redactado_no_bloquea; fin_caso "advlock_artefacto_redactado_no_bloquea"
 
