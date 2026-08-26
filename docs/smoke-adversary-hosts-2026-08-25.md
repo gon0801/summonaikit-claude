@@ -69,6 +69,29 @@ Host: zcode 0.16.1. Turno headless
   Z.AI en `/login` del TUI, o un turno interactivo del operador. Saltado por
   decisión del operador (2026-08-25).
 
+### Actualización mismo día: ceremonia viva COMPLETADA por el operador (TUI)
+
+El operador corrió el turno en su sesión zcode interactiva sobre
+`C:\dev\saikit-captura` (sesión `sess_3ba37f4b…`, transcript en
+`~/.zcode/cli/rollout/`). Lo observado:
+
+- **El adversary corrió y encontró un hallazgo REAL** (ADV-1, low: `.pyc`
+  residual sin gitignore — irónico: lo halló porque ese dir NO es repo git),
+  archivado en `.saikit/findings/adversary-app-docstring.json`; la **capa 3**
+  creó el `.gitignore` con `*` igual (inofensivo sin git, idempotente ✓).
+- **Recibo aceptado al TERCER intento, aceptación REAL** (0 eventos de
+  presupuesto agotado en el transcript): 2 bloqueos del gate en los ciclos
+  1 y 2. **Los motivos NO fueron del rol nuevo** (0 rechazos por línea
+  `ADVERSARY:` u orden): fueron la fricción YA conocida de zcode —
+  `Missing SUMMONAIKIT HARNESS RECEIPT` (forma/marcador del recibo no
+  detectado) y `Missing verification evidence` (su prosa de evidencia no
+  acredita — la familia de VERIFY_SKIP_RE, medida desde 2026-08-13).
+- **Desviaciones menores del artefacto** (label-only, el gate no las juzga;
+  el reviewer sí): esquema no canónico (`title`/`detail` en vez de
+  `claim`/`trigger`/`evidence`/`confirmed`; sin `attacked`) y
+  `generated_at_utc` inventado por el modelo (no corresponde a la hora
+  real). Nota para el perfil instalado en zcode y para la adjudicación.
+
 ## kimi — medición por LECTURA CRUZADA del port (sin turno nuevo)
 
 La medición pendiente ("¿qué campo lleva la identidad del subagente en los
@@ -115,6 +138,6 @@ por golden.
 |---|---|---|
 | claude | Turno completo (estreno del cierre 13.9: HIGH real hallado + candado mordiendo en vivo) | — |
 | grok | Mecanismo completo del rol (artefacto, capa 3, gate, escotillas, candado) | recibo final — en esta ejecución `--single` no reanudó tras subagentes (regla general `unknown`); va por sesión interactiva |
-| zcode | Armado + init del candado sobre payload real | ceremonia (bloqueada en auth del host, saltada por el operador) |
+| zcode | **Ceremonia viva completa** (TUI del operador, mismo día): adversary con hallazgo real, capa 3, recibo aceptado al 3er intento — fricción de la familia vieja del recibo/evidencia, 0 rechazos por el rol nuevo | afinar la fricción del recibo en zcode (preexistente); esquema del artefacto no canónico anotado |
 | kimi | canales MEDIDOS por lectura cruzada del port: despacho con `tool_input.subagent_type` ✓; internos `agent_name` solo en SubagentStart/Stop | portar el rol al hook del port `summonaikit-kimi` (D4–D6 + candado); tool-events internos `not_observed` |
 | codex | no aplica (sin costura de perfiles) | decisión futura de costura |
