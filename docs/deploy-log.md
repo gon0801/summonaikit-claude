@@ -7,6 +7,20 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-25 — PR #71 + PR 14.2–14.4 (Phase 14) — deploy PENDIENTE del lead
+
+- **Qué traía:** 14.1 (diseño, PR #71, merge `2243fdf`) + 14.2 (vía de crédito
+  del label `VERIFIED BY SUBAGENT:` en el hook) + 14.3 (esquema del artefacto
+  en `agents/adversary.md`) + 14.4 (spec/ledger). **El hook SÍ cambió** (14.2:
+  constantes `SAIKIT_VERIFIED_*`, helpers `saikit_verif_subagente_credita`/
+  `saikit_verif_evidence_ok`, condición de evidencia del Stop).
+- **Deploy:** NO ejecutado en esta sesión. El deploy post-merge (`bash
+  tools/install-hook.sh` + `tools/check-hook-registration.sh`) lo hace el
+  lead, que además coordina el deploy a `~/.agents/agents/` (kimi). **NO se
+  corrió `tools/install-hook.sh --host kimi`** desde acá: ese directorio lo
+  comparte el port `summonaikit-kimi` que corre en paralelo y se pisarían.
+- **Estado:** pendiente del lead tras el merge del PR 14.2–14.4.
+
 ## 2026-08-25 — PR #67 / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
 
 - **Qué traía:** Phase 13 completa mergeada a master — diseño (PR #63 + fix

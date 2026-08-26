@@ -1775,6 +1775,63 @@ de los PRs #65 y #66) ya sumados:
   verifier/reviewer: esta fase le puso un candado al rol NUEVO; los dos
   roles que ya existían conservan `Edit, Write` sin cambios.
 
+## Atestación de verificación delegada (Phase 14)
+
+**El problema.** En un host cuyo **canal interno es `unknown`** (zcode, medido
+en el turno vivo 2026-08-25; kimi candidato declarado, ver abajo), los comandos
+que corre un verifier **DELEGADO** no llegan al hook: `verified` queda en `0`, la
+prosa honesta del lead no matchea runner ni skip, y el gate bloquea con
+`Missing verification evidence`. El lead solo salía re-corriendo él mismo los
+checks (pago doble). Diseño en
+`docs/phase-14.1-atestacion-verificacion-delegada.md`.
+
+**La vía nueva (contrato 14.1).** Una declaración en el recibo,
+`VERIFIED BY SUBAGENT: <comandos y resultado>`, es una vía ADICIONAL de crédito
+de verificación, en hosts con canal interno ciego. Acredita SOLO si se cumplen
+las 5 condiciones:
+
+1. **Prefijo literal** `VERIFIED BY SUBAGENT:` — subcadena libre sobre el texto
+   del recibo (igual que `ROLE FALLBACK`, no `has_receipt_label`).
+2. **Comando + resultado** con el predicado §4.3: la declaración nombra un
+   **comando de verificación reconocido** (`SAIKIT_VERIFIED_CMD_RE` = unión del
+   vocabulario de runners + `py_compile`/`compileall`/`dotnet build`/`bash -n`/
+   `sh -n`/`node --check`/`git diff --check`) **y un resultado de ÉXITO**
+   (`exit 0`, `N passed`, `ok`, `en verde`, `0 failed`, …). Un nombre genérico
+   ("batería", "checks") NO cuenta.
+3. **Host con canal interno ciego** — evaluado sobre `$HOST` (JAMÁS `$TARGET`:
+   en zcode el fallback 5.4 deja `TARGET=claude`). En este repo es `$HOST=zcode`.
+   `kimi` es **candidato** con canal interno `unknown` declarado — el label ahí
+   se prende SOLO si el port mide que el canal no entrega esos eventos; hasta
+   esa medición queda `unknown`.
+4. **Verifier despachado** — `verifier` en `agents_seen`.
+5. **Solo cuando `verified != 1`** — la evidencia real ya observada no necesita
+   el label.
+
+**El veto de fallo.** Cualquier señal de fallo DESCALIFICA el label, aunque
+también aparezca un "passed". El veto reusa las constantes del raíl del EVENTO —
+`FAILURE_SIGNAL_RE_CI` y `FAILURE_SIGNAL_RE_CS` — en la forma EXACTA del hook
+(dos greps, variables expandidas, la CS case-SENSITIVE). NUNCA con comillas
+simples (buscaría el literal del nombre y el veto jamás dispararía). Reusar esas
+constantes garantiza por construcción que el label jamás sea MÁS LAXO que el
+raíl del evento y hereda sus mejoras sin drift.
+
+**Refinamiento sobre el pseudocódigo §3 del diseño (derivado del caso Greptile,
+ver `Plans.md` 14.2).** Cuando el label `VERIFIED BY SUBAGENT:` está **presente**,
+la evidencia la juzga SOLO el predicado §4.3 (con el veto de fallo) — **NO** se
+consulta el fallback de prosa/runner. Sin esto, `VERIFIED BY SUBAGENT: pytest -q,
+12 passed, failed: 1` acreditaría por la vía laxa de prosa (A11), contraviniendo
+la promesa §4.3 de "nunca más laxo que el raíl". Sin label, la evidencia se juzga
+exactamente como antes. El fallback de prosa (que acredita fallos, A11) permanece
+para los recibos SIN label.
+
+**Límites declarados (no se pretenden cerrar).** El label es texto del
+asistente, subcadena sin anclar (mismo trade-off que `ROLE FALLBACK`/`DELEGATED`).
+El hook no valida que el comando corrió de verdad (en el host ciego no puede);
+lo audita el humano. kimi NO es host ciego medido — es candidato `unknown`
+declarado (Core Rule 2); el port mide antes de prender el label. En un host con
+canal observable, un comando no reconocido como runner (`py_compile`) sigue sin
+acreditar por la vía normal (problema de vocabulario, fuera de alcance).
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
