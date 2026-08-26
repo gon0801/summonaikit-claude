@@ -1791,7 +1791,8 @@ de verificación, en hosts con canal interno ciego. Acredita SOLO si se cumplen
 las 5 condiciones:
 
 1. **Prefijo literal** `VERIFIED BY SUBAGENT:` — subcadena libre sobre el texto
-   del recibo (igual que `ROLE FALLBACK`, no `has_receipt_label`).
+   del recibo, matcheada con `grep -Eiq` (case-INSENSITIVE, igual que `ROLE
+   FALLBACK`, no `has_receipt_label`).
 2. **Comando + resultado** con el predicado §4.3: la declaración nombra un
    **comando de verificación reconocido** (`SAIKIT_VERIFIED_CMD_RE` = unión del
    vocabulario de runners + `py_compile`/`compileall`/`dotnet build`/`bash -n`/

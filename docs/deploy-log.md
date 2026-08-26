@@ -57,7 +57,6 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   comparte el port `summonaikit-kimi` que corre en paralelo y se pisarían.
 - **Estado:** pendiente del lead tras el merge del PR #72.
 
-
 ## 2026-08-25 — PR #67 / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
 
 - **Qué traía:** Phase 13 completa mergeada a master — diseño (PR #63 + fix

@@ -1245,6 +1245,7 @@ caso_g2_zcode_verif_subagente_fallido_bloquea() {
 
 # (c) el MISMO label en un host NO ciego (claude) no acredita: sigue BLOQUEANDO.
 caso_g2_claude_verif_subagente_no_acredita() {
+  unset LAB_ZCODE_SESSION_ID LAB_ZCODE_PROJECT_DIR
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
@@ -1278,7 +1279,6 @@ caso_g2_zcode_verif_subagente_sin_verifier_bloquea() {
   LAB_ZCODE_SESSION_ID=""
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
-
 
 # DEFECTO A3, el caso que lo habria atrapado. `cat pytest.log` matchea el
 # fragmento `pytest` y marca verified=1; `cat tsconfig.json` matchea `tsc`.

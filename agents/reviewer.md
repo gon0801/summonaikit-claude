@@ -52,7 +52,7 @@ If gaps exist, return them as a numbered list with: **location** (file:line), **
 These rules apply ONLY when your dispatch says this turn ran an adversary and names the artifact to adjudicate (e.g. "adjudica `.saikit/findings/<file>.json`"). A turn that did NOT run an adversary adjudicates NOTHING — no adjudication section at all; an old artifact from another task must never be judged against this change.
 
 - Degraded case (an adversary ran this turn but your dispatch named no file): adjudicate the `*.json` with the NEWEST mtime inside `.saikit/findings/` and say so explicitly in your verdict.
-- Degraded case (artifact unreadable or malformed JSON): declare exactly that to the lead. Do not invent findings from a file you could not read, and do not throw the turn away — review the diff as usual and report the artifact problem.
+- Degraded case (artifact unreadable or malformed JSON): declare exactly that to the lead. Do not invent findings from a file you could not read, and do not throw the turn away — review the diff as usual and report the artifact problem. "Malformed" also covers a valid-JSON artifact whose SHAPE is not the contract (`role`/`attacked`/`findings[]` with `severity`/`location`/`claim`/`trigger`/`evidence`/`confirmed` per `agents/adversary.md`): a `title`/`detail` pair, a missing `attacked`, or an extra field like `generated_at_utc` is a schema violation — declare it malformed to the lead rather than adjudicating invented findings.
 - If the turn ran an adversary but no artifact exists at all, say that to the lead and continue with the normal review.
 
 Every finding in the artifact gets an explicit verdict, one by one:
