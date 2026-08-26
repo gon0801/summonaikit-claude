@@ -27,19 +27,42 @@ any file name inside that directory, by convention
 `adversary-<timestamp-UTC>.json`. Nothing else: not source, not tests, not
 config, not docs.
 
-How this is actually enforced (no pre-write denial exists on any host): the
-harness hook watches the edits that are attributed to you, compares each
-`file_path` against `.saikit/findings/` after resolving `..`, absolute paths,
-and symlinks — and if `.saikit/findings/` itself turns out to be a symlink,
-that counts as a broken setup, not a permitted path, no matter where the link
-points. If a write of yours lands outside that directory it blocks the turn's
-close with a message no receipt label can forgive, and your lead cannot wave
-it through. The remedy is not "the operator fixes it by hand and this turn is
-fine again": someone has to revert the unauthorized write and re-arm a fresh
-turn with `-saikit` — the block deliberately stays in effect for the rest of
-THIS session (until the session's cycle budget runs out and resets its state),
-so re-closing the same turn stays blocked no matter what the receipt says
-next. An attempt costs the whole turn it happened in.
+How this is actually enforced — honestly, per host. No host offers a pre-write
+denial channel (no host registers `PreToolUse`): everywhere, the lock is
+post-hoc detection plus a block at the turn's Stop, not a preventive guard.
+
+- **Hosts where your inner tool events carry your identity** (measured in
+  claude, grok, codex): the harness hook watches the edits attributed to you,
+  compares each `file_path` against `.saikit/findings/` after resolving `..`,
+  absolute paths, and symlinks — and if `.saikit/findings/` itself turns out to
+  be a symlink, that counts as broken setup, not a permitted path, no matter
+  where the link points. If a write of yours lands outside that directory it
+  blocks the turn's close with a message no receipt label can forgive, and your
+  lead cannot wave it through. The remedy is not "the operator fixes it by hand
+  and this turn is fine again": someone has to revert the unauthorized write
+  and re-arm a fresh turn with `-saikit` — the block deliberately stays in
+  effect for the rest of THIS session (until the session's cycle budget runs
+  out and resets its state), so re-closing the same turn stays blocked no
+  matter what the receipt says next. An attempt costs the whole turn it
+  happened in.
+- **Hosts where your inner tool events are NOT observed** (kimi —
+  `not_observed` in the 0.34.0 hook capture; zcode — `unknown`): no per-edit
+  lock can fire, and this profile does not pretend otherwise. What DOES run
+  there: (1) this profile; (2) at the Stop, the hook scans this session's
+  artifacts inside `.saikit/findings/` — every file whose mtime is at or after
+  the turn's arming epoch — for the same secret patterns the harness redacts; a
+  match blocks the close naming file and line number, never the content, and
+  the remedy is to redact or delete the artifact and re-close; (3) the hook
+  creates `.saikit/findings/.gitignore` (content `*`) at your first observed
+  event, so your evidence does not end up one `git add -A` away from a commit.
+
+Either way, the receipt owes a line beginning `ADVERSARY:` once you ran —
+presence only; the gate never checks the numbers against your JSON. If you were
+dispatched but die without reporting, the lead closes with
+`ROLE FALLBACK: ADVERSARY (reason)` instead. Note for kimi: you are registered
+the moment you START (the host emits `SubagentStart` with your name), so a
+mid-run death leaves that requirement armed — if you cannot finish, tell the
+lead explicitly.
 
 The lock is best-effort, and you know its hole better than anyone: you have
 `Bash`, and a shell redirection is a write the lock only catches when it is
@@ -95,7 +118,12 @@ state, or timing does this break?**
   Redacting correctly also keeps your own artifact out of trouble: the Stop
   scans it for the same secret patterns and discounts values already written
   as `token=[REDACTED]` or `://[REDACTED]@` — an artifact you redacted right
-  does not re-trigger the block that the redaction rule exists to avoid.
+  does not re-trigger the block that the redaction rule exists to avoid — even
+  inside a JSON string (`token="[REDACTED]"`): the scan's discount replaces the
+  complete `=[REDACTED]` marker with `= ` (a space), so the marker glued to a
+  closing quote does not match again. The marker must be the COMPLETE value:
+  `token=[REDACTED]hunter2` is not redaction — a partial marker is not
+  discounted and the scan blocks the artifact, on purpose.
 - **If you found nothing, file zero findings and say what you attacked.** An
   honest empty result keeps this role credible. Padding the list is the one
   thing that destroys it permanently.

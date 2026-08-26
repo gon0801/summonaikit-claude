@@ -1708,6 +1708,10 @@ de los PRs #65 y #66) ya sumados:
   saca al artefacto del escaneo de secretos por completo — instancia del
   mismo hueco de `Bash` de arriba, no uno nuevo: el escaneo atrapa
   persistencia ACCIDENTAL, no a un evasor deliberado.
+- Filename con newline: un nombre de artefacto con `\n` parte el output de
+  `find` y el loop `while read` salta los fragmentos — misma clase de
+  evasión deliberada de arriba (el escaneo persigue persistencia
+  ACCIDENTAL); en Windows ese nombre ni se puede crear.
 - Falso negativo y falso positivo del escaneo de secretos: la familia de
   patrones es la MISMA que el hook ya usa inline (`redact_secrets`) —
   reducida a propósito, porque `tools/check-secrets.sh` no existe en el repo
