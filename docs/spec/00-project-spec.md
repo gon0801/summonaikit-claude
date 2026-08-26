@@ -1760,12 +1760,25 @@ de los PRs #65 y #66) ya sumados:
   perfiles, porque no hay un vendor que lo publique; `--refrescar-manifiesto`
   lo reporta como tal y advierte que ese camino de adopción no existe para
   este rol.
-- El descuento de formas redactadas es best-effort con una arista declarada:
-  un valor REAL pegado al marcador sin separador (`token=[REDACTED]sk-…`)
-  matcheaba antes del espacio del strip y ya no — quien pegue un secreto
-  vivo inmediatamente después de un marcador de redacción evade el escaneo
-  (misma familia que el evasor deliberado de mtime: el escaneo persigue
-  persistencia accidental).
+- El descuento de formas redactadas cubre las tres formas que el rol produce:
+  `token=[REDACTED]` suelto, el valor ENTRECOMILLADO (`token="[REDACTED]"`,
+  la forma natural al redactar dentro de un JSON) y las credenciales en URI.
+  **La arista que este spec declaraba como límite quedó CERRADA** (2026-08-26,
+  mejora traída del port `summonaikit-kimi`): un valor REAL pegado al marcador
+  sin separador (`token=[REDACTED]sk-…`) ya NO se descuenta — el reemplazo
+  exige un delimitador después del marcador —, así que ese secreto SÍ se
+  detecta. La forma entrecomillada, que antes hacía BLOQUEAR un artefacto
+  correctamente redactado, tampoco falla ya. El escaneo sigue siendo
+  best-effort para lo que su familia de patrones no matchea.
+- El escaneo recorre el directorio con `find … | while read`, así que un
+  artefacto cuyo NOMBRE contenga un salto de línea se parte en fragmentos y
+  ninguno existe como archivo: ese artefacto no se escanea. Es evasión
+  DELIBERADA — misma familia que el `touch -t` pre-época — y el escaneo
+  persigue persistencia accidental (un evasor deliberado es trabajo del
+  reviewer leyendo el artefacto). En Windows, el host de referencia, un nombre
+  así ni se puede crear. Declarado tras el análisis del port
+  (`summonaikit-kimi`, PR #13): endurecerlo sería `find -print0` acá y
+  absorción por paridad allá; no se hace hasta que exista un caso real.
 - `--quitar-zcode`/`--quitar-grok` IGNORAN `--dry-run` (escriben backup,
   config y borran perfiles igual): límite preexistente a la Phase 13,
   declarado acá — la promesa "dry-run no escribe" del README hoy solo está

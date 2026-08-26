@@ -1419,7 +1419,21 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 # comilla pegada al `=` y el regex volvia a matchear: el camino documentado
 # como correcto bloqueaba en su formato canonico. El espacio corta el match
 # ([^[:space:]]) sin romper la preservacion de lineas ni la linea mixta.
-SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/= /g; s|://\[REDACTED\]@|:// |g'
+# Tres reglas, cada una con su razon (las dos primeras vinieron del port —
+# summonaikit-kimi PR #13 — que las habia endurecido antes que este hook):
+#   1. VALOR ENTRECOMILLADO (`token="[REDACTED]"`): la forma mas natural al
+#      redactar dentro de un JSON. Sin esta regla el `=` quedaba seguido de `"`,
+#      el strip no disparaba y el artefacto BIEN redactado bloqueaba el cierre.
+#   2. Marcador seguido de DELIMITADOR: sin exigirlo, `token=[REDACTED]sk-real`
+#      se descontaba entero y el secreto pegado EVADIA el escaneo — era un
+#      limite residual declarado en el spec, y deja de serlo.
+#      El delimitador lo exigen las DOS reglas: la 1 sin el dejaba pasar
+#      `token="[REDACTED]"sk-real` (Greptile, PR #75) — el mismo agujero por
+#      la puerta de al lado. Cualquier regla nueva que se agregue acá tiene
+#      que exigirlo tambien, o reabre esta familia.
+#   3. Credenciales en URI, igual que antes.
+# El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento
@@ -1431,6 +1445,12 @@ SAIKIT_ADV_REDACTED_STRIP='s/=\[REDACTED\]/= /g; s|://\[REDACTED\]@|:// |g'
 # traves de un enlace seria exactamente la escritura-fuera-del-dir que este
 # candado existe para impedir.
 adv_ensure_gitignore() {
+  # Sin canon FISICO de la raiz no se escribe nada (mejora traida del port,
+  # summonaikit-kimi PR #13): si `cd $PROJECT_ROOT && pwd -P` fallo,
+  # ADV_FINDINGS_DIR cayo al fallback TEXTUAL, y crear ahi es escribir en una
+  # ruta que nadie pudo resolver. El escaneo ya trata ese caso como fail-open;
+  # el gitignore hace lo mismo en vez de escribir a ciegas.
+  if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
   # codex #1a (r2 PR #65): jamas crear a TRAVES de un enlace — un .saikit (o
   # un findings) symlink mandaria el gitignore fisico fuera del repo. Fail-open.
   if [ -L "${ADV_FINDINGS_DIR%/*}" ] || [ -L "$ADV_FINDINGS_DIR" ]; then return 0; fi
