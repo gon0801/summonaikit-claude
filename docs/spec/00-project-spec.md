@@ -1789,31 +1789,34 @@ de los PRs #65 y #66) ya sumados:
   redacción pueda producirlo **después** del valor (cierre de JSON, de comando,
   de prosa). No alcanza con que sea puntuación — `!`, `$`, `@`, `#` son
   prefijos perfectos de un secreto pegado y no cierran ningún valor.
-  **Límite residual declarado — COLA PEGADA TRAS UN DELIMITADOR**: un
-  `token=[REDACTED],sk-real` se descuenta (la coma cierra el valor) y la cola
-  `sk-real` sobrevive sin que el escaneo la vea. Aplica a TODOS los
-  delimitadores de la lista, no a los dos que se agregaron; medido sobre las dos
-  versiones de la lista (Greptile P1, PR #79):
+  **COLA PEGADA TRAS UN DELIMITADOR — cerrada** (Greptile P1, PR #79). Un
+  `token=[REDACTED],sk-real` tiene delimitador válido, así que la regla de una
+  sola rama lo descontaba y la cola con el secreto sobrevivía. **Esto no lo
+  trajeron `;` y `)`**: pasaba igual con `,`, `"` y `}` desde antes de la
+  Phase 13. Medido sobre las tres versiones:
 
-  | entrada | lista original | lista completada |
-  |---|---|---|
-  | `token=[REDACTED],sk-real` | PASA | PASA |
-  | `token=[REDACTED]"sk-real` | PASA | PASA |
-  | `token=[REDACTED]}sk-real` | PASA | PASA |
-  | `token=[REDACTED];sk-real` | BLOQUEA | PASA |
-  | `token=[REDACTED])sk-real` | BLOQUEA | PASA |
+  | entrada | lista original | lista completada | dos ramas |
+  |---|---|---|---|
+  | `token=[REDACTED],sk-real` | PASA | PASA | **BLOQUEA** |
+  | `token=[REDACTED]"sk-real` | PASA | PASA | **BLOQUEA** |
+  | `token=[REDACTED];sk-real` | BLOQUEA | PASA | **BLOQUEA** |
+  | `token=[REDACTED];` (correcto) | BLOQUEA | PASA | PASA |
+  | `token=[REDACTED]","uri"…` (JSON) | PASA | PASA | PASA |
+  | `token=[REDACTED] apareció en config` | PASA | PASA | PASA |
 
-  Lo que el bloqueo de las dos últimas filas hacía NO era detectar el secreto:
-  matcheaba `token=[`, o sea el propio marcador de redacción. El escaneo está
-  anclado a `keyword=valor` y a `://user@`; una cola suelta (`sk-real` sin
-  keyword delante) le es invisible **por diseño**, con strip o sin él. Ese
-  bloqueo era incidental, y sostenerlo costaba bloquear artefactos correctos.
-  Se prefiere la coherencia: la cola pegada es evasión deliberada, misma familia
-  que el `touch -t` pre-época y el nombre con `\n`, y el escaneo persigue
-  persistencia accidental. Cerrarla de verdad pide exigir que **después** del
-  delimitador venga algo que no sea continuación de secreto, y las variantes
-  probadas rompían la forma JSON (`","`), que es la del camino real — así que
-  queda declarado, no medio arreglado.
+  El delimitador va en **dos ramas**: (a) espacio o fin de línea descuenta
+  siempre —ahí el valor terminó, y exigirle algo más bloquearía la prosa
+  normal—; (b) cualquier otro delimitador descuenta **sólo** si lo que sigue no
+  puede ser continuación de un secreto (`[^A-Za-z0-9_-]` o fin de línea). Así la
+  forma JSON (`","`), que es la del camino real, se sigue descontando, y la cola
+  pegada no.
+
+  Nota sobre lo que el bloqueo *original* hacía, porque explica por qué la lista
+  corta no era la respuesta: cuando "bloqueaba" `token=[REDACTED];sk-real` no
+  estaba detectando el secreto, sino matcheando `token=[`, el propio marcador.
+  El escaneo está anclado a `keyword=valor` y a `://user@`, así que una cola
+  suelta sin keyword delante le es invisible por diseño. La rama (b) sí la
+  detecta, y por la vía correcta: dejando el marcador sin descontar.
   **Límite residual declarado — COMILLAS SIMPLES**: el valor entre comillas
   simples (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos
   piden `="` o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA

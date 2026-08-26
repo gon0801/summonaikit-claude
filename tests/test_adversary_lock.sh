@@ -542,6 +542,22 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "cola de puntuacion bloquea" "$LAB_RC" "2"
   _contiene "nombra la cola de puntuacion" "$LAB_ERR" 'adversary-cola-puntuacion.json'
+  # COLA tras un delimitador LEGITIMO: `token=[REDACTED],sk-real`. La coma SI
+  # cierra el valor, asi que la regla de una sola rama descontaba y la cola con
+  # el secreto sobrevivia. Esto NO lo trajeron `;` y `)`: pasaba igual con `,`,
+  # `"` y `}` desde antes de la Phase 13 (medido; Greptile P1, PR #79). Lo
+  # cierra la rama (b) del delimitador, que exige que despues NO siga algo que
+  # pueda ser continuacion de secreto. La rama (a) —espacio o fin de linea—
+  # descuenta siempre, porque exigirle lo mismo bloquearia la prosa normal
+  # (`token=[REDACTED] aparecio en config`).
+  lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
+  adv_armar
+  adv_despachar
+  printf 'evade4: token=[REDACTED],sk-vivo-666\n' > "$LAB/proyecto/.saikit/findings/adversary-cola-delimitador.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "cola tras delimitador bloquea" "$LAB_RC" "2"
+  _contiene "nombra la cola tras delimitador" "$LAB_ERR" 'adversary-cola-delimitador.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
   # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
@@ -658,23 +674,40 @@ mut_advlock_redactado_cuenta()       { sed 's/"\$SAIKIT_ADV_REDACTED_STRIP"/"s|z
 # CodeRabbit en el PR #75). Esta quita SOLO la regla 1 y deja las otras dos en
 # pie: el resto de las formas se siguen descontando y unicamente la
 # entrecomillada vuelve a bloquear. El port ya la tenia (summonaikit-kimi).
-# Dos trampas, las dos medidas (y las dos delatadas por el guardia de "el sed
-# quedo obsoleto", que existe justamente para esto):
+# Rompe las DOS reglas del valor entrecomillado cambiandoles el patron
+# (`s/="` -> `s/=z`, que ya no matchea nada). Las del valor pelado empiezan con
+# `s/=\[` y quedan intactas, asi que la mutacion aisla exactamente esa forma.
+#
+# TRES anclajes anteriores se rompieron aca, los tres delatados por el guardia
+# de "el sed quedo obsoleto". Vale la pena dejar por que, porque el modo de
+# falla es un no-op SILENCIOSO: la mutacion no muta nada y el arnes reportaria
+# "atrapada" sin haber probado nada.
 #   - la barra invertida literal se matchea con la clase `[\]`, NO con `\\`: en
-#     el sed de MSYS2/Git Bash la segunda forma no muerde y la mutacion queda un
-#     no-op silencioso que reportaria "atrapada" sin haber mutado nada;
-#   - no se puede anclar el final con `[^;]*; `, porque la lista blanca ahora
-#     CONTIENE un `;` y la clase de caracteres frena ahi. Se ancla en el
-#     reemplazo `= "\1/g; `, que aparece una sola vez en la linea (el de la
-#     regla 2 es `= \1/g`, sin la comilla).
-mut_advlock_redactado_comillas_ciego() { sed 's|s/="[\]\[REDACTED[\]\]".*"[\]1/g; ||'; }
+#     el sed de MSYS2/Git Bash la segunda forma no muerde;
+#   - anclar el final con `[^;]*; ` dejo de servir cuando la lista blanca paso a
+#     CONTENER un `;`: la clase de caracteres frena ahi;
+#   - anclar en el reemplazo `= "\1/g; ` dejo de servir cuando la regla paso a
+#     tener dos ramas: hay dos reemplazos parecidos (`\1` y `\1\2`) y el `.*`
+#     goloso agarraba solo hasta el primero.
+# Moraleja: anclar en la parte mas ESTABLE de la linea (el patron, no el
+# reemplazo ni la lista) y correr un `cmp` despues de cada cambio al hook.
+mut_advlock_redactado_comillas_ciego() { sed 's|s/="|s/=z|g'; }
 # Saca `;` y `)` de la lista blanca, o sea la devuelve a la version incompleta
 # de la primera vuelta. Sin esta mutacion, el sub-caso de los signos pasaba
 # igual con la lista corta o con la completa en cualquier maquina donde no se
 # hubiera medido a mano: nada probaba que discriminara. Con ella, acortar la
 # lista pone rojo al caso — que es lo que le pasaba al artefacto BIEN redactado
 # con `;` o `)` (Greptile P1, PR #75).
-mut_advlock_redactado_lista_corta() { sed 's|",;)}|",}|g'; }
+mut_advlock_redactado_lista_corta() { sed 's|,;)}|,}|g'; }
+# Afloja el guardia de la COLA: `[^A-Za-z0-9_-]` -> `.`, o sea la rama (b) pasa
+# a descontar aunque despues del delimitador siga un secreto pegado. Es la
+# mutacion que acredita el sub-caso de la cola: sin ella, nada probaba que las
+# dos ramas hicieran algo distinto de una lista de una sola rama.
+# Va acotada por DIRECCION a la linea del strip: esa clase de caracteres
+# aparece 7 veces en el hook —entre ellas SAIKIT_SENTINEL_RE— y un sed global
+# mutaria tambien el armado, o sea varias condiciones a la vez. Una mutacion
+# que rompe dos cosas no acredita ninguna.
+mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|\[^A-Za-z0-9_-\]|.|g'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -685,7 +718,8 @@ bash_ciego|advlock_bash_best_effort
 canon_logico|advlock_symlink_subdir_y_saikit_enlazado
 redactado_cuenta|advlock_artefacto_redactado_no_bloquea
 redactado_comillas_ciego|advlock_artefacto_redactado_no_bloquea
-redactado_lista_corta|advlock_artefacto_redactado_no_bloquea"
+redactado_lista_corta|advlock_artefacto_redactado_no_bloquea
+redactado_cola_ciega|advlock_artefacto_redactado_no_bloquea"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
@@ -693,7 +727,7 @@ while IFS='|' read -r nombre caso_atrapa; do
   # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
   # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
   case "$nombre" in
-    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_corta)
+    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_corta|redactado_cola_ciega)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
         printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
         continue
