@@ -81,7 +81,12 @@ if [ -z "$MODO" ]; then
 fi
 
 # --------------------------------------------------------------- utilleria
-sha_de() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+# Se lee por STDIN a proposito: con la ruta como ARGUMENTO, coreutils la
+# devuelve escapada y antepone `\` a la linea en cuanto el nombre trae un
+# backslash (una ruta Windows, p.ej.). Ese marcador se colaba al
+# `# hook_sha256:` de la linea base y la identidad quedaba describiendo un
+# archivo inexistente. Mismo idioma que `sha_de()` en tools/install-hook.sh.
+sha_de() { sha256sum < "$1" 2>/dev/null | cut -d' ' -f1; }
 sha_corto() { sha_de "$1" | cut -c1-16; }
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/saikit-golden-XXXXXX")" || exit 2
