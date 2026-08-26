@@ -485,6 +485,14 @@ advlock_artefacto_redactado_no_bloquea() {
   printf '{"evidence":"token=[REDACTED]","uri":"https://[REDACTED]@host/db"}\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-json.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _no_contiene "redactado en JSON no bloquea" "$LAB_ERR" 'adversary-redactado-json.json'
+  # Forma con el VALOR entrecomillado (`token="[REDACTED]"`) — la mas natural
+  # cuando el adversary redacta dentro de un JSON con jq o a mano. El strip
+  # solo cubria `=[REDACTED]`: con la comilla despues del `=` no disparaba y el
+  # regex matcheaba `token="`. Hallado portando el descuento al hook de kimi
+  # (summonaikit-kimi PR #13), cuyo strip ya cubria esta forma.
+  printf 'evidence: token="[REDACTED]"\npass: password="[REDACTED]"\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-comillas.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _no_contiene "redactado entrecomillado no bloquea" "$LAB_ERR" 'adversary-redactado-comillas.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
   # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
@@ -497,6 +505,19 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "mixto bloquea" "$LAB_RC" "2"
   _contiene "nombra el mixto" "$LAB_ERR" 'adversary-mixto.json'
+  # Secreto PEGADO al marcador, sin separador: `token=[REDACTED]sk-real`. El
+  # strip viejo lo tragaba entero (el `.*` implicito del reemplazo) y el
+  # secreto EVADIA el escaneo — quedaba declarado como limite residual en el
+  # spec. El strip nuevo exige un DELIMITADOR despues del marcador, asi que
+  # esta forma NO se descuenta y el secreto se detecta. La lecccion vino del
+  # port (summonaikit-kimi PR #13), cuyo descuento ya lo exigia.
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
+  printf 'evade: token=[REDACTED]sk-vivo-999\n' > "$LAB/proyecto/.saikit/findings/adversary-pegado.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "secreto pegado al marcador bloquea" "$LAB_RC" "2"
+  _contiene "nombra el pegado" "$LAB_ERR" 'adversary-pegado.json'
 }
 advlock_artefacto_redactado_no_bloquea; fin_caso "advlock_artefacto_redactado_no_bloquea"
 
