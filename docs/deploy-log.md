@@ -7,19 +7,56 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
-## 2026-08-25 — PR #71 + PR 14.2–14.4 (Phase 14) — deploy PENDIENTE del lead
+## 2026-08-26 — PR #73 (fix de la trampa de orden del adversary tardío) — deploy ACTUALIZA los tres hooks vivos
 
-- **Qué traía:** 14.1 (diseño, PR #71, merge `2243fdf`) + 14.2 (vía de crédito
-  del label `VERIFIED BY SUBAGENT:` en el hook) + 14.3 (esquema del artefacto
-  en `agents/adversary.md`) + 14.4 (spec/ledger). **El hook SÍ cambió** (14.2:
-  constantes `SAIKIT_VERIFIED_*`, helpers `saikit_verif_subagente_credita`/
-  `saikit_verif_evidence_ok`, condición de evidencia del Stop).
+- **Qué traía:** un solo fix de gate. La trampa: el dedupe de `record_agent`
+  conserva la posición de la PRIMERA aparición, así que un lead que ya corrió
+  `implementer→verifier→reviewer` y DESPUÉS agregaba el adversary quedaba con
+  `implementer,verifier,reviewer,adversary` — orden inválido para la regex de
+  4 roles — y **ningún re-despacho lo arreglaba**: el turno solo salía agotando
+  presupuesto. El camino honesto castigado, vivo desde la Phase 13 en los 4
+  hosts. Arreglo local a `record_agent`, sin campo nuevo de estado: un
+  RE-despacho del reviewer, y solo con adversary ya en `agents_seen`, mueve al
+  reviewer al final (la regla protege que la adjudicación ocurra DESPUÉS del
+  ataque, que es justo lo que pasó). Cualquier otro rol re-despachado conserva
+  su posición.
+- **Procedencia del hallazgo:** Greptile, revisando el **port** de kimi
+  (PR #12 de `summonaikit-kimi`) — no el original. Confirmado acá
+  ejecutándolo. La suite de 9 casos D6 de la 13.5 no lo cubría (probaba
+  "adversary dos veces", no "reviewer → adversary tarde → reviewer").
+- **Deploy:** sha de la fuente
+  `e20ef92e2a1ba11c13edd48f33fa747dc24a1fe48c3b2b5fb691febf94bd75f7`;
+  REPARADO con backup en los tres vivos — `~/.claude/hooks`
+  (`.nuestro.20260825-222031.bak`), `~/.codex/hooks` (`…-222035.bak`),
+  `~/.grok/hooks` (`…-222041.bak`). `cmp` byte a byte: IDÉNTICO los tres.
+- **Perfiles:** sin cambio (el fix es solo del hook); no se corrió `--host
+  kimi` a propósito: `~/.agents/agents/` lo comparte el port que trabaja en
+  paralelo y un deploy simultáneo se pisaría.
+- **`check-hook-registration.sh` en sus tres formas:** claude (settings) rc=0;
+  codex (`--codex-hooks-json`) rc=0; grok (`--grok-hooks-dir`) rc=0.
+- **Verificación previa al merge:** rojo medido pre-fix
+  (`caso_g3_adversary_tardio_con_re_review_cierra`), `test_gate_behavior: OK`,
+  `golden --check` con 54 escenarios sin divergencia (sin regrabar), CI 5/5.
+- **Paridad con el port:** el port de kimi dejó la regla escrita como semántica
+  ("el cierre exige reviewer DESPUÉS del último adversary") y porta la forma
+  exacta desde acá, verbatim.
+- **Operador:** Gon (sesión claude; deploy ejecutado por el lead).
+
+## 2026-08-25 — PR #72 (Phase 14: 14.2–14.4) — deploy PENDIENTE del lead
+
+- **Qué traía:** 14.2 (vía de crédito del label `VERIFIED BY SUBAGENT:` en el
+  hook) + 14.3 (esquema del artefacto en `agents/adversary.md`) + 14.4
+  (spec/ledger). (La 14.1, diseño, fue docs-only y no requirió deploy.) **El
+  hook SÍ cambió** (14.2: constantes `SAIKIT_VERIFIED_*`, helpers
+  `saikit_verif_subagente_credita`/`saikit_verif_evidence_ok`, condición de
+  evidencia del Stop).
 - **Deploy:** NO ejecutado en esta sesión. El deploy post-merge (`bash
   tools/install-hook.sh` + `tools/check-hook-registration.sh`) lo hace el
   lead, que además coordina el deploy a `~/.agents/agents/` (kimi). **NO se
   corrió `tools/install-hook.sh --host kimi`** desde acá: ese directorio lo
   comparte el port `summonaikit-kimi` que corre en paralelo y se pisarían.
-- **Estado:** pendiente del lead tras el merge del PR 14.2–14.4.
+- **Estado:** pendiente del lead tras el merge del PR #72.
+
 
 ## 2026-08-25 — PR #67 / Task 13.9 (cierre Phase 13) — deploy ACTUALIZA los tres hooks vivos + planta adversary en 4 hosts
 
