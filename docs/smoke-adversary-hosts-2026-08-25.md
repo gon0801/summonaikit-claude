@@ -86,6 +86,26 @@ El operador corrió el turno en su sesión zcode interactiva sobre
   `Missing SUMMONAIKIT HARNESS RECEIPT` (forma/marcador del recibo no
   detectado) y `Missing verification evidence` (su prosa de evidencia no
   acredita — la familia de VERIFY_SKIP_RE, medida desde 2026-08-13).
+- **Mecanismo exacto de los 3 intentos** (del transcript, literal):
+  1. Intento 1: `**Understand (leído por mí, el lead):**` — sin marcador y con
+     texto entre la etiqueta y los dos puntos ⇒ ninguna etiqueta contó.
+  2. Intento 2: las 6 etiquetas + `ADVERSARY:` en la forma `**Etiqueta:**`
+     (que SÍ cuenta) pero **sin la línea marcador** ⇒
+     `Missing SUMMONAIKIT HARNESS RECEIPT`. Causa: el ejemplo de la
+     instrucción global del operador (`## FORMATO DE RECEIPTS Y REPORTES`)
+     muestra el patrón de etiquetas sin el marcador.
+  3. Intento 3: marcador + etiquetas, y aun así rechazado —
+     `Missing verification evidence`: el Verify decía la verdad ("El verifier
+     corrió la batería aplicable… `python -m py_compile app.py` exit 0"),
+     pero **los comandos del verifier DELEGADO son invisibles para el hook en
+     zcode** (canal interno `unknown`, el mismo que deja ciego al candado), así
+     que `verified` siguió en 0 y la prosa no traía skip-phrase.
+  4. Intento 4 (aceptado): `**Verify:** Corrí yo mismo, contra el archivo
+     final, los checks…` — el LEAD re-corrió los comandos, sus eventos SÍ
+     llegaron al hook y `verified` se encendió.
+  **Consecuencia estructural**: en hosts con canal interno `unknown`, delegar
+  la verificación y reportarla con honestidad NO satisface el gate; la
+  ceremonia paga el trabajo dos veces. Levantado como Phase 14 en `Plans.md`.
 - **Desviaciones menores del artefacto** (label-only, el gate no las juzga;
   el reviewer sí): esquema no canónico (`title`/`detail` en vez de
   `claim`/`trigger`/`evidence`/`confirmed`; sin `attacked`) y

@@ -38,6 +38,39 @@ origen: borrador externo del operador conservado sin editar en
 
 ---
 
+## Phase 14 — La fricción del recibo en hosts con canal interno ciego (2026-08-25)
+
+**Propósito:** el turno vivo del operador en zcode (2026-08-25,
+`docs/smoke-adversary-hosts-2026-08-25.md`) cerró limpio pero **quemó 3
+intentos de recibo**. El diagnóstico del transcript
+(`~/.zcode/cli/rollout/model-io-sess_3ba37f4b….jsonl`) dice que NINGÚN rechazo
+vino del rol adversary — vinieron de una fricción estructural más vieja y más
+cara: **en un host cuyo canal interno es `unknown` (zcode, kimi), los comandos
+que corre el verifier DELEGADO son invisibles para el hook**, así que
+`verified` nunca se enciende y un lead que delegó correctamente y reportó con
+honestidad queda bloqueado. La única salida que el lead encontró fue
+**re-correr él mismo los checks** (intento 4: "Corrí yo mismo…" ⇒ aceptado) —
+o sea: la ceremonia paga el trabajo dos veces, justo en los hosts donde el
+candado ya es ciego. Evidencia literal por intento en el doc del smoke.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| 14.1 | `[Diseño]` `[lane:gate]` `[tdd:skip:diseño-y-medición]` **Diseño medido de la atestación de verificación delegada.** Confirmar con el transcript (rojo documental) que los intentos 2 y 3 murieron por `verified=0` + prosa sin skip-phrase, y que el 4 pasó porque el LEAD corrió los comandos. Decidir entre: (a) label declarativo nuevo estilo `ROLE FALLBACK` — p. ej. `VERIFIED BY SUBAGENT: <comandos y resultado>` — auditable por humano y acotado a hosts con canal interno `unknown`; (b) ampliar `VERIFY_SKIP_RE` a las formas naturales que el modelo SÍ escribe ("el proyecto no tiene tests", "no hay suite"); (c) declararlo límite y que el lead re-corra. **Regla dura: ninguna opción puede permitir que un lead acredite verificación sin dejar rastro auditable** — el gate existe para eso. Entrega un doc corto en `docs/` con la decisión, su razón y sus límites | Cada opción evaluada contra el riesgo de aflojar el gate; la elegida con su caso golden nombrado; lo no medible queda `unknown` declarado | — | cc:TODO |
+| 14.2 | `[Gate]` `[lane:gate]` `[tdd:required]` **Implementar lo que 14.1 decidió** en `hooks/summonaikit-harness.sh`, con la disciplina del repo: rojo medido pre-fix, caso que acredita y caso que SIGUE bloqueando (el lead que afirma verificación sin rastro), mutación acreditada, y línea base golden 0 divergencias (o regrabado con diff auditado si se movió prosa del contrato, precedente 11.1) | Los dos casos con nombre + mutación; sin la ruta nueva, el turno de zcode del 2026-08-25 sigue bloqueando igual | 14.1 | cc:TODO |
+| 14.3 | `[Perfil]` `[lane:fast]` `[tdd:skip:prompt-only]` **Esquema del artefacto en `agents/adversary.md`.** El artefacto del turno vivo salió con esquema propio (`title`/`detail`, sin `attacked`) y un `generated_at_utc` inventado por el modelo. Apretar el perfil: los campos del JSON son los del contrato o el reviewer lo declara malformado; el timestamp se OBTIENE con `Bash` (el rol lo tiene) o se omite — jamás se inventa | El texto nombra los campos exactos y prohíbe el timestamp inventado; consistencia con los otros perfiles verificada | — | cc:TODO |
+| 14.4 | `[Release]` `[lane:release]` `[tdd:skip:docs]` **Cierre**: spec con la ruta nueva y sus límites, ledger, y deploy anotado en `docs/deploy-log.md` si el hook cambió | Spec/perfil/hook coherentes; el perfil no promete nada que el hook no haga | 14.1–14.3 | cc:TODO |
+
+**Fuera de alcance, declarado:** la otra mitad de la fricción de ese turno fue
+que el modelo omitió la línea marcador `SUMMONAIKIT HARNESS RECEIPT` en su
+primer recibo completo — porque el **ejemplo de la instrucción global del
+operador** (`## FORMATO DE RECEIPTS Y REPORTES` de su quality-kit) muestra el
+patrón de etiquetas SIN el marcador. No se arregla en el hook: aceptar
+recibos sin marcador destruiría la distinción entre un recibo real y prosa que
+menciona etiquetas (RECEIPT_MARKER_RE es el ancla del sentinel). Se corrige en
+la instrucción del operador — anotado acá para que nadie lo re-diagnostique.
+
+---
+
 ## 事前確認
 
 - 事項: escritura de ACLs sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`
