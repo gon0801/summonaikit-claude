@@ -65,11 +65,13 @@ Host: zcode 0.16.1. Turno headless
   `--verbose`**. Esta ejecución no alcanza para atribuir el fallo al kit ni
   para descartarlo por completo: el control "headless con causa medida y sin
   `-saikit`" queda `not_observed`.
-- **Pendiente declarado**: ceremonia viva en zcode requiere o la API key de
-  Z.AI en `/login` del TUI, o un turno interactivo del operador. Saltado por
-  decisión del operador (2026-08-25).
+- **Pendiente que esto dejó — YA RESUELTO el mismo día** (ver la subsección
+  siguiente, no repitas la prueba): la ceremonia viva en zcode requería o la
+  API key de Z.AI en `/login` del TUI, o un turno interactivo del operador;
+  el headless quedó saltado por decisión del operador y el operador corrió el
+  turno en su TUI.
 
-### Actualización mismo día: ceremonia viva COMPLETADA por el operador (TUI)
+### Actualización mismo día: pendiente anterior RESUELTO — ceremonia viva COMPLETADA por el operador (TUI)
 
 El operador corrió el turno en su sesión zcode interactiva sobre
 `C:\dev\saikit-captura` (sesión `sess_3ba37f4b…`, transcript en
