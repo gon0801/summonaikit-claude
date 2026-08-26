@@ -1432,21 +1432,28 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #      la puerta de al lado. Cualquier regla nueva que se agregue acá tiene
 #      que exigirlo tambien, o reabre esta familia.
 #
-#      El delimitador se define por lo que NO puede ser, no por una lista de
-#      lo que si: `[^A-Za-z0-9_-]`. La primera version listaba los delimitadores
-#      permitidos (`] " espacio , } >`), y esa lista siempre queda corta: un
-#      `token=[REDACTED];` o `token=[REDACTED])` BIEN redactado no matcheaba
-#      ninguna regla, sobrevivia entero y volvia a disparar el escaneo — o sea
-#      el gate bloqueaba un artefacto correcto (Greptile P1, PR #75). Antes de
-#      este PR no pasaba porque el strip no exigia delimitador ninguno, asi que
-#      la lista blanca fue una regresion nuestra. Invertida, la regla dice lo
-#      unico que de verdad importa: si lo que sigue al marcador puede ser parte
-#      de un secreto (alfanumerico, `_` o `-`), NO se descuenta; cualquier otra
-#      cosa cierra el valor y si se descuenta. Cierra la familia entera en vez
-#      de ir agregando signos de puntuacion de a uno.
+#      El delimitador es una LISTA BLANCA a proposito, y se mantiene como tal.
+#      La primera version omitia `;` y `)`, asi que un `token=[REDACTED];` BIEN
+#      redactado no matcheaba ninguna regla, sobrevivia entero y disparaba el
+#      escaneo: el gate bloqueaba un artefacto correcto (Greptile P1, PR #75).
+#      Se agregan esos dos; NO se invierte la lista.
+#
+#      Por que no invertirla, que era lo elegante: con `[^A-Za-z0-9_-]`
+#      cualquier signo pasa a terminar el valor, y `token=[REDACTED]!secreto`
+#      se descuenta -> queda `token= !secreto`, el espacio corta el match de
+#      `=[^[:space:]]` y el secreto SALE (Greptile P1, PR #79). O sea la
+#      inversion cambia un bloqueo falso —ruidoso pero visible— por una fuga
+#      silenciosa. Para un escaneo de secretos la direccion correcta es fallar
+#      hacia BLOQUEAR, asi que gana la lista aunque haya que completarla de a
+#      un signo: el costo de que le falte uno es friccion que alguien ve, y el
+#      de que sobre es un secreto que nadie ve.
+#      El criterio para agregar un signo: que la REDACCION pueda producirlo
+#      despues del valor (cierre de JSON, de comando, de prosa). No alcanza con
+#      que "sea puntuacion" — `!`, `$`, `@`, `#` son prefijos perfectos de un
+#      secreto pegado y no cierran ningun valor.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([^A-Za-z0-9_-]|$)/= "\1/g; s/=\[REDACTED\]([^A-Za-z0-9_-]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",;)}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",;)}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

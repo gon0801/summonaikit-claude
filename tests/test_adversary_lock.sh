@@ -516,7 +516,8 @@ advlock_artefacto_redactado_no_bloquea() {
   # corta, asi que un artefacto BIEN redactado sobrevivia entero al strip y
   # disparaba el escaneo — el gate bloqueaba lo correcto (Greptile P1, PR #75).
   # Era regresion nuestra: antes de este PR el strip no exigia delimitador.
-  # Con la regla invertida (`[^A-Za-z0-9_-]`) cualquier signo cierra el valor.
+  # Se AGREGAN esos dos a la lista; la lista NO se invierte (ver el porque
+  # abajo, en el sub-caso de la cola de puntuacion).
   lab_limpiar_estado
   rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
   adv_armar
@@ -525,6 +526,22 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "signos: no salio por presupuesto agotado" "$LAB_RC" "2"
   _no_contiene "redactado con ; y ) no bloquea" "$LAB_ERR" 'adversary-redactado-signos.json'
+  # COLA DE PUNTUACION: un secreto real pegado al marcador detras de un signo
+  # que NO cierra ningun valor (`token=[REDACTED]!secreto`). Tiene que BLOQUEAR.
+  # Este caso existe por un error mio: la primera version de este PR invirtio la
+  # lista (`[^A-Za-z0-9_-]`, "cualquier signo cierra el valor") por elegancia, y
+  # con eso `!` pasaba a ser delimitador: el strip devolvia `token= !secreto`,
+  # el espacio cortaba el match de `=[^[:space:]]` y el secreto SALIA (Greptile
+  # P1, PR #79). Cambiar un bloqueo falso —ruidoso pero visible— por una fuga
+  # silenciosa es la direccion equivocada para un escaneo de secretos.
+  lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
+  adv_armar
+  adv_despachar
+  printf 'evade3: token=[REDACTED]!sk-vivo-777\n' > "$LAB/proyecto/.saikit/findings/adversary-cola-puntuacion.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "cola de puntuacion bloquea" "$LAB_RC" "2"
+  _contiene "nombra la cola de puntuacion" "$LAB_ERR" 'adversary-cola-puntuacion.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
   # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
@@ -641,17 +658,23 @@ mut_advlock_redactado_cuenta()       { sed 's/"\$SAIKIT_ADV_REDACTED_STRIP"/"s|z
 # CodeRabbit en el PR #75). Esta quita SOLO la regla 1 y deja las otras dos en
 # pie: el resto de las formas se siguen descontando y unicamente la
 # entrecomillada vuelve a bloquear. El port ya la tenia (summonaikit-kimi).
-# La barra invertida literal se matchea con la clase `[\]`, no con `\\`: en el
-# sed de MSYS2/Git Bash la segunda forma no muerde y la mutacion se vuelve un
-# no-op silencioso — o sea el arnes diria "atrapada" sin haber mutado nada. El
-# guardia de "el sed quedo obsoleto" lo delata, pero mejor no depender de el.
-mut_advlock_redactado_comillas_ciego() { sed 's|s/="[\]\[REDACTED[\]\]"[^;]*; ||'; }
-# Revierte el delimitador a la LISTA BLANCA de la primera version. Sin esta
-# mutacion, el sub-caso de los signos pasaba igual con la regla vieja o con la
-# nueva en cualquier maquina donde no se hubiera medido a mano: nada probaba
-# que discriminara. Con ella, volver a la lista blanca pone rojo al caso —que
-# es lo que le paso al artefacto BIEN redactado con `;` o `)` (Greptile P1).
-mut_advlock_redactado_lista_blanca() { sed 's|\[^A-Za-z0-9_-\]|[]"[[:space:]",}>]|g'; }
+# Dos trampas, las dos medidas (y las dos delatadas por el guardia de "el sed
+# quedo obsoleto", que existe justamente para esto):
+#   - la barra invertida literal se matchea con la clase `[\]`, NO con `\\`: en
+#     el sed de MSYS2/Git Bash la segunda forma no muerde y la mutacion queda un
+#     no-op silencioso que reportaria "atrapada" sin haber mutado nada;
+#   - no se puede anclar el final con `[^;]*; `, porque la lista blanca ahora
+#     CONTIENE un `;` y la clase de caracteres frena ahi. Se ancla en el
+#     reemplazo `= "\1/g; `, que aparece una sola vez en la linea (el de la
+#     regla 2 es `= \1/g`, sin la comilla).
+mut_advlock_redactado_comillas_ciego() { sed 's|s/="[\]\[REDACTED[\]\]".*"[\]1/g; ||'; }
+# Saca `;` y `)` de la lista blanca, o sea la devuelve a la version incompleta
+# de la primera vuelta. Sin esta mutacion, el sub-caso de los signos pasaba
+# igual con la lista corta o con la completa en cualquier maquina donde no se
+# hubiera medido a mano: nada probaba que discriminara. Con ella, acortar la
+# lista pone rojo al caso — que es lo que le pasaba al artefacto BIEN redactado
+# con `;` o `)` (Greptile P1, PR #75).
+mut_advlock_redactado_lista_corta() { sed 's|",;)}|",}|g'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -662,7 +685,7 @@ bash_ciego|advlock_bash_best_effort
 canon_logico|advlock_symlink_subdir_y_saikit_enlazado
 redactado_cuenta|advlock_artefacto_redactado_no_bloquea
 redactado_comillas_ciego|advlock_artefacto_redactado_no_bloquea
-redactado_lista_blanca|advlock_artefacto_redactado_no_bloquea"
+redactado_lista_corta|advlock_artefacto_redactado_no_bloquea"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
@@ -670,7 +693,7 @@ while IFS='|' read -r nombre caso_atrapa; do
   # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
   # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
   case "$nombre" in
-    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_blanca)
+    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_corta)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
         printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
         continue

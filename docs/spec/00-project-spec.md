@@ -1774,13 +1774,21 @@ de los PRs #65 y #66) ya sumados:
   detecta. La forma entrecomillada, que antes hacía BLOQUEAR un artefacto
   correctamente redactado, tampoco falla ya. El escaneo sigue siendo
   best-effort para lo que su familia de patrones no matchea.
-  El delimitador se define por lo que NO puede ser (`[^A-Za-z0-9_-]`) y no por
-  una lista blanca de signos permitidos: la lista blanca de la primera versión
-  dejaba afuera `token=[REDACTED];` y `token=[REDACTED])` —correctamente
-  redactados— y los hacía bloquear (Greptile P1, PR #75), que es exactamente la
-  fricción que el rol no puede permitirse. Invertida, la regla dice lo único
-  que importa: si lo que sigue al marcador puede ser parte de un secreto, no se
-  descuenta.
+  El delimitador es una **lista blanca** y se mantiene como tal. La primera
+  versión omitía `;` y `)`, así que `token=[REDACTED];` y `token=[REDACTED])`
+  —correctamente redactados— bloqueaban (Greptile P1, PR #75), que es la
+  fricción que el rol no puede permitirse; se agregaron esos dos signos.
+  **No se invierte**, aunque invertirla (`[^A-Za-z0-9_-]`, "cualquier signo
+  cierra el valor") sea más corto de escribir: con la lista invertida
+  `token=[REDACTED]!secreto` se descuenta y queda `token= !secreto`, donde el
+  espacio corta el match y el secreto SALE (Greptile P1, PR #79). Esa permuta
+  cambia un bloqueo falso —ruidoso pero visible— por una fuga silenciosa, y
+  para un escaneo de secretos la dirección correcta es fallar hacia BLOQUEAR.
+  El costo de que a la lista le falte un signo es fricción que alguien ve; el
+  de que le sobre es un secreto que nadie ve. Criterio para agregar uno: que la
+  redacción pueda producirlo **después** del valor (cierre de JSON, de comando,
+  de prosa). No alcanza con que sea puntuación — `!`, `$`, `@`, `#` son
+  prefijos perfectos de un secreto pegado y no cierran ningún valor.
   **Límite residual declarado**: el valor entre COMILLAS SIMPLES
   (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos piden `="`
   o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA aunque esté
