@@ -1451,6 +1451,15 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #      despues del valor (cierre de JSON, de comando, de prosa). No alcanza con
 #      que "sea puntuacion" — `!`, `$`, `@`, `#` son prefijos perfectos de un
 #      secreto pegado y no cierran ningun valor.
+#
+#      LIMITE DECLARADO (spec, "cola pegada tras un delimitador"): un
+#      `token=[REDACTED],sk-real` se descuenta y la cola sobrevive sin que el
+#      escaneo la vea. Vale para TODOS los delimitadores de la lista, no para
+#      los dos agregados — medido. El escaneo esta anclado a `keyword=valor`,
+#      asi que una cola suelta le es invisible por diseño: cuando la lista
+#      corta "bloqueaba" esa forma estaba matcheando `token=[`, el marcador,
+#      no el secreto. No se cierra a medias: las variantes que lo intentan
+#      rompen la forma JSON (`","`), que es la del camino real.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
 SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",;)}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",;)}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'

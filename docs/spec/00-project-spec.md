@@ -1789,9 +1789,35 @@ de los PRs #65 y #66) ya sumados:
   redacción pueda producirlo **después** del valor (cierre de JSON, de comando,
   de prosa). No alcanza con que sea puntuación — `!`, `$`, `@`, `#` son
   prefijos perfectos de un secreto pegado y no cierran ningún valor.
-  **Límite residual declarado**: el valor entre COMILLAS SIMPLES
-  (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos piden `="`
-  o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA aunque esté
+  **Límite residual declarado — COLA PEGADA TRAS UN DELIMITADOR**: un
+  `token=[REDACTED],sk-real` se descuenta (la coma cierra el valor) y la cola
+  `sk-real` sobrevive sin que el escaneo la vea. Aplica a TODOS los
+  delimitadores de la lista, no a los dos que se agregaron; medido sobre las dos
+  versiones de la lista (Greptile P1, PR #79):
+
+  | entrada | lista original | lista completada |
+  |---|---|---|
+  | `token=[REDACTED],sk-real` | PASA | PASA |
+  | `token=[REDACTED]"sk-real` | PASA | PASA |
+  | `token=[REDACTED]}sk-real` | PASA | PASA |
+  | `token=[REDACTED];sk-real` | BLOQUEA | PASA |
+  | `token=[REDACTED])sk-real` | BLOQUEA | PASA |
+
+  Lo que el bloqueo de las dos últimas filas hacía NO era detectar el secreto:
+  matcheaba `token=[`, o sea el propio marcador de redacción. El escaneo está
+  anclado a `keyword=valor` y a `://user@`; una cola suelta (`sk-real` sin
+  keyword delante) le es invisible **por diseño**, con strip o sin él. Ese
+  bloqueo era incidental, y sostenerlo costaba bloquear artefactos correctos.
+  Se prefiere la coherencia: la cola pegada es evasión deliberada, misma familia
+  que el `touch -t` pre-época y el nombre con `\n`, y el escaneo persigue
+  persistencia accidental. Cerrarla de verdad pide exigir que **después** del
+  delimitador venga algo que no sea continuación de secreto, y las variantes
+  probadas rompían la forma JSON (`","`), que es la del camino real — así que
+  queda declarado, no medio arreglado.
+  **Límite residual declarado — COMILLAS SIMPLES**: el valor entre comillas
+  simples (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos
+  piden `="` o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA
+  aunque esté
   bien redactado. Es preexistente (tampoco se descontaba antes del PR #75) y se
   deja abierto a propósito: el contrato del rol exige artefactos JSON, y JSON
   no tiene strings con comilla simple, así que la forma no aparece en el camino
