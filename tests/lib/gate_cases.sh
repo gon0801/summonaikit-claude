@@ -124,6 +124,19 @@ _RECIBO_ROLE_FALLBACK_REVIEWER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pedis
 # recibo honesto y completo se bloqueaba con las seis etiquetas "faltantes".
 _RECIBO_BOLD='SUMMONAIKIT HARNESS RECEIPT\n- **Understand**: pediste poder listar las sesiones abiertas.\n- **Implement**: se agrego el endpoint y su ruta.\n- **Verify**: se corrio la bateria completa, 12 en verde.\n- **Review**: sin hallazgos.\n- **Close**: entregado; no se toco codigo despues de la revision.\n- **Retro**: none.'
 
+# Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego, zcode).
+# El recibo que ACREDITA: verifier delegado en zcode, la verificacion real es
+# invisible para el hook (canal interno), y el lead declara con el label el
+# comando y su resultado de EXITO (predicado de la §4.3 del diseno 14.1).
+_RECIBO_VERIF_SUBAGENTE_ACREDITA='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# (a) label sin comando ni resultado — afirmacion sin rastro.
+_RECIBO_VERIF_SUBAGENTE_SIN_COMANDO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: el verifier corrió la batería aplicable.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# (b) label con resultado FALLIDO (12 passed, failed: 1) — el caso de Greptile.
+_RECIBO_VERIF_SUBAGENTE_FALLIDO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, failed: 1.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+
 _TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
 _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
@@ -894,7 +907,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1178,6 +1191,71 @@ caso_g2_excusa_espanol_no_reclama() {
   _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
+
+# Task 14.2 — la via de credito del label VERIFIED BY SUBAGENT. En un host con
+# canal interno ciego (HOST=zcode via ZCODE_SESSION_ID), con verified=0 (el
+# verifier DELEGADO corrio pero su evidencia es invisible) y verifier despachado,
+# el label con comando + resultado de EXITO acredita: el turno CIERRA sin
+# "Missing verification evidence" (caso del diseno 14.1 §3). Se corre el turno
+# completo (armar + despachar roles + Stop) para que el estado quede en la ruta
+# que llavea el host — el lab sembra en la de claude y el hook zcode lee otra.
+# El verifier se despacha via Agent (subagent_type=verifier) y NO se corre
+# runner: verified queda en 0 (la evidencia real es invisible).
+caso_g2_zcode_verif_subagente_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "exit code" "$LAB_RC" "0"
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (a) label sin comando ni resultado — afirmacion sin rastro: sigue BLOQUEANDO.
+caso_g2_zcode_verif_subagente_sin_comando_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_SIN_COMANDO")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (b) label con resultado FALLIDO ("12 passed, failed: 1") — el veto
+# FAILURE_SIGNAL_RE_CI/CS lo descalifica: sigue BLOQUEANDO (caso de Greptile).
+caso_g2_zcode_verif_subagente_fallido_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLIDO")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (c) el MISMO label en un host NO ciego (claude) no acredita: sigue BLOQUEANDO.
+caso_g2_claude_verif_subagente_no_acredita() {
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (d) label sin verifier en agents_seen no acredita: sigue BLOQUEANDO.
+caso_g2_zcode_verif_subagente_sin_verifier_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
 
 # DEFECTO A3, el caso que lo habria atrapado. `cat pytest.log` matchea el
 # fragmento `pytest` y marca verified=1; `cat tsconfig.json` matchea `tsc`.

@@ -87,6 +87,8 @@ G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FA
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
+G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
+G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -363,6 +365,21 @@ mut_runner_bash_quitada()  { sed 's#tests?/run\\.sh#testsNUNCA/runX.sh#g'; }
 # se rompe. Lo atrapa caso_g2_runner_bash_run_sh_marca (sin CMD_RE aplicada,
 # la forma bash ya no esta en WORD_RE y verified queda en 0).
 mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "NUNCA_\$TEST_RUNNER_CMD_RE"/g'; }
+
+# Task 14.2 — via de credito del label VERIFIED BY SUBAGENT, una mutacion por
+# condicion clave. label_apagado neutraliza el reconocimiento del prefijo
+# (SAIKIT_VERIFIED_SUBAGENT_RE a un literal imposible): el recibo honesto con el
+# label deja de acreditar y vuelve a bloquear — lo atrapa
+# caso_g2_zcode_verif_subagente_acredita (ningun otro caso del gate G2 escribe el
+# prefijo VERIFIED BY SUBAGENT, asi que ningun otro reacciona; los negativos
+# siguen bloqueando porque bloquean por igual sin el label reconocido).
+# host_a_cualquiera afloja la condicion de host ciego `[ "$HOST" = "zcode" ]` a
+# `true` (cualquier host): el label acredita tambien en claude — lo atrapa
+# caso_g2_claude_verif_subagente_no_acredita (el label ya acredita en zcode, asi
+# que el caso de ACREDITA sigue verde; solo el caso que espera BLOQUEO en host no
+# ciego se pone rojo).
+mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
+mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
