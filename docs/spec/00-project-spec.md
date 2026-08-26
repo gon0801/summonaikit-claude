@@ -1795,21 +1795,33 @@ de los PRs #65 y #66) ya sumados:
   trajeron `;` y `)`**: pasaba igual con `,`, `"` y `}` desde antes de la
   Phase 13. Medido sobre las tres versiones:
 
-  | entrada | lista original | lista completada | dos ramas |
-  |---|---|---|---|
-  | `token=[REDACTED],sk-real` | PASA | PASA | **BLOQUEA** |
-  | `token=[REDACTED]"sk-real` | PASA | PASA | **BLOQUEA** |
-  | `token=[REDACTED];sk-real` | BLOQUEA | PASA | **BLOQUEA** |
-  | `token=[REDACTED];` (correcto) | BLOQUEA | PASA | PASA |
-  | `token=[REDACTED]","uri"…` (JSON) | PASA | PASA | PASA |
-  | `token=[REDACTED] apareció en config` | PASA | PASA | PASA |
+  Medido contra la versión original, en las 11 formas probadas la regla nueva es
+  **mejor o igual en todas y peor en ninguna**:
+
+  | entrada | original | dos ramas + guardia estructural |
+  |---|---|---|
+  | `token=[REDACTED];` (correcto) | BLOQUEA | **PASA** |
+  | `fn(password=[REDACTED])` (correcto) | BLOQUEA | **PASA** |
+  | `token=[REDACTED],sk-real` | PASA | **BLOQUEA** |
+  | `token=[REDACTED],!sk-real` | PASA | **BLOQUEA** |
+  | `token=[REDACTED];sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED];!sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED]sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED]","uri"…` (JSON) | PASA | PASA |
+  | `token=[REDACTED] apareció en config` | PASA | PASA |
 
   El delimitador va en **dos ramas**: (a) espacio o fin de línea descuenta
   siempre —ahí el valor terminó, y exigirle algo más bloquearía la prosa
-  normal—; (b) cualquier otro delimitador descuenta **sólo** si lo que sigue no
-  puede ser continuación de un secreto (`[^A-Za-z0-9_-]` o fin de línea). Así la
-  forma JSON (`","`), que es la del camino real, se sigue descontando, y la cola
-  pegada no.
+  normal—; (b) cualquier otro delimitador descuenta **sólo** si lo que sigue es
+  otro carácter **estructural** (`] " [ { } , ; : ) >` o espacio) o fin de
+  línea. Así la forma JSON (`","`), que es la del camino real, se sigue
+  descontando, y la cola pegada no.
+
+  La rama (b) se escribió primero como "lo que sigue no puede ser continuación
+  de secreto" (`[^A-Za-z0-9_-]`), y esa versión mira **un solo** carácter:
+  `token=[REDACTED];!sk-real` la saltea con un `!` de relleno. La lista
+  estructural no tiene ese problema, porque `!` no cierra ningún valor por más
+  relleno que se ponga.
 
   Nota sobre lo que el bloqueo *original* hacía, porque explica por qué la lista
   corta no era la respuesta: cuando "bloqueaba" `token=[REDACTED];sk-real` no

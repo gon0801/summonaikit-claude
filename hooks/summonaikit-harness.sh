@@ -1463,15 +1463,24 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #        a) espacio o fin de linea: descuenta siempre. Ahi el valor termino y lo
 #           que siga es otra cosa; exigirle algo mas bloquearia la prosa normal
 #           (`token=[REDACTED] aparecio en config`).
-#        b) cualquier otro delimitador: descuenta SOLO si lo que sigue no puede
-#           ser continuacion de un secreto (`[^A-Za-z0-9_-]` o fin de linea).
-#           Asi `token=[REDACTED]","uri"...` —forma JSON, la del camino real—
-#           se descuenta, y `token=[REDACTED],sk-real` no.
-#      Se probo antes la variante de exigir espacio/fin DESPUES del delimitador:
-#      esa si rompe la forma JSON. La de dos ramas no.
+#        b) cualquier otro delimitador: descuenta SOLO si lo que sigue es otro
+#           caracter ESTRUCTURAL (`] " [ { } , ; : ) >` o espacio) o fin de
+#           linea. Asi `token=[REDACTED]","uri"...` —forma JSON, la del camino
+#           real— se descuenta, y `token=[REDACTED],sk-real` no.
+#
+#      La rama (b) se escribio primero como "lo que sigue no puede ser
+#      continuacion de secreto" (`[^A-Za-z0-9_-]`), y esa version mira UN solo
+#      caracter: `token=[REDACTED];!sk-real` la saltea con un `!` de por medio
+#      (Greptile P1, PR #79). La lista ESTRUCTURAL no tiene ese problema porque
+#      `!` no cierra ningun valor. Medida contra la version original, la
+#      estructural es mejor o igual en las 11 formas probadas: arregla los dos
+#      bloqueos falsos, cierra dos fugas que ya existian (`,sk-real` y
+#      `,!sk-real`) y no abre ninguna.
+#      Se probo tambien exigir espacio/fin DESPUES del delimitador: esa si
+#      rompe la forma JSON, que es la del camino real.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([[:space:]]|$)/= "\1/g; s/="\[REDACTED\]"([]"[,;)}>])([^A-Za-z0-9_-]|$)/= "\1\2/g; s/=\[REDACTED\]([[:space:]]|$)/= \1/g; s/=\[REDACTED\]([]"[,;)}>])([^A-Za-z0-9_-]|$)/= \1\2/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([[:space:]]|$)/= "\1/g; s/="\[REDACTED\]"([]"[,;)}>])([]"[{},;:)>[:space:]]|$)/= "\1\2/g; s/=\[REDACTED\]([[:space:]]|$)/= \1/g; s/=\[REDACTED\]([]"[,;)}>])([]"[{},;:)>[:space:]]|$)/= \1\2/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

@@ -558,6 +558,20 @@ advlock_artefacto_redactado_no_bloquea() {
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "cola tras delimitador bloquea" "$LAB_RC" "2"
   _contiene "nombra la cola tras delimitador" "$LAB_ERR" 'adversary-cola-delimitador.json'
+  # DOS signos entre el delimitador y el secreto (`;!sk-real`, `",!sk-real`).
+  # La primera version del guardia miraba si el caracter siguiente "podia ser
+  # continuacion de secreto" (`[^A-Za-z0-9_-]`), o sea UN solo caracter: un `!`
+  # de relleno la salteaba y el secreto volvia a salir (Greptile P1, PR #79).
+  # El guardia ESTRUCTURAL no tiene ese problema — `!` no cierra ningun valor,
+  # asi que no habilita el descuento por mas relleno que se le ponga.
+  lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
+  adv_armar
+  adv_despachar
+  printf 'evade5: token=[REDACTED];!sk-vivo-555\nevade6: token="[REDACTED]",!sk-vivo-444\n' > "$LAB/proyecto/.saikit/findings/adversary-cola-relleno.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "cola con relleno de puntuacion bloquea" "$LAB_RC" "2"
+  _contiene "nombra la cola con relleno" "$LAB_ERR" 'adversary-cola-relleno.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
   # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
@@ -699,15 +713,15 @@ mut_advlock_redactado_comillas_ciego() { sed 's|s/="|s/=z|g'; }
 # lista pone rojo al caso — que es lo que le pasaba al artefacto BIEN redactado
 # con `;` o `)` (Greptile P1, PR #75).
 mut_advlock_redactado_lista_corta() { sed 's|,;)}|,}|g'; }
-# Afloja el guardia de la COLA: `[^A-Za-z0-9_-]` -> `.`, o sea la rama (b) pasa
-# a descontar aunque despues del delimitador siga un secreto pegado. Es la
-# mutacion que acredita el sub-caso de la cola: sin ella, nada probaba que las
-# dos ramas hicieran algo distinto de una lista de una sola rama.
-# Va acotada por DIRECCION a la linea del strip: esa clase de caracteres
-# aparece 7 veces en el hook —entre ellas SAIKIT_SENTINEL_RE— y un sed global
-# mutaria tambien el armado, o sea varias condiciones a la vez. Una mutacion
-# que rompe dos cosas no acredita ninguna.
-mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|\[^A-Za-z0-9_-\]|.|g'; }
+# Afloja el guardia ESTRUCTURAL de la cola metiendole alfanumericos a la clase:
+# la rama (b) pasa a descontar aunque despues del delimitador siga un secreto
+# pegado. Es la mutacion que acredita los sub-casos de cola; sin ella, nada
+# probaba que las dos ramas hicieran algo distinto de una lista de una rama.
+# Va acotada por DIRECCION a la linea del strip: el anclaje tiene que tocar el
+# guardia y NADA mas. Una mutacion que rompe dos condiciones no acredita
+# ninguna — la version anterior mutaba `[^A-Za-z0-9_-]`, que aparece 7 veces en
+# el hook, incluida SAIKIT_SENTINEL_RE, y rompia tambien el armado.
+mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|{},;:)>|{},;:)>A-Za-z0-9_-|g'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
