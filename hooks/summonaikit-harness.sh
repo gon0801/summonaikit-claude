@@ -213,6 +213,14 @@ SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileal
 # ademas el veto FAILURE_SIGNAL_RE_CI lo atrapa por la rama [1-9]... failed).
 SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|en[[:space:]]+verde|todo[[:space:]]+verde|sin[[:space:]]+errores'
 
+# Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy
+# solo zcode lo tiene MEDIDO (turno vivo 2026-08-25). kimi es candidato con el
+# canal `not_observed` — se agrega aca, y en ningun otro lado, cuando alguien lo
+# mida. La condicion estaba escrita DOS veces (predicado + ruteo de la
+# evidencia): con dos copias, el dia que se mida otro host una se actualiza y la
+# otra no, y el sintoma seria un host medio-ciego imposible de razonar.
+saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
+
 # Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
 # verificacion en este turno (host con canal interno ciego + verifier
 # despachado + predicado §4.3: label + comando + resultado de EXITO + sin señal
@@ -223,7 +231,7 @@ SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:
 # literal del nombre y el veto jamas dispararia — design §4.3).
 saikit_verif_subagente_credita() {
   local saikit_text="$1"
-  [ "$HOST" = "zcode" ] || return 1
+  saikit_host_ciego || return 1
   printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
   printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE" || return 1
   printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || return 1
@@ -245,7 +253,7 @@ saikit_verif_evidence_ok() {
   # otro host (o sin label), la evidencia se juzga por el camino de antes
   # (prosa runner|skip OR runner en posicion de comando) — asi el label no cambia
   # el comportamiento en claude/codex/grok (la frase no los toca).
-  if [ "$HOST" = "zcode" ] && printf '%s' "$saikit_ok_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE"; then
+  if saikit_host_ciego && printf '%s' "$saikit_ok_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE"; then
     saikit_verif_subagente_credita "$saikit_ok_text"
   else
     { printf '%s' "$saikit_ok_text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE" \
