@@ -1431,9 +1431,22 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #      `token="[REDACTED]"sk-real` (Greptile, PR #75) — el mismo agujero por
 #      la puerta de al lado. Cualquier regla nueva que se agregue acá tiene
 #      que exigirlo tambien, o reabre esta familia.
+#
+#      El delimitador se define por lo que NO puede ser, no por una lista de
+#      lo que si: `[^A-Za-z0-9_-]`. La primera version listaba los delimitadores
+#      permitidos (`] " espacio , } >`), y esa lista siempre queda corta: un
+#      `token=[REDACTED];` o `token=[REDACTED])` BIEN redactado no matcheaba
+#      ninguna regla, sobrevivia entero y volvia a disparar el escaneo — o sea
+#      el gate bloqueaba un artefacto correcto (Greptile P1, PR #75). Antes de
+#      este PR no pasaba porque el strip no exigia delimitador ninguno, asi que
+#      la lista blanca fue una regresion nuestra. Invertida, la regla dice lo
+#      unico que de verdad importa: si lo que sigue al marcador puede ser parte
+#      de un secreto (alfanumerico, `_` o `-`), NO se descuenta; cualquier otra
+#      cosa cierra el valor y si se descuenta. Cierra la familia entera en vez
+#      de ir agregando signos de puntuacion de a uno.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([^A-Za-z0-9_-]|$)/= "\1/g; s/=\[REDACTED\]([^A-Za-z0-9_-]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

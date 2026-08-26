@@ -1774,6 +1774,21 @@ de los PRs #65 y #66) ya sumados:
   detecta. La forma entrecomillada, que antes hacía BLOQUEAR un artefacto
   correctamente redactado, tampoco falla ya. El escaneo sigue siendo
   best-effort para lo que su familia de patrones no matchea.
+  El delimitador se define por lo que NO puede ser (`[^A-Za-z0-9_-]`) y no por
+  una lista blanca de signos permitidos: la lista blanca de la primera versión
+  dejaba afuera `token=[REDACTED];` y `token=[REDACTED])` —correctamente
+  redactados— y los hacía bloquear (Greptile P1, PR #75), que es exactamente la
+  fricción que el rol no puede permitirse. Invertida, la regla dice lo único
+  que importa: si lo que sigue al marcador puede ser parte de un secreto, no se
+  descuenta.
+  **Límite residual declarado**: el valor entre COMILLAS SIMPLES
+  (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos piden `="`
+  o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA aunque esté
+  bien redactado. Es preexistente (tampoco se descontaba antes del PR #75) y se
+  deja abierto a propósito: el contrato del rol exige artefactos JSON, y JSON
+  no tiene strings con comilla simple, así que la forma no aparece en el camino
+  real. Si algún día un perfil la produjera, se cierra con una tercera regla
+  simétrica a la del entrecomillado, y con su mutación propia.
 - El escaneo recorre el directorio con `find … | while read`, así que un
   artefacto cuyo NOMBRE contenga un salto de línea se parte en fragmentos y
   ninguno existe como archivo: ese artefacto no se escanea. Es evasión

@@ -490,9 +490,41 @@ advlock_artefacto_redactado_no_bloquea() {
   # solo cubria `=[REDACTED]`: con la comilla despues del `=` no disparaba y el
   # regex matcheaba `token="`. Hallado portando el descuento al hook de kimi
   # (summonaikit-kimi PR #13), cuyo strip ya cubria esta forma.
+  #
+  # SESION FRESCA, por el mismo motivo que el sub-caso MIXTO de abajo (CI del
+  # PR #67): este era el TERCER Stop del mismo turno armado, llegaba con
+  # cycle=2 y caia al camino de presupuesto agotado, que informa con exit 0 sin
+  # escanear. Con `_no_contiene` eso pasaba en VERDE sin haber mirado el
+  # artefacto: el sub-caso que guarda la forma entrecomillada no probaba la
+  # forma entrecomillada (CodeRabbit, PR #75). La mutacion
+  # `redactado_comillas_ciego` es lo que ahora obliga a que discrimine.
+  lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
+  adv_armar
+  adv_despachar
   printf 'evidence: token="[REDACTED]"\npass: password="[REDACTED]"\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-comillas.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  # El camino de presupuesto agotado informa con exit 0; la ceremonia
+  # incompleta (este payload no trae recibo) bloquea con 2. Exigir 2 es lo que
+  # detecta que el turno NO se escapo por el presupuesto sin escanear. Que el
+  # escaneo de verdad corrio y de verdad descuenta la forma entrecomillada lo
+  # prueba la mutacion `redactado_comillas_ciego`, no esta linea.
+  _igual "entrecomillado: no salio por presupuesto agotado" "$LAB_RC" "2"
   _no_contiene "redactado entrecomillado no bloquea" "$LAB_ERR" 'adversary-redactado-comillas.json'
+  # Delimitadores ORDINARIOS despues del marcador: `;` y `)`. La primera version
+  # del descuento listaba los delimitadores PERMITIDOS y esta lista quedaba
+  # corta, asi que un artefacto BIEN redactado sobrevivia entero al strip y
+  # disparaba el escaneo — el gate bloqueaba lo correcto (Greptile P1, PR #75).
+  # Era regresion nuestra: antes de este PR el strip no exigia delimitador.
+  # Con la regla invertida (`[^A-Za-z0-9_-]`) cualquier signo cierra el valor.
+  lab_limpiar_estado
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
+  adv_armar
+  adv_despachar
+  printf 'cfg: token=[REDACTED];\nfn(password=[REDACTED])\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-signos.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "signos: no salio por presupuesto agotado" "$LAB_RC" "2"
+  _no_contiene "redactado con ; y ) no bloquea" "$LAB_ERR" 'adversary-redactado-signos.json'
   # Linea MIXTA: un valor real junto a uno redactado SIGUE bloqueando (el
   # descuento no puede tragarse el secreto vecino). SESION FRESCA a proposito
   # (CI del PR #67): con tres Stops en el mismo turno armado, el tercero
@@ -602,6 +634,24 @@ mut_advlock_bash_ciego()             { sed 's/^adv_guard_bash() {$/adv_guard_bas
 # falten; el CI de Linux corre ambos siempre.
 mut_advlock_canon_logico()           { sed 's/pwd -P/pwd/g'; }
 mut_advlock_redactado_cuenta()       { sed 's/"\$SAIKIT_ADV_REDACTED_STRIP"/"s|z-nunca-z|z-nunca-z|"/'; }
+# `redactado_cuenta` anula el strip ENTERO, asi que la atrapa el primer
+# sub-caso que escanee y nunca hace falta llegar al entrecomillado: la forma
+# `token="[REDACTED]"` no tenia NINGUNA mutacion que la aislara, o sea nada
+# probaba que su sub-caso discriminara (era el hueco detras del hallazgo de
+# CodeRabbit en el PR #75). Esta quita SOLO la regla 1 y deja las otras dos en
+# pie: el resto de las formas se siguen descontando y unicamente la
+# entrecomillada vuelve a bloquear. El port ya la tenia (summonaikit-kimi).
+# La barra invertida literal se matchea con la clase `[\]`, no con `\\`: en el
+# sed de MSYS2/Git Bash la segunda forma no muerde y la mutacion se vuelve un
+# no-op silencioso — o sea el arnes diria "atrapada" sin haber mutado nada. El
+# guardia de "el sed quedo obsoleto" lo delata, pero mejor no depender de el.
+mut_advlock_redactado_comillas_ciego() { sed 's|s/="[\]\[REDACTED[\]\]"[^;]*; ||'; }
+# Revierte el delimitador a la LISTA BLANCA de la primera version. Sin esta
+# mutacion, el sub-caso de los signos pasaba igual con la regla vieja o con la
+# nueva en cualquier maquina donde no se hubiera medido a mano: nada probaba
+# que discriminara. Con ella, volver a la lista blanca pone rojo al caso —que
+# es lo que le paso al artefacto BIEN redactado con `;` o `)` (Greptile P1).
+mut_advlock_redactado_lista_blanca() { sed 's|\[^A-Za-z0-9_-\]|[]"[[:space:]",}>]|g'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -610,7 +660,9 @@ epoca_no_se_inicializa|advlock_armado_inicializa_estado_previo
 prefijo_roto|advlock_traversal_y_ruta_absoluta
 bash_ciego|advlock_bash_best_effort
 canon_logico|advlock_symlink_subdir_y_saikit_enlazado
-redactado_cuenta|advlock_artefacto_redactado_no_bloquea"
+redactado_cuenta|advlock_artefacto_redactado_no_bloquea
+redactado_comillas_ciego|advlock_artefacto_redactado_no_bloquea
+redactado_lista_blanca|advlock_artefacto_redactado_no_bloquea"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
@@ -618,7 +670,7 @@ while IFS='|' read -r nombre caso_atrapa; do
   # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
   # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
   case "$nombre" in
-    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta)
+    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_lista_blanca)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
         printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
         continue
