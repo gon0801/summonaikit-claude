@@ -133,9 +133,13 @@ exactly the failure this rule prevents.)
 
 **Timestamp.** The only timestamp this artifact carries is the one in the
 FILENAME — `adversary-<timestamp-UTC>.json` — and it is OBTAINED WITH `Bash`
-(the role has `Bash`): run `date -u +%Y-%m-%dT%H:%M:%SZ` and use its output. If
-you cannot run `Bash`, OMIT the timestamp and use any name under the directory
-(e.g. `adversary-findings.json`). NEVER invent a timestamp: one that does not
+(the role has `Bash`): run `date -u +%Y%m%dT%H%M%SZ` and use its output.
+**Windows-safe:** the timestamp must be usable as a FILENAME on Windows — that
+means NO colons (`:` is invalid in a Windows filename). A colon form like
+`%Y-%m-%dT%H:%M:%SZ` (e.g. `2026-08-26T00:10:17Z`) is NOT safe; the no-colon
+form `%Y%m%dT%H%M%SZ` (e.g. `20260826T001017Z`) is. If you cannot run `Bash`,
+OMIT the timestamp and use any name under the directory (e.g.
+`adversary-findings.json`). NEVER invent a timestamp: one that does not
 correspond to the real wall clock is a lie and defeats the purpose of having it.
 A missing timestamp is honest; a fabricated one is not.
 

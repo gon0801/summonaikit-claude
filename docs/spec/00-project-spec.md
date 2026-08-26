@@ -1798,12 +1798,12 @@ las 5 condiciones:
    vocabulario de runners + `py_compile`/`compileall`/`dotnet build`/`bash -n`/
    `sh -n`/`node --check`/`git diff --check`) **y un resultado de ÉXITO**
    (`exit 0`, `N passed`, `ok`, `en verde`, `0 failed`, …). Un nombre genérico
-   ("batería", "checks") NO cuenta. **El predicado corre sobre TODO el texto del
-   recibo (`$text`), como el diseño §4.3** — no exige que el comando/resultado
-   estén pegados al label: el comando y el resultado pueden vivir en cualquier
-   línea del recibo. Límite declarado (así lo fija el diseño §4.3): la
-   verificación humana audita el recibo completo; el gate lo toma de toda la
-   superficie de texto del asistente.
+   ("batería", "checks") NO cuenta. **El predicado corre sobre el SPAN del label**
+   — el fragmento desde `VERIFIED BY SUBAGENT:` hasta el fin de ESA línea, como
+   el diseño §4.3 (y no sobre el recibo entero). Esto cierra dos defectos: un
+   `pytest` mencionado en otra línea o un `ok` suelto NO satisfacen el predicado
+   (crédito por piezas dispersas), y un `TypeError:` en otra línea NO veta la
+   atestación legítima (falso positivo del veto).
 3. **Host con canal interno ciego** — evaluado sobre `$HOST` (JAMÁS `$TARGET`:
    en zcode el fallback 5.4 deja `TARGET=claude`). En este repo es `$HOST=zcode`.
    `kimi` es **candidato** con canal interno `unknown` declarado — el label ahí
@@ -1816,7 +1816,11 @@ las 5 condiciones:
 **El veto de fallo.** Cualquier señal de fallo DESCALIFICA el label, aunque
 también aparezca un "passed". El veto reusa las constantes del raíl del EVENTO —
 `FAILURE_SIGNAL_RE_CI` y `FAILURE_SIGNAL_RE_CS` — en la forma EXACTA del hook
-(dos greps, variables expandidas, la CS case-SENSITIVE). NUNCA con comillas
+(dos greps, variables expandidas, la CS case-SENSITIVE) **MÁS una forma propia
+del label** (el raíl de evento recibe el `exit` por otro canal y esas constantes
+no cubren `exit 1`): `exit[[:space:]]+[1-9]`. **Responsabilidad del lead
+(declarado):** el diseño original tenía `exit [1-9]`; al reusar las constantes se
+perdió esa cobertura y se re-sumó como extra del label. NUNCA con comillas
 simples (buscaría el literal del nombre y el veto jamás dispararía). Reusar esas
 constantes garantiza por construcción que el label jamás sea MÁS LAXO que el
 raíl del evento y hereda sus mejoras sin drift.

@@ -221,23 +221,38 @@ SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:
 # otra no, y el sintoma seria un host medio-ciego imposible de razonar.
 saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
 
+# Task 14.2 — extrae el SPAN del label: desde 'VERIFIED BY SUBAGENT:' hasta el
+# fin de ESA linea. El predicado (§4.3) evalua comando/resultado/veto SOLO sobre
+# este fragmento, NO sobre el recibo entero — asi un 'pytest' mencionado en otra
+# linea, un 'ok' suelto en otra, o un 'TypeError:'/fallo de otra linea NO cuentan
+# (fix codex #2 credito por piezas dispersas / #3 falso positivo del veto).
+saikit_verif_span() {
+  local saikit_span_text="$1"
+  printf '%s' "$saikit_span_text" | awk 'match($0, /VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:/) { print substr($0, RSTART); exit }'
+}
+
 # Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
 # verificacion en este turno (host con canal interno ciego + verifier
-# despachado + predicado §4.3: label + comando + resultado de EXITO + sin señal
-# de FALLO). El argumento es el texto del asistente ($text). $HOST y
-# $agents_seen son variables del shell. El veto reusa FAILURE_SIGNAL_RE_CI/CS en
-# la forma EXACTA del raíl de evento (:1930-1935): dos greps, variables
-# EXPANDIDAS y la CS case-SENSITIVE. NUNCA con comillas simples (buscaria el
-# literal del nombre y el veto jamas dispararia — design §4.3).
+# despachado + predicado §4.3 sobre el SPAN del label: comando + resultado de
+# EXITO + sin señal de FALLO). El veto reusa FAILURE_SIGNAL_RE_CI/CS en la forma
+# EXACTA del raíl de evento (:1930-1935) — dos greps, variables EXPANDIDAS, la CS
+# case-SENSITIVE — MAS `exit[[:space:]]+[1-9]`, este ultimo PROPIO del label: el
+# raíl de evento recibe el exit por otro canal y FAILURE_SIGNAL_RE_CI/CS no
+# cubre 'exit 1'. (Responsabilidad del lead: el diseño original tenia exit [1-9];
+# se reuso la constante del raíl y se re-sumo el exit aca. NUNCA comillas
+# simples: buscaria el literal del nombre y el veto jamas dispararia — §4.3.)
 saikit_verif_subagente_credita() {
   local saikit_text="$1"
+  local saikit_span
   saikit_host_ciego || return 1
   printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
-  printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE" || return 1
-  printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || return 1
-  printf '%s' "$saikit_text" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || return 1
-  { printf '%s' "$saikit_text" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
-    || printf '%s' "$saikit_text" | grep -Eq "$FAILURE_SIGNAL_RE_CS"; } && return 1
+  saikit_span="$(saikit_verif_span "$saikit_text")"
+  [ -n "$saikit_span" ] || return 1
+  printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || return 1
+  printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || return 1
+  { printf '%s' "$saikit_span" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+    || printf '%s' "$saikit_span" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
+    || printf '%s' "$saikit_span" | grep -Eiq 'exit[[:space:]]+[1-9]'; } && return 1
   return 0
 }
 
