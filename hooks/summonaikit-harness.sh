@@ -208,10 +208,11 @@ SAIKIT_VERIFIED_SUBAGENT_RE='VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:'
 # legitimas. Con fronteras de palabra: "bateria"/"checks" NO cuentan.
 SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
 # Resultado de EXITO que el label DEBE declarar (el veto de fallo aparte, abajo).
-# OJO a la frontera izquierda de la rama "0 failed": esta DENTRO del grupo con
-# frontera, asi "10 failed" NO matchea (el "0" va precedido por "1", un word char;
-# ademas el veto FAILURE_SIGNAL_RE_CI lo atrapa por la rama [1-9]... failed).
-SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[0-9]+[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|en[[:space:]]+verde|todo[[:space:]]+verde|sin[[:space:]]+errores'
+# OJO a dos aristas (grok r1 #3): el conteo de "passed" es [1-9][0-9]* (excluye
+# "0 passed"/"0 passing" — no es un exito), y NO se acepta "en verde" suelto
+# (negable: "no en verde" lo matchearia) — queda "todo verde" y "sin errores",
+# que no se niegan. La frontera del grupo sigue excluyendo "10 failed".
+SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[1-9][0-9]*[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|todo[[:space:]]+verde|sin[[:space:]]+errores'
 
 # Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy
 # solo zcode lo tiene MEDIDO (turno vivo 2026-08-25). kimi es candidato con el
@@ -226,9 +227,14 @@ saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
 # este fragmento, NO sobre el recibo entero — asi un 'pytest' mencionado en otra
 # linea, un 'ok' suelto en otra, o un 'TypeError:'/fallo de otra linea NO cuentan
 # (fix codex #2 credito por piezas dispersas / #3 falso positivo del veto).
+# (grok r1 #2) se extrae con grep -Eio (case-INSENSITIVE) y con la CONSTANTE
+# SAKIT_VERIFIED_SUBAGENT_RE, no con awk case-sensitive hardcodeado: el detector
+# del label es -Eiq, asi que una forma 'Verified by subagent:' o en minusculas
+# debe producir un span igual — si no, entra al camino exclusivo pero sale span
+# vacio (no acredita), que es un falso negativo.
 saikit_verif_span() {
   local saikit_span_text="$1"
-  printf '%s' "$saikit_span_text" | awk 'match($0, /VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:/) { print substr($0, RSTART); exit }'
+  printf '%s' "$saikit_span_text" | grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE[^[:cntrl:]]*" | head -n1
 }
 
 # Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
@@ -2515,7 +2521,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # NO el fallback de prosa/runner — asi un label con fallo no acredita por la
   # via laxa de prosa (A11) y el label queda a la par del raíl de evento. Sin
   # label, comportamiento identico al de antes.
-  if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text"; then
+  # Task 14.2 / grok r1 #1: se juzga sobre $text_hatch (el texto del turno
+  # ACTUAL, last_assistant_message) NO sobre $text (que concatena el tail de 160
+  # lineas del transcript con turnos ANTERIORES). Un 'VERIFIED BY SUBAGENT:' que
+  # un turno previo dejo en el tail NO debe encender la via exclusiva del label
+  # ni servir su span para acreditar el turno nuevo — la misma clase que las
+  # escotillas PAUSED/DELEGATED ya cierran con text_hatch (Task 8.2).
+  if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text_hatch"; then
     missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
   fi
 
