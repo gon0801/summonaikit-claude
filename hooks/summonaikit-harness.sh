@@ -1759,7 +1759,36 @@ record_agent() {
   if [ -z "$implemented" ]; then implemented="0"; fi
   if [ -z "$verified" ]; then verified="0"; fi
   case ",$agents_seen," in
-    *",$agent,"*) ;;
+    *",$agent,"*)
+      # Trampa de orden con adversary TARDIO (hallada por Greptile en el port,
+      # PR #12 de summonaikit-kimi 2026-08-26; confirmada aca ejecutandola).
+      # El dedupe conserva la posicion de la PRIMERA aparicion, asi que un lead
+      # que ya corrio la ceremonia y DESPUES agrega el adversary queda con
+      # `implementer,verifier,reviewer,adversary`: orden invalido para la regex
+      # de 4 roles, y ningun re-despacho lo arregla — el turno solo salia
+      # agotando presupuesto. Era el camino HONESTO castigado (el lead que
+      # reacciona "esto tocaba auth, mejor lo ataco").
+      # Arreglo acotado: un RE-despacho del reviewer, y solo cuando el adversary
+      # ya esta en agents_seen, MUEVE al reviewer al final — porque lo que la
+      # regla de orden protege es que la adjudicacion ocurra DESPUES del ataque,
+      # y eso es exactamente lo que acaba de pasar. Alcance minimo a proposito:
+      # cualquier otro rol re-despachado conserva su posicion (el dedupe de
+      # siempre), y un adversary que corrio SIN reviewer posterior sigue
+      # bloqueando (lo fija caso_g3_adversary_fuera_de_orden_bloquea, que
+      # siembra el mismo agents_seen sin re-despacho).
+      if [ "$agent" = "reviewer" ]; then
+        case ",$agents_seen," in
+          *",adversary,"*)
+            # Quita el token exacto y re-anexa al final. Sin tr/paste (que el
+            # hook no usa en ningun otro lado): comas de borde + un sed, y las
+            # expansiones POSIX limpian los bordes.
+            ra_lista="$(printf ',%s,' "$agents_seen" | sed 's/,reviewer,/,/')"
+            ra_lista="${ra_lista#,}"; ra_lista="${ra_lista%,}"
+            if [ -z "$ra_lista" ]; then agents_seen="reviewer"; else agents_seen="$ra_lista,reviewer"; fi
+            ;;
+        esac
+      fi
+      ;;
     *)
       if [ -z "$agents_seen" ]; then agents_seen="$agent"; else agents_seen="$agents_seen,$agent"; fi
       ;;
