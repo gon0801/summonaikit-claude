@@ -62,6 +62,8 @@ PHASE="$SUMMONAIKIT_HOOK_PHASE"
 # unifico por TOOL_HINT.
 TOOL_HINT="the Task tool"
 if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
+# Phase 15: en dsh la tool model-facing de delegacion es `subagent` (no Task).
+if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the subagent tool"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
 # ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
@@ -2312,6 +2314,14 @@ Stop now, report the failed gates, and ask the user before another retry."
     printf '%s\n' "$message" >&2
     exit 2    # saikit-5.4-zcode-budget (mutacion: exit 2 -> exit 0)
   fi
+  # Phase 15: dsh consume {"decision":"block","reason":"..."} del stdout (el
+  # adaptador @summonaikit/dsh-gate parsea ese JSON, no continue:false/stopReason).
+  # Sin esto el presupuesto agotado cerraria silenciosamente en dsh.
+  if [ "$TARGET" = "dsh" ]; then
+    printf '{"decision":"block","reason":"%s"}\n' "$escaped"
+    printf '%s\n' "$message" >&2
+    exit 0
+  fi
   printf '{"continue":false,"stopReason":"%s"}\n' "$escaped"
   printf '%s\n' "$message" >&2
   exit 0
@@ -2696,7 +2706,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # con subagentType), y el env map entrega TARGET=grok en los 37 dumps. La
   # condicion del diseño ("solo si 7.1 mide que el rol llega") cumplida por
   # partida doble. Los tres canales ya los leia la 7.3.
-  case "$TARGET" in claude|codex|grok)
+  # Phase 15 (D3): dsh entra — 15.1 midio el rol por tools/* (no ciego, D7), y el
+  # adaptador @summonaikit/dsh-gate traduce la tool `subagent` a un PostToolUse
+  # con subagent_type (D4), asi que la ceremonia se exige como en claude.
+  case "$TARGET" in claude|codex|grok|dsh)
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
     # de herramienta) trababa el turno sin salida. La declaracion en el recibo

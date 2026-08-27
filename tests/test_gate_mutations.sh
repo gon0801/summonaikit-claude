@@ -137,6 +137,7 @@ G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y ci
 G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
 G1|host_dsh_no_reconocido|la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)
+G1|tool_hint_sin_dsh|la rama TOOL_HINT de dsh se apaga y el contrato vuelve a nombrar Task tool (Phase 15, D4)
 G1|phase_sin_user_prompt_submit|el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a "tool": nunca arma (D4)
 G2|toolresult_veto_quitado|el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)
 G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)
@@ -144,6 +145,7 @@ G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y 
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
 G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
 G3|ceremonia_sin_grok|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
+G3|ceremonia_sin_dsh|la rama de ceremonia vuelve a claude|codex|grok y el gate queda inerte en dsh (D1/D3, Phase 15)
 G3|adv_keyword_sin_precedencia|la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)
 G3|adv_delegated_sin_adversary|la escotilla DELEGATED vuelve a no perdonar awaiting adversary y una delegacion viva quema un ciclo (D6, Task 13.5)
 G3|adv_linea_no_se_exige|la linea ADVERSARY del recibo deja de exigirse y un turno fast con adversary cierra sin reporte (D4/B1, Task 13.5)
@@ -535,6 +537,13 @@ mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; th
 # mut_host_codex_sin_rama. Sin la rama, target dsh resuelve HOST=other y el
 # armado no crea state/dsh/. Lo atrapa caso_g1_dsh_arma_y_aisla_estado.
 mut_host_dsh_no_reconocido() { sed 's/= "dsh" \]; then/= "NUNCA_dsh" ]; then/'; }
+# Phase 15 (D1/D3): revierte la ceremonia a claude|codex|grok — el gate vuelve a
+# quedar inerte en dsh. Lo atrapa caso_g2_dsh_ceremonia_incompleta_bloquea (el
+# turno sin verifier pasa a cerrar en vez de bloquear).
+mut_ceremonia_sin_dsh()      { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|codex|grok)/'; }
+# Phase 15 (D4): vuelve la tool model-facing de dsh a "Task tool". Lo atrapa
+# caso_g1_dsh_contrato_nombra_subagent.
+mut_tool_hint_sin_dsh()      { sed 's|if \[ "\$TARGET" = "dsh" \]; then TOOL_HINT="the subagent tool"|if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the Task tool"|'; }
 # Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
 # inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
 # incompleto pasa a cerrar limpio y el decision:block desaparece).
