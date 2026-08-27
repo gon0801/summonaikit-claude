@@ -1957,6 +1957,15 @@ lo audita el humano. kimi NO es host ciego medido — es candidato `unknown`
 declarado (Core Rule 2); el port mide antes de prender el label. En un host con
 canal observable, un comando no reconocido como runner (`py_compile`) sigue sin
 acreditar por la vía normal (problema de vocabulario, fuera de alcance).
+**Residual (Greptile r3 del PR #72, 2026-08-27, medido):** un `failed`/`error`
+PELADO sin conteo (`VERIFIED BY SUBAGENT: pytest -q, ok, failed.`) no lo veta
+ninguna constante — `FAILURE_SIGNAL_RE_CI` cubre `N failed` y `failed: N`,
+`_CS` las formas de runner, y el veto propio del label `exit [1-9]` y el conteo
+cero — así que ese label acredita. El raíl de EVENTO usa exactamente las mismas
+constantes: el label queda A LA PAR del raíl (el invariante de esta sección), no
+más laxo. Arreglo candidato, en PR propio con caso + mutación + regrabado: veto
+propio del label para `fail(ed|ing|ure|s)?`/`error(s)?` pelados NO precedidos
+de `0 ` (que es forma de éxito: `0 failed`).
 
 ## Non-Goals
 

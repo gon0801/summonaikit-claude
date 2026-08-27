@@ -7,6 +7,51 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-27 — PR #72 (Phase 14: 14.2–14.4, atestación de verificación delegada) + PR #79 incluido — deploy REPARA los tres hooks vivos y los perfiles en 4 hosts
+
+- **Qué traía:** cierre de la Phase 14 — 14.2 (vía de crédito del label
+  `VERIFIED BY SUBAGENT:` en hosts de canal interno ciego, con el predicado
+  sobre TODOS los spans, veto de conteo cero y juicio sobre el turno actual),
+  14.3 (esquema del artefacto en `agents/adversary.md` + reviewer que declara
+  malformado), 14.4 (spec/ledger). Merge `ffd9987` (tip `3ea6b1e`). El PR
+  cerró con 3 rondas de bots + cross-reviews qwen r1/r2 y grok r1; el lead
+  cerró los últimos tres hallazgos (Greptile P1 `head -n1`, CodeRabbit
+  `0 passed`, caso faltante de `fe81de5`) — rojo medido por mutación en cada
+  uno. **También cubre el PR #79** (`;` y `)` en el delimitador del strip),
+  mergeado el 27 sin deploy propio: codex y grok estaban DOS PRs atrás (#75
+  y #79), claude uno (#79).
+- **Deploy — hook (una pasada):** el default REPARÓ `~/.claude/hooks`
+  (backup `saikit-backups/summonaikit-harness.sh.nuestro.20260827-045435.bak`),
+  `--host codex` REPARÓ `~/.codex/hooks` (`…-045438.bak`), `--host grok`
+  REPARÓ `~/.grok/hooks` (`…-045443.bak`). `cmp` byte a byte contra la
+  fuente: **IDÉNTICO los tres**, sha
+  `c96e7cdfed94da4954f9d617f0321d528fb4d800ba73a34fe042ba8cba6f828c`.
+- **Deploy — perfiles:** `reviewer.md` y `adversary.md` REPARADOS en
+  `~/.claude/agents` (`--host claude`), `~/.zcode/agents` (`--host zcode`,
+  que además re-REGISTRÓ el harness en el user-config, 4 fases, backup
+  `config.json.zcode.20260827-045454.bak`), `~/.grok/agents` (con el hook) y
+  `~/.agents/agents` (`--host kimi`; el port kimi ya no escribe ahí en
+  paralelo — PR #77). Verificado: los 4 `adversary.md` vivos llevan
+  `"attacked"` y `OMIT the timestamp` (esquema del contrato, 14.3).
+- **`check-hook-registration.sh`:** SILENCIO (ningún diagnóstico en stdout/
+  stderr) en sus cuatro formas — claude settings + local, `--codex-hooks-json`,
+  `--grok-hooks-dir`, `--zcode-config`. El `rc` no informa: el checker siempre
+  sale 0 y habla por texto (completo/incompleto/`unknown`/advisory); lo que
+  acredita es el silencio, re-corrido y citado tal cual.
+- **Verificación previa al merge:** CI 5/5 sobre `3ea6b1e` (suite completa,
+  quality, secrets, Greptile, CodeRabbit); local contra el hook de la rama:
+  `test_gate_mutations`, `test_golden_harness`, `test_hook_source`,
+  `test_adversary_artifact_contract` en verde; línea base regrabada con el
+  tooling del #76 (header sin la barra de escape; 0 bloques movidos).
+- **Límite residual declarado (Greptile r3, hilo abierto a propósito):** un
+  `failed`/`error` PELADO sin conteo (`pytest -q, ok, failed.`) no lo veta ni
+  `FAILURE_SIGNAL_RE_CI/CS` ni el veto propio del label — el raíl de evento
+  usa las mismas constantes, así que el label queda A LA PAR del raíl (el
+  invariante de la 14.2), no más laxo. Escrito en el spec § Atestación con
+  el arreglo candidato; va en un PR propio con caso + mutación + regrabado.
+- **Operador:** Gon (sesión claude; review, merge y deploy ejecutados por el
+  lead).
+
 ## 2026-08-26 — PR #77 (perfil adversary honesto por host + límite newline-filename) — deploy REPARA hook claude y ambos perfiles
 
 - **Qué traía:** docs del perfil. Publica en `agents/adversary.md` la
