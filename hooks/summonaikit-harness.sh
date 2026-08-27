@@ -195,6 +195,124 @@ TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.
 # bateria (_RECIBO_SIN_RETRO) debe seguir pidiendo evidencia.
 VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corrí|no se corrio|no se corrió|no se corrieron|no se ejecuto|no se ejecutó|no se ejecutaron|sin tests'
 
+# Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego). Via
+# ADICIONAL de credito de verificacion, SOLO en hosts donde el hook NO ve el
+# canal interno ($HOST=zcode, medido en el turno vivo 2026-08-25). Ver
+# docs/phase-14.1-atestacion-verificacion-delegada.md (§3.3 y §4.3); el label se
+# matchea como SUBCADENA libre sobre $text (igual que ROLE FALLBACK, NO
+# has_receipt_label): una frase que vive en cualquier parte del recibo.
+SAIKIT_VERIFIED_SUBAGENT_RE='VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:'
+# Comando que el label DEBE nombrar (un comando re-corrible). UNION del
+# vocabulario de runners (TEST_RUNNER_RE) + comandos de compilacion/type-check/
+# sintaxis que hoy NO estan en la lista de runners pero son verificaciones
+# legitimas. Con fronteras de palabra: "bateria"/"checks" NO cuentan.
+SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
+# Resultado de EXITO que el label DEBE declarar (el veto de fallo aparte, abajo).
+# OJO a dos aristas (grok r1 #3): el conteo de "passed" es [1-9][0-9]*, y NO se
+# acepta "en verde" suelto (negable: "no en verde" lo matchearia) — queda "todo
+# verde" y "sin errores", que no se niegan. La frontera del grupo sigue
+# excluyendo "10 failed". PERO el conteo [1-9] NO alcanza para excluir
+# "0 passed": la rama `pass(ed|ing)` pelada lo rematchea (CodeRabbit, PR #72) —
+# ERE no tiene lookbehind, asi que "0 passed"/"0 passing"/"0 tests passed" se
+# descalifican con el VETO propio del label (SAIKIT_VERIFIED_CERO_RE, abajo),
+# no aca: cero pruebas corridas no es una verificacion.
+SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[1-9][0-9]*[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|todo[[:space:]]+verde|sin[[:space:]]+errores'
+# Veto propio del label: un conteo CERO de exito ("0 passed", "0 passing",
+# "0 tests passed", "0 ok") no acredita — "10 passed" no cae (el 0 va precedido
+# de un digito). La frontera final ADMITE el punto: la linea del recibo suele
+# terminar en "0 passed." (rojo medido: sin eso el veto no disparaba).
+SAIKIT_VERIFIED_CERO_RE='(^|[^0-9.])0[[:space:]]+(tests?[[:space:]]+)?(pass(ed|ing)|ok|okay)([^A-Za-z0-9_-]|$)'
+
+# Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy
+# solo zcode lo tiene MEDIDO (turno vivo 2026-08-25). kimi es candidato con el
+# canal `not_observed` — se agrega aca, y en ningun otro lado, cuando alguien lo
+# mida. La condicion estaba escrita DOS veces (predicado + ruteo de la
+# evidencia): con dos copias, el dia que se mida otro host una se actualiza y la
+# otra no, y el sintoma seria un host medio-ciego imposible de razonar.
+saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
+
+# Task 14.2 — extrae el SPAN del label: desde 'VERIFIED BY SUBAGENT:' hasta el
+# fin de ESA linea. El predicado (§4.3) evalua comando/resultado/veto SOLO sobre
+# este fragmento, NO sobre el recibo entero — asi un 'pytest' mencionado en otra
+# linea, un 'ok' suelto en otra, o un 'TypeError:'/fallo de otra linea NO cuentan
+# (fix codex #2 credito por piezas dispersas / #3 falso positivo del veto).
+# (grok r1 #2) se extrae con grep -Eio (case-INSENSITIVE) y con la CONSTANTE
+# SAKIT_VERIFIED_SUBAGENT_RE, no con awk case-sensitive hardcodeado: el detector
+# del label es -Eiq, asi que una forma 'Verified by subagent:' o en minusculas
+# debe producir un span igual — si no, entra al camino exclusivo pero sale span
+# vacio (no acredita), que es un falso negativo.
+# (Greptile P1, PR #72) devuelve TODOS los spans, uno por linea — NO solo el
+# primero: con `| head -n1` un recibo con un label de EXITO seguido de otro con
+# `failed: 1` / `exit 1` acreditaba, porque el veto jamas veia el segundo. El
+# predicado juzga cada span (abajo); el veto corre sobre todos.
+saikit_verif_spans() {
+  local saikit_span_text="$1"
+  printf '%s' "$saikit_span_text" | grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE[^[:cntrl:]]*"
+}
+
+# Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
+# verificacion en este turno (host con canal interno ciego + verifier
+# despachado + predicado §4.3 sobre el SPAN del label: comando + resultado de
+# EXITO + sin señal de FALLO). El veto reusa FAILURE_SIGNAL_RE_CI/CS en la forma
+# EXACTA del raíl de evento (:1930-1935) — dos greps, variables EXPANDIDAS, la CS
+# case-SENSITIVE — MAS `exit[[:space:]]+[1-9]`, este ultimo PROPIO del label: el
+# raíl de evento recibe el exit por otro canal y FAILURE_SIGNAL_RE_CI/CS no
+# cubre 'exit 1'. (Responsabilidad del lead: el diseño original tenia exit [1-9];
+# se reuso la constante del raíl y se re-sumo el exit aca. NUNCA comillas
+# simples: buscaria el literal del nombre y el veto jamas dispararia — §4.3.)
+saikit_verif_subagente_credita() {
+  local saikit_text="$1"
+  local saikit_spans saikit_span saikit_credito
+  saikit_host_ciego || return 1
+  printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
+  saikit_spans="$(saikit_verif_spans "$saikit_text")"
+  [ -n "$saikit_spans" ] || return 1
+  # Veto sobre TODOS los spans (Greptile P1, PR #72): cualquier label con señal
+  # de fallo descalifica el turno entero — un exito declarado antes o despues de
+  # un fallo declarado no lo tapa. "Nunca mas laxo que el rail": el rail de
+  # evento ve todas las lineas, el label tambien.
+  # El cuarto grep (SAIKIT_VERIFIED_CERO_RE) descalifica "0 passed" y formas
+  # hermanas: RESULT_RE las rematchea por la rama `passed` pelada (CodeRabbit).
+  { printf '%s\n' "$saikit_spans" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+    || printf '%s\n' "$saikit_spans" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
+    || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]' \
+    || printf '%s\n' "$saikit_spans" | grep -Eiq "$SAIKIT_VERIFIED_CERO_RE"; } && return 1
+  # Credito: ALGUN span trae comando Y resultado de exito en la MISMA linea.
+  # Comando en un span y resultado en otro siguen siendo piezas dispersas (codex
+  # #2) y no acreditan.
+  saikit_credito=1
+  while IFS= read -r saikit_span; do
+    [ -n "$saikit_span" ] || continue
+    printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || continue
+    printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || continue
+    saikit_credito=0
+    break
+  done <<SAIKIT_SPANS_EOF
+$saikit_spans
+SAIKIT_SPANS_EOF
+  return "$saikit_credito"
+}
+
+# Task 14.2 — devuelve 0 si la evidencia de verificacion esta satisfecha (sin
+# contar verified=1, que se chequea afuera). Si el label VERIFIED BY SUBAGENT
+# esta PRESENTE, el predicado §4.3 es el UNICO juez (no se consulta el fallback
+# de prosa/runner): asi un label con fallo no acredita por la via laxa (A11) y el
+# label queda a la par del raíl de evento — "nunca mas laxo que el raíl". Sin
+# label, comportamiento identico al de antes (design 14.1 §3/§4.3).
+saikit_verif_evidence_ok() {
+  local saikit_ok_text="$1"
+  # El label solo es juez en hosts de canal interno ciego (zcode). En cualquier
+  # otro host (o sin label), la evidencia se juzga por el camino de antes
+  # (prosa runner|skip OR runner en posicion de comando) — asi el label no cambia
+  # el comportamiento en claude/codex/grok (la frase no los toca).
+  if saikit_host_ciego && printf '%s' "$saikit_ok_text" | grep -Eiq "$SAIKIT_VERIFIED_SUBAGENT_RE"; then
+    saikit_verif_subagente_credita "$saikit_ok_text"
+  else
+    { printf '%s' "$saikit_ok_text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE" \
+      || printf '%s' "$saikit_ok_text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }
+  fi
+}
+
 # Failure-signal patterns for the verification guard (record_tool_evidence).
 # A11 (medido 59/59, Task 1.4): el tool_response real de Bash NO trae exitCode,
 # asi que la unica forma de detectar que un runner revento es el TEXTO de su
@@ -1010,6 +1128,7 @@ Review: ...
 Close: ...
 Retro: ...
 ADVERSARY: N findings, highest severity X — required ONLY in receipts of turns where an adversary actually ran (any lane); presence only, the numbers are never checked. ROLE FALLBACK: ADVERSARY (reason) substitutes the line when the dispatched adversary died without reporting.
+VERIFIED BY SUBAGENT: <comando y resultado> — declaration ONLY for a receipt on a host whose INTERNAL channel is blind, i.e. the harness cannot see a delegated subagent's tool events (zcode today; kimi once measured). When you delegated verification to a verifier subagent and its evidence never reached the harness, name the exact command and its SUCCESS result here, on the SAME line as the label (e.g. `VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0`); the harness reads the command and result only from the label's own line, so a command placed on the next line is not seen. A human re-runs the named command. Invalid on hosts that DO surface those events — there keep the real evidence; a declared failure (failed / exit non-zero) never counts. Golden: the 2026-08-25 zcode live turn (already documented in the smoke doc).
 
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
@@ -2504,9 +2623,23 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # TEST_RUNNER_CMD_RE — grep ancla ^ por LINEA, asi que en prosa solo cuenta
   # una linea que ESTEME en posicion de comando; el credito real del carril
   # run.sh vive en el evento (arriba), este es el fallback de prosa.
-  if [ "$verified" != "1" ] && ! { printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_WORD_RE|$VERIFY_SKIP_RE" \
-                                      || printf '%s' "$text" | grep -Eiq "$TEST_RUNNER_CMD_RE"; }; then
-    missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
+  # Task 14.2 — via ADICIONAL de credito: label VERIFIED BY SUBAGENT en hosts con
+  # canal interno ciego ($HOST=zcode). Las 5 condiciones del contrato (14.1 §3):
+  # prefijo literal + comando+resultado (§4.3) + HOST ciego (sobre $HOST, JAMAS
+  # $TARGET: en zcode el fallback 5.4 deja TARGET=claude) + verifier en
+  # agents_seen + verified!=1 (la condicion de este if). Cuando el label esta
+  # PRESENTE, la evidencia la juzga SOLO el predicado §4.3 (con el veto de fallo),
+  # NO el fallback de prosa/runner — asi un label con fallo no acredita por la
+  # via laxa de prosa (A11) y el label queda a la par del raíl de evento. Sin
+  # label, comportamiento identico al de antes.
+  # Task 14.2 / grok r1 #1: se juzga sobre $text_hatch (el texto del turno
+  # ACTUAL, last_assistant_message) NO sobre $text (que concatena el tail de 160
+  # lineas del transcript con turnos ANTERIORES). Un 'VERIFIED BY SUBAGENT:' que
+  # un turno previo dejo en el tail NO debe encender la via exclusiva del label
+  # ni servir su span para acreditar el turno nuevo — la misma clase que las
+  # escotillas PAUSED/DELEGATED ya cierran con text_hatch (Task 8.2).
+  if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text_hatch"; then
+    missing="$missing- Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a \`VERIFIED BY SUBAGENT: <command> <result>\` on one line counts; otherwise declare an explicit skipped-check reason).\n"
   fi
 
   # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude

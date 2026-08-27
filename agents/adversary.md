@@ -130,8 +130,16 @@ state, or timing does this break?**
 
 ## Output
 
-Write `.saikit/findings/adversary-<timestamp-UTC>.json` (date it in UTC with
-`Bash`; any name under that directory is allowed, this is the convention):
+Write `.saikit/findings/adversary-<timestamp-UTC>.json`. **The schema is the
+contract — nothing else.** Use exactly the keys below: `role`, `attacked`, and
+`findings[]`, where each finding has `severity`, `location`, `claim`, `trigger`,
+`evidence`, `confirmed`. Do NOT invent a different shape: not a `title`/`detail`
+pair, not a flat list, not an extra field such as `generated_at_utc`. The
+reviewer adjudicates the schema: an artifact that does not use this exact shape
+is declared MALFORMED, and a malformed artifact is not a finding — it is the
+reason the reviewer reports back to the lead. (The live artifact on 2026-08-25
+came out with `title`/`detail` and a made-up `generated_at_utc`, which is
+exactly the failure this rule prevents.)
 
 ```json
 {
@@ -150,6 +158,18 @@ Write `.saikit/findings/adversary-<timestamp-UTC>.json` (date it in UTC with
   ]
 }
 ```
+
+**Timestamp.** The only timestamp this artifact carries is the one in the
+FILENAME — `adversary-<timestamp-UTC>.json` — and it is OBTAINED WITH `Bash`
+(the role has `Bash`): run `date -u +%Y%m%dT%H%M%SZ` and use its output.
+**Windows-safe:** the timestamp must be usable as a FILENAME on Windows — that
+means NO colons (`:` is invalid in a Windows filename). A colon form like
+`%Y-%m-%dT%H:%M:%SZ` (e.g. `2026-08-26T00:10:17Z`) is NOT safe; the no-colon
+form `%Y%m%dT%H%M%SZ` (e.g. `20260826T001017Z`) is. If you cannot run `Bash`,
+OMIT the timestamp and use any name under the directory (e.g.
+`adversary-findings.json`). NEVER invent a timestamp: one that does not
+correspond to the real wall clock is a lie and defeats the purpose of having it.
+A missing timestamp is honest; a fabricated one is not.
 
 Order by severity as it affects the user, not by how hard it was to find.
 

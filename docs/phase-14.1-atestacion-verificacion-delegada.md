@@ -212,8 +212,13 @@ Cómo se acota, sin aflojar en dónde sí se ve:
 3. **Comando + resultado — el predicado concreto que el hook evalúa.** Es el único
    freno del mecanismo: sin forma detectable, el caso que debe BLOQUEAR no se
    puede escribir y la implementación mínima colapsa en un pase libre. Se define
-   así (todo sobre el texto del asistente, `$text`, la MISMA superficie que usa
-   `ROLE FALLBACK`):
+   así — **sobre el SPAN del label**, es decir el fragmento desde
+   `VERIFIED BY SUBAGENT:` hasta el fin de ESA línea (NO sobre el recibo
+   entero). Esto cierra dos defectos que el predicado sobre `$text` completo
+   tenía: (a) **crédito por piezas dispersas** — un label vacío + un `pytest`
+   mencionado en otra línea + un `ok` suelto en otra NO satisfacen el
+   predicado; (b) **falso positivo del veto** — un `TypeError:` mencionado en
+   la línea `Understand` NO veta la atestación legítima del label:
 
    **Qué cuenta como COMANDO (predicado `SAIKIT_VERIFIED_CMD_RE`).** La
    declaración debe nombrar al menos un comando de verificación reconocido. El
@@ -236,9 +241,15 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    "passed". El veto se evalúa con las constantes que el hook YA define para el
    raíl del EVENTO: `FAILURE_SIGNAL_RE_CI` (hook:247) y `FAILURE_SIGNAL_RE_CS`
    (hook:261), con DOS greps en la MISMA forma que usa el hook en :1930-1935 —
-   variables EXPANDIDAS y la CS case-SENSITIVE:
-   `{ grep -Eiq "$FAILURE_SIGNAL_RE_CI" || grep -Eq "$FAILURE_SIGNAL_RE_CS"; }`
-   (sobre `$text`). NOTA de notación (las dos cosas importan, verificado por el
+   variables EXPANDIDAS y la CS case-SENSITIVE — **MÁS una forma propia del
+   label**: `exit[[:space:]]+[1-9]`:
+   `{ grep -Eiq "$FAILURE_SIGNAL_RE_CI" || grep -Eq "$FAILURE_SIGNAL_RE_CS" || grep -Eiq 'exit[[:space:]]+[1-9]'; }`
+   (sobre el SPAN). **Responsabilidad del lead (declarado):** el diseño ORIGINAL
+   tenía `exit [1-9]` en el veto; al reusar `FAILURE_SIGNAL_RE_CI/CS` (que NO
+   cubre `exit 1`, forma que el raíl de evento recibe por otro canal) se perdió
+   esa cobertura, y la corrección NO es volver atrás sino SUMAR el `exit [1-9]`
+   como extra propio del label. NOTA de notación (las dos cosas importan,
+   verificado por el
    lead): NO escribir `grep -Eiq 'FAILURE_SIGNAL_RE_CI|FAILURE_SIGNAL_RE_CS'` —
    las comillas simples harían a grep buscar el TEXTO literal
    "FAILURE_SIGNAL_RE_CI", no la regex, y el veto nunca dispararía (peor que no
@@ -260,15 +271,23 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    cualquier mejora futura de esas regex sin drift (una sola fuente, como ya hace
    `TEST_RUNNER_RE`).
 
-   **Predicado final (todo a la vez):** `label presente` Y
-   `SAIKIT_VERIFIED_CMD_RE` matchea Y `SAIKIT_VERIFIED_RESULT_RE` matchea Y
-   `{ grep -Eiq "$FAILURE_SIGNAL_RE_CI" || grep -Eq "$FAILURE_SIGNAL_RE_CS"; }`
+   **Predicado final (todo a la vez, sobre el SPAN del label):** `span presente`
+   Y `SAIKIT_VERIFIED_CMD_RE` matchea Y `SAIKIT_VERIFIED_RESULT_RE` matchea Y
+   `{ grep -Eiq "$FAILURE_SIGNAL_RE_CI" || grep -Eq "$FAILURE_SIGNAL_RE_CS" || grep -Eiq 'exit[[:space:]]+[1-9]'; }`
    NO matchea. Cualquiera
    de las cuatro que falle ⇒ acreditación NO se da y el gate sigue pidiendo
    evidencia. (Sin el veto, "12 passed, 3 failed" y "12 passed, failed: 1"
    acreditarían: el raíl del evento NO los deja — veto en hook:1930-1935 — y el
    label quedaría por debajo de ese raíl, que es lo contrario de lo que este
    diseño promete.)
+
+   **Implementación (PR #72, Greptile P1 / CodeRabbit):** con VARIOS labels en
+   el recibo el predicado corre en dos pasos sobre TODOS los spans — (1) veto:
+   cualquier span con señal de fallo (`FAILURE_SIGNAL_RE_CI`/`_CS`, `exit [1-9]`,
+   o conteo cero `SAIKIT_VERIFIED_CERO_RE`: "0 passed"/"0 passing") descalifica
+   el turno entero; (2) crédito: algún span trae `SAIKIT_VERIFIED_CMD_RE` Y
+   `SAIKIT_VERIFIED_RESULT_RE` en la MISMA línea. "Cualquier fallo declarado
+   veta", no "el último manda". El contrato vivo es el spec § vía adicional.
 
    **Por qué así (auditabilidad):** una mentira sobre "corrí `python -m
    py_compile app.py`, exit 0" es detectable en la revisión — un humano puede
@@ -285,7 +304,8 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    tomada).** El label queda a la par del raíl del EVENTO (que veta fallos) y más
    estricto que la PROSA (hook:2399, que hoy acredita un fallo si hay runner en
    la prosa). `VERIFIED BY SUBAGENT: pytest, 12 failed` NO cierra el turno: el
-   veto `SAIKIT_VERIFIED_FAIL_RE` lo descalifica. Consecuencia declarada: el
+   veto (las mismas `FAILURE_SIGNAL_RE_CI`/`FAILURE_SIGNAL_RE_CS` del raíl +
+   `exit [1-9]`; no existe una `SAIKIT_VERIFIED_FAIL_RE` propia) lo descalifica. Consecuencia declarada: el
    label NO introduce una vía nueva para acreditar un fallo (esa brecha seguiría
    siendo la del fallback de prosa, ajena a este cambio).
 4. **El gate es advisory, no un control de seguridad (Non-Goal del spec):** un
