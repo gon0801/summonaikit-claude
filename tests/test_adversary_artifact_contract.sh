@@ -45,6 +45,10 @@ if [ -r "$perfil" ]; then
     malo "el perfil enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
   fi
   grep -Fq 'date -u +%Y%m%dT%H%M%SZ' "$perfil" || malo "el perfil no enseña la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
+  # Regla "se OBTIENE con Bash o se OMITE — jamas se inventa" (CodeRabbit, PR #72):
+  # las dos mitades tienen que estar escritas, no solo la forma del comando.
+  grep -Fq 'OMIT the timestamp' "$perfil" || malo "el perfil no enseña la omision honesta del timestamp (sin Bash, se omite)"
+  grep -Fq 'NEVER invent a timestamp' "$perfil" || malo "el perfil no prohibe inventar el timestamp"
 else
   echo "  UNKNOWN: no se puede leer agents/adversary.md" >&2; unknown=1
 fi

@@ -232,9 +232,13 @@ saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
 # del label es -Eiq, asi que una forma 'Verified by subagent:' o en minusculas
 # debe producir un span igual — si no, entra al camino exclusivo pero sale span
 # vacio (no acredita), que es un falso negativo.
-saikit_verif_span() {
+# (Greptile P1, PR #72) devuelve TODOS los spans, uno por linea — NO solo el
+# primero: con `| head -n1` un recibo con un label de EXITO seguido de otro con
+# `failed: 1` / `exit 1` acreditaba, porque el veto jamas veia el segundo. El
+# predicado juzga cada span (abajo); el veto corre sobre todos.
+saikit_verif_spans() {
   local saikit_span_text="$1"
-  printf '%s' "$saikit_span_text" | grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE[^[:cntrl:]]*" | head -n1
+  printf '%s' "$saikit_span_text" | grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE[^[:cntrl:]]*"
 }
 
 # Task 14.2 — devuelve 0 si el label VERIFIED BY SUBAGENT acredita la
@@ -249,17 +253,32 @@ saikit_verif_span() {
 # simples: buscaria el literal del nombre y el veto jamas dispararia — §4.3.)
 saikit_verif_subagente_credita() {
   local saikit_text="$1"
-  local saikit_span
+  local saikit_spans saikit_span saikit_credito
   saikit_host_ciego || return 1
   printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
-  saikit_span="$(saikit_verif_span "$saikit_text")"
-  [ -n "$saikit_span" ] || return 1
-  printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || return 1
-  printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || return 1
-  { printf '%s' "$saikit_span" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
-    || printf '%s' "$saikit_span" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
-    || printf '%s' "$saikit_span" | grep -Eiq 'exit[[:space:]]+[1-9]'; } && return 1
-  return 0
+  saikit_spans="$(saikit_verif_spans "$saikit_text")"
+  [ -n "$saikit_spans" ] || return 1
+  # Veto sobre TODOS los spans (Greptile P1, PR #72): cualquier label con señal
+  # de fallo descalifica el turno entero — un exito declarado antes o despues de
+  # un fallo declarado no lo tapa. "Nunca mas laxo que el rail": el rail de
+  # evento ve todas las lineas, el label tambien.
+  { printf '%s\n' "$saikit_spans" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
+    || printf '%s\n' "$saikit_spans" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
+    || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]'; } && return 1
+  # Credito: ALGUN span trae comando Y resultado de exito en la MISMA linea.
+  # Comando en un span y resultado en otro siguen siendo piezas dispersas (codex
+  # #2) y no acreditan.
+  saikit_credito=1
+  while IFS= read -r saikit_span; do
+    [ -n "$saikit_span" ] || continue
+    printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || continue
+    printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || continue
+    saikit_credito=0
+    break
+  done <<SAIKIT_SPANS_EOF
+$saikit_spans
+SAIKIT_SPANS_EOF
+  return "$saikit_credito"
 }
 
 # Task 14.2 — devuelve 0 si la evidencia de verificacion esta satisfecha (sin

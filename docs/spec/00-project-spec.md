@@ -1901,6 +1901,16 @@ las 5 condiciones:
    `pytest` mencionado en otra línea o un `ok` suelto NO satisfacen el predicado
    (crédito por piezas dispersas), y un `TypeError:` en otra línea NO veta la
    atestación legítima (falso positivo del veto).
+   **Con VARIOS labels en el recibo se juzgan TODOS los spans** (Greptile P1,
+   PR #72): el veto corre sobre cada uno — un label con fallo declarado
+   (`failed: 1`, `exit 1`) descalifica el turno aunque otro label, antes o
+   después, declare éxito ("cualquier fallo declarado veta", no "el último
+   manda"); el crédito exige comando + resultado en la MISMA línea de algún
+   span. Antes se recortaba al primero (`head -n1`) y un éxito seguido de un
+   fallo acreditaba. Casos: `caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea`
+   (atrapa la mutación `verif_subagente_solo_primer_span`) y su espejo
+   `…_fallo_luego_exito_bloquea` (fija la semántica; no discrimina esa mutación,
+   declarado).
 3. **Host con canal interno ciego** — evaluado sobre `$HOST` (JAMÁS `$TARGET`:
    en zcode el fallback 5.4 deja `TARGET=claude`). En este repo es `$HOST=zcode`.
    `kimi` es **candidato** con canal interno `unknown` declarado — el label ahí
