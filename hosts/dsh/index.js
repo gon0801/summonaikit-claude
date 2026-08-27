@@ -17,9 +17,15 @@ export function sessionKey(agentOrSession) { return agentOrSession?.id ?? String
 export function apply(ctx, config) {
   const warn = (...a) => (ctx.logger?.warn ?? console.warn)("[summonaikit-gate]", ...a);
   const lastText = new Map();   // sessionKey -> ultimo texto del asistente (assistant/message, 15.1)
-  const cwdOf = new Map();      // sessionKey -> cwd (agent/created meta.cwd, 15.1)
+  const cwdOf = new Map();      // sessionKey -> cwd (agent/session header, 15.1)
+  const cwdWarned = new Set();  // sessionKey -> ya se aviso del fallback a process.cwd()
   const queues = new Map();     // sessionKey -> promesa encadenada (bots #83: el Stop espera a los PostToolUse)
-  const ctxOf = (agent) => ({ sessionId: sessionKey(agent), cwd: cwdOf.get(sessionKey(agent)) ?? process.cwd() });
+  const ctxOf = (agent) => {
+    const key = sessionKey(agent);
+    const cwd = cwdOf.get(key);
+    if (!cwd && !cwdWarned.has(key)) { cwdWarned.add(key); warn(`sin agent.session.header.cwd para ${key}; cae a process.cwd() (a confirmar en 15.5)`); }
+    return { sessionId: key, cwd: cwd ?? process.cwd() };
+  };
   const call = async (payload) => {
     if (!payload) return undefined;
     // runHook arranca el hook con `cwd` = cwd de la sesion (payload.cwd), porque el
@@ -49,7 +55,7 @@ export function apply(ctx, config) {
     // Limpieza de estado por sesion (codex r1 PR #86 / Greptile): un proceso dsh
     // de larga vida no debe acumular lastText/cwdOf/queues por sesion historica.
     const key = sessionKey(agent);
-    lastText.delete(key); cwdOf.delete(key); queues.delete(key);
+    lastText.delete(key); cwdOf.delete(key); queues.delete(key); cwdWarned.delete(key);
   });
   ctx.on("agent/session-start", ({ agent }) => { enqueue(sessionKey(agent), toSessionStart(ctxOf(agent))); });
   ctx.on("session/event", (session, event) => {
@@ -57,22 +63,26 @@ export function apply(ctx, config) {
   });
   ctx.on("agent/pre-step", async (payload, next) => {
     const decision = await next();
-    if (decision.kind !== "enter") return decision;
+    if (decision?.kind !== "enter") return decision;
     const json = await enqueue(sessionKey(payload.agent), toUserPromptSubmit({ ...ctxOf(payload.agent), step: payload.step, messages: payload.messages }));
     const extra = json?.hookSpecificOutput?.additionalContext;
     if (!extra) return decision;
     const msg = { id: crypto.randomUUID(), role: "user", source: { kind: "plugin", plugin: "summonaikit-gate" }, content: [{ type: "text", text: extra }] };
-    return { kind: "enter", messages: [...decision.messages, msg] };
+    return { kind: "enter", messages: [...(decision.messages ?? []), msg] };
   });
-  ctx.on("tools/result", (exec) => {
+  ctx.on("tools/result", (exec, result) => {
     if (!exec.agent) return;
+    if (result?.isError) return; // claude r3 PR #86: un subagente/herramienta que falla no debe sumarse a agents_seen
     enqueue(sessionKey(exec.agent), toPostToolUse({ ...ctxOf(exec.agent), name: exec.name, arguments: exec.arguments }));
   });
   ctx.on("agent/turn-stopping", async ({ agent }) => {
     const key = sessionKey(agent);
     // El Stop entra a la MISMA cola: corre solo cuando drenaron los PostToolUse.
     const json = await enqueue(key, toStop({ ...ctxOf(agent), lastAssistantText: lastText.get(key) ?? "" }));
-    if (json?.decision === "block" && json.reason) agent.followup({ role: "user", source: { kind: "plugin", plugin: "summonaikit-gate" }, content: [{ type: "text", text: json.reason }] });
+    if (json?.decision === "block" && json.reason) {
+      try { agent.followup({ role: "user", source: { kind: "plugin", plugin: "summonaikit-gate" }, content: [{ type: "text", text: json.reason }] }); }
+      catch (e) { warn(e); }  // fail-open: un followup que rechaza no debe tumbar el turno
+    }
   });
 }
 function textOf(event) {

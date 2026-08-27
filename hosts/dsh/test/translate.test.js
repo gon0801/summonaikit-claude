@@ -69,3 +69,13 @@ test("pre-step con reporte de subagente (source.kind != user) -> undefined", () 
   const p = toUserPromptSubmit({ sessionId: "s", cwd: "c", step: 3, messages: [{ role: "user", source: { kind: "subagent-settled", senderSessionId: "x" }, content: [{ type: "text", text: "Background subagent … finished" }] }] });
   assert.equal(p, undefined);
 });
+test("tools/result de pwsh -> PostToolUse Bash con command (claude r3: verificado por evento)", () => {
+  const p = toPostToolUse({ sessionId: "s", cwd: "c", name: "pwsh", arguments: { command: "pytest -q" } });
+  assert.equal(p.hook_event_name, "PostToolUse");
+  assert.equal(p.tool_name, "Bash");
+  assert.equal(p.tool_input.command, "pytest -q");
+});
+test("verifier 'Run the tests for app.py' -> verifier (vocabulario amplio, claude r3)", () => {
+  const p = toPostToolUse({ sessionId: "s", cwd: "c", name: "subagent", arguments: { description: "Run the tests for app.py", prompt: "x" } });
+  assert.equal(p.tool_input.subagent_type, "verifier");
+});

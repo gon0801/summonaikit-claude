@@ -14,17 +14,23 @@ const ROLES = new Set(["implementer", "verifier", "reviewer", "adversary"]);
 // y `str_replace_editor` NO aparecieron en el turno capturado; se conservan por
 // robustez/futuro. `read` no se mapea (es una lectura; el gate rastrea escrituras).
 const FS_TOOLS = { write: "Write", str_replace_editor: "Edit", edit: "Edit", str_replace: "Edit" };
+// Shell de dsh (claude r3 PR #86): 15.1 midio `pwsh` con `arguments.command`. El
+// raíl de verificacion del hook acredita `verified` sobre un evento con
+// tool_name:"Bash" + comando de runner; sin esto, en dsh `verified` jamas se
+// acredita por evento y el Stop depende solo del fallback de prosa. Extension por
+// medicion (la tabla §3 del diseño solo lista fs + subagent).
+const SHELL_TOOLS = { pwsh: "Bash", powershell: "Bash" };
 const SUBAGENT_TOOL_RE = /^subagent(?:[_-](implementer|verifier|reviewer|adversary))?$/;
-// Heuristica de rol por texto (15.1: el rol solo esta ahi). Fail-safe (codex r1
-// PR #86): SOLO se devuelve un rol si matchea EXACTAMENTE una regla; cero o
-// multiples (ambiguo) -> undefined. Adivinar mal puede satisfacer/reordenar la
-// ceremonia; perder el evento por ambiguo es el lado seguro. La DESCRIPCION se
-// prueba primero (senal corta y tipica); el prompt queda de fallback.
+// Heuristica de rol por texto (15.1: el rol solo esta ahi). Fail-safe (codex r1):
+// SOLO se devuelve un rol si matchea EXACTAMENTE una regla; cero o multiples
+// (ambiguo) -> undefined. Vocabulario alineado con el `canonical_agent_role` del
+// hook (claude r3: verifier/implementer/reviewer mas amplios) para no perder un
+// rol real por falta de stem.
 const ROLE_INFER = [
   ["adversary", /\badversar|attack|\bred[\s_-]?team|\bhack/i],
-  ["verifier", /\bverif|\bverify|acredita/i],
-  ["reviewer", /\breview|\brevis|\brevision|\baudit|\bcode.?review/i],
-  ["implementer", /\bimplement|\bcreate|\bbuild|\bagrega|\bcrea|\bescribe|\badd(?:s|ing)?\b/i],
+  ["verifier", /\bverif|verify|acredita|validat|\bqa\b|qualit|\btest/i],
+  ["reviewer", /\breview|revis|revision|\baudit|criti|\bcode[.\s]?review/i],
+  ["implementer", /\bimplement|create|build|agrega|crea|escribe|add(?:s|ing)?\b|engineer|developer|coder|debug|refactor|\bfix\b/i],
 ];
 function inferRole(text) {
   const hits = [];
@@ -72,6 +78,10 @@ export function toPostToolUse(ev) {
   const fs = FS_TOOLS[ev.name];
   if (fs && typeof ev.arguments?.file_path === "string") {
     return { ...base(ev, "PostToolUse"), tool_name: fs, tool_input: { file_path: ev.arguments.file_path } };
+  }
+  const shell = SHELL_TOOLS[ev.name];
+  if (shell && typeof ev.arguments?.command === "string") {
+    return { ...base(ev, "PostToolUse"), tool_name: shell, tool_input: { command: ev.arguments.command } };
   }
   return undefined;
 }

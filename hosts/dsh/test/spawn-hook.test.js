@@ -38,6 +38,16 @@ test("runHook corre en el cwd de la sesion (qwen r2 PR #86: el hook resuelve el 
   assert.equal(r.ok, true);
   assert.ok(r.stdout.includes("dsh-cwd-"), `pwd de la sesion esperado, dio: ${r.stdout.trim()}`);
 });
+test("hook que muere sin leer stdin + payload grande -> fail-open (sin throw/rejection, kimi r3)", async () => {
+  const big = "x".repeat(2 * 1024 * 1024);
+  const r = await runHook({ hook: "ignored", payload: { hook_event_name: "Stop", last_assistant_message: big }, _bashArgs: ["-c", "exit 0"], timeoutMs: 5000 });
+  assert.equal(r.ok, true);
+});
+test("no hereda senales de identidad de otros hosts (claude r3 PR #86, D2)", async () => {
+  const r = await runHook({ hook: "ignored", payload: { hook_event_name: "Stop" }, env: { CLAUDECODE: "1", GROK_HOOK_EVENT: "user_prompt_submit" }, _bashArgs: ["-c", "test -z \"$CLAUDECODE\" && test -z \"$GROK_HOOK_EVENT\" && echo STRIPPED"], timeoutMs: 10000 });
+  assert.equal(r.ok, true);
+  assert.match(r.stdout, /STRIPPED/);
+});
 test("timeout -> fail-open con error declarado", async () => {
   const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, timeoutMs: 1, _bashArgs: ["-c", "sleep 1"] });
   assert.equal(r.ok, false); assert.match(r.error, /timeout/i);
