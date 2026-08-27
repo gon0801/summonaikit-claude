@@ -1,0 +1,5 @@
+{"ts": "2026-08-27T18:27:14.612Z", "event": "agent/turn-stopping", "payload": {"agent": "session-2e3255c6-d647-470d-ba3f-33e8ebe32228", "turn": 1}}
+{"ts": "2026-08-27T18:27:20.099Z", "event": "agent/turn-stopping", "payload": {"agent": "107f7943-9e87-4e1d-a3e7-3ea0c7f1b383", "turn": 1}}
+{"ts": "2026-08-27T18:27:27.304Z", "event": "agent/turn-stopping", "payload": {"agent": "session-2e3255c6-d647-470d-ba3f-33e8ebe32228", "turn": 2}}
+{"ts": "2026-08-27T18:27:39.062Z", "event": "agent/turn-stopping", "payload": {"agent": "de2f699a-4e00-48dc-b50a-3f9bf8f2235f", "turn": 1}}
+{"ts": "2026-08-27T18:27:48.025Z", "event": "agent/turn-stopping", "payload": {"agent": "session-2e3255c6-d647-470d-ba3f-33e8ebe32228", "turn": 3}}

@@ -1,0 +1,2 @@
+{ "name": "@summonaikit/dsh-spy", "version": "0.0.1", "type": "module", "main": "index.js",
+  "peerDependencies": { "@deepseek-ai/cordis": "*", "@deepseek-ai/schemastery": "*" } }
