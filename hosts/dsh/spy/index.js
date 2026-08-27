@@ -23,22 +23,34 @@ export function redact(text) {
   return t;
 }
 
+// Claves sensibles: si el NOMBRE de la propiedad es sensible, se redacta el valor
+// aunque el valor no matchee un patron (p. ej. {"token":"cleartext"} o
+// {"authorization":"Bearer opaque-secret"}). Capa ADICIONAL a `redact`.
+const SENSITIVE_KEY = /^(?:token|password|passwd|secret|authorization|bearer|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|auth)$/i;
+
 function dump(out, event, payload) {
-  // Solo lo serializable; Agent/AbortSignal/funciones se reducen a su forma.
-  const seen = new WeakSet();
-  const json = JSON.stringify({ ts: new Date().toISOString(), event, payload }, (k, v) => {
-    if (typeof v === "function") return "[fn]";
-    if (v instanceof AbortSignal) return "[signal]";
-    if (typeof v === "string") return redact(v);
-    if (v && typeof v === "object") {
-      if (seen.has(v)) return "[cycle]";
-      seen.add(v);
-      if (typeof v.id === "string" && typeof v.session !== "undefined") return { agentId: v.id, sessionId: v.session?.id ?? "[unknown]", status: v.status };
-    }
-    return v;
-  });
-  mkdirSync(dirname(out), { recursive: true });
-  appendFileSync(out, json + "\n");
+  // Fail-open: la medicion nunca debe romper dsh. Cualquier error (serializacion,
+  // BigInt, fs) se traga y se pierde solo esa linea.
+  try {
+    const seen = new WeakSet();
+    const json = JSON.stringify({ ts: new Date().toISOString(), event, payload }, (k, v) => {
+      if (typeof v === "bigint") return String(v);
+      if (typeof v === "function") return "[fn]";
+      if (v instanceof AbortSignal) return "[signal]";
+      if (SENSITIVE_KEY.test(k)) return "[REDACTED]";
+      if (typeof v === "string") return redact(v);
+      if (v && typeof v === "object") {
+        if (seen.has(v)) return "[cycle]";
+        seen.add(v);
+        if (typeof v.id === "string" && typeof v.session !== "undefined") return { agentId: v.id, sessionId: v.session?.id ?? "[unknown]", status: v.status };
+      }
+      return v;
+    });
+    mkdirSync(dirname(out), { recursive: true });
+    appendFileSync(out, json + "\n");
+  } catch {
+    // fail-open: el plugin de medicion no debe abortar el turno de dsh.
+  }
 }
 
 export function apply(ctx, config) {

@@ -29,6 +29,8 @@ los eventos que el adaptador `@summonaikit/dsh-gate` (15.3) traducirá al hook.
 | `tools-result-subagent.jsonl` | `tools/result` de las 2 delegaciones (name `subagent`). |
 | `tools-result-fs.jsonl` | `tools/result` de tools de fs (`edit`/`read`/`glob`); `edit` primero. |
 | `turn-stopping.jsonl` | `agent/turn-stopping` (3 turnos del padre + 2 de subagentes). |
+| `agent-created.jsonl` | `agent/created` (los 3 agentes: padre + 2 subagentes). |
+| `agent-session-start.jsonl` | `agent/session-start` (los 3 agentes). |
 | `session-events.jsonl` | `session/event` `assistant/message` (la forma del texto final del asistente). |
 
 ## Hechos clave medidos (relevantes para 15.3)
@@ -39,12 +41,18 @@ los eventos que el adaptador `@summonaikit/dsh-gate` (15.3) traducirá al hook.
   prompt}` — **sin** `subagent_type` ni `persona`. El rol (implementer/verifier) solo
   está en el texto de `description`/`prompt`. El adaptador 15.3 NO puede mapear
   `subagent → Task {subagent_type}` con la forma actual sin inferirlo del texto.
-- `exec.parent` es siempre `None`; el discriminador padre/hijo es `exec.agent`.
+- `exec.parent` está **ausente/undefined** (en dsh `ToolExecution.parent` es un token
+  Symbol no serializable); el discriminador padre/hijo es `exec.agent`.
 - Tools de fs de edición: `edit` con `arguments.file_path` (y `old_string`/
   `new_string`); `read` con `file_path`. **No** apareció `write` ni
   `str_replace_editor`.
-- El texto final del asistente vive en `session/event` `assistant/message`
-  (`message.content[].text`), no en `agent/turn-stopping`.
+- El texto final del asistente vive en `session/event` `assistant/message` en
+  `payload.event.data.message.content[].text` (no en `payload.event.message`).
+- `step===1` **no** identifica por sí solo el prompt humano: los subagentes también
+  arrancan en `step:1`, y dsh inyecta mensajes `role:user` ("Background subagent …")
+  en pasos variados (p. ej. un `step:3` con mensaje).
+- El `session/event` de sesión usa la MISMA cadena que `agent.id` (== `SessionId`),
+  así que `sessionKey()` única vale para ambas partes.
 - El JSONL de sesión (`~/.dsh/sessions/…/session.jsonl.zstd`) está **comprimido con
   zstd** (magic `28 b5 2f fd`); el walker del hook, que lee JSONL plano, no lo leería
   sin descompresión.

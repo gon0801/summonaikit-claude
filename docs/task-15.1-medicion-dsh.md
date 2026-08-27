@@ -18,7 +18,9 @@ Disparo vía HTTP `POST /api/session.create` (`{cwd}`) + `POST /api/session.prom
 `turn/end reason:completed`; el modelo delegó a **2 subagentes** (implementación y
 verificación, ambos `isError:false`); `app.py` quedó con docstring de módulo + función.
 
-Captura: `C:/dev/saikit-captura/dsh/captura.jsonl` (5456 líneas, una por evento).
+Captura: `C:/dev/saikit-captura/dsh/captura.jsonl` — el turno principal `-saikit`
+aporta **5456** líneas; el control sin `-saikit` agregó 377 → **5833** total (una
+línea por evento). Los conteos de abajo son del turno principal (`-saikit`).
 
 **Conteo por `event`:**
 
@@ -46,9 +48,14 @@ Captura: `C:/dev/saikit-captura/dsh/captura.jsonl` (5456 líneas, una por evento
 - `messages[]` trae el texto del usuario. En el primer `pre-step` del padre
   (`step 1`): `messages[0]` = `{role:"user", source:{kind:"user", rpcId}, id, content:[...]}`.
 - El texto está en `content[].text`: `content:[{type:"text", text:"-saikit agrega un docstring a app.py. Delegá la implementación a un subagente y la verificación a otro."}]`.
-- `step===1` marca el primer paso del turno. En el padre, `step:1` trae el mensaje
-  de usuario (`nmsg:1`); `step>=2` llega con `messages:[]` (vacío). Cada subagente
-  también arranca en `step:1` con su prompt propio (el de `description`/`prompt`).
+- `step===1` aparece en el primer paso de **cada** turno (padre y subagentes), pero
+  **no** identifica por sí solo el prompt humano: los subagentes también arrancan en
+  `step:1` con su propio prompt (el de `description`/`prompt`), y dsh inyecta como
+  `role:user` los reportes "Background subagent `<id>` …" en pasos variados
+  (p. ej. hay un `pre-step` de `step:3` con `nmsg:1`).
+- El prompt humano original está en el primer `pre-step` cuyo `messages[0].source.kind === "user"`
+  y cuyo texto no es un reporte de subagente (`L1` → `-saikit agrega un docstring…`).
+  Pasos posteriores **pueden** traer mensajes inyectados (`nmsg>0`); no siempre `[]`.
 
 **Ausente:** no hay más campo que `content[].text` para el texto — siempre ese bloque.
 
@@ -65,10 +72,12 @@ hay que correlacionar con el id de `agent/turn-stopping`/`tools/result` más cer
   `subagent_type` ni `role`). El rol (implementer vs verifier) solo está en el
   **texto**: `description:"Add docstring to app.py"` / `"Verify docstring in app.py"`,
   y en el prompt (`"You are implementing…"` / `"You are verifying…"`).
-- `exec.parent` es `None` en **todas** las `tools/result` (del padre y de los
-  subagentes). El discriminador entre padre e hijo es `exec.agent` (el id del agente
-  que llama): para las `subagent` del padre `agent=session-2e3255c6…`; para las tools
-  de un subagente `agent=<id hijo>` (ejs. `107f7943-…`, `de2f699a-…`).
+- `exec.parent` está **ausente/undefined** en las 17 capturas de `tools/result`: en
+  dsh `ToolExecution.parent` es un token opaco (Symbol) que `JSON.stringify` no
+  serializa, así que la propiedad **no aparece** en la captura (no vale `null`).
+  El discriminador entre padre e hijo es `exec.agent` (el id del agente que llama):
+  para las `subagent` del padre `agent=session-2e3255c6…`; para las tools de un
+  subagente `agent=<id hijo>` (ejs. `107f7943-…`, `de2f699a-…`).
 
 **Implicación (diseño D4/D2):** la persona **no** es un campo estructurado
 recuperable de los eventos. El `toPostToolUse` del plan 15.3 (que mapea `subagent`→
@@ -100,14 +109,17 @@ observada es `edit`→`Edit` (`file_path`) y `write` no se usó.
 - `agent/turn-stopping` dispara **una vez por turno**: 5 eventos = 3 del padre
   (`turn:1,2,3`) + 1 por cada subagente (`turn:1`).
 - `agent/turn-stopping` **no** trae el texto del asistente. El texto final vive en
-  los `session/event` con `type:"assistant/message"` (20 en total). La forma:
-  `message = {role, content:[{type:"reasoning"|"text"|"tool-call"}], source, id}`;
-  el texto está en `message.content[].text`.
+  los `session/event` con `type:"assistant/message"` (20 en total). La forma real
+  (medida en `session-events.jsonl`): está en `payload.event.data.message`, **no** en
+  `payload.event.message` (campo directo ausente). `event.data.message` =
+  `{role, content:[{type:"reasoning"|"text"|"tool-call"}], source, id}` y el texto en
+  `event.data.message.content[].text`.
 - También hay `assistant/chunk` (streaming), más numeroso.
 
 **Implicación (15.3):** el adaptador toma `lastAssistantText` desde
-`session/event`→`assistant/message` (`message.content[].text` del último por
-sesión), que es lo que hace el `index.js` del plan. Sin el gate instalado no hay
+`session/event`→`assistant/message`, leyendo `event.data.message.content[].text` del
+último por sesión. **El `textOf` del plan 15.3 (`event?.message?.content`) NO funciona
+en dsh**: hay que leer `event?.data?.message?.content`. Sin el gate instalado no hay
 recibo `SUMMONAIKIT` (esperado): el texto final del turno es el resumen del agente.
 
 ### Q5 — ¿`agent.id` == `SessionId`? ¿`session.id` igual? ¿de dónde el `cwd`?
@@ -213,5 +225,10 @@ comportamiento observable entre ambos en los eventos del espía.)
 Referencia validada en `tests/fixtures/dsh/README.md` (Paso 5) — evento por archivo,
 extraídos de la sesión `session-2e3255c6-d647-470d-ba3f-33e8ebe32228`
 (`pre-step.jsonl`, `tools-result-subagent.jsonl`, `tools-result-fs.jsonl`,
-`turn-stopping.jsonl`, `session-events-appearance.jsonl`), más
-`pre-step-control.jsonl` del turno sin `-saikit`.
+`turn-stopping.jsonl`, `session-events.jsonl`, `agent-created.jsonl`,
+`agent-session-start.jsonl`), más `pre-step-control.jsonl` del turno sin `-saikit`.
+Q5 (ids) queda respaldado por `agent-created.jsonl`/`agent-session-start.jsonl`;
+**Q6** (magic zstd `28 b5 2f fd`) y **Q7** (marker `SPY-MARK-AGENTS-fd0b401a` en
+`session/event type:user/message`) son observaciones de la captura/archivo de
+sesión local y se citan con exactitud, pero no se representan como fixtures de
+evento (son propiedades de archivo / del control `~/.dsh/AGENTS.md`).
