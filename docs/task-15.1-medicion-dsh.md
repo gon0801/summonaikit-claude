@@ -72,12 +72,12 @@ hay que correlacionar con el id de `agent/turn-stopping`/`tools/result` más cer
   `subagent_type` ni `role`). El rol (implementer vs verifier) solo está en el
   **texto**: `description:"Add docstring to app.py"` / `"Verify docstring in app.py"`,
   y en el prompt (`"You are implementing…"` / `"You are verifying…"`).
-- `exec.parent` está **ausente/undefined** en las 17 capturas de `tools/result`: en
-  dsh `ToolExecution.parent` es un token opaco (Symbol) que `JSON.stringify` no
-  serializa, así que la propiedad **no aparece** en la captura (no vale `null`).
-  El discriminador entre padre e hijo es `exec.agent` (el id del agente que llama):
-  para las `subagent` del padre `agent=session-2e3255c6…`; para las tools de un
-  subagente `agent=<id hijo>` (ejs. `107f7943-…`, `de2f699a-…`).
+- `exec.parent` está **ausente/undefined** en las 17 capturas de `tools/result` (no
+  vale `null`). El tipo `ToolExecutionToken` de dsh lo sugiere como un token opaco no
+  serializable — **inferencia por el fuente, a confirmar en 15.3**. El discriminador
+  entre padre e hijo es `exec.agent` (el id del agente que llama): para las `subagent`
+  del padre `agent=session-2e3255c6…`; para las tools de un subagente
+  `agent=<id hijo>` (ejs. `107f7943-…`, `de2f699a-…`).
 
 **Implicación (diseño D4/D2):** la persona **no** es un campo estructurado
 recuperable de los eventos. El `toPostToolUse` del plan 15.3 (que mapea `subagent`→
@@ -95,6 +95,10 @@ registraría** el subagente. **Ajuste necesario en 15.3**: inferir el rol del te
 - `todo_write` → `arguments.todos`.
 - `pwsh` (shell; no bash) → `arguments.command`, `description`, `workdir`.
 - `report` → `arguments.output`.
+
+**Fixtures:** los 17 `tools/result` están cubiertos por `tools-result-subagent.jsonl`,
+`tools-result-fs.jsonl` (`edit`/`read`/`glob`) y `tools-result-other.jsonl`
+(`todo_write`/`pwsh`/`report`).
 
 **Ausente:** `write` y `str_replace_editor` **no** aparecieron en este turno. La
 tool de edición es `edit` con `file_path`.
@@ -171,7 +175,14 @@ primer paso.
 Ningún hit sin `[REDACTED]`. Los hits crudos de un chequeo grosero eran falsos
 positivos (`task-` contiene `sk-`; `://` en URLs normales de `request/header`).
 También se verificó `redact()` unitario: `token=x`, `api_key=sk-…`, `https://u:p@h`
-→ `[REDACTED]`. **El espía redacta antes de escribir.**
+→ `[REDACTED]`.
+
+**Cobertura del redactor (medida):** el espía redacta (a) patrones de valor (`token=`,
+`sk-…`, `://user:pass@`), (b) **claves** sensibles a nivel de objeto (`SENSITIVE_KEY`:
+`token`, `password`, `authorization`, `bearer`, `api_key`, `secret`, `cookie`,
+`set-cookie`, `x-api-key`, …), y (c) la forma JSON-en-string (`"api_key": "x"`), sin
+sobre-redactar (`token_count`/`model` no se tocan). En esta captura no hubo secretos
+que escapar, pero la cobertura es estas 3 capas. **El espía redacta antes de escribir.**
 
 ---
 

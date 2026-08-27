@@ -11,7 +11,7 @@ export const Config = z.object({ out: z.string().required() });
 // comillas), claves `sk-…`, y credenciales en URIs. La revisión manual del
 // paso 5 es la SEGUNDA capa, no la única.
 const SECRET_RES = [
-  /((?:token|password|passwd|secret|api[_-]?key|authorization|bearer)\s*[=:]\s*["']?)[^\s"',;)]+/gi,
+  /((?:token|password|passwd|secret|api[_-]?key|authorization|bearer|cookie|set-cookie|x-api-key)["']?\s*[=:]\s*["']?)[^\s"',;)]+/gi,
   /\bsk-[A-Za-z0-9_-]{8,}/g,
   /(:\/\/)[^\s\/@:]+:[^\s\/@]+@/g,
 ];
@@ -26,7 +26,7 @@ export function redact(text) {
 // Claves sensibles: si el NOMBRE de la propiedad es sensible, se redacta el valor
 // aunque el valor no matchee un patron (p. ej. {"token":"cleartext"} o
 // {"authorization":"Bearer opaque-secret"}). Capa ADICIONAL a `redact`.
-const SENSITIVE_KEY = /^(?:token|password|passwd|secret|authorization|bearer|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|auth)$/i;
+const SENSITIVE_KEY = /^(?:token|password|passwd|secret|authorization|bearer|cookie|set-cookie|x-api-key|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|auth)$/i;
 
 function dump(out, event, payload) {
   // Fail-open: la medicion nunca debe romper dsh. Cualquier error (serializacion,
