@@ -230,11 +230,24 @@ SAIKIT_VERIFIED_CERO_RE='(^|[^0-9.])0[[:space:]]+(tests?[[:space:]]+)?(pass(ed|i
 # `[=:] N`; (2) descartar las NEGADAS — "0 failed", "no failures", "sin errores",
 # "failures: 0" son formas de EXITO — y si queda alguna, veta. Fronteras de
 # palabra a ambos lados: "unfailed"/"errorless" no cuentan.
-SAIKIT_VERIFIED_FALLO_PELADO_RE='(^|[^A-Za-z0-9_-])([A-Za-z0-9]+[[:space:]]+)?(fail(ed|ing|ure|ures|s)?|error(s|es)?)([=:][[:space:]]*[0-9]+|[^A-Za-z0-9_-]|$)'
+# El span incluye el COMANDO (bots del PR #81): un `error`/`fail` que es parte
+# de una ruta o un archivo (`tests/errors.py`, `error.py`, `errors/`) no es una
+# declaracion de fallo — se descuenta por forma: `/` o `.` pegados antes no
+# abren match (leading), y el sufijo `.ext` o `/` se captura y se descuenta
+# (SAIKIT_VERIFIED_FALLO_RUTA_RE). El punto de FIN DE FRASE ("failed.") sigue
+# vetando: solo se descuenta `.` seguido de alfanumerico. Limite declarado: un
+# argumento suelto (`pytest -k error, 2 passed`) veta de mas.
+# Puntuacion PEGADA (`0 failed,error`): grep -o consume la coma como sufijo del
+# primer match y el segundo se queda sin frontera — se normaliza antes
+# (saikit_verif_fallo_norm separa , ; ( ) con espacios).
+SAIKIT_VERIFIED_FALLO_PELADO_RE='(^|[^A-Za-z0-9_/.-])([A-Za-z0-9]+[[:space:]]+)?(fail(ed|ing|ure|ures|s)?|error(s|es)?)([=:][[:space:]]*[0-9]+|\.[A-Za-z0-9]+|/|\.([^A-Za-z0-9]|$)|[^A-Za-z0-9_./-]|$)'
 SAIKIT_VERIFIED_FALLO_NEGADO_RE='^[^A-Za-z0-9_-]?(0|no|sin|without|zero|cero|none|ningun|ningún)[[:space:]]|[=:][[:space:]]*0$'
-# Devuelve 0 (veta) si algun span trae un fallo pelado NO negado.
+SAIKIT_VERIFIED_FALLO_RUTA_RE='\.[A-Za-z0-9]+$|/$'
+saikit_verif_fallo_norm() { sed 's/[,;()]/ & /g'; }
+# Devuelve 0 (veta) si algun span trae un fallo pelado NO negado y NO ruta.
 saikit_verif_fallo_pelado() {
-  printf '%s\n' "$1" | grep -Eio "$SAIKIT_VERIFIED_FALLO_PELADO_RE" | grep -Eivq "$SAIKIT_VERIFIED_FALLO_NEGADO_RE"
+  printf '%s\n' "$1" | saikit_verif_fallo_norm | grep -Eio "$SAIKIT_VERIFIED_FALLO_PELADO_RE" \
+    | grep -Eiv "$SAIKIT_VERIFIED_FALLO_NEGADO_RE" | grep -Eivq "$SAIKIT_VERIFIED_FALLO_RUTA_RE"
 }
 
 # Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy

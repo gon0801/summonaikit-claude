@@ -1972,10 +1972,19 @@ declaración explícita. Casos `caso_g2_zcode_verif_subagente_fallo_pelado_bloqu
 (atrapa `verif_fallo_pelado_apagado`) y los dos que ACREDITAN con negación,
 `…_cero_failed_acredita` / `…_sin_fallos_acredita` (atrapan
 `verif_fallo_negado_apagado`: un veto de más es la fricción que esta sección
-vino a quitar). Límite que queda: la negación se reconoce por vocabulario
-(`0|no|sin|without|zero|cero|none|ningun`); una forma fuera de esa lista
-("failed 0", "zero failed tests") veta de más y bloquea un recibo legítimo —
-declarado, no medido en vivo.
+vino a quitar). El span incluye el COMANDO, así que un `error`/`fail` que es
+ruta o archivo (`pytest tests/errors.py`, `error.py`, `errors/`) se descuenta
+por forma (`SAIKIT_VERIFIED_FALLO_RUTA_RE`; caso `…_cmd_con_error_acredita`,
+mutación `verif_fallo_ruta_no_descontada`) — el punto de fin de frase
+(`failed.`) sigue vetando. La puntuación pegada (`0 failed,error`) se normaliza
+antes de extraer, porque `grep -o` consume la coma como sufijo del primer match
+y el segundo token quedaría sin frontera (caso `…_fallo_pegado_bloquea`,
+mutación `verif_fallo_pegado_sin_normalizar`). `zero failed tests` es negación
+de la lista y acredita (caso `…_zero_failed_acredita`). Límites que quedan: la
+negación se reconoce por vocabulario (`0|no|sin|without|zero|cero|none|ningun`)
+— una forma fuera de la lista ("failed 0") veta de más —, y un argumento suelto
+del comando que sea la palabra a secas (`pytest -k error, 2 passed`) también:
+ambos bloquean un recibo legítimo — declarados, no medidos en vivo.
 
 ## Non-Goals
 

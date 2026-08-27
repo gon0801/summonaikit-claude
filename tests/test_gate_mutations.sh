@@ -94,6 +94,8 @@ G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' /
 G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
 G2|verif_fallo_pelado_apagado|el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
 G2|verif_fallo_negado_apagado|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
+G2|verif_fallo_ruta_no_descontada|el descuento de ruta/archivo se apaga y un `tests/errors.py` en el COMANDO veta un recibo legitimo (bots PR #81)
+G2|verif_fallo_pegado_sin_normalizar|la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -409,6 +411,14 @@ mut_verif_label_sobre_text_entero() { sed 's/saikit_verif_evidence_ok "$text_hat
 # ponen rojos (caso_g2_zcode_verif_subagente_cero_failed_acredita / _sin_fallos_acredita).
 mut_verif_fallo_pelado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_PELADO_RE=.*/SAIKIT_VERIFIED_FALLO_PELADO_RE='NUNCA_MATCHEA_ESTO_FALLO_PELADO'/"; }
 mut_verif_fallo_negado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_NEGADO_RE=.*/SAIKIT_VERIFIED_FALLO_NEGADO_RE='NUNCA_MATCHEA_ESTO_NEGADO'/"; }
+# ruta_no_descontada (bots #81) deja SAIKIT_VERIFIED_FALLO_RUTA_RE imposible:
+# `tests/errors.py` en el comando vuelve a vetar — lo atrapa
+# caso_g2_zcode_verif_subagente_cmd_con_error_acredita.
+# pegado_sin_normalizar reemplaza saikit_verif_fallo_norm por `cat`: la coma
+# pegada vuelve a tragarse la frontera y "0 failed,error" acredita — lo atrapa
+# caso_g2_zcode_verif_subagente_fallo_pegado_bloquea.
+mut_verif_fallo_ruta_no_descontada() { sed "s/^SAIKIT_VERIFIED_FALLO_RUTA_RE=.*/SAIKIT_VERIFIED_FALLO_RUTA_RE='NUNCA_MATCHEA_ESTO_RUTA'/"; }
+mut_verif_fallo_pegado_sin_normalizar() { sed 's/^saikit_verif_fallo_norm() .*/saikit_verif_fallo_norm() { cat; }/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
