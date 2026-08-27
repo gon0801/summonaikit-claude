@@ -7,7 +7,7 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
-## 2026-08-27 — PR #72 (Phase 14: 14.2–14.4, atestación de verificación delegada) + PR #79 pendiente — deploy REPARA los tres hooks vivos y los perfiles en 4 hosts
+## 2026-08-27 — PR #72 (Phase 14: 14.2–14.4, atestación de verificación delegada) + PR #79 incluido — deploy REPARA los tres hooks vivos y los perfiles en 4 hosts
 
 - **Qué traía:** cierre de la Phase 14 — 14.2 (vía de crédito del label
   `VERIFIED BY SUBAGENT:` en hosts de canal interno ciego, con el predicado
@@ -33,9 +33,11 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   `~/.agents/agents` (`--host kimi`; el port kimi ya no escribe ahí en
   paralelo — PR #77). Verificado: los 4 `adversary.md` vivos llevan
   `"attacked"` y `OMIT the timestamp` (esquema del contrato, 14.3).
-- **`check-hook-registration.sh`:** rc=0 en sus cuatro formas (claude
-  settings + local, `--codex-hooks-json`, `--grok-hooks-dir`,
-  `--zcode-config`).
+- **`check-hook-registration.sh`:** SILENCIO (ningún diagnóstico en stdout/
+  stderr) en sus cuatro formas — claude settings + local, `--codex-hooks-json`,
+  `--grok-hooks-dir`, `--zcode-config`. El `rc` no informa: el checker siempre
+  sale 0 y habla por texto (completo/incompleto/`unknown`/advisory); lo que
+  acredita es el silencio, re-corrido y citado tal cual.
 - **Verificación previa al merge:** CI 5/5 sobre `3ea6b1e` (suite completa,
   quality, secrets, Greptile, CodeRabbit); local contra el hook de la rama:
   `test_gate_mutations`, `test_golden_harness`, `test_hook_source`,
