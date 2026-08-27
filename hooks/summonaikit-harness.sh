@@ -1431,9 +1431,68 @@ SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^
 #      `token="[REDACTED]"sk-real` (Greptile, PR #75) — el mismo agujero por
 #      la puerta de al lado. Cualquier regla nueva que se agregue acá tiene
 #      que exigirlo tambien, o reabre esta familia.
+#
+#      El delimitador es una LISTA BLANCA a proposito, y se mantiene como tal.
+#      La primera version omitia `;` y `)`, asi que un `token=[REDACTED];` BIEN
+#      redactado no matcheaba ninguna regla, sobrevivia entero y disparaba el
+#      escaneo: el gate bloqueaba un artefacto correcto (Greptile P1, PR #75).
+#      Se agregan esos dos; NO se invierte la lista.
+#
+#      Por que no invertirla, que era lo elegante: usar `[^A-Za-z0-9_-]` COMO
+#      DELIMITADOR hace que cualquier signo termine el valor, y entonces
+#      `token=[REDACTED]!secreto` se descuenta -> queda `token= !secreto`, el
+#      espacio corta el match de `=[^[:space:]]` y el secreto SALE (Greptile P1,
+#      PR #79). O sea la inversion cambia un bloqueo falso —ruidoso pero
+#      visible— por una fuga silenciosa. Para un escaneo de secretos la
+#      direccion correcta es fallar hacia BLOQUEAR, asi que gana la lista aunque
+#      haya que completarla de a un signo: el costo de que le falte uno es
+#      friccion que alguien ve, y el de que sobre es un secreto que nadie ve.
+#      (Ojo: `[^A-Za-z0-9_-]` SI aparece abajo, pero en el otro rol — como
+#      guardia de la COLA despues del delimitador, no como el delimitador. Ahi
+#      aprieta en vez de aflojar.)
+#      El criterio para agregar un signo: que la REDACCION pueda producirlo
+#      despues del valor (cierre de JSON, de comando, de prosa). No alcanza con
+#      que "sea puntuacion" — `!`, `$`, `@`, `#` son prefijos perfectos de un
+#      secreto pegado y no cierran ningun valor.
+#
+#      COLA PEGADA TRAS EL DELIMITADOR: `token=[REDACTED],sk-real`. El
+#      delimitador esta, asi que la regla de arriba descontaba y la cola con el
+#      secreto sobrevivia. Esto NO lo trajeron `;` y `)` — pasaba igual con `,`,
+#      `"` y `}` desde antes (Greptile P1, PR #79; medido sobre las dos listas).
+#      Por eso el delimitador va en TRES ramas, y cada una admite un conjunto
+#      distinto con una exigencia distinta:
+#        a) espacio o fin de linea: descuenta siempre. Ahi el valor termino y lo
+#           que siga es otra cosa; exigirle algo mas bloquearia la prosa normal
+#           (`token=[REDACTED] aparecio en config`).
+#        b) delimitadores de ESTRUCTURA (`] " [ , } >`): descuentan solo si lo
+#           que sigue es otro caracter estructural o fin de linea. Asi
+#           `token=[REDACTED]","uri"...` —forma JSON, la del camino real— se
+#           descuenta, y `token=[REDACTED],sk-real` no.
+#        c) `;` y `)`: descuentan solo si despues viene ESPACIO o fin de linea.
+#
+#      Por que (c) es mas estricta que (b), que es el punto fino de todo esto:
+#      `;` y `)` no estaban en la lista original, asi que meterlos como
+#      delimitadores comunes ABRE caminos que antes no existian para ellos, y
+#      ningun guardia de UN caracter alcanza — siempre hay un relleno que lo
+#      satisface. Medido: con el guardia "no puede ser continuacion de secreto"
+#      (`[^A-Za-z0-9_-]`) lo saltea `token=[REDACTED];!sk-real`, y con el
+#      guardia ESTRUCTURAL lo saltea `token=[REDACTED];]sk-real` — un `]` es
+#      estructural (Greptile y CodeRabbit, PR #79). Exigir espacio/fin de linea
+#      no se puede rellenar por construccion: cualquier caracter de relleno, por
+#      definicion, no es espacio. Cubre las formas reales (`;` o `)` cerrando la
+#      linea o seguidos de prosa) sin abrir nada.
+#
+#      Medida contra la version original en 16 formas: mejor o igual en todas,
+#      peor en ninguna. Arregla los bloqueos falsos de `;` y `)`, y cierra dos
+#      fugas que ya existian (`,sk-real` y `,!sk-real`).
+#      Queda ABIERTO —igual que antes, no es regresion— el relleno estructural
+#      tras un delimitador de (b): `token=[REDACTED],]sk-real`. Cerrarlo pide
+#      inspeccionar la cola entera con conciencia del formato, que es otra
+#      tarea; la forma JSON legitima tambien trae letras despues del
+#      delimitador, asi que ninguna regex de una pasada las distingue.
 #   3. Credenciales en URI, igual que antes.
 # El espacio del reemplazo es load-bearing: corta el match de `=[^[:space:]]`.
-SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([]"[[:space:]",}>]|$)/= "\1/g; s/=\[REDACTED\]([]"[[:space:]",}>]|$)/= \1/g; s|://\[REDACTED\]@|:// |g'
+SAIKIT_ADV_REDACTED_STRIP='s/="\[REDACTED\]"([[:space:]]|$)/= "\1/g; s/="\[REDACTED\]"([]"[,}>])([]"[{},;:)>[:space:]]|$)/= "\1\2/g; s/="\[REDACTED\]"([;)])([[:space:]]|$)/= "\1\2/g; s/=\[REDACTED\]([[:space:]]|$)/= \1/g; s/=\[REDACTED\]([]"[,}>])([]"[{},;:)>[:space:]]|$)/= \1\2/g; s/=\[REDACTED\]([;)])([[:space:]]|$)/= \1\2/g; s|://\[REDACTED\]@|:// |g'
 
 # Gitignore del consumer (D2 capa 3): clase de efecto NUEVA declarada — hasta
 # aqui el hook solo escribia bajo su state dir. Dispara con el PRIMER evento

@@ -1774,6 +1774,86 @@ de los PRs #65 y #66) ya sumados:
   detecta. La forma entrecomillada, que antes hacía BLOQUEAR un artefacto
   correctamente redactado, tampoco falla ya. El escaneo sigue siendo
   best-effort para lo que su familia de patrones no matchea.
+  El delimitador es una **lista blanca** y se mantiene como tal. La primera
+  versión omitía `;` y `)`, así que `token=[REDACTED];` y `token=[REDACTED])`
+  —correctamente redactados— bloqueaban (Greptile P1, PR #75), que es la
+  fricción que el rol no puede permitirse; se agregaron esos dos signos.
+  **No se invierte**, aunque invertirla (`[^A-Za-z0-9_-]`, "cualquier signo
+  cierra el valor") sea más corto de escribir: con la lista invertida
+  `token=[REDACTED]!secreto` se descuenta y queda `token= !secreto`, donde el
+  espacio corta el match y el secreto SALE (Greptile P1, PR #79). Esa permuta
+  cambia un bloqueo falso —ruidoso pero visible— por una fuga silenciosa, y
+  para un escaneo de secretos la dirección correcta es fallar hacia BLOQUEAR.
+  El costo de que a la lista le falte un signo es fricción que alguien ve; el
+  de que le sobre es un secreto que nadie ve. Criterio para agregar uno: que la
+  redacción pueda producirlo **después** del valor (cierre de JSON, de comando,
+  de prosa). No alcanza con que sea puntuación — `!`, `$`, `@`, `#` son
+  prefijos perfectos de un secreto pegado y no cierran ningún valor.
+  **COLA PEGADA TRAS UN DELIMITADOR — cerrada** (Greptile P1, PR #79). Un
+  `token=[REDACTED],sk-real` tiene delimitador válido, así que la regla de una
+  sola rama lo descontaba y la cola con el secreto sobrevivía. **Esto no lo
+  trajeron `;` y `)`**: pasaba igual con `,`, `"` y `}` desde antes de la
+  Phase 13. Medido sobre las tres versiones:
+
+  Medido contra la versión original en 16 formas, la regla nueva es **mejor o
+  igual en todas y peor en ninguna**:
+
+  | entrada | original | tres ramas |
+  |---|---|---|
+  | `token=[REDACTED];` (correcto) | BLOQUEA | **PASA** |
+  | `fn(password=[REDACTED])` (correcto) | BLOQUEA | **PASA** |
+  | `token=[REDACTED],sk-real` | PASA | **BLOQUEA** |
+  | `token=[REDACTED],!sk-real` | PASA | **BLOQUEA** |
+  | `token=[REDACTED];sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED];!sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED];]sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED]sk-real` | BLOQUEA | BLOQUEA |
+  | `token=[REDACTED]","uri"…` (JSON) | PASA | PASA |
+  | `token=[REDACTED] apareció en config` | PASA | PASA |
+  | `token=[REDACTED],]sk-real` | PASA | PASA |
+
+  El delimitador va en **tres ramas**, cada una con un conjunto y una exigencia
+  distintos:
+
+  - **(a)** espacio o fin de línea: descuenta siempre. Ahí el valor terminó, y
+    exigirle algo más bloquearía la prosa normal.
+  - **(b)** delimitadores de estructura (`] " [ , } >`): descuentan sólo si lo
+    que sigue es otro carácter estructural o fin de línea. Así la forma JSON
+    (`","`), que es la del camino real, se sigue descontando, y
+    `token=[REDACTED],sk-real` no.
+  - **(c)** `;` y `)`: descuentan sólo si después viene **espacio o fin de
+    línea**.
+
+  Por qué (c) es más estricta, que es el punto fino: `;` y `)` no estaban en la
+  lista original, así que meterlos como delimitadores comunes **abre caminos que
+  antes no existían para ellos**, y ningún guardia de **un** carácter alcanza —
+  siempre hay un relleno que lo satisface. Medido: el guardia "no puede ser
+  continuación de secreto" (`[^A-Za-z0-9_-]`) lo saltea `;!sk-real`; el guardia
+  "estructural" lo saltea `;]sk-real`, porque `]` sí es estructural. Exigir
+  espacio o fin de línea no se puede rellenar **por construcción**: cualquier
+  carácter de relleno, por definición, no es espacio.
+
+  **Límite que sigue abierto** (igual que antes — no es regresión): el relleno
+  estructural tras un delimitador de (b), `token=[REDACTED],]sk-real`. Cerrarlo
+  pide inspeccionar la cola entera con conciencia del formato, que es otra
+  tarea: la forma JSON legítima también trae letras después del delimitador, así
+  que ninguna regex de una pasada las distingue.
+
+  Nota sobre lo que el bloqueo *original* hacía, porque explica por qué la lista
+  corta no era la respuesta: cuando "bloqueaba" `token=[REDACTED];sk-real` no
+  estaba detectando el secreto, sino matcheando `token=[`, el propio marcador.
+  El escaneo está anclado a `keyword=valor` y a `://user@`, así que una cola
+  suelta sin keyword delante le es invisible por diseño. La rama (b) sí la
+  detecta, y por la vía correcta: dejando el marcador sin descontar.
+  **Límite residual declarado — COMILLAS SIMPLES**: el valor entre comillas
+  simples (`token='[REDACTED]'`) no se descuenta por ninguna regla —las dos
+  piden `="` o `=[`— y por lo tanto un artefacto que use esa forma BLOQUEA
+  aunque esté
+  bien redactado. Es preexistente (tampoco se descontaba antes del PR #75) y se
+  deja abierto a propósito: el contrato del rol exige artefactos JSON, y JSON
+  no tiene strings con comilla simple, así que la forma no aparece en el camino
+  real. Si algún día un perfil la produjera, se cierra con una tercera regla
+  simétrica a la del entrecomillado, y con su mutación propia.
 - El escaneo recorre el directorio con `find … | while read`, así que un
   artefacto cuyo NOMBRE contenga un salto de línea se parte en fragmentos y
   ninguno existe como archivo: ese artefacto no se escanea. Es evasión
