@@ -62,16 +62,34 @@ import z from "@deepseek-ai/schemastery";
 export const name = "summonaikit-spy";
 export const Config = z.object({ out: z.string().required() });
 
+// Redaccion ANTES de escribir (bots PR #83): los mismos patrones que el hook y
+// el perfil adversary — valores de token/password/secret/api_key (con o sin
+// comillas), claves `sk-…`, y credenciales en URIs. La revision manual del
+// paso 5 es la SEGUNDA capa, no la unica.
+const SECRET_RES = [
+  /((?:token|password|passwd|secret|api[_-]?key|authorization|bearer)\s*[=:]\s*["']?)[^\s"',;)]+/gi,
+  /\bsk-[A-Za-z0-9_-]{8,}/g,
+  /(:\/\/)[^\s\/@:]+:[^\s\/@]+@/g,
+];
+export function redact(text) {
+  let t = text;
+  t = t.replace(SECRET_RES[0], "$1[REDACTED]");
+  t = t.replace(SECRET_RES[1], "sk-[REDACTED]");
+  t = t.replace(SECRET_RES[2], "$1[REDACTED]@");
+  return t;
+}
+
 function dump(out, event, payload) {
   // Solo lo serializable; Agent/AbortSignal/funciones se reducen a su forma.
   const seen = new WeakSet();
   const json = JSON.stringify({ ts: new Date().toISOString(), event, payload }, (k, v) => {
     if (typeof v === "function") return "[fn]";
     if (v instanceof AbortSignal) return "[signal]";
+    if (typeof v === "string") return redact(v);
     if (v && typeof v === "object") {
       if (seen.has(v)) return "[cycle]";
       seen.add(v);
-      if (typeof v.id === "string" && typeof v.session !== "undefined") return { agentId: v.id, status: v.status };
+      if (typeof v.id === "string" && typeof v.session !== "undefined") return { agentId: v.id, sessionId: v.session?.id ?? "[unknown]", status: v.status };
     }
     return v;
   });
@@ -138,8 +156,13 @@ export function apply(ctx, config) {
   4. `agent/turn-stopping`: ¿llega una vez por turno? ¿qué evento de
      `session/event` (`assistant/message` / `assistant/chunk`) trae el texto
      final del asistente y con qué forma?
-  5. ¿`agent.id` es el `SessionId`? ¿de dónde sale el cwd (`agent/created`
-     `meta.cwd`?)?
+  5. ¿`agent.id` es el `SessionId`? ¿`session.id` en `session/event` es la
+     MISMA cadena que `agent.id` del `agent/turn-stopping` del mismo turno?
+     (el espía vuelca ambos; compararlos literal). ¿De dónde sale el cwd
+     (`agent/created` `meta.cwd`?)?
+  8. Redacción: buscar en la captura `token=`, `sk-`, `://…:…@` — tienen que
+     salir `[REDACTED]` (el espía redacta antes de escribir); si algo se
+     escapó, ampliar `SECRET_RES` y volver a capturar.
   6. JSONL de sesión en `~/.dsh/sessions/`: ¿tiene `role:"assistant"` +
      `content[].type:"text"` como exige el walker del hook?
   7. ¿`~/.dsh/AGENTS.md` se inyecta? (control: crear uno con una frase única y
@@ -455,7 +478,11 @@ export function runHook({ hook, payload, env = {}, timeoutMs = 20000, bash = "ba
   mensaje extra con `SUMMONAIKIT HARNESS REQUIRED`; (b) pre-step sin `-saikit`
   → decisión intacta; (c) turn-stopping sin recibo → `agent.followup` llamado
   una vez con el `reason`; (d) turn-stopping con recibo → no se llama; (e) hook
-  inexistente en config → ningún throw, `logger.warn` llamado, decisión intacta.
+  inexistente en config → ningún throw, `logger.warn` llamado, decisión intacta;
+  (f) **orden**: un `tools/result` cuyo hook falso tarda 300 ms seguido de
+  `turn-stopping` inmediato → el hook falso registra el `PostToolUse` ANTES del
+  `Stop` (el fake escribe una línea por llamada a un archivo; el test lee el
+  orden). Sin la cola por sesión este caso es ROJO — medirlo así primero.
 
 - [ ] **Paso 9: `index.js`:**
 
@@ -468,31 +495,46 @@ import { toSessionStart, toUserPromptSubmit, toPostToolUse, toStop } from "./tra
 export const name = "summonaikit-gate";
 export const Config = z.object({
   hook: z.string().required(),      // ruta del summonaikit-harness.sh instalado
+  bash: z.string().required(),      // ruta ABSOLUTA del bash de Git for Windows — la escribe el instalador (bots #83: `bash` pelado puede resolver a WSL)
   timeoutMs: z.number().default(20000),
-  bash: z.string().default("bash"),
 });
+
+// Una clave por sesion para TODO: cola, texto del asistente, cwd. Que `agent.id`
+// y `session.id` de session/event sean la misma cadena lo decide 15.1 (pregunta
+// 5); si no lo son, esta funcion es el UNICO lugar que se ajusta.
+export function sessionKey(agentOrSession) { return agentOrSession?.id ?? String(agentOrSession); }
 
 export function apply(ctx, config) {
   const warn = (...a) => (ctx.logger?.warn ?? console.warn)("[summonaikit-gate]", ...a);
-  const lastText = new Map();   // agentId -> ultimo texto del asistente (assistant/message, 15.1)
-  const cwdOf = new Map();      // agentId -> cwd (agent/created meta.cwd, 15.1)
-  const ctxOf = (agent) => ({ sessionId: agent.id, cwd: cwdOf.get(agent.id) ?? process.cwd() });
+  const lastText = new Map();   // sessionKey -> ultimo texto del asistente (assistant/message, 15.1)
+  const cwdOf = new Map();      // sessionKey -> cwd (agent/created meta.cwd, 15.1)
+  const queues = new Map();     // sessionKey -> promesa encadenada (bots #83: el Stop espera a los PostToolUse)
+  const ctxOf = (agent) => ({ sessionId: sessionKey(agent), cwd: cwdOf.get(sessionKey(agent)) ?? process.cwd() });
   const call = async (payload) => {
     if (!payload) return undefined;
     const r = await runHook({ hook: config.hook, payload, timeoutMs: config.timeoutMs, bash: config.bash });
     if (!r.ok || r.error) warn(r.error, r.stderr ?? "");
     return r.json;
   };
+  // Cola por sesion: cada llamada al hook corre despues de la anterior de la
+  // misma sesion, en el orden en que dsh emitio los eventos. Un error no corta
+  // la cadena (fail-open).
+  const enqueue = (key, payload) => {
+    const prev = queues.get(key) ?? Promise.resolve();
+    const nextP = prev.then(() => call(payload)).catch((e) => { warn(e); return undefined; });
+    queues.set(key, nextP);
+    return nextP;
+  };
 
-  ctx.on("agent/created", ({ agent, meta }) => { if (meta?.cwd) cwdOf.set(agent.id, meta.cwd); });
-  ctx.on("agent/session-start", ({ agent }) => { void call(toSessionStart(ctxOf(agent))); });
+  ctx.on("agent/created", ({ agent, meta }) => { if (meta?.cwd) cwdOf.set(sessionKey(agent), meta.cwd); });
+  ctx.on("agent/session-start", ({ agent }) => { enqueue(sessionKey(agent), toSessionStart(ctxOf(agent))); });
   ctx.on("session/event", (session, event) => {
-    if (event?.type === "assistant/message") lastText.set(session.id ?? session, textOf(event));
+    if (event?.type === "assistant/message") lastText.set(sessionKey(session), textOf(event));
   });
   ctx.on("agent/pre-step", async (payload, next) => {
     const decision = await next();
     if (decision.kind !== "enter") return decision;
-    const json = await call(toUserPromptSubmit({ ...ctxOf(payload.agent), step: payload.step, messages: payload.messages }));
+    const json = await enqueue(sessionKey(payload.agent), toUserPromptSubmit({ ...ctxOf(payload.agent), step: payload.step, messages: payload.messages }));
     const extra = json?.hookSpecificOutput?.additionalContext;
     if (!extra) return decision;
     const msg = { id: crypto.randomUUID(), role: "user", source: "summonaikit-gate", content: [{ type: "text", text: extra }] };
@@ -500,10 +542,12 @@ export function apply(ctx, config) {
   });
   ctx.on("tools/result", (exec) => {
     if (!exec.agent) return;
-    void call(toPostToolUse({ ...ctxOf(exec.agent), name: exec.name, arguments: exec.arguments }));
+    enqueue(sessionKey(exec.agent), toPostToolUse({ ...ctxOf(exec.agent), name: exec.name, arguments: exec.arguments }));
   });
   ctx.on("agent/turn-stopping", async ({ agent }) => {
-    const json = await call(toStop({ ...ctxOf(agent), lastAssistantText: lastText.get(agent.id) ?? "" }));
+    const key = sessionKey(agent);
+    // El Stop entra a la MISMA cola: corre solo cuando drenaron los PostToolUse.
+    const json = await enqueue(key, toStop({ ...ctxOf(agent), lastAssistantText: lastText.get(key) ?? "" }));
     if (json?.decision === "block" && json.reason) agent.followup({ role: "user", source: "summonaikit-gate", content: [{ type: "text", text: json.reason }] });
   });
 }
@@ -581,6 +625,7 @@ fi
       name: '<ruta absoluta de dsh_plugin_dir()>'
       config:
         hook: '<DEST>'
+        bash: '<zcode_bash_win(), p. ej. C:/Program Files/Git/bin/bash.exe>'
 # <<< summonaikit-gate END
 ```
 

@@ -93,10 +93,24 @@ entra en la lista de ciegos ni en la de observables hasta entonces.
 | `agent/session-start` | `SessionId`, cwd del workspace | `SessionStart` | nada visible (el hook siembra/limpia estado) |
 | `agent/pre-step` (lote con `UserMessage`) | el texto del usuario del lote | `UserPromptSubmit` `{prompt}` | si hay `hookSpecificOutput.additionalContext` (contrato al armar con `-saikit`), lo agrega al lote como mensaje inyectado; si no, devuelve el lote intacto |
 | `tools/result` de `subagent` | `persona`, `label`, resultado | `PostToolUse` `{tool_name:"Task", tool_input:{subagent_type:<persona>}}` | nada (el hook registra `agents_seen`) |
-| `tools/result` de tools de fs (`str_replace_editor`, `write`, …) | tool y ruta | `PostToolUse` `{tool_name:"Edit"|"Write", tool_input:{file_path}}` | nada (candado post-hoc del adversary) — **tools y campo de ruta: `unknown` hasta 15.1** |
+| `tools/result` de tools de fs (`str_replace_editor`, `write`, …) | tool y ruta | `PostToolUse` con `tool_name` `Edit` o `Write` y `tool_input:{file_path}` | nada (candado post-hoc del adversary) — **tools y campo de ruta: `unknown` hasta 15.1** |
+
+**Orden y concurrencia (bots del PR #83):** las llamadas al hook se encolan
+**por sesión** (una promesa encadenada): `SessionStart`, cada `PostToolUse` y el
+`Stop` corren en el orden en que dsh los emitió, y `agent/turn-stopping` espera
+a que la cola drene antes de mandar el `Stop`. Sin esto, un `tools/result` del
+verifier todavía escribiendo `agents_seen` y un `Stop` independiente leyendo el
+estado darían "rol faltante" sobre una ceremonia válida (carrera medible en el
+turno vivo). `bash` nunca va pelado: el instalador escribe la ruta absoluta del
+Git-Bash de Windows en la config del plugin (`zcode_bash_win()` ya existe); un
+`bash` que resuelve a WSL o no existe es fail-open registrado, no silencio.
 | `agent/turn-stopping` | último texto del asistente del turno | `Stop` `{last_assistant_message, transcript_path?}` | `decision:"block"` + feedback → `agent.followup(feedback)`; el turno sigue. Sin bloqueo → cierra |
 
-`session_id` = `SessionId` de dsh. `transcript_path`: el JSONL de
+`session_id` = `SessionId` de dsh. **Si `agent.id` y el `session.id` de
+`session/event` son la misma clave lo decide la captura (15.1, pregunta 5)**: el
+adaptador usa una sola función `sessionKey()` para guardar y leer el último
+texto del asistente, resuelta con lo medido — nunca `agent.id` de un lado y
+`session.id` del otro. `transcript_path`: el JSONL de
 `dsh-session-persistence-jsonl` **si** su forma la entiende el walker del hook
 (`role:assistant` + `content[].type:text`); si no, se omite y el gate juzga
 solo `last_assistant_message` (fail-open ya existente). `unknown` hasta 15.1.
@@ -117,7 +131,11 @@ solo `last_assistant_message` (fail-open ya existente). `unknown` hasta 15.1.
 - `tools/check-hook-registration.sh --dsh-home <dir>` — silencio = hook +
   entrada del patch + 4 personas presentes; habla si falta algo.
 - `tools/model-routing.sh --host dsh` — fila vacía.
-- `agents/*.md` — sin cambios de texto; el instalador traduce.
+- `agents/*.md` — el TEXTO de los roles (lo que el modelo lee como persona) no
+  cambia; el instalador traduce. Lo único que se toca es la **tabla de
+  enforcement por host** de `agents/adversary.md` (docs del perfil, precedente
+  PR #77), que gana la fila dsh con lo medido en 15.1 — y eso sí se propaga a
+  todos los hosts en su siguiente deploy, como pasó con la fila de kimi.
 - Docs: este diseño; `docs/task-15.1-medicion-dsh.md`; spec § host dsh;
   `Plans.md` Phase 15; `docs/deploy-log.md` al desplegar.
 
