@@ -2,13 +2,13 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 
-export function runHook({ hook, payload, env = {}, timeoutMs = 20000, bash = "bash", _bashArgs }) {
+export function runHook({ hook, payload, env = {}, timeoutMs = 20000, bash = "bash", _bashArgs, cwd }) {
   return new Promise((resolve) => {
     if (!_bashArgs && !existsSync(hook)) return resolve({ ok: false, error: `hook no existe: ${hook}` });
     const args = _bashArgs ?? [hook];
     let child;
     try {
-      child = spawn(bash, args, { env: { ...process.env, SUMMONAIKIT_HOOK_TARGET: "dsh", ...env }, windowsHide: true });
+      child = spawn(bash, args, { env: { ...process.env, SUMMONAIKIT_HOOK_TARGET: "dsh", ...env }, windowsHide: true, ...(cwd ? { cwd } : {}) });
     } catch (e) { return resolve({ ok: false, error: String(e) }); }
     let out = "", err = "";
     const timer = setTimeout(() => { child.kill(); resolve({ ok: false, error: `timeout ${timeoutMs}ms` }); }, timeoutMs);

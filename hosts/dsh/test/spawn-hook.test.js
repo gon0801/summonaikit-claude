@@ -1,6 +1,9 @@
 // hosts/dsh/test/spawn-hook.test.js — runHook con un hook falso. Fail-open (D3).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runHook } from "../spawn-hook.js";
 const hook = new URL("./fake-hook.sh", import.meta.url).pathname.replace(/^\/([A-Za-z]):/, "$1:");
 
@@ -28,6 +31,12 @@ test("salida no-JSON -> fail-open", async () => {
 test("bash inexistente -> fail-open (sin throw/rejection)", async () => {
   const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, bash: "C:/no/existe/bash.exe", timeoutMs: 2000 });
   assert.equal(r.ok, false); assert.match(r.error, /ENOENT|no existe|not found/i);
+});
+test("runHook corre en el cwd de la sesion (qwen r2 PR #86: el hook resuelve el proyecto por pwd)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dsh-cwd-"));
+  const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, _bashArgs: ["-c", "pwd"], cwd: dir, timeoutMs: 10000 });
+  assert.equal(r.ok, true);
+  assert.ok(r.stdout.includes("dsh-cwd-"), `pwd de la sesion esperado, dio: ${r.stdout.trim()}`);
 });
 test("timeout -> fail-open con error declarado", async () => {
   const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, timeoutMs: 1, _bashArgs: ["-c", "sleep 1"] });

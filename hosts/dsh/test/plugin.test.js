@@ -25,7 +25,9 @@ test("pre-step con -saikit -> la decision agrega el contrato (SUMMONAIKIT HARNES
     async () => ({ kind: "enter", messages: [{ role: "user", content: [{ type: "text", text: "-saikit agrega el docstring" }] }] }),
   );
   assert.equal(decision.kind, "enter");
-  assert.ok(decision.messages.some((m) => JSON.stringify(m).includes("SUMMONAIKIT HARNESS REQUIRED")));
+  const injected = decision.messages.filter((m) => JSON.stringify(m).includes("SUMMONAIKIT HARNESS REQUIRED"));
+  assert.ok(injected.length === 1, "debe haber 1 mensaje de contrato");
+  assert.deepEqual(injected[0].source, { kind: "plugin", plugin: "summonaikit-gate" });
 });
 
 test("pre-step sin -saikit -> decision intacta (sin contrato extra)", async () => {
@@ -49,6 +51,7 @@ test("turn-stopping sin recibo -> followup una vez con el reason", async () => {
   const agent = { id: "sess_dsh_1", followup: (m) => queued.push(m) };
   await handlers["agent/turn-stopping"]({ agent });
   assert.equal(queued.length, 1);
+  assert.deepEqual(queued[0].source, { kind: "plugin", plugin: "summonaikit-gate" });
   assert.match(queued[0].content[0].text, /SUMMONAIKIT HARNESS GATE/);
 });
 

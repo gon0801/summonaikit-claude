@@ -22,7 +22,10 @@ export function apply(ctx, config) {
   const ctxOf = (agent) => ({ sessionId: sessionKey(agent), cwd: cwdOf.get(sessionKey(agent)) ?? process.cwd() });
   const call = async (payload) => {
     if (!payload) return undefined;
-    const r = await runHook({ hook: config.hook, payload, timeoutMs: config.timeoutMs, bash: config.bash });
+    // runHook arranca el hook con `cwd` = cwd de la sesion (payload.cwd), porque el
+    // hook resuelve el proyecto por `pwd`+`git rev-parse` (qwen r2 PR #86: sin esto
+    // correria en el cwd del SERVIDOR de dsh, gateando el repo equivocado).
+    const r = await runHook({ hook: config.hook, payload, timeoutMs: config.timeoutMs, bash: config.bash, cwd: typeof payload.cwd === "string" && payload.cwd ? payload.cwd : undefined });
     if (!r.ok || r.error) warn(r.error, r.stderr ?? "");
     return r.json;
   };
