@@ -92,6 +92,8 @@ G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) s
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
 G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
 G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
+G2|verif_fallo_pelado_apagado|el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
+G2|verif_fallo_negado_apagado|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -399,6 +401,14 @@ mut_verif_subagente_cero_acredita() { sed "s/^SAIKIT_VERIFIED_CERO_RE=.*/SAIKIT_
 # ANTERIOR acredita el turno nuevo — lo atrapa
 # caso_g2_zcode_verif_label_de_turno_anterior_no_acredita.
 mut_verif_label_sobre_text_entero() { sed 's/saikit_verif_evidence_ok "$text_hatch"/saikit_verif_evidence_ok "$text"/'; }
+# fallo_pelado_apagado (residual PR #72) deja SAIKIT_VERIFIED_FALLO_PELADO_RE en
+# un literal imposible: la extraccion no devuelve nada, el veto no dispara y
+# "ok, failed." acredita — lo atrapa caso_g2_zcode_verif_subagente_fallo_pelado_bloquea.
+# fallo_negado_apagado deja SAIKIT_VERIFIED_FALLO_NEGADO_RE imposible: nada se
+# descuenta, "0 failed"/"no failures" vetan y los dos casos que ACREDITAN se
+# ponen rojos (caso_g2_zcode_verif_subagente_cero_failed_acredita / _sin_fallos_acredita).
+mut_verif_fallo_pelado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_PELADO_RE=.*/SAIKIT_VERIFIED_FALLO_PELADO_RE='NUNCA_MATCHEA_ESTO_FALLO_PELADO'/"; }
+mut_verif_fallo_negado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_NEGADO_RE=.*/SAIKIT_VERIFIED_FALLO_NEGADO_RE='NUNCA_MATCHEA_ESTO_NEGADO'/"; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en

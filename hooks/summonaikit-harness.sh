@@ -222,6 +222,20 @@ SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[1-9][0-9]*[[:s
 # de un digito). La frontera final ADMITE el punto: la linea del recibo suele
 # terminar en "0 passed." (rojo medido: sin eso el veto no disparaba).
 SAIKIT_VERIFIED_CERO_RE='(^|[^0-9.])0[[:space:]]+(tests?[[:space:]]+)?(pass(ed|ing)|ok|okay)([^A-Za-z0-9_-]|$)'
+# Veto propio del label: FALLO PELADO sin conteo ("ok, failed.", "1 failure",
+# "errors") — residual del PR #72 (Greptile r3). FAILURE_SIGNAL_RE_CI solo cubre
+# `N failed` y `failed: N`; un `failed` a secas escrito por el lead es una
+# declaracion de fallo explicita y acreditaba. Sin lookbehind en ERE, se hace en
+# dos pasos: (1) extraer cada ocurrencia CON su palabra previa y su sufijo
+# `[=:] N`; (2) descartar las NEGADAS — "0 failed", "no failures", "sin errores",
+# "failures: 0" son formas de EXITO — y si queda alguna, veta. Fronteras de
+# palabra a ambos lados: "unfailed"/"errorless" no cuentan.
+SAIKIT_VERIFIED_FALLO_PELADO_RE='(^|[^A-Za-z0-9_-])([A-Za-z0-9]+[[:space:]]+)?(fail(ed|ing|ure|ures|s)?|error(s|es)?)([=:][[:space:]]*[0-9]+|[^A-Za-z0-9_-]|$)'
+SAIKIT_VERIFIED_FALLO_NEGADO_RE='^[^A-Za-z0-9_-]?(0|no|sin|without|zero|cero|none|ningun|ningún)[[:space:]]|[=:][[:space:]]*0$'
+# Devuelve 0 (veta) si algun span trae un fallo pelado NO negado.
+saikit_verif_fallo_pelado() {
+  printf '%s\n' "$1" | grep -Eio "$SAIKIT_VERIFIED_FALLO_PELADO_RE" | grep -Eivq "$SAIKIT_VERIFIED_FALLO_NEGADO_RE"
+}
 
 # Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy
 # solo zcode lo tiene MEDIDO (turno vivo 2026-08-25). kimi es candidato con el
@@ -276,7 +290,8 @@ saikit_verif_subagente_credita() {
   { printf '%s\n' "$saikit_spans" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
     || printf '%s\n' "$saikit_spans" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
     || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]' \
-    || printf '%s\n' "$saikit_spans" | grep -Eiq "$SAIKIT_VERIFIED_CERO_RE"; } && return 1
+    || printf '%s\n' "$saikit_spans" | grep -Eiq "$SAIKIT_VERIFIED_CERO_RE" \
+    || saikit_verif_fallo_pelado "$saikit_spans"; } && return 1
   # Credito: ALGUN span trae comando Y resultado de exito en la MISMA linea.
   # Comando en un span y resultado en otro siguen siendo piezas dispersas (codex
   # #2) y no acreditan.

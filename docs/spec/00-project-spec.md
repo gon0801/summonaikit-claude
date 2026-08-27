@@ -1957,15 +1957,25 @@ lo audita el humano. kimi NO es host ciego medido — es candidato `unknown`
 declarado (Core Rule 2); el port mide antes de prender el label. En un host con
 canal observable, un comando no reconocido como runner (`py_compile`) sigue sin
 acreditar por la vía normal (problema de vocabulario, fuera de alcance).
-**Residual (Greptile r3 del PR #72, 2026-08-27, medido):** un `failed`/`error`
-PELADO sin conteo (`VERIFIED BY SUBAGENT: pytest -q, ok, failed.`) no lo veta
-ninguna constante — `FAILURE_SIGNAL_RE_CI` cubre `N failed` y `failed: N`,
-`_CS` las formas de runner, y el veto propio del label `exit [1-9]` y el conteo
-cero — así que ese label acredita. El raíl de EVENTO usa exactamente las mismas
-constantes: el label queda A LA PAR del raíl (el invariante de esta sección), no
-más laxo. Arreglo candidato, en PR propio con caso + mutación + regrabado: veto
-propio del label para `fail(ed|ing|ure|s)?`/`error(s)?` pelados NO precedidos
-de `0 ` (que es forma de éxito: `0 failed`).
+**Fallo PELADO sin conteo (residual del PR #72, Greptile r3 — CERRADO en el
+PR siguiente):** `VERIFIED BY SUBAGENT: pytest -q, ok, failed.` acreditaba —
+`FAILURE_SIGNAL_RE_CI` cubre `N failed` y `failed: N`, `_CS` las formas de
+runner, y ninguna un `failed`/`error` a secas. Veto propio del label
+(`saikit_verif_fallo_pelado`, dos pasos porque ERE no tiene lookbehind): se
+extrae cada `fail(ed|ing|ure|s)?`/`error(s|es)?` con su palabra previa y su
+sufijo `[=:] N` (`SAIKIT_VERIFIED_FALLO_PELADO_RE`) y se descuentan las formas
+NEGADAS, que son de éxito — `0 failed`, `no failures`, `sin errores`,
+`failures: 0` (`SAIKIT_VERIFIED_FALLO_NEGADO_RE`); si queda alguna, veta. El
+label queda MÁS estricto que el raíl de evento en esta forma (el raíl no la
+veta): es texto escrito por el lead, y un `failed` a secas ahí es una
+declaración explícita. Casos `caso_g2_zcode_verif_subagente_fallo_pelado_bloquea`
+(atrapa `verif_fallo_pelado_apagado`) y los dos que ACREDITAN con negación,
+`…_cero_failed_acredita` / `…_sin_fallos_acredita` (atrapan
+`verif_fallo_negado_apagado`: un veto de más es la fricción que esta sección
+vino a quitar). Límite que queda: la negación se reconoce por vocabulario
+(`0|no|sin|without|zero|cero|none|ningun`); una forma fuera de esa lista
+("failed 0", "zero failed tests") veta de más y bloquea un recibo legítimo —
+declarado, no medido en vivo.
 
 ## Non-Goals
 
