@@ -75,6 +75,32 @@ puntos). Verificado por el lead el 2026-08-27.
 
 ---
 
+## Phase 15 — summonaikit en dsh, el DeepSeek Harness (2026-08-27)
+
+**Propósito:** el operador quiere el gate en el harness de DeepSeek — `dsh`
+(`@deepseek-ai/dsh` 0.1.1-rc.2), NO el shim `deepseek` (que es Claude Code y ya
+lo tiene). dsh no tiene hooks de shell: es un harness de plugins cordis con
+`agent/pre-step`, `agent/turn-stopping`, `tools/*` y subagentes por `persona`.
+Decisión: un **adaptador JS** que traduce esos eventos a los payloads del hook
+existente y lo ejecuta con `SUMMONAIKIT_HOOK_TARGET=dsh` — una sola fuente de
+verdad, el port es delgado. Diseño: `docs/phase-15-dsh-host-design.md`; plan
+paso a paso: `docs/phase-15-dsh-host-plan.md`. Alcance medido: solo la UI web.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| 15.1 | `[Medición]` `[lane:gate]` `[tdd:skip:medición]` **Captura de payloads reales de dsh.** Plugin espía en un profile desechable; un turno vivo con `-saikit` y delegación; tabla observado/ausente/`unknown` para las 7 preguntas (texto del usuario en `pre-step`, persona en `subagent`, tools de fs y su campo de ruta, texto final del asistente, `SessionId`/cwd, JSONL de sesión, `AGENTS.md`); fixtures redactados en `tests/fixtures/dsh/` | Las 7 preguntas con cita o `unknown`; sin secretos; el espía no queda instalado | — | cc:TODO |
+| 15.2 | `[Gate]` `[lane:gate]` `[tdd:required]` **`HOST=dsh` en el hook** por `SUMMONAIKIT_HOOK_TARGET=dsh` (D2, como codex); estado en `state/dsh/`; cada rama por host decide dsh explícitamente; `saikit_host_ciego()` intacto salvo medición (D7) | Rojo medido; `caso_g1_dsh_arma_y_aisla_estado` + `_no_se_hereda_sin_target`; G2 ceremonia cierra / sin recibo bloquea; mutación `host_dsh_no_reconocido`; golden 0 divergencias | 15.1 | cc:TODO |
+| 15.3 | `[Adaptador]` `[lane:gate]` `[tdd:required]` **`hosts/dsh/` = `@summonaikit/dsh-gate`**: `translate.js` (4 traducciones, puro), `spawn-hook.js` (bash + stdin + timeout, fail-open), `index.js` (listeners; bloqueo → `agent.followup`); banco `node --test` con dsh falso y hook falso; CI | Casos: arma / no arma / bloquea-y-encola / cierra / hook ausente / no-JSON / timeout; sin reglas del gate en JS | 15.1 | cc:TODO |
+| 15.4 | `[Instalador]` `[lane:gate]` `[tdd:required]` **`--host dsh`**: hook a `~/.dsh/hooks/`, plugin a `~/.dsh/plugins/`, entrada entre marcas en `~/.dsh/cordis.patch.yml`, personas con marca; `--dry-run` que no escribe; `--quitar-dsh`; checker `--dsh-home`; fila `dsh` vacía del router | 7 casos del instalador (limpio / dry-run / ajeno intacto / repara / quitar / sin bash / versión distinta reporta) + 3 del checker + 1 del router | 15.2, 15.3 | cc:TODO |
+| 15.5 | `[Release]` `[lane:release]` `[tdd:skip:docs-y-vivo]` **Turno vivo + docs + deploy**: 3 escenarios en la UI web con transcript (arma y cierra / sin recibo bloquea y vuelve / sin `-saikit` byte-idéntico); spec § host dsh; fila dsh en `agents/adversary.md`; README; deploy-log | Evidencia literal de los 3; spec/perfil/README coherentes con el instalador | 15.4 | cc:TODO |
+| 15.6 | `[Release]` `[lane:release]` `[tdd:skip:docs]` **Cierre del ledger** (y archivo de Phase 13 si `Plans.md` pasa de 200 líneas) | Filas cerradas con sha/PR | 15.5 | cc:TODO |
+
+**Fuera de alcance, declarado:** `headless`/`tui` (profiles no instalados), el
+shim `deepseek` (Claude Code, ya cubierto), reglas nuevas del gate, y cualquier
+cosa que 15.1 no haya observado.
+
+---
+
 ## 事前確認
 
 - 事項: escritura de ACLs sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`
