@@ -7,6 +7,41 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-27 — PR #81 (veto del fallo PELADO en el label, residual del #72 cerrado) — deploy REPARA los tres hooks vivos
+
+- **Qué traía:** el residual declarado en el #72 (Greptile r3): `VERIFIED BY
+  SUBAGENT: pytest -q, ok, failed.` acreditaba. Veto propio del label en dos
+  pasos (`saikit_verif_fallo_pelado`: extraer `fail*`/`error*` con su palabra
+  previa y sufijo, descontar negaciones de éxito — `0 failed`, `no failures`,
+  `failures: 0` — y rutas/archivos del comando — `error.py`,
+  `tests/errors.py` — tras normalizar la puntuación pegada). Merge `5ba0355`
+  (tip `61a013e`), dos rondas de bots (4 hilos, todos atendidos con caso +
+  mutación; medido que un fixture no discriminaba y se corrigió). Límites
+  declarados en el spec: negación por vocabulario (`failed 0`) y un
+  argumento suelto del comando que sea la palabra a secas (`pytest -k error`)
+  vetan de más.
+- **Deploy — hook (una pasada):** REPARADO en `~/.claude/hooks`
+  (backup `saikit-backups/summonaikit-harness.sh.nuestro.20260827-083908.bak`),
+  `~/.codex/hooks` (`…-083911.bak`), `~/.grok/hooks` (`…-083916.bak`). `cmp`
+  byte a byte: **IDÉNTICO los tres**, sha
+  `a2f4c7a8ddaf937f2238de310b108b4120f9485d8aea48739c4369aa66009f87`.
+  Perfiles sin cambio (no se tocaron). `verifier` ajeno de grok intacto
+  (DESCONOCIDO — no se tocó, como siempre).
+- **`check-hook-registration.sh`:** SILENCIO en sus cuatro formas (claude
+  settings + local, `--codex-hooks-json`, `--grok-hooks-dir`,
+  `--zcode-config`), re-corrido y citado.
+- **Verificación previa al merge:** CI 5/5 sobre `61a013e` (suite completa,
+  quality, secrets, Greptile, CodeRabbit). Local: driver de casos (rojo/verde
+  por mutación, 17 strings de sonda directa); la batería completa la corrió
+  CI — regla del repo, una sola vez donde es barato.
+- **Higiene de docs instalada en este mismo PR** (`install-repo-hygiene.ps1`):
+  `tools/check_context_docs.py` + hook `context-docs-budget` en
+  `.pre-commit-config.yaml`. Primera corrida: capa de contexto dentro de
+  presupuesto; sweep de basura limpio. Cierra el `unknown` que la 13.9 dejó
+  declarado ("higiene opcional, aún no corrida").
+- **Operador:** Gon (sesión claude; review, merge y deploy ejecutados por el
+  lead).
+
 ## 2026-08-27 — PR #72 (Phase 14: 14.2–14.4, atestación de verificación delegada) + PR #79 incluido — deploy REPARA los tres hooks vivos y los perfiles en 4 hosts
 
 - **Qué traía:** cierre de la Phase 14 — 14.2 (vía de crédito del label
