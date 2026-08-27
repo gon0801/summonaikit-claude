@@ -109,6 +109,12 @@ if [ "${GROK_HOOK_EVENT+x}" = "x" ]; then
   HOST=grok
 elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
   HOST=codex
+# Phase 15 (D2): dsh no exporta senal propia medible desde el hook (el plugin
+# corre en el proceso de dsh y lanza bash); el adaptador declara el target,
+# igual que el wrapper de codex. Setness+valor exacto: un hijo lanzado DESDE
+# dsh sin el adaptador no se cree dsh.
+elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "dsh" ]; then
+  HOST=dsh
 elif [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
   HOST=zcode
 elif [ "${CLAUDECODE:-}" = "1" ]; then

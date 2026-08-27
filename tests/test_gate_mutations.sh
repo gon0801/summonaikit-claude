@@ -136,6 +136,7 @@ G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex des
 G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
 G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
+G1|host_dsh_no_reconocido|la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)
 G1|phase_sin_user_prompt_submit|el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a "tool": nunca arma (D4)
 G2|toolresult_veto_quitado|el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)
 G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)
@@ -530,6 +531,10 @@ mut_bloqueo_codex_exit2()    { sed '/saikit-6.4-codex-block/s/exit 0/exit 2/'; }
 # sin la rama (y sin su prioridad), el lado grok resuelve HOST=claude y los dos
 # hosts comparten estado. Lo atrapa caso_g1_dos_hosts_grok_y_claude_no_comparten_estado.
 mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; then/if false; then/'; }
+# Task 15.2 (D2): apaga la rama dsh de la deteccion de HOST, espejo de
+# mut_host_codex_sin_rama. Sin la rama, target dsh resuelve HOST=other y el
+# armado no crea state/dsh/. Lo atrapa caso_g1_dsh_arma_y_aisla_estado.
+mut_host_dsh_no_reconocido() { sed 's/= "dsh" \]; then/= "NUNCA_dsh" ]; then/'; }
 # Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
 # inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
 # incompleto pasa a cerrar limpio y el decision:block desaparece).
