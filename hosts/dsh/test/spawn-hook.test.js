@@ -25,6 +25,10 @@ test("salida no-JSON -> fail-open", async () => {
   const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, timeoutMs: 2000, _bashArgs: ["-c", "echo 'esto no es json'"] });
   assert.equal(r.ok, true); assert.equal(r.json, undefined); assert.match(r.error ?? "", /JSON/);
 });
+test("bash inexistente -> fail-open (sin throw/rejection)", async () => {
+  const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, bash: "C:/no/existe/bash.exe", timeoutMs: 2000 });
+  assert.equal(r.ok, false); assert.match(r.error, /ENOENT|no existe|not found/i);
+});
 test("timeout -> fail-open con error declarado", async () => {
   const r = await runHook({ hook, payload: { hook_event_name: "Stop" }, timeoutMs: 1, _bashArgs: ["-c", "sleep 1"] });
   assert.equal(r.ok, false); assert.match(r.error, /timeout/i);

@@ -15,16 +15,22 @@ const ROLES = new Set(["implementer", "verifier", "reviewer", "adversary"]);
 // robustez/futuro. `read` no se mapea (es una lectura; el gate rastrea escrituras).
 const FS_TOOLS = { write: "Write", str_replace_editor: "Edit", edit: "Edit", str_replace: "Edit" };
 const SUBAGENT_TOOL_RE = /^subagent(?:[_-](implementer|verifier|reviewer|adversary))?$/;
-// Heuristica de rol por texto (15.1: el rol solo esta ahi). Orden por especificidad.
+// Heuristica de rol por texto (15.1: el rol solo esta ahi). Fail-safe (codex r1
+// PR #86): SOLO se devuelve un rol si matchea EXACTAMENTE una regla; cero o
+// multiples (ambiguo) -> undefined. Adivinar mal puede satisfacer/reordenar la
+// ceremonia; perder el evento por ambiguo es el lado seguro. La DESCRIPCION se
+// prueba primero (senal corta y tipica); el prompt queda de fallback.
 const ROLE_INFER = [
-  ["adversary", /\badversar|\battack|\bred[\s_-]?team|\bhack/i],
-  ["verifier", /\bverif|\bverify|\bconfirm|\bcheck\b|\btest|acredita|revisa/i],
-  ["reviewer", /\breview|\brevision|\baudit|\bcode.?review/i],
-  ["implementer", /\bimplement|\badd\b|\bcreate|\bbuild|\bagrega|\bcrea|\bescribe|\bchange|\bupdate/i],
+  ["adversary", /\badversar|attack|\bred[\s_-]?team|\bhack/i],
+  ["verifier", /\bverif|\bverify|acredita/i],
+  ["reviewer", /\breview|\brevis|\brevision|\baudit|\bcode.?review/i],
+  ["implementer", /\bimplement|\bcreate|\bbuild|\bagrega|\bcrea|\bescribe|\badd(?:s|ing)?\b/i],
 ];
 function inferRole(text) {
-  for (const [role, re] of ROLE_INFER) if (re.test(text)) return role;
-  return undefined;
+  const hits = [];
+  for (const [role, re] of ROLE_INFER) if (re.test(text)) hits.push(role);
+  const uniq = [...new Set(hits)];
+  return uniq.length === 1 ? uniq[0] : undefined;
 }
 
 const base = (ev, name) => ({
@@ -35,11 +41,17 @@ const base = (ev, name) => ({
 export function toSessionStart(ev) { return { ...base(ev, "SessionStart"), source: "startup" }; }
 
 export function toUserPromptSubmit(ev) {
-  const text = (ev.messages ?? [])
-    .filter((m) => m.role === "user" && !m.source?.startsWith?.("summonaikit"))
-    .flatMap((m) => (Array.isArray(m.content) ? m.content : [m.content]))
-    .map((c) => (typeof c === "string" ? c : c?.text ?? ""))
-    .join("\n").trim();
+  // Solo un mensaje de usuario HUMANO (source.kind === "user") cuenta como prompt;
+  // los reportes de subagente (source.kind "subagent-settled"/"subagent-report")
+  // y los mensajes inyectados por este plugin ("plugin") NO. Y solo el MAS NUEVO,
+  // para no re-transcribir el prompt de un paso anterior.
+  const human = (ev.messages ?? []).filter((m) => m.role === "user" && m.source?.kind === "user");
+  const newest = human.at(-1);
+  if (!newest) return undefined;
+  const text = (() => {
+    const c = newest.content ?? [];
+    return (Array.isArray(c) ? c : [c]).map((x) => (typeof x === "string" ? x : x?.text ?? "")).join("\n").trim();
+  })();
   if (!text) return undefined;
   return { ...base(ev, "UserPromptSubmit"), prompt: text };
 }

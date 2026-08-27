@@ -56,3 +56,16 @@ test("tools/result de subagent 'Verify' -> verifier (rol por texto)", () => {
   assert.equal(p.tool_name, "Task");
   assert.equal(p.tool_input.subagent_type, "verifier"); // "Verify docstring..." -> verifier
 });
+
+test("subagent con descripcion ambigua (add + verify) -> undefined (fail-safe, codex r1)", () => {
+  const p = toPostToolUse({ sessionId: "s", cwd: "c", name: "subagent", arguments: { description: "Add and verify the change", prompt: "x" } });
+  assert.equal(p, undefined);
+});
+test("subagent sin keyword de rol -> undefined (fail-safe)", () => {
+  const p = toPostToolUse({ sessionId: "s", cwd: "c", name: "subagent", arguments: { description: "Do the thing", prompt: "x" } });
+  assert.equal(p, undefined);
+});
+test("pre-step con reporte de subagente (source.kind != user) -> undefined", () => {
+  const p = toUserPromptSubmit({ sessionId: "s", cwd: "c", step: 3, messages: [{ role: "user", source: { kind: "subagent-settled", senderSessionId: "x" }, content: [{ type: "text", text: "Background subagent … finished" }] }] });
+  assert.equal(p, undefined);
+});

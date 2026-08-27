@@ -36,7 +36,18 @@ export function apply(ctx, config) {
     return nextP;
   };
 
-  ctx.on("agent/created", ({ agent, meta }) => { if (meta?.cwd) cwdOf.set(sessionKey(agent), meta.cwd); });
+  ctx.on("agent/created", ({ agent }) => {
+    // dsh no pone meta.cwd en agent/created (codex r1 PR #86): el cwd vive en
+    // session.header.cwd. Fallback: process.cwd() (lo del proceso del adaptador).
+    const cwd = agent?.session?.header?.cwd;
+    if (typeof cwd === "string" && cwd !== "") cwdOf.set(sessionKey(agent), cwd);
+  });
+  ctx.on("agent/disposed", ({ agent }) => {
+    // Limpieza de estado por sesion (codex r1 PR #86 / Greptile): un proceso dsh
+    // de larga vida no debe acumular lastText/cwdOf/queues por sesion historica.
+    const key = sessionKey(agent);
+    lastText.delete(key); cwdOf.delete(key); queues.delete(key);
+  });
   ctx.on("agent/session-start", ({ agent }) => { enqueue(sessionKey(agent), toSessionStart(ctxOf(agent))); });
   ctx.on("session/event", (session, event) => {
     if (event?.type === "assistant/message") lastText.set(sessionKey(session), textOf(event));
@@ -47,7 +58,7 @@ export function apply(ctx, config) {
     const json = await enqueue(sessionKey(payload.agent), toUserPromptSubmit({ ...ctxOf(payload.agent), step: payload.step, messages: payload.messages }));
     const extra = json?.hookSpecificOutput?.additionalContext;
     if (!extra) return decision;
-    const msg = { id: crypto.randomUUID(), role: "user", source: "summonaikit-gate", content: [{ type: "text", text: extra }] };
+    const msg = { id: crypto.randomUUID(), role: "user", source: { kind: "plugin", plugin: "summonaikit-gate" }, content: [{ type: "text", text: extra }] };
     return { kind: "enter", messages: [...decision.messages, msg] };
   });
   ctx.on("tools/result", (exec) => {
@@ -58,12 +69,16 @@ export function apply(ctx, config) {
     const key = sessionKey(agent);
     // El Stop entra a la MISMA cola: corre solo cuando drenaron los PostToolUse.
     const json = await enqueue(key, toStop({ ...ctxOf(agent), lastAssistantText: lastText.get(key) ?? "" }));
-    if (json?.decision === "block" && json.reason) agent.followup({ role: "user", source: "summonaikit-gate", content: [{ type: "text", text: json.reason }] });
+    if (json?.decision === "block" && json.reason) agent.followup({ role: "user", source: { kind: "plugin", plugin: "summonaikit-gate" }, content: [{ type: "text", text: json.reason }] });
   });
 }
 function textOf(event) {
   // 15.1: el texto del asistente vive en event.data.message.content[].text (no en
-  // event.message). Se conserva el fallback del plan por robustez.
+  // event.message). Solo los bloques `type:"text"` cuentan (codex r1 PR #86): un
+  // recibo presente solo en `reasoning` (oculto) no debe pasar el gate por
+  // delante del texto visible. Se conserva el fallback del plan por robustez.
   const c = event?.data?.message?.content ?? event?.message?.content ?? event?.content ?? [];
-  return (Array.isArray(c) ? c : [c]).map((x) => (typeof x === "string" ? x : x?.text ?? "")).join("\n");
+  const blocks = Array.isArray(c) ? c : [c];
+  return blocks.filter((x) => x?.type === "text" || typeof x === "string")
+    .map((x) => (typeof x === "string" ? x : x?.text ?? "")).join("\n");
 }

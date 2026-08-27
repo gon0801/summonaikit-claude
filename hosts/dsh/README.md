@@ -29,10 +29,11 @@ Estas difieren del pseudocódigo del plan y vienen de `docs/task-15.1-medicion-d
   **no** hay campo estructurado con el rol. El adaptador **infiere** el rol del texto
   (heurística: `verify`→verifier, `review`→reviewer, `add/create`→implementer,
   `adversar`→adversary), probando **primero la descripción** (señal corta y típica)
-  y el prompt solo como fallback. **Límite:** es una heurística; una descripción sin
-  keyword clara no mapea (el evento se ignora y la ceremonia del gate reclamará el
-  rol faltante). Confirmar en el turno vivo de 15.5 si dsh expone el rol por otro
-  canal (p. ej. la persona del hijo en `agent/created`).
+  y el prompt solo como fallback. **Fail-safe:** devuelve `undefined` si **ninguna**
+  o **más de una** regla coincide (ambiguo); una descripción ambigua se ignora (el
+  evento se pierde y la ceremonia del gate reclamará el rol faltante). Confirmar en
+  el turno vivo de 15.5 si dsh expone el rol por otro canal (p. ej. la persona del
+  hijo en `agent/created`).
 - **Texto final del asistente.** Vive en `session/event` `assistant/message` en
   `event.data.message.content[].text` — no en `event.message`. `textOf()` lee esa
   ruta (con el fallback del plan por robustez).
@@ -54,13 +55,19 @@ orden en que dsh emitió los eventos (bots #83): `Stop` espera a que drenen los
 `PostToolUse`, para que un `tools/result` del verifier que escribe `agents_seen` no
 carreree contra el `Stop` que lee el estado.
 
-## Shape de los mensajes inyectados (límite)
+## Shape de los mensajes inyectados (codex r1 PR #86)
 
 Los mensajes que el adaptador inyecta (`additionalContext` del contrato y el
-`followup` del bloqueo) usan `{ role:"user", source:"summonaikit-gate",
-content:[{type:"text",text}] }`. dsh puede exigir `source:{kind:"user", rpcId}` o un
-`createMessage` de `dsh-llm`; **verificar en el turno vivo de 15.5** y ajustar aquí si
-difiere.
+`followup` del bloqueo) usan `{ role:"user", source:{ kind:"plugin",
+plugin:"summonaikit-gate" }, content:[{type:"text",text}] }`. dsh define
+`MessageSource` como sum type: `{kind:'user'|'plugin'|'model'|'tool'}` con los
+campos de cada uno — la string `source:"summonaikit-gate"` del pseudocódigo del
+plan es **inválida** (el validador de sesión de dsh la rechaza). El `cwd` se
+deriva de `agent.session.header.cwd` (dsh no pone `meta.cwd` en `agent/created`),
+con fallback a `process.cwd()`. El estado por sesión (`lastText`/`cwdOf`/`queues`)
+se limpia en `agent/disposed` (proceso dsh de larga vida). El texto del asistente
+vive en `event.data.message.content[].text` y `textOf()` toma solo los bloques
+`type:"text"` (un recibo solo en el `reasoning` oculto no debe pasar el gate).
 
 ## Ejecución
 
