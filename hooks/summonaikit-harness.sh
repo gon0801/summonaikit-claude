@@ -1097,7 +1097,7 @@ Review: ...
 Close: ...
 Retro: ...
 ADVERSARY: N findings, highest severity X — required ONLY in receipts of turns where an adversary actually ran (any lane); presence only, the numbers are never checked. ROLE FALLBACK: ADVERSARY (reason) substitutes the line when the dispatched adversary died without reporting.
-VERIFIED BY SUBAGENT: <comando y resultado> — declaration ONLY for a receipt on a host whose INTERNAL channel is blind, i.e. the harness cannot see a delegated subagent's tool events (zcode today; kimi once measured). When you delegated verification to a verifier subagent and its evidence never reached the harness, name the exact command and its SUCCESS result here (e.g. `VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0`); a human re-runs the named command. Invalid on hosts that DO surface those events — there keep the real evidence; a declared failure (failed / exit non-zero) never counts. Golden: the 2026-08-25 zcode live turn (already documented in the smoke doc).
+VERIFIED BY SUBAGENT: <comando y resultado> — declaration ONLY for a receipt on a host whose INTERNAL channel is blind, i.e. the harness cannot see a delegated subagent's tool events (zcode today; kimi once measured). When you delegated verification to a verifier subagent and its evidence never reached the harness, name the exact command and its SUCCESS result here, on the SAME line as the label (e.g. `VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0`); the harness reads the command and result only from the label's own line, so a command placed on the next line is not seen. A human re-runs the named command. Invalid on hosts that DO surface those events — there keep the real evidence; a declared failure (failed / exit non-zero) never counts. Golden: the 2026-08-25 zcode live turn (already documented in the smoke doc).
 
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
@@ -2529,7 +2529,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # ni servir su span para acreditar el turno nuevo — la misma clase que las
   # escotillas PAUSED/DELEGATED ya cierran con text_hatch (Task 8.2).
   if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text_hatch"; then
-    missing="$missing- Missing verification evidence or explicit skipped-check reason.\n"
+    missing="$missing- Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a \`VERIFIED BY SUBAGENT: <command> <result>\` on one line counts; otherwise declare an explicit skipped-check reason).\n"
   fi
 
   # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude
