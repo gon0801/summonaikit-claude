@@ -1903,10 +1903,17 @@ las 5 condiciones:
    atestación legítima (falso positivo del veto).
    **Con VARIOS labels en el recibo se juzgan TODOS los spans** (Greptile P1,
    PR #72): el veto corre sobre cada uno — un label con fallo declarado
-   (`failed: 1`, `exit 1`) descalifica el turno aunque otro label, antes o
-   después, declare éxito ("cualquier fallo declarado veta", no "el último
-   manda"); el crédito exige comando + resultado en la MISMA línea de algún
-   span. Antes se recortaba al primero (`head -n1`) y un éxito seguido de un
+   (`failed: 1`, `exit 1`, o **conteo cero** `0 passed`/`0 passing`/`0 tests
+   passed`, `SAIKIT_VERIFIED_CERO_RE`: cero pruebas corridas no verifica, y el
+   `[1-9]` de `SAIKIT_VERIFIED_RESULT_RE` no alcanza porque la rama `passed`
+   pelada lo rematchea — CodeRabbit) descalifica el turno aunque otro label,
+   antes o después, declare éxito ("cualquier fallo declarado veta", no "el
+   último manda"); el crédito exige comando + resultado en la MISMA línea de
+   algún span. La vía se juzga sobre el texto del turno ACTUAL
+   (`last_assistant_message`), no sobre el tail del transcript: un label
+   válido de un turno anterior no acredita el nuevo
+   (`caso_g2_zcode_verif_label_de_turno_anterior_no_acredita`, mutación
+   `verif_label_sobre_text_entero`). Antes se recortaba al primero (`head -n1`) y un éxito seguido de un
    fallo acreditaba. Casos: `caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea`
    (atrapa la mutación `verif_subagente_solo_primer_span`) y su espejo
    `…_fallo_luego_exito_bloquea` (fija la semántica; no discrimina esa mutación,

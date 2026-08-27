@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: d32be37a49727b94d5b6218046eac189995d436849b4ce5fe8591648aafa3b53
-# hook_bytes: 168152
-# hook_lineas: 2805
+# hook_sha256: c96e7cdfed94da4954f9d617f0321d528fb4d800ba73a34fe042ba8cba6f828c
+# hook_bytes: 169092
+# hook_lineas: 2817
 # escenarios: 54
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):

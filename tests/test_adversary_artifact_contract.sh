@@ -30,6 +30,11 @@ if [ -r "$perfil" ]; then
   for k in '"role"' '"attacked"' '"findings"' '"severity"' '"location"' '"claim"' '"trigger"' '"evidence"' '"confirmed"'; do
     grep -Fq "$k" "$perfil" || malo "el perfil no documenta la clave del contrato $k"
   done
+  # (CodeRabbit, PR #72) no alcanza con que las claves aparezcan sueltas: el
+  # perfil tiene que declarar el esquema como contrato EXACTO y la estructura.
+  grep -Fq 'Use exactly the keys below' "$perfil" || malo "el perfil no declara el esquema como contrato exacto"
+  grep -Fq 'findings[]' "$perfil" || malo "el perfil no documenta la estructura findings[]"
+  grep -Fq 'Do NOT invent a different shape' "$perfil" || malo "el perfil no prohibe una forma distinta"
 else
   echo "  UNKNOWN: no se puede leer agents/adversary.md" >&2; unknown=1
 fi
@@ -57,6 +62,12 @@ caso "el reviewer declara MALFORMADO un esquema no contrato"
 if [ -r "$reviewer" ]; then
   grep -Eiq 'malform' "$reviewer" || malo "el reviewer no declara malformado"
   grep -Fq 'generated_at_utc' "$reviewer" || malo "el reviewer no cubre el esquema ajeno (campo 'generated_at_utc')"
+  # (CodeRabbit, PR #72) cada regla de artefacto malformado documentada, por su
+  # forma: title/detail, attacked ausente, ilegible, y artefacto inexistente.
+  grep -Fq '`title`/`detail`' "$reviewer" || malo "el reviewer no cubre el esquema title/detail"
+  grep -Fq 'missing `attacked`' "$reviewer" || malo "el reviewer no cubre el attacked ausente"
+  grep -Fiq 'unreadable' "$reviewer" || malo "el reviewer no cubre el artefacto ilegible"
+  grep -Fq 'no artifact exists' "$reviewer" || malo "el reviewer no cubre el artefacto inexistente"
 else
   echo "  UNKNOWN: no se puede leer agents/reviewer.md" >&2; unknown=1
 fi
@@ -66,6 +77,8 @@ if [ -r "$plans" ]; then
   if grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ' "$plans"; then
     malo "Plans.md (fila 14.3) enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
   fi
+  # (CodeRabbit, PR #72) ademas de rechazar la forma insegura, exigir la segura.
+  grep -Fq 'date -u +%Y%m%dT%H%M%SZ' "$plans" || malo "Plans.md (fila 14.3) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
 else
   echo "  UNKNOWN: no se puede leer Plans.md" >&2; unknown=1
 fi

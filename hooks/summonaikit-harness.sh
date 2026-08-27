@@ -208,11 +208,20 @@ SAIKIT_VERIFIED_SUBAGENT_RE='VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:'
 # legitimas. Con fronteras de palabra: "bateria"/"checks" NO cuentan.
 SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
 # Resultado de EXITO que el label DEBE declarar (el veto de fallo aparte, abajo).
-# OJO a dos aristas (grok r1 #3): el conteo de "passed" es [1-9][0-9]* (excluye
-# "0 passed"/"0 passing" — no es un exito), y NO se acepta "en verde" suelto
-# (negable: "no en verde" lo matchearia) — queda "todo verde" y "sin errores",
-# que no se niegan. La frontera del grupo sigue excluyendo "10 failed".
+# OJO a dos aristas (grok r1 #3): el conteo de "passed" es [1-9][0-9]*, y NO se
+# acepta "en verde" suelto (negable: "no en verde" lo matchearia) — queda "todo
+# verde" y "sin errores", que no se niegan. La frontera del grupo sigue
+# excluyendo "10 failed". PERO el conteo [1-9] NO alcanza para excluir
+# "0 passed": la rama `pass(ed|ing)` pelada lo rematchea (CodeRabbit, PR #72) —
+# ERE no tiene lookbehind, asi que "0 passed"/"0 passing"/"0 tests passed" se
+# descalifican con el VETO propio del label (SAIKIT_VERIFIED_CERO_RE, abajo),
+# no aca: cero pruebas corridas no es una verificacion.
 SAIKIT_VERIFIED_RESULT_RE='(^|[^A-Za-z0-9_.-])(exit[[:space:]]+0|[1-9][0-9]*[[:space:]]+(pass(ed|ing)|ok|okay)|0[[:space:]]+(failed|failing|failures?|errors?)|pass(ed|ing)|ok|okay)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)|todo[[:space:]]+verde|sin[[:space:]]+errores'
+# Veto propio del label: un conteo CERO de exito ("0 passed", "0 passing",
+# "0 tests passed", "0 ok") no acredita — "10 passed" no cae (el 0 va precedido
+# de un digito). La frontera final ADMITE el punto: la linea del recibo suele
+# terminar en "0 passed." (rojo medido: sin eso el veto no disparaba).
+SAIKIT_VERIFIED_CERO_RE='(^|[^0-9.])0[[:space:]]+(tests?[[:space:]]+)?(pass(ed|ing)|ok|okay)([^A-Za-z0-9_-]|$)'
 
 # Task 14.2 — UN SOLO lugar define que host tiene el canal interno ciego. Hoy
 # solo zcode lo tiene MEDIDO (turno vivo 2026-08-25). kimi es candidato con el
@@ -262,9 +271,12 @@ saikit_verif_subagente_credita() {
   # de fallo descalifica el turno entero — un exito declarado antes o despues de
   # un fallo declarado no lo tapa. "Nunca mas laxo que el rail": el rail de
   # evento ve todas las lineas, el label tambien.
+  # El cuarto grep (SAIKIT_VERIFIED_CERO_RE) descalifica "0 passed" y formas
+  # hermanas: RESULT_RE las rematchea por la rama `passed` pelada (CodeRabbit).
   { printf '%s\n' "$saikit_spans" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
     || printf '%s\n' "$saikit_spans" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
-    || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]'; } && return 1
+    || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]' \
+    || printf '%s\n' "$saikit_spans" | grep -Eiq "$SAIKIT_VERIFIED_CERO_RE"; } && return 1
   # Credito: ALGUN span trae comando Y resultado de exito en la MISMA linea.
   # Comando en un span y resultado en otro siguen siendo piezas dispersas (codex
   # #2) y no acreditan.

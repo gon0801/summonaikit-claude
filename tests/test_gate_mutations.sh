@@ -90,6 +90,8 @@ G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la pos
 G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
 G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
+G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
+G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -387,6 +389,16 @@ mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/';
 # exito-luego-fallo acredita — lo atrapa caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
 # (el espejo fallo-luego-exito bloquea con y sin la mutacion: no la discrimina).
 mut_verif_subagente_solo_primer_span() { sed 's/grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE\[^\[:cntrl:\]\]\*"$/& | head -n1/'; }
+# cero_acredita (CodeRabbit, PR #72) apaga SAIKIT_VERIFIED_CERO_RE (literal
+# imposible): "0 passed"/"0 passing" vuelven a acreditar por la rama `passed`
+# pelada de RESULT_RE — lo atrapan caso_g2_zcode_verif_subagente_cero_passed_bloquea
+# y ..._cero_passing_bloquea.
+mut_verif_subagente_cero_acredita() { sed "s/^SAIKIT_VERIFIED_CERO_RE=.*/SAIKIT_VERIFIED_CERO_RE='NUNCA_MATCHEA_ESTO_0_PASSED'/"; }
+# label_sobre_text_entero (grok r1 #1, fe81de5) vuelve a juzgar la via del label
+# sobre $text (tail del transcript + turno actual): un label valido de un turno
+# ANTERIOR acredita el turno nuevo — lo atrapa
+# caso_g2_zcode_verif_label_de_turno_anterior_no_acredita.
+mut_verif_label_sobre_text_entero() { sed 's/saikit_verif_evidence_ok "$text_hatch"/saikit_verif_evidence_ok "$text"/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en

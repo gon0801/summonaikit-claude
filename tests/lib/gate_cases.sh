@@ -162,6 +162,18 @@ _RECIBO_VERIF_SUBAGENTE_EXITO_LUEGO_FALLO='SUMMONAIKIT HARNESS RECEIPT\n- Unders
 # fallido), asi que este caso NO discrimina esa mutacion — fija la semantica.
 _RECIBO_VERIF_SUBAGENTE_FALLO_LUEGO_EXITO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 11 passed, failed: 1.\n- Review: VERIFIED BY SUBAGENT: pytest -q, 12 passed.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
 
+# (b-4) conteo CERO de exito (CodeRabbit, PR #72): "0 passed" no lo excluye el
+# [1-9] de RESULT_RE porque la rama `passed` pelada lo rematchea; lo descalifica
+# el veto SAIKIT_VERIFIED_CERO_RE. Cero pruebas corridas no verifica: BLOQUEA.
+_RECIBO_VERIF_SUBAGENTE_CERO_PASSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 0 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_CERO_PASSING='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: npm test, 0 passing.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# (d) recibo del turno ACTUAL sin evidencia ni label — se usa con un transcript
+# cuyo turno ANTERIOR si traia un label valido (grok r1 #1 / fe81de5): el label
+# viejo en el tail de 160 lineas NO acredita el turno nuevo. "lo miro el
+# verifier" no es prosa de runner ni skip-phrase: sin el label, BLOQUEA.
+_RECIBO_TURNO_SIN_EVIDENCIA='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: lo miro el verifier.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
 # (b-ter) label en MINUSCULAS — el detector es case-insensitive (-Eiq) y el span
 # (grok r1 #2) tambien: la forma 'Verified by subagent:' debe acreditar igual.
 _RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: Verified by subagent: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
@@ -967,7 +979,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1353,6 +1365,48 @@ caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLO_LUEGO_EXITO")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (b-4) "0 passed" / "0 passing" (CodeRabbit, PR #72): RESULT_RE los rematchea
+# por la rama `passed` pelada; el veto SAIKIT_VERIFIED_CERO_RE los descalifica.
+# BLOQUEAN. Lo atrapa la mutacion verif_subagente_cero_acredita (apaga el veto:
+# ambos acreditan y se ponen rojos).
+caso_g2_zcode_verif_subagente_cero_passed_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_CERO_PASSED")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+caso_g2_zcode_verif_subagente_cero_passing_bloquea() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_CERO_PASSING")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# (d) label de un turno ANTERIOR (grok r1 #1, fe81de5 — caso que faltaba,
+# CodeRabbit PR #72): el transcript trae un turno previo del asistente con un
+# label VALIDO; el turno actual (last_assistant_message) no trae evidencia ni
+# label. La via del label se juzga sobre $text_hatch (turno actual), no sobre
+# $text (tail de 160 lineas + turnos anteriores): el label viejo NO acredita.
+# BLOQUEA. Lo atrapa la mutacion verif_label_sobre_text_entero.
+caso_g2_zcode_verif_label_de_turno_anterior_no_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_TURNO_SIN_EVIDENCIA")" "$(lab_transcript_asistente "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
   LAB_ZCODE_SESSION_ID=""
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }

@@ -281,6 +281,14 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    label quedaría por debajo de ese raíl, que es lo contrario de lo que este
    diseño promete.)
 
+   **Implementación (PR #72, Greptile P1 / CodeRabbit):** con VARIOS labels en
+   el recibo el predicado corre en dos pasos sobre TODOS los spans — (1) veto:
+   cualquier span con señal de fallo (`FAILURE_SIGNAL_RE_CI`/`_CS`, `exit [1-9]`,
+   o conteo cero `SAIKIT_VERIFIED_CERO_RE`: "0 passed"/"0 passing") descalifica
+   el turno entero; (2) crédito: algún span trae `SAIKIT_VERIFIED_CMD_RE` Y
+   `SAIKIT_VERIFIED_RESULT_RE` en la MISMA línea. "Cualquier fallo declarado
+   veta", no "el último manda". El contrato vivo es el spec § vía adicional.
+
    **Por qué así (auditabilidad):** una mentira sobre "corrí `python -m
    py_compile app.py`, exit 0" es detectable en la revisión — un humano puede
    re-correr el comando nombrado. Una mentira sobre "el verifier corrió la
@@ -296,7 +304,8 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    tomada).** El label queda a la par del raíl del EVENTO (que veta fallos) y más
    estricto que la PROSA (hook:2399, que hoy acredita un fallo si hay runner en
    la prosa). `VERIFIED BY SUBAGENT: pytest, 12 failed` NO cierra el turno: el
-   veto `SAIKIT_VERIFIED_FAIL_RE` lo descalifica. Consecuencia declarada: el
+   veto (las mismas `FAILURE_SIGNAL_RE_CI`/`FAILURE_SIGNAL_RE_CS` del raíl +
+   `exit [1-9]`; no existe una `SAIKIT_VERIFIED_FAIL_RE` propia) lo descalifica. Consecuencia declarada: el
    label NO introduce una vía nueva para acreditar un fallo (esa brecha seguiría
    siendo la del fallback de prosa, ajena a este cambio).
 4. **El gate es advisory, no un control de seguridad (Non-Goal del spec):** un
