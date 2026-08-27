@@ -7,6 +7,33 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-26 — PR #77 (perfil adversary honesto por host + límite newline-filename) — deploy REPARA hook claude y ambos perfiles
+
+- **Qué traía:** docs del perfil. Publica en `agents/adversary.md` la
+  distinción de enforcement por host que la Phase 13 retenía: hosts CON
+  atribución de tool-events (claude/grok/codex) conservan el candado
+  Edit/Write; hosts SIN (kimi `not_observed`, zcode `unknown`) declaran el
+  hueco y describen el enforcement real (perfil disuasivo + escaneo por
+  época + gitignore). El spec gana el límite de filename con newline (misma
+  clase de evasión deliberada que `touch -t`). La publicación se retuvo a
+  propósito hasta que el escaneo y el gitignore existieran en el port kimi
+  (P4 mergeada) y el strip de redactados quedara corregido (PR #75).
+- **Deploy — hook:** el default (`install-hook.sh`) REPARÓ
+  `~/.claude/hooks/summonaikit-harness.sh` — le faltaba el strip del PR
+  #75, que se había mergeado sin deploy propio. Backup
+  `…/saikit-backups/summonaikit-harness.sh.nuestro.20260826-131621.bak`;
+  `cmp` byte a byte contra la fuente: IDÉNTICO.
+- **Deploy — perfiles:** `--host kimi` y `--host claude` REPARARON el
+  `adversary.md` de `~/.agents/agents/` y `~/.claude/agents/` (ambos con
+  marca `saikit_owned: summonaikit-claude`, estados de backup en sus
+  `saikit-backups/`). Verificado: ambos llevan el texto honesto-por-host.
+  La corrida sin pisada: el port kimi terminó su trabajo en paralelo, así
+  que `~/.agents/agents/` vuelve a tener un solo escritor activo.
+- **`check-hook-registration.sh`:** rc=0 (registrado en las 3 fases).
+- **Verificación previa al merge:** CI 4/4 (suite 5m52s, quality, secrets,
+  Greptile); `pre-commit run --files` en verde; texto fuente validado
+  contra el parser real de kimi-code (PROBE-ADVPORT-OK, en el port).
+
 ## 2026-08-26 — PR #73 (fix de la trampa de orden del adversary tardío) — deploy ACTUALIZA los tres hooks vivos
 
 - **Qué traía:** un solo fix de gate. La trampa: el dedupe de `record_agent`
