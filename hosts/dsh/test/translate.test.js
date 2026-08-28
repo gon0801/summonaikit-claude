@@ -75,6 +75,29 @@ test("tools/result de pwsh -> PostToolUse Bash con command (claude r3: verificad
   assert.equal(p.tool_name, "Bash");
   assert.equal(p.tool_input.command, "pytest -q");
 });
+
+test("pwsh con exitCode>0 -> payload enriquece toolResult.exit_code (snake) y tool_response.output (glm HIGH: veto verified sobre run rojo)", () => {
+  const p = toPostToolUse({
+    sessionId: "s", cwd: "c", name: "pwsh",
+    arguments: { command: "pytest -q" },
+    result: { isError: false, value: { exitCode: 1, stdout: { text: "1 failed, 2 passed\n" }, stderr: { text: "" } } },
+  });
+  assert.equal(p.tool_name, "Bash");
+  assert.equal(typeof p.toolResult?.exit_code, "number");
+  assert.equal(p.toolResult.exit_code, 1);
+  assert.match(p.tool_response?.output ?? "", /1 failed/);
+});
+
+test("pwsh con exitCode=0 y salida limpia -> NO marca toolResult.exit_code en rango [1-9] (veto no dispara falso positivo)", () => {
+  const p = toPostToolUse({
+    sessionId: "s", cwd: "c", name: "pwsh",
+    arguments: { command: "pytest -q" },
+    result: { isError: false, value: { exitCode: 0, stdout: { text: "3 passed\n" }, stderr: { text: "" } } },
+  });
+  assert.equal(p.tool_name, "Bash");
+  assert.equal(typeof p.toolResult?.exit_code, "number");
+  assert.equal(p.toolResult.exit_code, 0);
+});
 test("verifier 'Run the tests for app.py' -> verifier (vocabulario amplio, claude r3)", () => {
   const p = toPostToolUse({ sessionId: "s", cwd: "c", name: "subagent", arguments: { description: "Run the tests for app.py", prompt: "x" } });
   assert.equal(p.tool_input.subagent_type, "verifier");

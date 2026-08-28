@@ -62,6 +62,28 @@ export function toUserPromptSubmit(ev) {
   return { ...base(ev, "UserPromptSubmit"), prompt: text };
 }
 
+// Anade a un payload de PostToolUse el desenlace del comando, en la FORMA que el
+// hook ya sabe leer (glm HIGH r4 PR #86). dsh da un resultado de tool "exitoso"
+// (isError:false) aunque el comando salga con exit != 0, asi que el adaptador
+// tiene que llevar el desenlace MANUALMENTE o el raíl `verified` queda ciego a
+// una corrida roja (falso verde). Dos campos:
+// - `toolResult.exit_code` en SNAKE (el veto de :2150 grepea exit_code en esa
+//   forma; dsh trae camelCase `exitCode`, hay que traducir). Se agrega solo si
+//   es numero; el grep exige [1-9] directo tras el ':', asi que 0 no dispara.
+// - `tool_response.output` (forma Claude) para que FAILURE_SIGNAL_RE_CI/CS
+//   (que grepea $combined, que incluye $INPUT) vea el texto de salida.
+function withShellResult(ev, payload) {
+  const value = ev.result?.value;
+  if (!value || typeof value !== "object") return payload;
+  const out = { ...payload };
+  if (typeof value.exitCode === "number") out.toolResult = { exit_code: value.exitCode };
+  const stdout = value.stdout?.text ?? "";
+  const stderr = value.stderr?.text ?? "";
+  const output = [stdout, stderr].filter(Boolean).join("\n");
+  if (output) out.tool_response = { output };
+  return out;
+}
+
 export function toPostToolUse(ev) {
   const m = SUBAGENT_TOOL_RE.exec(ev.name ?? "");
   if (m) {
@@ -73,7 +95,14 @@ export function toPostToolUse(ev) {
       ?? inferRole(ev.arguments?.description ?? "")
       ?? inferRole(ev.arguments?.prompt ?? "");
     if (!ROLES.has(role)) return undefined;
-    return { ...base(ev, "PostToolUse"), tool_name: "Task", tool_input: { subagent_type: role, description: ev.arguments?.description ?? "" } };
+    const payload = { ...base(ev, "PostToolUse"), tool_name: "Task", tool_input: { subagent_type: role, description: ev.arguments?.description ?? "" } };
+    // dsh manda el subagente a su PROPIA sesion (Gap1 claude, r3 PR #86): el
+    // evento de spawn trae result.value.subagentId (id de la sesion del hijo) y
+    // kind:"continuable". El adaptador lo copia al payload para que index.js
+    // pueda mapear sesion-hijo -> sesion-madre + rol (la ceremonia y el candado
+    // adversary corren sobre la sesion de la MADRE).
+    if (typeof ev.result?.value?.subagentId === "string") payload.subagentId = ev.result.value.subagentId;
+    return payload;
   }
   const fs = FS_TOOLS[ev.name];
   if (fs && typeof ev.arguments?.file_path === "string") {
@@ -81,7 +110,7 @@ export function toPostToolUse(ev) {
   }
   const shell = SHELL_TOOLS[ev.name];
   if (shell && typeof ev.arguments?.command === "string") {
-    return { ...base(ev, "PostToolUse"), tool_name: shell, tool_input: { command: ev.arguments.command } };
+    return withShellResult(ev, { ...base(ev, "PostToolUse"), tool_name: shell, tool_input: { command: ev.arguments.command } });
   }
   return undefined;
 }
