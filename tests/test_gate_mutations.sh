@@ -491,7 +491,9 @@ mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'
 # literal nuevo (el patron `*)` matchea cualquier target, mismo efecto que el
 # `if true` de antes). Si el sed viejo quedara, la guardia 2 del driver ("la
 # mutacion no cambio nada") reventaria la bateria entera.
-mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok)/case "$TARGET" in *)/'; }
+# Phase 15 (PR #85) sumo dsh al case: el ancla sigue al literal nuevo (misma
+# guardia 2 que atrapo ceremonia_sin_grok/sin_codex en CI).
+mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in *)/'; }
 # Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
@@ -521,7 +523,7 @@ mut_host_codex_sin_rama()    { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "codex" \]/S
 # Task 6.4 (D3): revierte la ceremonia a claude-only — el gate vuelve a ser
 # inerte en codex. Lo atrapa caso_g3_ceremonia_se_exige_en_codex (el bloqueo
 # que reclama al implementer desaparece y el turno cierra limpio).
-mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok)/case "$TARGET" in claude|grok)/'; }
+mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|grok|dsh)/'; }
 # Task 6.4 (medido 6.2): devuelve el exit 2 al bloqueo de codex. Codex descarta
 # el stdout con exit != 0, o sea gate decorativo — lo atrapa
 # caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
