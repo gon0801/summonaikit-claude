@@ -2069,9 +2069,149 @@ profile. La fase 15 porta el gate como:
   `pre-step` (ni el prompt humano ni los inyectados): la evidencia del
   contrato en vivo es el razonamiento del modelo, no un evento del log.
 
+## Ampliación — Phases 16–18: el recetario y el autopilot (2026-08-28)
+
+Diseño completo: `docs/phase-16-18-recetario-autopilot-design.md` (decisiones
+D0–D23, triage de pstack en su Apéndice A, validación de 3 revisores en el
+Apéndice C). Lo que este spec fija como contrato de producto:
+
+**Qué es.** Encima del gate — que sigue midiendo exactamente lo mismo — se
+suman (1) un **recetario** por tipo de tarea que el líder elige y declara en
+el recibo (`Understand: … Receta: <nombre>`), (2) una **lane de app real**
+(`verify/` generado en el repo del usuario como prueba e2e del framework que
+ya tiene, acreditada por `TEST_RUNNER_RE` sin cambios), un **rastro de
+decisiones** en español (`.saikit/decisiones/<task>.tsv`) y el **hecho único**
+del blast radius con nivel 1–5 (`.saikit/findings/blast-<task>.json`), y (3)
+un **autopilot** que mergea el PR solo cuando un veredicto atado al SHA exacto
+y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
+
+**Reglas nuevas.**
+
+1. **El carril lo fija el sentinel, nunca la receta ni el recibo.** `-saikit`
+   = full; `-saikit:fast` (y los alias `-saikit:pregunta` / `-saikit:boceto`,
+   Phase 16.6) = fast; match exacto con frontera, un typo cae a full. Medido:
+   en full el Stop exige los tres roles aunque no haya cambio de código; una
+   receta de solo lectura en un turno full corre la ceremonia igual. Rechazado
+   que el líder baje el carril desde el recibo (Core Rule 3).
+2. **Sin recetario no hay menú, y una receta se ofrece solo si su hash
+   coincide.** El hook lee `<dir-del-hook>/recetas/MANIFEST.sha256` (override
+   `SAIKIT_RECETAS_DIR` para el lab; columna `tipo` = `receta` | `lider`) y
+   ofrece únicamente las recetas de `tipo: receta` cuyo sha256 instalado
+   coincide con el manifiesto; `00-lider.md` se verifica por hash y se
+   referencia, nunca se ofrece. Ausente o distinta ⇒ omitida con aviso
+   (fail-open del turno, fail-closed de la receta); la validez del
+   frontmatter la garantiza el generador del manifiesto (corre el linter), no
+   el runtime. El contrato **no imprime rutas** (la línea base golden se graba
+   en un tmpdir distinto por corrida). `recetas/**` va con `eol=lf` en
+   `.gitattributes` para que el hash sea el mismo en Windows y Linux. Sin
+   manifiesto ⇒ línea fija y el turno sigue como hoy. Primera ola: host
+   `claude`. Los alias `-saikit:pregunta` / `-saikit:boceto` bajan el carril
+   **y nombran su receta** (`investigar` / `boceto`); el contrato lo dice.
+3. **Autorización del autopilot = una llave humana + una config versionada.**
+   El sentinel `-saikit:autopilot` (la única llave independiente del modelo) y
+   `.saikit/autopilot.json` con `merge: true` y `merge_despliega` distinto de
+   `unknown`, **leída SOLO de `origin/<rama>` tras `git fetch`** (nunca del
+   working tree ni del head del PR); un PR que toque ese archivo nunca se
+   auto-mergea. Lo que el usuario autorizó ahí (el merge, el deploy que
+   dispara si `merge_despliega: true`, el aviso si `telegram: true`) queda
+   como excepción escrita de la regla de preguntar del contrato. Límite
+   declarado: el modelo tiene `Write` y `gh`; lo que impide la
+   auto-autorización en el mismo turno es esa lectura + `protected_branch_push:
+   deny`, no una barrera criptográfica. Un PR a la vez por repo: lock en
+   `git-common-dir` (compartido por worktrees), adquirido con `mkdir` atómico,
+   liberado por `trap EXIT`; un lock viejo se reporta y bloquea, nunca se
+   borra solo.
+4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
+   declarada al fail-open (la primera es el instalador): mergear no admite
+   "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
+   config.rama`, `headRefOid == sha del veredicto`, autor del PR = la cuenta
+   de gh; nunca argumento libre. Precondiciones observadas, todas: `git fetch
+   origin <rama>` y la rama al día con la base (`merge-base --is-ancestor`;
+   si no, "base vieja": merge de master en la rama y CI de nuevo); PR
+   mergeable (`UNKNOWN` diferido de GitHub ⇒ un reintento; sigue `UNKNOWN` ⇒
+   no merge); CI del head concluido en `success` ("sin checks" ≠ verde);
+   veredicto `.saikit/veredictos/<sha>.json` para ESE sha con `verifier:
+   PASS`, `blast.nivel ≥ 4`, `reviewer: clean`, `verify_app: PASS` con comando
+   bajo `verify/` (la suite unitaria no cuenta) o `n/a` solo con
+   `sin_verify_app: true`; **sello del hook**: en el `Write` del reviewer
+   sobre `veredictos/` el hook registra `veredicto_sha256` del contenido, y el
+   script exige que el archivo actual tenga ese hash (cualquier escritura
+   posterior lo invalida) además de `reviewer` en `agents_seen` y del comando
+   del blast en `harness-evidence.log` con éxito — por eso el merge corre
+   DENTRO del turno armado, antes del recibo; `git log origin/<rama>..HEAD`
+   no vacío y solo con commits del `user.email` local o de la cuenta de gh.
+   Merge por `gh pr merge --squash --match-head-commit <sha> --body
+   "Saikit-Merge: <sha>"` (el trailer sella el squash) **sin
+   `--delete-branch`** (falla tras mergear cuando master vive en otro
+   worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
+   Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
+   reviewer con `sha = HEAD` **después** de que el líder commiteó todo
+   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo. El
+   veredicto sellado **no se modifica jamás**: el `merge_commit` va a un
+   archivo aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
+   contra `origin/<rama>` y el trailer, no contra ese archivo. La rama base es
+   siempre `config.rama` (probado con un valor distinto de `master`).
+5. **La protección de rama de GitHub no está disponible** en este repo
+   (privado, plan free: 403 medido 2026-08-28). El script es la **vía
+   sancionada del merge, no "la protección"**: el gate es advisory y el modelo
+   tiene `gh`, así que un `gh pr merge` a pelo se lo salta — límite declarado
+   de la misma clase que un recibo falso; la 18.11 (Recommended) mide si un
+   `PreToolUse` de Claude Code puede negarlo. `protected_branch_push: deny`
+   sigue vigente. Hacer público el repo habilitaría la protección: alternativa
+   rechazada aquí por ser decisión de visibilidad del operador, no de este
+   plan.
+6. **Post-merge (turno desarmado)**: se localiza el run de CI por el
+   `merge_commit` que el propio script registró; sin run ⇒ `unknown` con
+   espera acotada, timeout ⇒ `unknown` sin revert; `salud_url` solo http(s),
+   sin redirects, redactada. En rojo, `git revert <merge_commit>` (squash: sin
+   `-m`) SOLO del merge propio, y el PR de revert se mergea con
+   `saikit-merge.sh --revert-de <merge_commit>`: un **modo con precondiciones
+   propias** — el turno desarmado ya no tiene el estado del hook que exige la
+   regla 4 — que **no confía en ningún JSON local**: exige que
+   `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git fetch`
+   (si algo aterrizó después, no revierte: reporta), que lleve el trailer
+   `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el inverso**
+   del `merge_commit` por **igualdad exacta de árboles** (`<head>^{tree}` ==
+   `<merge_commit>^^{tree}`; `patch-id` solo como comprobación extra, porque
+   ignora espacios en blanco), ningún otro commit, `baseRefName == rama`, CI
+   del head del revert en `success` y
+   `--match-head-commit`; no exige reviewer, blast ni estado de sesión (es la
+   inversa mecánica de algo ya revisado). Fail-closed:
+   cualquier `unknown` ⇒ no mergea el revert y avisa al usuario que la rama
+   está roja y cómo revertir a mano. Una vez (un revert rojo se reporta). El
+   usuario recibe un mensaje en español desde el `Close:` redactado: qué
+   aterrizó, qué cambia para él, cómo deshacerlo.
+7. **Sin CI no hay autopilot, y el setup lo ofrece.** Si el repo no tiene
+   workflows, el setup ofrece en español un CI mínimo (test del repo +
+   `verify/`, acciones pinneadas, sin secretos); sin CI y sin aceptar, el
+   autopilot lo dice y no mergea.
+8. **El Stop gate no gana checks nuevos** en estas fases: el control del merge
+   es el script; los artefactos (veredicto, blast, rastro) son datos que el
+   reviewer adjudica y el script lee. El hook solo gana **registro de estado**
+   (`veredicto_sha256` en el `Write` del reviewer; la familia de patrones de
+   redacción extendida con `ghp_`/`github_pat_`/`gho_`/`sk-`/`AKIA`/`xox`),
+   nunca bloqueo nuevo. `veredictos/`, `findings/` y el lock son gitignored;
+   `decisiones/` se commitea (es evidencia del PR) y se redacta con
+   `tools/lib/redactar.sh` (patrones del hook + formas de token), el mismo
+   helper que redacta la `salida` del blast.
+
+**Límites declarados.** El gate sigue advisory: el modelo puede escribir un
+veredicto falso; el script verifica forma y CI, no verdad — el CI es lo
+independiente del modelo. `merge_despliega` nace `unknown` y es la única
+pregunta técnica que se le hace al usuario, una vez por repo. La suite mide el
+gate, no si el modelo sigue la receta: eso lo mide un turno vivo por receta
+(`docs/smoke-recetas-<fecha>.md`), n=1. Los demás hosts quedan sin menú y sin
+autopilot hasta una ola posterior. No se leen transcripts para auditar (A6).
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
+- **Phases 16–18 (2026-08-28): no se importan piezas de pstack "por si
+  acaso"** (las 10 NO y las 10 DESPUÉS del Apéndice A del diseño quedan fuera
+  con su razón o su disparador); **no hay PRs en paralelo** (choque medido de
+  worktree compartido), **no Graphite/stacks**, **no modo pegajoso**
+  (contradice Core Rule 3), **no paneles de 4 modelos** (tope de 1 ronda: un
+  panel = adversary + 1 cross-review de otro vendor).
 - **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
   explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
   y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y
