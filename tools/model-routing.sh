@@ -31,7 +31,7 @@ decir() { printf '%s\n' "$*" >&2; }
 uso() {
   cat <<'EOF'
 Uso:
-  tools/model-routing.sh --host claude|zcode|grok|kimi
+  tools/model-routing.sh --host claude|zcode|grok|kimi|dsh
                          (--role implementer|verifier|reviewer|adversary | --tier standard|verify|review)
                          [--field model|effort|effort-key|tier]
                          [--format json|frontmatter]
@@ -184,6 +184,16 @@ case "$HOST" in
     # Fila VACIA DEFINITIVA, no pendiente (medido en la Task 12.3): el host
     # no acepta model: ni effort: por agente. Ver tests/test_model_routing.sh.
     : ;;
+  dsh)
+    # Phase 15 (D6): fila VACIA A PROPOSITO. dsh declara que el subagente
+    # acepta agentOptions.model (dsh-tool-subagent), pero no hay medicion que
+    # cierre el catalogo de la cuenta ni el modelo por rol — 15.1 solo midio
+    # que el rol vive en el TEXTO del description/prompt, no en la config de la
+    # tool. Sin medicion que cierre la fila queda vacia y el agente hereda el
+    # modelo de la sesion (Core Rule del diseno 12/15). EFFORT_KEY queda 'effort'
+    # (el parser de dsh lee la clave por el nombre que el router emite).
+    EFFORT_KEY='effort'
+    ;;
   '')
     decir "[summonaikit] model-routing: hace falta --host"
     exit 2

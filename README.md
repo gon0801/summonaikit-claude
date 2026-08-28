@@ -51,7 +51,29 @@ bash tools/install-hook.sh --host claude   # perfiles de agente en ~/.claude/age
 bash tools/install-hook.sh --host kimi     # perfiles de agente en ~/.agents/agents
 bash tools/install-hook.sh --host claude --dry-run   # dice que HARIA por rol; no escribe
 bash tools/install-hook.sh --host kimi --dry-run     # idem, sobre ~/.agents/agents
+bash tools/install-hook.sh --host dsh       # gate en el DeepSeek Harness (Phase 15)
+bash tools/install-hook.sh --host dsh --dry-run --quitar-dsh   # dice que HARIA al quitar
 ```
+
+`--host dsh` publica el gate en el **DeepSeek Harness** (`@deepseek-ai/dsh`),
+que no tiene hooks de shell: el gate se compone como un **plugin cordis** en
+`~/.dsh/cordis.patch.yml` entre marcas propias. El instalador escribe:
+
+1. el hook bash en `~/.dsh/hooks/`;
+2. el paquete adaptador `@summonaikit/dsh-gate` en
+   `~/.dsh/plugins/summonaikit-dsh-gate/` (los 4 archivos de `hosts/dsh/`);
+3. la entrada del plugin en `~/.dsh/cordis.patch.yml` (bloque entre marcas);
+4. las 4 personas de rol como **instancias `@deepseek-ai/dsh-tool-subagent`** en
+   la MISMA entrada del patch. dsh **no** tiene archivos de persona: la persona
+   es `config.persona` (texto) aplicada al hijo, así que cada rol es una
+   instancia `subagent_<rol>` con su propia persona.
+5. La versión de dsh (si difiere de `summonaikit.measuredAgainst`) se reporta;
+   no se aborta.
+
+`--quitar-dsh` retira hook + plugin + entrada del patch (con backup, respetando
+contenido ajeno fuera de marcas). El verificador de ese host es
+`bash tools/check-hook-registration.sh --dsh-home ~/.dsh` (silencio = completo;
+el registro en dsh no es un archivo de hooks, es la entrada del patch).
 
 Estos dos hosts no llevan la marca `saikit_owned` en los perfiles del vendor,
 así que la máquina de tres estados de arriba se amplía a un **cuarto

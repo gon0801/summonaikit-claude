@@ -1,0 +1,7 @@
+{ "name": "@summonaikit/dsh-gate", "version": "0.1.0", "type": "module", "main": "index.js",
+  "saikit_owned": "summonaikit-claude",
+  "engines": { "node": ">=20" },
+  "peerDependencies": { "@deepseek-ai/cordis": "*", "@deepseek-ai/schemastery": "*" },
+  "devDependencies": { "@deepseek-ai/cordis": "*", "@deepseek-ai/schemastery": "*" },
+  "scripts": { "test": "node --test test/" },
+  "summonaikit": { "measuredAgainst": "@deepseek-ai/dsh@0.1.1-rc.2" } }

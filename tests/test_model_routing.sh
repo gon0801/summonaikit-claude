@@ -53,8 +53,10 @@ caso "una fila de host sin valor devuelve VACIO con exit 0, no un default"
 # diseno: sin medicion que cierre, la fila queda vacia y hereda del padre).
 # kimi: vacia DEFINITIVA -- la 12.3 midio que el host no acepta model ni effort
 # por agente, asi que esa fila no se llena nunca y este caso queda permanente.
-for h in zcode kimi; do
+for h in zcode kimi dsh; do
   # Task 13.7: adversary tambien hereda la fila vacia de zcode y kimi (12.1/12.3).
+  # Task 15.4 (D6): dsh hereda igual -- 15.1 no cerro el catalogo ni el modelo
+  # por rol, asi que la fila queda vacia y el agente hereda el modelo de la sesion.
   for rol in implementer adversary; do
     out="$(bash "$router" --host "$h" --role "$rol" --field model)"; rc=$?
     [ "$rc" -eq 0 ] || malo "$h/$rol: esperaba exit 0, obtuve $rc"
@@ -74,9 +76,13 @@ igual "model: claude-opus-5
 effort: xhigh" "$(bash "$router" --host claude --role adversary --format frontmatter)" "claude/adversary"
 # El vacio de zcode tiene que venir con exit 0 (fila sin medir), no con un
 # exit 2 por rol desconocido: sin el chequeo de rc el caso no discrimina.
+# Task 15.4 (D6): dsh hereda el modelo de la sesion => frontmatter sin model:.
 out="$(bash "$router" --host zcode --role adversary --format frontmatter)"; rc=$?
 [ "$rc" -eq 0 ] || malo "zcode/adversary frontmatter: esperaba exit 0, obtuve $rc"
 igual "" "$out" "zcode/adversary sin medir"
+out="$(bash "$router" --host dsh --role reviewer --format frontmatter)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh/reviewer frontmatter: esperaba exit 0, obtuve $rc"
+igual "" "$out" "dsh sin medir hereda"
 
 caso "--field effort-key: el nombre de CLAVE del effort es por host, no siempre 'effort'"
 # Medido en la Task 12.1 (docs/task-12.1-medicion.md): el parser de zcode
@@ -91,6 +97,8 @@ igual "thoughtLevel" "$(bash "$router" --host zcode --role reviewer --field effo
 # Task 13.7: adversary comparte el nombre de clave del tier review por host.
 igual "effort"       "$(bash "$router" --host claude --role adversary --field effort-key)" "claude/adversary"
 igual "thoughtLevel" "$(bash "$router" --host zcode --role adversary --field effort-key)"  "zcode/adversary"
+# Task 15.4 (D6): dsh hereda la clave 'effort' por default (filas nuevas).
+igual "effort"       "$(bash "$router" --host dsh --role reviewer --field effort-key)"    "dsh"
 
 caso "--format json"
 esperado='{"host":"claude","role":"reviewer","tier":"review","model":"claude-opus-5","effort":"xhigh"}'

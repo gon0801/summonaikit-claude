@@ -4,3 +4,4 @@ out/
 .claude/
 .zcode/
 .harness-mem/
+node_modules/

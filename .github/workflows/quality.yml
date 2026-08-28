@@ -49,6 +49,28 @@ jobs:
         if: hashFiles('package.json') != ''
         run: npm test --if-present
 
+  # Phase 15 (Task 15.3) — banco del adaptador @summonaikit/dsh-gate. index.js
+  # importa @deepseek-ai/schemastery (para Config) y el test del plugin lo usa;
+  # se instalan las peer deps (ya son las del propio dsh, no deps nuevas) para
+  # que `node --test` resuelva el import.
+  node-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install adapter peer deps (schemastery/cordis)
+        working-directory: hosts/dsh
+        run: npm install --no-save @deepseek-ai/schemastery@3.18.1 @deepseek-ai/cordis@^4.0.1
+
+      - name: Run adapter tests
+        working-directory: hosts/dsh
+        run: node --test test/
+
   # Task 10.5 — la suite completa en Linux. En Git Bash/MSYS2 la misma corrida
   # tarda ~18 min porque cada fork del hook cuesta ~28 ms (documentado en
   # AGENTS.md); en Linux el fork es ~0.1 ms, asi que aca la suite entera corre
