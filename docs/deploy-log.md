@@ -1218,3 +1218,29 @@ que estos dos van como cierre de la fila y no como deploy obligatorio.
   (el de 7.1/7.2). Nuestros `implementer.md`/`reviewer.md` presentes con frontmatter
   traducido.
 - **Operador:** Gon (sesión zcode).
+
+## 2026-08-28 — PR #91/#92 (deploy dsh: instalador con rutas Windows + plugin en fallback, hallado en el turno vivo) — deploy NUEVO del gate dsh
+
+- **Qué traía:** la Phase 15 (host dsh — DeepSeek Harness). El turno vivo reveló
+  dos bugs reales que no aparecían en los tests (que usaban `SAIKIT_DSH_HOME`
+  con rutas Windows): (1) el instalador escribía `name:`/`hook:` del patch como
+  POSIX (`/c/...`) cuando `$HOME` es MSYS — dsh (Node) necesita `C:/...`; (2) dsh
+  NO resuelve un plugin custom por ruta absoluta Windows (`ERR_UNSUPPORTED_ESM_URL_SCHEME`)
+  — debe instalarse como dir real en el flat module fallback y referenciarse por
+  **nombre de paquete** (`@summonaikit/dsh-gate`), porque en MSYS `ln -s` no crea
+  symlinks reales.
+- **Deploy — dsh (una pasada):** `bash tools/install-hook.sh --host dsh` instaló el
+  hook `~/.dsh/hooks/summonaikit-harness.sh`, el adaptador
+  `~/.dsh/profiles/node_modules/@summonaikit/dsh-gate/` (4 archivos, dir real en
+  el fallback) y la entrada del patch en `~/.dsh/cordis.patch.yml` (bloque entre
+  marcas con el gate `name: '@summonaikit/dsh-gate'` + las 4 personas
+  `subagent_<rol>`). `dsh --version` = `0.1.1-rc.2` (= `measuredAgainst`).
+- **`check-hook-registration.sh --dsh-home ~/.dsh`:** SILENCIO (exit 0).
+- **`dsh --profile headless --dump-config`:** compone `summonaikit-gate` + las 4
+  `subagent_<rol>`.
+- **Turno vivo (`docs/smoke-dsh-2026-08-28.md`):** escenario 1 (`-saikit` +
+  delegación implementer→verifier→reviewer → recibo cierra) ✅; escenario 3 (sin
+  `-saikit` → nada del harness) ✅; escenario 2 (cerrar sin recibo) → el gate no
+  deja cerrar (observó `DELEGATED`; el GATE exacto está cubierto por la suite del
+  hook — ver la nota en la smoke doc).
+- **Operador:** Gon (sesión dsh).
