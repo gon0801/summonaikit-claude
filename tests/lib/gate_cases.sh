@@ -281,7 +281,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -933,6 +933,45 @@ caso_g1_host_codex_solo_literal() {
   lab_limpiar_estado
 }
 
+# Phase 15 — dsh se identifica por SUMMONAIKIT_HOOK_TARGET=dsh (D2), como codex:
+# nunca por variables heredadas. Un prompt con -saikit bajo target dsh ARMA y el
+# estado queda bajo state/dsh/ (aislamiento por host, 5.3).
+caso_g1_dsh_arma_y_aisla_estado() {
+  LAB_SESSION_ID=""; LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""
+  # Precedencia (copia del caso codex): TARGET=dsh le GANA a CLAUDECODE=1 heredado.
+  LAB_CLAUDECODE=1
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  LAB_CLAUDECODE=""
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+  _ruta_dsh="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/dsh/' | head -n 1)"
+  _no_vacio "estado bajo state/dsh/ (D2: rama HOST=dsh le gana a CLAUDECODE)" "$_ruta_dsh"
+  LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_SESSION_ID=""
+}
+# Sin target dsh, el mismo payload NO cae en dsh (HOST=other/claude segun el lab):
+# no hay state/dsh/. Near-miss: solo el LITERAL `dsh` mapea; dshx cae a other.
+caso_g1_dsh_no_se_hereda_sin_target() {
+  LAB_SESSION_ID=""; LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  if find "$LAB/hooks/state" -type d -name dsh 2>/dev/null | grep -q .; then
+    _mal "sin target dsh no debe crearse state/dsh/ (D2: setness+valor exacto)"
+  fi
+  lab_run prompt dshx "$(lab_payload_prompt '-saikit agrega el docstring')"
+  if find "$LAB/hooks/state" -type d -name dsh 2>/dev/null | grep -q .; then
+    _mal "target dshx (near-miss) no debe mapear a HOST=dsh (solo el literal, Core Rule 2)"
+  fi
+  LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_SESSION_ID=""
+}
+# El contrato de armado para dsh nombra la tool model-facing `subagent` (design
+# D4), no "the Task tool" (hallazgo grok r1, PR #85). Mismo criterio que el
+# hallazgo "Task tool" de grok (PR #28): el modelo no debe recibir un nombre que
+# no existe en el host.
+caso_g1_dsh_contrato_nombra_subagent() {
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  _contiene "contrato dsh nombra la tool subagent" "$LAB_OUT" 'the subagent tool'
+  _no_contiene "el contrato dsh NO debe nombrar Task tool" "$LAB_OUT" 'the Task tool'
+}
+
 
 # C1 (auditoria 2026-08-13, Task 8.1) — json_string_field cortaba el valor del
 # prompt en la primera comilla escapada: `arregla el "bug" -saikit` llegaba
@@ -998,7 +1037,7 @@ caso_g1_sufijo_desconocido_arma_full() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1330,6 +1369,41 @@ caso_g2_zcode_verif_subagente_sin_resultado_bloquea() {
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_SIN_RESULTADO")"
   LAB_ZCODE_SESSION_ID=""
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# Phase 15 — la ceremonia bajo HOST=dsh (Stop claude-like, JSON). dsh entra al
+# allowlist de ceremonia (como claude/codex/grok), asi que el turno completo
+# (implementer -> verifier con evidencia real -> reviewer) + recibo completo
+# cierra con exit 0. dsh NO es ciego (15.1): el verifier deja traza de tool real.
+caso_g2_dsh_ceremonia_cierra() {
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool dsh "$(lab_payload_agent 'implementer')"
+  lab_run tool dsh "$(lab_payload_agent 'verifier')"
+  lab_run tool dsh "$(lab_payload_bash 'pytest -q' 0)"
+  lab_run tool dsh "$(lab_payload_agent 'reviewer')"
+  lab_run stop dsh "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verifier subagent run'
+}
+# Sin el verifier (agent_type=verifier no despachado) => la ceremonia bloquea
+# (exit 2, Missing verifier subagent run). Es lo que ata que dsh exija la
+# secuencia implementer -> verifier -> reviewer (D1/D3, como claude).
+caso_g3_dsh_ceremonia_incompleta_bloquea() {
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool dsh "$(lab_payload_agent 'implementer')"
+  lab_run tool dsh "$(lab_payload_bash 'pytest -q' 0)"
+  lab_run tool dsh "$(lab_payload_agent 'reviewer')"
+  lab_run stop dsh "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_ERR" 'Missing verifier subagent run'
+}
+# Sin recibo => el Stop de dsh bloquea (exit 2) con el recibo ausente.
+caso_g2_dsh_sin_recibo_bloquea() {
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run stop dsh "$(lab_payload_stop 'Listo.')"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
 }
 
 # (b) label con resultado FALLIDO ("12 passed, failed: 1") — el veto
@@ -1825,7 +1899,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -2742,7 +2816,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_presupuesto_agotado caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno caso_g5_tool_name_eco_no_marca_edicion"
+CASOS_G5="caso_g5_presupuesto_agotado caso_g5_presupuesto_dsh_decision_block caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno caso_g5_tool_name_eco_no_marca_edicion"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
@@ -2756,6 +2830,26 @@ caso_g5_presupuesto_agotado() {
   _contiene "stdout" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
   _no_contiene "stdout" "$LAB_OUT" '"decision":"block"'
   _no_vacio "stderr" "$LAB_ERR"
+}
+
+# Phase 15 (D3): en dsh el presupuesto agotado DEBE emitir el formato que el
+# adaptador parsea (`{"decision":"block","reason":...}`), NO continue:false/stopReason
+# (hallazgo codex r1 del PR #85). Sin esta rama, dsh cerraria silenciosamente.
+caso_g5_presupuesto_dsh_decision_block() {
+  # Arma (crea state/dsh/) y siembra cycle=2 (presupuesto agotado) en ESA ruta —
+  # no en la de claude: lab_sembrar escribe a LAB_ESTADO_PATH (claudel), y dsh lee
+  # state/dsh/ (aislamiento por host, D2).
+  lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
+  _dsh_state="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/dsh/' | head -n 1)"
+  if [ -n "$_dsh_state" ]; then
+    { printf 'task_hash=123456\ncycle=2\nimplemented=1\nverified=1\nagents_seen=implementer,verifier,reviewer\n'; } > "$_dsh_state"
+  fi
+  lab_run stop dsh "$(lab_payload_stop "$_TEXTO_LLANO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" '"decision":"block"'
+  _contiene "stdout" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
+  _no_contiene "stdout" "$LAB_OUT" '"continue":false'
+  _no_vacio "stderr del mensaje de budget" "$LAB_ERR"
 }
 
 caso_g5_ciclos_cuentan_y_bloquean() {
