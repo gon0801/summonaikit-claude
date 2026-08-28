@@ -2043,6 +2043,23 @@ profile. La fase 15 porta el gate como:
   que `saikit_host_ciego()` no cambia (D7).
 - **Fuera de alcance:** `headless`/`tui`; el shim `deepseek` (ya cubierto por
   Claude Code); reglas nuevas del gate.
+- **Atribución de rol por texto (cierre 15.6, medido 15.1 Q2):** cuando el
+  modelo delega con la tool `subagent` a secas, `arguments` trae solo
+  `description`/`prompt` y el adaptador **infiere** el rol con `inferRole()`
+  sobre ese texto; solo las instancias `subagent_<rol>` que planta el
+  instalador llevan el rol en el nombre de la tool. Un texto ambiguo no
+  acredita rol (fail-safe: `undefined`); uno engañoso puede acreditar el rol
+  equivocado. Límite del host, no del gate.
+- **`agent/created meta.cwd` no observado (15.1 Q5):** el adaptador toma el
+  cwd del header de sesión y cae a `process.cwd()` con aviso; `unknown` hasta
+  verlo en vivo.
+- **La UI web sigue sin turno vivo medido:** el smoke del 2026-08-28
+  (`docs/smoke-dsh-2026-08-28.md`) corrió en `headless` — que el operador NO
+  pidió y que este mismo bloque declara fuera de alcance. `dsh --profile web
+  --dump-config` compone el plugin y las 4 tools (verificado por el lead), pero
+  el comportamiento del turno en la UI queda `unknown` hasta que el operador
+  lo corra con `docs/task-15.5-runbook.md`. El escenario 2 (GATE por recibo
+  ausente) tampoco se reprodujo en vivo — cubierto solo por la suite del hook.
 
 ## Non-Goals
 
