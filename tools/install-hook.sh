@@ -41,6 +41,7 @@
 #   bash tools/install-hook.sh --host grok [--quitar-grok]
 #   bash tools/install-hook.sh --host kimi [--dry-run]
 #   bash tools/install-hook.sh --host claude [--dry-run]
+#   bash tools/install-hook.sh --host dsh [--dry-run] [--quitar-dsh]
 #   bash tools/install-hook.sh --host claude --refrescar-manifiesto
 #   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
 #
@@ -1296,16 +1297,20 @@ dsh_bash_win() {
 }
 
 # Cuerpo del agente (sin el frontmatter ---): la persona de dsh es ese texto.
-# Cuenta las lineas '---'; despues de la SEGUNDA (el cierre del frontmatter)
-# imprime todo el resto. Una fuente sin cierre imprime desde la primera '---'.
+# Se imprime todo lo que sigue a la SEGUNDA linea '---' (el cierre del
+# frontmatter), incluidas las '---' posteriores del cuerpo (separadores markdown,
+# L2/codex r1 PR #88). Si el fuente no tiene cierre (una sola '---'), se falla
+# con 1 y NO se devuelve un cuerpo vacio en silencio (L1).
 dsh_persona_body() {  # $1=rol
-  local rol="$1" fuente
+  local rol="$1" fuente n_cierre
   fuente="$(dsh_agents_source)/$rol.md"
   if [ ! -r "$fuente" ]; then return 1; fi
+  n_cierre="$(awk '/^---[[:space:]]*\r?$/{c++} END{print c+0}' "$fuente")"
+  [ "$n_cierre" -ge 2 ] || { printf '[summonaikit] instalador: %s no tiene cierre de frontmatter (---)\n' "$fuente" >&2; return 1; }
   awk 'BEGIN{n=0; in_body=0}
     /^---[[:space:]]*\r?$/ {
       n++
-      if (n == 2) { in_body=1 }
+      if (n == 2) { in_body=1; next }
       next
     }
     in_body { print }
@@ -1360,50 +1365,45 @@ dsh_patch_estado() {  # $1=bloque
   if [ "$(cat "$patch")" = "$bloque" ]; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
 }
 
-# Parten el archivo en "lo que hay antes de la linea N" y "lo que hay despues
-# de la linea N". `sed -n "1,$((n-1))p"` con n=1 imprime la linea 1 (GNU sed
-# trata `0` como "imprimir 0 y despues 1"), asi que el caso n=1 hay que
-# cortarlo a mano: prev vacio, post desde la linea 2.
-dsh_patch_antes() {  # $1=archivo $2=n  -> stdout (vacio si n<=1)
-  [ "$2" -gt 1 ] && sed -n "1,$(($2 - 1))p" "$1"
-}
-dsh_patch_despues() {  # $1=archivo $2=n -> stdout (desde n+1 hasta el fin)
-  sed -n "$(($2 + 1)),\$p" "$1"
-}
-
 # Inserta el bloque nuestro ENTRE marcas, preservando byte a byte lo ajeno fuera
 # de `# >>> summonaikit-gate START` / `# <<< summonaikit-gate END`. Atomico:
 # temporal en el mismo dir + igualdad + mv. Si el archivo no existe, se crea.
 dsh_patch_insertar() {  # $1=patch  $2=bloque
-  local patch="$1" bloque="$2" dir tmp start end prev post nuevo
+  local patch="$1" bloque="$2" dir tmp start end nuevo actual
   dir="$(dirname "$patch")"
   mkdir -p "$dir" || return 1
   tmp="$(mktemp "$dir/.saikit-dsh-patch-XXXXXX")" || return 1
-  nuevo="$bloque"
+  # Se escribe directo al temporal (no a variables) para no perder newlines: la
+  # sustitucion `$(...)` elimina los saltos finales y pegaria lineas en las
+  # fronteras (HIGH codex+glm r1 PR #88), corrompiendo el contenido ajeno que el
+  # DoD manda respetar byte a byte.
+  : > "$tmp"
   if [ -e "$patch" ]; then
-    # Linea con la marca START / END (o vacio si no esta).
     start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
     end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
-    if [ -n "$start" ] && [ -n "$end" ]; then
-      # Quitar el rango actual y re-insertar el nuevo bloque.
-      prev="$(dsh_patch_antes "$patch" "$start")"
-      post="$(dsh_patch_despues "$patch" "$end")"
-      nuevo="${prev}${bloque}"
-      [ -n "$post" ] && nuevo="${nuevo}${post}"
-    else
-      # Sin marcas: appendear el bloque al final (respeta lo que ya habia).
-      local actual
-      actual="$(cat "$patch")"
-      # Un array vacio literal '[]' no debe quedar pegado al bloque nuevo.
-      case "$(printf '%s' "$actual" | tr -d '[:space:]')" in
-        '') nuevo="$bloque" ;;
-        '[]') [ -n "$actual" ] || actual='[]' ; nuevo="$bloque" ;;
-        *) nuevo="${actual}"$'\n'"${bloque}" ;;
-      esac
+    if [ -n "$start" ] && [ -n "$end" ] && [ "$start" -ge 1 ] && [ "$end" -gt "$start" ]; then
+      # Splice: conserva lo anterior, inserta el bloque, re-appendee lo posterior.
+      if [ "$start" -gt 1 ]; then sed -n "1,$((start - 1))p" "$patch" >> "$tmp"; fi
+      # El bloque debe quedar a continuacion; si lo anterior no termino con \n, se repone.
+      printf '%s' "$bloque" >> "$tmp"
+      if [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ]; then printf '\n' >> "$tmp"; fi
+      # UNA linea despues del END (puede ser vacia) re-appendee lo posterior.
+      sed -n "$((end + 1)),\$p" "$patch" >> "$tmp"
+      if [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ]; then printf '\n' >> "$tmp"; fi
+      mv -f "$tmp" "$patch" || { rm -f "$tmp"; return 1; }
+      return 0
     fi
+    # Sin marcas validas: appendear el bloque al final (respeta lo que ya habia).
+    actual="$(cat "$patch")"
+    case "$(printf '%s' "$actual" | tr -d '[:space:]')" in
+      '') true ;;
+      '[]') : ;;
+      *) printf '%s' "$actual" >> "$tmp"
+         [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp" ;;
+    esac
   fi
-  printf '%s' "$nuevo" > "$tmp" || { rm -f "$tmp"; return 1; }
-  if ! printf '%s' "$nuevo" | cmp -s - "$tmp"; then rm -f "$tmp"; return 1; fi
+  printf '%s' "$bloque" >> "$tmp"
+  [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp"
   mv -f "$tmp" "$patch" || { rm -f "$tmp"; return 1; }
   return 0
 }
@@ -1411,26 +1411,48 @@ dsh_patch_insertar() {  # $1=patch  $2=bloque
 # Publica los 4 archivos del paquete adaptador en <dsh-home>/plugins/
 # summonaikit-dsh-gate/, respetando la disciplina de tres estados (marcador en
 # package.json: `"saikit_owned": "summonaikit-claude"`). Compara sha por archivo,
-# repara con backup NUESTRO_DISTINTO, AUSENTE instala, DESCONOCIDO devuelve 1.
+# repara con backup NUESTRO_DISTINTO, AUSENTE instala.
+#
+# IMPORTANTE (HIGH codex r1 PR #88): la propiedad la DECIDE package.json y se
+# clasifica ANTES de escribir UN solo byte. Antes se procesaba index.js etc. y
+# recien al final se miraba package.json: un dir ajeno (package sin marcador)
+# podia quedar pisado archivo por archivo antes de detectarse. Ahora:
+#   - dir no existe                -> AUSENTE (instalar los 4)
+#   - dir existe + package sin marcador -> DESCONOCIDO completo: NO se toca
+#   - dir existe + package nuestro  -> por archivo: NUESTRO_IDENTICO / NUESTRO_DISTINTO
 dsh_publicar_plugin() {
   local srdir="$repo/hosts/dsh" ddir="$(dsh_plugin_dir)" file
-  local f dirstado bak
+  local f dirstado bak dir_estado
   declare -a DSH_PLUGIN_DESTS DSH_PLUGIN_BACKUPS
   DSH_PLUGIN_DESTS=(); DSH_PLUGIN_BACKUPS=()
+  # Clasificar el DIRECTORIO (no cada archivo) por el package.json de destino.
+  if [ ! -e "$ddir/package.json" ]; then
+    dir_estado='AUSENTE'
+  elif [ ! -f "$ddir/package.json" ] || [ ! -r "$ddir/package.json" ]; then
+    dir_estado='NO_OBSERVABLE'
+  elif grep -q '"saikit_owned"[[:space:]]*:[[:space:]]*"summonaikit-claude"' "$ddir/package.json" 2>/dev/null; then
+    dir_estado='NUESTRO'
+  else
+    dir_estado='DESCONOCIDO'
+  fi
+  case "$dir_estado" in
+    DESCONOCIDO)
+      decir "[summonaikit] PLUGIN DSH DESCONOCIDO — no se toco nada ($ddir)."
+      decir "              El dir del plugin existe y su package.json no lleva saikit_owned: puede ser de otro."
+      return 1
+      ;;
+    NO_OBSERVABLE)
+      decir "[summonaikit] unknown — no se pudo clasificar el plugin dsh ($ddir)."
+      return 1
+      ;;
+  esac
+  # AUSENTE o NUESTRO: crear el dir si falta y procesar archivo por archivo.
   mkdir -p "$ddir" || return 1
   for file in index.js translate.js spawn-hook.js package.json; do
     f="$srdir/$file"
     [ -r "$f" ] || { decir "[summonaikit] instalador: falta $f en hosts/dsh"; return 1; }
-    # Estado del archivo destino (marcador en package.json, resto por contenido).
-    if [ "$file" = "package.json" ]; then
-      if [ ! -e "$ddir/$file" ]; then dirstado='AUSENTE'
-      elif grep -q '"saikit_owned"[[:space:]]*:[[:space:]]*"summonaikit-claude"' "$ddir/$file" 2>/dev/null; then
-        if cmp -s "$f" "$ddir/$file"; then dirstado='NUESTRO_IDENTICO'; else dirstado='NUESTRO_DISTINTO'; fi
-      else dirstado='DESCONOCIDO'; fi
-    else
-      if [ ! -e "$ddir/$file" ]; then dirstado='AUSENTE'
-      elif cmp -s "$f" "$ddir/$file"; then dirstado='NUESTRO_IDENTICO'; else dirstado='NUESTRO_DISTINTO'; fi
-    fi
+    if [ ! -e "$ddir/$file" ]; then dirstado='AUSENTE'
+    elif cmp -s "$f" "$ddir/$file"; then dirstado='NUESTRO_IDENTICO'; else dirstado='NUESTRO_DISTINTO'; fi
     case "$dirstado" in
       NUESTRO_IDENTICO) : ;;
       AUSENTE)
@@ -1442,10 +1464,6 @@ dsh_publicar_plugin() {
         bak="$zcode_agent_backup"
         cp "$f" "$ddir/$file" || return 1
         DSH_PLUGIN_DESTS+=("$ddir/$file"); DSH_PLUGIN_BACKUPS+=("$bak")
-        ;;
-      DESCONOCIDO)
-        decir "[summonaikit] PLUGIN DSH DESCONOCIDO: $ddir/$file — no se toco."
-        return 1
         ;;
     esac
   done
@@ -1479,18 +1497,22 @@ dsh_publicar() {
 # Preflight del install dsh (D3: solo el instalador falla cerrado). Sin bash.exe
 # el command del patch seria 'bash: '\'''\'' -> el plugin no correria; sin el se
 # aborta ANTES de tocar DEST (igual que grok_preflight). La version de dsh se
-# REPORTA si difiere de measuredAgainst (0.1.1-rc.2); no se aborta -- una version
-# distinta no es incompatible por definicion, solo se avisa (diseno §6).
+# REPORTA si difiere de la medida; no se aborta -- una version distinta no es
+# incompatible por definicion, solo se avisa (diseno §6). La version medida se
+# lee de hosts/dsh/package.json (`summonaikit.measuredAgainst`), NO hardcodeada
+# (M5/CODE r1 PR #88): comparar cadenas con grep de subcadena aceptaba
+# '0.1.1-rc.20' como igual a '0.1.1-rc.2'.
 dsh_preflight() {
-  local medida
+  local medida esperada
   if ! dsh_bash_win >/dev/null 2>&1; then
     decir "[summonaikit] instalador: --host dsh requiere bash.exe (no encontrado); nada se escribio."
     exit 2
   fi
+  esperada="$(sed -n 's/.*"measuredAgainst"[[:space:]]*:[[:space:]]*"@deepseek-ai\/dsh@\([^"]*\)".*/\1/p' "$repo/hosts/dsh/package.json" | head -1)"
   if command -v dsh >/dev/null 2>&1; then
     medida="$(dsh --version 2>/dev/null | head -1)"
-    if [ -n "$medida" ] && ! printf '%s' "$medida" | grep -qi '0\.1\.1-rc\.2'; then
-      decir "[summonaikit] version de dsh ($medida) distinta de la medida (0.1.1-rc.2); no se aborta, revisar en 15.5."
+    if [ -n "$medida" ] && [ -n "$esperada" ] && [ "$(printf '%s' "$medida" | tr -d '[:space:]')" != "$(printf '%s' "$esperada" | tr -d '[:space:]')" ]; then
+      decir "[summonaikit] version de dsh ($medida) distinta de la medida ($esperada); no se aborta, revisar en 15.5."
     fi
   fi
   return 0
@@ -1500,21 +1522,30 @@ dsh_quitar() {
   local patch="$(dsh_patch)" ddir="$(dsh_plugin_dir)" file
   # Quita la entrada del patch entre marcas; lo ajeno fuera de ellas sobrevive.
   if [ -e "$patch" ]; then
-    local start end prev post nuevo
+    local start end dir tmp bak
     if [ ! -r "$patch" ]; then
       decir "[summonaikit] unknown — no se pudo clasificar el patch dsh ($patch); no se quito."
     else
       start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
       end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
-      if [ -n "$start" ] && [ -n "$end" ]; then
-        prev="$(dsh_patch_antes "$patch" "$start")"
-        post="$(dsh_patch_despues "$patch" "$end")"
-        nuevo="${prev}${post}"
-        # Si quedo vacio o '[]' limpio, se deja un array vacio valido.
-        if [ "$(printf '%s' "$nuevo" | tr -d '[:space:]')" = '' ]; then nuevo='[]' ; fi
-        cp "$patch" "$patch.saikit-backup" 2>/dev/null
-        printf '%s' "$nuevo" > "$patch" 2>/dev/null || { decir "[summonaikit] instalador: no se pudo borrar $patch"; exit 5; }
+      if [ -n "$start" ] && [ -n "$end" ] && [ "$start" -ge 1 ] && [ "$end" -gt "$start" ]; then
+        # Backup fechado y verificado (estandar del repo, no un cp mudo).
+        dir="$(dirname "$patch")"
+        bak="$(mktemp "$dir/cordis.patch.yml.saikit-backup-XXXXXX")" || {
+          decir "[summonaikit] instalador: no se pudo respaldar $patch"; exit 5; }
+        if ! cmp -s "$bak" "$patch"; then cp "$patch" "$bak"; cmp -s "$bak" "$patch" || { rm -f "$bak"; exit 5; }; fi
+        # Reconstruir SIN pegar lineas: lo anterior + lo posterior, con los
+        # newlines repuestos (HIGH codex+glm r1 PR #88). Escritura atomica.
+        tmp="$(mktemp "$dir/.saikit-dsh-patch-XXXXXX")" || exit 5
+        if [ "$start" -gt 1 ]; then sed -n "1,$((start - 1))p" "$patch" >> "$tmp"; fi
+        [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp"
+        sed -n "$((end + 1)),\$p" "$patch" >> "$tmp"
+        if [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ]; then printf '\n' >> "$tmp"; fi
+        # Si quedo vacio, se deja un array vacio valido.
+        if [ "$(cat "$tmp" | tr -d '[:space:]')" = '' ]; then printf '[]\n' > "$tmp"; fi
+        mv -f "$tmp" "$patch" || { rm -f "$tmp"; exit 5; }
         decir "[summonaikit] PATCH DSH QUITADO: $patch"
+        decir "              backup:  $bak"
       else
         decir "[summonaikit] PATCH DSH: no hay entrada entre marcas ($patch)."
       fi
@@ -2113,6 +2144,12 @@ fi
 # archivar_destino (definida arriba) exista: dsh_quitar la usa para respaldar el
 # hook al retirarlo. El install de dsh NO sale temprano: reusa el flujo de DEST.
 if [ "$HOST" = "dsh" ] && [ "$QUITAR_DSH" -eq 1 ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    # HIGH codex r1 PR #88: --dry-run --quitar-dsh NO debe borrar nada.
+    decir "[summonaikit] dry-run: --quitar-dsh no borraria nada (solo reporta)."
+    decir "              (hook $DEST, plugin $(dsh_plugin_dir), patch $(dsh_patch))"
+    exit 0
+  fi
   dsh_quitar
   exit $?
 fi
@@ -2308,9 +2345,14 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
   if [ "$HOST" = "grok" ]; then
     grok_publicar
   fi
-  # Phase 15: idem para dsh (plugin + patch del profile; D1).
+  # Phase 15: idem para dsh (plugin + patch del profile; D1). Si falla, NO se
+  # afirma "YA AL DIA" completo (HIGH codex+glm r1 PR #88) y se sale con error.
   if [ "$HOST" = "dsh" ]; then
-    dsh_publicar
+    if [ "$DRY_RUN" -eq 1 ]; then
+      decir "[summonaikit] dry-run: (dsh) hook al dia; no se toca el plugin ni el patch."
+    else
+      dsh_publicar || { decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — no se toco mas."; exit 5; }
+    fi
   fi
   avisar_registro
   exit 0
@@ -2349,9 +2391,24 @@ if [ "$HOST" = "grok" ]; then
   grok_publicar
 fi
 # Phase 15: idem para dsh — el plugin y el patch salen justo despues de publicar
-# el hook, y si fallan se reporta (no se afirma "INSTALADO" con el goal roto).
+# el hook. Si fallan, NO se afirma "INSTALADO" ni se deja el hook sin plugin
+# (HIGH codex+glm r1 PR #88): se hace rollback del hook con el backup de esta
+# corrida y se sale con error, igual que grok.
 if [ "$HOST" = "dsh" ]; then
-  dsh_publicar
+  if ! dsh_publicar; then
+    decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — ROLLBACK del hook."
+    if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
+      if cp "$backup" "$DEST" 2>/dev/null; then
+        decir "              hook restaurado desde $backup"
+      else
+        decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST desde $backup"
+      fi
+    else
+      rm -f "$DEST" 2>/dev/null
+      decir "              hook retirado (esta corrida lo habia creado)"
+    fi
+    exit 5
+  fi
 fi
 
 case "$estado" in

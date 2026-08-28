@@ -31,7 +31,7 @@ decir() { printf '%s\n' "$*" >&2; }
 uso() {
   cat <<'EOF'
 Uso:
-  tools/model-routing.sh --host claude|zcode|grok|kimi
+  tools/model-routing.sh --host claude|zcode|grok|kimi|dsh
                          (--role implementer|verifier|reviewer|adversary | --tier standard|verify|review)
                          [--field model|effort|effort-key|tier]
                          [--format json|frontmatter]

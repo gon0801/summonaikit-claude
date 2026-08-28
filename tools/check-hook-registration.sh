@@ -21,6 +21,7 @@
 #   bash tools/check-hook-registration.sh --zcode-config <user-config>   (Task 5.4)
 #   bash tools/check-hook-registration.sh --codex-hooks-json <hooks.json> (Task 6.5)
 #   bash tools/check-hook-registration.sh --grok-hooks-dir <dir>         (Task 7.5)
+#   bash tools/check-hook-registration.sh --dsh-home <dir>               (Phase 15)
 set -u
 
 HOOK_NAME='summonaikit-harness.sh'
@@ -137,8 +138,8 @@ fi
 # Contrato de salida identico: SIEMPRE exit 0 (fail-open), reporta por texto.
 parch_dsh() {
   [ "$VIO_DSH" -gt 0 ] || return 0
-  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook plupatch patch block ddir
-  local p_start p_end hay_hook hay_subagente subagentes falla=0
+  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch
+  local p_start p_end bloque roles rol n_roles falla=0
   hook="$home/hooks/summonaikit-harness.sh"
   ddir="$home/plugins/summonaikit-dsh-gate"
   patch="$home/cordis.patch.yml"
@@ -159,8 +160,12 @@ parch_dsh() {
       falla=1
     fi
   done
-  # 3) El patch del profile lleva el bloque entre marcas con el hook: apuntando
-  #    al hook Y las 4 personas subagent_<rol>.
+  # 3) El patch del profile lleva el bloque entre marcas con el id del gate, el
+  #    name: del plugin, hook: apuntando al hook, bash: presente, y las 4
+  #    personas distinctas subagent_<rol> (cada una con nombre, toolName y
+  #    persona:). M2/CODE (HIGH codex+glm r1 PR #88): antes solo contaba lineas
+  #    `toolName: subagent_`, lo que pasaba con 4 veces el mismo rol, sin \
+  #    id:/name:/bash:, o con un bloque que YAML no aplicaria.
   if [ ! -e "$patch" ]; then
     reportar "[summonaikit] PATCH DE DSH: no existe ($patch)."
     falla=1
@@ -169,21 +174,32 @@ parch_dsh() {
   else
     p_start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
     p_end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
-    if [ -z "$p_start" ] || [ -z "$p_end" ]; then
+    if [ -z "$p_start" ] || [ -z "$p_end" ] || [ "$p_end" -le "$p_start" ]; then
       reportar "[summonaikit] PATCH DE DSH: falta la entrada entre marcas summonaikit-gate ($patch)."
       falla=1
     else
-      hay_hook="$(sed -n "${p_start},${p_end}p" "$patch" | grep -F "hook: '$hook'" | head -1)"
-      [ -n "$hay_hook" ] || { reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook)."; falla=1; }
-      subagentes="$(sed -n "${p_start},${p_end}p" "$patch" | grep -c "toolName: subagent_")"
-      if [ "$subagentes" -lt 4 ]; then
-        reportar "[summonaikit] PATCH DE DSH: faltan las 4 personas subagent_<rol> (se ven $subagentes)."
-        falla=1
-      fi
+      bloque="$(sed -n "${p_start},${p_end}p" "$patch")"
+      printf '%s' "$bloque" | grep -q "id: summonaikit-gate" || {
+        reportar "[summonaikit] PATCH DE DSH: falta el id: summonaikit-gate ($patch)."; falla=1; }
+      printf '%s' "$bloque" | grep -qF "name: '$ddir'" || {
+        reportar "[summonaikit] PATCH DE DSH: el name: no apunta al plugin ($ddir)."; falla=1; }
+      printf '%s' "$bloque" | grep -qF "hook: '$hook'" || {
+        reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook)."; falla=1; }
+      printf '%s' "$bloque" | grep -qE 'bash: ' || {
+        reportar "[summonaikit] PATCH DE DSH: falta la config bash: del plugin."; falla=1; }
+      # Cada rol: un `- id: subagent_<rol>` con toolName y persona: propios.
+      for rol in implementer verifier reviewer adversary; do
+        n_roles="$(printf '%s' "$bloque" | grep -c "^[[:space:]]*-[[:space:]]id: subagent_$rol$")"
+        if [ "$n_roles" -eq 0 ]; then
+          reportar "[summonaikit] PATCH DE DSH: falta la persona subagent_$rol."; falla=1
+        else
+          printf '%s' "$bloque" | grep -qE "toolName: subagent_$rol" || {
+            reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin toolName."; falla=1; }
+          printf '%s' "$bloque" | grep -q "persona: |-" || {
+            reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin persona."; falla=1; }
+        fi
+      done
     fi
-  fi
-  if [ "$falla" -eq 0 ]; then
-    :
   fi
   return 0
 }

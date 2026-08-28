@@ -1893,18 +1893,55 @@ out="$(host_dsh --dry-run 2>&1)"; rc=$?
 [ -d "$dsh_plugin" ] && malo "dsh --dry-run creo el dir del plugin"
 printf '%s' "$out" | grep -qi 'dry-run' || malo "dsh --dry-run no reporta dry-run"
 
-caso "dsh: patch con contenido ajeno fuera de marcas se respeta"
+caso "dsh: patch con contenido ajeno fuera de marcas se respeta byte a byte"
 nuevo_home_dsh
 host_dsh >/dev/null 2>&1
-# Un array ficticio con contenido del operador ANTES de nuestras marcas.
-printf -- '- insert:\n    - id: otromodulo\n      name: '\''algo-del-operator'\''\n' > /tmp/dsh-pre.txt
-cat /tmp/dsh-pre.txt "$dsh_patch" > "$dsh_patch.tmp" && mv "$dsh_patch.tmp" "$dsh_patch"
-# Reinstalar: el splice debe conservar el bloque ajeno y refrescar el nuestro.
+# Un array ficticio con contenido del operador ANTES y DESPUES de nuestras marcas.
+pre="$tmp/dsh-pre-$n_dsh.txt"; post="$tmp/dsh-post-$n_dsh.txt"
+printf -- '- insert:\n    - id: otromodulo\n      name: '\''algo-del-operator'\''\n' > "$pre"
+printf -- '- insert:\n    - id: otromodulo2\n      name: '\''algo2'\''\n' > "$post"
+cat "$pre" "$dsh_patch" "$post" > "$dsh_patch.tmp" && mv "$dsh_patch.tmp" "$dsh_patch"
+# Reinstalar: el splice debe conservar AMBOS bloques ajenos intactos y refrescar
+# el nuestro, sin pegar lineas en las fronteras (HIGH r1 PR #88).
 out="$(host_dsh 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "reinstall dsh con contenido ajeno deberia salir 0, dio $rc: $out"
-grep -q "id: otromodulo" "$dsh_patch" || malo "el reinstall dsh perdio el contenido ajeno fuera de marcas"
+grep -q "id: otromodulo" "$dsh_patch" || malo "el reinstall dsh perdio el contenido ajeno ANTERIOR"
+grep -q "id: otromodulo2" "$dsh_patch" || malo "el reinstall dsh perdio el contenido ajeno POSTERIOR"
 grep -q "id: summonaikit-gate" "$dsh_patch" || malo "el reinstall dsh no refresco nuestro bloque"
-rm -f /tmp/dsh-pre.txt
+# Byte a byte: ninguna marca pegada a una linea ajena (el YAML se corrompe ahi).
+grep -q 'algo-del-operator# >>>' "$dsh_patch" && malo "splice pego la linea ajena ANTERIOR a la marca START"
+grep -q 'algo2# <<< summonaikit-gate END' "$dsh_patch" && malo "splice pego la marca END a la primera linea ajena"
+rm -f "$pre" "$post"
+
+caso "dsh: --dry-run sobre hook AU AL DIA (NUESTRO_IDENTICO) NO toca plugin/patch"
+nuevo_home_dsh
+host_dsh >/dev/null 2>&1
+out="$(host_dsh --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh --dry-run con hook al dia deberia salir 0, dio $rc: $out"
+# El plugin y el patch ya existen del install previo; el dry-run no debe tocarlos.
+[ -f "$dsh_plugin/package.json" ] || malo "el dry-run no debe borrar el plugin"
+[ "$(cksum < "$dsh_plugin/index.js")" = "$(cksum < "$repo/hosts/dsh/index.js")" ] || malo "dry-run modifico index.js"
+
+caso "dsh: --dry-run --quitar-dsh NO borra nada"
+nuevo_home_dsh
+host_dsh >/dev/null 2>&1
+out="$(host_dsh --dry-run --quitar-dsh 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh --dry-run --quitar-dsh deberia salir 0, dio $rc: $out"
+[ -f "$dest" ] || malo "--dry-run --quitar-dsh borro el hook"
+[ -d "$dsh_plugin" ] || malo "--dry-run --quitar-dsh borro el plugin"
+[ -f "$dsh_patch" ] || malo "--dry-run --quitar-dsh borro el patch"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run --quitar-dsh no reporta dry-run"
+
+caso "dsh: un dir de plugin ajeno (sin saikit_owned) NO se toca entero"
+nuevo_home_dsh
+# El dir del plugin existe con un package.json ajeno (sin marcador) y archivos distintos.
+mkdir -p "$dsh_plugin"
+printf -- '{"name":"otro-plugin","version":"1.0"}\n' > "$dsh_plugin/package.json"
+printf 'ajeno\n' > "$dsh_plugin/index.js"
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "dir de plugin ajeno deberia hacer fallar (DESCONOCIDO), dio 0: $out"
+[ "$(cat "$dsh_plugin/package.json")" = '{"name":"otro-plugin","version":"1.0"}' ] || malo "se toco el package.json ajeno"
+[ "$(cat "$dsh_plugin/index.js")" = 'ajeno' ] || malo "se toco el index.js ajeno"
 
 caso "dsh: repara hook y plugin viejos con backup"
 nuevo_home_dsh
@@ -1928,6 +1965,10 @@ if [ -f "$dsh_patch" ]; then
   grep -q "summonaikit-gate START" "$dsh_patch" && malo "--quitar-dsh dejo la entrada entre marcas"
 fi
 [ -d "$(dirname "$dest")/saikit-backups" ] || malo "--quitar-dsh no dejo backup del hook"
+
+caso "dsh: --quitar-dsh sin --host dsh => exit 2"
+out="$(bash "$tool" --quitar-dsh 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--quitar-dsh sin --host dsh deberia salir 2, dio $rc: $out"
 
 caso "dsh: sin bash.exe => exit 2 y nada escrito"
 nuevo_home_dsh

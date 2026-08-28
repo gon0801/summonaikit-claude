@@ -732,12 +732,12 @@ escribir_hook_marca() {  # $1=dest
     printf '%s\n' 'exit 0'
   } > "$1"
 }
-escribir_patch_dsh() {  # $1=patch  $2=hook
+escribir_patch_dsh() {  # $1=patch  $2=hook  $3=ddir
   cat > "$1" <<EOF
 # >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh
 - insert:
     - id: summonaikit-gate
-      name: 'plugins/summonaikit-dsh-gate'
+      name: '$3'
       config:
         hook: '$2'
         bash: 'C:/Program Files/Git/bin/bash.exe'
@@ -752,28 +752,41 @@ escribir_patch_dsh() {  # $1=patch  $2=hook
     - id: subagent_verifier
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
+        provider: spawn
         toolName: subagent_verifier
+        backgroundMode: continuable
+        persona: |-
+          # verifier
     - id: subagent_reviewer
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
+        provider: spawn
         toolName: subagent_reviewer
+        backgroundMode: continuable
+        persona: |-
+          # reviewer
     - id: subagent_adversary
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
+        provider: spawn
         toolName: subagent_adversary
+        backgroundMode: continuable
+        persona: |-
+          # adversary
 # <<< summonaikit-gate END
 EOF
 }
 nuevo_dsh_reg() {
   n_dsh_reg=$((n_dsh_reg + 1))
   dsh_home="$tmp/dsh-reg-$n_dsh_reg"
-  mkdir -p "$dsh_home/hooks" "$dsh_home/plugins/summonaikit-dsh-gate"
+  dsh_ddir="$dsh_home/plugins/summonaikit-dsh-gate"
+  mkdir -p "$dsh_home/hooks" "$dsh_ddir"
   escribir_hook_marca "$dsh_home/hooks/summonaikit-harness.sh"
-  : > "$dsh_home/plugins/summonaikit-dsh-gate/index.js"
-  : > "$dsh_home/plugins/summonaikit-dsh-gate/translate.js"
-  : > "$dsh_home/plugins/summonaikit-dsh-gate/spawn-hook.js"
-  : > "$dsh_home/plugins/summonaikit-dsh-gate/package.json"
-  escribir_patch_dsh "$dsh_home/cordis.patch.yml" "$dsh_home/hooks/summonaikit-harness.sh"
+  : > "$dsh_ddir/index.js"
+  : > "$dsh_ddir/translate.js"
+  : > "$dsh_ddir/spawn-hook.js"
+  : > "$dsh_ddir/package.json"
+  escribir_patch_dsh "$dsh_home/cordis.patch.yml" "$dsh_home/hooks/summonaikit-harness.sh" "$dsh_ddir"
 }
 n_dsh_reg=0
 
@@ -792,7 +805,7 @@ printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh sin entrada deberia ha
 
 caso "dsh: [hook:] apuntando a otra ruta => habla (la entrada no apunta al hook)"
 nuevo_dsh_reg
-escribir_patch_dsh "$dsh_home/cordis.patch.yml" "/otra/ruta/hooks/summonaikit-harness.sh"
+escribir_patch_dsh "$dsh_home/cordis.patch.yml" "/otra/ruta/hooks/summonaikit-harness.sh" "$dsh_ddir"
 out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dsh hook: apuntando a otra ruta: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con hook: a otra ruta deberia hablar: $out"
