@@ -94,7 +94,7 @@ G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' /
 G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
 G2|verif_fallo_pelado_apagado|el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
 G2|verif_fallo_negado_apagado|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
-G2|verif_fallo_ruta_no_descontada|el descuento de ruta/archivo se apaga y un `tests/errors.py` en el COMANDO veta un recibo legitimo (bots PR #81)
+G2|verif_fallo_ruta_no_descontada|el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)
 G2|verif_fallo_pegado_sin_normalizar|la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
@@ -547,7 +547,11 @@ mut_tool_hint_sin_dsh()      { sed 's|if \[ "\$TARGET" = "dsh" \]; then TOOL_HIN
 # Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
 # inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
 # incompleto pasa a cerrar limpio y el decision:block desaparece).
-mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok)/case "$TARGET" in claude|codex)/'; }
+# Phase 15 (PR #85) movio el case a `claude|codex|grok|dsh)` y este sed quedo
+# OBSOLETO: la guardia 2 ("la mutacion no cambio nada del hook") lo atrapo en CI
+# y master quedo rojo desde ese merge. El ancla sigue al literal nuevo; se
+# quita SOLO grok (dsh queda) — mismo efecto que antes: el gate inerte en grok.
+mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|codex|dsh)/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa
