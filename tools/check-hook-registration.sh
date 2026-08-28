@@ -138,25 +138,22 @@ fi
 # Contrato de salida identico: SIEMPRE exit 0 (fail-open), reporta por texto.
 parch_dsh() {
   [ "$VIO_DSH" -gt 0 ] || return 0
-  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch hook_win ddir_win
+  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch hook_win
   local p_start p_end bloque rol n_roles rebanada falla=0
   hook="$home/hooks/summonaikit-harness.sh"
-  ddir="$home/plugins/summonaikit-dsh-gate"
+  ddir="$home/profiles/node_modules/@summonaikit/dsh-gate"
   patch="$home/cordis.patch.yml"
-  # El instalador escribe name:/hook: en forma WINDOWS (C:/...), porque dsh (Node)
-  # los lee. El plugin y el hook existen en la ruta nativa ($home, que en MSYS es
-  # /c/...). Para comparar name:/hook: se usa la forma Windows; para verificar
-  # existencia, la nativa. (PR #91: el turno vivo revelo que el instalador
-  # escribia /c/... y el checker no coincidia).
+  # El instalador escribe hook: en forma WINDOWS (C:/...), porque dsh (Node)
+  # lee la config del plugin; el name: es el NOMBRE del paquete (@summonaikit/
+  # dsh-gate), no una ruta. El hook existe en la ruta nativa ($home, MSYS /c/...);
+  # para comparar hook: se usa la forma Windows. (PR #91: el turno vivo revelo
+  # que el name: por ruta C:/... no lo importa dsh, y que /c/ no coincidia.)
   hook_win="$(printf '%s' "$home/hooks/summonaikit-harness.sh")"
-  ddir_win="$(printf '%s' "$home/plugins/summonaikit-dsh-gate")"
   if command -v cygpath >/dev/null 2>&1; then
     case "$hook_win" in
       [A-Za-z]:/*) : ;;                    # ya es Windows con barra adelante
-      [A-Za-z]:\\*) hook_win="$(printf '%s' "$hook_win" | sed 's|\\|/|g')"
-                     ddir_win="$(printf '%s' "$ddir_win" | sed 's|\\|/|g')" ;;
-      *) hook_win="$(cygpath -m "$hook" 2>/dev/null || printf '%s' "$hook")"
-         ddir_win="$(cygpath -m "$ddir" 2>/dev/null || printf '%s' "$ddir")" ;;
+      [A-Za-z]:\\*) hook_win="$(printf '%s' "$hook_win" | sed 's|\\|/|g')" ;;
+      *) hook_win="$(cygpath -m "$hook" 2>/dev/null || printf '%s' "$hook")" ;;
     esac
   fi
   # 1) Hook existe y lleva el marcador de linea 2.
@@ -197,8 +194,8 @@ parch_dsh() {
       bloque="$(sed -n "${p_start},${p_end}p" "$patch")"
       printf '%s' "$bloque" | grep -q "id: summonaikit-gate" || {
         reportar "[summonaikit] PATCH DE DSH: falta el id: summonaikit-gate ($patch)."; falla=1; }
-      printf '%s' "$bloque" | grep -qF "name: '$ddir_win'" || {
-        reportar "[summonaikit] PATCH DE DSH: el name: no apunta al plugin ($ddir_win)."; falla=1; }
+      printf '%s' "$bloque" | grep -qF "name: '@summonaikit/dsh-gate'" || {
+        reportar "[summonaikit] PATCH DE DSH: el name: no es el paquete del plugin (@summonaikit/dsh-gate)."; falla=1; }
       printf '%s' "$bloque" | grep -qF "hook: '$hook_win'" || {
         reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook_win)."; falla=1; }
       printf '%s' "$bloque" | grep -qE 'bash: ' || {

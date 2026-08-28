@@ -1859,7 +1859,9 @@ nuevo_home_dsh() {
   home_dh="$tmp/dsh-home-$n_dsh/.dsh"
   mkdir -p "$home_dh"
   dest="$home_dh/hooks/summonaikit-harness.sh"
-  dsh_plugin="$home_dh/plugins/summonaikit-dsh-gate"
+  # El plugin vive en el flat module fallback (dsh resuelve los plugins custom
+  # por nombre ahi), no en <dsh-home>/plugins/ (PR #91: el turno vivo).
+  dsh_plugin="$home_dh/profiles/node_modules/@summonaikit/dsh-gate"
   dsh_patch="$home_dh/cordis.patch.yml"
 }
 host_dsh() {
@@ -2024,17 +2026,20 @@ out="$(SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN= \
 [ "$rc" -eq 2 ] || malo "dsh sin bash.exe deberia salir 2, dio $rc: $out"
 [ ! -e "$dsh_patch" ] || malo "dsh sin bash.exe no debe tocar el patch"
 
-caso "dsh: patch usa rutas WINDOWS (C:/...) en name:/hook:, no POSIX (/c/...) (turno vivo, PR #91)"
-# El turno vivo revelo que con HOME/MSYS la ruta queda /c/... y dsh (Node) no
-# la resuelve. En MSYS $tmp es POSIX; con cygpath disponible el instalador debe
-# escribir name:/hook: en forma Windows (letra de drive). En CI Linux (sin
-# cygpath) el fallback deja la ruta como llega y el caso se condiciona.
+caso "dsh: patch usa name:=paquete y hook: en forma WINDOWS (C:/), no POSIX (/c/) (turno vivo, PR #91)"
+# El turno vivo revelo que: (a) el name: por ruta (C:/...) no lo importa dsh
+# (ERR_UNSUPPORTED_ESM_URL_SCHEME / DIR_IMPORT) — debe ser el nombre del paquete
+# linkeado en el fallback; (b) el hook: (ruta que el plugin lee) debe ser Windows,
+# no /c/. En MSYS $tmp es POSIX; con cygpath el instalador convierte hook: a C:/.
 nuevo_home_dsh
 if command -v cygpath >/dev/null 2>&1; then
   host_dsh >/dev/null 2>&1
-  grep -qE "name: '[A-Za-z]:/" "$dsh_patch" || malo "el patch no usa name: en forma Windows (PR #91): $(grep -E 'name:' "$dsh_patch" | head -2)"
+  grep -qF "name: '@summonaikit/dsh-gate'" "$dsh_patch" || malo "el patch no usa name: de paquete (@summonaikit/dsh-gate): $(grep -E 'name:' "$dsh_patch" | head -2)"
   grep -qE "hook: '[A-Za-z]:/" "$dsh_patch" || malo "el patch no usa hook: en forma Windows (PR #91): $(grep -E 'hook:' "$dsh_patch" | head -2)"
   grep -q "/c/" "$dsh_patch" && malo "el patch dejo una ruta POSIX /c/ (dsh Node no la resuelve)"
+  # El plugin vive como dir REAL en el fallback (no symlink; MSYS ln -s no crea
+  # symlinks reales). Debe tener los 4 archivos y resolverse por nombre.
+  [ -f "$dsh_plugin/index.js" ] && [ -f "$dsh_plugin/package.json" ] || malo "no se publico el plugin en el fallback de dsh ($dsh_plugin)"
 fi
 
 if [ "$fail" -ne 0 ]; then

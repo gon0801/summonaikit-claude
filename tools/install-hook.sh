@@ -1284,7 +1284,11 @@ grok_quitar() {
 DSH_AGENT_ROLES='implementer verifier reviewer adversary'
 
 dsh_home() { printf '%s' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}"; }
-dsh_plugin_dir() { printf '%s/plugins/summonaikit-dsh-gate' "$(dsh_home)"; }
+# dsh resuelve los plugins custom por NOMBRE de paquete via el flat module
+# fallback `$DSH_HOME/profiles/node_modules/<pkg>` (Node-walk desde cualquier
+# profile). El plugin se instala como DIR REAL ahi (no symlink: en MSYS/Windows
+# `ln -s` no crea symlinks reales solos). El `name:` del patch lo referencia.
+dsh_plugin_dir() { printf '%s/profiles/node_modules/@summonaikit/dsh-gate' "$(dsh_home)"; }
 dsh_patch() { printf '%s/cordis.patch.yml' "$(dsh_home)"; }
 dsh_agents_source() { printf '%s' "${SAIKIT_DSH_AGENTS_SOURCE:-$repo/agents}"; }
 # Estado de lo publicado en ESTA corrida (rollback del install dsh): archivos de
@@ -1353,13 +1357,12 @@ dsh_win_path() {  # $1=ruta
 # LISTA de entradas, insertado en el ROOT (id del target = ''). Por eso el bloque
 # es una lista plana de 5 entradas (gate + 4 roles) bajo UN `- insert:`.
 dsh_patch_nuestro_bloque() {
-  local rol cuerpo win_plugin win_hook
-  win_plugin="$(dsh_win_path "$(dsh_plugin_dir)")"
+  local rol cuerpo win_hook
   win_hook="$(dsh_win_path "$DEST")"
   printf '%s\n' "# >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh"
   printf '%s\n' "- insert:"
   printf '%s\n' "    - id: summonaikit-gate"
-  printf '%s\n' "      name: '$win_plugin'"
+  printf '%s\n' "      name: '@summonaikit/dsh-gate'"
   printf '%s\n' "      config:"
   printf '%s\n' "        hook: '$win_hook'"
   printf '%s\n' "        bash: '$(dsh_bash_win)'"

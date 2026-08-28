@@ -2019,6 +2019,14 @@ profile. La fase 15 porta el gate como:
   archivo de hooks; el **verificador** `check-hook-registration.sh --dsh-home`
   afirma hook (existe + marcador), plugin (4 archivos) y el bloque del patch
   (id del gate + `name:` del plugin + `hook:` + 4 roles con `persona:`).
+  **Hallado en el turno vivo (15.5, PR #92):** dsh resuelve los plugins custom
+  por **nombre de paquete** y NO por ruta absoluta — el plugin se instala como
+  dir real en el flat module fallback
+  `<dsh-home>/profiles/node_modules/@summonaikit/dsh-gate/` (que Node-walk
+  resuelve desde cualquier profile), y el `name:` del patch es
+  `@summonaikit/dsh-gate`. En Windows `import("C:/...")` falla
+  (`ERR_UNSUPPORTED_ESM_URL_SCHEME`), y en MSYS `ln -s` no crea symlinks reales,
+  así que se copia el dir y no se hace symlink.
 - **Ruteo (D6).** Fila `dsh` vacía en `tools/model-routing.sh`: el subagente
   hereda el modelo de la sesión. El `effort-key` de dsh es `effort`.
 
