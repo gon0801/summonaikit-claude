@@ -53,9 +53,17 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **Turno vivo (`docs/smoke-dsh-2026-08-28.md`, en `headless`):** escenario 1
   (`-saikit` + delegación implementer→verifier→reviewer → recibo cierra) ✅;
   escenario 3 (sin `-saikit` → nada del harness) ✅; escenario 2 (cerrar sin
-  recibo) NO reprodujo el GATE (observó `DELEGATED`) — declarado. **La UI web,
-  que era el alcance pedido, sigue sin turno medido** (spec § Límites de dsh);
-  lo corre el operador con `docs/task-15.5-runbook.md`.
+  recibo) NO reprodujo el GATE (observó `DELEGATED`) — declarado.
+- **Turno vivo en la UI WEB (2026-08-28 07:18–07:25 PDT, operador; leído por
+  el lead del `session.jsonl.zstd`, ver smoke doc § UI WEB):** escenario 1 ✅
+  (contrato inyectado — literal en el `reasoning` del modelo —,
+  `subagent_implementer` → `_verifier` → `_reviewer` → `_adversary` con
+  artefacto esquema-conforme → adjudicación → recibo con `ADVERSARY:`);
+  escenario 3 ✅ (turnos sin `-saikit` sin marcadores). El gate se cargó en el
+  `dsh web` ya abierto sin reiniciar (`watchUserPatches` recarga el patch en
+  vivo). **Escenario 2 (GATE en la UI) sigue `unknown`** — sin ningún followup
+  del adaptador en 28 turnos; cubierto por la suite del hook y el banco del
+  adaptador (spec § Límites de dsh).
 - **Operador:** Gon (deploy: sesión dsh del worker; verificación, merges y
   firma: sesión claude del lead).
 

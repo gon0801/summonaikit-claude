@@ -2053,13 +2053,21 @@ profile. La fase 15 porta el gate como:
 - **`agent/created meta.cwd` no observado (15.1 Q5):** el adaptador toma el
   cwd del header de sesión y cae a `process.cwd()` con aviso; `unknown` hasta
   verlo en vivo.
-- **La UI web sigue sin turno vivo medido:** el smoke del 2026-08-28
-  (`docs/smoke-dsh-2026-08-28.md`) corrió en `headless` — que el operador NO
-  pidió y que este mismo bloque declara fuera de alcance. `dsh --profile web
-  --dump-config` compone el plugin y las 4 tools (verificado por el lead), pero
-  el comportamiento del turno en la UI queda `unknown` hasta que el operador
-  lo corra con `docs/task-15.5-runbook.md`. El escenario 2 (GATE por recibo
-  ausente) tampoco se reprodujo en vivo — cubierto solo por la suite del hook.
+- **UI web — medido el 2026-08-28 (turno del operador, leído por el lead del
+  `session.jsonl.zstd`; `docs/smoke-dsh-2026-08-28.md` § UI WEB):** escenario 1
+  ✅ — el contrato llegó inyectado (el modelo lo dice literal en su
+  `reasoning`), ceremonia por `subagent_implementer` → `_verifier` →
+  `_reviewer` → `_adversary` (artefacto con el esquema del contrato) →
+  adjudicación → recibo con `ADVERSARY:`; escenario 3 ✅ (turnos sin `-saikit`
+  sin ningún marcador). dsh recarga `~/.dsh/cordis.patch.yml` en vivo
+  (`watchUserPatches`): un `dsh web` ya abierto toma el gate sin reiniciar.
+  **Lo que sigue `unknown`: el escenario 2 (bloqueo `SUMMONAIKIT HARNESS GATE`
+  en la UI)** — en 28 turnos de la sesión no hubo ningún `followup` del
+  adaptador; el modelo siempre escribió recibo o `DELEGATED`. Cubierto por la
+  suite del hook y el banco del adaptador (`plugin.test.js`), no en vivo.
+  Además, el log de sesión de dsh NO persiste los mensajes del lote de
+  `pre-step` (ni el prompt humano ni los inyectados): la evidencia del
+  contrato en vivo es el razonamiento del modelo, no un evento del log.
 
 ## Non-Goals
 
