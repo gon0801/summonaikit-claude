@@ -1,10 +1,10 @@
 # tests/lib/recetas_lint.sh — reglas de forma de una receta (D2). Se carga con
 # `. tests/lib/recetas_lint.sh`. Sin dependencias fuera de coreutils/grep/sed.
-RECETAS_TERMINOS_PROHIBIDOS='gt |Graphite|Bugbot|AskQuestion|/loop|poteto'
+RECETAS_TERMINOS_PROHIBIDOS='gt |Graphite|Bugbot|AskQuestion|/loop|poteto|Cursor'
 RECETAS_TOPE_LINEAS=80
 
-_rl_frontmatter() {  # $1=archivo → stdout: lineas entre el 1er y 2do '---'
-  tr -d '\r' < "$1" | awk 'NR==1 && $0!="---"{exit 1} NR>1 && $0=="---"{exit} NR>1{print}'
+_rl_frontmatter() {  # $1=archivo → stdout: lineas entre el 1er y 2do '---'; rc 1 si falta el cierre
+  tr -d '\r' < "$1" | awk 'NR==1 && $0!="---"{exit 1} NR>1 && $0=="---"{c=1; exit} NR>1{print} END{if(NR>1 && !c) exit 1}'
 }
 _rl_campo() {  # $1=archivo $2=clave → valor (sin comillas) o vacio
   _rl_frontmatter "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -n1 | sed 's/^"\(.*\)"$/\1/'
@@ -23,6 +23,7 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   titulo="$(_rl_campo "$f" titulo)"
   [ -n "$titulo" ] || { echo "falta titulo"; rc=1; }
   printf '%s' "$titulo" | grep -q "$(printf '\t')" && { echo "el titulo lleva TAB"; rc=1; }
+  case "$titulo" in '>'|'|') echo "el titulo es un indicador plegado/literal"; rc=1 ;; esac
   if [ "$tipo" = receta ]; then
     carril="$(_rl_campo "$f" carril)"
     case "$carril" in full|fast) ;; *) echo "carril invalido: [$carril]"; rc=1 ;; esac

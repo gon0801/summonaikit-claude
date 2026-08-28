@@ -37,6 +37,18 @@ caso "termino prohibido con otra caja => 1"
 buena "$SANDBOX/pc.md"; printf 'Usa graphite en minusculas.\n' >> "$SANDBOX/pc.md"
 lint_receta "$SANDBOX/pc.md" >/dev/null && malo "acepto 'graphite' en minusculas"
 
+caso "termino prohibido Cursor => 1"
+buena "$SANDBOX/pcu.md"; printf 'El Cursor me ayuda a editar.\n' >> "$SANDBOX/pcu.md"
+lint_receta "$SANDBOX/pcu.md" >/dev/null && malo "acepto 'Cursor'"
+
+caso "frontmatter sin linea de cierre => 1"
+printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: bug\ntitulo: Arreglar algo\ncarril: full\ncuando: ["x"]\nadversary: opcional\n## Pasos\n1. a\n## Qué le dices al usuario\nb\n## Recibo\nc\n' > "$SANDBOX/fsc.md"
+lint_receta "$SANDBOX/fsc.md" >/dev/null && malo "acepto frontmatter sin '---' de cierre"
+
+caso "titulo plegado o literal => 1"
+buena "$SANDBOX/pg.md"; sed -i 's/^titulo: .*/titulo: >/' "$SANDBOX/pg.md"
+lint_receta "$SANDBOX/pg.md" >/dev/null && malo "acepto titulo plegado (>)"
+
 caso "carril invalido => 1"
 buena "$SANDBOX/c.md"; sed -i 's/^carril: full/carril: rapido/' "$SANDBOX/c.md"
 lint_receta "$SANDBOX/c.md" >/dev/null && malo "acepto carril: rapido"
