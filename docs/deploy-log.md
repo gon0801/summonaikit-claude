@@ -7,6 +7,58 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-28 — Phase 15 (host dsh, PRs #84–#86 + #91; fix de master #92) — deploy NUEVO del gate dsh, verificado y firmado por el lead
+
+- **Qué traía:** la Phase 15 completa — 15.1 captura (#84, `5c4a37d`), 15.2
+  `HOST=dsh` en el hook (#85, `3c3b71f`), 15.3 adaptador `@summonaikit/dsh-gate`
+  (#86; su merge `7b9680b` quedó huérfano — el contenido entró por el merge local
+  `d49efea`), 15.4 instalador y 15.5 docs (commits `fc29fff`…`ebff9c8`, PRs
+  #87–#90 cerrados sin mergear, entraron por `d49efea`), más el #91 (`d05284d`:
+  rutas Windows en el patch + plugin en el flat module fallback, hallados en el
+  turno vivo). El #85 se mergeó con `suite` en rojo (tres mutaciones ancladas al
+  `case` viejo de la ceremonia quedaron obsoletas); master estuvo rojo desde
+  `3c3b71f` hasta el #92 (`3327710`), que las re-ancló — medido: cada una pone
+  rojo solo a su caso.
+- **Deploy — dsh (una pasada, la corrió el worker desde la task — fuera del
+  proceso, que lo reservaba al lead):** `bash tools/install-hook.sh --host dsh`
+  instaló el hook `~/.dsh/hooks/summonaikit-harness.sh`, el adaptador
+  `~/.dsh/profiles/node_modules/@summonaikit/dsh-gate/` (4 archivos, dir real en
+  el fallback: dsh no resuelve un plugin custom por ruta `C:/...` y en MSYS
+  `ln -s` no crea symlinks) y la entrada del patch en `~/.dsh/cordis.patch.yml`
+  (bloque entre marcas: `name: '@summonaikit/dsh-gate'`, `hook:`/`bash:` en forma
+  Windows `C:/...`, + las 4 personas `subagent_<rol>` inline).
+- **Deploy — claude/codex/grok + perfiles (2026-08-28 00:19, lead; Greptile
+  del PR #93 lo reclamó: el hook cambió en la fase y los vivos seguían en el
+  sha del #81):** `install-hook.sh` REPARÓ `~/.claude/hooks` (backup
+  `saikit-backups/summonaikit-harness.sh.nuestro.20260828-001911.bak`),
+  `--host codex` REPARÓ `~/.codex/hooks` (`…-001916.bak`), `--host grok`
+  REPARÓ `~/.grok/hooks` (`…-001923.bak`). `cmp` byte a byte contra la fuente
+  (== `master` `d05284d`): **IDÉNTICO los tres**, sha
+  `e563fe8064d5425e80a0013b61725066187f6dcfb66bad7afa709d2df19d1b7c`.
+  Perfiles: `adversary.md` (fila dsh en la tabla por host, 15.5) REPARADO en
+  `~/.claude/agents`, `~/.zcode/agents`, `~/.grok/agents`, `~/.agents/agents`
+  (kimi); zcode re-REGISTRADO (4 fases, backup
+  `config.json.zcode.20260828-001935.bak`). `verifier` ajeno de grok intacto
+  (DESCONOCIDO — no se tocó). `check-hook-registration.sh`: **SILENCIO** en
+  sus cinco formas (claude settings + local, `--codex-hooks-json`,
+  `--grok-hooks-dir`, `--zcode-config`, `--dsh-home`), re-corrido y citado.
+- **Verificación del lead de dsh (2026-08-28, sesión claude; sin re-desplegar dsh):** hook
+  `~/.dsh/hooks/…` == `master` byte a byte; los 3 JS del plugin == `master`
+  (solo CRLF); `check-hook-registration.sh --dsh-home ~/.dsh` → **SILENCIO**,
+  re-corrido y citado; `dsh --profile web --dump-config` compone
+  `summonaikit-gate` + las 4 `subagent_<rol>`; `dsh --version` = `0.1.1-rc.2` =
+  `summonaikit.measuredAgainst`. Los profiles `headless` y `saikit-smoke` los
+  instaló el worker fuera del alcance (web): se dejan, declarados; no son parte
+  del deploy.
+- **Turno vivo (`docs/smoke-dsh-2026-08-28.md`, en `headless`):** escenario 1
+  (`-saikit` + delegación implementer→verifier→reviewer → recibo cierra) ✅;
+  escenario 3 (sin `-saikit` → nada del harness) ✅; escenario 2 (cerrar sin
+  recibo) NO reprodujo el GATE (observó `DELEGATED`) — declarado. **La UI web,
+  que era el alcance pedido, sigue sin turno medido** (spec § Límites de dsh);
+  lo corre el operador con `docs/task-15.5-runbook.md`.
+- **Operador:** Gon (deploy: sesión dsh del worker; verificación, merges y
+  firma: sesión claude del lead).
+
 ## 2026-08-27 — PR #81 (veto del fallo PELADO en el label, residual del #72 cerrado) — deploy REPARA los tres hooks vivos
 
 - **Qué traía:** el residual declarado en el #72 (Greptile r3): `VERIFIED BY
@@ -1218,29 +1270,3 @@ que estos dos van como cierre de la fila y no como deploy obligatorio.
   (el de 7.1/7.2). Nuestros `implementer.md`/`reviewer.md` presentes con frontmatter
   traducido.
 - **Operador:** Gon (sesión zcode).
-
-## 2026-08-28 — PR #91/#92 (deploy dsh: instalador con rutas Windows + plugin en fallback, hallado en el turno vivo) — deploy NUEVO del gate dsh
-
-- **Qué traía:** la Phase 15 (host dsh — DeepSeek Harness). El turno vivo reveló
-  dos bugs reales que no aparecían en los tests (que usaban `SAIKIT_DSH_HOME`
-  con rutas Windows): (1) el instalador escribía `name:`/`hook:` del patch como
-  POSIX (`/c/...`) cuando `$HOME` es MSYS — dsh (Node) necesita `C:/...`; (2) dsh
-  NO resuelve un plugin custom por ruta absoluta Windows (`ERR_UNSUPPORTED_ESM_URL_SCHEME`)
-  — debe instalarse como dir real en el flat module fallback y referenciarse por
-  **nombre de paquete** (`@summonaikit/dsh-gate`), porque en MSYS `ln -s` no crea
-  symlinks reales.
-- **Deploy — dsh (una pasada):** `bash tools/install-hook.sh --host dsh` instaló el
-  hook `~/.dsh/hooks/summonaikit-harness.sh`, el adaptador
-  `~/.dsh/profiles/node_modules/@summonaikit/dsh-gate/` (4 archivos, dir real en
-  el fallback) y la entrada del patch en `~/.dsh/cordis.patch.yml` (bloque entre
-  marcas con el gate `name: '@summonaikit/dsh-gate'` + las 4 personas
-  `subagent_<rol>`). `dsh --version` = `0.1.1-rc.2` (= `measuredAgainst`).
-- **`check-hook-registration.sh --dsh-home ~/.dsh`:** SILENCIO (exit 0).
-- **`dsh --profile headless --dump-config`:** compone `summonaikit-gate` + las 4
-  `subagent_<rol>`.
-- **Turno vivo (`docs/smoke-dsh-2026-08-28.md`):** escenario 1 (`-saikit` +
-  delegación implementer→verifier→reviewer → recibo cierra) ✅; escenario 3 (sin
-  `-saikit` → nada del harness) ✅; escenario 2 (cerrar sin recibo) → el gate no
-  deja cerrar (observó `DELEGATED`; el GATE exacto está cubierto por la suite del
-  hook — ver la nota en la smoke doc).
-- **Operador:** Gon (sesión dsh).
