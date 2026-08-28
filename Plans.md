@@ -46,9 +46,11 @@ cosa que 15.1 no haya observado.
 tipo de tarea que el **líder elige y declara en el recibo**, con principios por
 rol en los perfiles y la voz para un usuario que no lee código ni inglés.
 Origen: pstack (MIT), triage de 69 piezas. Diseño y decisiones D0–D23 (v2,
-validada por 3 revisores): `docs/phase-16-18-recetario-autopilot-design.md`.
-Host de la primera ola: Claude Code. **El carril lo fija el sentinel, nunca la
-receta** (D3, medido). Lint bash baseline: `tests/lib/check_syntax.sh`.
+validada por 3 revisores): `docs/phase-16-18-recetario-autopilot-design.md`; plan paso a paso para
+workers: `docs/phase-16-recetario-plan.md` (implementa DeepSeek; el lead
+revisa, cierra y despliega). Host de la primera ola: Claude Code. **El carril
+lo fija el sentinel, nunca la receta** (D3, medido). Lint bash baseline:
+`tests/lib/check_syntax.sh`.
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
