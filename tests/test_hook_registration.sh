@@ -822,6 +822,28 @@ out="$(bash "$tool" --dsh-home "$dsh_home" --settings "$tmp/completo.json" 2>&1)
 [ "$rc" -eq 0 ] || malo "dsh formas mezcladas: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'unknown' || malo "formas mezcladas es unknown: $out"
 
+caso "dsh: bloque con UNA sola persona (falta el resto) => SI habla (M2/qwen r1)"
+nuevo_dsh_reg
+# Quitar las personas de verifier/reviewer/adversary (dejar solo implementer) —
+# el checker debe hablar porque cada rol exige su persona:
+#   `persona: |-` sobre el bloque entero dejaba pasar esto con 4 roles.
+sed -i '/- id: subagent_verifier/,+2d; /- id: subagent_reviewer/,+2d; /- id: subagent_adversary/,+2d' "$dsh_home/cordis.patch.yml"
+out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh con persona faltante: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con persona faltante deberia hablar: $out"
+
+caso "dsh: rol duplicado => SI habla (M2/qwen r1)"
+nuevo_dsh_reg
+# Duplicar el bloque de implementer: el checker debe detectar >1 aparicion.
+sed -n '/- id: subagent_implementer/,/- id: subagent_verifier/p' "$dsh_home/cordis.patch.yml" > "$tmp/dsh-dup-$n_dsh_reg.txt"
+sed -i '/- id: subagent_verifier/{
+  r '"$tmp/dsh-dup-$n_dsh_reg.txt"'
+}' "$dsh_home/cordis.patch.yml"
+out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh con rol duplicado: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con rol duplicado deberia hablar: $out"
+rm -f "$tmp/dsh-dup-$n_dsh_reg.txt"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

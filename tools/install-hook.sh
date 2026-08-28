@@ -1287,6 +1287,12 @@ dsh_home() { printf '%s' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}"; }
 dsh_plugin_dir() { printf '%s/plugins/summonaikit-dsh-gate' "$(dsh_home)"; }
 dsh_patch() { printf '%s/cordis.patch.yml' "$(dsh_home)"; }
 dsh_agents_source() { printf '%s' "${SAIKIT_DSH_AGENTS_SOURCE:-$repo/agents}"; }
+# Estado de lo publicado en ESTA corrida (rollback del install dsh): archivos de
+# plugin escritos (y su backup si eran NUESTRO_DISTINTO) + si el patch se toco.
+# Globales a proposito (no `declare` local): dsh_rollback_publicar los lee.
+DSH_PLUGIN_DESTS=()
+DSH_PLUGIN_BACKUPS=()
+DSH_PATCH_ESCRITO=0
 dsh_bash_win() {
   if [ "${SAIKIT_DSH_BASH_WIN+set}" = "set" ]; then
     if [ -n "$SAIKIT_DSH_BASH_WIN" ] && [ -f "$SAIKIT_DSH_BASH_WIN" ]; then printf '%s' "$SAIKIT_DSH_BASH_WIN"; return 0; fi
@@ -1309,6 +1315,7 @@ dsh_persona_body() {  # $1=rol
   [ "$n_cierre" -ge 2 ] || { printf '[summonaikit] instalador: %s no tiene cierre de frontmatter (---)\n' "$fuente" >&2; return 1; }
   awk 'BEGIN{n=0; in_body=0}
     /^---[[:space:]]*\r?$/ {
+      if (in_body) { print; next }   # '---' del CUERPO (separador markdown) se conserva
       n++
       if (n == 2) { in_body=1; next }
       next
@@ -1369,7 +1376,7 @@ dsh_patch_estado() {  # $1=bloque
 # de `# >>> summonaikit-gate START` / `# <<< summonaikit-gate END`. Atomico:
 # temporal en el mismo dir + igualdad + mv. Si el archivo no existe, se crea.
 dsh_patch_insertar() {  # $1=patch  $2=bloque
-  local patch="$1" bloque="$2" dir tmp start end nuevo actual
+  local patch="$1" bloque="$2" dir tmp start end actual
   dir="$(dirname "$patch")"
   mkdir -p "$dir" || return 1
   tmp="$(mktemp "$dir/.saikit-dsh-patch-XXXXXX")" || return 1
@@ -1423,10 +1430,14 @@ dsh_patch_insertar() {  # $1=patch  $2=bloque
 dsh_publicar_plugin() {
   local srdir="$repo/hosts/dsh" ddir="$(dsh_plugin_dir)" file
   local f dirstado bak dir_estado
-  declare -a DSH_PLUGIN_DESTS DSH_PLUGIN_BACKUPS
   DSH_PLUGIN_DESTS=(); DSH_PLUGIN_BACKUPS=()
   # Clasificar el DIRECTORIO (no cada archivo) por el package.json de destino.
-  if [ ! -e "$ddir/package.json" ]; then
+  # Un dir que EXISTE y no lleva nuestro package.json es de otro o quedó a medias
+  # de un install que no escribió el package (se copia ÚLTIMO): NO se escribe
+  # dentro (M4/qwen r1 PR #88) — se clasifica DESCONOCIDO, intocable entero.
+  if [ -d "$ddir" ] && [ ! -e "$ddir/package.json" ]; then
+    dir_estado='DESCONOCIDO'
+  elif [ ! -e "$ddir/package.json" ]; then
     dir_estado='AUSENTE'
   elif [ ! -f "$ddir/package.json" ] || [ ! -r "$ddir/package.json" ]; then
     dir_estado='NO_OBSERVABLE'
@@ -1473,10 +1484,12 @@ dsh_publicar_plugin() {
 dsh_publicar_patch() {
   local patch="$(dsh_patch)" bloque
   bloque="$(dsh_patch_nuestro_bloque)" || return 1
+  DSH_PATCH_ESCRITO=0
   local estado="$(dsh_patch_estado "$patch" "$bloque")"
   case "$estado" in
     AUSENTE|NUESTRO_DISTINTO)
       dsh_patch_insertar "$patch" "$bloque" || return 1
+      DSH_PATCH_ESCRITO=1
       decir "[summonaikit] PATCH DSH INSTALADO: $patch"
       ;;
     NUESTRO_IDENTICO) : ;;
@@ -1489,9 +1502,61 @@ dsh_publicar_patch() {
 }
 
 dsh_publicar() {
-  dsh_publicar_plugin || { dsh_publicar_patch || :; return 5; }
+  dsh_publicar_plugin || return 5
   dsh_publicar_patch || return 5
   return 0
+}
+
+# Quita SOLO la entrada nuestra del patch (entre marcas), preservando lo ajeno
+# fuera de ellas. Backup fechado + escritura atomica. La usan dsh_quitar (con su
+# backup y mensaje) y dsh_rollback_publicar (para revertir un install fallido).
+dsh_quitar_patch_solo() {
+  local patch="$(dsh_patch)" start end dir tmp bak
+  [ -f "$patch" ] || { decir "[summonaikit] PATCH DSH: no existe ($patch)."; return 1; }
+  start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
+  end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
+  if [ -z "$start" ] || [ -z "$end" ] || [ "$start" -lt 1 ] || [ "$end" -le "$start" ]; then
+    decir "[summonaikit] PATCH DSH: no hay entrada entre marcas ($patch)."
+    return 1
+  fi
+  dir="$(dirname "$patch")"
+  bak="$(mktemp "$dir/cordis.patch.yml.saikit-backup-XXXXXX")" || return 1
+  cp "$patch" "$bak" && cmp -s "$bak" "$patch" || { rm -f "$bak"; return 1; }
+  tmp="$(mktemp "$dir/.saikit-dsh-patch-XXXXXX")" || { rm -f "$bak"; return 1; }
+  if [ "$start" -gt 1 ]; then sed -n "1,$((start - 1))p" "$patch" >> "$tmp"; fi
+  [ -s "$tmp" ] && [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp"
+  sed -n "$((end + 1)),\$p" "$patch" >> "$tmp"
+  [ -s "$tmp" ] && [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp"
+  if [ "$(cat "$tmp" | tr -d '[:space:]')" = '' ]; then printf '[]\n' > "$tmp"; fi
+  mv -f "$tmp" "$patch" || { rm -f "$tmp" "$bak"; return 1; }
+  DSH_PATCH_BACKUP="$bak"
+  return 0
+}
+DSH_PATCH_BACKUP=''
+
+# Revierte lo publicado por el install dsh en ESTA corrida (HIGH grok r1 PR #88):
+# el patch (si se toco) y los archivos de plugin escritos. Se llama ANTES de
+# revertir el hook, asi el profile vuelve a su estado pre-corrida. `DSH_PATCH_ESCRITO`
+# y `DSH_PLUGIN_DESTS`/`DSH_PLUGIN_BACKUPS` son globales (llenados por dsh_publicar_patch/
+# dsh_publicar_plugin).
+dsh_rollback_publicar() {
+  decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — ROLLBACK."
+  local i dest bak
+  # 1) Patch: si se toco, quitar la entrada nuestra entre marcas.
+  if [ "$DSH_PATCH_ESCRITO" -eq 1 ]; then
+    dsh_quitar_patch_solo >/dev/null 2>&1 || decir "              ROLLBACK INCOMPLETO: no se revirtio el patch"
+  fi
+  # 2) Archivos de plugin: restaurar desde backup o retirar los creados.
+  i=0
+  while [ "$i" -lt "${#DSH_PLUGIN_DESTS[@]}" ]; do
+    dest="${DSH_PLUGIN_DESTS[$i]}"; bak="${DSH_PLUGIN_BACKUPS[$i]}"
+    if [ -n "$bak" ] && [ -f "$bak" ]; then
+      cp "$bak" "$dest" 2>/dev/null && decir "              plugin restaurado desde $bak" || decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $dest"
+    else
+      rm -f "$dest" 2>/dev/null && decir "              plugin retirado (creado en esta corrida): $dest" || decir "              ROLLBACK INCOMPLETO: no se pudo retirar $dest"
+    fi
+    i=$((i + 1))
+  done
 }
 
 # Preflight del install dsh (D3: solo el instalador falla cerrado). Sin bash.exe
@@ -1522,41 +1587,30 @@ dsh_quitar() {
   local patch="$(dsh_patch)" ddir="$(dsh_plugin_dir)" file
   # Quita la entrada del patch entre marcas; lo ajeno fuera de ellas sobrevive.
   if [ -e "$patch" ]; then
-    local start end dir tmp bak
     if [ ! -r "$patch" ]; then
       decir "[summonaikit] unknown — no se pudo clasificar el patch dsh ($patch); no se quito."
-    else
-      start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
-      end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
-      if [ -n "$start" ] && [ -n "$end" ] && [ "$start" -ge 1 ] && [ "$end" -gt "$start" ]; then
-        # Backup fechado y verificado (estandar del repo, no un cp mudo).
-        dir="$(dirname "$patch")"
-        bak="$(mktemp "$dir/cordis.patch.yml.saikit-backup-XXXXXX")" || {
-          decir "[summonaikit] instalador: no se pudo respaldar $patch"; exit 5; }
-        if ! cmp -s "$bak" "$patch"; then cp "$patch" "$bak"; cmp -s "$bak" "$patch" || { rm -f "$bak"; exit 5; }; fi
-        # Reconstruir SIN pegar lineas: lo anterior + lo posterior, con los
-        # newlines repuestos (HIGH codex+glm r1 PR #88). Escritura atomica.
-        tmp="$(mktemp "$dir/.saikit-dsh-patch-XXXXXX")" || exit 5
-        if [ "$start" -gt 1 ]; then sed -n "1,$((start - 1))p" "$patch" >> "$tmp"; fi
-        [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ] && printf '\n' >> "$tmp"
-        sed -n "$((end + 1)),\$p" "$patch" >> "$tmp"
-        if [ "$(tail -c1 "$tmp" | od -An -tuC | tr -d ' ')" != "10" ]; then printf '\n' >> "$tmp"; fi
-        # Si quedo vacio, se deja un array vacio valido.
-        if [ "$(cat "$tmp" | tr -d '[:space:]')" = '' ]; then printf '[]\n' > "$tmp"; fi
-        mv -f "$tmp" "$patch" || { rm -f "$tmp"; exit 5; }
-        decir "[summonaikit] PATCH DSH QUITADO: $patch"
-        decir "              backup:  $bak"
-      else
-        decir "[summonaikit] PATCH DSH: no hay entrada entre marcas ($patch)."
-      fi
+    elif dsh_quitar_patch_solo; then
+      decir "[summonaikit] PATCH DSH QUITADO: $patch"
+      [ -n "$DSH_PATCH_BACKUP" ] && decir "              backup:  $DSH_PATCH_BACKUP"
     fi
   else
     decir "[summonaikit] PATCH DSH: no existe ($patch)."
   fi
-  # Quita los archivos del plugin que llevan nuestra marca (package.json).
+  # Quita los archivos del plugin que llevan nuestra marca (package.json), con
+  # backup del dir entero (M5/qwen r1 PR #88: "volver atras tiene que ser
+  # reversible"; no un rm -rf a pelo que pierde archivos extra del dir).
   if [ -e "$ddir/package.json" ] && grep -q '"saikit_owned"[[:space:]]*:[[:space:]]*"summonaikit-claude"' "$ddir/package.json" 2>/dev/null; then
+    local pdir pbackup
+    pdir="$(dirname "$ddir")"
+    mkdir -p "$pdir/saikit-backups" 2>/dev/null || { decir "[summonaikit] instalador: no se pudo crear el dir de backups"; exit 5; }
+    pbackup="$pdir/saikit-backups/summonaikit-dsh-gate.nuestro.$$.bak"
+    if [ -d "$ddir" ]; then
+      cp -R "$ddir" "$pbackup" 2>/dev/null && cmp -s "$ddir/package.json" "$pbackup/package.json" || {
+        decir "[summonaikit] instalador: no se pudo respaldar el plugin $ddir"; exit 5; }
+    fi
     rm -rf "$ddir" 2>/dev/null || { decir "[summonaikit] instalador: no se pudo borrar $ddir"; exit 5; }
     decir "[summonaikit] PLUGIN DSH QUITADO: $ddir"
+    decir "              backup:  $pbackup"
   else
     decir "[summonaikit] PLUGIN DSH: no existe o no es nuestro ($ddir)."
   fi
@@ -2351,7 +2405,11 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
       decir "[summonaikit] dry-run: (dsh) hook al dia; no se toca el plugin ni el patch."
     else
-      dsh_publicar || { decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — no se toco mas."; exit 5; }
+      if ! dsh_publicar; then
+        decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — ROLLBACK de lo publicado."
+        dsh_rollback_publicar
+        exit 5
+      fi
     fi
   fi
   avisar_registro
@@ -2396,7 +2454,9 @@ fi
 # corrida y se sale con error, igual que grok.
 if [ "$HOST" = "dsh" ]; then
   if ! dsh_publicar; then
-    decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — ROLLBACK del hook."
+    decir "[summonaikit] instalador: fallo publicar el plugin/patch dsh — ROLLBACK."
+    # Revertir lo publicado (patch + archivos de plugin) antes de tocar el hook.
+    dsh_rollback_publicar
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
       if cp "$backup" "$DEST" 2>/dev/null; then
         decir "              hook restaurado desde $backup"

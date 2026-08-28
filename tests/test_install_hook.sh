@@ -1909,8 +1909,12 @@ grep -q "id: otromodulo" "$dsh_patch" || malo "el reinstall dsh perdio el conten
 grep -q "id: otromodulo2" "$dsh_patch" || malo "el reinstall dsh perdio el contenido ajeno POSTERIOR"
 grep -q "id: summonaikit-gate" "$dsh_patch" || malo "el reinstall dsh no refresco nuestro bloque"
 # Byte a byte: ninguna marca pegada a una linea ajena (el YAML se corrompe ahi).
+# Frontera START: la ultima linea ajena pegada a la marca START.
 grep -q 'algo-del-operator# >>>' "$dsh_patch" && malo "splice pego la linea ajena ANTERIOR a la marca START"
-grep -q 'algo2# <<< summonaikit-gate END' "$dsh_patch" && malo "splice pego la marca END a la primera linea ajena"
+# Frontera END (la VULNERABLE): la marca END pegada a la PRIMERA linea ajena
+# posterior (que es '- insert:' del bloque post). 'algo2' esta DOS lineas mas
+# abajo, asi que buscarla no detecta el pegamento (§qwen r1 PR #88).
+grep -q 'summonaikit-gate END- insert' "$dsh_patch" && malo "splice pego la marca END a la primera linea ajena posterior"
 rm -f "$pre" "$post"
 
 caso "dsh: --dry-run sobre hook AU AL DIA (NUESTRO_IDENTICO) NO toca plugin/patch"
@@ -1942,6 +1946,34 @@ out="$(host_dsh 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] || malo "dir de plugin ajeno deberia hacer fallar (DESCONOCIDO), dio 0: $out"
 [ "$(cat "$dsh_plugin/package.json")" = '{"name":"otro-plugin","version":"1.0"}' ] || malo "se toco el package.json ajeno"
 [ "$(cat "$dsh_plugin/index.js")" = 'ajeno' ] || malo "se toco el index.js ajeno"
+# HIGH grok/qwen r1 PR #88: el fallo del plugin NO debe publicar el patch (que
+# quedaria apuntando al plugin ajeno/inexistente) ni dejar el hook instalado.
+[ ! -e "$dsh_patch" ] || malo "el fallo del plugin dsh publico el patch (cableado a un plugin ajeno)"
+[ ! -e "$dest" ] || malo "el fallo del plugin dsh dejo el hook instalado (sin rollback)"
+
+caso "dsh: dir de plugin existente SIN package.json (ajeno) NO se pisa"
+nuevo_home_dsh
+# Un dir con archivos pero sin package.json: no lleva marcador, es de otro o
+# quedo a medio instalar; NO se debe escribir dentro (M4/qwen r1 PR #88).
+mkdir -p "$dsh_plugin"
+printf 'ajeno-index\n' > "$dsh_plugin/index.js"
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "dir sin package.json deberia hacer fallar (DESCONOCIDO), dio 0: $out"
+[ "$(cat "$dsh_plugin/index.js")" = 'ajeno-index' ] || malo "se sobrescribio el index.js ajeno de un dir sin package.json"
+
+caso "dsh: fallo del plugin en install FRESCO NO publica el patch ni deja el hook (HIGH grok/qwen r1 PR #88)"
+nuevo_home_dsh
+# El dir del plugin es ajeno: el plugin falla; el hook esta AUSENTE (fresh).
+mkdir -p "$dsh_plugin"
+printf -- '{"name":"otro-plugin","version":"1.0"}\n' > "$dsh_plugin/package.json"
+printf 'ajeno\n' > "$dsh_plugin/index.js"
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "install con plugin ajeno deberia fallar, dio 0: $out"
+# HIGH grok/qwen: el fallo del plugin NO debe publicar el patch (quedaria
+# apuntando al plugin ajeno/inexistente) ni dejar el hook instalado a medias.
+[ ! -e "$dsh_patch" ] || malo "el fallo del plugin publico el patch (cableado a plugin ajeno/inexistente)"
+[ ! -e "$dest" ] || malo "el fallo del plugin dejo el hook instalado sin rollback"
+[ "$(cat "$dsh_plugin/package.json")" = '{"name":"otro-plugin","version":"1.0"}' ] || malo "el rollback toco el package.json ajeno"
 
 caso "dsh: repara hook y plugin viejos con backup"
 nuevo_home_dsh

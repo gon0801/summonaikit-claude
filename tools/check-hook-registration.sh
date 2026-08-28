@@ -139,7 +139,7 @@ fi
 parch_dsh() {
   [ "$VIO_DSH" -gt 0 ] || return 0
   local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch
-  local p_start p_end bloque roles rol n_roles falla=0
+  local p_start p_end bloque rol n_roles rebanada falla=0
   hook="$home/hooks/summonaikit-harness.sh"
   ddir="$home/plugins/summonaikit-dsh-gate"
   patch="$home/cordis.patch.yml"
@@ -187,17 +187,40 @@ parch_dsh() {
         reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook)."; falla=1; }
       printf '%s' "$bloque" | grep -qE 'bash: ' || {
         reportar "[summonaikit] PATCH DE DSH: falta la config bash: del plugin."; falla=1; }
-      # Cada rol: un `- id: subagent_<rol>` con toolName y persona: propios.
+      # Cada rol: un bloque `- id: subagent_<rol>` con name:, toolName: y persona:
+      # PROPIOS. Se recorta la rebanada del rol (hasta el proximo '- id:' o la
+      # marca END) para no cruzar personas de otros roles (M2/qwen r1 PR #88):
+      # antes se gripeaba todo el bloque, asi que UNA persona bastaba para los 4.
       for rol in implementer verifier reviewer adversary; do
+        # rebanada = lineas desde `- id: subagent_<rol>` hasta la siguiente
+        # `- id:` (o el final del bloque). awk con estado: dentro=1 al ver el id
+        # del rol; se corta en la siguiente linea con el patron `- id:`.
+        rebanada="$(printf '%s' "$bloque" | awk -v r="$rol" '
+          /^[[:space:]]*-[[:space:]]id: subagent_/ {
+            if (dentro) exit                 # siguiente id del rol => fin de esta rebanada
+            if ($0 ~ ("subagent_" r "$")) dentro=1   # es EL rol buscado
+            next
+          }
+          /^[[:space:]]*-[[:space:]]id: / { if (dentro) exit; next }
+          dentro { print }
+        ')"
+        # Conteo de apariciones del id del rol (para detectar duplicados).
         n_roles="$(printf '%s' "$bloque" | grep -c "^[[:space:]]*-[[:space:]]id: subagent_$rol$")"
         if [ "$n_roles" -eq 0 ]; then
-          reportar "[summonaikit] PATCH DE DSH: falta la persona subagent_$rol."; falla=1
-        else
-          printf '%s' "$bloque" | grep -qE "toolName: subagent_$rol" || {
-            reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin toolName."; falla=1; }
-          printf '%s' "$bloque" | grep -q "persona: |-" || {
-            reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin persona."; falla=1; }
+          reportar "[summonaikit] PATCH DE DSH: falta la persona subagent_$rol."; falla=1; continue
         fi
+        if [ "$n_roles" -gt 1 ]; then
+          reportar "[summonaikit] PATCH DE DSH: subagent_$rol duplicado ($n_roles veces)."; falla=1; continue
+        fi
+        if [ -z "$rebanada" ]; then
+          reportar "[summonaikit] PATCH DE DSH: bloque de subagent_$rol vacio."; falla=1; continue
+        fi
+        printf '%s' "$rebanada" | grep -qE "name: '@deepseek-ai/dsh-tool-subagent'" || {
+          reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin name: dsh-tool-subagent."; falla=1; }
+        printf '%s' "$rebanada" | grep -qE "toolName: subagent_$rol" || {
+          reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin toolName."; falla=1; }
+        printf '%s' "$rebanada" | grep -q "persona: |-" || {
+          reportar "[summonaikit] PATCH DE DSH: subagent_$rol sin persona."; falla=1; }
       done
     fi
   fi
