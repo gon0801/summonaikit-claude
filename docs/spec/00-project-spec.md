@@ -1986,6 +1986,56 @@ negación se reconoce por vocabulario (`0|no|sin|without|zero|cero|none|ningun`)
 del comando que sea la palabra a secas (`pytest -k error, 2 passed`) también:
 ambos bloquean un recibo legítimo — declarados, no medidos en vivo.
 
+## Host dsh (Phase 15) — DeepSeek Harness
+
+`@deepseek-ai/dsh@0.1.1-rc.2` es una app de **plugins cordis** (no tiene hooks de
+shell). Su superficie de extensión es un plugin JS compuesto en el árbol del
+profile. La fase 15 porta el gate como:
+
+- **Adaptador `@summonaikit/dsh-gate`** (`hosts/dsh/`, ESM sin build). Traduce 4
+  eventos de dsh al contrato que el hook bash ya entiende y ejecuta el hook con
+  `SUMMONAIKIT_HOOK_TARGET=dsh` (D1: una sola fuente de verdad — las reglas son
+  las del hook; el adaptador es un port delgado + fail-open).
+
+| dsh | El adaptador toma | Manda al hook | Con la respuesta |
+|---|---|---|---|
+| `agent/session-start` | `SessionId`, cwd | `SessionStart` | nada (siembra/limpia estado) |
+| `agent/pre-step` (lote con `UserMessage`) | el texto del usuario | `UserPromptSubmit {prompt}` | si hay `additionalContext` (contrato al armar con `-saikit`), lo agrega al lote; si no, devuelve el lote intacto |
+| `tools/result` de `subagent` | `arguments`, `result` | `PostToolUse {tool_name:"Task", tool_input:{subagent_type, description}}` | nada (el hook registra `agents_seen`) |
+| `agent/turn-stopping` | último texto del asistente | `Stop {last_assistant_message}` | `decision:"block"` + feedback → `agent.followup`; sin bloqueo → cierra |
+
+- **Fail-open (D3).** `runHook` nunca traba dsh por un error propio: hook ausente,
+  bash ausente, timeout, salida no-JSON → se registra (`ctx.logger.warn`) y se
+  deja pasar. La única excepción al fail-open es el instalador.
+- **Personas inline (D4, corregido por medición).** dsh **no** tiene archivos de
+  persona: la persona es `config.persona` (texto) aplicada al systemPrompt del
+  hijo, y el tool `subagent` solo toma `{description, prompt, run_in_background?}`
+  (medido en 15.1). Por eso los 4 roles se instalan como **4 instancias
+  `@deepseek-ai/dsh-tool-subagent`**, cada una con `toolName: subagent_<rol>` y
+  `config.persona` = cuerpo (frontmatter stripped) de `agents/<rol>.md`. La marca
+  de propiedad del kit es el **bloque del patch** que el instalador posee.
+- **Composición a nivel home (D5).** El plugin se compone en
+  `<dsh-home>/cordis.patch.yml` entre marcas propias. dsh no se registra por
+  archivo de hooks; el **verificador** `check-hook-registration.sh --dsh-home`
+  afirma hook (existe + marcador), plugin (4 archivos) y el bloque del patch
+  (id del gate + `name:` del plugin + `hook:` + 4 roles con `persona:`).
+- **Ruteo (D6).** Fila `dsh` vacía en `tools/model-routing.sh`: el subagente
+  hereda el modelo de la sesión. El `effort-key` de dsh es `effort`.
+
+### Límites declarados de dsh
+
+- dsh es `0.1.1-rc.2` (release candidate): sus eventos y config pueden moverse
+  entre versiones. El instalador **reporta** (no aborta) si la versión de dsh
+  difiere de `summonaikit.measuredAgainst`.
+- **`unknown` (medido 15.1, no observado en vivo):** la forma exacta del
+  `source:{kind:"plugin"}` visto por el validador de sesión; el `transcript_path`
+  (el JSONL de sesión está comprimido con zstd — el gate juzga solo
+  `last_assistant_message`); el modelo por rol (fila del router vacía); **la
+  ceguera NO se declara** — el canal interno de dsh (tools/*) deja rastro, así
+  que `saikit_host_ciego()` no cambia (D7).
+- **Fuera de alcance:** `headless`/`tui`; el shim `deepseek` (ya cubierto por
+  Claude Code); reglas nuevas del gate.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

@@ -32,7 +32,8 @@ denial channel (no host registers `PreToolUse`): everywhere, the lock is
 post-hoc detection plus a block at the turn's Stop, not a preventive guard.
 
 - **Hosts where your inner tool events carry your identity** (measured in
-  claude, grok, codex): the harness hook watches the edits attributed to you,
+  claude, grok, codex; dsh — by adapter design, **not yet measured live, see
+  below**): the harness hook watches the edits attributed to you,
   compares each `file_path` against `.saikit/findings/` after resolving `..`,
   absolute paths, and symlinks — and if `.saikit/findings/` itself turns out to
   be a symlink, that counts as broken setup, not a permitted path, no matter
@@ -45,6 +46,12 @@ post-hoc detection plus a block at the turn's Stop, not a preventive guard.
   out and resets its state), so re-closing the same turn stays blocked no
   matter what the receipt says next. An attempt costs the whole turn it
   happened in.
+  - **dsh (Phase 15):** el adaptador `@summonaikit/dsh-gate` corre los
+    `tools/result` del hijo sobre la sesión de la MADRE con `agent_type:<rol>`
+    (Gap1), así que tus edits internos **se atribuyen** y el candado anti-fuga
+    de `.saikit/findings/` es aplicable en principio. **Pendiente de medir
+    en vivo (15.5):** no hay aún un turno real de dsh capturado; hasta entonces
+    esto es `unknown` y el candado no se declara verificado.
 - **Hosts where your inner tool events are NOT observed** (kimi —
   `not_observed` in the 0.34.0 hook capture; zcode — `unknown`): no per-edit
   lock can fire, and this profile does not pretend otherwise. What DOES run
