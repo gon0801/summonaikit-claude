@@ -77,17 +77,17 @@ else
 fi
 
 caso "la fila 14.3 del ledger (Plans.md o su archivo) usa el timestamp Windows-safe (sin ':' en el comando)"
-ledger_files=""
-[ -r "$plans" ] && ledger_files="$plans"
-[ -r "$archivo" ] && ledger_files="$ledger_files $archivo"
-if [ -n "$ledger_files" ]; then
-  # shellcheck disable=SC2086  # lista de rutas sin espacios, a proposito
-  if cat $ledger_files | grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ'; then
+ledger_files=()
+[ -r "$plans" ] && ledger_files+=("$plans")
+[ -r "$archivo" ] && ledger_files+=("$archivo")
+# Array, no string: un checkout en una ruta con espacios partiria la lista
+# (cross-review codex, PR #95, hallazgo 8).
+if [ "${#ledger_files[@]}" -gt 0 ]; then
+  if cat "${ledger_files[@]}" | grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ'; then
     malo "el ledger (fila 14.3) enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
   fi
   # (CodeRabbit, PR #72) ademas de rechazar la forma insegura, exigir la segura.
-  # shellcheck disable=SC2086
-  cat $ledger_files | grep -Fq 'date -u +%Y%m%dT%H%M%SZ' || malo "el ledger (fila 14.3, Plans.md o docs/plans-archivo.md) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
+  cat "${ledger_files[@]}" | grep -Fq 'date -u +%Y%m%dT%H%M%SZ' || malo "el ledger (fila 14.3, Plans.md o docs/plans-archivo.md) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
 else
   echo "  UNKNOWN: no se puede leer Plans.md ni docs/plans-archivo.md" >&2; unknown=1
 fi

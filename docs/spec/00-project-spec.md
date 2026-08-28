@@ -2095,43 +2095,65 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    que el líder baje el carril desde el recibo (Core Rule 3).
 2. **Sin recetario no hay menú, y una receta se ofrece solo si su hash
    coincide.** El hook lee `<dir-del-hook>/recetas/MANIFEST.sha256` (override
-   `SAIKIT_RECETAS_DIR` para el lab) y ofrece únicamente las recetas cuyo
-   sha256 instalado coincide con el manifiesto; ausente, distinta o con
-   frontmatter roto ⇒ omitida con aviso (fail-open del turno, fail-closed de
-   la receta). El contrato **no imprime rutas** (la línea base golden se graba
-   en un tmpdir distinto por corrida). Sin manifiesto ⇒ línea fija y el turno
-   sigue como hoy. Primera ola: host `claude`.
+   `SAIKIT_RECETAS_DIR` para el lab; columna `tipo` = `receta` | `lider`) y
+   ofrece únicamente las recetas de `tipo: receta` cuyo sha256 instalado
+   coincide con el manifiesto; `00-lider.md` se verifica por hash y se
+   referencia, nunca se ofrece. Ausente o distinta ⇒ omitida con aviso
+   (fail-open del turno, fail-closed de la receta); la validez del
+   frontmatter la garantiza el generador del manifiesto (corre el linter), no
+   el runtime. El contrato **no imprime rutas** (la línea base golden se graba
+   en un tmpdir distinto por corrida). `recetas/**` va con `eol=lf` en
+   `.gitattributes` para que el hash sea el mismo en Windows y Linux. Sin
+   manifiesto ⇒ línea fija y el turno sigue como hoy. Primera ola: host
+   `claude`. Los alias `-saikit:pregunta` / `-saikit:boceto` bajan el carril
+   **y nombran su receta** (`investigar` / `boceto`); el contrato lo dice.
 3. **Autorización del autopilot = una llave humana + una config versionada.**
    El sentinel `-saikit:autopilot` (la única llave independiente del modelo) y
    `.saikit/autopilot.json` con `merge: true` y `merge_despliega` distinto de
-   `unknown`, **leído SOLO de `origin/<rama>`** (nunca del working tree ni del
-   head del PR); un PR que toque ese archivo nunca se auto-mergea. Límite
+   `unknown`, **leída SOLO de `origin/<rama>` tras `git fetch`** (nunca del
+   working tree ni del head del PR); un PR que toque ese archivo nunca se
+   auto-mergea. Lo que el usuario autorizó ahí (el merge, el deploy que
+   dispara si `merge_despliega: true`, el aviso si `telegram: true`) queda
+   como excepción escrita de la regla de preguntar del contrato. Límite
    declarado: el modelo tiene `Write` y `gh`; lo que impide la
    auto-autorización en el mismo turno es esa lectura + `protected_branch_push:
-   deny`, no una barrera criptográfica. Un PR a la vez por repo.
+   deny`, no una barrera criptográfica. Un PR a la vez por repo (lock en
+   `git-common-dir`, compartido por worktrees).
 4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
    declarada al fail-open (la primera es el instalador): mergear no admite
    "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
-   config.rama`, `headRefOid == sha del veredicto`; nunca argumento libre.
-   Precondiciones observadas, todas: PR mergeable; CI del head concluido en
-   `success` ("sin checks" ≠ verde); veredicto `.saikit/veredictos/<sha>.json`
-   para ESE sha con `verifier: PASS`, `blast.nivel ≥ 4`, `reviewer: clean`,
-   `verify_app: PASS|n/a`; **cruce con el estado del hook de la sesión**
-   (`reviewer` en `agents_seen`, `Write` del veredicto atribuido al rol
-   reviewer, comando del blast en `harness-evidence.log` con éxito) — por eso
-   el merge corre DENTRO del turno armado, antes del recibo; `git log
-   origin/<rama>..HEAD` solo commits de la task. Merge por `gh pr merge
-   --squash --match-head-commit <sha>` **sin `--delete-branch`** (falla tras
-   mergear cuando master vive en otro worktree); la rama remota se borra
-   aparte. Nunca `--admin` ni force. Cualquier `unknown` ⇒ no mergea y nombra
-   cuál. El veredicto lo escribe el reviewer con `sha = HEAD` **después** de
-   que el líder commiteó todo (incluido el rastro); un commit posterior = SHA
-   nuevo = veredicto nuevo.
+   config.rama`, `headRefOid == sha del veredicto`, autor del PR = la cuenta
+   de gh; nunca argumento libre. Precondiciones observadas, todas: `git fetch
+   origin <rama>` y la rama al día con la base (`merge-base --is-ancestor`;
+   si no, "base vieja": merge de master en la rama y CI de nuevo); PR
+   mergeable (`UNKNOWN` diferido de GitHub ⇒ un reintento; sigue `UNKNOWN` ⇒
+   no merge); CI del head concluido en `success` ("sin checks" ≠ verde);
+   veredicto `.saikit/veredictos/<sha>.json` para ESE sha con `verifier:
+   PASS`, `blast.nivel ≥ 4`, `reviewer: clean`, `verify_app: PASS` con comando
+   bajo `verify/` (la suite unitaria no cuenta) o `n/a` solo con
+   `sin_verify_app: true`; **sello del hook**: en el `Write` del reviewer
+   sobre `veredictos/` el hook registra `veredicto_sha256` del contenido, y el
+   script exige que el archivo actual tenga ese hash (cualquier escritura
+   posterior lo invalida) además de `reviewer` en `agents_seen` y del comando
+   del blast en `harness-evidence.log` con éxito — por eso el merge corre
+   DENTRO del turno armado, antes del recibo; `git log origin/<rama>..HEAD`
+   no vacío y solo con commits del `user.email` local o de la cuenta de gh.
+   Merge por `gh pr merge --squash --match-head-commit <sha> --body
+   "Saikit-Merge: <sha>"` (el trailer sella el squash) **sin
+   `--delete-branch`** (falla tras mergear cuando master vive en otro
+   worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
+   Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
+   reviewer con `sha = HEAD` **después** de que el líder commiteó todo
+   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo.
 5. **La protección de rama de GitHub no está disponible** en este repo
-   (privado, plan free: 403 medido 2026-08-28): el script ES la protección;
-   `protected_branch_push: deny` sigue vigente. Hacer público el repo la
-   habilitaría: alternativa rechazada aquí por ser decisión de visibilidad del
-   operador, no de este plan.
+   (privado, plan free: 403 medido 2026-08-28). El script es la **vía
+   sancionada del merge, no "la protección"**: el gate es advisory y el modelo
+   tiene `gh`, así que un `gh pr merge` a pelo se lo salta — límite declarado
+   de la misma clase que un recibo falso; la 18.11 (Recommended) mide si un
+   `PreToolUse` de Claude Code puede negarlo. `protected_branch_push: deny`
+   sigue vigente. Hacer público el repo habilitaría la protección: alternativa
+   rechazada aquí por ser decisión de visibilidad del operador, no de este
+   plan.
 6. **Post-merge (turno desarmado)**: se localiza el run de CI por el
    `merge_commit` que el propio script registró; sin run ⇒ `unknown` con
    espera acotada, timeout ⇒ `unknown` sin revert; `salud_url` solo http(s),
@@ -2139,11 +2161,14 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    `-m`) SOLO del merge propio, y el PR de revert se mergea con
    `saikit-merge.sh --revert-de <merge_commit>`: un **modo con precondiciones
    propias** — el turno desarmado ya no tiene el estado del hook que exige la
-   regla 4 — que exige `merge_commit` registrado por el propio script, diff
-   del PR **exactamente el inverso** del `merge_commit` (comparado por
-   `patch-id`), ningún otro commit, `baseRefName == rama`, CI del head del
-   revert en `success` y `--match-head-commit`; no exige reviewer, blast ni
-   estado de sesión (es la inversa mecánica de algo ya revisado). Fail-closed:
+   regla 4 — que **no confía en ningún JSON local**: exige que
+   `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git fetch`
+   (si algo aterrizó después, no revierte: reporta), que lleve el trailer
+   `Saikit-Merge:` que solo pone la regla 4, diff del PR **exactamente el
+   inverso** del `merge_commit` (comparado por `patch-id`), ningún otro
+   commit, `baseRefName == rama`, CI del head del revert en `success` y
+   `--match-head-commit`; no exige reviewer, blast ni estado de sesión (es la
+   inversa mecánica de algo ya revisado). Fail-closed:
    cualquier `unknown` ⇒ no mergea el revert y avisa al usuario que la rama
    está roja y cómo revertir a mano. Una vez (un revert rojo se reporta). El
    usuario recibe un mensaje en español desde el `Close:` redactado: qué
@@ -2154,9 +2179,13 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    autopilot lo dice y no mergea.
 8. **El Stop gate no gana checks nuevos** en estas fases: el control del merge
    es el script; los artefactos (veredicto, blast, rastro) son datos que el
-   reviewer adjudica y el script lee. `veredictos/`, `findings/` y el lock son
-   gitignored; `decisiones/` se commitea (es evidencia del PR) y se redacta
-   con los patrones del hook más las formas de token conocidas.
+   reviewer adjudica y el script lee. El hook solo gana **registro de estado**
+   (`veredicto_sha256` en el `Write` del reviewer; la familia de patrones de
+   redacción extendida con `ghp_`/`github_pat_`/`gho_`/`sk-`/`AKIA`/`xox`),
+   nunca bloqueo nuevo. `veredictos/`, `findings/` y el lock son gitignored;
+   `decisiones/` se commitea (es evidencia del PR) y se redacta con
+   `tools/lib/redactar.sh` (patrones del hook + formas de token), el mismo
+   helper que redacta la `salida` del blast.
 
 **Límites declarados.** El gate sigue advisory: el modelo puede escribir un
 veredicto falso; el script verifica forma y CI, no verdad — el CI es lo
