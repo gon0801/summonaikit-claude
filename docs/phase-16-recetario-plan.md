@@ -726,7 +726,15 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       decir "[summonaikit] recetario: ajeno, intacto: $f"
     fi
   done
-  [ "$DRY_RUN" -eq 0 ] && rm -f "$1/recetas/MANIFEST.sha256"
+  # El manifiesto no lleva marca: solo se borra si es byte a byte el NUESTRO
+  # (Greptile, PR #97: uno ajeno o editado se reporta y se deja).
+  if [ -f "$1/recetas/MANIFEST.sha256" ]; then
+    if cmp -s "$1/recetas/MANIFEST.sha256" "$repo/recetas/MANIFEST.sha256"; then
+      [ "$DRY_RUN" -eq 0 ] && rm -f "$1/recetas/MANIFEST.sha256"; decir "[summonaikit] recetario: quitado el manifiesto"
+    else
+      decir "[summonaikit] recetario: manifiesto distinto del nuestro, intacto: $1/recetas/MANIFEST.sha256"
+    fi
+  fi
   return 0
 }
 ```
