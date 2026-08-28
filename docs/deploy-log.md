@@ -27,7 +27,22 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   `ln -s` no crea symlinks) y la entrada del patch en `~/.dsh/cordis.patch.yml`
   (bloque entre marcas: `name: '@summonaikit/dsh-gate'`, `hook:`/`bash:` en forma
   Windows `C:/...`, + las 4 personas `subagent_<rol>` inline).
-- **Verificación del lead (2026-08-28, sesión claude; sin re-desplegar):** hook
+- **Deploy — claude/codex/grok + perfiles (2026-08-28 00:19, lead; Greptile
+  del PR #93 lo reclamó: el hook cambió en la fase y los vivos seguían en el
+  sha del #81):** `install-hook.sh` REPARÓ `~/.claude/hooks` (backup
+  `saikit-backups/summonaikit-harness.sh.nuestro.20260828-001911.bak`),
+  `--host codex` REPARÓ `~/.codex/hooks` (`…-001916.bak`), `--host grok`
+  REPARÓ `~/.grok/hooks` (`…-001923.bak`). `cmp` byte a byte contra la fuente
+  (== `master` `d05284d`): **IDÉNTICO los tres**, sha
+  `e563fe8064d5425e80a0013b61725066187f6dcfb66bad7afa709d2df19d1b7c`.
+  Perfiles: `adversary.md` (fila dsh en la tabla por host, 15.5) REPARADO en
+  `~/.claude/agents`, `~/.zcode/agents`, `~/.grok/agents`, `~/.agents/agents`
+  (kimi); zcode re-REGISTRADO (4 fases, backup
+  `config.json.zcode.20260828-001935.bak`). `verifier` ajeno de grok intacto
+  (DESCONOCIDO — no se tocó). `check-hook-registration.sh`: **SILENCIO** en
+  sus cinco formas (claude settings + local, `--codex-hooks-json`,
+  `--grok-hooks-dir`, `--zcode-config`, `--dsh-home`), re-corrido y citado.
+- **Verificación del lead de dsh (2026-08-28, sesión claude; sin re-desplegar dsh):** hook
   `~/.dsh/hooks/…` == `master` byte a byte; los 3 JS del plugin == `master`
   (solo CRLF); `check-hook-registration.sh --dsh-home ~/.dsh` → **SILENCIO**,
   re-corrido y citado; `dsh --profile web --dump-config` compone
