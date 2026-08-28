@@ -71,8 +71,11 @@ determinista en `$LAB/hooks/recetas`). **El contrato NO imprime la ruta** —
 en el lab y en golden el hook se copia a un tmpdir distinto por corrida, y una
 ruta absoluta rompería la línea base. Imprime solo el menú
 (`nombre — título — carril`) o la línea fija "sin recetario en este host". El
-menú sale de **`recetas/MANIFEST.sha256`** (una línea por archivo:
-`sha256  tipo  nombre  carril  título`, con `tipo` = `receta` | `lider`),
+menú sale de **`recetas/MANIFEST.sha256`** (una línea por archivo, **campos
+separados por TAB** en este orden: `sha256`, `tipo`, `nombre`, `carril`,
+`titulo`; el título va al final y puede llevar espacios pero nunca TAB ni
+salto de línea — el linter lo rechaza; `tipo` = `receta` | `lider`; el
+formato se ata con un caso de contrato con título de varias palabras),
 generado en el repo por `tools/gen-recetas-manifest.sh`, que **corre el mismo
 linter** antes de incluir un archivo (un frontmatter roto no entra al
 manifiesto: la validez del frontmatter se garantiza en generación, no en
@@ -111,7 +114,7 @@ qué cambia para él, luego cómo, luego por qué), **Recibo** (qué va en
 frontmatter (`tipo: lider`) y secciones propias, y el linter lo valida con
 sus propias reglas. El linter `tests/test_recetas.sh` exige frontmatter
 completo, tope de líneas, carril válido, links que resuelven, tolera CRLF en
-lectura, y **rechaza términos prohibidos** (`gt `, `Graphite`, `Bugbot`,
+lectura, y **rechaza términos prohibidos** (`gt` seguido de espacio, `Graphite`, `Bugbot`,
 `AskQuestion`, `/loop` de Cursor, `poteto`) con un fixture rojo — así el
 `[tdd:required]` de una receta discrimina contenido, no solo forma.
 
@@ -331,8 +334,9 @@ después del reviewer?"). Sin excepción por `patch-id` en la primera ola.
 **D17 — Receta `cuidar-pr`** (de `babysit` + `bugbot-triage`): declarar el modo
 (revisar / cuidar / solo-hilos); orden conflictos → hilos → CI; clasificar un
 CI rojo antes de reintentar (flake → un build fresco y solo uno; base vieja →
-merge de master en la rama, memoria `rebase-choca-en-deploy-log-usar-merge`;
-bug real → commit); triage de Greptile/CodeRabbit con la rúbrica
+merge de `config.rama` en la rama, memoria
+`rebase-choca-en-deploy-log-usar-merge`; bug real → commit); triage de
+Greptile/CodeRabbit con la rúbrica
 fix / dismiss / ask y patrones aprendidos en `.saikit/triage-patrones.md`;
 esperas SIN bloquear (Monitor + heartbeat largo, nunca un segundo sleep loop;
 antes de esperar, checar si ya terminó); tope 2 rondas; **cuidar nunca
@@ -347,9 +351,10 @@ view --json number,baseRefName,headRefOid,author,mergeable`); exige
 la cuenta de gh` (el PR lo abrió el propio flujo; no se juzga el autor de los
 commits). Precondiciones, TODAS observadas: `git fetch origin <rama>` hecho y
 **la rama al día con la base** (`git merge-base --is-ancestor origin/<rama>
-<head>`; si no: "base vieja ⇒ merge de master en la rama y CI de nuevo", como
-en `cuidar-pr` — `--match-head-commit` fija el head, no la base, hallazgo de
-codex); PR `mergeable` (si GitHub devuelve `UNKNOWN`, que lo calcula en
+<head>`; si no: "base vieja ⇒ merge de `config.rama` en la rama y CI de
+nuevo", como en `cuidar-pr` — `--match-head-commit` fija el head, no la base,
+hallazgo de codex; 18.4 prueba también una config con `rama: main`); PR
+`mergeable` (si GitHub devuelve `UNKNOWN`, que lo calcula en
 diferido, se reintenta UNA vez tras unos segundos; sigue `UNKNOWN` ⇒ no
 merge; 18.1 mide la frecuencia real); CI del head concluido en `success`
 (`gh pr checks` + run del workflow; "no hay checks" ≠ verde; forma real medida
@@ -371,8 +376,12 @@ local y hacer checkout de la default, que falla cuando master vive en otro
 worktree (flujo de este repo) DESPUÉS de haber mergeado; la rama remota se
 borra como paso aparte e idempotente (`git push origin --delete <rama>`), y
 "merge ok + borrado falla" se reporta sin reintentar el merge. Nunca
-`--admin`, nunca force. Cualquier `unknown` ⇒ no mergea y dice cuál. El
-script registra `merge_commit` en el veredicto. 18.1 mide además si `gh pr
+`--admin`, nunca force. Cualquier `unknown` ⇒ no mergea y dice cuál. **El
+veredicto sellado no se toca nunca después del sello**: el script registra el
+`merge_commit` en un archivo aparte, `.saikit/veredictos/<sha>.merge`
+(hallazgo de CodeRabbit: escribirlo dentro del veredicto invalidaba el propio
+`veredicto_sha256`), y D19 de todos modos no confía en ese archivo — lo
+confirma contra `origin/<rama>` y el trailer. 18.1 mide además si `gh pr
 merge` pasa el runtime floor sin prompt humano: un autopilot que pide
 confirmación en cada merge no es autopilot.
 **La protección de rama de GitHub no está disponible en este repo** (privado,
@@ -397,8 +406,13 @@ saber qué se puede revertir (hallazgo de codex y grok: `merge_commit` era
 plantable): exige que `<merge_commit>` sea **la punta actual de
 `origin/<rama>`** tras `git fetch` (si algo aterrizó después, no revierte:
 reporta), que su mensaje lleve el trailer `Saikit-Merge:` que solo pone D18,
-que el diff del PR de revert sea **exactamente el inverso** del
-`merge_commit` (comparado por `patch-id`), que no traiga ningún otro commit,
+que el revert sea **exactamente el inverso** del `merge_commit` — se
+comprueba por **igualdad exacta de árboles**: `git rev-parse
+<head-del-revert>^{tree}` == `git rev-parse <merge_commit>^^{tree}` (el árbol
+que había antes del merge); `patch-id` queda solo como comprobación adicional,
+porque ignora cambios de espacios en blanco (hallazgo de CodeRabbit; caso:
+un revert con un cambio extra de whitespace se rechaza) —, que no traiga
+ningún otro commit,
 `baseRefName == rama`, CI del head del revert en `success`, y
 `--match-head-commit`; NO exige reviewer, blast ni estado de sesión (es la
 inversa mecánica de algo ya revisado). Sigue fail-closed: cualquier `unknown`
@@ -408,10 +422,18 @@ re-revierte). Mensaje al usuario en español (qué aterrizó, qué cambia para �
 cómo deshacerlo) armado desde el `Close:` ya redactado, ≤ 4096 chars;
 `telegram-send` solo con `telegram: true` en la config.
 
-**D20 — En serie.** Un PR a la vez por repo: el lock vive en
-`$(git rev-parse --git-common-dir)/saikit-autopilot.lock` — compartido por
-todos los worktrees del mismo repo (hallazgo de codex: un lock por worktree
-dejaba mergear en paralelo). Los PRs en paralelo chocan con la memoria
+**D20 — En serie, con protocolo de lock definido.** Un PR a la vez por repo:
+el lock vive en `$(git rev-parse --git-common-dir)/saikit-autopilot.lock` —
+compartido por todos los worktrees del mismo repo (hallazgo de codex: un lock
+por worktree dejaba mergear en paralelo). Protocolo (hallazgo de CodeRabbit:
+"ruta" no es "protocolo"): **adquisición atómica por `mkdir`** del directorio
+de lock (atómico en MSYS/Windows y Linux; sin `flock`, que no es portable),
+que contiene `pid`, `host`, `started_at` y `pr`; **liberación** por `rmdir`
+en un `trap EXIT` del script; **lock viejo** = su `pid` no vive en este host
+o `started_at` supera N horas ⇒ el script lo **reporta y no mergea**
+(fail-closed; nunca lo borra solo); `--liberar-lock` explícito lo quita tras
+mostrar su contenido. Caso de contención con dos worktrees del mismo repo en
+18.7. Los PRs en paralelo chocan con la memoria
 `worktree-compartido-entre-workers`; quedan para una ola posterior.
 
 **D21 — Contrato.** Párrafo "autopilot" (qué hará solo; qué NUNCA: force-push,
@@ -440,14 +462,23 @@ si `gh repo view` muestra el topic y el marcador**, o a mano por el operador
 `PreToolUse` (lo que el spec dice es que *nuestro hook* no está registrado
 ahí en ningún host). Medir primero que un `PreToolUse` con `decision: deny`
 detiene un `Bash` cuyo comando matchea `gh pr merge` / `gh api … /merge` /
-`git push … :<rama>` que no venga de `tools/saikit-merge.sh` (variable de
-entorno de marca que el script exporta, verificada en el evento). Si la
-medición confirma el deny: registrar la fase en `settings.json` (el checker
-`check-hook-registration.sh` pasa de 3 fases a 4, advisory), con caso que
-niega y caso que deja pasar al script, mutación y golden. Si no confirma: se
-declara el límite y se cierra la task con `unknown`. Es Recommended, no
-Required: el autopilot funciona sin ella; lo que cambia es cuánto del límite
-"el modelo puede mergear a pelo" queda cerrado en Claude Code.
+`git push … <rama>`. **La autorización del script NO puede ser una variable
+de entorno que el script exporte** — `PreToolUse` corre ANTES de que el
+comando exista, así que esa marca nunca está en el evento (hallazgo de
+CodeRabbit). La regla es por **forma canónica del comando**: el hook deja
+pasar únicamente un `tool_input.command` que invoque `tools/saikit-merge.sh`
+(o su ruta instalada) y cuyo archivo, leído en ese momento, tenga el sha256
+del manifiesto del kit; cualquier otra forma que contenga las órdenes de
+merge se niega con razón. Límite declarado: es un match de texto sobre el
+comando — un `gh` escondido dentro de otro archivo no es visible; cierra el
+camino directo, no todos. Si la medición confirma el deny: registrar la fase
+en `settings.json` (el checker `check-hook-registration.sh` pasa de 3 fases a
+4, advisory), con caso que niega el directo, caso que deja pasar al script
+con hash correcto, caso que niega al script con hash distinto, mutación y
+golden. Si no confirma: se declara el límite y se cierra la task con
+`unknown`. Es Recommended, no Required: el autopilot funciona sin ella; lo
+que cambia es cuánto del límite "el modelo puede mergear a pelo" queda
+cerrado en Claude Code.
 
 ---
 

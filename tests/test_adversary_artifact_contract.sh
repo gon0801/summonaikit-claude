@@ -15,11 +15,39 @@ set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
+# Los casos sinteticos de la fila 14.3 escriben fixtures en el sandbox, nunca
+# en el arbol del repo (Core Rule 4), igual que test_plans_ledger.sh.
+. "$here/lib/sandbox.sh"
+sandbox_init
 
 fail=0
 unknown=0
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 caso() { printf '  caso: %s\n' "$1"; }
+
+# fila_143 ARCHIVO... -> imprime la(s) linea(s) de la fila de tarea 14.3 de los
+# ledgers dados (una fila de tarea es UNA linea fisica, test_plans_ledger.sh lo
+# candea). Vacio si ningun ledger la trae.
+fila_143() { cat "$@" 2>/dev/null | grep -E '^\| *14\.3 '; }
+
+# chequear_fila_143 ARCHIVO... -> 0 si la fila 14.3 existe y ensena SOLO la
+# forma Windows-safe; imprime el motivo y devuelve 1 si no. Mira la FILA, no el
+# ledger entero: un ejemplo seguro suelto en otra fila o en un apendice no
+# puede dar por buena una 14.3 ausente o insegura (CodeRabbit, PR #95).
+chequear_fila_143() {
+  local fila
+  fila="$(fila_143 "$@")"
+  if [ -z "$fila" ]; then
+    echo "la fila 14.3 no existe en el ledger"; return 1
+  fi
+  if printf '%s\n' "$fila" | grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ'; then
+    echo "la fila 14.3 ensena como comando un timestamp con dos puntos (invalido en un filename de Windows)"; return 1
+  fi
+  if ! printf '%s\n' "$fila" | grep -Fq 'date -u +%Y%m%dT%H%M%SZ'; then
+    echo "la fila 14.3 no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"; return 1
+  fi
+  return 0
+}
 
 perfil="$repo/agents/adversary.md"
 reviewer="$repo/agents/reviewer.md"
@@ -76,18 +104,43 @@ else
   echo "  UNKNOWN: no se puede leer agents/reviewer.md" >&2; unknown=1
 fi
 
-caso "la fila 14.3 del ledger (Plans.md o su archivo) usa el timestamp Windows-safe (sin ':' en el comando)"
+# ---------------------------------------------------------------- sinteticos
+# El detector se ejercita contra fixtures del sandbox ANTES de mirar el ledger
+# real: sin estos casos, un `grep` sobre el ledger entero pasaba con un ejemplo
+# seguro en cualquier otra fila (CodeRabbit, PR #95).
+caso "sintetico: fila 14.3 con la forma segura => OK"
+f="$SANDBOX/ok.md"
+printf '| 14.3 | perfil con `date -u +%%Y%%m%%dT%%H%%M%%SZ` | DoD | — | cc:完了 |\n' > "$f"
+out="$(chequear_fila_143 "$f")" || malo "fila segura rechazada: $out"
+
+caso "sintetico: ledger SIN fila 14.3 pero con un ejemplo seguro suelto en otra fila => FAIL"
+f="$SANDBOX/sin-fila.md"
+printf '| 14.2 | otra fila que cita `date -u +%%Y%%m%%dT%%H%%M%%SZ` de paso | DoD | — | cc:完了 |\n' > "$f"
+if chequear_fila_143 "$f" >/dev/null; then malo "acepto un ledger sin fila 14.3 por un ejemplo seguro en otra fila"; fi
+
+caso "sintetico: fila 14.3 insegura + ejemplo seguro en un apendice => FAIL"
+f="$SANDBOX/insegura.md"
+{
+  printf '| 14.3 | perfil con `date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ` | DoD | — | cc:完了 |\n'
+  printf 'Apendice: la forma buena seria `date -u +%%Y%%m%%dT%%H%%M%%SZ`.\n'
+} > "$f"
+if chequear_fila_143 "$f" >/dev/null; then malo "acepto una fila 14.3 insegura por un ejemplo seguro fuera de la fila"; fi
+
+caso "sintetico: la fila 14.3 vive en el ARCHIVO, no en Plans.md => OK (el ledger es Plans.md + archivo)"
+f1="$SANDBOX/plans-sin.md"; f2="$SANDBOX/archivo-con.md"
+printf '| 16.1 | fila reciente | DoD | — | cc:WIP |\n' > "$f1"
+printf '| 14.3 | archivada con `date -u +%%Y%%m%%dT%%H%%M%%SZ` | DoD | — | cc:完了 |\n' > "$f2"
+out="$(chequear_fila_143 "$f1" "$f2")" || malo "no encontro la fila 14.3 en el archivo: $out"
+
+# ------------------------------------------------------------ el ledger real
+caso "la fila 14.3 del ledger real (Plans.md o su archivo) usa el timestamp Windows-safe (sin ':' en el comando)"
 ledger_files=()
 [ -r "$plans" ] && ledger_files+=("$plans")
 [ -r "$archivo" ] && ledger_files+=("$archivo")
 # Array, no string: un checkout en una ruta con espacios partiria la lista
 # (cross-review codex, PR #95, hallazgo 8).
 if [ "${#ledger_files[@]}" -gt 0 ]; then
-  if cat "${ledger_files[@]}" | grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ'; then
-    malo "el ledger (fila 14.3) enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
-  fi
-  # (CodeRabbit, PR #72) ademas de rechazar la forma insegura, exigir la segura.
-  cat "${ledger_files[@]}" | grep -Fq 'date -u +%Y%m%dT%H%M%SZ' || malo "el ledger (fila 14.3, Plans.md o docs/plans-archivo.md) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
+  out="$(chequear_fila_143 "${ledger_files[@]}")" || malo "$out (Plans.md o docs/plans-archivo.md)"
 else
   echo "  UNKNOWN: no se puede leer Plans.md ni docs/plans-archivo.md" >&2; unknown=1
 fi

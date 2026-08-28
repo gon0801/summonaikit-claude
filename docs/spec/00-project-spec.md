@@ -2117,8 +2117,10 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    como excepción escrita de la regla de preguntar del contrato. Límite
    declarado: el modelo tiene `Write` y `gh`; lo que impide la
    auto-autorización en el mismo turno es esa lectura + `protected_branch_push:
-   deny`, no una barrera criptográfica. Un PR a la vez por repo (lock en
-   `git-common-dir`, compartido por worktrees).
+   deny`, no una barrera criptográfica. Un PR a la vez por repo: lock en
+   `git-common-dir` (compartido por worktrees), adquirido con `mkdir` atómico,
+   liberado por `trap EXIT`; un lock viejo se reporta y bloquea, nunca se
+   borra solo.
 4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
    declarada al fail-open (la primera es el instalador): mergear no admite
    "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
@@ -2144,7 +2146,11 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
    Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
    reviewer con `sha = HEAD` **después** de que el líder commiteó todo
-   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo.
+   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo. El
+   veredicto sellado **no se modifica jamás**: el `merge_commit` va a un
+   archivo aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
+   contra `origin/<rama>` y el trailer, no contra ese archivo. La rama base es
+   siempre `config.rama` (probado con un valor distinto de `master`).
 5. **La protección de rama de GitHub no está disponible** en este repo
    (privado, plan free: 403 medido 2026-08-28). El script es la **vía
    sancionada del merge, no "la protección"**: el gate es advisory y el modelo
@@ -2164,9 +2170,11 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    regla 4 — que **no confía en ningún JSON local**: exige que
    `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git fetch`
    (si algo aterrizó después, no revierte: reporta), que lleve el trailer
-   `Saikit-Merge:` que solo pone la regla 4, diff del PR **exactamente el
-   inverso** del `merge_commit` (comparado por `patch-id`), ningún otro
-   commit, `baseRefName == rama`, CI del head del revert en `success` y
+   `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el inverso**
+   del `merge_commit` por **igualdad exacta de árboles** (`<head>^{tree}` ==
+   `<merge_commit>^^{tree}`; `patch-id` solo como comprobación extra, porque
+   ignora espacios en blanco), ningún otro commit, `baseRefName == rama`, CI
+   del head del revert en `success` y
    `--match-head-commit`; no exige reviewer, blast ni estado de sesión (es la
    inversa mecánica de algo ya revisado). Fail-closed:
    cualquier `unknown` ⇒ no mergea el revert y avisa al usuario que la rama
