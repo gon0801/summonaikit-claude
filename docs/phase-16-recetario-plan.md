@@ -87,8 +87,13 @@ los perfiles. Host de esta ola: `claude`.
 ```bash
 # tests/lib/recetas_lint.sh — reglas de forma de una receta (D2). Se carga con
 # `. tests/lib/recetas_lint.sh`. Sin dependencias fuera de coreutils/grep/sed.
-RECETAS_TERMINOS_PROHIBIDOS='gt |Graphite|Bugbot|AskQuestion|/loop|poteto'
+# `gt` como token independiente (CodeRabbit, PR #97: 'gt ' matcheaba 'right ').
+RECETAS_TERMINOS_PROHIBIDOS='(^|[^A-Za-z0-9_])gt([^A-Za-z0-9_]|$)|Graphite|Bugbot|AskQuestion|/loop|poteto'
 RECETAS_TOPE_LINEAS=80
+
+_rl_lineas() {  # $1=archivo → lineas LOGICAS (cuenta la ultima aunque no termine en \n; Greptile, PR #97)
+  tr -d '\r' < "$1" | awk 'END{print NR}'
+}
 
 _rl_frontmatter() {  # $1=archivo → stdout: lineas entre el 1er y 2do '---'
   tr -d '\r' < "$1" | awk 'NR==1 && $0!="---"{exit 1} NR>1 && $0=="---"{exit} NR>1{print}'
@@ -98,8 +103,8 @@ _rl_campo() {  # $1=archivo $2=clave → valor (sin comillas) o vacio
 }
 
 lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
-  local f="$1" rc=0 n tipo nombre carril titulo
-  n="$(tr -d '\r' < "$f" | wc -l | tr -d ' ')"
+  local f="$1" rc=0 n tipo nombre carril titulo base
+  n="$(_rl_lineas "$f")"
   [ "$n" -le "$RECETAS_TOPE_LINEAS" ] || { echo "supera $RECETAS_TOPE_LINEAS lineas ($n)"; rc=1; }
   _rl_frontmatter "$f" >/dev/null 2>&1 || { echo "sin frontmatter (--- en la linea 1 y cierre)"; return 1; }
   [ "$(_rl_campo "$f" saikit_owned)" = "summonaikit-claude" ] || { echo "falta saikit_owned: summonaikit-claude"; rc=1; }
@@ -107,6 +112,14 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   case "$tipo" in receta|lider) ;; *) echo "tipo invalido: $tipo"; rc=1 ;; esac
   nombre="$(_rl_campo "$f" nombre)"
   printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || { echo "nombre invalido: [$nombre]"; rc=1; }
+  # nombre == archivo (CodeRabbit, PR #97): el instalador y el hook resuelven
+  # <nombre>.md; un desfase deja una receta en el manifiesto que no existe.
+  base="$(basename "$f" .md)"
+  if [ "$tipo" = lider ]; then
+    [ "$base" = "00-lider" ] && [ "$nombre" = "lider" ] || { echo "el lider debe ser 00-lider.md con nombre: lider"; rc=1; }
+  else
+    [ "$base" = "$nombre" ] || { echo "nombre [$nombre] no coincide con el archivo [$base.md]"; rc=1; }
+  fi
   titulo="$(_rl_campo "$f" titulo)"
   [ -n "$titulo" ] || { echo "falta titulo"; rc=1; }
   printf '%s' "$titulo" | grep -q "$(printf '\t')" && { echo "el titulo lleva TAB"; rc=1; }
@@ -169,20 +182,35 @@ Understand: Receta: bug.
 EOF
 }
 
+# Nota: `buena` escribe `nombre: bug`, y el linter exige nombre == archivo, asi
+# que las fixtures que deben ser VALIDAS se llaman bug.md (en subdirs propios).
 caso "receta valida => 0"
-buena "$SANDBOX/ok.md"; lint_receta "$SANDBOX/ok.md" >/dev/null || malo "rechazo una receta valida"
+mkdir -p "$SANDBOX/ok"; buena "$SANDBOX/ok/bug.md"; lint_receta "$SANDBOX/ok/bug.md" >/dev/null || malo "rechazo una receta valida"
 
 caso "termino prohibido => 1 con motivo"
-buena "$SANDBOX/p.md"; printf 'Usa Graphite para el stack.\n' >> "$SANDBOX/p.md"
-out="$(lint_receta "$SANDBOX/p.md")" && malo "acepto 'Graphite'"; printf '%s' "$out" | grep -q prohibido || malo "motivo sin 'prohibido': $out"
+mkdir -p "$SANDBOX/p"; buena "$SANDBOX/p/bug.md"; printf 'Usa Graphite para el stack.\n' >> "$SANDBOX/p/bug.md"
+out="$(lint_receta "$SANDBOX/p/bug.md")" && malo "acepto 'Graphite'"; printf '%s' "$out" | grep -q prohibido || malo "motivo sin 'prohibido': $out"
 
 caso "carril invalido => 1"
-buena "$SANDBOX/c.md"; sed -i 's/^carril: full/carril: rapido/' "$SANDBOX/c.md"
-lint_receta "$SANDBOX/c.md" >/dev/null && malo "acepto carril: rapido"
+mkdir -p "$SANDBOX/c"; buena "$SANDBOX/c/bug.md"; sed -i 's/^carril: full/carril: rapido/' "$SANDBOX/c/bug.md"
+lint_receta "$SANDBOX/c/bug.md" >/dev/null && malo "acepto carril: rapido"
 
 caso "mas de 80 lineas => 1"
 buena "$SANDBOX/l.md"; yes 'relleno' | head -n 80 >> "$SANDBOX/l.md"
 lint_receta "$SANDBOX/l.md" >/dev/null && malo "acepto 90 lineas"
+
+caso "81 lineas SIN salto final => 1 (wc -l las subcontaria)"
+buena "$SANDBOX/l81.md"; yes 'relleno' | head -n 66 >> "$SANDBOX/l81.md"; printf 'ultima sin salto' >> "$SANDBOX/l81.md"
+lint_receta "$SANDBOX/l81.md" >/dev/null && malo "acepto 81 lineas por falta de salto final"
+
+caso "nombre distinto del archivo => 1; igual => 0"
+buena "$SANDBOX/otro.md"     # nombre: bug pero archivo otro.md
+lint_receta "$SANDBOX/otro.md" >/dev/null && malo "acepto nombre != archivo"
+cp "$SANDBOX/otro.md" "$SANDBOX/bug.md"; lint_receta "$SANDBOX/bug.md" >/dev/null || malo "rechazo bug.md con nombre: bug"
+
+caso "'right ' no es termino prohibido; 'gt ' si"
+buena "$SANDBOX/r.md"; printf 'Mueve el boton a la right side.\n' >> "$SANDBOX/r.md"
+lint_receta "$SANDBOX/r.md" >/dev/null || malo "rechazo 'right ' como si fuera 'gt '"
 
 caso "TAB en el titulo => 1"
 buena "$SANDBOX/t.md"; sed -i "s/^titulo: .*/titulo: Con\ttab/" "$SANDBOX/t.md"
@@ -236,11 +264,15 @@ for f in "$dir"/*.md; do
   manifest_linea "$f" >> "$tmp"
 done
 [ "$rc" -eq 0 ] || { rm -f "$tmp"; exit 1; }
-sort -t"$(printf '\t')" -k3,3 "$tmp" > "$tmp.sorted"
+sort -t"$(printf '\t')" -k3,3 "$tmp" > "$tmp.sorted" || { rm -f "$tmp" "$tmp.sorted"; exit 5; }
 if [ "$modo" = "--check" ]; then
-  cmp -s "$tmp.sorted" "$out"; rc=$?; rm -f "$tmp" "$tmp.sorted"; exit $rc
+  # cmp devuelve 2 si $out no existe: se normaliza a 1 (difiere) para que el
+  # llamador no confunda "no hay manifiesto" con "ok" (CodeRabbit, PR #97).
+  if [ -f "$out" ] && cmp -s "$tmp.sorted" "$out"; then rc=0; else rc=1; fi
+  rm -f "$tmp" "$tmp.sorted"; exit $rc
 fi
-mv "$tmp.sorted" "$out"; rm -f "$tmp"; printf '[gen-recetas-manifest] %s lineas -> %s\n' "$(wc -l < "$out" | tr -d ' ')" "$out"
+mv -f "$tmp.sorted" "$out" || { rm -f "$tmp" "$tmp.sorted"; exit 5; }
+rm -f "$tmp"; printf '[gen-recetas-manifest] %s lineas -> %s\n' "$(awk 'END{print NR}' "$out")" "$out"
 ```
 
 - [ ] **Paso 5: `.gitattributes`** — agregar al final:
@@ -338,7 +370,7 @@ recetas/MANIFEST.sha256 text eol=lf
 mkdir -p recetas/pendientes && : > recetas/pendientes/.gitkeep
 bash tools/gen-recetas-manifest.sh
 bash tests/test_recetas.sh          # esperado: test_recetas: OK
-bash tests/lib/check_syntax.sh      # bash -n de todo .sh
+bash -n tests/lib/recetas_lint.sh tests/test_recetas.sh tools/gen-recetas-manifest.sh   # solo lo tocado
 ```
 
 - [ ] **Paso 9: rojo/verde del candado del manifiesto** — editar una línea de
@@ -612,60 +644,98 @@ Reescribe tu último mensaje para una persona que no lee código: primero qué c
   5. instalación a medias imposible: una receta fuente ilegible (chmod 000 en
      el sandbox) ⇒ exit ≠ 0 y NINGÚN archivo publicado (clasifica todo antes de
      publicar, precedente 12.9).
-  Correr: `bash tests/test_install_hook.sh` ⇒ los 5 nuevos en FAIL.
+  6. `--quitar-recetas`: borra SOLO los archivos con marca `saikit_owned` (y
+     el manifiesto) de `<hookdir>/recetas/` y `skills/sencillo/SKILL.md`; un
+     archivo ajeno en `recetas/` queda intacto y el directorio también.
+  Correr: `bash tests/test_install_hook.sh` ⇒ los 6 nuevos en FAIL.
 
-- [ ] **Paso 3: la función**
+- [ ] **Paso 3: la función — todo o nada POR DIRECTORIO** (Greptile + CodeRabbit,
+  PR #97: publicar archivo por archivo dejaba una instalación a medias si
+  fallaba el segundo, y el contrato del instalador promete "exit ≠ 0 ⇒ el
+  destino quedó intacto"). Se arma el directorio nuevo COMPLETO en un temporal
+  hermano (copia de lo ajeno que ya estaba + nuestros archivos) y se
+  intercambia con dos `mv` al final; hasta el intercambio no se tocó nada.
 
 ```bash
 # Task 16.5 (D1/D8): planta el recetario y la skill /sencillo con la maquina de
 # estados POR ARCHIVO de los perfiles (marca saikit_owned; ajeno => DESCONOCIDO,
-# no se toca). Clasifica TODO antes de publicar nada (12.9).
+# no se toca). Clasifica TODO antes de escribir nada (12.9) y publica cada
+# directorio de un solo golpe (dos renames); la ventana entre los dos mv se
+# declara, no se esconde.
+recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva frontmatter)
+  if [ "$(basename "$2")" = "MANIFEST.sha256" ]; then
+    if [ ! -e "$1" ]; then printf AUSENTE; elif cmp -s "$1" "$2"; then printf NUESTRO_IDENTICO; else printf NUESTRO_DISTINTO; fi
+  else
+    agente_estado_con_vendor "$1" "$2" "receta"
+  fi
+}
+recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocado
+  local destdir="$1"; shift
+  local f dest est nuevo old cambios=0
+  # 1) clasificar todo; cualquier NO_OBSERVABLE aborta sin escribir
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    est="$(recetas_clasificar "$dest" "$f")"
+    case "$est" in
+      NO_OBSERVABLE) decir "[summonaikit] recetario: $dest no observable; no se publica nada"; return 5 ;;
+      NUESTRO_IDENTICO) ;;
+      DESCONOCIDO) decir "[summonaikit] recetario: DESCONOCIDO, no se toca: $dest" ;;
+      *) decir "[summonaikit] recetario: $est -> $dest"; cambios=1 ;;
+    esac
+  done
+  [ "$cambios" -eq 1 ] || return 0
+  [ "$DRY_RUN" -eq 0 ] || return 0
+  # 2) armar el directorio nuevo entero en un temporal hermano
+  nuevo="$(mktemp -d "$(dirname "$destdir")/.saikit-recetas-XXXXXX")" || return 5
+  if [ -d "$destdir" ]; then cp -p "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    case "$(recetas_clasificar "$dest" "$f")" in
+      AUSENTE|NUESTRO_DISTINTO|VENDOR_CONOCIDO)
+        [ -e "$dest" ] && { claude_archivar_vendor "$dest" || { rm -rf "$nuevo"; return 5; }; }
+        cp "$f" "$nuevo/$(basename "$f")" || { rm -rf "$nuevo"; return 5; } ;;
+    esac
+  done
+  # 3) intercambio: hasta aqui $destdir esta intacto
+  old="$destdir.saikit-old-$$"
+  if [ -d "$destdir" ]; then mv "$destdir" "$old" || { rm -rf "$nuevo"; return 5; }; fi
+  mv "$nuevo" "$destdir" || { [ -d "$old" ] && mv "$old" "$destdir"; return 5; }
+  rm -rf "$old"
+  return 0
+}
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
-  local hookdir="$1" skills="$2" f dest est fuentes=() destinos=() estados=() i
+  local f
   for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" "$repo/skills/sencillo/SKILL.md"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
-    case "$f" in
-      */skills/sencillo/SKILL.md) dest="$skills/sencillo/SKILL.md" ;;
-      *) dest="$hookdir/recetas/$(basename "$f")" ;;
-    esac
-    if [ "$(basename "$f")" = "MANIFEST.sha256" ]; then
-      # el manifiesto no lleva frontmatter: se clasifica por contenido (nuestro == identico a la fuente)
-      if [ ! -e "$dest" ]; then est=AUSENTE; elif cmp -s "$dest" "$f"; then est=NUESTRO_IDENTICO; else est=NUESTRO_DISTINTO; fi
-    else
-      est="$(agente_estado_con_vendor "$dest" "$f" "receta")"
-    fi
-    case "$est" in NO_OBSERVABLE) decir "[summonaikit] instalador: $dest no observable; no se publica nada"; return 5 ;; esac
-    fuentes+=("$f"); destinos+=("$dest"); estados+=("$est")
   done
-  i=0
-  while [ "$i" -lt "${#fuentes[@]}" ]; do
-    f="${fuentes[$i]}"; dest="${destinos[$i]}"; est="${estados[$i]}"
-    case "$est" in
-      AUSENTE|NUESTRO_DISTINTO|VENDOR_CONOCIDO)
-        decir "[summonaikit] recetario: $est -> $dest"
-        if [ "$DRY_RUN" -eq 0 ]; then
-          mkdir -p "$(dirname "$dest")" || return 5
-          [ "$est" = AUSENTE ] || claude_archivar_vendor "$dest" || return 5
-          publicar_atomico "$f" "$dest" || return 5
-        fi ;;
-      NUESTRO_IDENTICO) : ;;
-      DESCONOCIDO) decir "[summonaikit] recetario: DESCONOCIDO, no se toca: $dest" ;;
-    esac
-    i=$((i+1))
-  done
-  # archivos ajenos DENTRO de recetas/ que no estan en la fuente: solo reportar
-  for f in "$hookdir"/recetas/*.md; do
+  recetas_publicar_dir "$1/recetas" "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" || return $?
+  recetas_publicar_dir "$2/sencillo" "$repo/skills/sencillo/SKILL.md" || return $?
+  for f in "$1"/recetas/*.md; do   # ajenos: solo reportar
     [ -e "$f" ] || continue
     [ -e "$repo/recetas/$(basename "$f")" ] || decir "[summonaikit] recetario: archivo ajeno reportado, intacto: $f"
   done
   return 0
 }
+quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
+  local f
+  for f in "$1"/recetas/*.md "$2/sencillo/SKILL.md"; do
+    [ -f "$f" ] || continue
+    if zcode_agente_tiene_marca "$f"; then
+      [ "$DRY_RUN" -eq 0 ] && rm -f "$f"; decir "[summonaikit] recetario: quitado $f"
+    else
+      decir "[summonaikit] recetario: ajeno, intacto: $f"
+    fi
+  done
+  [ "$DRY_RUN" -eq 0 ] && rm -f "$1/recetas/MANIFEST.sha256"
+  return 0
+}
 ```
-  (`publicar_atomico` no existe con ese nombre: **usar `zcode_publicar_agente`**,
-  `tools/install-hook.sh:380`, que ya escribe a un temporal y hace `mv -f`;
-  leer su firma ahí — sus dos argumentos son fuente y destino — y llamarla
-  con ese orden.) Llamarla en el flujo por defecto después de
-  publicar el hook: `instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?`.
+  Llamar `instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?`
+  en el flujo por defecto después de publicar el hook; `--quitar-recetas`
+  despacha a `quitar_recetas_claude` (requiere el flujo claude, como
+  `--quitar-zcode` requiere `--host zcode`). Si el segundo directorio falla
+  después de que el primero ya se intercambió, se reporta cuál quedó publicado
+  y cuál no (dos directorios = dos unidades atómicas; límite declarado).
 
 - [ ] **Paso 4: checker** — en `tools/check-hook-registration.sh`, un
   `reportar` advisory (exit 0 siempre) si falta `<hookdir>/recetas/MANIFEST.sha256`
@@ -818,7 +888,8 @@ caso_g1_alias_typo_arma_full_sin_receta() {
   `$RECETAS_MENU`, `$ALIAS_LINEA`, `receta_alias`, `instalar_recetas_claude`,
   `SAIKIT_RECETAS_DIR` — los mismos en todas las tasks.
 - Verificado por el lead en el código antes de entregar: el driver de casos
-  no acepta lista acotada (16.4 paso 2); la publicación atómica es
-  `zcode_publicar_agente` (16.5 paso 3); `_mal` y `LAB_ESTADO_PATH` existen en
-  `tests/lib/gate_cases.sh` (16.6 paso 1). Lo que sigue `unknown` hasta medir:
-  si el golden cambia en 16.6 (paso 5).
+  no acepta lista acotada (16.4 paso 2); `_mal` y `LAB_ESTADO_PATH` existen en
+  `tests/lib/gate_cases.sh` (16.6 paso 1); la publicación de 16.5 ya no usa
+  ningún helper por archivo — es todo-o-nada por directorio con dos `mv`
+  (PR #97, hilos de Greptile y CodeRabbit). Lo que sigue `unknown` hasta
+  medir: si el golden cambia en 16.6 (paso 5).
