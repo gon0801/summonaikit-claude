@@ -37,3 +37,5 @@ tests/golden/** -whitespace
 # Plantillas de subagente de zcode: se comparan byte a byte con lo instalado.
 # CRLF haría que el instalador las viera "distintas" de sí mismas.
 agents/** text eol=lf
+recetas/** text eol=lf
+recetas/MANIFEST.sha256 text eol=lf
