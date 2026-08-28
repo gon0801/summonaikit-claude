@@ -61,8 +61,13 @@ que no tiene hooks de shell: el gate se compone como un **plugin cordis** en
 
 1. el hook bash en `~/.dsh/hooks/`;
 2. el paquete adaptador `@summonaikit/dsh-gate` en
-   `~/.dsh/plugins/summonaikit-dsh-gate/` (los 4 archivos de `hosts/dsh/`);
-3. la entrada del plugin en `~/.dsh/cordis.patch.yml` (bloque entre marcas);
+   `~/.dsh/profiles/node_modules/@summonaikit/dsh-gate/` (el flat module fallback
+   de dsh: ahí es donde dsh resuelve los plugins custom por nombre. Los 4
+   archivos de `hosts/dsh/` se copian como dir real, no symlink — en MSYS `ln -s`
+   no crea symlinks reales y dsh falla con `ERR_UNSUPPORTED_ESM_URL_SCHEME` si se
+   referencia el plugin por ruta `C:/...` en Windows);
+3. la entrada del plugin en `~/.dsh/cordis.patch.yml` (bloque entre marcas) con
+   `name: '@summonaikit/dsh-gate'` (nombre de paquete, no ruta);
 4. las 4 personas de rol como **instancias `@deepseek-ai/dsh-tool-subagent`** en
    la MISMA entrada del patch. dsh **no** tiene archivos de persona: la persona
    es `config.persona` (texto) aplicada al hijo, así que cada rol es una

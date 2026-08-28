@@ -1284,7 +1284,11 @@ grok_quitar() {
 DSH_AGENT_ROLES='implementer verifier reviewer adversary'
 
 dsh_home() { printf '%s' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}"; }
-dsh_plugin_dir() { printf '%s/plugins/summonaikit-dsh-gate' "$(dsh_home)"; }
+# dsh resuelve los plugins custom por NOMBRE de paquete via el flat module
+# fallback `$DSH_HOME/profiles/node_modules/<pkg>` (Node-walk desde cualquier
+# profile). El plugin se instala como DIR REAL ahi (no symlink: en MSYS/Windows
+# `ln -s` no crea symlinks reales solos). El `name:` del patch lo referencia.
+dsh_plugin_dir() { printf '%s/profiles/node_modules/@summonaikit/dsh-gate' "$(dsh_home)"; }
 dsh_patch() { printf '%s/cordis.patch.yml' "$(dsh_home)"; }
 dsh_agents_source() { printf '%s' "${SAIKIT_DSH_AGENTS_SOURCE:-$repo/agents}"; }
 # Estado de lo publicado en ESTA corrida (rollback del install dsh): archivos de
@@ -1324,6 +1328,25 @@ dsh_persona_body() {  # $1=rol
   ' "$fuente"
 }
 
+# Convierte una ruta a forma Windows con barra normal (C:/...). En MSYS/Git
+# Bash `$HOME` es una ruta POSIX (/c/Users/...), y el `name:`/`hook:` del patch
+# los lee Node (dsh), que necesita `C:/Users/...`. `cygpath -m` (barra adelante)
+# es la forma canonica y consistente (tanto para el plugin dir como para el
+# hook), y Node la acepta. Si no hay cygpath o la ruta ya es Windows adelante,
+# se deja como llega (el test con SAIKIT_DSH_HOME Windows no se rompe).
+dsh_win_path() {  # $1=ruta
+  local ruta="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$ruta" in
+      [A-Za-z]:/*) printf '%s' "$ruta" ;;  # ya es Windows con barra adelante
+      [A-Za-z]:\\*) printf '%s' "$(printf '%s' "$ruta" | sed 's|\\|/|g')" ;;  # Windows con backslash -> adelante
+      *) printf '%s' "$(cygpath -m "$ruta" 2>/dev/null || printf '%s' "$ruta")" ;;
+    esac
+  else
+    printf '%s' "$ruta"
+  fi
+}
+
 # El bloque de Marcas (id-targeted insert) que el patch del profile lleva entre
 # `# >>> summonaikit-gate START` / `# <<< summonaikit-gate END`. Salida por
 # stdout. Si no se pudo leer un cuerpo de persona => return 1 (rollback).
@@ -1334,13 +1357,14 @@ dsh_persona_body() {  # $1=rol
 # LISTA de entradas, insertado en el ROOT (id del target = ''). Por eso el bloque
 # es una lista plana de 5 entradas (gate + 4 roles) bajo UN `- insert:`.
 dsh_patch_nuestro_bloque() {
-  local rol cuerpo
+  local rol cuerpo win_hook
+  win_hook="$(dsh_win_path "$DEST")"
   printf '%s\n' "# >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh"
   printf '%s\n' "- insert:"
   printf '%s\n' "    - id: summonaikit-gate"
-  printf '%s\n' "      name: '$(dsh_plugin_dir)'"
+  printf '%s\n' "      name: '@summonaikit/dsh-gate'"
   printf '%s\n' "      config:"
-  printf '%s\n' "        hook: '$DEST'"
+  printf '%s\n' "        hook: '$win_hook'"
   printf '%s\n' "        bash: '$(dsh_bash_win)'"
   for rol in $DSH_AGENT_ROLES; do
     cuerpo="$(dsh_persona_body "$rol")" || {

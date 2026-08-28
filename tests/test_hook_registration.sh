@@ -732,14 +732,22 @@ escribir_hook_marca() {  # $1=dest
     printf '%s\n' 'exit 0'
   } > "$1"
 }
-escribir_patch_dsh() {  # $1=patch  $2=hook  $3=ddir
+escribir_patch_dsh() {  # $1=patch  $2=hook  $3=ddir(sin uso para name:)
+  # El instalador escribe name: = paquete (@summonaikit/dsh-gate) y hook: en
+  # forma WINDOWS (C:/...). El checker compara contra eso. El fixture usa rutas
+  # POSIX ($tmp); el hook: se convierte con cygpath -m (PR #91).
+  local hook_win
+  hook_win="$2"
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$2" in [A-Za-z]:/*|[A-Za-z]:\\*) : ;; *) hook_win="$(cygpath -m "$2" 2>/dev/null || printf '%s' "$2")" ;; esac
+  fi
   cat > "$1" <<EOF
 # >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh
 - insert:
     - id: summonaikit-gate
-      name: '$3'
+      name: '@summonaikit/dsh-gate'
       config:
-        hook: '$2'
+        hook: '$hook_win'
         bash: 'C:/Program Files/Git/bin/bash.exe'
     - id: subagent_implementer
       name: '@deepseek-ai/dsh-tool-subagent'
@@ -779,7 +787,7 @@ EOF
 nuevo_dsh_reg() {
   n_dsh_reg=$((n_dsh_reg + 1))
   dsh_home="$tmp/dsh-reg-$n_dsh_reg"
-  dsh_ddir="$dsh_home/plugins/summonaikit-dsh-gate"
+  dsh_ddir="$dsh_home/profiles/node_modules/@summonaikit/dsh-gate"
   mkdir -p "$dsh_home/hooks" "$dsh_ddir"
   escribir_hook_marca "$dsh_home/hooks/summonaikit-harness.sh"
   : > "$dsh_ddir/index.js"

@@ -138,11 +138,24 @@ fi
 # Contrato de salida identico: SIEMPRE exit 0 (fail-open), reporta por texto.
 parch_dsh() {
   [ "$VIO_DSH" -gt 0 ] || return 0
-  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch
+  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook ddir patch hook_win
   local p_start p_end bloque rol n_roles rebanada falla=0
   hook="$home/hooks/summonaikit-harness.sh"
-  ddir="$home/plugins/summonaikit-dsh-gate"
+  ddir="$home/profiles/node_modules/@summonaikit/dsh-gate"
   patch="$home/cordis.patch.yml"
+  # El instalador escribe hook: en forma WINDOWS (C:/...), porque dsh (Node)
+  # lee la config del plugin; el name: es el NOMBRE del paquete (@summonaikit/
+  # dsh-gate), no una ruta. El hook existe en la ruta nativa ($home, MSYS /c/...);
+  # para comparar hook: se usa la forma Windows. (PR #91: el turno vivo revelo
+  # que el name: por ruta C:/... no lo importa dsh, y que /c/ no coincidia.)
+  hook_win="$(printf '%s' "$home/hooks/summonaikit-harness.sh")"
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$hook_win" in
+      [A-Za-z]:/*) : ;;                    # ya es Windows con barra adelante
+      [A-Za-z]:\\*) hook_win="$(printf '%s' "$hook_win" | sed 's|\\|/|g')" ;;
+      *) hook_win="$(cygpath -m "$hook" 2>/dev/null || printf '%s' "$hook")" ;;
+    esac
+  fi
   # 1) Hook existe y lleva el marcador de linea 2.
   if [ ! -e "$hook" ]; then
     reportar "[summonaikit] HOOK DE DSH: no existe ($hook)."
@@ -181,10 +194,10 @@ parch_dsh() {
       bloque="$(sed -n "${p_start},${p_end}p" "$patch")"
       printf '%s' "$bloque" | grep -q "id: summonaikit-gate" || {
         reportar "[summonaikit] PATCH DE DSH: falta el id: summonaikit-gate ($patch)."; falla=1; }
-      printf '%s' "$bloque" | grep -qF "name: '$ddir'" || {
-        reportar "[summonaikit] PATCH DE DSH: el name: no apunta al plugin ($ddir)."; falla=1; }
-      printf '%s' "$bloque" | grep -qF "hook: '$hook'" || {
-        reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook)."; falla=1; }
+      printf '%s' "$bloque" | grep -qF "name: '@summonaikit/dsh-gate'" || {
+        reportar "[summonaikit] PATCH DE DSH: el name: no es el paquete del plugin (@summonaikit/dsh-gate)."; falla=1; }
+      printf '%s' "$bloque" | grep -qF "hook: '$hook_win'" || {
+        reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook_win)."; falla=1; }
       printf '%s' "$bloque" | grep -qE 'bash: ' || {
         reportar "[summonaikit] PATCH DE DSH: falta la config bash: del plugin."; falla=1; }
       # Cada rol: un bloque `- id: subagent_<rol>` con name:, toolName: y persona:

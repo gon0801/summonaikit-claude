@@ -26,9 +26,12 @@ bash tools/check-hook-registration.sh --dsh-home ~/.dsh   # SILENCIO esperado
 dsh --dump-config 2>&1 | grep summonaikit-gate            # debe aparecer el plugin
 ```
 
-Esperado: hook en `~/.dsh/hooks/`, adaptador en `~/.dsh/plugins/summonaikit-dsh-gate/`,
-entrada del patch en `~/.dsh/cordis.patch.yml` (bloque entre marcas con el gate +
-las 4 personas `subagent_<rol>`).
+Esperado: hook en `~/.dsh/hooks/`, adaptador en
+`~/.dsh/profiles/node_modules/@summonaikit/dsh-gate/` (el flat module fallback de
+dsh — ahí es donde dsh resuelve los plugins custom por nombre; se copia como dir
+real, no symlink), entrada del patch en `~/.dsh/cordis.patch.yml` (bloque entre
+marcas con el gate `name: '@summonaikit/dsh-gate'` + las 4 personas
+`subagent_<rol>`).
 
 ## 2) Turno vivo en la UI web de dsh
 

@@ -1859,12 +1859,29 @@ nuevo_home_dsh() {
   home_dh="$tmp/dsh-home-$n_dsh/.dsh"
   mkdir -p "$home_dh"
   dest="$home_dh/hooks/summonaikit-harness.sh"
-  dsh_plugin="$home_dh/plugins/summonaikit-dsh-gate"
+  # El plugin vive en el flat module fallback (dsh resuelve los plugins custom
+  # por nombre ahi), no en <dsh-home>/plugins/ (PR #91: el turno vivo).
+  dsh_plugin="$home_dh/profiles/node_modules/@summonaikit/dsh-gate"
   dsh_patch="$home_dh/cordis.patch.yml"
 }
 host_dsh() {
   SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN="$bash_dsh" \
     bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check "$@"
+}
+# El instalador dsh escribe name:/hook: en forma WINDOWS (C:/...) porque dsh
+# (Node) los lee. El test usa rutas POSIX ($dest/$dsh_plugin sobre $tmp); para
+# comparar contra el patch hay que convertirlas (PR #91: el turno vivo revelo
+# que sin esto el instalador escribia /c/ y los greps de la suite no coincidian).
+dsh_win() {  # $1=ruta POSIX/Windows -> forma Windows con barra adelante
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$1" in
+      [A-Za-z]:/*) printf '%s' "$1" ;;
+      [A-Za-z]:\\*) printf '%s' "$1" | sed 's|\\|/|g' ;;
+      *) printf '%s' "$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" ;;
+    esac
+  else
+    printf '%s' "$1"
+  fi
 }
 
 caso "dsh: instala hook + plugin + patch entre marcas + 4 personas (limpio)"
@@ -1881,7 +1898,7 @@ printf '%s' "$out" | grep -qi 'INSTALADO' || malo "dsh install no reporta INSTAL
 for rol in implementer verifier reviewer adversary; do
   grep -q "toolName: subagent_$rol" "$dsh_patch" || malo "al patch dsh le falta la persona subagent_$rol"
 done
-grep -q "hook: '$dest'" "$dsh_patch" || malo "la entrada del patch no apunta al hook"
+grep -q "hook: '$(dsh_win "$dest")'" "$dsh_patch" || malo "la entrada del patch no apunta al hook"
 printf '%s' "$out" | grep -qi 'PATCH DSH INSTALADO' || malo "dsh install no reporta PATCH DSH INSTALADO"
 
 caso "dsh: --dry-run no escribe nada (ni hook ni plugin ni patch ni backups)"
@@ -2008,6 +2025,22 @@ out="$(SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN= \
        bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "dsh sin bash.exe deberia salir 2, dio $rc: $out"
 [ ! -e "$dsh_patch" ] || malo "dsh sin bash.exe no debe tocar el patch"
+
+caso "dsh: patch usa name:=paquete y hook: en forma WINDOWS (C:/), no POSIX (/c/) (turno vivo, PR #91)"
+# El turno vivo revelo que: (a) el name: por ruta (C:/...) no lo importa dsh
+# (ERR_UNSUPPORTED_ESM_URL_SCHEME / DIR_IMPORT) — debe ser el nombre del paquete
+# linkeado en el fallback; (b) el hook: (ruta que el plugin lee) debe ser Windows,
+# no /c/. En MSYS $tmp es POSIX; con cygpath el instalador convierte hook: a C:/.
+nuevo_home_dsh
+if command -v cygpath >/dev/null 2>&1; then
+  host_dsh >/dev/null 2>&1
+  grep -qF "name: '@summonaikit/dsh-gate'" "$dsh_patch" || malo "el patch no usa name: de paquete (@summonaikit/dsh-gate): $(grep -E 'name:' "$dsh_patch" | head -2)"
+  grep -qE "hook: '[A-Za-z]:/" "$dsh_patch" || malo "el patch no usa hook: en forma Windows (PR #91): $(grep -E 'hook:' "$dsh_patch" | head -2)"
+  grep -q "/c/" "$dsh_patch" && malo "el patch dejo una ruta POSIX /c/ (dsh Node no la resuelve)"
+  # El plugin vive como dir REAL en el fallback (no symlink; MSYS ln -s no crea
+  # symlinks reales). Debe tener los 4 archivos y resolverse por nombre.
+  [ -f "$dsh_plugin/index.js" ] && [ -f "$dsh_plugin/package.json" ] || malo "no se publico el plugin en el fallback de dsh ($dsh_plugin)"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
