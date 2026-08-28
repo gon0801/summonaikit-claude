@@ -1,11 +1,17 @@
 # Phase 16 — El recetario: plan de implementación
 
-> **Para workers (DeepSeek):** ejecutar task por task con
-> `superpowers:subagent-driven-development` (recomendado) o
-> `superpowers:executing-plans`. Los pasos llevan `- [ ]`. Diseño aprobado:
+> **Para workers (DeepSeek):** este plan **no requiere ningún plugin ni
+> skill**. Una task por sesión, en UN turno armado con `-saikit` (el gate corre
+> en la sesión `deepseek` y exige implementer → verifier → reviewer y el recibo;
+> úsalo: delega los pasos de implementación al implementer, la corrida de
+> tests al verifier, la lectura del diff al reviewer). Sigue los pasos `- [ ]`
+> de la task EN ORDEN y sin saltarte ninguno; un paso que no puedas hacer se
+> declara en el recibo con su razón, no se omite en silencio. Diseño aprobado:
 > `docs/phase-16-18-recetario-autopilot-design.md` (leer ENTERO antes de la
 > primera task; las decisiones D1–D10 son las de esta fase). Ledger:
 > `Plans.md` § Phase 16 (16.2–16.9; la 16.1 ya cerró en el PR #95).
+> Primera entrada de la sesión, literal:
+> `-saikit Lee docs/phase-16-recetario-plan.md entero y ejecuta SOLO la Task 16.2 siguiendo sus pasos; abre el PR y para.`
 
 **Objetivo:** que un turno `-saikit` en Claude Code reciba, además del
 contrato de siempre, un **menú de recetas** por tipo de tarea; que el líder
