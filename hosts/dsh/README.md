@@ -55,6 +55,45 @@ orden en que dsh emitió los eventos (bots #83): `Stop` espera a que drenen los
 `PostToolUse`, para que un `tools/result` del verifier que escribe `agents_seen` no
 carreree contra el `Stop` que lee el estado.
 
+## Raciño del desenlace de `pwsh` (glm r4 PR #86)
+
+En dsh un comando con `exit != 0` es un **resultado de tool exitoso** (`isError:false`
+con `value.exitCode` adentro), así que un `pytest`/`vitest` rojo pasaba el filtro del
+adaptador y llegaba al hook como `PostToolUse` `{ tool_name:"Bash", tool_input:{ command } }`
+**sin exit code ni texto de salida**. El raíl `verified` del hook veta con dos greps
+sobre el payload (`"toolResult"...exit_code:[1-9]` y las señales de fallo
+`FAILURE_SIGNAL_RE_CI/CS` sobre `$combined`); sin esos datos un runner rojo acreditaba
+`verified=1` = **falso verde**. `toPostToolUse` enriquece el branch shell, usando `result`
+que `tools/result` ya pasa a la callback de dsh:
+- `tool_result.exit_code` en **snake** (dsh da `exitCode` camel; el veto grep esa forma),
+  solo cuando es número. `exit_code:0` no dispara el `[1-9]`.
+- `tool_response.output` (forma Claude) con stdout+stderr, para que
+  `FAILURE_SIGNAL_RE_CI/CS` vea el texto de fallo.
+
+## Subagentes en sesión propia (claude r3 PR #86, Gap1 + Gap2)
+
+En dsh un subagente corre en su **propia sesión** (`result.value.subagentId`), así que
+sus `tools/result` llegan con `agent` = id del hijo y el gate — que corre sobre la sesión
+de la **madre** — no los ve. El adaptador mapea hijo→madre:
+
+- **Gap1 — re-acreditación a la madre.** Al recibir el `tools/result` de spawn
+  (`name:"subagent"` + `subagentId`), registra `childOf[subagentId] = { parent, role }`
+  (rol inferido del spawn) y suma 1 a `liveKids[parent]`. Los `tools/result` posteriores
+  con `agent` = id de un hijo registrado se traducen con la sesión de la **madre** y se
+  les inyecta `agent_type:<rol>` de primer nivel (fallback A9 del hook), para que el gate
+  atribuya el edit/run del implementer/verifier/adversary al rol correcto sobre la sesión
+  de la madre. Los eventos de hijo se en-queuean bajo la sesión de la madre.
+- **Gap2 — Stop con hijos vivos.** Mientras `liveKids[parent] > 0`, un
+  `agent/turn-stopping` del padre es **intermedio** (el turno se corta para que corra un
+  hijo), no el cierre real. Traducirlo a `Stop` quemaría el gate con la ceremonia a
+  medias y dejaría pasar el turno final sin gate. `agent/turn-stopping` retorna sin
+  enviar `Stop` mientras haya hijos vivos; al disponerse el último hijo
+  (`agent/disposed`, que decrementa `liveKids[parent]`) el próximo turn-stopping del
+  padre sí traduce. **A confirmar en el turno vivo de 15.5** que unpair exacto
+  `dispose`-hijo cae antes del turn-stopping final del padre y que dsh no deja un hijo
+  "zombi" que bloquee el Stop.
+
+
 ## Shape de los mensajes inyectados (codex r1 PR #86)
 
 Los mensajes que el adaptador inyecta (`additionalContext` del contrato y el
