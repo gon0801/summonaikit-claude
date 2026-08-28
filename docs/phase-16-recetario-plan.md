@@ -685,14 +685,20 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   done
   [ "$cambios" -eq 1 ] || return 0
   [ "$DRY_RUN" -eq 0 ] || return 0
-  # 2) armar el directorio nuevo entero en un temporal hermano
+  # 2) armar el directorio nuevo entero en un temporal hermano. Los respaldos
+  #    de lo reemplazado van DENTRO del temporal (saikit-backups/), no al
+  #    directorio vivo: escribirlos en el vivo rompia el todo-o-nada y el swap
+  #    los borraba con $old (Greptile, PR #97).
   nuevo="$(mktemp -d "$(dirname "$destdir")/.saikit-recetas-XXXXXX")" || return 5
   if [ -d "$destdir" ]; then cp -p "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
+  sello="$(date +%Y%m%d-%H%M%S)"
   for f in "$@"; do
     dest="$destdir/$(basename "$f")"
     case "$(recetas_clasificar "$dest" "$f")" in
       AUSENTE|NUESTRO_DISTINTO|VENDOR_CONOCIDO)
-        [ -e "$dest" ] && { claude_archivar_vendor "$dest" || { rm -rf "$nuevo"; return 5; }; }
+        if [ -e "$dest" ]; then
+          mkdir -p "$nuevo/saikit-backups" && cp -p "$dest" "$nuevo/saikit-backups/$(basename "$dest").nuestro.$sello.bak" || { rm -rf "$nuevo"; return 5; }
+        fi
         cp "$f" "$nuevo/$(basename "$f")" || { rm -rf "$nuevo"; return 5; } ;;
     esac
   done
@@ -726,18 +732,30 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       decir "[summonaikit] recetario: ajeno, intacto: $f"
     fi
   done
-  # El manifiesto no lleva marca: solo se borra si es byte a byte el NUESTRO
-  # (Greptile, PR #97: uno ajeno o editado se reporta y se deja).
-  if [ -f "$1/recetas/MANIFEST.sha256" ]; then
-    if cmp -s "$1/recetas/MANIFEST.sha256" "$repo/recetas/MANIFEST.sha256"; then
-      [ "$DRY_RUN" -eq 0 ] && rm -f "$1/recetas/MANIFEST.sha256"; decir "[summonaikit] recetario: quitado el manifiesto"
+  # El manifiesto no lleva marca: es NUESTRO si cada receta que nombra lleva
+  # la marca (o ya no existe). Comparar contra el manifiesto del repo no sirve
+  # tras un upgrade del kit sin reinstalar (Greptile, PR #97): el instalado
+  # viejo difiere del actual y seguiria siendo nuestro.
+  local m="$1/recetas/MANIFEST.sha256" nuestro=1 sha tipo nombre carril titulo
+  if [ -f "$m" ]; then
+    while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+      [ -f "$1/recetas/$nombre.md" ] || continue
+      zcode_agente_tiene_marca "$1/recetas/$nombre.md" || nuestro=0
+    done < "$m"
+    if [ "$nuestro" -eq 1 ]; then
+      [ "$DRY_RUN" -eq 0 ] && rm -f "$m"; decir "[summonaikit] recetario: quitado el manifiesto"
     else
-      decir "[summonaikit] recetario: manifiesto distinto del nuestro, intacto: $1/recetas/MANIFEST.sha256"
+      decir "[summonaikit] recetario: el manifiesto nombra recetas ajenas, intacto: $m"
     fi
   fi
   return 0
 }
 ```
+  Nota de orden: `quitar_recetas_claude` evalúa el manifiesto ANTES de borrar
+  las recetas (mueve el bloque del manifiesto arriba del bucle, o guarda la
+  decisión en una variable antes del `rm`), porque después del borrado ya no
+  puede leer las marcas.
+
   Llamar `instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?`
   en el flujo por defecto después de publicar el hook; `--quitar-recetas`
   despacha a `quitar_recetas_claude` (requiere el flujo claude, como
