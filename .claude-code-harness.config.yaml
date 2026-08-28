@@ -1,2 +1,2 @@
 safety:
-  protected_branch_push: allow
+  protected_branch_push: deny
