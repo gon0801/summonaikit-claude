@@ -17,5 +17,6 @@ adversary: opcional
 Definición simple primero, luego cómo, luego por qué. Diagrama si ayuda.
 
 ## Recibo
+Understand: … Receta: investigar
 Implement: sin cambio de código
 Verify: no corrí tests; es una pregunta de solo lectura

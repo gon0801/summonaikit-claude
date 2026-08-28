@@ -1,7 +1,16 @@
 # tests/lib/recetas_lint.sh — reglas de forma de una receta (D2). Se carga con
 # `. tests/lib/recetas_lint.sh`. Sin dependencias fuera de coreutils/grep/sed.
-RECETAS_TERMINOS_PROHIBIDOS='gt |Graphite|Bugbot|AskQuestion|/loop|poteto|Cursor'
+# `gt` como token independiente (CodeRabbit, PR #97): un `gt` suelto matcheaba
+# el "gt" dentro de palabras como "right"; la frontera lo limita al token. El
+# borde DELANTERO excluye ademas '-' para no cazar el operador shell `-gt`
+# (`[ "$n" -gt 10 ]`) ni un token unido por guion (`x-gt-y`): esos no son el
+# token suelto que se quiere prohibir. El borde trasero queda como en el plan.
+RECETAS_TERMINOS_PROHIBIDOS='(^|[^A-Za-z0-9_-])gt([^A-Za-z0-9_]|$)|Graphite|Bugbot|AskQuestion|/loop|poteto'
 RECETAS_TOPE_LINEAS=80
+
+_rl_lineas() {  # $1=archivo → lineas LOGICAS (cuenta la ultima aunque no termine en \n; Greptile, PR #97)
+  tr -d '\r' < "$1" | awk 'END{print NR}'
+}
 
 _rl_frontmatter() {  # $1=archivo → stdout: lineas entre el 1er y 2do '---'; rc 1 si falta el cierre
   tr -d '\r' < "$1" | awk 'NR==1 && $0!="---"{exit 1} NR>1 && $0=="---"{c=1; exit} NR>1{print} END{if(NR>1 && !c) exit 1}'
@@ -11,8 +20,8 @@ _rl_campo() {  # $1=archivo $2=clave → valor (sin comillas) o vacio
 }
 
 lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
-  local f="$1" rc=0 n tipo nombre carril titulo
-  n="$(tr -d '\r' < "$f" | wc -l | tr -d ' ')"
+  local f="$1" rc=0 n tipo nombre carril titulo base
+  n="$(_rl_lineas "$f")"
   [ "$n" -le "$RECETAS_TOPE_LINEAS" ] || { echo "supera $RECETAS_TOPE_LINEAS lineas ($n)"; rc=1; }
   _rl_frontmatter "$f" >/dev/null 2>&1 || { echo "sin frontmatter (--- en la linea 1 y cierre)"; return 1; }
   [ "$(_rl_campo "$f" saikit_owned)" = "summonaikit-claude" ] || { echo "falta saikit_owned: summonaikit-claude"; rc=1; }
@@ -20,6 +29,14 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   case "$tipo" in receta|lider) ;; *) echo "tipo invalido: $tipo"; rc=1 ;; esac
   nombre="$(_rl_campo "$f" nombre)"
   printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || { echo "nombre invalido: [$nombre]"; rc=1; }
+  # nombre == archivo (CodeRabbit, PR #97): el instalador y el hook resuelven
+  # <nombre>.md; un desfase deja una receta en el manifiesto que no existe.
+  base="$(basename "$f" .md)"
+  if [ "$tipo" = lider ]; then
+    [ "$base" = "00-lider" ] && [ "$nombre" = "lider" ] || { echo "el lider debe ser 00-lider.md con nombre: lider"; rc=1; }
+  else
+    [ "$base" = "$nombre" ] || { echo "nombre [$nombre] no coincide con el archivo [$base.md]"; rc=1; }
+  fi
   titulo="$(_rl_campo "$f" titulo)"
   [ -n "$titulo" ] || { echo "falta titulo"; rc=1; }
   printf '%s' "$titulo" | grep -q "$(printf '\t')" && { echo "el titulo lleva TAB"; rc=1; }
@@ -33,8 +50,17 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
       grep -q "^$sec" "$f" || { echo "falta la seccion '$sec'"; rc=1; }
     done
   fi
+  # Nombres de producto se rechazan tal cual (Graphite, Bugbot, AskQuestion,
+  # /loop, poteto); se mantiene -i para que 'graphite' en minusculas tambien
+  # caiga. `gt` con frontera de token: un `gt` suelto (o como flag al final de
+  # linea) no es palabra natural, pero no matchea dentro de 'right'.
   if grep -Eiq "$RECETAS_TERMINOS_PROHIBIDOS" "$f"; then
     echo "termino prohibido: $(grep -Eio "$RECETAS_TERMINOS_PROHIBIDOS" "$f" | head -n1)"; rc=1
+  fi
+  # `Cursor` es sensible a caja SIN -i: 'el cursor del mouse' es prosa legitima
+  # y no debe caer; solo el producto 'Cursor' se rechaza (grok, cross-review).
+  if grep -Eq 'Cursor' "$f"; then
+    echo "termino prohibido: Cursor"; rc=1
   fi
   # links relativos [texto](ruta) tienen que resolver desde recetas/
   while IFS= read -r l; do

@@ -17,5 +17,6 @@ adversary: opcional
 Qué variante recomiendas y por qué, con la captura o salida a la vista.
 
 ## Recibo
+Understand: … Receta: boceto
 Implement: boceto desechable en boceto/, sin código de producción
 Verify: la captura o salida observada
