@@ -7,6 +7,30 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-28 — PR #95 / Task 16.1 (plan de Phases 16–18: recetario, verificación real, autopilot) — deploy NO-OP (docs-only)
+
+- **Qué traía:** el plan completo de las Phases 16–18 — diseño
+  `docs/phase-16-18-recetario-autopilot-design.md` (D0–D24, triage de 69
+  piezas de pstack, Apéndice C con las revisiones), `Plans.md` con 25 tasks y
+  事前確認 acotado, spec § "Ampliación — Phases 16–18", Phases 13–14 movidas a
+  `docs/plans-archivo.md`, y un fix de test: `test_adversary_artifact_contract`
+  anclaba la fila 14.3 solo a `Plans.md` y se puso rojo en CI al archivarla
+  (run `33196774677`); ahora sigue al ledger archivado y valida solo esa
+  fila, con 4 casos sintéticos en sandbox. Merge `dd37809` (merge commit, sin
+  `--delete-branch`; rama remota borrada aparte por `gh api`).
+- **Revisiones del PR:** 3 revisores internos (43), Greptile P1 (1),
+  cross-review externo codex + grok en paralelo (22), CodeRabbit (9) — 10
+  hilos, 10 resueltos con respuesta que cita el commit. CI final: 6/6 en
+  `1d455f3`.
+- **¿Cambió el hook? NO.** `install-hook.sh`: **YA AL DIA** (destino nuestro y
+  byte a byte igual a la fuente). `cmp` vivo vs `master` `dd37809`: idéntico.
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0, silencio.
+- **Aprobaciones:** 事前確認 de Phases 16–18 aprobado por el operador y
+  registrado en `.claude/state/plan-preapprovals.json` (v2, 5 entradas; la de
+  "merge automático en repos del usuario" queda `denied` a propósito: la
+  autorización real es por repo con las dos llaves).
+- **Operador:** Gon (sesión Claude Code; el lead corrió el deploy).
+
 ## 2026-08-28 — Phase 15 (host dsh, PRs #84–#86 + #91; fix de master #92) — deploy NUEVO del gate dsh, verificado y firmado por el lead
 
 - **Qué traía:** la Phase 15 completa — 15.1 captura (#84, `5c4a37d`), 15.2
