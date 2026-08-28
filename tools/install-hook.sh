@@ -1324,6 +1324,25 @@ dsh_persona_body() {  # $1=rol
   ' "$fuente"
 }
 
+# Convierte una ruta a forma Windows con barra normal (C:/...). En MSYS/Git
+# Bash `$HOME` es una ruta POSIX (/c/Users/...), y el `name:`/`hook:` del patch
+# los lee Node (dsh), que necesita `C:/Users/...`. `cygpath -m` (barra adelante)
+# es la forma canonica y consistente (tanto para el plugin dir como para el
+# hook), y Node la acepta. Si no hay cygpath o la ruta ya es Windows adelante,
+# se deja como llega (el test con SAIKIT_DSH_HOME Windows no se rompe).
+dsh_win_path() {  # $1=ruta
+  local ruta="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$ruta" in
+      [A-Za-z]:/*) printf '%s' "$ruta" ;;  # ya es Windows con barra adelante
+      [A-Za-z]:\\*) printf '%s' "$(printf '%s' "$ruta" | sed 's|\\|/|g')" ;;  # Windows con backslash -> adelante
+      *) printf '%s' "$(cygpath -m "$ruta" 2>/dev/null || printf '%s' "$ruta")" ;;
+    esac
+  else
+    printf '%s' "$ruta"
+  fi
+}
+
 # El bloque de Marcas (id-targeted insert) que el patch del profile lleva entre
 # `# >>> summonaikit-gate START` / `# <<< summonaikit-gate END`. Salida por
 # stdout. Si no se pudo leer un cuerpo de persona => return 1 (rollback).
@@ -1334,13 +1353,15 @@ dsh_persona_body() {  # $1=rol
 # LISTA de entradas, insertado en el ROOT (id del target = ''). Por eso el bloque
 # es una lista plana de 5 entradas (gate + 4 roles) bajo UN `- insert:`.
 dsh_patch_nuestro_bloque() {
-  local rol cuerpo
+  local rol cuerpo win_plugin win_hook
+  win_plugin="$(dsh_win_path "$(dsh_plugin_dir)")"
+  win_hook="$(dsh_win_path "$DEST")"
   printf '%s\n' "# >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh"
   printf '%s\n' "- insert:"
   printf '%s\n' "    - id: summonaikit-gate"
-  printf '%s\n' "      name: '$(dsh_plugin_dir)'"
+  printf '%s\n' "      name: '$win_plugin'"
   printf '%s\n' "      config:"
-  printf '%s\n' "        hook: '$DEST'"
+  printf '%s\n' "        hook: '$win_hook'"
   printf '%s\n' "        bash: '$(dsh_bash_win)'"
   for rol in $DSH_AGENT_ROLES; do
     cuerpo="$(dsh_persona_body "$rol")" || {

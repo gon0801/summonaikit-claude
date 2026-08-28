@@ -733,13 +733,22 @@ escribir_hook_marca() {  # $1=dest
   } > "$1"
 }
 escribir_patch_dsh() {  # $1=patch  $2=hook  $3=ddir
+  # El instalador escribe name:/hook: en forma WINDOWS (C:/...); el checker
+  # compara contra esa forma. El fixture usa rutas POSIX ($tmp); se convierten
+  # con cygpath -m para que el "completo" sea SILENCIO (PR #91).
+  local hook_win ddir_win
+  hook_win="$2"; ddir_win="$3"
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$2" in [A-Za-z]:/*|[A-Za-z]:\\*) : ;; *) hook_win="$(cygpath -m "$2" 2>/dev/null || printf '%s' "$2")" ;; esac
+    case "$3" in [A-Za-z]:/*|[A-Za-z]:\\*) : ;; *) ddir_win="$(cygpath -m "$3" 2>/dev/null || printf '%s' "$3")" ;; esac
+  fi
   cat > "$1" <<EOF
 # >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh
 - insert:
     - id: summonaikit-gate
-      name: '$3'
+      name: '$ddir_win'
       config:
-        hook: '$2'
+        hook: '$hook_win'
         bash: 'C:/Program Files/Git/bin/bash.exe'
     - id: subagent_implementer
       name: '@deepseek-ai/dsh-tool-subagent'

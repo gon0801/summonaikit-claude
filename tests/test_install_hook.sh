@@ -1866,6 +1866,21 @@ host_dsh() {
   SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN="$bash_dsh" \
     bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check "$@"
 }
+# El instalador dsh escribe name:/hook: en forma WINDOWS (C:/...) porque dsh
+# (Node) los lee. El test usa rutas POSIX ($dest/$dsh_plugin sobre $tmp); para
+# comparar contra el patch hay que convertirlas (PR #91: el turno vivo revelo
+# que sin esto el instalador escribia /c/ y los greps de la suite no coincidian).
+dsh_win() {  # $1=ruta POSIX/Windows -> forma Windows con barra adelante
+  if command -v cygpath >/dev/null 2>&1; then
+    case "$1" in
+      [A-Za-z]:/*) printf '%s' "$1" ;;
+      [A-Za-z]:\\*) printf '%s' "$1" | sed 's|\\|/|g' ;;
+      *) printf '%s' "$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" ;;
+    esac
+  else
+    printf '%s' "$1"
+  fi
+}
 
 caso "dsh: instala hook + plugin + patch entre marcas + 4 personas (limpio)"
 nuevo_home_dsh
@@ -1881,7 +1896,7 @@ printf '%s' "$out" | grep -qi 'INSTALADO' || malo "dsh install no reporta INSTAL
 for rol in implementer verifier reviewer adversary; do
   grep -q "toolName: subagent_$rol" "$dsh_patch" || malo "al patch dsh le falta la persona subagent_$rol"
 done
-grep -q "hook: '$dest'" "$dsh_patch" || malo "la entrada del patch no apunta al hook"
+grep -q "hook: '$(dsh_win "$dest")'" "$dsh_patch" || malo "la entrada del patch no apunta al hook"
 printf '%s' "$out" | grep -qi 'PATCH DSH INSTALADO' || malo "dsh install no reporta PATCH DSH INSTALADO"
 
 caso "dsh: --dry-run no escribe nada (ni hook ni plugin ni patch ni backups)"
@@ -2008,6 +2023,19 @@ out="$(SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN= \
        bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "dsh sin bash.exe deberia salir 2, dio $rc: $out"
 [ ! -e "$dsh_patch" ] || malo "dsh sin bash.exe no debe tocar el patch"
+
+caso "dsh: patch usa rutas WINDOWS (C:/...) en name:/hook:, no POSIX (/c/...) (turno vivo, PR #91)"
+# El turno vivo revelo que con HOME/MSYS la ruta queda /c/... y dsh (Node) no
+# la resuelve. En MSYS $tmp es POSIX; con cygpath disponible el instalador debe
+# escribir name:/hook: en forma Windows (letra de drive). En CI Linux (sin
+# cygpath) el fallback deja la ruta como llega y el caso se condiciona.
+nuevo_home_dsh
+if command -v cygpath >/dev/null 2>&1; then
+  host_dsh >/dev/null 2>&1
+  grep -qE "name: '[A-Za-z]:/" "$dsh_patch" || malo "el patch no usa name: en forma Windows (PR #91): $(grep -E 'name:' "$dsh_patch" | head -2)"
+  grep -qE "hook: '[A-Za-z]:/" "$dsh_patch" || malo "el patch no usa hook: en forma Windows (PR #91): $(grep -E 'hook:' "$dsh_patch" | head -2)"
+  grep -q "/c/" "$dsh_patch" && malo "el patch dejo una ruta POSIX /c/ (dsh Node no la resuelve)"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
