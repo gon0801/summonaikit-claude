@@ -49,6 +49,15 @@ caso "titulo plegado o literal => 1"
 buena "$SANDBOX/pg.md"; sed -i 's/^titulo: .*/titulo: >/' "$SANDBOX/pg.md"
 lint_receta "$SANDBOX/pg.md" >/dev/null && malo "acepto titulo plegado (>)"
 
+caso "titulo plegado con chomping => 1"
+buena "$SANDBOX/pgc.md"; sed -i 's/^titulo: .*/titulo: >-/' "$SANDBOX/pgc.md"
+lint_receta "$SANDBOX/pgc.md" >/dev/null && malo "acepto titulo plegado con chomping (>-)"
+
+caso "link relativo con espacios resuelve"
+mkdir -p "$SANDBOX/sub"; : > "$SANDBOX/sub/mi archivo.md"
+buena "$SANDBOX/ly.md"; printf '[esto](sub/mi archivo.md)\n' >> "$SANDBOX/ly.md"
+lint_receta "$SANDBOX/ly.md" >/dev/null || malo "rechazo un link relativo con espacios que existe"
+
 caso "carril invalido => 1"
 buena "$SANDBOX/c.md"; sed -i 's/^carril: full/carril: rapido/' "$SANDBOX/c.md"
 lint_receta "$SANDBOX/c.md" >/dev/null && malo "acepto carril: rapido"

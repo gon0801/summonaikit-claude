@@ -23,7 +23,7 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   titulo="$(_rl_campo "$f" titulo)"
   [ -n "$titulo" ] || { echo "falta titulo"; rc=1; }
   printf '%s' "$titulo" | grep -q "$(printf '\t')" && { echo "el titulo lleva TAB"; rc=1; }
-  case "$titulo" in '>'|'|') echo "el titulo es un indicador plegado/literal"; rc=1 ;; esac
+  case "$titulo" in '>'*|'|'*) echo "el titulo es un indicador plegado/literal"; rc=1 ;; esac
   if [ "$tipo" = receta ]; then
     carril="$(_rl_campo "$f" carril)"
     case "$carril" in full|fast) ;; *) echo "carril invalido: [$carril]"; rc=1 ;; esac
@@ -37,9 +37,9 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
     echo "termino prohibido: $(grep -Eio "$RECETAS_TERMINOS_PROHIBIDOS" "$f" | head -n1)"; rc=1
   fi
   # links relativos [texto](ruta) tienen que resolver desde recetas/
-  for l in $(grep -Eo '\]\([^)#]+' "$f" | sed 's/^](//' | grep -Ev '^(https?:|mailto:)'); do
+  while IFS= read -r l; do
     [ -e "$(dirname "$f")/$l" ] || { echo "link roto: $l"; rc=1; }
-  done
+  done < <(grep -Eo '\]\([^)#]+' "$f" | sed 's/^](//' | grep -Ev '^(https?:|mailto:)')
   return $rc
 }
 
