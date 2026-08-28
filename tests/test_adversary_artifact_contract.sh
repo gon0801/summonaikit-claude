@@ -24,6 +24,10 @@ caso() { printf '  caso: %s\n' "$1"; }
 perfil="$repo/agents/adversary.md"
 reviewer="$repo/agents/reviewer.md"
 plans="$repo/Plans.md"
+# El ledger es Plans.md MAS su archivo: la higiene del tope de 200 lineas mueve
+# fases cerradas a docs/plans-archivo.md (Phase 14 movida el 2026-08-28), y una
+# ancla que solo mira Plans.md se pone roja por un archivado legitimo (PR #95).
+archivo="$repo/docs/plans-archivo.md"
 
 caso "el perfil documenta la forma del contrato (claves exactas)"
 if [ -r "$perfil" ]; then
@@ -72,15 +76,20 @@ else
   echo "  UNKNOWN: no se puede leer agents/reviewer.md" >&2; unknown=1
 fi
 
-caso "Plans.md fila 14.3 usa el timestamp Windows-safe (sin ':' en el comando)"
-if [ -r "$plans" ]; then
-  if grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ' "$plans"; then
-    malo "Plans.md (fila 14.3) enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
+caso "la fila 14.3 del ledger (Plans.md o su archivo) usa el timestamp Windows-safe (sin ':' en el comando)"
+ledger_files=""
+[ -r "$plans" ] && ledger_files="$plans"
+[ -r "$archivo" ] && ledger_files="$ledger_files $archivo"
+if [ -n "$ledger_files" ]; then
+  # shellcheck disable=SC2086  # lista de rutas sin espacios, a proposito
+  if cat $ledger_files | grep -Fq 'date -u +%Y-%m-%dT%H:%M:%SZ'; then
+    malo "el ledger (fila 14.3) enseña como comando un timestamp con dos puntos (invalido en un filename de Windows)"
   fi
   # (CodeRabbit, PR #72) ademas de rechazar la forma insegura, exigir la segura.
-  grep -Fq 'date -u +%Y%m%dT%H%M%SZ' "$plans" || malo "Plans.md (fila 14.3) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
+  # shellcheck disable=SC2086
+  cat $ledger_files | grep -Fq 'date -u +%Y%m%dT%H%M%SZ' || malo "el ledger (fila 14.3, Plans.md o docs/plans-archivo.md) no nombra la forma Windows-safe (date -u +%Y%m%dT%H%M%SZ)"
 else
-  echo "  UNKNOWN: no se puede leer Plans.md" >&2; unknown=1
+  echo "  UNKNOWN: no se puede leer Plans.md ni docs/plans-archivo.md" >&2; unknown=1
 fi
 
 if [ "$fail" -ne 0 ]; then

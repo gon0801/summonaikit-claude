@@ -324,9 +324,20 @@ todavía ⇒ `unknown`, espera con heartbeat acotado; timeout ⇒ reporta
 `unknown`, NO revierte**. `GET salud_url` si existe: solo `http(s)`, sin
 seguir redirects, `--max-time`, y la URL pasa por redacción antes de escribirse
 en cualquier lado. En rojo → **`git revert <merge_commit>`** (squash: no hay
-`-m`), **solo del merge que él mismo registró**, PR de revert que pasa por el
-MISMO `saikit-merge.sh` (CI verde + `--match-head-commit`), una sola
-profundidad (un revert rojo se reporta, no se re-revierte). Mensaje al usuario
+`-m`), **solo del merge que él mismo registró**, PR de revert que pasa por
+`saikit-merge.sh --revert-de <merge_commit>`: un **modo distinto, con sus
+propias precondiciones**, porque el turno desarmado ya no tiene el estado del
+hook que D18 exige (hallazgo P1 de Greptile en el PR #95) — exige que el
+`merge_commit` sea el registrado por el propio script en el veredicto, que el
+diff del PR de revert sea **exactamente el inverso** del `merge_commit`
+(`git diff` del PR == `git diff <merge_commit>^ <merge_commit>` invertido,
+comparado por `patch-id`), que no traiga ningún otro commit, `baseRefName ==
+rama`, CI del head del revert en `success`, y `--match-head-commit`; NO exige
+reviewer, blast ni estado de sesión (no hay código nuevo que revisar: es la
+inversa mecánica de algo ya revisado). Sigue fail-closed: cualquier
+`unknown` ⇒ no mergea el revert y **avisa al usuario que master está rojo y
+cómo revertir a mano**. Una sola profundidad (un revert rojo se reporta, no se
+re-revierte). Mensaje al usuario
 en español (qué aterrizó, qué cambia para él, cómo deshacerlo) armado desde el
 `Close:` ya redactado, ≤ 4096 chars; `telegram-send` opcional.
 

@@ -2136,9 +2136,18 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    `merge_commit` que el propio script registró; sin run ⇒ `unknown` con
    espera acotada, timeout ⇒ `unknown` sin revert; `salud_url` solo http(s),
    sin redirects, redactada. En rojo, `git revert <merge_commit>` (squash: sin
-   `-m`) SOLO del merge propio, PR de revert por el MISMO script, una vez
-   (un revert rojo se reporta). El usuario recibe un mensaje en español desde
-   el `Close:` redactado: qué aterrizó, qué cambia para él, cómo deshacerlo.
+   `-m`) SOLO del merge propio, y el PR de revert se mergea con
+   `saikit-merge.sh --revert-de <merge_commit>`: un **modo con precondiciones
+   propias** — el turno desarmado ya no tiene el estado del hook que exige la
+   regla 4 — que exige `merge_commit` registrado por el propio script, diff
+   del PR **exactamente el inverso** del `merge_commit` (comparado por
+   `patch-id`), ningún otro commit, `baseRefName == rama`, CI del head del
+   revert en `success` y `--match-head-commit`; no exige reviewer, blast ni
+   estado de sesión (es la inversa mecánica de algo ya revisado). Fail-closed:
+   cualquier `unknown` ⇒ no mergea el revert y avisa al usuario que la rama
+   está roja y cómo revertir a mano. Una vez (un revert rojo se reporta). El
+   usuario recibe un mensaje en español desde el `Close:` redactado: qué
+   aterrizó, qué cambia para él, cómo deshacerlo.
 7. **Sin CI no hay autopilot, y el setup lo ofrece.** Si el repo no tiene
    workflows, el setup ofrece en español un CI mínimo (test del repo +
    `verify/`, acciones pinneadas, sin secretos); sin CI y sin aceptar, el
