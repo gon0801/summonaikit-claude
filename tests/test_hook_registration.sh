@@ -720,6 +720,95 @@ out="$(bash "$tool" --grok-hooks-dir "$grok_dir/hooks" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
 [ -z "$out" ] || malo "el hook bajo ruta con espacios existe y lleva marca: silencio, no $out"
 
+# ===================================================== Phase 15 -- --dsh-home
+# dsh no se registra por archivo de hooks: el plugin se compone en
+# <dsh-home>/cordis.patch.yml entre marcas. El verificador de dsh afirma: hook
+# (existe + marcador), dir del plugin (4 archivos), patch (bloque entre marcas
+# con hook: y las 4 personas subagent_<rol>).
+escribir_hook_marca() {  # $1=dest
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' '# SAIKIT-CLAUDE-OWNED summonaikit-claude 0.0.1'
+    printf '%s\n' 'exit 0'
+  } > "$1"
+}
+escribir_patch_dsh() {  # $1=patch  $2=hook
+  cat > "$1" <<EOF
+# >>> summonaikit-gate START -- managed by summonaikit-claude tools/install-hook.sh
+- insert:
+    - id: summonaikit-gate
+      name: 'plugins/summonaikit-dsh-gate'
+      config:
+        hook: '$2'
+        bash: 'C:/Program Files/Git/bin/bash.exe'
+    - id: subagent_implementer
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_implementer
+        backgroundMode: continuable
+        persona: |-
+          # implementer
+    - id: subagent_verifier
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        toolName: subagent_verifier
+    - id: subagent_reviewer
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        toolName: subagent_reviewer
+    - id: subagent_adversary
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        toolName: subagent_adversary
+# <<< summonaikit-gate END
+EOF
+}
+nuevo_dsh_reg() {
+  n_dsh_reg=$((n_dsh_reg + 1))
+  dsh_home="$tmp/dsh-reg-$n_dsh_reg"
+  mkdir -p "$dsh_home/hooks" "$dsh_home/plugins/summonaikit-dsh-gate"
+  escribir_hook_marca "$dsh_home/hooks/summonaikit-harness.sh"
+  : > "$dsh_home/plugins/summonaikit-dsh-gate/index.js"
+  : > "$dsh_home/plugins/summonaikit-dsh-gate/translate.js"
+  : > "$dsh_home/plugins/summonaikit-dsh-gate/spawn-hook.js"
+  : > "$dsh_home/plugins/summonaikit-dsh-gate/package.json"
+  escribir_patch_dsh "$dsh_home/cordis.patch.yml" "$dsh_home/hooks/summonaikit-harness.sh"
+}
+n_dsh_reg=0
+
+caso "dsh: --dsh-home completo => SILENCIO y exit 0"
+nuevo_dsh_reg
+out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh completo: esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "dsh completo: esperaba silencio, imprimio: $out"
+
+caso "dsh: sin la entrada entre marcas => habla (y exit 0, fail-open)"
+nuevo_dsh_reg
+printf -- '- insert:\n    - id: otromodulo\n      name: x\n' > "$dsh_home/cordis.patch.yml"
+out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh sin entrada: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh sin entrada deberia hablar del patch: $out"
+
+caso "dsh: [hook:] apuntando a otra ruta => habla (la entrada no apunta al hook)"
+nuevo_dsh_reg
+escribir_patch_dsh "$dsh_home/cordis.patch.yml" "/otra/ruta/hooks/summonaikit-harness.sh"
+out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh hook: apuntando a otra ruta: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con hook: a otra ruta deberia hablar: $out"
+
+caso "dsh: --dsh-home sin valor => unknown (fail-open, leccion 0.4)"
+out="$(timeout 5 bash "$tool" --dsh-home 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "el bucle de argumentos se colgo"
+[ "$rc" -eq 0 ] || malo "dsh --dsh-home sin valor: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "flag sin valor => unknown: $out"
+
+caso "dsh: --dsh-home + --settings juntos => unknown (no se mezclan)"
+nuevo_dsh_reg
+out="$(bash "$tool" --dsh-home "$dsh_home" --settings "$tmp/completo.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh formas mezcladas: esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "formas mezcladas es unknown: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

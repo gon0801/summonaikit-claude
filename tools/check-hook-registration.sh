@@ -48,6 +48,14 @@ VIO_CODEX=0
 # spawn_subagent o su alias Task (7.1 midio ambos nombres).
 GROK_HOOKS_DIR=''
 VIO_GROK=0
+# Phase 15: la QINTA forma. dsh no se registra por archivo de hooks: el plugin
+# se compone en <dsh-home>/cordis.patch.yml entre marcas propias. El verificador
+# de dsh hace afirmaciones sobre el HOOK (existe + marcador), el DIR del plugin
+# (4 archivos) y la ENTRADA del patch (bloque entre marcas con el hook: y las 4
+# personas subagent_<rol>). --bash es la ruta del bash.exe para leer el hook.
+DSH_HOME=''
+DSH_BASH=''
+VIO_DSH=0
 
 reportar() { printf '%s\n' "$*"; }
 
@@ -61,7 +69,7 @@ reportar() { printf '%s\n' "$*"; }
 # exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper|--grok-hooks-dir)
+    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper|--grok-hooks-dir|--dsh-home|--bash)
       if [ $# -lt 2 ]; then
         reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
         reportar "              No se afirma que el registro falte: no se pudo mirar."
@@ -75,6 +83,8 @@ while [ $# -gt 0 ]; do
         --codex-hooks-json) CODEX_HOOKS_JSON="$2"; VIO_CODEX=1 ;;
         --codex-wrapper)   CODEX_WRAPPER="$2" ;;
         --grok-hooks-dir)  GROK_HOOKS_DIR="$2"; VIO_GROK=1 ;;
+        --dsh-home)        DSH_HOME="$2"; VIO_DSH=1 ;;
+        --bash)            DSH_BASH="$2" ;;
       esac
       shift 2
       ;;
@@ -86,9 +96,9 @@ done
 # Task 5.4: --zcode-config y --settings son mutuamente excluyentes (cada host
 # registra en su propio archivo). Mezclarlos no tiene sentido y leer la forma
 # equivocada daria silencio o INCOMPLETO falsos. Fail-open: unknown, exit 0.
-# Task 7.5: --grok-hooks-dir entra en la misma regla.
-if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX + VIO_GROK)) -gt 1 ]; then
-  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config, --codex-hooks-json y --grok-hooks-dir son mutuamente excluyentes."
+# Task 7.5: --grok-hooks-dir entra en la misma regla. Phase 15: --dsh-home igual.
+if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX + VIO_GROK + VIO_DSH)) -gt 1 ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config, --codex-hooks-json, --grok-hooks-dir y --dsh-home son mutuamente excluyentes."
   reportar "              Cada host registra en su propio archivo; no se verifico nada."
   reportar "              No se afirma que el registro falte: no se pudo mirar."
   exit 0
@@ -119,6 +129,67 @@ if [ "$VIO_GROK" -gt 0 ]; then
   [ -n "$GROK_HOOKS_DIR" ] || GROK_HOOKS_DIR="${HOME:-}/.grok/hooks"
   SETTINGS="$GROK_HOOKS_DIR/summonaikit.json"
   LOCAL_SETTINGS=''
+fi
+
+# Phase 15 (modo dsh): el plugin se compone en <dsh-home>/cordis.patch.yml entre
+# marcas; no hay archivo de hooks/proxy que parsear con python. Se verifica con
+# una rama propia (no el parser de settings de abajo, que es de la forma claude).
+# Contrato de salida identico: SIEMPRE exit 0 (fail-open), reporta por texto.
+parch_dsh() {
+  [ "$VIO_DSH" -gt 0 ] || return 0
+  local home="${DSH_HOME:-${HOME:-}/.dsh}" hook plupatch patch block ddir
+  local p_start p_end hay_hook hay_subagente subagentes falla=0
+  hook="$home/hooks/summonaikit-harness.sh"
+  ddir="$home/plugins/summonaikit-dsh-gate"
+  patch="$home/cordis.patch.yml"
+  # 1) Hook existe y lleva el marcador de linea 2.
+  if [ ! -e "$hook" ]; then
+    reportar "[summonaikit] HOOK DE DSH: no existe ($hook)."
+    falla=1
+  elif [ ! -f "$hook" ] || [ ! -r "$hook" ]; then
+    reportar "[summonaikit] HOOK DE DSH: unknown — existe pero no se pudo leer ($hook)."
+  elif ! sed -n '2p' "$hook" | grep -Eq '^# SAIKIT-CLAUDE-OWNED summonaikit-claude [^[:space:]]+$'; then
+    reportar "[summonaikit] HOOK DE DSH: no lleva el marcador de propiedad en la linea 2 ($hook)."
+    falla=1
+  fi
+  # 2) El dir del plugin tiene los 4 archivos que el patch declara.
+  for f in index.js translate.js spawn-hook.js package.json; do
+    if [ ! -e "$ddir/$f" ]; then
+      reportar "[summonaikit] PLUGIN DE DSH: falta $f ($ddir/$f)."
+      falla=1
+    fi
+  done
+  # 3) El patch del profile lleva el bloque entre marcas con el hook: apuntando
+  #    al hook Y las 4 personas subagent_<rol>.
+  if [ ! -e "$patch" ]; then
+    reportar "[summonaikit] PATCH DE DSH: no existe ($patch)."
+    falla=1
+  elif [ ! -r "$patch" ]; then
+    reportar "[summonaikit] PATCH DE DSH: unknown — no se pudo leer ($patch)."
+  else
+    p_start="$(grep -n '^# >>> summonaikit-gate START' "$patch" | head -1 | cut -d: -f1)"
+    p_end="$(grep -n '^# <<< summonaikit-gate END' "$patch" | head -1 | cut -d: -f1)"
+    if [ -z "$p_start" ] || [ -z "$p_end" ]; then
+      reportar "[summonaikit] PATCH DE DSH: falta la entrada entre marcas summonaikit-gate ($patch)."
+      falla=1
+    else
+      hay_hook="$(sed -n "${p_start},${p_end}p" "$patch" | grep -F "hook: '$hook'" | head -1)"
+      [ -n "$hay_hook" ] || { reportar "[summonaikit] PATCH DE DSH: la entrada no apunta al hook ($hook)."; falla=1; }
+      subagentes="$(sed -n "${p_start},${p_end}p" "$patch" | grep -c "toolName: subagent_")"
+      if [ "$subagentes" -lt 4 ]; then
+        reportar "[summonaikit] PATCH DE DSH: faltan las 4 personas subagent_<rol> (se ven $subagentes)."
+        falla=1
+      fi
+    fi
+  fi
+  if [ "$falla" -eq 0 ]; then
+    :
+  fi
+  return 0
+}
+if [ "$VIO_DSH" -gt 0 ]; then
+  parch_dsh
+  exit 0
 fi
 
 # El local por defecto es HERMANO del settings dado, no el del HOME real: si no,

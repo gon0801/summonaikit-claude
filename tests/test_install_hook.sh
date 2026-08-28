@@ -1845,6 +1845,97 @@ out="$(host_claude --dry-run 2>&1)"; rc=$?
 [ -d "$claude_agents/saikit-backups" ] && malo "dry-run sobre NUESTRO_DISTINTO creo un backup"
 printf '%s' "$out" | grep -qi 'NUESTRO distinto' || malo "dry-run sobre NUESTRO_DISTINTO no reporto el estado"
 
+# ===================================================== Phase 15 — --host dsh
+# dsh publica CUATRO cosas (D5): hook + plugin + patch del profile + personas.
+# El home dsh de test se aísla con SAIKIT_DSH_HOME (como SAIKIT_GROK_HOOKS_DIR),
+# y el bash.exe con SAIKIT_DSH_BASH_WIN (un archivo vacio existente basta para
+# pasar la validacion del override; el command del patch debe ser ese).
+bash_dsh="$tmp/fake-bash.exe"
+: > "$bash_dsh"
+n_dsh=0
+nuevo_home_dsh() {
+  n_dsh=$((n_dsh + 1))
+  # home_dh ES el .dsh del test (raiz que SAIKIT_DSH_HOME apunta).
+  home_dh="$tmp/dsh-home-$n_dsh/.dsh"
+  mkdir -p "$home_dh"
+  dest="$home_dh/hooks/summonaikit-harness.sh"
+  dsh_plugin="$home_dh/plugins/summonaikit-dsh-gate"
+  dsh_patch="$home_dh/cordis.patch.yml"
+}
+host_dsh() {
+  SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN="$bash_dsh" \
+    bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check "$@"
+}
+
+caso "dsh: instala hook + plugin + patch entre marcas + 4 personas (limpio)"
+nuevo_home_dsh
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh install deberia salir 0, dio $rc: $out"
+[ -f "$dest" ] || malo "dsh no instalo el hook en $dest"
+printf '%s' "$out" | grep -qi 'INSTALADO' || malo "dsh install no reporta INSTALADO"
+[ -f "$dsh_plugin/package.json" ] || malo "dsh no instalo el package.json del plugin"
+[ -f "$dsh_plugin/index.js" ] || malo "dsh no instalo index.js del plugin"
+[ -f "$dsh_plugin/translate.js" ] || malo "dsh no instalo translate.js del plugin"
+[ -f "$dsh_plugin/spawn-hook.js" ] || malo "dsh no instalo spawn-hook.js del plugin"
+[ -f "$dsh_patch" ] || malo "dsh no instalo el patch del profile"
+for rol in implementer verifier reviewer adversary; do
+  grep -q "toolName: subagent_$rol" "$dsh_patch" || malo "al patch dsh le falta la persona subagent_$rol"
+done
+grep -q "hook: '$dest'" "$dsh_patch" || malo "la entrada del patch no apunta al hook"
+printf '%s' "$out" | grep -qi 'PATCH DSH INSTALADO' || malo "dsh install no reporta PATCH DSH INSTALADO"
+
+caso "dsh: --dry-run no escribe nada (ni hook ni plugin ni patch ni backups)"
+nuevo_home_dsh
+out="$(host_dsh --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh --dry-run deberia salir 0, dio $rc: $out"
+[ ! -e "$dest" ] || malo "dsh --dry-run escribio el hook"
+[ ! -e "$dsh_patch" ] || malo "dsh --dry-run escribio el patch del profile"
+[ -d "$dsh_plugin" ] && malo "dsh --dry-run creo el dir del plugin"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dsh --dry-run no reporta dry-run"
+
+caso "dsh: patch con contenido ajeno fuera de marcas se respeta"
+nuevo_home_dsh
+host_dsh >/dev/null 2>&1
+# Un array ficticio con contenido del operador ANTES de nuestras marcas.
+printf -- '- insert:\n    - id: otromodulo\n      name: '\''algo-del-operator'\''\n' > /tmp/dsh-pre.txt
+cat /tmp/dsh-pre.txt "$dsh_patch" > "$dsh_patch.tmp" && mv "$dsh_patch.tmp" "$dsh_patch"
+# Reinstalar: el splice debe conservar el bloque ajeno y refrescar el nuestro.
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "reinstall dsh con contenido ajeno deberia salir 0, dio $rc: $out"
+grep -q "id: otromodulo" "$dsh_patch" || malo "el reinstall dsh perdio el contenido ajeno fuera de marcas"
+grep -q "id: summonaikit-gate" "$dsh_patch" || malo "el reinstall dsh no refresco nuestro bloque"
+rm -f /tmp/dsh-pre.txt
+
+caso "dsh: repara hook y plugin viejos con backup"
+nuevo_home_dsh
+host_dsh >/dev/null 2>&1
+# Envejecer el hook y un archivo del plugin (marcador presente => NUESTRO_DISTINTO).
+printf '\n# envejecido\n' >> "$dest"
+printf 'x' >> "$dsh_plugin/index.js"
+out="$(host_dsh 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh reinstall no deberia fallar sobre NUESTRO_DISTINTO, dio $rc: $out"
+[ -d "$(dirname "$dest")/saikit-backups" ] || malo "dsh no dejo backup del hook reparado"
+[ "$(cksum < "$dsh_plugin/index.js")" = "$(cksum < "$repo/hosts/dsh/index.js")" ] || malo "dsh no reparo index.js del plugin"
+
+caso "dsh: --quitar-dsh deja el patch sin nuestra entrada y el hook+plugin retirados"
+nuevo_home_dsh
+host_dsh >/dev/null 2>&1
+out="$(host_dsh --quitar-dsh 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dsh --quitar-dsh deberia salir 0, dio $rc: $out"
+[ ! -f "$dest" ] || malo "--quitar-dsh no retiro el hook"
+[ ! -d "$dsh_plugin" ] || malo "--quitar-dsh no retiro el plugin"
+if [ -f "$dsh_patch" ]; then
+  grep -q "summonaikit-gate START" "$dsh_patch" && malo "--quitar-dsh dejo la entrada entre marcas"
+fi
+[ -d "$(dirname "$dest")/saikit-backups" ] || malo "--quitar-dsh no dejo backup del hook"
+
+caso "dsh: sin bash.exe => exit 2 y nada escrito"
+nuevo_home_dsh
+out="$(SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN= \
+       bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "dsh sin bash.exe deberia salir 2, dio $rc: $out"
+[ ! -e "$dsh_patch" ] || malo "dsh sin bash.exe no debe tocar el patch"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1
