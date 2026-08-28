@@ -63,6 +63,10 @@ caso "operador shell -gt NO es termino prohibido => 0"
 buena "$SANDBOX/sgt/bug.md"; printf 'Comprueba que [ "$n" -gt 10 ].\n' >> "$SANDBOX/sgt/bug.md"
 lint_receta "$SANDBOX/sgt/bug.md" >/dev/null || malo "rechazo '-gt' (operador shell) como si fuera 'gt'"
 
+caso "token unido por guion (x-gt-y, gt-x) NO es termino prohibido => 0"
+buena "$SANDBOX/sgxy/bug.md"; printf 'Compara con x-gt-y y el flag gt-x.\n' >> "$SANDBOX/sgxy/bug.md"
+lint_receta "$SANDBOX/sgxy/bug.md" >/dev/null || malo "rechazo 'x-gt-y'/'gt-x' como si fuera 'gt'"
+
 caso "termino prohibido Bugbot => 1"
 buena "$SANDBOX/bb/bug.md"; printf 'Bugbot lo reporta.\n' >> "$SANDBOX/bb/bug.md"
 lint_receta "$SANDBOX/bb/bug.md" >/dev/null && malo "acepto 'Bugbot'"

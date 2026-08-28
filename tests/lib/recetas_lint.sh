@@ -1,11 +1,11 @@
 # tests/lib/recetas_lint.sh — reglas de forma de una receta (D2). Se carga con
 # `. tests/lib/recetas_lint.sh`. Sin dependencias fuera de coreutils/grep/sed.
 # `gt` como token independiente (CodeRabbit, PR #97): un `gt` suelto matcheaba
-# el "gt" dentro de palabras como "right"; la frontera lo limita al token. El
-# borde DELANTERO excluye ademas '-' para no cazar el operador shell `-gt`
-# (`[ "$n" -gt 10 ]`) ni un token unido por guion (`x-gt-y`): esos no son el
-# token suelto que se quiere prohibir. El borde trasero queda como en el plan.
-RECETAS_TERMINOS_PROHIBIDOS='(^|[^A-Za-z0-9_-])gt([^A-Za-z0-9_]|$)|Graphite|Bugbot|AskQuestion|/loop|poteto'
+# el "gt" dentro de palabras como "right"; la frontera lo limita al token. Ambos
+# bordes excluyen '-' para no cazar el operador shell `-gt` (`[ "$n" -gt 10 ]`),
+# un token unido por guion (`x-gt-y`, `gt-x`): esos no son el token suelto que
+# se quiere prohibir. Un `gt` entre espacios/puntuacion/inicio/fin de linea si.
+RECETAS_TERMINOS_PROHIBIDOS='(^|[^A-Za-z0-9_-])gt([^A-Za-z0-9_-]|$)|Graphite|Bugbot|AskQuestion|/loop|poteto'
 RECETAS_TOPE_LINEAS=80
 
 _rl_lineas() {  # $1=archivo → lineas LOGICAS (cuenta la ultima aunque no termine en \n; Greptile, PR #97)
