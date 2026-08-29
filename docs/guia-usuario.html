@@ -330,11 +330,13 @@
     <div class="ledger">
       <div class="row"><span class="name">implementer</span><span class="desc">Escribe el cambio, lo más chico que resuelva el problema.</span></div>
       <div class="row"><span class="name">verifier</span><span class="desc">Comprueba que de verdad funciona, corriendo cosas — no confía en que "debería andar".</span></div>
-      <div class="row"><span class="name">adversary</span><span class="desc">Intenta romperlo a propósito. Solo entra cuando el cambio toca dinero, contraseñas o datos que ya existían.</span></div>
+      <div class="row"><span class="name">adversary</span><span class="desc">Intenta romperlo a propósito. Es el único de los cuatro que <b>no siempre entra</b>: lo llama el líder cuando el cambio toca dinero, contraseñas o datos que ya existían. Es su criterio, no un automatismo — si quieres asegurarte, pídelo en tu mensaje.</span></div>
       <div class="row"><span class="name">reviewer</span><span class="desc">Lee el cambio con ojos frescos y decide qué hallazgo se corrige y cuál no.</span></div>
     </div>
 
-    <div class="note"><b>El recibo.</b> Al final el líder te deja un resumen en palabras simples: qué entendió que pediste, qué cambió, cómo lo comprobó y qué quedó pendiente. Si no puede escribirlo con evidencia real, el turno no cierra.</div>
+    <div class="note"><b>El recibo.</b> Al final el líder te deja un resumen en palabras simples: qué entendió que pediste, qué cambió, cómo lo comprobó y qué quedó pendiente. El sistema se lo exige antes de dejarlo cerrar.</div>
+
+    <div class="note"><b>Hasta dónde llega esto — dicho en claro.</b> Los controles de arriba son un <b>ayudante disciplinado, no un candado</b>. El sistema comprueba que los pasos ocurrieran y que el resumen traiga evidencia; lo que no puede es garantizar que esa evidencia sea cierta. Y cuando no logra ver algo — porque el programa donde trabajas no le muestra esa parte — <b>deja pasar en vez de bloquear</b>, a propósito: un control que frena sin poder mirar estorba más de lo que protege. Lo que sí es firme: nada se publica sin que las pruebas de tu proyecto estén en verde.</div>
   </section>
 
   <section>
