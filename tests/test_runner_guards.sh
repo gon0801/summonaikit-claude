@@ -20,6 +20,14 @@ fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
+# Esta bateria puede correr DENTRO de un runner particionado (el job `suite` la
+# invoca con SAIKIT_PARTICION=rapidos): heredarla vuelve la "corrida completa"
+# de los casos de abajo indistinguible de una mitad — que es exactamente como el
+# caso de la union salio verde en local y ROJO en CI. Los casos que necesitan
+# una particion la ponen ellos, por comando. Misma leccion que ya aplica mas
+# abajo con SAIKIT_CI_LINUX.
+unset SAIKIT_PARTICION
+
 # ------------------------------------------------- 1) repo vacio de logica
 caso "repo sin hook y sin tests => exit 0"
 mkdir -p "$SANDBOX/vacio/tests"

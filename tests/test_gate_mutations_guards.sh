@@ -76,6 +76,52 @@ salida="$(correr_driver 'G1|presupuesto_infinito|mutacion real atribuida a un ga
 [ "$rc" -ne 0 ] || malo "esperaba exit != 0, salio 0: el driver no sabe ponerse en rojo"
 printf '%s' "$salida" | grep -q 'ningun caso detecto' || malo "no nombra el motivo (gate sin atar)"
 
+# ------------------------------------ 5) shard de CI: la union son TODAS (2026-08-29)
+# `SAIKIT_MUT_SHARD=i/N` reparte las 111 mutaciones entre N jobs paralelos porque
+# este archivo solo se llevaba ~6 de los 6.9 min del CI. Lo que hay que candar no
+# es la velocidad: es que la union de las N partes sea la lista ENTERA. Un shard
+# que perdiera mutaciones seria un candado que deja de correr sin que nadie se
+# entere — la misma falla silenciosa que esta bateria existe para evitar.
+#
+# Barato como el resto del archivo: el catalogo son mutaciones INERTES, que el
+# driver rechaza antes de correr un solo caso; lo que se cuenta es cuantas nombro
+# cada parte.
+cat_seis='G1|inerte|a
+G1|inerte|b
+G1|inerte|c
+G1|inerte|d
+G1|inerte|e
+G1|inerte|f'
+procesadas() {  # $1 = i/N  -> cuantas mutaciones proceso esa parte
+  SAIKIT_MUT_SHARD="$1" correr_driver "$cat_seis" "$tmp/lib.sh" \
+    | grep -c 'la mutacion no cambio nada'
+}
+caso "la union de los 3 shards == la lista entera (ni una mutacion se pierde)"
+p1="$(procesadas 1/3)"; p2="$(procesadas 2/3)"; p3="$(procesadas 3/3)"
+total=$((p1 + p2 + p3))
+[ "$total" -eq 6 ] || malo "los 3 shards suman $total de 6 mutaciones (1/3=$p1 2/3=$p2 3/3=$p3)"
+{ [ "$p1" -gt 0 ] && [ "$p2" -gt 0 ] && [ "$p3" -gt 0 ]; } \
+  || malo "algun shard quedo sin mutaciones: 1/3=$p1 2/3=$p2 3/3=$p3"
+
+caso "un shard corre SOLO su parte, no la lista entera"
+[ "$p1" -lt 6 ] || malo "el shard 1/3 corrio las 6: el filtro no se aplico"
+
+caso "shard con forma invalida => corta con exit 2 y no corre nada"
+salida="$(SAIKIT_MUT_SHARD='dos' correr_driver "$cat_seis" "$tmp/lib.sh")"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2 con un shard invalido, dio $rc"
+printf '%s' "$salida" | grep -q 'SAIKIT_MUT_SHARD invalido' || malo "no nombra el motivo: $salida"
+printf '%s' "$salida" | grep -q 'la mutacion no cambio nada' && malo "corrio mutaciones con un shard invalido"
+
+caso "shard fuera de rango => corta con exit 2"
+salida="$(SAIKIT_MUT_SHARD='4/3' correr_driver "$cat_seis" "$tmp/lib.sh")"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2 con 4/3, dio $rc"
+printf '%s' "$salida" | grep -q 'fuera de rango' || malo "no nombra el motivo: $salida"
+
+caso "un shard que queda VACIO no reporta verde"
+salida="$(SAIKIT_MUT_SHARD='9/9' correr_driver 'G1|inerte|unica' "$tmp/lib.sh")"; rc=$?
+[ "$rc" -ne 0 ] || malo "un shard vacio cerro en verde: $salida"
+printf '%s' "$salida" | grep -qi 'vacio' || malo "no dice que quedo vacio: $salida"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_gate_mutations_guards: FAIL" >&2
   exit 1

@@ -85,12 +85,18 @@ jobs:
   # cygpath ya se autolimitan con `command -v cygpath` y en Linux corren su
   # mitad POSIX; los que dependen de forma Windows de rutas se listan en la
   # fila 10.5 de Plans.md si llegaran a divergir.
-  # Particion en dos jobs PARALELOS (2026-08-28): medido en el run 33231405475,
-  # `test_gate_mutations` era 4.8 de los 6.9 min del job unico. No se saltea ni
-  # un test — es un reparto: `SAIKIT_PARTICION` vive en `tests/run.sh` con la
-  # lista de lentos, y `tests/test_runner_guards.sh` canda que la union de las
-  # dos mitades sea la bateria ENTERA (una mitad que no corre nada rompe).
-  # El reloj del PR baja de ~7 min a ~2.5.
+  # Reparto en jobs PARALELOS. Nada se saltea: son particiones cuya UNION es la
+  # bateria entera, y cada nivel tiene su candado.
+  #
+  # Medido: el job unico eran 6.9 min (run 33231405475) y `test_gate_mutations`
+  # se llevaba ~6 de esos minutos (run 33232669996: la mitad lenta sola tardo
+  # 6.0 y la rapida 2.7). Por eso el reparto es en DOS niveles:
+  #   1) `SAIKIT_PARTICION` (en `tests/run.sh`) separa la mitad lenta de la
+  #      rapida — candado: `tests/test_runner_guards.sh`.
+  #   2) `SAIKIT_MUT_SHARD=i/N` (en `tests/test_gate_mutations.sh`) reparte las
+  #      111 mutaciones en 3 (37/37/37) — candado:
+  #      `tests/test_gate_mutations_guards.sh`.
+  # Reloj esperado del PR: ~2.7 min (lo fija ahora la mitad rapida).
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -109,14 +115,19 @@ jobs:
   suite-lentos:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run the gate suite — slow half (tests/run.sh)
+      - name: Run the gate suite — slow half, shard ${{ matrix.shard }} (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
           SAIKIT_CI_LINUX: '1'
           SAIKIT_PARTICION: lentos
+          SAIKIT_MUT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
 
   # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de

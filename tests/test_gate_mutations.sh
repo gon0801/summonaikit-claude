@@ -757,6 +757,37 @@ if [ -n "${SAIKIT_MUTACIONES:-}" ]; then
   MUTACIONES="$SAIKIT_MUTACIONES"
 fi
 
+# ------------------------------------------------------ shard para CI (2026-08-29)
+# Medido en el run 33232669996: 111 mutaciones a ~3.2 s cada una = ~6 min, y este
+# archivo SOLO fijaba el reloj del PR entero (el resto de la bateria son 2.7 min,
+# en paralelo). `SAIKIT_MUT_SHARD="i/N"` corre la i-esima de N partes, repartidas
+# round-robin POR POSICION (no por gate: asi ninguna parte se queda con todos los
+# casos caros de un mismo gate).
+#
+# No saltea nada: la union de las N partes es la lista ENTERA, y
+# `tests/test_gate_mutations_guards.sh` lo canda — una parte que perdiera
+# mutaciones seria un candado que deja de correr sin que nadie se entere, la
+# misma falla silenciosa que esta bateria existe para evitar. Un shard vacio o
+# una forma invalida cortan con exit 2 en vez de reportar verde.
+if [ -n "${SAIKIT_MUT_SHARD:-}" ]; then
+  case "$SAIKIT_MUT_SHARD" in
+    [1-9]/[1-9]|[1-9]/[1-9][0-9]|[1-9][0-9]/[1-9][0-9]) ;;
+    *) echo "test_gate_mutations: SAIKIT_MUT_SHARD invalido: [$SAIKIT_MUT_SHARD] — forma i/N" >&2; exit 2 ;;
+  esac
+  _sh_i="${SAIKIT_MUT_SHARD%%/*}"
+  _sh_n="${SAIKIT_MUT_SHARD##*/}"
+  if [ "$_sh_i" -gt "$_sh_n" ]; then
+    echo "test_gate_mutations: shard $_sh_i fuera de rango (son $_sh_n)" >&2; exit 2
+  fi
+  MUTACIONES="$(printf '%s\n' "$MUTACIONES" | awk -v i="$_sh_i" -v n="$_sh_n" \
+    '/^[A-Za-z0-9]+\|/ { c++; if ((c - 1) % n == i - 1) print }')"
+  if [ -z "$MUTACIONES" ]; then
+    echo "test_gate_mutations: el shard $SAIKIT_MUT_SHARD quedo VACIO — no corrio ninguna mutacion" >&2
+    exit 2
+  fi
+  echo "test_gate_mutations: shard $SAIKIT_MUT_SHARD — $(printf '%s\n' "$MUTACIONES" | grep -c .) mutaciones"
+fi
+
 # ------------------------------------------------------------------ la corrida
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/saikit-mut-XXXXXX")" || exit 1
 HOOK_BAJO_PRUEBA="$vivo"

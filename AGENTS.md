@@ -39,12 +39,19 @@ es el fork de MSYS, no la logica del hook.
 
 ## Gate final: CI Linux, no la suite local (politica 2026-08-15)
 
-La bateria completa corre en ubuntu en CADA push/PR, repartida en DOS jobs
-paralelos (2026-08-28): `suite` (mitad rapida) y `suite-lentos`
-(`test_gate_mutations`, que era 4.8 de los 6.9 min del job unico). No se saltea
-ni un test: `SAIKIT_PARTICION` reparte la lista de `tests/run.sh` y
-`tests/test_runner_guards.sh` canda que la union de las dos mitades sea la
-bateria entera. El reloj del PR baja de ~7 min a ~2.5. Correr ademas la suite
+La bateria completa corre en ubuntu en CADA push/PR, repartida en jobs
+PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
+bateria entera, y cada nivel tiene su candado.
+
+- `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), ~2.7 min. Candado:
+  `tests/test_runner_guards.sh`.
+- `suite-lentos` — `test_gate_mutations`, que solo se llevaba ~6 de los 6.9 min
+  del job unico, repartido en 3 shards de 37 mutaciones
+  (`SAIKIT_MUT_SHARD=i/3`), ~2 min cada uno. Candado:
+  `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
+  shard vacio, invalido o fuera de rango corta con exit 2).
+
+El reloj del PR baja de ~7 min a ~2.7. Correr ademas la suite
 completa en local (~20 min por el fork de MSYS) es pagar dos veces lo mismo —
 medido 2026-08-15: dos sesiones paralelas gastaron ~2 h de pared en suites
 locales serializadas por el candado.
