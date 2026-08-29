@@ -85,18 +85,38 @@ jobs:
   # cygpath ya se autolimitan con `command -v cygpath` y en Linux corren su
   # mitad POSIX; los que dependen de forma Windows de rutas se listan en la
   # fila 10.5 de Plans.md si llegaran a divergir.
+  # Particion en dos jobs PARALELOS (2026-08-28): medido en el run 33231405475,
+  # `test_gate_mutations` era 4.8 de los 6.9 min del job unico. No se saltea ni
+  # un test — es un reparto: `SAIKIT_PARTICION` vive en `tests/run.sh` con la
+  # lista de lentos, y `tests/test_runner_guards.sh` canda que la union de las
+  # dos mitades sea la bateria ENTERA (una mitad que no corre nada rompe).
+  # El reloj del PR baja de ~7 min a ~2.5.
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run the full gate suite (tests/run.sh)
+      - name: Run the gate suite — fast half (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
           # Task 10.5: marca los 4 tests Windows-bound como SKIP CON LISTADO
           # (los nombra el runner uno por uno; razones en Plans.md, fila 10.5).
           SAIKIT_CI_LINUX: '1'
+          SAIKIT_PARTICION: rapidos
+        run: bash tests/run.sh
+
+  suite-lentos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the gate suite — slow half (tests/run.sh)
+        env:
+          SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
+          SAIKIT_CI_LINUX: '1'
+          SAIKIT_PARTICION: lentos
         run: bash tests/run.sh
 
   # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de
