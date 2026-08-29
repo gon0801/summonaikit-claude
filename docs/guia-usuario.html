@@ -1,0 +1,382 @@
+<!--
+  Este archivo NO es una pagina HTML suelta: es el CUERPO de un artifact de
+  claude.ai, y al publicarlo se envuelve en su propio <!doctype html> + <head>
+  + <body>. Por eso no lleva doctype ni <html>/<head>/<body> propios: ponerlos
+  duplicaria el esqueleto y romperia la publicacion. HTMLHint marca
+  `doctype-first` sobre este archivo; es un falso positivo del linter externo
+  (no corre en nuestros candados) y no se corrige agregando el doctype.
+  Fuente de la guia publicada en:
+  https://claude.ai/code/artifact/b734d453-27a8-428a-835e-67ba0c692ada
+-->
+<title>Qué escribo y qué pasa solo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    /* Sala de control: tinta verde-grisácea sobre papel, acento teal de instrumento. */
+    --ground:      #F6F5F1;
+    --surface:     #FFFFFF;
+    --surface-alt: #EEEDE7;
+    --ink:         #14201E;
+    --ink-soft:    #4A5754;
+    --ink-faint:   #7B8683;
+    --rule:        #DCDAD2;
+    --accent:      #0E5E58;
+    --accent-soft: #E0EDEB;
+    --ok:          #3F6B3A;
+    --ok-soft:     #E4EDE1;
+    --wait:        #8A5A22;
+    --wait-soft:   #F3E9DC;
+
+    --f-display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+    --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101715;
+      --surface:     #16201E;
+      --surface-alt: #1D2926;
+      --ink:         #ECEFEC;
+      --ink-soft:    #A6B3AF;
+      --ink-faint:   #77837F;
+      --rule:        #2A3733;
+      --accent:      #6FC9BE;
+      --accent-soft: #1B302E;
+      --ok:          #92C588;
+      --ok-soft:     #1C2A1B;
+      --wait:        #D8A35F;
+      --wait-soft:   #2C2317;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101715;
+    --surface:     #16201E;
+    --surface-alt: #1D2926;
+    --ink:         #ECEFEC;
+    --ink-soft:    #A6B3AF;
+    --ink-faint:   #77837F;
+    --rule:        #2A3733;
+    --accent:      #6FC9BE;
+    --accent-soft: #1B302E;
+    --ok:          #92C588;
+    --ok-soft:     #1C2A1B;
+    --wait:        #D8A35F;
+    --wait-soft:   #2C2317;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 5.5vw, 3.2rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  h2 { font-size: clamp(1.4rem, 3vw, 1.8rem); font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; font-weight: 700; }
+  p { margin: 0; max-width: 62ch; }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* ---- apertura ---- */
+  .lede { display: flex; flex-direction: column; gap: 1rem; }
+  .lede p { font-size: 1.1rem; color: var(--ink-soft); }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .count {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 2.5rem;
+    margin-top: 0.6rem;
+    padding: 1.1rem 1.3rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+  }
+  .count div { display: flex; flex-direction: column; }
+  .count .n {
+    font-family: var(--f-display);
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .count .lbl { font-size: 0.85rem; color: var(--ink-faint); margin-top: 0.25rem; }
+
+  section { display: flex; flex-direction: column; gap: 1.4rem; }
+  .sec-head { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  /* ---- lo que TÚ escribes: tarjetas accionables, en mono ---- */
+  .cmds { display: flex; flex-direction: column; gap: 0.9rem; }
+
+  .cmd {
+    display: grid;
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+    gap: 0.4rem 1.6rem;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.1rem 1.3rem;
+  }
+  @media (max-width: 46rem) { .cmd { grid-template-columns: 1fr; } }
+
+  .cmd code {
+    font-family: var(--f-mono);
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 0.3rem 0.55rem;
+    justify-self: start;
+    overflow-wrap: anywhere;
+  }
+  .cmd .what { font-weight: 600; margin-bottom: 0.15rem; }
+  .cmd .when { color: var(--ink-soft); font-size: 0.95rem; }
+  .cmd .body { display: flex; flex-direction: column; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--f-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.45rem;
+    justify-self: start;
+    margin-top: 0.5rem;
+  }
+  .chip.ya   { color: var(--ok);   background: var(--ok-soft); }
+  .chip.pron { color: var(--wait); background: var(--wait-soft); }
+
+  /* ---- lo que pasa SOLO: ledger silencioso, sin aire de botón ---- */
+  .ledger { border-top: 1px solid var(--rule); }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    gap: 0.2rem 1.6rem;
+    padding: 0.85rem 0.2rem;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  @media (max-width: 46rem) { .row { grid-template-columns: 1fr; } }
+  .row .name {
+    font-family: var(--f-mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .row .desc { color: var(--ink-soft); font-size: 0.95rem; }
+  .row .desc b { color: var(--ink); font-weight: 600; }
+
+  .note {
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    padding: 1rem 1.2rem;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+  }
+  .note b { color: var(--ink); font-weight: 600; }
+
+  /* ---- el turno, paso a paso ---- */
+  .flow { display: flex; flex-direction: column; gap: 0; counter-reset: paso; }
+  .step {
+    display: grid;
+    grid-template-columns: 2.1rem minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0.7rem 0;
+    align-items: baseline;
+  }
+  .step::before {
+    counter-increment: paso;
+    content: counter(paso);
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    width: 2.1rem;
+    height: 2.1rem;
+    display: grid;
+    place-items: center;
+  }
+  .step .t { font-weight: 600; }
+  .step .d { color: var(--ink-soft); font-size: 0.95rem; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.4rem;
+    color: var(--ink-faint);
+    font-size: 0.86rem;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, .cmd:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="lede">
+    <span class="eyebrow">summonaikit · guía de uso</span>
+    <h1>Qué escribo y qué pasa solo</h1>
+    <p>Parece que hay muchas piezas, pero <strong>casi ninguna es tuya</strong>. Las recetas, los cuatro roles y el recibo los maneja el líder por su cuenta. Lo único que tú tecleas son unas pocas palabras al principio de tu mensaje.</p>
+    <div class="count">
+      <div><span class="n">2</span><span class="lbl">palabras que puedes usar hoy</span></div>
+      <div><span class="n">5</span><span class="lbl">cuando esté todo listo</span></div>
+      <div><span class="n">0</span><span class="lbl">recetas que eliges tú</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Lo que tú escribes</span>
+      <h2>Las palabras que activan el sistema</h2>
+      <p>Van al principio de tu mensaje, como una palabra más. Sin ninguna de ellas, el sistema se queda quieto y trabajas como siempre.</p>
+    </div>
+
+    <div class="cmds">
+      <div class="cmd">
+        <code>-saikit</code>
+        <div class="body">
+          <span class="what">Construye algo, con todos los controles puestos</span>
+          <span class="when">El trabajo pasa por tres pares de ojos distintos antes de darse por terminado, y al final recibes un resumen de qué se hizo y cómo se comprobó. Úsalo para cualquier cosa que toque tu app de verdad.</span>
+          <span class="chip ya">ya funciona</span>
+        </div>
+      </div>
+
+      <div class="cmd">
+        <code>-saikit:fast</code>
+        <div class="body">
+          <span class="what">Lo mismo, pero sin repartir el trabajo</span>
+          <span class="when">Para cambios chicos donde repartir cuesta más de lo que ayuda: un texto, un color, un typo. Te siguen debiendo el resumen y la prueba de que funciona.</span>
+          <span class="chip ya">ya funciona</span>
+        </div>
+      </div>
+
+      <div class="cmd">
+        <code>-saikit:pregunta</code>
+        <div class="body">
+          <span class="what">Solo quiero entender algo, no cambiarlo</span>
+          <span class="when">La respuesta llega explicada desde cero y con la evidencia de dónde salió. No se toca ni una línea de tu app.</span>
+          <span class="chip pron">en camino</span>
+        </div>
+      </div>
+
+      <div class="cmd">
+        <code>-saikit:boceto</code>
+        <div class="body">
+          <span class="what">Muéstrame dos o tres opciones antes de decidir</span>
+          <span class="when">Cuando no sabes cuál te gusta más. Se arman variantes desechables, aparte de tu app, y eliges viendo en vez de imaginando.</span>
+          <span class="chip pron">en camino</span>
+        </div>
+      </div>
+
+      <div class="cmd">
+        <code>-saikit:autopilot</code>
+        <div class="body">
+          <span class="what">Hazlo y publícalo tú, no me preguntes</span>
+          <span class="when">El cambio se construye, se prueba, se revisa y se publica solo. Después vigila dos cosas: que las pruebas de tu proyecto sigan en verde y, si configuraste una dirección para checarlo, que tu app siga viva. Si alguna de las dos falla, intenta deshacerlo y te avisa; si no puede — porque ya se publicó algo encima, o el deshacer tampoco pasa las pruebas — se detiene y te dice qué hacer, en vez de insistir. Hay que activarlo una vez por proyecto.</span>
+          <span class="chip pron">en camino</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note"><b>Si no escribes ninguna:</b> el sistema no se activa y nadie te pide nada. No hay forma de "dejarlo prendido" por accidente.</div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Lo que pasa solo</span>
+      <h2>Las recetas: no las eliges tú</h2>
+      <p>Según lo que pidas, el líder abre la receta que corresponde y sigue sus pasos. Están aquí para que sepas qué esperar, no para que las invoques.</p>
+    </div>
+
+    <div class="ledger">
+      <div class="row"><span class="name">bug</span><span class="desc"><b>Algo no funciona.</b> Primero lo reproduce él mismo — un problema que no puede provocar, no puede darlo por resuelto — y deja una prueba para que no vuelva.</span></div>
+      <div class="row"><span class="name">funcion</span><span class="desc"><b>Algo nuevo.</b> Primero define qué datos maneja, luego lo construye completo: la pantalla, lo que guarda, y qué se ve cuando está vacío o falla.</span></div>
+      <div class="row"><span class="name">refactor</span><span class="desc"><b>Ordenar por dentro sin cambiar nada por fuera.</b> Antes de mover nada deja una prueba que fije el comportamiento actual.</span></div>
+      <div class="row"><span class="name">lento</span><span class="desc"><b>Algo tarda.</b> Mide antes, cambia una sola cosa, mide después, y te dice el antes y el después.</span></div>
+      <div class="row"><span class="name">investigar</span><span class="desc"><b>Explicar cómo funciona algo.</b> Sin tocar código y citando de dónde sacó cada afirmación.</span></div>
+      <div class="row"><span class="name">boceto</span><span class="desc"><b>Probar una idea barata.</b> Variantes desechables en un rincón aparte, nunca en tu app.</span></div>
+      <div class="row"><span class="name">cuidar-pr</span><span class="desc"><b>Dejar un cambio listo para publicar.</b> Atiende los comentarios automáticos y espera a que las pruebas pasen. <i>En camino.</i></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Lo que pasa solo</span>
+      <h2>Los cuatro que revisan</h2>
+      <p>Cuando escribes <code style="font-family:var(--f-mono);font-size:0.9em">-saikit</code>, el trabajo pasa por estos, en este orden. Nunca los llamas por su nombre.</p>
+    </div>
+
+    <div class="ledger">
+      <div class="row"><span class="name">implementer</span><span class="desc">Escribe el cambio, lo más chico que resuelva el problema.</span></div>
+      <div class="row"><span class="name">verifier</span><span class="desc">Comprueba que de verdad funciona, corriendo cosas — no confía en que "debería andar".</span></div>
+      <div class="row"><span class="name">adversary</span><span class="desc">Intenta romperlo a propósito. Es el único de los cuatro que <b>no siempre entra</b>: lo llama el líder cuando el cambio toca dinero, contraseñas o datos que ya existían. Es su criterio, no un automatismo — si quieres asegurarte, pídelo en tu mensaje.</span></div>
+      <div class="row"><span class="name">reviewer</span><span class="desc">Lee el cambio con ojos frescos y decide qué hallazgo se corrige y cuál no.</span></div>
+    </div>
+
+    <div class="note"><b>El recibo.</b> Al final el líder te deja un resumen en palabras simples: qué entendió que pediste, qué cambió, cómo lo comprobó y qué quedó pendiente. El sistema se lo exige antes de dejarlo cerrar.</div>
+
+    <div class="note"><b>Hasta dónde llega esto — dicho en claro.</b> Los controles de arriba son un <b>ayudante disciplinado, no un candado</b>. El sistema comprueba que los pasos ocurrieran y que el resumen traiga evidencia; lo que no puede es garantizar que esa evidencia sea cierta. Y cuando no logra ver algo — porque el programa donde trabajas no le muestra esa parte — <b>deja pasar en vez de bloquear</b>, a propósito: un control que frena sin poder mirar estorba más de lo que protege. Un turno puede cerrar diciendo <i>«no corrí las pruebas»</i>: lo que el sistema exige es que lo <b>diga</b>, no que estén en verde. El único lugar donde sí hay candado de verdad es el que publica solo: ahí no mergea sin el visto bueno verde de tu proyecto atado a ese cambio exacto — y si no lo puede ver, no mergea.</div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Lo que pasa solo</span>
+      <h2>Herramientas que se instalan una vez</h2>
+    </div>
+
+    <div class="ledger">
+      <div class="row"><span class="name">/sencillo</span><span class="desc">Si algo te llegó con demasiada jerga, pides esto y te lo reescribe en palabras normales. <i>En camino.</i></span></div>
+      <div class="row"><span class="name">verificar-app</span><span class="desc">Crea, dentro de tu proyecto, la forma de probar tu app <b>como la usa una persona</b> — no solo por dentro. Es lo que hace confiable todo lo demás. <i>En camino.</i></span></div>
+      <div class="row"><span class="name">setup-autopilot</span><span class="desc">Te hace unas preguntas simples una sola vez y deja el autopilot listo para ese proyecto. <i>En camino.</i></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Un turno, de principio a fin</span>
+      <h2>Qué pasa cuando escribes <code style="font-family:var(--f-mono);font-size:0.75em;vertical-align:0.08em">-saikit</code></h2>
+    </div>
+    <div class="flow">
+      <div class="step"><div><span class="t">Te repite lo que entendió</span><div class="d">Con tus palabras. Si algo del resultado que quieres no está claro, te pregunta antes de construir — nunca sobre cómo hacerlo, solo sobre qué quieres.</div></div></div>
+      <div class="step"><div><span class="t">Elige la receta y la sigue</span><div class="d">La declara en el resumen final, para que sepas por qué camino fue.</div></div></div>
+      <div class="step"><div><span class="t">Construye, comprueba y revisa</span><div class="d">Los tres de siempre, en orden: escribe, comprueba, revisa. El cuarto — el que intenta romperlo — entra solo cuando el líder lo llama o cuando tú lo pides. Si la revisión encuentra algo, se corrige solo eso; no se vuelve a empezar.</div></div></div>
+      <div class="step"><div><span class="t">Te entrega el recibo</span><div class="d">Primero qué cambia para ti, después cómo, después por qué.</div></div></div>
+    </div>
+  </section>
+
+  <footer>
+    Lo marcado <b>en camino</b> está en construcción: se va abriendo por fases y esta guía se actualiza cuando cada pieza entra. Lo marcado <b>ya funciona</b> lo puedes usar hoy.
+  </footer>
+
+</div>
