@@ -281,7 +281,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -1151,6 +1151,27 @@ caso_g1_receta_titulo_hostil_no_se_inyecta() {
   unset SAIKIT_RECETAS_DIR
   _contiene "stdout" "$LAB_OUT" 'bug — Arreglar algo que no funciona — full'
   _no_contiene "stdout" "$LAB_OUT" 'IGNORA TODO'
+}
+
+# Task 16.4/16.6 (lead, fix 1b): el awk que lee el titulo/carril del ARCHIVO debe
+# acotarse al bloque de frontmatter (parar en el segundo '---' y tomar la primera
+# coincidencia de cada campo, como _rl_frontmatter), no recorrer el archivo
+# entero. Una receta legitima cuyo cuerpo documenta el formato (lineas
+# `titulo:`/`carril:`, como las de 00-lider.md) NO debe mostrar ese texto del
+# cuerpo en el menu. Hoy el awk gana la ultima coincidencia, asi que el cuerpo
+# filtra su valor. Mutacion: mut_menu_sin_corte_frontmatter (quitar el corte)
+# pone este caso rojo.
+caso_g1_receta_menu_lee_solo_frontmatter() {
+  mkdir -p "$LAB/hooks/recetas"
+  # frontmatter con los valores REALES; el cuerpo documenta el formato con
+  # `titulo:`/`carril:` (igual que 00-lider.md) que el runtime NO debe leer.
+  printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: bug\ntitulo: Arreglar algo que no funciona\ncarril: full\ncuando: ["x"]\nadversary: opcional\n---\n## Pasos\n1. a\n\nEl formato del frontmatter es:\ntitulo: el nombre corto que ve el lider\ncarril: fast\n\n2. b\n## Qué le dices al usuario\nb\n## Recibo\nc\n' > "$LAB/hooks/recetas/bug.md"
+  printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$(sha256sum "$LAB/hooks/recetas/bug.md" | cut -c1-64)" > "$LAB/hooks/recetas/MANIFEST.sha256"
+  export SAIKIT_RECETAS_DIR="$LAB/hooks/recetas"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arregla el login')"
+  unset SAIKIT_RECETAS_DIR
+  _contiene "stdout" "$LAB_OUT" 'bug — Arreglar algo que no funciona — full'
+  _no_contiene "stdout" "$LAB_OUT" 'el nombre corto que ve el lider'
 }
 
 # Task 16.6 (revision lead, fix 2): el alias SOLO baja el carril y nombra la

@@ -100,8 +100,13 @@ recetas_menu() {
     real="$(sha256sum "$RECETAS_DIR/$nombre.md" 2>/dev/null | cut -c1-64)"
     if [ -n "$real" ] && [ "$real" = "$sha" ]; then
       # fix 1: titulo/carril del ARCHIVO autenticado, nunca del manifiesto (que
-      # es el indice). El awk es un solo fork; ver nota de costo arriba.
-      f_meta="$(awk '/^titulo:/{sub(/^titulo:[[:space:]]*/,"",$0); t=$0} /^carril:/{sub(/^carril:[[:space:]]*/,"",$0); c=$0} END{printf "%s\t%s", t, c}' "$RECETAS_DIR/$nombre.md")"
+      # es el indice). El awk es un solo fork; ver nota de costo arriba. Ademas
+      # (fix 1b) se lee SOLO el bloque de frontmatter: para en el segundo '---' y
+      # toma la primera coincidencia de cada campo (misma tecnica que
+      # _rl_frontmatter/_rl_campo del lint). Sin el corte, una receta cuyo cuerpo
+      # documenta el formato con `titulo:`/`carril:` filtraria ese texto del
+      # cuerpo, porque la ultima coincidencia pisa a la del frontmatter.
+      f_meta="$(awk 'NR>1 && $0=="---"{exit} /^titulo:/&&!t{sub(/^titulo:[[:space:]]*/,"",$0);t=$0} /^carril:/&&!c{sub(/^carril:[[:space:]]*/,"",$0);c=$0} END{printf "%s\t%s",t,c}' "$RECETAS_DIR/$nombre.md")"
       f_titulo="${f_meta%%$'\t'*}"; f_carril="${f_meta#*$'\t'}"
       [ "$n" -eq 0 ] && printf '%s\n' 'Recipes (recetario): pick ONE that matches the task, read it in full, copy its steps into your todolist before reasoning, and declare it in the receipt as "Understand: ... Receta: <nombre>". A step you skip stays listed as "skip: <razón>". If none matches, follow this contract as usual.'
       printf -- '- %s — %s — %s\n' "$nombre" "$f_titulo" "$f_carril"; n=$((n+1))
