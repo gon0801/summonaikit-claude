@@ -65,12 +65,29 @@ if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
 # Phase 15: en dsh la tool model-facing de delegacion es `subagent` (no Task).
 if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the subagent tool"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Task 16.4 (D1): recetario. Solo el manifiesto se lee en runtime (un cat +
-# sha256sum por receta); NUNCA se parsea frontmatter aqui. Override de entorno
-# para el lab/golden (la ruta real cambia por corrida y NO se imprime).
+# Task 16.4 (D1): recetario. El manifiesto se lee en runtime (un cat +
+# sha256sum por receta) como indice de "que recetas hay y cual es su sha
+# esperado". Desde el fix 1 de la revision del lead (16.4/16.6) ADEMAS se lee
+# el titulo/carril del ARCHIVO autenticado (un awk por receta valida); el
+# frontmatter se parsea solo para esas dos claves, nunca como fuente de datos
+# no confiable. Override de entorno para el lab/golden (la ruta real cambia por
+# corrida y NO se imprime).
 RECETAS_DIR="${SAIKIT_RECETAS_DIR:-$HOOK_DIR/recetas}"
-recetas_menu() {  # stdout: bloque del contrato (menu o linea fija). Fail-open.
+# recetas_menu(): stdout = bloque del contrato (menu o linea fija). Fail-open.
+# D1/D4/D7/D8. De la revision del lead (16.4/16.6, fix 1): el sha256 del
+# manifiesto autentica el ARCHIVO de la receta, no la linea del manifiesto.
+# Quien pueda editar el manifiesto (o inyectar SAIKIT_RECETAS_DIR) escribiria el
+# contrato de cada turno armado si el runtime confiara en sus columnas
+# titulo/carril. Por eso el manifiesto es SOLO el indice de "que recetas hay y
+# cual es su sha esperado"; el titulo y el carril que se muestran se leen del
+# archivo cuya hash se acaba de verificar.
+# Costo medido (MSYS2/Git Bash, esta maquina): el awk de abajo agrega UN fork
+# por receta valida, ~25 ms (referencia: el sha256sum+cut que ya existia ~44 ms),
+# una vez por turno armado — el contrato se arma en start_harness, no por evento,
+# asi que es aceptable frente a arriesgar el contrato.
+recetas_menu() {
   local m="$RECETAS_DIR/MANIFEST.sha256" sha tipo nombre carril titulo real n=0 omit=""
+  local f_meta f_titulo f_carril
   if [ ! -r "$m" ]; then printf '%s\n' 'No recipe book on this host: follow this contract as usual.'; return 0; fi
   while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
     [ "$tipo" = "receta" ] || continue
@@ -82,8 +99,12 @@ recetas_menu() {  # stdout: bloque del contrato (menu o linea fija). Fail-open.
     printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || continue
     real="$(sha256sum "$RECETAS_DIR/$nombre.md" 2>/dev/null | cut -c1-64)"
     if [ -n "$real" ] && [ "$real" = "$sha" ]; then
+      # fix 1: titulo/carril del ARCHIVO autenticado, nunca del manifiesto (que
+      # es el indice). El awk es un solo fork; ver nota de costo arriba.
+      f_meta="$(awk '/^titulo:/{sub(/^titulo:[[:space:]]*/,"",$0); t=$0} /^carril:/{sub(/^carril:[[:space:]]*/,"",$0); c=$0} END{printf "%s\t%s", t, c}' "$RECETAS_DIR/$nombre.md")"
+      f_titulo="${f_meta%%$'\t'*}"; f_carril="${f_meta#*$'\t'}"
       [ "$n" -eq 0 ] && printf '%s\n' 'Recipes (recetario): pick ONE that matches the task, read it in full, copy its steps into your todolist before reasoning, and declare it in the receipt as "Understand: ... Receta: <nombre>". A step you skip stays listed as "skip: <razón>". If none matches, follow this contract as usual.'
-      printf -- '- %s — %s — %s\n' "$nombre" "$titulo" "$carril"; n=$((n+1))
+      printf -- '- %s — %s — %s\n' "$nombre" "$f_titulo" "$f_carril"; n=$((n+1))
     else
       omit="$omit $nombre"
     fi
@@ -91,6 +112,25 @@ recetas_menu() {  # stdout: bloque del contrato (menu o linea fija). Fail-open.
   [ "$n" -eq 0 ] && printf '%s\n' 'No recipe book on this host: follow this contract as usual.'
   [ -n "$omit" ] && for x in $omit; do printf '%s\n' "(recipe omitted: hash mismatch ($x) — reinstall with tools/install-hook.sh)"; done
   return 0
+}
+# receta_valida <nombre>: exit 0 si el recetario lista una receta <nombre> cuyo
+# archivo instalado coincide con el sha del manifiesto; exit distinto en caso
+# contrario (sin manifiesto, nombre inseguro, hash distinto). Es la misma
+# comprobacion serie manifiesto+hash que hace recetas_menu, pero para UN nombre
+# con fallo ESTRICTO (no fail-open): es el guard del alias (16.6), que no debe
+# bajar el carril si la receta que nombra no existe — cae al lado seguro (full).
+receta_valida() {  # $1 = nombre
+  local nombre="$1" m="$RECETAS_DIR/MANIFEST.sha256" sha tipo nombre_m carril titulo real
+  printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || return 1
+  [ -r "$m" ] || return 1
+  while IFS="$(printf '\t')" read -r sha tipo nombre_m carril titulo; do
+    [ "$tipo" = "receta" ] || continue
+    [ "$nombre_m" = "$nombre" ] || continue
+    real="$(sha256sum "$RECETAS_DIR/$nombre.md" 2>/dev/null | cut -c1-64)"
+    [ -n "$real" ] && [ "$real" = "$sha" ] && return 0
+    return 1
+  done < "$m"
+  return 1
 }
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
 # ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
@@ -1490,8 +1530,16 @@ start_harness() {
   lane="full"
   if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:fast([^A-Za-z0-9_-]|$)'; then lane="fast"; fi
   receta_alias=""
-  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:pregunta([^A-Za-z0-9_-]|$)'; then lane="fast"; receta_alias="investigar"; fi
-  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:boceto([^A-Za-z0-9_-]|$)'; then lane="fast"; receta_alias="boceto"; fi
+  # Alias de receta (16.6, fix 2): el alias SOLO baja el carril y nombra la
+  # receta si esta EXISTE en el recetario con su sha verificado. Si no (sin
+  # recetario, hash distinto, nombre inseguro): carril full, sin alias y sin
+  # linea en el contrato — el mismo lado seguro al que ya cae un typo del sufijo.
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:pregunta([^A-Za-z0-9_-]|$)'; then
+    if receta_valida "investigar"; then lane="fast"; receta_alias="investigar"; fi
+  fi
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:boceto([^A-Za-z0-9_-]|$)'; then
+    if receta_valida "boceto"; then lane="fast"; receta_alias="boceto"; fi
+  fi
 
   task_hash="$(printf '%s' "$prompt_text" | cksum | awk '{print $1}')"
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
