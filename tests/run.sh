@@ -178,7 +178,12 @@ fi
 # Una mitad que no corrio NINGUN test es un job verde que no probo nada: es la
 # falla que esta particion podria introducir (renombrar un test lento deja la
 # lista huerfana). Se rompe la corrida en vez de publicar un OK vacio.
-if [ -n "$particion" ] && [ "$corridos" -eq 0 ] && [ "$skipped" -eq 0 ]; then
+#
+# Se mira SOLO `corridos`, no `skipped` (Greptile, PR #101): una mitad cuyos
+# tests son todos Windows-bound se salta entera en Linux, y con `skipped > 0`
+# la guardia no disparaba — el job cerraba `OK (0 tests)`, que es exactamente el
+# verde vacio que esto existe para impedir. Los skips se siguen listando arriba.
+if [ -n "$particion" ] && [ "$corridos" -eq 0 ]; then
   echo "tests/run.sh: la particion '$particion' no corrio NINGUN test — lista huerfana o glob vacio" >&2
   echo "              (lentos declarados: $SAIKIT_TESTS_LENTOS)" >&2
   exit 1

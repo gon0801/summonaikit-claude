@@ -130,6 +130,38 @@ jobs:
           SAIKIT_MUT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
 
+  # Compuerta agregada (Greptile, PR #101). El reparto multiplico los checks, y
+  # cualquier consumidor que mire UN solo status — una proteccion de rama, el
+  # `saikit-merge.sh` de la Phase 18, un humano apurado — veria el `suite` de
+  # siempre en verde con `suite-lentos` en rojo: el reparto habria convertido un
+  # candado en decoracion. Este job es el unico status que hay que mirar.
+  #
+  # `if: always()` + comparacion explicita de cada resultado: con `needs:` a
+  # secas, un job que falla deja a este SALTEADO, y un check salteado no bloquea
+  # nada — seria el mismo verde vacio con otra forma. Los nombres con guion van
+  # en corchetes (`needs['node-adapter']`), que es la sintaxis que GitHub acepta.
+  gate:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [quality, node-adapter, suite, suite-lentos, secrets]
+    steps:
+      - name: Todos los jobs de calidad en verde
+        env:
+          R_QUALITY: ${{ needs.quality.result }}
+          R_NODE: ${{ needs['node-adapter'].result }}
+          R_SUITE: ${{ needs.suite.result }}
+          R_LENTOS: ${{ needs['suite-lentos'].result }}
+          R_SECRETS: ${{ needs.secrets.result }}
+        run: |
+          rc=0
+          for par in "quality=$R_QUALITY" "node-adapter=$R_NODE" "suite=$R_SUITE" \
+                     "suite-lentos=$R_LENTOS" "secrets=$R_SECRETS"; do
+            printf '%s\n' "$par"
+            case "$par" in *=success) ;; *) rc=1 ;; esac
+          done
+          [ "$rc" -eq 0 ] || { echo "gate: algun job de calidad NO quedo en success" >&2; exit 1; }
+          echo "gate: OK — todos en success"
+
   # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de
   # secretos en este repo"): el hook de este repo corre en CADA turno y nada
   # impedia instalarlo desde una rama con un secreto adentro. Este job es la

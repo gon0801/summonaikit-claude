@@ -237,6 +237,19 @@ out="$(SAIKIT_PARTICION=lentos bash "$run_sh" "$SANDBOX/part-huerfana" 2>&1)"; r
 [ "$rc" -ne 0 ] || malo "una mitad vacia no puede reportar verde: $out"
 printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que la mitad no corrio nada: $out"
 
+caso "una mitad cuyos tests se saltan TODOS por plataforma tampoco cierra en verde"
+# Greptile (PR #101): con `skipped > 0` y `corridos == 0` la guardia no
+# disparaba y el job cerraba `OK (0 tests)` — verde sin haber probado nada, que
+# es justo lo que esta guardia existe para impedir. `test_hook_acl` esta en la
+# lista de Windows-bound, asi que en CI Linux se salta entero.
+mkdir -p "$SANDBOX/part-solo-skip/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/part-solo-skip/tests/test_hook_acl.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/part-solo-skip/tests/test_gate_mutations.sh"
+out="$(SAIKIT_CI_LINUX=1 SAIKIT_PARTICION=rapidos bash "$run_sh" "$SANDBOX/part-solo-skip" 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "una mitad con todo salteado cerro en verde: $out"
+printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que no corrio nada: $out"
+printf '%s' "$out" | grep -q 'SKIP (linux-ci): test_hook_acl' || malo "el skip se sigue listando: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2
   exit 1
