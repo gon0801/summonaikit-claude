@@ -20,6 +20,16 @@ tool="$here/../tools/check-hook-registration.sh"
 tmp="$(mktemp -d)" || { echo "test_hook_registration: FAIL (mktemp)" >&2; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 
+# Task 16.5: reportar_recetario deriva el hookdir del settings (<dir>/hooks) en
+# modo claude. Los fixtures "completo => silencio" usan --settings "$tmp/*.json",
+# cuyo hookdir es $tmp/hooks: se les planta un recetario VALIDO (manifiesto +
+# recetas del repo) para que el advisory no dispare y el "silencio" del registro
+# completo siga siendo silencio.
+repo="$(cd "$here/.." && pwd)"
+mkdir -p "$tmp/hooks/recetas"
+cp "$repo/recetas/MANIFEST.sha256" "$tmp/hooks/recetas/"
+cp "$repo"/recetas/*.md "$tmp/hooks/recetas/"
+
 fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
@@ -851,6 +861,31 @@ out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dsh con rol duplicado: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con rol duplicado deberia hablar: $out"
 rm -f "$tmp/dsh-dup-$n_dsh_reg.txt"
+
+# ============================================== Task 16.5 — advisory del recetario
+# El contrato del hook solo ofrece las recetas cuyo sha256 coincide con el
+# manifiesto instalado; sin manifiesto (o con hash distinto) esa receta no
+# aparece en el menu. El verificador lo REPORTa (fail-open: exit 0 SIEMPRE).
+caso "recetario: sin manifiesto o con hash distinto => avisa y exit 0"
+# Un settings en un dir propio (no $tmp, que ya tiene un recetario valido) para
+# que el hookdir derivado (<dir>/hooks) no tenga recetas/.
+inca_dir="$tmp/recetario-rutas"
+mkdir -p "$inca_dir/hooks"
+escribir_settings_completo "$inca_dir/settings.json"
+if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=0; else rc_b=$?; fi
+[ "$rc_b" -eq 0 ] || malo "sin manifiesto: esperaba exit 0, dio $rc_b"
+printf '%s' "$out_b" | grep -q 'recetario: ausente o con hash distinto en' \
+  || malo "sin manifiesto debe decir 'ausente o con hash distinto': $out_b"
+# Ahora con manifiesto pero con hash FALSO para bug.md (el contrato no ofrecera
+# esa receta).
+mkdir -p "$inca_dir/hooks/recetas"
+failsha="$(printf 'a%.0s' $(seq 1 64))"
+printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$failsha" > "$inca_dir/hooks/recetas/MANIFEST.sha256"
+: > "$inca_dir/hooks/recetas/bug.md"
+if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=0; else rc_b=$?; fi
+[ "$rc_b" -eq 0 ] || malo "con hash distinto: esperaba exit 0, dio $rc_b"
+printf '%s' "$out_b" | grep -q 'no ofrecera esa receta' \
+  || malo "con hash distinto debe decir 'no ofrecera esa receta': $out_b"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

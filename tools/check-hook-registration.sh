@@ -495,6 +495,38 @@ reportar_session_rules() {
   reportar "              Se arregla en settings.json: agregar el hook en SessionStart, sin matcher."
 }
 
+# Task 16.5 (D1): advisory del recetario. El contrato del hook solo ofrece las
+# recetas cuyo sha256 coincide con el manifiesto instalado: sin manifiesto (o con
+# hash distinto) esa receta NO aparece en el menu. Fail-open: exit 0 siempre;
+# corre en los desenlaces verdes, como reportar_session_rules. El hookdir se
+# deriva del settings en modo Claude (el hook vive en <dir del settings>/hooks).
+reportar_recetario() {
+  [ "$MODO" = "claude" ] || return 0
+  local hookdir m sha tipo nombre carril titulo real
+  hookdir="$(dirname "$SETTINGS")/hooks"
+  m="$hookdir/recetas/MANIFEST.sha256"
+  if [ ! -e "$m" ]; then
+    reportar "[summonaikit] recetario: ausente o con hash distinto en $m — el contrato no ofrecera esa receta"
+    return 0
+  fi
+  if [ ! -f "$m" ] || [ ! -r "$m" ]; then
+    reportar "[summonaikit] recetario: unknown — $m existe pero no se pudo leer; no se afirma ausencia."
+    return 0
+  fi
+  while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+    [ "$tipo" = "receta" ] || continue
+    if [ ! -f "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: ausente o con hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+      continue
+    fi
+    real="$(sha256sum "$hookdir/recetas/$nombre.md" 2>/dev/null | cut -c1-64)"
+    if [ -z "$real" ] || [ "$real" != "$sha" ]; then
+      reportar "[summonaikit] recetario: ausente o con hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+    fi
+  done < "$m"
+  return 0
+}
+
 # Reporta el hueco del matcher de Agent cuando PostToolUse esta registrado pero
 # su matcher no cubre 'Agent' (Task 3.7 / CORRECCION 2): un subagente read-only
 # (Read/Grep/Glob) no generaria ningun evento para el gate. No edita el registro
@@ -632,6 +664,7 @@ if [ -z "$faltantes" ]; then
   [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
   reportar_session_rules
+  reportar_recetario
   reportar_wrapper_codex
   reportar_hook_grok
   exit 0
@@ -661,6 +694,7 @@ reportar "              revisar: $SETTINGS"
 [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
 [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
 reportar_session_rules
+reportar_recetario
 reportar_matcher
 reportar_wrapper_codex
 reportar_hook_grok

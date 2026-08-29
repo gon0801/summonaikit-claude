@@ -156,6 +156,32 @@ antes="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
 despues="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
 [ "$antes" = "$despues" ] || malo "la auditoria modifico el arbol"
 
+# ============================================ Task 16.5 — -RutasExtra en el ACL
+# El recetario y las skills viven FUERA del arbol de hooks
+# (~/.claude/hooks/recetas, ~/.claude/skills/*). -RutasExtra los suma al arbol
+# auditado; una ruta que aun no existe se reporta `ausente` y NO es un error.
+caso "RutasExtra: rutas aceptadas; la ausente se reporta ausente, no error"
+mkdir -p "$tmp/acl-extra-existe"
+printf 'x\n' > "$tmp/acl-extra-existe/archivo.txt"
+if command -v cygpath >/dev/null 2>&1; then
+  arbol_w="$(cygpath -w "$tmp/arbol")"
+  extra_w="$(cygpath -w "$tmp/acl-extra-existe")"
+  ausente_w="$(cygpath -w "$tmp/acl-extra-no-existe")"
+else
+  arbol_w="$tmp/arbol"
+  extra_w="$tmp/acl-extra-existe"
+  ausente_w="$tmp/acl-extra-no-existe"
+fi
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -Command "& '$tool_win' -Path '$arbol_w' -RutasExtra '$extra_w','$ausente_w'" > "$tmp/acl-out.txt" 2>&1
+rc=$?
+# El arbol bajo %TEMP% hereda ACE con escritura (CodexSandboxUsers / SID huerfano),
+# asi que la auditoria puede salir 1 por esos hallazgos. Lo que NO debe pasar es
+# que la ruta extra AUSENTE sea un error (exit 2): se reporta y se salta.
+[ "$rc" -ne 2 ] || malo "una ruta extra ausente NO debe ser un error (exit 2): $(cat "$tmp/acl-out.txt")"
+grep -qi 'ausente' "$tmp/acl-out.txt" || malo "no reporta la ruta extra ausente: $(cat "$tmp/acl-out.txt")"
+grep -qF "$ausente_w" "$tmp/acl-out.txt" || malo "no nombra la ruta ausente: $(cat "$tmp/acl-out.txt")"
+grep -qi 'no se audita' "$tmp/acl-out.txt" || malo "no dice que la ruta ausente no se audita: $(cat "$tmp/acl-out.txt")"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_acl: FAIL" >&2
   exit 1

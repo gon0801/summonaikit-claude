@@ -79,6 +79,10 @@ QUITAR_GROK=0
 # Phase 15 (D5): --quitar-dsh es la vuelta atras del host dsh (hook + plugin +
 # patch del profile + personas con marca); requiere --host dsh.
 QUITAR_DSH=0
+# Task 16.5 (D1): --quitar-recetas retira SOLO lo nuestro de <hookdir>/recetas/
+# y ~/.claude/skills/sencillo (marca saikit_owned; el manifiesto se juzga por
+# las marcas de las recetas que nombra); requiere el flujo claude.
+QUITAR_RECETAS=0
 # Task 6.5: --host codex escribe la SEGUNDA copia (~/.codex/hooks) por el flujo
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
@@ -111,6 +115,7 @@ while [ $# -gt 0 ]; do
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
     --quitar-grok) QUITAR_GROK=1; shift ;;
     --quitar-dsh) QUITAR_DSH=1; shift ;;
+    --quitar-recetas) QUITAR_RECETAS=1; shift ;;
     --refrescar-manifiesto) REFRESCAR_MANIFIESTO=1; shift ;;
     -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
@@ -152,6 +157,12 @@ if [ "$QUITAR_GROK" -eq 1 ] && [ "$HOST" != "grok" ]; then
 fi
 if [ "$QUITAR_DSH" -eq 1 ] && [ "$HOST" != "dsh" ]; then
   printf '[summonaikit] instalador: --quitar-dsh requiere --host dsh\n' >&2
+  exit 2
+fi
+# Task 16.5: --quitar-recetas despacha a quitar_recetas_claude y solo tiene
+# sentido en el flujo claude (el recetario y /sencillo son de ese host).
+if [ "$QUITAR_RECETAS" -eq 1 ] && [ -n "$HOST" ] && [ "$HOST" != "claude" ]; then
+  printf '[summonaikit] instalador: --quitar-recetas requiere --host claude\n' >&2
   exit 2
 fi
 
@@ -2094,12 +2105,115 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
   return 0
 }
 
+# Task 16.5 (D1/D8): planta el recetario y la skill /sencillo con la maquina de
+# estados POR ARCHIVO de los perfiles (marca saikit_owned; ajeno => DESCONOCIDO,
+# no se toca). Clasifica TODO antes de escribir nada (12.9) y publica cada
+# directorio de un solo golpe (dos renames); la ventana entre los dos mv se
+# declara, no se esconde.
+recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva frontmatter)
+  if [ "$(basename "$2")" = "MANIFEST.sha256" ]; then
+    if [ ! -e "$1" ]; then printf AUSENTE; elif cmp -s "$1" "$2"; then printf NUESTRO_IDENTICO; else printf NUESTRO_DISTINTO; fi
+  else
+    agente_estado_con_vendor "$1" "$2" "receta"
+  fi
+}
+recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocado
+  local destdir="$1"; shift
+  local f dest est nuevo old cambios=0
+  # 1) clasificar todo; cualquier NO_OBSERVABLE aborta sin escribir
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    est="$(recetas_clasificar "$dest" "$f")"
+    case "$est" in
+      NO_OBSERVABLE) decir "[summonaikit] recetario: $dest no observable; no se publica nada"; return 5 ;;
+      NUESTRO_IDENTICO) ;;
+      DESCONOCIDO) decir "[summonaikit] recetario: DESCONOCIDO, no se toca: $dest" ;;
+      *) decir "[summonaikit] recetario: $est -> $dest"; cambios=1 ;;
+    esac
+  done
+  [ "$cambios" -eq 1 ] || return 0
+  [ "$DRY_RUN" -eq 0 ] || return 0
+  # 2) armar el directorio nuevo entero en un temporal hermano. Los respaldos
+  #    de lo reemplazado van DENTRO del temporal (saikit-backups/), no al
+  #    directorio vivo: escribirlos en el vivo rompia el todo-o-nada y el swap
+  #    los borraba con $old (Greptile, PR #97).
+  # 16.5: crear el PADRE del destino si no existe (p. ej. ~/.claude/skills en un
+  #    perfil fresco); mktemp -d con un prefijo que no existe falla, y eso dejaba
+  #    la skill sin publicar en la instalacion nueva — el caso de uso principal.
+  mkdir -p "$(dirname "$destdir")" 2>/dev/null || return 5
+  nuevo="$(mktemp -d "$(dirname "$destdir")/.saikit-recetas-XXXXXX")" || return 5
+  if [ -d "$destdir" ]; then cp -p -r "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
+  sello="$(date +%Y%m%d-%H%M%S)"
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    case "$(recetas_clasificar "$dest" "$f")" in
+      AUSENTE|NUESTRO_DISTINTO|VENDOR_CONOCIDO)
+        if [ -e "$dest" ]; then
+          mkdir -p "$nuevo/saikit-backups" && cp -p "$dest" "$nuevo/saikit-backups/$(basename "$dest").nuestro.$sello.bak" || { rm -rf "$nuevo"; return 5; }
+        fi
+        cp "$f" "$nuevo/$(basename "$f")" || { rm -rf "$nuevo"; return 5; } ;;
+    esac
+  done
+  # 3) intercambio: hasta aqui $destdir esta intacto
+  old="$destdir.saikit-old-$$"
+  if [ -d "$destdir" ]; then mv "$destdir" "$old" || { rm -rf "$nuevo"; return 5; }; fi
+  mv "$nuevo" "$destdir" || { [ -d "$old" ] && mv "$old" "$destdir"; return 5; }
+  rm -rf "$old"
+  return 0
+}
+instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
+  local f
+  for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" "$repo/skills/sencillo/SKILL.md"; do
+    [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
+  done
+  recetas_publicar_dir "$1/recetas" "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" || return $?
+  recetas_publicar_dir "$2/sencillo" "$repo/skills/sencillo/SKILL.md" || return $?
+  for f in "$1"/recetas/*.md; do   # ajenos: solo reportar
+    [ -e "$f" ] || continue
+    [ -e "$repo/recetas/$(basename "$f")" ] || decir "[summonaikit] recetario: archivo ajeno reportado, intacto: $f"
+  done
+  return 0
+}
+quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
+  local f
+  for f in "$1"/recetas/*.md "$2/sencillo/SKILL.md"; do
+    [ -f "$f" ] || continue
+    if zcode_agente_tiene_marca "$f"; then
+      [ "$DRY_RUN" -eq 0 ] && rm -f "$f"; decir "[summonaikit] recetario: quitado $f"
+    else
+      decir "[summonaikit] recetario: ajeno, intacto: $f"
+    fi
+  done
+  # El manifiesto no lleva marca: es NUESTRO si cada receta que nombra lleva
+  # la marca (o ya no existe). Comparar contra el manifiesto del repo no sirve
+  # tras un upgrade del kit sin reinstalar (Greptile, PR #97): el instalado
+  # viejo difiere del actual y seguiria siendo nuestro.
+  local m="$1/recetas/MANIFEST.sha256" nuestro=1 sha tipo nombre carril titulo
+  if [ -f "$m" ]; then
+    while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+      [ -f "$1/recetas/$nombre.md" ] || continue
+      zcode_agente_tiene_marca "$1/recetas/$nombre.md" || nuestro=0
+    done < "$m"
+    if [ "$nuestro" -eq 1 ]; then
+      [ "$DRY_RUN" -eq 0 ] && rm -f "$m"; decir "[summonaikit] recetario: quitado el manifiesto"
+    else
+      decir "[summonaikit] recetario: el manifiesto nombra recetas ajenas, intacto: $m"
+    fi
+  fi
+  return 0
+}
+
 if [ "$HOST" = "claude" ]; then
   if [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
     refrescar_manifiesto_vendor "$(claude_agents_dir)" CLAUDE
     exit $?
   fi
+  if [ "$QUITAR_RECETAS" -eq 1 ]; then
+    quitar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills"
+    exit $?
+  fi
   claude_instalar_agentes
+  instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
   exit $?
 fi
 
@@ -2436,6 +2550,12 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
       fi
     fi
   fi
+  # Task 16.5: el recetario y /sencillo son independientes del estado del hook —
+  # pueden faltar aun con el hook al dia. Solo aplica al flujo por defecto (el
+  # del hook claude, sin --host): recetas y skills son una feature de ese host.
+  if [ -z "$HOST" ]; then
+    instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
+  fi
   avisar_registro
   exit 0
 fi
@@ -2493,6 +2613,14 @@ if [ "$HOST" = "dsh" ]; then
     fi
     exit 5
   fi
+fi
+
+# Task 16.5: el recetario y /sencillo se publican DESPUES del hook (o ya al dia)
+# y son independientes de su estado. Solo aplica al flujo por defecto (el del
+# hook claude, sin --host); si el segundo directorio falla tras el primero, se
+# reporta cual quedo publicado y cual no (dos directorios = dos unidades).
+if [ -z "$HOST" ]; then
+  instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
 fi
 
 case "$estado" in
