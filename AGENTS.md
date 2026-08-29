@@ -89,6 +89,14 @@ merge a `master` (cierre de task o PR), **siempre**:
    (verifica registro en las 3 fases; fail-open, reporta por texto).
 3. **Apuntarlo:** agregar entrada a `docs/deploy-log.md` (fecha, que se mergeo,
    resultado del deploy, si el hook cambio o fue no-op).
+4. **Auditar el ledger:** `bash tools/audita-ledger.sh` — lista las filas que
+   siguen en `cc:TODO` con su trabajo ya mergeado en `origin/master`. Nacio
+   porque la fila 16.3 estuvo cerrada en master y abierta en el ledger un dia
+   entero: el lider cierra las filas del PR que acaba de mergear y no vuelve a
+   mirar las de antes. NO es un job de CI a proposito — durante el PR de una
+   task sus commits ya estan en la rama y su fila todavia dice `cc:TODO`, asi
+   que en CI daria rojo en cada PR. Su detector si tiene bateria:
+   `tests/test_audita_ledger.sh`.
 
 Si el merge NO toco `hooks/summonaikit-harness.sh`, el deploy es no-op ("YA AL
 DIA") — igual se corre y se registra, para no perder la costumbre y detectar
