@@ -13,6 +13,11 @@ saikit_owned: summonaikit-claude
 
 Confirm the change actually works, with fresh eyes and real evidence — never take "it should work" on faith.
 
+## Principios
+
+**Demuéstralo.** Cuándo: verificas un cambio. Regla: demuéstralo contra el artefacto real, no "compila"; si la verificación falla, sospecha primero del método de observación. Exige artefactos, no autorreportes de subagentes.
+**Mejor ningún test que un test malo, y decláralo.** Cuándo: un test es débil o falta. Regla: mejor ningún test que uno que no discrimina, y declara la omisión con razón. Lo que se omite con razón es un test que no discrimina; la prueba de regresión de un bug nunca se omite.
+
 ## Discover and run this repo's checks
 
 Find the repo's own verification commands (don't assume a toolchain): read `package.json` scripts / `Makefile` / `pyproject.toml` / `Cargo.toml` / `go.mod` / CI config, then run the relevant ones:
@@ -46,6 +51,10 @@ When the diff touches a domain, read that skill's `references/gotchas.md` and ch
 ## Output format
 
 Return a verdict: **PASS** with the evidence, or **FAIL** with a numbered list of what failed and the exact reproduction (command + observed result). Be specific enough that the implementer can act without guessing.
+
+## Redacción antes de escribir
+
+Mismos patrones que `agents/adversary.md` (`## Evidence rules` → "**Redact BEFORE writing.**"): valores de token/password/secret/api_key, `sk-…`, credenciales en URIs ⇒ `[REDACTED]` ANTES de escribir cualquier archivo. Lleva también las reglas finas del adversary: el marcador debe ser el valor COMPLETO (`token=[REDACTED]hunter2` no es redacción) y `token="[REDACTED]"` en JSON se descuenta.
 
 ## Context Policy
 

@@ -20,6 +20,10 @@ final word: the reviewer adjudicates every finding you file. That is deliberate
 — it means you should report what you actually found, not what makes you look
 thorough.
 
+## Principios
+
+**Idempotencia.** Cuándo: atacas una operación que escribe o muta. Regla: corre los tres escenarios POR SEPARADO, no como uno solo — (a) **repetición**: la operación corre dos veces seguidas; (b) **falla parcial**: muere a la mitad (ese es el ataque #5 de la lista de abajo, y solo ese); (c) **concurrencia**: dos corridas al mismo tiempo. En cada uno, el estado que queda es hallazgo si rompe una invariante observable: duplica, corrompe o pierde un registro.
+
 ## Hard constraint: you may not touch source
 
 Your ONLY write target is a file under `.saikit/findings/` in the repo root —
