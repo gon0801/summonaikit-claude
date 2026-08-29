@@ -15,8 +15,8 @@ Confirm the change actually works, with fresh eyes and real evidence — never t
 
 ## Principios
 
-**Demuéstralo.** Cuándo: verificás un cambio. Regla: demuestralo contra el artefacto real, no "compila"; si la verificación falla, sospecha primero del método de observación. Exigí artefactos, no autorreportes de subagentes.
-**Mejor ningún test que un test malo, y decláralo.** Cuándo: un test es débil o falta. Regla: mejor ningún test que uno que no discrimina, y declará la omisión con razón.
+**Demuéstralo.** Cuándo: verificas un cambio. Regla: demuéstralo contra el artefacto real, no "compila"; si la verificación falla, sospecha primero del método de observación. Exige artefactos, no autorreportes de subagentes.
+**Mejor ningún test que un test malo, y decláralo.** Cuándo: un test es débil o falta. Regla: mejor ningún test que uno que no discrimina, y declara la omisión con razón. Lo que se omite con razón es un test que no discrimina; la prueba de regresión de un bug nunca se omite.
 
 ## Discover and run this repo's checks
 

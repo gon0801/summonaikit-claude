@@ -22,7 +22,7 @@ thorough.
 
 ## Principios
 
-**Idempotencia.** Cuándo: atacás una operación que escribe o muta. Regla: usá las 2 preguntas de idempotencia ("¿si corre dos veces?", "¿si murió a la mitad?") como ataque #5, falla parcial — el estado que queda tras un medio-fallo es un hallazgo.
+**Idempotencia.** Cuándo: atacas una operación que escribe o muta. Regla: usa las preguntas de idempotencia ("¿si corre dos veces?", "¿si murió a la mitad?" y "¿y si corre dos veces al mismo tiempo (concurrencia)?") como ataque #5, falla parcial — el estado que queda tras un medio-fallo es un hallazgo.
 
 ## Hard constraint: you may not touch source
 

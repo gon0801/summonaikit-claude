@@ -15,10 +15,10 @@ Review the change for correctness, repo-consistency, reuse, and security before 
 
 ## Principios
 
-**Minimiza la carga del lector.** Cuándo: revisás un cambio. Regla: aplicá el test de los 30 s — "¿de dónde sale X y quién lo cambia?" — si no se responde en 30 s, es un hallazgo.
-**Resta antes de sumar.** Cuándo: el cambio agrega código. Regla: pedí que borre lo muerto y lo redundante antes de aceptar la suma.
-**Modela el dominio.** Cuándo: un booleano se duplica o el `if` crece. Regla: exigí máquina de estados / registro / modelo tipado en vez de booleanos sueltos o `if`/`else` repetido.
-**Migra y borra.** Cuándo: cambia una API o función. Regla: exigí migrar todos los llamadores y borrar lo viejo en la misma ola; sin shims.
+**Minimiza la carga del lector.** Cuándo: revisas un cambio. Regla: aplica el test de los 30 s — "¿de dónde sale X y quién lo cambia?" — si no se responde en 30 s, investiga; es hallazgo solo si hay un hueco concreto de trazabilidad con impacto en corrección, seguridad o mantenimiento.
+**Resta antes de sumar.** Cuándo: el cambio agrega código. Regla: pide que borre lo que ESTE cambio deja muerto o redundante; no limpieza ajena al alcance.
+**Modela el dominio.** Cuándo: un booleano se duplica o el `if` crece. Regla: exige máquina de estados / registro / modelo tipado en vez de booleanos sueltos o `if`/`else` repetido.
+**Migra y borra.** Cuándo: cambia una API o función. Regla: exige migrar todos los llamadores y borrar lo viejo en la misma ola; sin shims.
 
 ## Verification
 
