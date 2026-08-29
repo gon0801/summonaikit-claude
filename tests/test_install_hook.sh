@@ -2152,6 +2152,20 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--quitar-recetas no quito skills/sencillo/SKILL.md"
 printf '%s' "$out" | grep -q 'ajeno, intacto' || malo "--quitar-recetas no reporto ajena.md como ajeno intacto: $out"
 
+# Revision (reviewer, MEDIUM): el dispatch de --quitar-recetas tenia que estar
+# tambien en el flujo POR DEFECTO (sin --host, el del hook claude). Antes el
+# flag, sin --host, caia al camino de instalacion y REINSTALABA el recetario.
+caso "recetario: --quitar-recetas por el flujo por defecto (sin --host) quita y NO reinstala"
+nuevo_destino; nuevo_casa_recetas
+out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "instalar por el flujo por defecto deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/bug.md" ] || malo "el flujo por defecto no instalo recetas/"
+out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas (flujo por defecto) deberia salir 0, dio $rc: $out"
+[ ! -e "$(dirname "$dest")/recetas/bug.md" ] || malo "--quitar-recetas (flujo por defecto) no quito bug.md"
+[ ! -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--quitar-recetas (flujo por defecto) no quito el manifiesto"
+[ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--quitar-recetas (flujo por defecto) no quito la skill"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

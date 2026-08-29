@@ -2216,6 +2216,14 @@ if [ "$HOST" = "claude" ]; then
   instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
   exit $?
 fi
+# Task 16.5 (revision, MEDIUM): --quitar-recetas en el flujo POR DEFECTO (HOST
+# vacio = el flujo del hook claude) tambien despacha a quitar_recetas_claude.
+# Antes solo lo hacian en la rama --host claude, asi que sin --host el flag caia
+# al camino de instalacion y REINSTALABA el recetario en vez de quitarlo.
+if [ "$QUITAR_RECETAS" -eq 1 ] && [ -z "$HOST" ]; then
+  quitar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills"
+  exit $?
+fi
 
 # Task 12.7: --host kimi termina aca, igual que --host claude: solo posesiona
 # los perfiles en ~/.agents/agents (via SAIKIT_KIMI_AGENTS_DIR en tests).
