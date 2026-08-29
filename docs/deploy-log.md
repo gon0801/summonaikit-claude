@@ -7,6 +7,36 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-28 — PR #98 / Task 16.2 (recetario fuente: 6 recetas + `00-lider`, manifiesto TSV, linter) — deploy NO-OP (el hook no cambió)
+
+- **Qué traía:** `recetas/` (7 archivos, ≤80 líneas, español), `recetas/MANIFEST.sha256`
+  (TSV por TAB, hash normalizado a LF), `tests/lib/recetas_lint.sh`,
+  `tests/test_recetas.sh` (29 casos en sandbox), `tools/gen-recetas-manifest.sh`
+  (`--check`, `--dir`, exit 5 en IO), `.gitattributes` con `recetas/** eol=lf`.
+  Implementó DeepSeek (5 commits + merge de master); merge `89ff713`.
+- **Revisión del lead (2 vueltas):** 13 sondas con archivos fuera del repo
+  (81 líneas sin salto, `nombre != archivo`, `-gt`/`right`/`cursor` aceptados,
+  `gt`/`Cursor`/`Bugbot`/`AskQuestion`/`/loop` rechazados, `--dir` ausente/al
+  día/stale ⇒ 1/0/1) y dos mutaciones del linter (quitar `gt` del regex; volver
+  a `wc -l`) que ponen el test en ROJO — el test discrimina. Cross-review real
+  con grok (7 hallazgos; #2 era artefacto de base vieja, verificado); Greptile
+  y CodeRabbit: 9 hilos, todos cerrados. Desviación aceptada: el borde de `gt`
+  excluye `-` para no cazar el operador `-gt`.
+- **¿Cambió el hook? NO** (las recetas solo son fuente; se instalan en 16.5).
+  `install-hook.sh`: **YA AL DIA**. `cmp` vivo vs `master` `89ff713`: idéntico.
+- **`check-hook-registration.sh`:** 3 fases OK, exit 0.
+- **Proceso:** el worker no mergeó, no empujó a master, no desplegó ni tocó
+  `Plans.md`; dejó un `AGENTS.md` modificado SIN commitear (fuera de alcance,
+  no entró). Operador: Gon; lead desde el worktree `-wt-lead`.
+
+## 2026-08-28 — PR #97 (plan de workers de la Phase 16, `docs/phase-16-recetario-plan.md`) — deploy NO-OP (docs-only)
+
+- **Qué traía:** el plan paso a paso de 16.2–16.9 para DeepSeek (sin plugins;
+  cada task en un turno `-saikit`), con 12 hilos de bots atendidos y 2
+  residuales declarados para 16.5. Merge `60dd872`. `install-hook.sh`: YA AL
+  DIA; `check-hook-registration.sh`: 3 fases OK; vivo == master byte a byte.
+  Operador: Gon (lead, worktree `-wt-lead`).
+
 ## 2026-08-28 — PR #95 / Task 16.1 (plan de Phases 16–18: recetario, verificación real, autopilot) — deploy NO-OP (docs-only)
 
 - **Qué traía:** el plan completo de las Phases 16–18 — diseño
