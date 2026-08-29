@@ -14,32 +14,21 @@
 # cerradas como abiertas, y un candado que grita sin razon se apaga: por eso
 # los dos falsos positivos tienen caso propio aca.
 #
-# Core Rule 4: los ledgers son fixtures sinteticos en el sandbox. Los COMMITS
-# salen del repo real (solo lectura), porque lo que se prueba es el cruce entre
-# un ledger y un historial de verdad — la task 16.3 esta mergeada en
-# `origin/master` y sirve de ancla observable.
+# HERMETICO a proposito: el repo y el ledger son sinteticos, armados en el
+# sandbox. La primera version cruzaba contra el `origin/master` del repo real y
+# en CI salia `unknown` en cada corrida — el checkout de Actions es shallow. Un
+# test permanentemente unknown no protege nada y entrena a ignorar el contador
+# de unknowns, que es el mismo defecto que el auditor existe para evitar.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/.." && pwd)"
-auditor="$repo/tools/audita-ledger.sh"
+auditor="$(cd "$here/.." && pwd)/tools/audita-ledger.sh"
 
 if [ ! -r "$auditor" ]; then
   echo "test_audita_ledger: unknown — no existe $auditor" >&2
   exit 3
 fi
-# El ancla: una task con commits mergeados en origin/master. Sin origin/master
-# (clon sin remoto, checkout shallow) no se puede afirmar nada.
-if [ "$(git -C "$repo" rev-parse --is-shallow-repository 2>/dev/null)" = "true" ] \
-   || ! git -C "$repo" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
-  echo "test_audita_ledger: unknown — sin origin/master legible (o clon shallow); no se pudo mirar" >&2
-  exit 3
-fi
-ancla=16.3
-if ! git -C "$repo" log --format='%s' origin/master | grep -qE "^[a-z]+\([^)]*$ancla"; then
-  echo "test_audita_ledger: unknown — no hay commits con alcance ($ancla) en origin/master; el ancla ya no sirve" >&2
-  exit 3
-fi
+command -v git >/dev/null 2>&1 || { echo "test_audita_ledger: unknown — no hay git" >&2; exit 3; }
 
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/saikit-audit-XXXXXX")" || exit 1
 trap 'rm -rf "$sandbox"' EXIT
@@ -48,54 +37,78 @@ fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
-correr() { SAIKIT_LEDGER="$1" bash "$auditor" "$repo" 2>&1; }
+# --------------------------------------------------- repo sintetico
+# Dos tasks "mergeadas" (16.3 sola, y 16.4/16.6 en un mismo alcance con coma,
+# que es la forma real que uso el PR #105) y ninguna otra. `origin/master` se
+# planta como ref para ejercitar el camino por defecto del auditor.
+r="$sandbox/repo"
+mkdir -p "$r" || exit 1
+git -c init.defaultBranch=master init -q "$r" || { echo "test_audita_ledger: unknown — git init fallo" >&2; exit 3; }
+gitr() { git -C "$r" -c user.email='t@example.invalid' -c user.name='t' "$@"; }
+gitr commit -q --allow-empty -m 'docs(16.3): principios por rol en los cuatro perfiles' || exit 1
+gitr commit -q --allow-empty -m 'feat(16.4,16.6): menu de recetas por manifiesto y alias' || exit 1
+gitr commit -q --allow-empty -m 'chore: un commit sin alcance de task' || exit 1
+gitr update-ref refs/remotes/origin/master HEAD || exit 1
+
+correr() { SAIKIT_LEDGER="$1" bash "$auditor" "$r" 2>&1; }
 
 encabezado() {
   printf '| Task | Contenido | DoD | Depends | Status |\n'
   printf '|------|------|-----|---------|--------|\n'
 }
 
+# --------------------------------------------------- casos
 caso "fila en cc:TODO con trabajo ya mergeado => se detecta y se nombra"
 f="$sandbox/abierta.md"
-{ encabezado; printf '| %s | contenido | DoD | - | cc:TODO |\n' "$ancla"; } > "$f"
+{ encabezado; printf '| 16.3 | contenido | DoD | - | cc:TODO |\n'; } > "$f"
 out="$(correr "$f")"
 printf '%s' "$out" | grep -q 'LEDGER DESACTUALIZADO' || malo "no reporto la fila abierta: $out"
-printf '%s' "$out" | grep -q "fila $ancla" || malo "no nombra la fila $ancla: $out"
+printf '%s' "$out" | grep -q 'fila 16.3' || malo "no nombra la fila 16.3: $out"
 
 caso "la MISMA fila cerrada, cuyo cierre MENCIONA cc:TODO en prosa => no se reporta"
-# Falso positivo 1 y 2 juntos: la mencion esta en la linea Y dentro de la celda
-# de estado, que es donde va el texto del cierre.
+# Los dos falsos positivos juntos: la mencion esta en la linea Y dentro de la
+# celda de estado, que es donde va el texto del cierre.
 f="$sandbox/cerrada.md"
 { encabezado
-  printf '| %s | contenido | DoD | - | cc:完了 [PR #100] — la fila decia `cc:TODO` con el trabajo ya mergeado |\n' "$ancla"
+  printf '| 16.3 | contenido | DoD | - | cc:完了 [PR #100] — la fila decia `cc:TODO` con el trabajo ya mergeado |\n'
 } > "$f"
 out="$(correr "$f")"
 printf '%s' "$out" | grep -q 'LEDGER DESACTUALIZADO' && malo "reporto como abierta una fila cerrada que menciona cc:TODO en su prosa: $out"
 printf '%s' "$out" | grep -q 'AUDITORIA DEL LEDGER: OK' || malo "no dijo OK sobre un ledger correcto: $out"
 
+caso "alcance con coma (feat(16.4,16.6)) => las DOS filas cuentan como mergeadas"
+f="$sandbox/coma.md"
+{ encabezado
+  printf '| 16.4 | contenido | DoD | - | cc:TODO |\n'
+  printf '| 16.6 | contenido | DoD | - | cc:TODO |\n'
+} > "$f"
+out="$(correr "$f")"
+printf '%s' "$out" | grep -q 'fila 16.4' || malo "no vio la 16.4 del alcance con coma: $out"
+printf '%s' "$out" | grep -q 'fila 16.6' || malo "no vio la 16.6 del alcance con coma: $out"
+
 caso "fila en cc:TODO SIN trabajo mergeado => no se reporta (no inventa hallazgos)"
 f="$sandbox/pendiente.md"
-{ encabezado; printf '| 99.9 | una task que no existe | DoD | - | cc:TODO |\n'; } > "$f"
+{ encabezado; printf '| 99.9 | una task que nadie empezo | DoD | - | cc:TODO |\n'; } > "$f"
 out="$(correr "$f")"
 printf '%s' "$out" | grep -q 'LEDGER DESACTUALIZADO' && malo "invento un hallazgo sobre una task sin commits: $out"
+printf '%s' "$out" | grep -q 'AUDITORIA DEL LEDGER: OK' || malo "no dijo OK: $out"
 
 caso "celda con pipes escapados adentro => el estado se lee igual"
 f="$sandbox/escapes.md"
-{ encabezado; printf '| %s | columnas `a\\|b\\|c` | DoD con `x\\|y` | - | cc:TODO |\n' "$ancla"; } > "$f"
+{ encabezado; printf '| 16.3 | columnas `a\\|b\\|c` | DoD con `x\\|y` | - | cc:TODO |\n'; } > "$f"
 out="$(correr "$f")"
-printf '%s' "$out" | grep -q "fila $ancla" || malo "los pipes escapados le tapan el estado: $out"
+printf '%s' "$out" | grep -q 'fila 16.3' || malo "los pipes escapados le tapan el estado: $out"
 
 caso "sin referencia con la cual comparar => unknown (exit 3), no un OK"
 f="$sandbox/abierta.md"
-SAIKIT_LEDGER="$f" SAIKIT_LEDGER_REF='saikit/no-existe-esta-ref' bash "$auditor" "$repo" >/dev/null 2>&1
+out="$(SAIKIT_LEDGER="$f" SAIKIT_LEDGER_REF='saikit/no-existe-esta-ref' bash "$auditor" "$r" 2>&1)"
 rc=$?
 [ "$rc" = 3 ] || malo "esperaba exit 3 sin referencia, dio $rc"
-out="$(SAIKIT_LEDGER="$f" SAIKIT_LEDGER_REF='saikit/no-existe-esta-ref' bash "$auditor" "$repo" 2>&1)"
 printf '%s' "$out" | grep -q 'unknown' || malo "no dijo unknown: $out"
 printf '%s' "$out" | grep -q 'LEDGER DESACTUALIZADO' && malo "afirmo un hallazgo sin poder mirar: $out"
 
 caso "ledger ilegible => unknown (exit 3), no un OK"
-SAIKIT_LEDGER="$sandbox/no-existe.md" bash "$auditor" "$repo" >/dev/null 2>&1
+SAIKIT_LEDGER="$sandbox/no-existe.md" bash "$auditor" "$r" >/dev/null 2>&1
 rc=$?
 [ "$rc" = 3 ] || malo "esperaba exit 3 con un ledger ilegible, dio $rc"
 
