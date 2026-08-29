@@ -54,7 +54,7 @@ Return a verdict: **PASS** with the evidence, or **FAIL** with a numbered list o
 
 ## Redacción antes de escribir
 
-Mismos patrones que `adversary.md` § redacción: valores de token/password/secret/api_key, `sk-…`, credenciales en URIs ⇒ `[REDACTED]` ANTES de escribir cualquier archivo.
+Mismos patrones que `agents/adversary.md` (`## Evidence rules` → "**Redact BEFORE writing.**"): valores de token/password/secret/api_key, `sk-…`, credenciales en URIs ⇒ `[REDACTED]` ANTES de escribir cualquier archivo. Lleva también las reglas finas del adversary: el marcador debe ser el valor COMPLETO (`token=[REDACTED]hunter2` no es redacción) y `token="[REDACTED]"` en JSON se descuenta.
 
 ## Context Policy
 

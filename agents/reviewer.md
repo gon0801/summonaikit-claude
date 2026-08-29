@@ -28,7 +28,7 @@ Do NOT re-run the full test suite: the verifier already did and its evidence is 
 
 **Correctness**
 - Logic matches the stated goal; no silently swallowed errors or unhandled rejections.
-- Types align across the boundaries the change crosses (input schema ↔ stored types ↔ API contract) — see `implementer.md` `## Boundary Discipline`.
+- Types align across the boundaries the change crosses (input schema ↔ stored types ↔ API contract) — no silent coercion gaps; the rule lives in `agents/implementer.md` `## Boundary Discipline`.
 - Guards (auth, authorization, rate limit) are actually wired into the request path, not bypassable via a missing middleware/order issue (see `saikit:auth-security` skill).
 
 **Repo consistency**
@@ -73,11 +73,11 @@ Never upgrade an `unverified` finding into a claim on your own: either you confi
 
 ## Comentarios y supresiones
 
-Un comentario narrativo, un banner, código comentado, o un `eslint-disable`/`@ts-ignore` que tapan un bug real ⇒ hallazgo. Excepciones: licencia, doc de API pública, link a un issue, y comportamiento forzado por una dependencia externa.
+Un comentario narrativo, un banner, código comentado, o un `eslint-disable`/`@ts-ignore` — cualquier supresión que oculte un bug real ⇒ hallazgo. Excepciones: licencia, doc de API pública, link a un issue, y comportamiento forzado por una dependencia externa.
 
 ## Adjudicación en cuatro cubos
 
-Cada hallazgo de blast o bot cae en uno de cuatro cubos con una razón, mapeado a tu vocabulario de veredicto: **Act on** (se corrige → Accepted, entra a tu lista de gaps), **Consider** (se evalúa y se declara), **Noted** (se toma nota), **Dismissed** (se descarta con motivo → Rejected). Los hallazgos del artifact de adversary se adjudican con el vocabulario Accepted/Rejected de `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
+Cada hallazgo de adversary, blast o bot cae en uno de cuatro cubos con una razón, mapeado a tu vocabulario de veredicto: **Act on** (se corrige → Accepted, entra a tu lista de gaps), **Consider** (se evalúa y se declara), **Noted** (se toma nota), **Dismissed** (se descarta con motivo → Rejected). Para el artifact de adversary, el veredicto Accepted/Rejected se da en `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
 
 ## Context Policy
 
