@@ -1,3 +1,13 @@
+<!--
+  Este archivo NO es una pagina HTML suelta: es el CUERPO de un artifact de
+  claude.ai, y al publicarlo se envuelve en su propio <!doctype html> + <head>
+  + <body>. Por eso no lleva doctype ni <html>/<head>/<body> propios: ponerlos
+  duplicaria el esqueleto y romperia la publicacion. HTMLHint marca
+  `doctype-first` sobre este archivo; es un falso positivo del linter externo
+  (no corre en nuestros candados) y no se corrige agregando el doctype.
+  Fuente de la guia publicada en:
+  https://claude.ai/code/artifact/b734d453-27a8-428a-835e-67ba0c692ada
+-->
 <title>Qué escribo y qué pasa solo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -293,7 +303,7 @@
         <code>-saikit:autopilot</code>
         <div class="body">
           <span class="what">Hazlo y publícalo tú, no me preguntes</span>
-          <span class="when">El cambio se construye, se prueba, se revisa y se publica solo. Si al publicarlo algo se rompe, se deshace solo y te avisa. Hay que activarlo una vez por proyecto.</span>
+          <span class="when">El cambio se construye, se prueba, se revisa y se publica solo. Después vigila dos cosas: que las pruebas de tu proyecto sigan en verde y, si configuraste una dirección para checarlo, que tu app siga viva. Si alguna de las dos falla, intenta deshacerlo y te avisa; si no puede — porque ya se publicó algo encima, o el deshacer tampoco pasa las pruebas — se detiene y te dice qué hacer, en vez de insistir. Hay que activarlo una vez por proyecto.</span>
           <span class="chip pron">en camino</span>
         </div>
       </div>
@@ -336,7 +346,7 @@
 
     <div class="note"><b>El recibo.</b> Al final el líder te deja un resumen en palabras simples: qué entendió que pediste, qué cambió, cómo lo comprobó y qué quedó pendiente. El sistema se lo exige antes de dejarlo cerrar.</div>
 
-    <div class="note"><b>Hasta dónde llega esto — dicho en claro.</b> Los controles de arriba son un <b>ayudante disciplinado, no un candado</b>. El sistema comprueba que los pasos ocurrieran y que el resumen traiga evidencia; lo que no puede es garantizar que esa evidencia sea cierta. Y cuando no logra ver algo — porque el programa donde trabajas no le muestra esa parte — <b>deja pasar en vez de bloquear</b>, a propósito: un control que frena sin poder mirar estorba más de lo que protege. Lo que sí es firme: nada se publica sin que las pruebas de tu proyecto estén en verde.</div>
+    <div class="note"><b>Hasta dónde llega esto — dicho en claro.</b> Los controles de arriba son un <b>ayudante disciplinado, no un candado</b>. El sistema comprueba que los pasos ocurrieran y que el resumen traiga evidencia; lo que no puede es garantizar que esa evidencia sea cierta. Y cuando no logra ver algo — porque el programa donde trabajas no le muestra esa parte — <b>deja pasar en vez de bloquear</b>, a propósito: un control que frena sin poder mirar estorba más de lo que protege. Un turno puede cerrar diciendo <i>«no corrí las pruebas»</i>: lo que el sistema exige es que lo <b>diga</b>, no que estén en verde. El único lugar donde sí hay candado de verdad es el que publica solo: ahí no mergea sin el visto bueno verde de tu proyecto atado a ese cambio exacto — y si no lo puede ver, no mergea.</div>
   </section>
 
   <section>
@@ -360,7 +370,7 @@
     <div class="flow">
       <div class="step"><div><span class="t">Te repite lo que entendió</span><div class="d">Con tus palabras. Si algo del resultado que quieres no está claro, te pregunta antes de construir — nunca sobre cómo hacerlo, solo sobre qué quieres.</div></div></div>
       <div class="step"><div><span class="t">Elige la receta y la sigue</span><div class="d">La declara en el resumen final, para que sepas por qué camino fue.</div></div></div>
-      <div class="step"><div><span class="t">Construye, comprueba y revisa</span><div class="d">Los cuatro de arriba, en orden. Si la revisión encuentra algo, se corrige solo eso; no se vuelve a empezar.</div></div></div>
+      <div class="step"><div><span class="t">Construye, comprueba y revisa</span><div class="d">Los tres de siempre, en orden: escribe, comprueba, revisa. El cuarto — el que intenta romperlo — entra solo cuando el líder lo llama o cuando tú lo pides. Si la revisión encuentra algo, se corrige solo eso; no se vuelve a empezar.</div></div></div>
       <div class="step"><div><span class="t">Te entrega el recibo</span><div class="d">Primero qué cambia para ti, después cómo, después por qué.</div></div></div>
     </div>
   </section>
