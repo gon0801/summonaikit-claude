@@ -65,6 +65,13 @@ G1|fallback_sin_acotar|el fallback al payload crudo deja de acotarse a session y
 G1|frontera_izquierda_floja|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
 G1|estado_inmortal|la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre
 G1|barrido_sin_ttl|el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
+G1|menu_recetas_apagado|el menu del recetario se apaga y el contrato deja de ofrecer recetas aun con manifiesto valido
+G1|alias_pregunta_apagado|el alias -saikit:pregunta deja de bajar el carril
+G1|alias_sin_receta|el alias baja el carril pero no nombra la receta
+G1|alias_no_se_limpia|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
+G1|manifiesto_reinyecta_titulo|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
+G1|menu_sin_corte_frontmatter|el menu vuelve a recorrer el archivo entero para titulo/carril y una receta cuyo cuerpo documenta el formato filtra ese texto del cuerpo
+G1|alias_sin_validacion|el alias vuelve a bajar el carril y a nombrar la receta aunque la receta no exista en el recetario
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
 G2|sin_guardia_de_falla|un runner que fallo tambien acredita verificacion
 G2|falla_assertion_quitada|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
@@ -240,6 +247,40 @@ mut_prompt_greedy()             { sed 's/json_top_level_decoded prompt/json_stri
 # (exit 0 -> 2: la ceremonia vuelve a exigirse con lane=fast).
 mut_fast_no_se_detecta()        { sed 's/then lane="fast"; fi/then lane="full"; fi/'; }
 mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
+# Task 16.4 (D1) — que el recetario se APAGUE (la guarda del manifiesto se vuelve
+# `if true`) deje de ofrecer recetas aunque el manifiesto este valido: lo atrapa
+# caso_g1_contrato_nombra_recetario. Task 16.6 (D3) — alias: una mutacion mata la
+# DETECCION (-saikit:pregunta deja de bajar el carril, lo atrapa
+# caso_g1_alias_pregunta_arma_fast_y_nombra_receta) y otra deja el carril en fast
+# pero vacia la receta (receta_alias="" ⇒ no se nombra, lo atrapa el mismo caso
+# porque 'the recipe is investigar' no aparece).
+mut_menu_recetas_apagado()      { sed 's/^  if \[ ! -r "\$m" \]; then printf/  if true; then printf/'; }
+mut_alias_pregunta_apagado()    { sed 's/-saikit:pregunta(/-saikit:NUNCA(/'; }
+mut_alias_sin_receta()          { sed 's/receta_alias="investigar"/receta_alias=""/'; }
+# Task 16.6 (reviewer, hallazgo #4 / C13): la limpieza receta_alias de
+# podar_dir_sesion se neutraliza y el desarme tras un turno con alias deja el
+# directorio inmortal — lo atrapa caso_g1_alias_desarme_limpia_estado (ningun
+# otro caso de CASOS_G1 arma con alias y exige que el dir desaparezca).
+mut_alias_no_se_limpia()        { sed 's#rm -f "\$STATE_DIR/receta_alias" 2>/dev/null || true; rmdir#rmdir#'; }
+# Task 16.4/16.6 (revision lead, fix 1): devuelve el runtime a leer el titulo y
+# el carril del MANIFIESTO en vez del archivo autenticado. Con un manifiesto de
+# titulo hostil y hash valido, ese texto vuelve al contrato — lo atrapa
+# caso_g1_receta_titulo_hostil_no_se_inyecta (el unico caso que planta un
+# titulo de manifiesto distinto al del archivo; los demas con recetario usan el
+# mismo titulo en ambos, asi que no reaccionan).
+mut_manifiesto_reinyecta_titulo() { sed 's/"\$f_titulo" "\$f_carril"/"$titulo" "$carril"/'; }
+# Task 16.4/16.6 (lead, fix 1b): hace que el awk vuelva a recorrer el archivo
+# entero (sin parar en el segundo '---' y sin la guardia de primera coincidencia)
+# -> vuelve a ganar la ULTIMA coincidencia y una receta cuyo cuerpo documenta el
+# formato filtra su texto al menu. Lo atrapa caso_g1_receta_menu_lee_solo_
+# frontmatter (el unico caso que planta titulo/carril en el cuerpo).
+mut_menu_sin_corte_frontmatter() { sed 's/NR>1 && \$0=="---"{exit} //; s/&&!t//; s/&&!c//;'; }
+# Task 16.6 (revision lead, fix 2): neutraliza el guard receta_valida de AMBOS
+# alias — el alias vuelve a bajar el carril y a nombrar la receta aunque no
+# exista. Lo atrapan caso_g1_alias_sin_receta_no_baja_el_carril y
+# caso_g1_alias_sin_recetario_queda_full (los positivos del alias y el typo
+# siguen verdes: corren con/sin recetario valido).
+mut_alias_sin_validacion() { sed 's/if receta_valida "investigar"/if true/; s/if receta_valida "boceto"/if true/'; }
 # Task 10.6 — las dos mitades de las reglas permanentes, una mutacion cada una.
 # session_sin_reglas mata la EMISION (la fase session vuelve a salir muda) — lo
 # atrapa caso_g1_session_inyecta_reglas. session_pisa_gate saca el acotamiento a
