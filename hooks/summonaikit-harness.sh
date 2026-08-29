@@ -65,6 +65,33 @@ if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
 # Phase 15: en dsh la tool model-facing de delegacion es `subagent` (no Task).
 if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the subagent tool"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Task 16.4 (D1): recetario. Solo el manifiesto se lee en runtime (un cat +
+# sha256sum por receta); NUNCA se parsea frontmatter aqui. Override de entorno
+# para el lab/golden (la ruta real cambia por corrida y NO se imprime).
+RECETAS_DIR="${SAIKIT_RECETAS_DIR:-$HOOK_DIR/recetas}"
+recetas_menu() {  # stdout: bloque del contrato (menu o linea fija). Fail-open.
+  local m="$RECETAS_DIR/MANIFEST.sha256" sha tipo nombre carril titulo real n=0 omit=""
+  if [ ! -r "$m" ]; then printf '%s\n' 'No recipe book on this host: follow this contract as usual.'; return 0; fi
+  while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+    [ "$tipo" = "receta" ] || continue
+    # D1 (adversary #1/#2): el manifiesto se lee en runtime y no es de confianza
+    # ciega. Un nombre fuera de ^[a-z][a-z0-9-]*$ (traversal ../, glob *) no debe
+    # usarse como ruta ni volcarse al contrato: se omite en silencio (el linter
+    # del generador ya lo impide en un manifiesto propio; esto cubre el override
+    # SAIKIT_RECETAS_DIR o un manifiesto editado a mano).
+    printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || continue
+    real="$(sha256sum "$RECETAS_DIR/$nombre.md" 2>/dev/null | cut -c1-64)"
+    if [ -n "$real" ] && [ "$real" = "$sha" ]; then
+      [ "$n" -eq 0 ] && printf '%s\n' 'Recipes (recetario): pick ONE that matches the task, read it in full, copy its steps into your todolist before reasoning, and declare it in the receipt as "Understand: ... Receta: <nombre>". A step you skip stays listed as "skip: <razón>". If none matches, follow this contract as usual.'
+      printf -- '- %s — %s — %s\n' "$nombre" "$titulo" "$carril"; n=$((n+1))
+    else
+      omit="$omit $nombre"
+    fi
+  done < "$m"
+  [ "$n" -eq 0 ] && printf '%s\n' 'No recipe book on this host: follow this contract as usual.'
+  [ -n "$omit" ] && for x in $omit; do printf '%s\n' "(recipe omitted: hash mismatch ($x) — reinstall with tools/install-hook.sh)"; done
+  return 0
+}
 # Directorio de PERFIL del host (dirname del HOOK_DIR). En install global es
 # ~/.claude, que contiene projects/ donde Claude Code guarda los transcripts
 # reales. Es la raiz de contencion de transcript_path (Task 3.6 / A6): ver
@@ -525,7 +552,7 @@ LOG_PATH="$STATE_DIR/harness-evidence.log"
 # (a) podar_dir_sesion: `rmdir` best-effort al final de CADA limpieza. Es
 #     `rmdir`, JAMAS `rm -rf`: si por lo que sea quedo algo adentro, el dir
 #     sobrevive y se ve, en vez de borrarse en silencio.
-podar_dir_sesion() { rmdir "$STATE_DIR" 2>/dev/null || true; }
+podar_dir_sesion() { rm -f "$STATE_DIR/receta_alias" 2>/dev/null || true; rmdir "$STATE_DIR" 2>/dev/null || true; }
 
 # (b) barrer_estado_viejo: al ARMAR, se llevan las hermanas del MISMO
 #     proyecto+host cuyo `harness-state.env` pasa el TTL. Cubre las sesiones que
@@ -1090,9 +1117,12 @@ Waiting on a subagent is not failing:
   where <ROLE> is implementer, verifier, reviewer, or adversary — naming one of those is what makes the line count.
 - That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
 
+$RECETAS_MENU
+
 Delegation rule:
 - Delegate the implement, verify, and review gates to subagents via $TOOL_HINT, in this exact sequence:
   1) the implementer subagent, then 2) the verifier subagent, then 3) the reviewer subagent.
+- Write the brief with the 8 fields of recetas/00-lider.md (GOAL, SCOPE, CONTEXT, ACCEPTANCE, VERIFY, TIMEBOX, FORBIDDEN, REPORT) when the recipe book is present.
 - If your host does not surface those project-level agents in $TOOL_HINT, delegate to its
   nearest equivalent instead — an engineer/coding agent to implement, a test/QA agent to verify,
   a code-review agent to review. The gate maps host agent names to these roles by function, so a
@@ -1106,7 +1136,7 @@ Fast lane (-saikit:fast):
 - A turn armed with -saikit:fast is exempt from the three-subagent ceremony: you (the lead)
   implement directly. The receipt and real verification evidence (or a declared skip) are
   still required. A plain -saikit arm runs the full ceremony above.
-
+$ALIAS_LINEA
 Revision after findings (do this the CHEAP way):
 - If the reviewer returns findings, do NOT restart the ceremony. Fix the exact
   findings, then have the verifier re-check ONLY those points (targeted
@@ -1147,8 +1177,7 @@ Data-source precondition (language/framework/platform agnostic):
 
 Missing-information rule (language/framework/platform agnostic):
 - Before coding, separate what the REPO can answer (conventions, schema, existing helpers — go read it) from what only the USER can answer (what they want, who it is for, what "done" looks like to them, naming and tone, anything irreversible).
-- If a decision that shapes the outcome depends on user-only information, ASK the user the smallest set of key questions FIRST, in plain language, and wait for the answer. A good plain-language question beats a wrong guess. Ask about the outcome they want, never about how to build it.
-- Resolve every technical choice yourself from the repo; never hand a user a technical decision to make.
+- Two branches, always: (a) technical or reversible → decide it yourself from the repo and present the result; (b) product, preference or IRREVERSIBLE (force-push, deleting data, messages to third parties, deploys, payments) → ask the smallest set of plain-language questions FIRST and end the turn with the PAUSED line. A fact you could observe by running something is never a question for the human: sketch it (recipe boceto) and let the result decide.
 - Never block on questions the repo already answers, and never silently guess on questions it cannot answer: if you must proceed without an answer, state the assumption in plain words to the user and record it in the diff.
 
 User-facing surface baseline (language/framework/platform agnostic):
@@ -1172,11 +1201,17 @@ Understand: in one or two plain sentences, what the user asked for, plus any que
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
 Verify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. "No corri los candados" counts; "PASS" or od/wc alone does not.
 Review: findings, risks, or "no findings" with basis.
-Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits.
+Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits. Say first what changes for the user, then how, then why; never invent a link, citation or command you did not produce or read this turn.
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
 )"
-  printf '%s' "${_hc//\$TOOL_HINT/$TOOL_HINT}"
+  _menu="$(recetas_menu)"
+  _alias="$(cat "$STATE_DIR/receta_alias" 2>/dev/null)"
+  _alias_linea=""
+  [ -n "$_alias" ] && _alias_linea="Fast lane by alias: this turn is -saikit:$( [ "$_alias" = investigar ] && echo pregunta || echo boceto ); the recipe is $_alias. Do NOT touch production code."
+  _hc="${_hc//\$TOOL_HINT/$TOOL_HINT}"
+  _hc="${_hc//\$RECETAS_MENU/$_menu}"
+  printf '%s' "${_hc//\$ALIAS_LINEA/$_alias_linea}"
 }
 
 # Task 10.1: los clasificadores del vendor (is_engineering_task,
@@ -1454,6 +1489,9 @@ start_harness() {
   # silencioso. Atado por caso_g1_sufijo_desconocido_arma_full.
   lane="full"
   if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:fast([^A-Za-z0-9_-]|$)'; then lane="fast"; fi
+  receta_alias=""
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:pregunta([^A-Za-z0-9_-]|$)'; then lane="fast"; receta_alias="investigar"; fi
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:boceto([^A-Za-z0-9_-]|$)'; then lane="fast"; receta_alias="boceto"; fi
 
   task_hash="$(printf '%s' "$prompt_text" | cksum | awk '{print $1}')"
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
@@ -1472,6 +1510,7 @@ start_harness() {
   # Major #64-b). ISO UTC: es la forma que la linea base dorada normaliza.
   adv_epoch_armado="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
   write_state "$task_hash" "0" "0" "0" "" "$lane" "$adv_epoch_armado" "" "" ""
+  rm -f "$STATE_DIR/receta_alias"; [ -n "$receta_alias" ] && printf '%s\n' "$receta_alias" > "$STATE_DIR/receta_alias"
   # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
   # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni
   # por el skip explicito. Fail-open: si no hay `find`, no se barre nada.

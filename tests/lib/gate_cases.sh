@@ -281,7 +281,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -533,6 +533,42 @@ caso_g1_contrato_label_verif_una_linea() {
   _contiene "stdout" "$LAB_OUT" 'VERIFIED BY SUBAGENT:'
   _contiene "stdout" "$LAB_OUT" 'on the SAME line as the label'
   _contiene "stdout" "$LAB_OUT" 'a command placed on the next line is not seen'
+}
+
+# Task 16.4 (D1/D4): el contrato ofrece SOLO las recetas cuyo sha256 instalado
+# coincide con el manifiesto; sin manifiesto, linea fija y contrato identico.
+_recetas_lab() {  # planta un recetario minimo en $LAB/hooks/recetas y exporta el override
+  mkdir -p "$LAB/hooks/recetas"
+  printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: bug\ntitulo: Arreglar algo que no funciona\ncarril: full\ncuando: ["x"]\nadversary: opcional\n---\n## Pasos\n1. a\n## Qué le dices al usuario\nb\n## Recibo\nc\n' > "$LAB/hooks/recetas/bug.md"
+  printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$(sha256sum "$LAB/hooks/recetas/bug.md" | cut -c1-64)" > "$LAB/hooks/recetas/MANIFEST.sha256"
+  export SAIKIT_RECETAS_DIR="$LAB/hooks/recetas"
+}
+caso_g1_contrato_nombra_recetario() {
+  _recetas_lab
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arregla el login')"
+  unset SAIKIT_RECETAS_DIR
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'Recipes (recetario):'
+  _contiene "stdout" "$LAB_OUT" 'bug — Arreglar algo que no funciona — full'
+  _contiene "stdout" "$LAB_OUT" 'Receta: <nombre>'
+  _contiene "stdout" "$LAB_OUT" 'skip: <razón>'
+  _no_contiene "stdout" "$LAB_OUT" "$LAB/hooks/recetas"     # D1: sin ruta absoluta
+}
+caso_g1_sin_recetario_contrato_igual() {
+  export SAIKIT_RECETAS_DIR="$LAB/hooks/no-existe"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arregla el login')"
+  unset SAIKIT_RECETAS_DIR
+  _igual "exit code" "$LAB_RC" "0"
+  _contiene "stdout" "$LAB_OUT" 'No recipe book on this host'
+  _no_contiene "stdout" "$LAB_OUT" 'Recipes (recetario):'
+}
+caso_g1_receta_hash_distinto_se_omite() {
+  _recetas_lab
+  printf '\nlinea editada por alguien\n' >> "$LAB/hooks/recetas/bug.md"   # el hash ya no coincide
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arregla el login')"
+  unset SAIKIT_RECETAS_DIR
+  _no_contiene "stdout" "$LAB_OUT" 'bug — Arreglar'
+  _contiene "stdout" "$LAB_OUT" 'omitted: hash mismatch (bug)'
 }
 
 # El sentinel pide fronteras a los dos lados. Sin ellas, cualquier archivo o
@@ -1034,6 +1070,54 @@ caso_g1_sufijo_desconocido_arma_full() {
   lab_limpiar_estado
   lab_run prompt claude "$(lab_payload_prompt '-saikit:rapido corrige el typo')"
   _igual "lane con sufijo :rapido" "$(lab_estado lane)" "full"
+}
+
+caso_g1_alias_pregunta_arma_fast_y_nombra_receta() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:pregunta cómo funciona el login')"
+  _igual "lane" "$(lab_estado lane)" "fast"
+  _igual "receta_alias" "$(cat "$(dirname "$LAB_ESTADO_PATH")/receta_alias" 2>/dev/null)" "investigar"
+  _contiene "stdout" "$LAB_OUT" 'the recipe is investigar'
+}
+caso_g1_alias_boceto_arma_fast_y_nombra_receta() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:boceto del login')"
+  _igual "lane" "$(lab_estado lane)" "fast"
+  _igual "receta_alias" "$(cat "$(dirname "$LAB_ESTADO_PATH")/receta_alias" 2>/dev/null)" "boceto"
+  _contiene "stdout" "$LAB_OUT" 'Do NOT touch production code'
+}
+caso_g1_alias_typo_arma_full_sin_receta() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:pregunt cómo funciona')"
+  _igual "lane" "$(lab_estado lane)" "full"
+  [ -e "$(dirname "$LAB_ESTADO_PATH")/receta_alias" ] && _mal "receta_alias no debe existir con un typo"
+}
+
+# Task 16.6 (reviewer, finding #4 / C13): el desarme tras un turno con alias debe
+# llevarse receta_alias con el resto del estado; si queda, `podar_dir_sesion`'s
+# rmdir deja el directorio de sesion inmortal (viola C13).
+caso_g1_alias_desarme_limpia_estado() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:pregunta cómo funciona el login')"
+  _igual "lane" "$(lab_estado lane)" "fast"
+  dir_turno="$(dirname "$LAB_ESTADO_PATH")"
+  [ -e "$dir_turno/receta_alias" ] || _mal "tras armar con -saikit:pregunta, receta_alias debe existir en $dir_turno"
+  # DESARME: prompt sin sentinel -> E2 debe llevarse TODO (archivos + receta_alias + dir)
+  lab_run prompt claude "$(lab_payload_prompt 'otro mensaje sin sentinel')"
+  if [ -d "$dir_turno" ]; then
+    _mal "el desarme tras un turno con alias debe llevarse el DIRECTORIO, pero persistio: $dir_turno"
+  fi
+}
+
+# Task 16.4 (adversary, hallazgos #1/#2 / D1): el hook lee el manifiesto en
+# runtime y no debe filtrar contenido fuera de RECETAS_DIR. Un `nombre` malicioso
+# (traversal `../` o glob) no debe aparecer en el menu ni volcar contenido ajeno.
+# El linter de recetas lo impide en un manifiesto generado; esto cubre el caso
+# del manifiesto editado a mano o del override SAIKIT_RECETAS_DIR.
+caso_g1_receta_nombre_inseguro_se_omite() {
+  _recetas_lab
+  # linea con nombre que apunta FUERA de RECETAS_DIR (path traversal)
+  printf '%s\treceta\t../SECRETO\tfull\tTitulo confidencial\n' "aaaa" >> "$LAB/hooks/recetas/MANIFEST.sha256"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit arregla el login')"
+  unset SAIKIT_RECETAS_DIR
+  _contiene "stdout" "$LAB_OUT" 'bug — Arreglar algo que no funciona — full'
+  _no_contiene "stdout" "$LAB_OUT" 'SECRETO'
 }
 
 # ============================================ G2 — evidencia de verificacion
