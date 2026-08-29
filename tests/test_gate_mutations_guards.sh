@@ -41,6 +41,17 @@ cat > "$tmp/lib.sh" <<'LIB'
 mut_inerte() { cat; }
 # Cambia el archivo pero lo deja sin parsear.
 mut_rompe_sintaxis() { printf 'if [\n'; cat; }
+# Seis inertes con NOMBRE distinto: el reparto del shard se verifica por
+# identidad, no por cantidad (CodeRabbit, PR #101). El driver imprime el nombre
+# de cada mutacion que procesa, asi que con nombres unicos se puede exigir la
+# union exacta y la interseccion vacia; con seis `inerte` solo se podia contar,
+# y un selector que repitiera una y omitiera otra habria sumado seis igual.
+mut_in_a() { cat; }
+mut_in_b() { cat; }
+mut_in_c() { cat; }
+mut_in_d() { cat; }
+mut_in_e() { cat; }
+mut_in_f() { cat; }
 LIB
 
 correr_driver() { # $1 = catalogo, $2 = lib (opcional)
@@ -86,25 +97,43 @@ printf '%s' "$salida" | grep -q 'ningun caso detecto' || malo "no nombra el moti
 # Barato como el resto del archivo: el catalogo son mutaciones INERTES, que el
 # driver rechaza antes de correr un solo caso; lo que se cuenta es cuantas nombro
 # cada parte.
-cat_seis='G1|inerte|a
-G1|inerte|b
-G1|inerte|c
-G1|inerte|d
-G1|inerte|e
-G1|inerte|f'
-procesadas() {  # $1 = i/N  -> cuantas mutaciones proceso esa parte
+cat_seis='G1|in_a|a
+G1|in_b|b
+G1|in_c|c
+G1|in_d|d
+G1|in_e|e
+G1|in_f|f'
+# Por IDENTIDAD, no por cantidad: el driver nombra cada mutacion que procesa.
+nombres_de() {  # $1 = i/N  -> los nombres que proceso esa parte, uno por linea
   SAIKIT_MUT_SHARD="$1" correr_driver "$cat_seis" "$tmp/lib.sh" \
-    | grep -c 'la mutacion no cambio nada'
+    | grep -oE 'FAIL: in_[a-f]' | sed 's/^FAIL: //' | sort
 }
-caso "la union de los 3 shards == la lista entera (ni una mutacion se pierde)"
-p1="$(procesadas 1/3)"; p2="$(procesadas 2/3)"; p3="$(procesadas 3/3)"
-total=$((p1 + p2 + p3))
-[ "$total" -eq 6 ] || malo "los 3 shards suman $total de 6 mutaciones (1/3=$p1 2/3=$p2 3/3=$p3)"
-{ [ "$p1" -gt 0 ] && [ "$p2" -gt 0 ] && [ "$p3" -gt 0 ]; } \
-  || malo "algun shard quedo sin mutaciones: 1/3=$p1 2/3=$p2 3/3=$p3"
+n1="$(nombres_de 1/3)"; n2="$(nombres_de 2/3)"; n3="$(nombres_de 3/3)"
+
+caso "la union de los 3 shards == la lista entera, mutacion por mutacion"
+union="$(printf '%s\n%s\n%s\n' "$n1" "$n2" "$n3" | grep -c .)"
+distintas="$(printf '%s\n%s\n%s\n' "$n1" "$n2" "$n3" | sort -u | grep -c .)"
+esperadas="$(printf 'in_a\nin_b\nin_c\nin_d\nin_e\nin_f\n')"
+obtenidas="$(printf '%s\n%s\n%s\n' "$n1" "$n2" "$n3" | sort -u)"
+[ "$obtenidas" = "$esperadas" ] || malo "la union no son las 6 esperadas: [$(printf '%s' "$obtenidas" | tr '\n' ' ')]"
+# Cardinalidad Y unicidad: si un selector repitiera una y omitiera otra, la
+# union seguiria sumando 6 pero con una duplicada — por eso se comparan las dos.
+[ "$union" -eq 6 ] || malo "los 3 shards procesaron $union mutaciones, esperaba 6"
+[ "$distintas" -eq 6 ] || malo "hay mutaciones repetidas entre shards: $distintas distintas de $union procesadas"
+
+caso "los shards no se pisan entre si (interseccion vacia)"
+for par in "1/3:2/3 $n1|$n2" "1/3:3/3 $n1|$n3" "2/3:3/3 $n2|$n3"; do
+  etiqueta="${par%% *}"; lados="${par#* }"
+  izq="${lados%%|*}"; der="${lados##*|}"
+  comunes="$(comm -12 <(printf '%s\n' "$izq" | sort) <(printf '%s\n' "$der" | sort) | grep -c .)"
+  [ "$comunes" -eq 0 ] || malo "$etiqueta comparten $comunes mutacion(es)"
+done
 
 caso "un shard corre SOLO su parte, no la lista entera"
-[ "$p1" -lt 6 ] || malo "el shard 1/3 corrio las 6: el filtro no se aplico"
+[ "$(printf '%s\n' "$n1" | grep -c .)" -lt 6 ] || malo "el shard 1/3 corrio las 6: el filtro no se aplico"
+for x in "1/3:$n1" "2/3:$n2" "3/3:$n3"; do
+  [ "$(printf '%s\n' "${x#*:}" | grep -c .)" -gt 0 ] || malo "el shard ${x%%:*} quedo sin mutaciones"
+done
 
 caso "shard con forma invalida => corta con exit 2 y no corre nada"
 salida="$(SAIKIT_MUT_SHARD='dos' correr_driver "$cat_seis" "$tmp/lib.sh")"; rc=$?
