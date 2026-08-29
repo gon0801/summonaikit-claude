@@ -59,8 +59,11 @@ locales serializadas por el candado.
 1. **Local, por cambio: SOLO lo acotado.** Rojo/verde con el driver suelto
    (regla 1 de arriba) + la bateria de mutaciones ACOTADA a las lineas tocadas
    (`SAIKIT_MUTACIONES='...' bash tests/test_gate_mutations.sh`). ~1-3 min.
-2. **El gate final de una task/PR son los jobs `suite` + `suite-lentos` del CI
-   en verde** (los dos: cada uno corre la mitad de la bateria). El
+2. **El gate final de una task/PR es el job `gate` del CI en verde** — es la
+   compuerta agregada que exige success en los cinco (`quality`,
+   `node-adapter`, `suite`, `suite-lentos`, `secrets`), asi que mirar SOLO las
+   dos mitades de la bateria dejaria pasar un rojo de cualquiera de los otros
+   tres. El
    cierre en Plans.md cita ese run de Actions donde antes citaba la corrida
    local. La suite completa local queda como opcion (medir la forma Windows
    entera), no como requisito.
