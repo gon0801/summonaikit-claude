@@ -39,15 +39,28 @@ es el fork de MSYS, no la logica del hook.
 
 ## Gate final: CI Linux, no la suite local (politica 2026-08-15)
 
-El job `suite` del CI (Task 10.5) corre `tests/run.sh` COMPLETO en ubuntu en
-~1m32s, en CADA push/PR. Correr ademas la suite completa en local (~20 min por
-el fork de MSYS) es pagar dos veces lo mismo — medido 2026-08-15: dos sesiones
-paralelas gastaron ~2 h de pared en suites locales serializadas por el candado.
+La bateria completa corre en ubuntu en CADA push/PR, repartida en jobs
+PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
+bateria entera, y cada nivel tiene su candado.
+
+- `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), ~2.7 min. Candado:
+  `tests/test_runner_guards.sh`.
+- `suite-lentos` — `test_gate_mutations`, que solo se llevaba ~6 de los 6.9 min
+  del job unico, repartido en 3 shards de 37 mutaciones
+  (`SAIKIT_MUT_SHARD=i/3`), ~2 min cada uno. Candado:
+  `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
+  shard vacio, invalido o fuera de rango corta con exit 2).
+
+El reloj del PR baja de ~7 min a ~2.7. Correr ademas la suite
+completa en local (~20 min por el fork de MSYS) es pagar dos veces lo mismo —
+medido 2026-08-15: dos sesiones paralelas gastaron ~2 h de pared en suites
+locales serializadas por el candado.
 
 1. **Local, por cambio: SOLO lo acotado.** Rojo/verde con el driver suelto
    (regla 1 de arriba) + la bateria de mutaciones ACOTADA a las lineas tocadas
    (`SAIKIT_MUTACIONES='...' bash tests/test_gate_mutations.sh`). ~1-3 min.
-2. **El gate final de una task/PR es el job `suite` del CI en verde.** El
+2. **El gate final de una task/PR son los jobs `suite` + `suite-lentos` del CI
+   en verde** (los dos: cada uno corre la mitad de la bateria). El
    cierre en Plans.md cita ese run de Actions donde antes citaba la corrida
    local. La suite completa local queda como opcion (medir la forma Windows
    entera), no como requisito.

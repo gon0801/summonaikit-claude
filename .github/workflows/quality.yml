@@ -85,19 +85,82 @@ jobs:
   # cygpath ya se autolimitan con `command -v cygpath` y en Linux corren su
   # mitad POSIX; los que dependen de forma Windows de rutas se listan en la
   # fila 10.5 de Plans.md si llegaran a divergir.
+  # Reparto en jobs PARALELOS. Nada se saltea: son particiones cuya UNION es la
+  # bateria entera, y cada nivel tiene su candado.
+  #
+  # Medido: el job unico eran 6.9 min (run 33231405475) y `test_gate_mutations`
+  # se llevaba ~6 de esos minutos (run 33232669996: la mitad lenta sola tardo
+  # 6.0 y la rapida 2.7). Por eso el reparto es en DOS niveles:
+  #   1) `SAIKIT_PARTICION` (en `tests/run.sh`) separa la mitad lenta de la
+  #      rapida — candado: `tests/test_runner_guards.sh`.
+  #   2) `SAIKIT_MUT_SHARD=i/N` (en `tests/test_gate_mutations.sh`) reparte las
+  #      111 mutaciones en 3 (37/37/37) — candado:
+  #      `tests/test_gate_mutations_guards.sh`.
+  # Reloj esperado del PR: ~2.7 min (lo fija ahora la mitad rapida).
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run the full gate suite (tests/run.sh)
+      - name: Run the gate suite — fast half (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
           # Task 10.5: marca los 4 tests Windows-bound como SKIP CON LISTADO
           # (los nombra el runner uno por uno; razones en Plans.md, fila 10.5).
           SAIKIT_CI_LINUX: '1'
+          SAIKIT_PARTICION: rapidos
         run: bash tests/run.sh
+
+  suite-lentos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the gate suite — slow half, shard ${{ matrix.shard }} (tests/run.sh)
+        env:
+          SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
+          SAIKIT_CI_LINUX: '1'
+          SAIKIT_PARTICION: lentos
+          SAIKIT_MUT_SHARD: ${{ matrix.shard }}
+        run: bash tests/run.sh
+
+  # Compuerta agregada (Greptile, PR #101). El reparto multiplico los checks, y
+  # cualquier consumidor que mire UN solo status — una proteccion de rama, el
+  # `saikit-merge.sh` de la Phase 18, un humano apurado — veria el `suite` de
+  # siempre en verde con `suite-lentos` en rojo: el reparto habria convertido un
+  # candado en decoracion. Este job es el unico status que hay que mirar.
+  #
+  # `if: always()` + comparacion explicita de cada resultado: con `needs:` a
+  # secas, un job que falla deja a este SALTEADO, y un check salteado no bloquea
+  # nada — seria el mismo verde vacio con otra forma. Los nombres con guion van
+  # en corchetes (`needs['node-adapter']`), que es la sintaxis que GitHub acepta.
+  gate:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [quality, node-adapter, suite, suite-lentos, secrets]
+    steps:
+      - name: Todos los jobs de calidad en verde
+        env:
+          R_QUALITY: ${{ needs.quality.result }}
+          R_NODE: ${{ needs['node-adapter'].result }}
+          R_SUITE: ${{ needs.suite.result }}
+          R_LENTOS: ${{ needs['suite-lentos'].result }}
+          R_SECRETS: ${{ needs.secrets.result }}
+        run: |
+          rc=0
+          for par in "quality=$R_QUALITY" "node-adapter=$R_NODE" "suite=$R_SUITE" \
+                     "suite-lentos=$R_LENTOS" "secrets=$R_SECRETS"; do
+            printf '%s\n' "$par"
+            case "$par" in *=success) ;; *) rc=1 ;; esac
+          done
+          [ "$rc" -eq 0 ] || { echo "gate: algun job de calidad NO quedo en success" >&2; exit 1; }
+          echo "gate: OK — todos en success"
 
   # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de
   # secretos en este repo"): el hook de este repo corre en CADA turno y nada
