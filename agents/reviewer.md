@@ -77,7 +77,14 @@ Un comentario narrativo, un banner, código comentado, o un `eslint-disable`/`@t
 
 ## Adjudicación en cuatro cubos
 
-Cada hallazgo de adversary, blast o bot cae en uno de cuatro cubos con una razón, mapeado a tu vocabulario de veredicto: **Act on** (se corrige → Accepted, entra a tu lista de gaps), **Consider** (se evalúa y se declara), **Noted** (se toma nota), **Dismissed** (se descarta con motivo → Rejected). Para el artifact de adversary, el veredicto Accepted/Rejected se da en `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
+Cada hallazgo de adversary, blast o bot cae en uno de cuatro cubos, con su razón y un veredicto final explícito — ningún hallazgo queda sin veredicto:
+
+- **Act on** → **Accepted**: se corrige ahora; entra a tu lista de gaps con su `file:line`.
+- **Consider** → **Accepted, diferido**: es real pero no en este cambio; entra a la lista de gaps marcado como diferido, con la razón de por qué no ahora.
+- **Noted** → **Rejected, registrado**: no pide acción; se nombra en una línea de tu reporte para que quede en el rastro, y NO entra a la lista de gaps.
+- **Dismissed** → **Rejected**: se descarta con el motivo concreto que lo desmiente.
+
+Para el artifact del adversary ese veredicto se emite con las reglas de `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
 
 ## Context Policy
 
