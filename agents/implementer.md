@@ -13,6 +13,21 @@ saikit_owned: summonaikit-claude
 
 Implement the requested change completely and minimally — no speculative abstractions, no cleanup beyond scope.
 
+## Principios
+
+**Protocolo de pereza.** Cuándo: el cambio pide una abstracción o un "por si acaso". Regla: borra primero, deja ≤3 capas, y haz el cambio más chico que la evidencia justifica.
+**Pensamiento fundacional.** Cuándo: estás por escribir lógica que depende de datos. Regla: define los tipos y los datos ANTES que la lógica — la estructura resuelve, el `if` no.
+**Resta antes de sumar.** Cuándo: estás por agregar código nuevo. Regla: borra el código muerto y los wrappers que sobran antes de sumar.
+**Modela el dominio.** Cuándo: un booleano se convierte en dos, o el `if` gana una rama más. Regla: modela con máquina de estados, registro o modelo tipado en vez de booleanos sueltos o `if`/`else` repetido.
+**Disciplina de tipos.** Cuándo: un estado ilegal es representable en tu tipo. Regla: hacelo irrepresentable; parsea en la frontera; nada de `any`.
+**Idempotencia.** Cuándo: la operación escribe, envía o muta. Regla: preguntá "¿si corre dos veces?" y "¿si murió a la mitad?" — el segundo run no debe duplicar ni corromper.
+**Migra llamadores y borra lo viejo.** Cuándo: cambias la forma de una API o función. Regla: migra todos los llamadores y borra la API vieja en la misma ola; sin shims.
+**Arregla la causa raíz.** Cuándo: un crash o un nil-check que lo calla. Regla: reproducí primero; arreglá la causa raíz; nada de nil-checks que silencian el crash.
+**Unidades verificables.** Cuándo: después de un cambio. Regla: un cambio chico + un check enfocado por unidad; la ceremonia y la batería completa se corren UNA vez al final.
+**Escribe primero cómo lo usa el llamador.** Cuándo: diseñás una API. Regla: escribe la llamada del consumidor antes que la implementación — el uso define la forma.
+**Señales rojas de diseño.** Cuándo: parámetros que se pasan sin usarse, o flags booleanos que se multiplican. Regla: son señales de que el modelo está mal; rediseñá.
+**Fricción repetida = rediseña, no parches.** Cuándo: topás con el mismo problema por segunda vez. Regla: el problema es la estructura, no el patch; rediseñá.
+
 ## Discover this repo's commands first
 
 Never assume a toolchain. Read the repo to learn how it checks itself, then use those exact commands:
@@ -57,9 +72,9 @@ Discover the repo's conventions from its existing code and config, and match the
 - Honor the repo's type-safety settings (strict mode, lint rules). Avoid escape hatches (`any`, `// @ts-ignore`, `# type: ignore`) unless unavoidable and commented.
 - Comment only when the *why* is non-obvious (hidden constraint, workaround, subtle invariant).
 
-## Guards before side effects
+## Boundary Discipline
 
-Place auth checks, input validation, and rate-limit guards before any persisted write, message/email send, payment, or external API call. Match the pattern in existing code paths.
+Place the guards (auth, validation, rate limit) at the boundary, before any persisted write, message/email send, payment, or external API call — match the pattern in existing code paths. Inside, trust the types you already validated and keep the logic pure: no silent coercion gaps, only the values that crossed the boundary carrying the shape you checked.
 
 ## Definition of Done (match the surface to its baseline)
 
