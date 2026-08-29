@@ -1,8 +1,25 @@
-# Generado por quality-kit (init-repo.ps1). Corre los mismos candados que
-# ya corren en tu maquina (pre-commit) mas las pruebas, en la nube, en cada
-# push y en cada pull request -- asi el repo queda protegido aunque alguien
-# (vos, otra IA, un colaborador) haga un commit sin pasar por los candados
-# locales, o desde una maquina que no los tiene instalados.
+# CI de summonaikit-claude. Corre los mismos candados que ya corren en la
+# maquina (pre-commit) mas las pruebas, en la nube, en cada push y en cada pull
+# request -- asi el repo queda protegido aunque alguien (el operador, otra IA,
+# un colaborador) haga un commit sin pasar por los candados locales, o desde una
+# maquina que no los tiene instalados.
+#
+# ESTE ARCHIVO ES DE ESTE REPO, ya no de la plantilla del quality-kit. Nacio de
+# su `init-repo.ps1`, pero el reparto en jobs paralelos de mas abajo (particion
+# de la bateria + shards de mutaciones) es propio y no esta en la plantilla.
+#
+# POR ESO SE LE QUITO, A PROPOSITO, LA LINEA DE ATRIBUCION QUE EL KIT PONE EN LO
+# QUE GENERA (la que empieza con "Generado por" y nombra al kit). NO se la
+# devuelvas: `Copy-QualityWorkflowIfSafe` (init-repo.ps1, ~linea 778) compara
+# contra esa cadena y SOBRESCRIBE con la plantilla generica todo workflow que la
+# lleve; el que no la tiene lo respeta ("no lo toco"). Con la marca puesta, la
+# proxima corrida de ese script se llevaria por delante el reparto y el CI
+# volveria a tardar ~7 min en vez de ~2.3, en silencio y sin aviso.
+#
+# Verificado 2026-08-29: `init-repo.ps1` es el UNICO script del kit que escribe
+# este archivo (`install-ci-linux.ps1` escribe otro, `suite-linux.yml`, con su
+# propia marca). Si algun dia el reparto se generaliza, el lugar es la plantilla
+# del kit — no volver a marcar este archivo.
 name: Quality
 
 on:
