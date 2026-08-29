@@ -7,6 +7,40 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-29 — PR #105 / Tasks 16.4 + 16.6 (menú de recetas en el contrato, alias del carril fast) + PR #104 (guía de usuario) — deploy REAL (el hook cambió)
+
+- **Qué traía:** `recetas_menu()` y `receta_valida()` en el hook — el menú se arma
+  desde `recetas/MANIFEST.sha256` verificando el sha de **cada archivo**, y el
+  título/carril que se inyectan al contrato se leen del **archivo autenticado**,
+  nunca de las columnas del manifiesto (quien pudiera editar el manifiesto
+  escribiría el contrato de cada turno armado). Alias `-saikit:pregunta` y
+  `-saikit:boceto` ⇒ `lane=fast` + `receta_alias`, con guard estricto: si la
+  receta no existe con su hash, el alias NO baja el carril. `podar_dir_sesion`
+  limpia `receta_alias`. Del #104 no salió código de hook: guía de usuario,
+  escape de pipes del ledger y dos candados de prueba.
+- **Merge:** `8ca9bab` (#105, rama `phase-16/16.4-16.6`, head `df13ca9`) y
+  `ebfd2e5` (#104, rama `docs/guia-usuario`, head `94931f5`). Master quedó en
+  `ebfd2e5`.
+- **CI:** run `33270136308` success sobre `df13ca9` (10 checks, incluido el job
+  agregado `gate`); run `33273108526` success sobre `94931f5`.
+- **Verificación del lead, sobre el árbol real y no sobre el reporte del autor:**
+  - `mut_menu_sin_corte_frontmatter` corrida aparte ⇒ acreditada a **un solo**
+    caso (`caso_g1_receta_menu_lee_solo_frontmatter`).
+  - Golden regrabado auditado: 2258 líneas de estructura **idénticas** entre
+    master y la rama, los 54 escenarios en el mismo orden, ningún `exit` ni
+    estado cambió. Lo único que cambió es el texto del contrato y los hashes.
+- **Deploy:** `tools/install-hook.sh` ⇒ `REPARADO: el destino era nuestro y
+  difiere de la fuente`; backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260829-132315.bak`.
+  Vivo == master comprobado por sha256 (`6bcc4f9e4619e312b923…` en los dos).
+- **Registro:** `tools/check-hook-registration.sh` ⇒ exit 0 **sin salida**, que
+  en ese script significa registro completo en las 3 fases (el silencio es su
+  diseño: "un aviso en cada arranque sin nada que decir es como se entrena a un
+  operador a ignorarlos").
+- **Límite declarado:** el fix del frontmatter es **preventivo**. Hoy ninguna
+  receta del repo tiene `titulo:`/`carril:` fuera del frontmatter, así que el
+  caso planta la situación sintéticamente; 16.5 agrega recetas y skills.
+
 ## 2026-08-28 — PR #98 / Task 16.2 (recetario fuente: 6 recetas + `00-lider`, manifiesto TSV, linter) — deploy NO-OP (el hook no cambió)
 
 - **Qué traía:** `recetas/` (7 archivos, ≤80 líneas, español), `recetas/MANIFEST.sha256`
