@@ -2250,6 +2250,21 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "un manifiesto vacio NO se borra (no es atribuible al kit)"
 printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
 
+# 16.5 (cross-review grok, hallazgo 1): la misma regla de nombre seguro del hook
+# y del checker vale al QUITAR. Un `nombre` con traversal (../blanco) no debe
+# usarse como ruta ni sesgar la propiedad del manifiesto. Sin el guard, un
+# hooks/blanco.md CON marca (que el nombre ../blanco resolveria) haria "nuestro"
+# al manifiesto y lo borraria.
+caso "recetario: un nombre inseguro del manifiesto NO sesga la propiedad al quitar"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+escribir_nuestro_viejo "$(dirname "$dest")/blanco.md"   # fuera de recetas/, con marca
+printf 'deadbeef\treceta\t../blanco\tfull\tTitulo ajeno\n' > "$(dirname "$dest")/recetas/MANIFEST.sha256"
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas con nombre inseguro deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "el nombre inseguro NO debe volver 'nuestro' al manifiesto (se borro)"
+printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
+
 # 16.5 (cross-review codex-16.5-r2, hallazgo 1): un symlink en recetas/ no se toca
 # tampoco al QUITAR, por consistencia con el instalador. rm -f des-enlaza (no borra
 # el destinatario), pero se trata como ajeno. Mismo SKIP por host sin symlinks.

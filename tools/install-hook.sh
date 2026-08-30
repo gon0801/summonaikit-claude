@@ -41,6 +41,7 @@
 #   bash tools/install-hook.sh --host grok [--quitar-grok]
 #   bash tools/install-hook.sh --host kimi [--dry-run]
 #   bash tools/install-hook.sh --host claude [--dry-run]
+#   bash tools/install-hook.sh --host claude --quitar-recetas
 #   bash tools/install-hook.sh --host dsh [--dry-run] [--quitar-dsh]
 #   bash tools/install-hook.sh --host claude --refrescar-manifiesto
 #   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
@@ -2212,6 +2213,13 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
     else
       while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
         [ "$tipo" = "receta" ] || continue
+        # Guard de nombre (cross-review grok, hallazgo 1): misma regla que el
+        # hook y el checker. Un `nombre` fuera de ^[a-z][a-z0-9-]*$ (traversal
+        # ../) no debe usarse como ruta ni sesgar la decision de propiedad.
+        printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || continue
+        # Un symlink no es nuestro (consistencia con el instalador y con el
+        # borrado de arriba, que lo deja intacto): no cuenta como receta propia.
+        [ -L "$1/recetas/$nombre.md" ] && continue
         # Solo lo que EXISTE confirma o niega propiedad; lo inexistente no.
         [ -f "$1/recetas/$nombre.md" ] || continue
         if zcode_agente_tiene_marca "$1/recetas/$nombre.md"; then
