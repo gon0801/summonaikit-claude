@@ -70,6 +70,7 @@ G1|alias_pregunta_apagado|el alias -saikit:pregunta deja de bajar el carril
 G1|alias_sin_receta|el alias baja el carril pero no nombra la receta
 G1|alias_no_se_limpia|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
 G1|manifiesto_reinyecta_titulo|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
+G1|menu_pide_todolist|el menu vuelve a pedir el todolist, una herramienta de UN host que la 16.8 midio con 0 usos en 6 de 6 turnos
 G1|menu_sin_corte_frontmatter|el menu vuelve a recorrer el archivo entero para titulo/carril y una receta cuyo cuerpo documenta el formato filtra ese texto del cuerpo
 G1|alias_sin_validacion|el alias vuelve a bajar el carril y a nombrar la receta aunque la receta no exista en el recetario
 G2|runner_sin_pytest|pytest sale de la lista de runners de verificacion
@@ -269,6 +270,10 @@ mut_alias_no_se_limpia()        { sed 's#rm -f "\$STATE_DIR/receta_alias" 2>/dev
 # titulo de manifiesto distinto al del archivo; los demas con recetario usan el
 # mismo titulo en ambos, asi que no reaccionan).
 mut_manifiesto_reinyecta_titulo() { sed 's/"\$f_titulo" "\$f_carril"/"$titulo" "$carril"/'; }
+# Task 16.10: devuelve la instruccion vieja al menu. Lo atrapa
+# caso_g1_contrato_nombra_recetario, que ahora exige la conducta ("follow its
+# steps IN ORDER") y prohibe nombrar la herramienta ("todolist").
+mut_menu_pide_todolist() { sed 's/and follow its steps IN ORDER — do not improvise your own sequence. Declare it/copy its steps into your todolist before reasoning, and declare it/'; }
 # Task 16.4/16.6 (lead, fix 1b): hace que el awk vuelva a recorrer el archivo
 # entero (sin parar en el segundo '---' y sin la guardia de primera coincidencia)
 # -> vuelve a ganar la ULTIMA coincidencia y una receta cuyo cuerpo documenta el
