@@ -874,8 +874,10 @@ mkdir -p "$inca_dir/hooks"
 escribir_settings_completo "$inca_dir/settings.json"
 if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=0; else rc_b=$?; fi
 [ "$rc_b" -eq 0 ] || malo "sin manifiesto: esperaba exit 0, dio $rc_b"
-printf '%s' "$out_b" | grep -q 'recetario: ausente o con hash distinto en' \
-  || malo "sin manifiesto debe decir 'ausente o con hash distinto': $out_b"
+printf '%s' "$out_b" | grep -q 'recetario: ausente en' \
+  || malo "sin manifiesto debe decir 'ausente en': $out_b"
+printf '%s' "$out_b" | grep -qi 'hash distinto' \
+  && malo "sin manifiesto NO debe decir 'hash distinto' (no se midio nada): $out_b"
 # Ahora con manifiesto pero con hash FALSO para bug.md (el contrato no ofrecera
 # esa receta).
 mkdir -p "$inca_dir/hooks/recetas"
@@ -903,6 +905,25 @@ printf '%s' "$out_i" | grep -q 'entrada insegura' \
   || malo "debe reportar 'entrada insegura' para el nombre ../blanco: $out_i"
 printf '%s' "$out_i" | grep -q 'blanco.md' \
   && malo "no debe hashear un .md fuera de recetas/ (uso ../blanco como ruta): $out_i"
+
+# 16.5 (cross-review, hilo sha256sum): si el binario de hash NO esta disponible
+# (host con solo `shasum`, o ninguno), el checker debe salir `unknown` y NUNCA
+# acusar "hash distinto" — eso seria la alarma falsa que el contrato prohibe.
+# SAIKIT_SHA_BIN fuerza la falta de binario (costura de test documentada en el
+# tool). El OLD code usaba `sha256sum` a pelo y acusaba integridad rota.
+caso "recetario: sin binario de hash disponible => unknown, NO integridad rota"
+shbo_dir="$tmp/recetario-sin-binario"
+mkdir -p "$shbo_dir/hooks/recetas"
+escribir_settings_completo "$shbo_dir/settings.json"
+realsha="$(sha256sum "$repo/recetas/bug.md" 2>/dev/null | cut -c1-64)"
+printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$realsha" > "$shbo_dir/hooks/recetas/MANIFEST.sha256"
+cp "$repo/recetas/bug.md" "$shbo_dir/hooks/recetas/bug.md"
+if out_sh="$(SAIKIT_SHA_BIN='__no_such_hash_bin__' bash "$tool" --settings "$shbo_dir/settings.json" 2>&1)"; then rc_sh=0; else rc_sh=$?; fi
+[ "$rc_sh" -eq 0 ] || malo "sin binario de hash: esperaba exit 0 (advisory), dio $rc_sh: $out_sh"
+printf '%s' "$out_sh" | grep -q 'unknown' \
+  || malo "sin binario de hash debe decir 'unknown': $out_sh"
+printf '%s' "$out_sh" | grep -qi 'hash distinto\|ausente o con hash' \
+  && malo "sin binario de hash NO debe acusar integridad rota: $out_sh"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

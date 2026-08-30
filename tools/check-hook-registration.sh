@@ -500,13 +500,39 @@ reportar_session_rules() {
 # hash distinto) esa receta NO aparece en el menu. Fail-open: exit 0 siempre;
 # corre en los desenlaces verdes, como reportar_session_rules. El hookdir se
 # deriva del settings en modo Claude (el hook vive en <dir del settings>/hooks).
+# 16.5 (cross-review, hilo sha256sum): la seleccion del binario de hash es UNA
+# sola regla junto con install-hook.sh (lineas 1689-1699, identicas). En un host
+# que solo tenga `shasum`, `sha256sum` a pelo devolvia vacio y este advisory
+# acusaba "ausente o con hash distinto" en TODAS las recetas — la alarma falsa
+# que entrena a ignorar el aviso. SAIKIT_SHA_BIN es la costura de test: al
+# forzarlo a un nombre inexistente se simula un host sin binario de hash.
+sha_bin=''
+if [ -n "${SAIKIT_SHA_BIN:-}" ]; then
+  if command -v "$SAIKIT_SHA_BIN" >/dev/null 2>&1; then sha_bin="$SAIKIT_SHA_BIN"; fi
+else
+  for c in sha256sum shasum; do
+    if command -v "$c" >/dev/null 2>&1; then sha_bin="$c"; break; fi
+  done
+fi
+sha_de() {  # $1=archivo → sha256 hex en stdout; exit != 0 si no hay binario
+  case "$sha_bin" in
+    sha256sum) sha256sum < "$1" | cut -d' ' -f1 ;;
+    shasum)    shasum -a 256 < "$1" | cut -d' ' -f1 ;;
+    *)         return 1 ;;
+  esac
+}
+
 reportar_recetario() {
   [ "$MODO" = "claude" ] || return 0
   local hookdir m sha tipo nombre carril titulo real
   hookdir="$(dirname "$SETTINGS")/hooks"
   m="$hookdir/recetas/MANIFEST.sha256"
+  # 16.5 (cross-review, hilo sha256sum): separar los TRES desenlaces que antes
+  # salian todos con el mismo texto. No se puede afirmar "hash distinto" (cambio
+  # ajeno) si el hash no se pudo calcular: seria exactamente la alarma falsa que
+  # el contrato de este archivo prohibe.
   if [ ! -e "$m" ]; then
-    reportar "[summonaikit] recetario: ausente o con hash distinto en $m — el contrato no ofrecera esa receta"
+    reportar "[summonaikit] recetario: ausente en $m — el contrato no ofrecera ninguna receta"
     return 0
   fi
   if [ ! -f "$m" ] || [ ! -r "$m" ]; then
@@ -522,13 +548,22 @@ reportar_recetario() {
     # FUERA de recetas/.
     printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || {
       reportar "[summonaikit] recetario: entrada insegura en el manifiesto ($m): nombre [$nombre]; se omite"; continue; }
-    if [ ! -f "$hookdir/recetas/$nombre.md" ]; then
-      reportar "[summonaikit] recetario: ausente o con hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+    # El archivo de esa receta no existe: observado como ausente.
+    if [ ! -e "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: ausente en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
       continue
     fi
-    real="$(sha256sum "$hookdir/recetas/$nombre.md" 2>/dev/null | cut -c1-64)"
-    if [ -z "$real" ] || [ "$real" != "$sha" ]; then
-      reportar "[summonaikit] recetario: ausente o con hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+    if [ ! -f "$hookdir/recetas/$nombre.md" ] || [ ! -r "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: unknown — $hookdir/recetas/$nombre.md existe pero no se pudo leer; no se afirma integridad rota."
+      continue
+    fi
+    # Sin binario de hash (o si produce vacio): unknown, NUNCA "hash distinto".
+    if ! real="$(sha_de "$hookdir/recetas/$nombre.md")" || [ -z "$real" ]; then
+      reportar "[summonaikit] recetario: unknown — no se pudo calcular el hash de $hookdir/recetas/$nombre.md (binario: ${sha_bin:-ninguno}); no se afirma integridad rota."
+      continue
+    fi
+    if [ "$real" != "$sha" ]; then
+      reportar "[summonaikit] recetario: hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
     fi
   done < "$m"
   return 0
