@@ -2180,6 +2180,28 @@ out="$(host_claude_recetas --quitar-recetas --dry-run 2>&1)"; rc=$?
 printf '%s' "$out" | grep -q 'quitado' && malo "--quitar-recetas --dry-run NO debe decir 'quitado': $out"
 printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run debe decir 'se quitara (dry-run)': $out"
 
+# 16.5 (cross-review, hilo symlink): un symlink plantado en el destino (recetas/)
+# apuntando FUERA no es nuestro — nunca lo plantamos asi — y no se sigue: el
+# archivo externo queda INTACTO y el instalador lo reporta (DESCONOCIDO). El
+# `cp -r` del staging replicaba el symlink como symlink y el `cp` siguiente lo
+# seguia y escribia encima del archivo externo. Solo se puede crear un symlink
+# real con privilegio/Developer Mode: si el host no puede (Git Bash sin eso hace
+# una COPIA), el caso se salta limpio, no da falso rojo.
+caso "recetario: un symlink del destino no se sigue (archivo externo intacto y se reporta)"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+printf -- 'contenido externo, ajeno al kit\n' > "$casa_recetas/externo.md"
+if ln -s "$casa_recetas/externo.md" "$(dirname "$dest")/recetas/bug.md" 2>/dev/null && [ -L "$(dirname "$dest")/recetas/bug.md" ]; then
+  antes="$(cksum < "$casa_recetas/externo.md")"
+  out="$(host_claude_recetas 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "un symlink no debe abortar la instalacion, dio $rc: $out"
+  [ "$antes" = "$(cksum < "$casa_recetas/externo.md")" ] || malo "se escribio sobre el archivo externo via el symlink"
+  printf '%s' "$out" | grep -qi 'desconocid\|no se toca' || malo "no reporto el symlink como no-tocado: $out"
+  [ -L "$(dirname "$dest")/recetas/bug.md" ] || malo "se reemplazo el symlink que no era nuestro"
+else
+  printf '  caso: (SKIP) este host no crea symlinks reales (ln -s -> copia; requiere privilegio/Developer Mode); el caso se valida en hosts con symlinks\n'
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

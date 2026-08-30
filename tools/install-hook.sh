@@ -2111,6 +2111,12 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
 # directorio de un solo golpe (dos renames); la ventana entre los dos mv se
 # declara, no se esconde.
 recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva frontmatter)
+  # 16.5 (cross-review, hilo symlink): un $dest que sea symlink NO es nuestro —
+  # nunca lo plantamos asi — y no se toca. Antes agente_estado_con_vendor lo
+  # clasificaba por el CONTENIDO del archivo que el symlink apunta y podia
+  # reemplazarlo, y el cp del staging (que replica el symlink como symlink) lo
+  # seguia y escribia FUERA de recetas/. Esto lo saca del juego antes de eso.
+  if [ -L "$1" ]; then printf DESCONOCIDO; return 0; fi
   if [ "$(basename "$2")" = "MANIFEST.sha256" ]; then
     if [ ! -e "$1" ]; then printf AUSENTE; elif cmp -s "$1" "$2"; then printf NUESTRO_IDENTICO; else printf NUESTRO_DISTINTO; fi
   else
@@ -2151,6 +2157,12 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
         if [ -e "$dest" ]; then
           mkdir -p "$nuevo/saikit-backups" && cp -p "$dest" "$nuevo/saikit-backups/$(basename "$dest").nuestro.$sello.bak" || { rm -rf "$nuevo"; return 5; }
         fi
+        # defensa en profundidad (hilo symlink): borrar la ruta en el staging
+        # antes de copiar, para que `cp` no pueda seguir nada. El `cp -r` inicial
+        # replico cualquier symlink del destino ASI como llego; seguirlo en el
+        # `cp` de aca escribiria encima del archivo que el symlink apunta (fuera
+        # de recetas/).
+        rm -f "$nuevo/$(basename "$f")" 2>/dev/null
         cp "$f" "$nuevo/$(basename "$f")" || { rm -rf "$nuevo"; return 5; } ;;
     esac
   done
