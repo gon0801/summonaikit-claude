@@ -2092,15 +2092,25 @@ cmp -s "$casa_recetas/.claude/skills/sencillo/SKILL.md" "$repo/skills/sencillo/S
 caso "recetario: dos corridas seguidas NO reescriben (mtime intacto, sin backup nuevo)"
 nuevo_destino; nuevo_casa_recetas
 host_claude_recetas >/dev/null 2>&1
-rc_m="$(stat -c '%y' "$(dirname "$dest")/recetas/bug.md" 2>/dev/null)"
-sk_m="$(stat -c '%y' "$casa_recetas/.claude/skills/sencillo/SKILL.md" 2>/dev/null)"
+# 16.5 (cross-review, hilo test-vacio): antes `stat -c '%y' ... 2>/dev/null` daba
+# cadena VACIA ante cualquier fallo y el caso comparaba "" contra "" (verde sin
+# haber medido nada, incluso si el archivo nunca se instalo); y `find` sobre un
+# dir inexistente daba 0, y 0=0 pasaba igual. Se exige que los valores medidos NO
+# esten vacios y que el directorio y los archivos existan ANTES de comparar.
+[ -d "$(dirname "$dest")/recetas" ] || malo "recetas/ no existe: no se puede medir el mtime ni contar backups"
+[ -f "$(dirname "$dest")/recetas/bug.md" ] || malo "bug.md no se instalo: no se puede medir el mtime"
+[ -f "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "la skill no se instalo: no se puede medir el mtime"
+rc_m="$(mtime_de "$(dirname "$dest")/recetas/bug.md")"
+sk_m="$(mtime_de "$casa_recetas/.claude/skills/sencillo/SKILL.md")"
 n_bak="$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)"
+[ -n "$rc_m" ] || malo "mtime de bug.md vacio (stat fallo o archivo ausente)"
+[ -n "$sk_m" ] || malo "mtime de la skill vacio (stat fallo o archivo ausente)"
 sleep 1
 out="$(host_claude_recetas 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "segunda corrida deberia salir 0, dio $rc: $out"
-[ "$(stat -c '%y' "$(dirname "$dest")/recetas/bug.md" 2>/dev/null)" = "$rc_m" ] \
+[ "$(mtime_de "$(dirname "$dest")/recetas/bug.md")" = "$rc_m" ] \
   || malo "la segunda corrida reescribio bug.md"
-[ "$(stat -c '%y' "$casa_recetas/.claude/skills/sencillo/SKILL.md" 2>/dev/null)" = "$sk_m" ] \
+[ "$(mtime_de "$casa_recetas/.claude/skills/sencillo/SKILL.md")" = "$sk_m" ] \
   || malo "la segunda corrida reescribio la skill"
 [ "$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)" = "$n_bak" ] \
   || malo "la segunda corrida creo un backup"
