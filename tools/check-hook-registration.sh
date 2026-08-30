@@ -495,6 +495,100 @@ reportar_session_rules() {
   reportar "              Se arregla en settings.json: agregar el hook en SessionStart, sin matcher."
 }
 
+# Task 16.5 (D1): advisory del recetario. El contrato del hook solo ofrece las
+# recetas cuyo sha256 coincide con el manifiesto instalado: sin manifiesto (o con
+# hash distinto) esa receta NO aparece en el menu. Fail-open: exit 0 siempre;
+# corre en los desenlaces verdes, como reportar_session_rules. El hookdir se
+# deriva del settings en modo Claude (el hook vive en <dir del settings>/hooks).
+# 16.5 (cross-review, hilo sha256sum): la seleccion del binario de hash es UNA
+# sola regla con tools/install-hook.sh (misma eleccion: sha256sum -> shasum -a 256;
+# la costura SAIKIT_SHA_BIN de test vive SOLO aca, en el checker). En un host
+# que solo tenga `shasum`, `sha256sum` a pelo devolvia vacio y este advisory
+# acusaba "ausente o con hash distinto" en TODAS las recetas — la alarma falsa
+# que entrena a ignorar el aviso.
+sha_bin=''
+if [ -n "${SAIKIT_SHA_BIN:-}" ]; then
+  if command -v "$SAIKIT_SHA_BIN" >/dev/null 2>&1; then sha_bin="$SAIKIT_SHA_BIN"; fi
+else
+  for c in sha256sum shasum; do
+    if command -v "$c" >/dev/null 2>&1; then sha_bin="$c"; break; fi
+  done
+fi
+sha_de() {  # $1=archivo → sha256 hex en stdout; exit != 0 si no hay binario
+  case "$sha_bin" in
+    sha256sum) sha256sum < "$1" | cut -d' ' -f1 ;;
+    shasum)    shasum -a 256 < "$1" | cut -d' ' -f1 ;;
+    *)         return 1 ;;
+  esac
+}
+
+reportar_recetario() {
+  [ "$MODO" = "claude" ] || return 0
+  local hookdir m sha tipo nombre carril titulo real
+  hookdir="$(dirname "$SETTINGS")/hooks"
+  m="$hookdir/recetas/MANIFEST.sha256"
+  # 16.5 (cross-review, hilo sha256sum): separar los TRES desenlaces que antes
+  # salian todos con el mismo texto. No se puede afirmar "hash distinto" (cambio
+  # ajeno) si el hash no se pudo calcular: seria exactamente la alarma falsa que
+  # el contrato de este archivo prohibe.
+  # cross-review grok r4 #8: un directorio o un manifiesto que sean ENLACE
+  # apuntan a contenido cuya propiedad nadie clasifico. Hashear a traves del
+  # enlace y despues decir "hash distinto" seria afirmar integridad rota sobre
+  # algo que no esta en el arbol gestionado — la misma alarma falsa que este
+  # archivo prohibe en su cabecera. Es `unknown`, no un veredicto.
+  #
+  # El guard va ANTES del de existencia (CodeRabbit, PR #108): un enlace
+  # COLGANTE da `-e` FALSO y `-L` verdadero, asi que con el orden inverso se
+  # reportaba "ausente" algo que si esta — como enlace — y solo apunta a la
+  # nada. Afirmar ausencia de lo que no se llego a mirar es el mismo defecto.
+  if [ -L "$hookdir/recetas" ] || [ -L "$m" ]; then
+    reportar "[summonaikit] recetario: unknown — $hookdir/recetas o su manifiesto son un enlace; el contenido apuntado no es del arbol gestionado y no se afirma integridad."
+    return 0
+  fi
+  if [ ! -e "$m" ]; then
+    reportar "[summonaikit] recetario: ausente en $m — el contrato no ofrecera ninguna receta"
+    return 0
+  fi
+  if [ ! -f "$m" ] || [ ! -r "$m" ]; then
+    reportar "[summonaikit] recetario: unknown — $m existe pero no se pudo leer; no se afirma ausencia."
+    return 0
+  fi
+  while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+    [ "$tipo" = "receta" ] || continue
+    # 16.5 (cross-review codex, P2): el manifiesto no es de confianza ciega (igual
+    # que en el hook). Un `nombre` fuera de ^[a-z][a-z0-9-]*$ (traversal ../, glob
+    # *) no debe usarse para armar una ruta: se reporta y se omite. Sin el guard,
+    # un manifiesto manipulado haria que el checker calculara hashes de .md
+    # FUERA de recetas/.
+    printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || {
+      reportar "[summonaikit] recetario: entrada insegura en el manifiesto ($m): nombre [$nombre]; se omite"; continue; }
+    # Enlace (grok r4 #8): mismo criterio que el directorio, por receta. Va
+    # ANTES del chequeo de existencia por el enlace colgante (CodeRabbit).
+    if [ -L "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: unknown — $hookdir/recetas/$nombre.md es un enlace; no se afirma integridad de contenido fuera del arbol gestionado."
+      continue
+    fi
+    # El archivo de esa receta no existe: observado como ausente.
+    if [ ! -e "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: ausente en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+      continue
+    fi
+    if [ ! -f "$hookdir/recetas/$nombre.md" ] || [ ! -r "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: unknown — $hookdir/recetas/$nombre.md existe pero no se pudo leer; no se afirma integridad rota."
+      continue
+    fi
+    # Sin binario de hash (o si produce vacio): unknown, NUNCA "hash distinto".
+    if ! real="$(sha_de "$hookdir/recetas/$nombre.md")" || [ -z "$real" ]; then
+      reportar "[summonaikit] recetario: unknown — no se pudo calcular el hash de $hookdir/recetas/$nombre.md (binario: ${sha_bin:-ninguno}); no se afirma integridad rota."
+      continue
+    fi
+    if [ "$real" != "$sha" ]; then
+      reportar "[summonaikit] recetario: hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
+    fi
+  done < "$m"
+  return 0
+}
+
 # Reporta el hueco del matcher de Agent cuando PostToolUse esta registrado pero
 # su matcher no cubre 'Agent' (Task 3.7 / CORRECCION 2): un subagente read-only
 # (Read/Grep/Glob) no generaria ningun evento para el gate. No edita el registro
@@ -632,6 +726,7 @@ if [ -z "$faltantes" ]; then
   [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
   reportar_session_rules
+  reportar_recetario
   reportar_wrapper_codex
   reportar_hook_grok
   exit 0
@@ -661,6 +756,7 @@ reportar "              revisar: $SETTINGS"
 [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
 [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
 reportar_session_rules
+reportar_recetario
 reportar_matcher
 reportar_wrapper_codex
 reportar_hook_grok

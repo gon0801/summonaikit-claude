@@ -32,6 +32,13 @@ caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/saikit-2-2-XXXXXX")" || exit 1
+# Task 16.5: el instalador por defecto publica tambien el recetario y /sencillo
+# ($HOME/.claude/skills). Core Rule 4: jamas `~/.claude`. Se apunta HOME (y
+# USERPROFILE, como hacen los casos codex) al sandbox y se crea el padre del
+# skill para que la publicacion por dos renames tenga donde mktemp.
+export HOME="$tmp"
+export USERPROFILE="$tmp"
+mkdir -p "$tmp/.claude/skills"
 
 # CodeRabbit (PR #62, CR2): el caso de lookup multi-hash muta TEMPORALMENTE
 # el manifiesto TRACKEADO del repo (agents/vendor-manifest.sha256) para
@@ -2041,6 +2048,217 @@ if command -v cygpath >/dev/null 2>&1; then
   # symlinks reales). Debe tener los 4 archivos y resolverse por nombre.
   [ -f "$dsh_plugin/index.js" ] && [ -f "$dsh_plugin/package.json" ] || malo "no se publico el plugin en el fallback de dsh ($dsh_plugin)"
 fi
+
+# ============================================================================
+# Task 16.5 — el instalador planta el recetario y /sencillo (host claude)
+# ============================================================================
+# El recetario vive en <hookdir>/recetas y la skill en $HOME/.claude/skills/
+# sencillo/SKILL.md. Cada caso estrena su propio HOME (los casos del flujo por
+# defecto ya comparten $tmp/.claude/skills) para que "limpio" y "dos corridas"
+# midan el estado real del skill y no lo que dejo otro caso. Core Rule 4: nada
+# toca el `~/.claude` real.
+n_rc=0
+casa_recetas=''
+nuevo_casa_recetas() {
+  n_rc=$((n_rc + 1))
+  # La raiz del HOME sandbox (sin .claude: el tool lo agrega como $HOME/.claude).
+  # NO se pre-crea .claude/skills a proposito: el caso "limpio" es un PERFIL
+  # FRESCO, y el instalador tiene que crear el padre de la skill (16.5). Si el
+  # util no lo creara, ese caso fallaria — atado, no asumido.
+  casa_recetas="$tmp/casa-recetas-$n_rc"
+}
+host_claude_recetas() {
+  HOME="$casa_recetas" USERPROFILE="$casa_recetas" \
+  SAIKIT_CLAUDE_AGENTS_DIR="$casa_recetas/agents" \
+    bash "$tool" --host claude --dest "$dest" --source "$fuente" --manifest "$manifiesto" "$@"
+}
+
+caso "recetario: limpio => recetas/ + 7 recetas + skill byte a byte iguales"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install limpio de recetas deberia salir 0, dio $rc: $out"
+[ -f "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "no planto el manifiesto de recetas"
+cmp -s "$(dirname "$dest")/recetas/MANIFEST.sha256" "$repo/recetas/MANIFEST.sha256" \
+  || malo "el manifiesto instalado difiere del fuente"
+for f in "$repo"/recetas/*.md; do
+  b="$(basename "$f")"
+  [ -f "$(dirname "$dest")/recetas/$b" ] || malo "no planto $b"
+  cmp -s "$(dirname "$dest")/recetas/$b" "$f" || malo "$b instalado difiere del fuente"
+done
+[ -f "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "no planto skills/sencillo/SKILL.md"
+cmp -s "$casa_recetas/.claude/skills/sencillo/SKILL.md" "$repo/skills/sencillo/SKILL.md" \
+  || malo "la skill instalada difiere del fuente"
+
+caso "recetario: dos corridas seguidas NO reescriben (mtime intacto, sin backup nuevo)"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+# 16.5 (cross-review, hilo test-vacio): antes `stat -c '%y' ... 2>/dev/null` daba
+# cadena VACIA ante cualquier fallo y el caso comparaba "" contra "" (verde sin
+# haber medido nada, incluso si el archivo nunca se instalo); y `find` sobre un
+# dir inexistente daba 0, y 0=0 pasaba igual. Se exige que los valores medidos NO
+# esten vacios y que el directorio y los archivos existan ANTES de comparar.
+[ -d "$(dirname "$dest")/recetas" ] || malo "recetas/ no existe: no se puede medir el mtime ni contar backups"
+[ -f "$(dirname "$dest")/recetas/bug.md" ] || malo "bug.md no se instalo: no se puede medir el mtime"
+[ -f "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "la skill no se instalo: no se puede medir el mtime"
+rc_m="$(mtime_de "$(dirname "$dest")/recetas/bug.md")"
+sk_m="$(mtime_de "$casa_recetas/.claude/skills/sencillo/SKILL.md")"
+n_bak="$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)"
+[ -n "$rc_m" ] || malo "mtime de bug.md vacio (stat fallo o archivo ausente)"
+[ -n "$sk_m" ] || malo "mtime de la skill vacio (stat fallo o archivo ausente)"
+sleep 1
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "segunda corrida deberia salir 0, dio $rc: $out"
+[ "$(mtime_de "$(dirname "$dest")/recetas/bug.md")" = "$rc_m" ] \
+  || malo "la segunda corrida reescribio bug.md"
+[ "$(mtime_de "$casa_recetas/.claude/skills/sencillo/SKILL.md")" = "$sk_m" ] \
+  || malo "la segunda corrida reescribio la skill"
+[ "$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)" = "$n_bak" ] \
+  || malo "la segunda corrida creo un backup"
+
+# 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto se reemplaza SIEMPRE
+# al instalar (no lleva marca; si gana un manifiesto viejo/ajeno, nuestras recetas
+# recien plantadas no aparecerian en el menu) y el anterior queda respaldado — es
+# la asimetria DELIBERADA que recetas_clasificar declara frente a la regla de
+# propiedad que si aplica quitar_recetas_claude. El caso ata esa conducta.
+caso "recetario: un manifiesto distinto se reemplaza al instalar y el previo queda respaldado"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\treceta\tbug\tfull\tViejo manifiesto ajeno\n' > "$(dirname "$dest")/recetas/MANIFEST.sha256"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un manifiesto distinto no debe abortar la instalacion, dio $rc: $out"
+cmp -s "$(dirname "$dest")/recetas/MANIFEST.sha256" "$repo/recetas/MANIFEST.sha256" \
+  || malo "el manifiesto distinto NO se reemplazo por el nuestro (nuestras recetas no aparecerian en el menu)"
+[ -n "$(find "$(dirname "$dest")/recetas/saikit-backups" -name 'MANIFEST.sha256*.nuestro.*.bak' 2>/dev/null)" ] \
+  || malo "el manifiesto previo no quedo respaldado en saikit-backups/"
+
+caso "recetario: archivo ajeno (sin marca) en recetas/ queda intacto y se reporta; las nuestras se instalan"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+printf -- '---\nname: ajena\ndescription: de otro\n---\ncambio ajeno\n' > "$(dirname "$dest")/recetas/ajena.md"
+antes="$(cksum < "$(dirname "$dest")/recetas/ajena.md")"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un archivo ajeno no debe abortar la instalacion, dio $rc: $out"
+[ "$antes" = "$(cksum < "$(dirname "$dest")/recetas/ajena.md")" ] || malo "se toco la receta ajena ajena.md"
+printf '%s' "$out" | grep -q 'ajeno' || malo "no reporto la receta ajena: $out"
+cmp -s "$(dirname "$dest")/recetas/bug.md" "$repo/recetas/bug.md" || malo "las recetas propias no se instalaron"
+
+# cross-review grok r4 #2: el bucle de "ajenos" decidia SOLO por "no existe en el
+# repo", sin mirar la marca — y eso no mide propiedad. Una receta NUESTRA
+# retirada en una version posterior del kit lleva `saikit_owned`, y
+# `--quitar-recetas` SI la borra porque ese lado si mira la marca: anunciarla
+# como "ajena, intacta" contradecia al desinstalador y afirmaba una propiedad
+# que nadie observo. El caso planta las DOS a la vez para que el mensaje tenga
+# que distinguirlas.
+caso "recetario: una receta NUESTRA retirada del kit no se anuncia como ajena"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+# retirada del kit: lleva la marca, pero ya no existe en el repo
+printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: vieja\ntitulo: Receta retirada\ncarril: full\n---\ncuerpo\n' \
+  > "$(dirname "$dest")/recetas/vieja.md"
+# ajena de verdad: sin marca y sin correlato en el repo
+printf -- '---\nname: ajena\ndescription: de otro\n---\ncambio ajeno\n' \
+  > "$(dirname "$dest")/recetas/ajena.md"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "no debe abortar la instalacion, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/vieja.md" ] || malo "la receta retirada se borro; el instalador solo reporta"
+printf '%s' "$out" | grep -q 'retirada del kit' \
+  || malo "una receta con la marca debe reportarse como retirada del kit, no como ajena: $out"
+printf '%s' "$out" | grep -q 'archivo ajeno reportado, intacto: .*vieja.md' \
+  && malo "una receta CON marca no puede anunciarse como ajena (contradice a --quitar-recetas): $out"
+printf '%s' "$out" | grep -q 'archivo ajeno reportado, intacto: .*ajena.md' \
+  || malo "la receta sin marca si debe reportarse como ajena: $out"
+
+caso "recetario: --dry-run no crea recetas/ ni la skill, reporta por archivo"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--dry-run deberia salir 0, dio $rc: $out"
+[ ! -e "$(dirname "$dest")/recetas" ] || malo "--dry-run creo recetas/"
+[ ! -e "$casa_recetas/.claude/skills/sencillo" ] || malo "--dry-run creo /sencillo"
+printf '%s' "$out" | grep -q 'recetario' || malo "--dry-run no reporta el recetario: $out"
+
+caso "recetario: destino receta NO_OBSERVABLE => exit != 0 y NADA publicado (todo-o-nada, 12.9)"
+# Precedente 12.9: se clasifica TODO antes de publicar. Un destino de receta
+# convertido en DIRECTORIO no es un archivo legible: agente_estado_con_vendor lo
+# clasifica NO_OBSERVABLE y recetas_publicar_dir aborta ANTES de publicar nada.
+# (chmod 000 no vuelve ilegible a un archivo en MSYS: el ACL sigue otorgando
+# lectura, medido; el directorio es el disparador confiable de NO_OBSERVABLE.)
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas/bug.md"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "un destino NO_OBSERVABLE deberia salir != 0, dio 0: $out"
+[ ! -e "$(dirname "$dest")/recetas/00-lider.md" ] || malo "se publico una receta pese al NO_OBSERVABLE"
+[ -d "$(dirname "$dest")/recetas/bug.md" ] || malo "se toco el destino NO_OBSERVABLE (bug.md)"
+
+caso "recetario: --quitar-recetas borra SOLO lo nuestro (marca) + el manifiesto; lo ajeno queda"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+printf -- '---\nname: ajena\ndescription: de otro\n---\ncambio ajeno\n' > "$(dirname "$dest")/recetas/ajena.md"
+antes="$(cksum < "$(dirname "$dest")/recetas/ajena.md")"
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas deberia salir 0, dio $rc: $out"
+[ ! -e "$(dirname "$dest")/recetas/bug.md" ] || malo "--quitar-recetas no quito bug.md (nuestra)"
+[ ! -e "$(dirname "$dest")/recetas/00-lider.md" ] || malo "--quitar-recetas no quito 00-lider.md (nuestra)"
+[ "$antes" = "$(cksum < "$(dirname "$dest")/recetas/ajena.md")" ] || malo "--quitar-recetas toco ajena.md"
+[ -e "$(dirname "$dest")/recetas/ajena.md" ] || malo "--quitar-recetas borro ajena.md (ajena)"
+[ ! -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--quitar-recetas no quito el manifiesto (todos los nombrados eran nuestros)"
+[ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--quitar-recetas no quito skills/sencillo/SKILL.md"
+printf '%s' "$out" | grep -q 'ajeno, intacto' || malo "--quitar-recetas no reporto ajena.md como ajeno intacto: $out"
+
+# Revision (reviewer, MEDIUM): el dispatch de --quitar-recetas tenia que estar
+# tambien en el flujo POR DEFECTO (sin --host, el del hook claude). Antes el
+# flag, sin --host, caia al camino de instalacion y REINSTALABA el recetario.
+caso "recetario: --quitar-recetas por el flujo por defecto (sin --host) quita y NO reinstala"
+nuevo_destino; nuevo_casa_recetas
+out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "instalar por el flujo por defecto deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/bug.md" ] || malo "el flujo por defecto no instalo recetas/"
+out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$tool" --dest "$dest" --source "$fuente" --manifest "$manifiesto" --no-registration-check --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas (flujo por defecto) deberia salir 0, dio $rc: $out"
+[ ! -e "$(dirname "$dest")/recetas/bug.md" ] || malo "--quitar-recetas (flujo por defecto) no quito bug.md"
+[ ! -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--quitar-recetas (flujo por defecto) no quito el manifiesto"
+[ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--quitar-recetas (flujo por defecto) no quito la skill"
+
+# 16.5 (cross-review codex, P2): --dry-run --quitar-recetas NO borra y NO debe
+# decir "quitado" (un dry-run que miente entrena a confiar); debe decir
+# "se quitara (dry-run)" y dejar los archivos.
+caso "recetario: --dry-run --quitar-recetas NO borra y NO dice 'quitado'"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1   # instala
+out="$(host_claude_recetas --quitar-recetas --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas --dry-run deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/bug.md" ] || malo "--dry-run --quitar-recetas borro bug.md"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--dry-run --quitar-recetas borro el manifiesto"
+[ -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--dry-run --quitar-recetas borro la skill"
+printf '%s' "$out" | grep -q 'quitado' && malo "--quitar-recetas --dry-run NO debe decir 'quitado': $out"
+printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run debe decir 'se quitara (dry-run)': $out"
+
+# 16.5 (cross-review codex-16.5-r2, hallazgo 3): un manifiesto vacio (o que no
+# nombre ninguna receta nuestra PRESENTE) no es atribuible al kit y NO se borra
+# con --quitar-recetas. Antes el bucle de propiedad lo saltaba todo, "nuestro"
+# quedaba 1 y se borraba de forma vacua.
+caso "recetario: un manifiesto no-atribuible (vacio) NO se borra al quitar"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+: > "$(dirname "$dest")/recetas/MANIFEST.sha256"   # manifiesto vacio
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas con manifiesto vacio deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "un manifiesto vacio NO se borra (no es atribuible al kit)"
+printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
+
+# 16.5 (cross-review grok, hallazgo 1): la misma regla de nombre seguro del hook
+# y del checker vale al QUITAR. Un `nombre` con traversal (../blanco) no debe
+# usarse como ruta ni sesgar la propiedad del manifiesto. Sin el guard, un
+# hooks/blanco.md CON marca (que el nombre ../blanco resolveria) haria "nuestro"
+# al manifiesto y lo borraria.
+caso "recetario: un nombre inseguro del manifiesto NO sesga la propiedad al quitar"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+escribir_nuestro_viejo "$(dirname "$dest")/blanco.md"   # fuera de recetas/, con marca
+printf 'deadbeef\treceta\t../blanco\tfull\tTitulo ajeno\n' > "$(dirname "$dest")/recetas/MANIFEST.sha256"
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas con nombre inseguro deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "el nombre inseguro NO debe volver 'nuestro' al manifiesto (se borro)"
+printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2

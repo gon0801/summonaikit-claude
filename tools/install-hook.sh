@@ -41,6 +41,7 @@
 #   bash tools/install-hook.sh --host grok [--quitar-grok]
 #   bash tools/install-hook.sh --host kimi [--dry-run]
 #   bash tools/install-hook.sh --host claude [--dry-run]
+#   bash tools/install-hook.sh --host claude --quitar-recetas
 #   bash tools/install-hook.sh --host dsh [--dry-run] [--quitar-dsh]
 #   bash tools/install-hook.sh --host claude --refrescar-manifiesto
 #   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
@@ -79,6 +80,10 @@ QUITAR_GROK=0
 # Phase 15 (D5): --quitar-dsh es la vuelta atras del host dsh (hook + plugin +
 # patch del profile + personas con marca); requiere --host dsh.
 QUITAR_DSH=0
+# Task 16.5 (D1): --quitar-recetas retira SOLO lo nuestro de <hookdir>/recetas/
+# y ~/.claude/skills/sencillo (marca saikit_owned; el manifiesto se juzga por
+# las marcas de las recetas que nombra); requiere el flujo claude.
+QUITAR_RECETAS=0
 # Task 6.5: --host codex escribe la SEGUNDA copia (~/.codex/hooks) por el flujo
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
@@ -111,6 +116,7 @@ while [ $# -gt 0 ]; do
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
     --quitar-grok) QUITAR_GROK=1; shift ;;
     --quitar-dsh) QUITAR_DSH=1; shift ;;
+    --quitar-recetas) QUITAR_RECETAS=1; shift ;;
     --refrescar-manifiesto) REFRESCAR_MANIFIESTO=1; shift ;;
     -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
@@ -152,6 +158,12 @@ if [ "$QUITAR_GROK" -eq 1 ] && [ "$HOST" != "grok" ]; then
 fi
 if [ "$QUITAR_DSH" -eq 1 ] && [ "$HOST" != "dsh" ]; then
   printf '[summonaikit] instalador: --quitar-dsh requiere --host dsh\n' >&2
+  exit 2
+fi
+# Task 16.5: --quitar-recetas despacha a quitar_recetas_claude y solo tiene
+# sentido en el flujo claude (el recetario y /sencillo son de ese host).
+if [ "$QUITAR_RECETAS" -eq 1 ] && [ -n "$HOST" ] && [ "$HOST" != "claude" ]; then
+  printf '[summonaikit] instalador: --quitar-recetas requiere --host claude\n' >&2
   exit 2
 fi
 
@@ -2094,12 +2106,282 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
   return 0
 }
 
+# Task 16.5 (D1/D8): planta el recetario y la skill /sencillo con la maquina de
+# estados POR ARCHIVO de los perfiles (marca saikit_owned; ajeno => DESCONOCIDO,
+# no se toca). Cada directorio se publica de un solo golpe (dos renames); la
+# ventana entre los dos mv se declara, no se esconde.
+#
+# ALCANCE del todo-o-nada, dicho con precision (cross-review grok r4 #1): es POR
+# DIRECTORIO, no entre los dos. `instalar_recetas_claude` publica `recetas/` y
+# DESPUES `skills/sencillo/`, asi que un aborto del segundo deja el primero ya
+# escrito. Lo que si se hace antes de tocar nada es rechazar los dos destinos
+# que son enlace (la causa de aborto que depende del estado del perfil) y
+# comprobar que las tres fuentes se lean; para lo que no se puede saber de
+# antemano (un mktemp o un cp que falle a mitad), el mensaje de aborto DICE que
+# recetas/ ya quedo publicado en vez de afirmar que no se toco nada.
+recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva frontmatter)
+  # 16.5 (cross-review, hilo symlink): un $dest que sea symlink NO es nuestro —
+  # nunca lo plantamos asi — y no se toca. Antes agente_estado_con_vendor lo
+  # clasificaba por el CONTENIDO del archivo que el symlink apunta y podia
+  # reemplazarlo, y el cp del staging (que replica el symlink como symlink) lo
+  # seguia y escribia FUERA de recetas/. Esto lo saca del juego antes de eso.
+  if [ -L "$1" ]; then printf DESCONOCIDO; return 0; fi
+  # 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto no lleva marca de
+  # propiedad y aca se reemplaza SIEMPRE que difiera (NUESTRO_DISTINTO), SIN la
+  # prueba de propiedad que si aplica quitar_recetas_claude. La asimetria es
+  # DELIBERADA y se declara, no se esconde:
+  #   - al INSTALAR, el manifiesto es parte del recetario que plantamos: si gana
+  #     un manifiesto viejo/ajeno, nuestras recetas recien plantadas NO aparecen
+  #     en el menu (recetas_menu lee el manifiesto). Para que el recetario nuevo
+  #     funcione, el manifiesto sale reemplazado por el nuestro; el anterior queda
+  #     respaldado en saikit-backups/ dentro del staging (nunca se pierde).
+  #   - al QUITAR (quitar_recetas_claude) somos cuidadosos: el manifiesto es
+  #     nuestro solo si cada receta que nombra lleva la marca; si no, intacto.
+  if [ "$(basename "$2")" = "MANIFEST.sha256" ]; then
+    if [ ! -e "$1" ]; then printf AUSENTE; elif cmp -s "$1" "$2"; then printf NUESTRO_IDENTICO; else printf NUESTRO_DISTINTO; fi
+  else
+    agente_estado_con_vendor "$1" "$2" "receta"
+  fi
+}
+recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocado
+  local destdir="$1"; shift
+  local f dest est nuevo old cambios=0
+  # 16.5 (cross-review, hilo symlink de DIRECTORIO): un $destdir que sea symlink
+  # NO es nuestro — nunca lo plantamos asi — y no se toca. `recetas_clasificar`
+  # mira el ARCHIVO ($dest), no al directorio que lo contiene; y aca un $destdir
+  # symlink haria que `[ -d "$destdir" ]` lo SIGA (lineas de abajo), que el
+  # `cp -p -r "$destdir"/.` copiara el contenido ajeno al staging y que el swap
+  # dejara un DIRECTORIO REAL en lugar del enlace — importando contenido cuya
+  # propiedad nunca se clasifico. Se rechaza ANTES de leer el manifiesto,
+  # expandir el glob, copiar o hacer el swap.
+  if [ -L "$destdir" ]; then
+    decir "[summonaikit] recetario: enlace, no se publica nada: $destdir"
+    return 5
+  fi
+  # 1) clasificar todo; cualquier NO_OBSERVABLE aborta sin escribir
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    est="$(recetas_clasificar "$dest" "$f")"
+    case "$est" in
+      NO_OBSERVABLE) decir "[summonaikit] recetario: $dest no observable; no se publica nada"; return 5 ;;
+      NUESTRO_IDENTICO) ;;
+      DESCONOCIDO) decir "[summonaikit] recetario: DESCONOCIDO, no se toca: $dest" ;;
+      *) decir "[summonaikit] recetario: $est -> $dest"; cambios=1 ;;
+    esac
+  done
+  [ "$cambios" -eq 1 ] || return 0
+  [ "$DRY_RUN" -eq 0 ] || return 0
+  # 2) armar el directorio nuevo entero en un temporal hermano. Los respaldos
+  #    de lo reemplazado van DENTRO del temporal (saikit-backups/), no al
+  #    directorio vivo: escribirlos en el vivo rompia el todo-o-nada y el swap
+  #    los borraba con $old (Greptile, PR #97).
+  # 16.5: crear el PADRE del destino si no existe (p. ej. ~/.claude/skills en un
+  #    perfil fresco); mktemp -d con un prefijo que no existe falla, y eso dejaba
+  #    la skill sin publicar en la instalacion nueva — el caso de uso principal.
+  mkdir -p "$(dirname "$destdir")" 2>/dev/null || return 5
+  nuevo="$(mktemp -d "$(dirname "$destdir")/.saikit-recetas-XXXXXX")" || return 5
+  if [ -d "$destdir" ]; then cp -p -r "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
+  sello="$(date +%Y%m%d-%H%M%S)"
+  for f in "$@"; do
+    dest="$destdir/$(basename "$f")"
+    case "$(recetas_clasificar "$dest" "$f")" in
+      AUSENTE|NUESTRO_DISTINTO|VENDOR_CONOCIDO)
+        if [ -e "$dest" ]; then
+          mkdir -p "$nuevo/saikit-backups" && cp -p "$dest" "$nuevo/saikit-backups/$(basename "$dest").nuestro.$sello.bak" || { rm -rf "$nuevo"; return 5; }
+        fi
+        # defensa en profundidad (hilo symlink): borrar la ruta en el staging
+        # antes de copiar, para que `cp` no pueda seguir nada. El `cp -r` inicial
+        # replico cualquier symlink del destino ASI como llego; seguirlo en el
+        # `cp` de aca escribiria encima del archivo que el symlink apunta (fuera
+        # de recetas/).
+        rm -f "$nuevo/$(basename "$f")" 2>/dev/null
+        cp "$f" "$nuevo/$(basename "$f")" || { rm -rf "$nuevo"; return 5; } ;;
+    esac
+  done
+  # 3) intercambio: hasta aqui $destdir esta intacto
+  old="$destdir.saikit-old-$$"
+  if [ -d "$destdir" ]; then mv "$destdir" "$old" || { rm -rf "$nuevo"; return 5; }; fi
+  mv "$nuevo" "$destdir" || { [ -d "$old" ] && mv "$old" "$destdir"; return 5; }
+  rm -rf "$old"
+  return 0
+}
+instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
+  local f rc_sencillo
+  for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" "$repo/skills/sencillo/SKILL.md"; do
+    [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
+  done
+  # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
+  # NINGUNO. Un enlace en el segundo abortaba despues de haber escrito el
+  # primero, y el aviso decia "no se publica nada" nombrando solo el segundo.
+  # Esta es la unica causa de aborto que se puede saber de antemano; el resto
+  # (mktemp/cp) se declara abajo en vez de esconderse.
+  for f in "$1/recetas" "$2/sencillo"; do
+    if [ -L "$f" ]; then
+      decir "[summonaikit] recetario: enlace, no se publica nada: $f"
+      return 5
+    fi
+  done
+  recetas_publicar_dir "$1/recetas" "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" || return $?
+  # Si ESTE falla, recetas/ ya quedo publicado: se dice, no se calla.
+  recetas_publicar_dir "$2/sencillo" "$repo/skills/sencillo/SKILL.md" || {
+    rc_sencillo=$?
+    decir "[summonaikit] recetario: la skill /sencillo no se publico, pero $1/recetas SI quedo publicado (el todo-o-nada es por directorio)"
+    return "$rc_sencillo"; }
+  # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
+  # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
+  # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la
+  # borra: anunciarla como "ajena" contradecia al desinstalador y afirmaba una
+  # propiedad que nadie midio. Ahora la marca decide, igual que al quitar.
+  for f in "$1"/recetas/*.md; do
+    [ -e "$f" ] || continue
+    [ -e "$repo/recetas/$(basename "$f")" ] && continue
+    if zcode_agente_tiene_marca "$f"; then
+      decir "[summonaikit] recetario: receta nuestra retirada del kit, intacta (--quitar-recetas la borra): $f"
+    else
+      decir "[summonaikit] recetario: archivo ajeno reportado, intacto: $f"
+    fi
+  done
+  return 0
+}
+quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
+  local f
+  # 16.5 (cross-review, hilo symlink de DIRECTORIO): un directorio gestionado que
+  # sea symlink NO es nuestro — nunca lo plantamos asi — y no se toca. El glob
+  # "$1/recetas/*.md" atravesaba el enlace y `rm -f` borraba archivos EXTERNOS,
+  # y el manifiesto leido a traves del symlink podia atribuir la propiedad a un
+  # manifiesto externo. Se rechaza ANTES de leer el manifiesto, expandir el glob
+  # o borrar: se reporta y se deja intacto, igual que los archivos symlink.
+  local r_enlace=0 s_enlace=0
+  if [ -L "$1/recetas" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $1/recetas"
+    r_enlace=1
+  fi
+  if [ -L "$2/sencillo" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $2/sencillo"
+    s_enlace=1
+  fi
+  # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
+  # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
+  # propias recien borradas ya no existen y se saltan, y un manifiesto VACIO (o
+  # que solo nombre recetas inexistentes) quedaria "nuestro" y se borraria. Aca
+  # se mira con las recetas TODAVIA presentes. Si recetas/ es un enlace, no se
+  # lee el manifiesto a traves de el: podria ser externo y atribuirse la
+  # propiedad a un manifiesto ajeno. Un manifiesto que sea un symlink de ARCHIVO
+  # tampoco es nuestro y no se lee (consistencia con las recetas, cross-review
+  # codex/grok): rm -f solo des-enlazaria, pero tratarlo como ajeno evita leer
+  # un manifiesto externo.
+  local m="$1/recetas/MANIFEST.sha256" sha tipo nombre carril titulo
+  local n_confirmadas=0 ajeno=0
+  if [ "$r_enlace" -eq 0 ] && [ -L "$m" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $m"
+  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
+    if [ ! -r "$m" ]; then
+      decir "[summonaikit] recetario: el manifiesto no se puede leer; intacto: $m"
+    else
+      while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+        [ "$tipo" = "receta" ] || continue
+        # Guard de nombre (cross-review grok, hallazgo 1): misma regla que el
+        # hook y el checker. Un `nombre` fuera de ^[a-z][a-z0-9-]*$ (traversal
+        # ../) no debe usarse como ruta ni sesgar la decision de propiedad.
+        printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || continue
+        # Un symlink no es nuestro (consistencia con el instalador y con el
+        # borrado de arriba, que lo deja intacto): no cuenta como receta propia.
+        [ -L "$1/recetas/$nombre.md" ] && continue
+        # Solo lo que EXISTE confirma o niega propiedad; lo inexistente no.
+        [ -f "$1/recetas/$nombre.md" ] || continue
+        if zcode_agente_tiene_marca "$1/recetas/$nombre.md"; then
+          n_confirmadas=$((n_confirmadas + 1))
+        else
+          ajeno=1
+        fi
+      done < "$m"
+    fi
+  fi
+  # El manifiesto es nuestro si, ANTES de borrar, nombro al menos una receta
+  # nuestra presente y ninguna receta presente ajena. Un manifiesto vacio o que
+  # solo nombre recetas inexistentes no es atribuible al kit: intacto.
+  local m_nuestro=0
+  [ "$ajeno" -eq 0 ] && [ "$n_confirmadas" -gt 0 ] && m_nuestro=1
+
+  # Borrar las recetas propias (solo si recetas/ no es un enlace). Consistencia
+  # con el instalador (cross-review codex-16.5-r2, hallazgo 1): un symlink no es
+  # nuestro — nunca lo plantamos asi — y no se toca. rm -f des-enlaza el symlink
+  # (no borra el destinatario), pero tratarlo como ajeno evita seguir enlaces que
+  # podrian apuntar fuera del recetario.
+  if [ "$r_enlace" -eq 0 ]; then
+    for f in "$1"/recetas/*.md; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        # dry-run NO borra y NO debe decirlo como hecho (12.9 #4 / 13.9): un aviso
+        # "quitado" que no borro entrena a confiar en un dry-run que miente.
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+  # La skill /sencillo (solo si sencillo/ no es un enlace): misma regla. El
+  # glob de arriba era "$1/recetas/*.md $2/sencillo/SKILL.md"; al separarlo, un
+  # symlink de DIRECTORIO en sencillo/ no se atraviesa para borrar su SKILL.md
+  # externo.
+  if [ "$s_enlace" -eq 0 ]; then
+    for f in "$2/sencillo/SKILL.md"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+
+  # Comparar contra el manifiesto del repo no sirve tras un upgrade del kit sin
+  # reinstalar (Greptile, PR #97): el instalado viejo difiere y seguiria siendo
+  # nuestro.
+  if [ "$m_nuestro" -eq 1 ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      decir "[summonaikit] recetario: se quitara el manifiesto (dry-run)"
+    else
+      rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
+      decir "[summonaikit] recetario: quitado el manifiesto"
+    fi
+  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ] && [ ! -L "$m" ]; then
+    decir "[summonaikit] recetario: el manifiesto no es atribuible al kit, intacto: $m"
+  fi
+  return 0
+}
+
 if [ "$HOST" = "claude" ]; then
   if [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
     refrescar_manifiesto_vendor "$(claude_agents_dir)" CLAUDE
     exit $?
   fi
+  if [ "$QUITAR_RECETAS" -eq 1 ]; then
+    quitar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills"
+    exit $?
+  fi
   claude_instalar_agentes
+  instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
+  exit $?
+fi
+# Task 16.5 (revision, MEDIUM): --quitar-recetas en el flujo POR DEFECTO (HOST
+# vacio = el flujo del hook claude) tambien despacha a quitar_recetas_claude.
+# Antes solo lo hacian en la rama --host claude, asi que sin --host el flag caia
+# al camino de instalacion y REINSTALABA el recetario en vez de quitarlo.
+if [ "$QUITAR_RECETAS" -eq 1 ] && [ -z "$HOST" ]; then
+  quitar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills"
   exit $?
 fi
 
@@ -2436,6 +2718,12 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
       fi
     fi
   fi
+  # Task 16.5: el recetario y /sencillo son independientes del estado del hook —
+  # pueden faltar aun con el hook al dia. Solo aplica al flujo por defecto (el
+  # del hook claude, sin --host): recetas y skills son una feature de ese host.
+  if [ -z "$HOST" ]; then
+    instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
+  fi
   avisar_registro
   exit 0
 fi
@@ -2493,6 +2781,14 @@ if [ "$HOST" = "dsh" ]; then
     fi
     exit 5
   fi
+fi
+
+# Task 16.5: el recetario y /sencillo se publican DESPUES del hook (o ya al dia)
+# y son independientes de su estado. Solo aplica al flujo por defecto (el del
+# hook claude, sin --host); si el segundo directorio falla tras el primero, se
+# reporta cual quedo publicado y cual no (dos directorios = dos unidades).
+if [ -z "$HOST" ]; then
+  instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
 fi
 
 case "$estado" in

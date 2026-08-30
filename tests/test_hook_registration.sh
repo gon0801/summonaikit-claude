@@ -20,6 +20,16 @@ tool="$here/../tools/check-hook-registration.sh"
 tmp="$(mktemp -d)" || { echo "test_hook_registration: FAIL (mktemp)" >&2; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 
+# Task 16.5: reportar_recetario deriva el hookdir del settings (<dir>/hooks) en
+# modo claude. Los fixtures "completo => silencio" usan --settings "$tmp/*.json",
+# cuyo hookdir es $tmp/hooks: se les planta un recetario VALIDO (manifiesto +
+# recetas del repo) para que el advisory no dispare y el "silencio" del registro
+# completo siga siendo silencio.
+repo="$(cd "$here/.." && pwd)"
+mkdir -p "$tmp/hooks/recetas"
+cp "$repo/recetas/MANIFEST.sha256" "$tmp/hooks/recetas/"
+cp "$repo"/recetas/*.md "$tmp/hooks/recetas/"
+
 fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
@@ -851,6 +861,82 @@ out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dsh con rol duplicado: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con rol duplicado deberia hablar: $out"
 rm -f "$tmp/dsh-dup-$n_dsh_reg.txt"
+
+# ============================================== Task 16.5 — advisory del recetario
+# El contrato del hook solo ofrece las recetas cuyo sha256 coincide con el
+# manifiesto instalado; sin manifiesto (o con hash distinto) esa receta no
+# aparece en el menu. El verificador lo REPORTa (fail-open: exit 0 SIEMPRE).
+caso "recetario: sin manifiesto o con hash distinto => avisa y exit 0"
+# Un settings en un dir propio (no $tmp, que ya tiene un recetario valido) para
+# que el hookdir derivado (<dir>/hooks) no tenga recetas/.
+inca_dir="$tmp/recetario-rutas"
+mkdir -p "$inca_dir/hooks"
+escribir_settings_completo "$inca_dir/settings.json"
+if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=0; else rc_b=$?; fi
+[ "$rc_b" -eq 0 ] || malo "sin manifiesto: esperaba exit 0, dio $rc_b"
+printf '%s' "$out_b" | grep -q 'recetario: ausente en' \
+  || malo "sin manifiesto debe decir 'ausente en': $out_b"
+printf '%s' "$out_b" | grep -qi 'hash distinto' \
+  && malo "sin manifiesto NO debe decir 'hash distinto' (no se midio nada): $out_b"
+# Ahora con manifiesto pero con hash FALSO para bug.md (el contrato no ofrecera
+# esa receta).
+mkdir -p "$inca_dir/hooks/recetas"
+failsha="$(printf 'a%.0s' $(seq 1 64))"
+printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$failsha" > "$inca_dir/hooks/recetas/MANIFEST.sha256"
+: > "$inca_dir/hooks/recetas/bug.md"
+if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=0; else rc_b=$?; fi
+[ "$rc_b" -eq 0 ] || malo "con hash distinto: esperaba exit 0, dio $rc_b"
+printf '%s' "$out_b" | grep -q 'no ofrecera esa receta' \
+  || malo "con hash distinto debe decir 'no ofrecera esa receta': $out_b"
+# cross-review grok r4 #3: exigir SOLO 'no ofrecera esa receta' no discrimina —
+# esa frase la lleva tambien el mensaje de ausente, y el archivo bug.md de este
+# caso SI existe. Sin esta linea, una regresion que reportara "ausente" un
+# archivo presente con hash distinto dejaba el caso verde.
+printf '%s' "$out_b" | grep -q 'hash distinto' \
+  || malo "con un archivo PRESENTE y hash distinto debe decir 'hash distinto', no 'ausente': $out_b"
+printf '%s' "$out_b" | grep -q 'ausente en' \
+  && malo "un archivo presente NO debe reportarse como ausente: $out_b"
+
+# 16.5 (cross-review codex, P2): el hook valida `nombre` contra ^[a-z][a-z0-9-]*$,
+# pero el checker NO lo hacia — un manifiesto manipulado podia hacerle hashear un
+# .md FUERA de recetas/ (traversal). Se agrega el guard en reportar_recetario y
+# este caso lo ata (advisory: exit 0 siempre; reporta la entrada insegura).
+caso "recetario: un nombre inseguro del manifiesto NO se usa como ruta"
+inseg_dir="$tmp/recetario-inseguro"
+mkdir -p "$inseg_dir/hooks/recetas"
+escribir_settings_completo "$inseg_dir/settings.json"
+printf '%s\treceta\t../blanco\tfull\tTitulo ajeno\n' "aaaa" > "$inseg_dir/hooks/recetas/MANIFEST.sha256"
+printf 'x\n' > "$inseg_dir/hooks/blanco.md"   # el archivo fuera de recetas/ que el checker NO debe leer
+if out_i="$(bash "$tool" --settings "$inseg_dir/settings.json" 2>&1)"; then rc_i=0; else rc_i=$?; fi
+[ "$rc_i" -eq 0 ] || malo "un nombre inseguro debe seguir exit 0 (advisory), dio $rc_i: $out_i"
+printf '%s' "$out_i" | grep -q 'entrada insegura' \
+  || malo "debe reportar 'entrada insegura' para el nombre ../blanco: $out_i"
+printf '%s' "$out_i" | grep -q 'blanco.md' \
+  && malo "no debe hashear un .md fuera de recetas/ (uso ../blanco como ruta): $out_i"
+
+# 16.5 (cross-review, hilo sha256sum): si el binario de hash NO esta disponible
+# (host con solo `shasum`, o ninguno), el checker debe salir `unknown` y NUNCA
+# acusar "hash distinto" — eso seria la alarma falsa que el contrato prohibe.
+# SAIKIT_SHA_BIN fuerza la falta de binario (costura de test documentada en el
+# tool). El OLD code usaba `sha256sum` a pelo y acusaba integridad rota.
+caso "recetario: sin binario de hash disponible => unknown, NO integridad rota"
+shbo_dir="$tmp/recetario-sin-binario"
+mkdir -p "$shbo_dir/hooks/recetas"
+escribir_settings_completo "$shbo_dir/settings.json"
+# El fixture necesita un hash VALIDO; la costura del test fuerza la falta de
+# binario SOLO en la invocacion del checker, no en la preparacion. Se usa el
+# mismo fallback sha256sum->shasum que el propio tool, para no depender de que
+# sha256sum exista en el host (cross-review codex-16.5-r2, hallazgo 5).
+if command -v sha256sum >/dev/null 2>&1; then realsha="$(sha256sum "$repo/recetas/bug.md" | cut -d' ' -f1)"
+else realsha="$(shasum -a 256 "$repo/recetas/bug.md" | cut -d' ' -f1)"; fi
+printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$realsha" > "$shbo_dir/hooks/recetas/MANIFEST.sha256"
+cp "$repo/recetas/bug.md" "$shbo_dir/hooks/recetas/bug.md"
+if out_sh="$(SAIKIT_SHA_BIN='__no_such_hash_bin__' bash "$tool" --settings "$shbo_dir/settings.json" 2>&1)"; then rc_sh=0; else rc_sh=$?; fi
+[ "$rc_sh" -eq 0 ] || malo "sin binario de hash: esperaba exit 0 (advisory), dio $rc_sh: $out_sh"
+printf '%s' "$out_sh" | grep -q 'unknown' \
+  || malo "sin binario de hash debe decir 'unknown': $out_sh"
+printf '%s' "$out_sh" | grep -qi 'hash distinto\|ausente o con hash' \
+  && malo "sin binario de hash NO debe acusar integridad rota: $out_sh"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2

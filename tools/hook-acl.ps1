@@ -73,7 +73,8 @@ param(
     [string]$Restore,
     [switch]$Detailed,
     [switch]$OrphansOnly,
-    [switch]$RootOnly
+    [switch]$RootOnly,
+    [string[]]$RutasExtra = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -496,7 +497,18 @@ if (-not (Test-Path -LiteralPath $Path)) {
     exit 2
 }
 
-$before = @(Invoke-Audit -RootPath $Path)
+# Task 16.5 (D1): el recetario y las skills viven FUERA del arbol de hooks
+# (~/.claude/hooks/recetas, ~/.claude/skills/*). -RutasExtra los suma al arbol
+# auditado: una ruta que aun no existe NO es un error -- se reporta `ausente` y
+# se salta (Core Rule 2: no se acusa lo que no se pudo mirar).
+$before = @()
+foreach ($raiz in @($Path) + @($RutasExtra)) {
+    if (-not (Test-Path -LiteralPath $raiz)) {
+        Write-Output "Ruta extra ausente: $raiz (no se audita)"
+        continue
+    }
+    $before += @(Invoke-Audit -RootPath $raiz)
+}
 
 Write-Output "Arbol auditado: $Path"
 if ($before.Count -eq 0) {
@@ -517,9 +529,11 @@ if (-not $Fix) {
 }
 
 # Se respalda exactamente lo que `Repair-HookAcl` va a tocar: la raiz (se le
-# corta la herencia) mas cualquier hijo con ACE explicito propio.
-$aTocar = @(@($Path) + @($before | Where-Object { -not $_.IsInherited } |
-                         Select-Object -ExpandProperty Path) | Select-Object -Unique)
+# corta la herencia), cada raiz extra existente y cualquier hijo con ACE
+# explicito propio.
+$aTocar = @(@($Path) + @($RutasExtra | Where-Object { Test-Path -LiteralPath $_ }) +
+           @($before | Where-Object { -not $_.IsInherited } |
+             Select-Object -ExpandProperty Path) | Select-Object -Unique)
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupDir = Join-Path $BackupRoot $stamp
@@ -529,8 +543,14 @@ $backupJson = Save-AclBackup -RootPath $Path -Destination $backupDir -Target $aT
 
 Write-Output "Corrigiendo:"
 Repair-HookAcl -RootPath $Path
+foreach ($raiz in $RutasExtra) {
+    if (Test-Path -LiteralPath $raiz) { Repair-HookAcl -RootPath $raiz }
+}
 
-$after = @(Invoke-Audit -RootPath $Path)
+$after = @()
+foreach ($raiz in @($Path) + @($RutasExtra)) {
+    if (Test-Path -LiteralPath $raiz) { $after += @(Invoke-Audit -RootPath $raiz) }
+}
 
 # Lo que sobrevive a la correccion del origen son los ACE heredados obsoletos que
 # entraron por `move`. Se atacan solo si quedaron: cuesta una auditoria extra.
@@ -538,7 +558,10 @@ if ($after.Count -gt 0 -and -not $RootOnly) {
     Write-Output ""
     Write-Output "Sobrevivieron ACE que el padre ya no otorga (llegaron por move):"
     Repair-StaleInherited -Findings $after
-    $after = @(Invoke-Audit -RootPath $Path)
+    $after = @()
+    foreach ($raiz in @($Path) + @($RutasExtra)) {
+        if (Test-Path -LiteralPath $raiz) { $after += @(Invoke-Audit -RootPath $raiz) }
+    }
 }
 
 Write-Output ""

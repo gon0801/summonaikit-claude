@@ -156,8 +156,65 @@ antes="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
 despues="$(cd "$tmp/arbol" && find . -type f | sort | xargs cksum 2>/dev/null)"
 [ "$antes" = "$despues" ] || malo "la auditoria modifico el arbol"
 
+# ============================================ Task 16.5 — -RutasExtra en el ACL
+# El recetario y las skills viven FUERA del arbol de hooks
+# (~/.claude/hooks/recetas, ~/.claude/skills/*). -RutasExtra los suma al arbol
+# auditado; una ruta que aun no existe se reporta `ausente` y NO es un error.
+caso "RutasExtra: rutas aceptadas; la ausente se reporta ausente, no error"
+mkdir -p "$tmp/acl-extra-existe"
+printf 'x\n' > "$tmp/acl-extra-existe/archivo.txt"
+if command -v cygpath >/dev/null 2>&1; then
+  arbol_w="$(cygpath -w "$tmp/arbol")"
+  extra_w="$(cygpath -w "$tmp/acl-extra-existe")"
+  ausente_w="$(cygpath -w "$tmp/acl-extra-no-existe")"
+else
+  arbol_w="$tmp/arbol"
+  extra_w="$tmp/acl-extra-existe"
+  ausente_w="$tmp/acl-extra-no-existe"
+fi
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -Command "& '$tool_win' -Path '$arbol_w' -RutasExtra '$extra_w','$ausente_w'" > "$tmp/acl-out.txt" 2>&1
+rc=$?
+# El arbol bajo %TEMP% hereda ACE con escritura (CodexSandboxUsers / SID huerfano),
+# asi que la auditoria puede salir 1 por esos hallazgos. Lo que NO debe pasar es
+# que la ruta extra AUSENTE sea un error (exit 2): se reporta y se salta.
+[ "$rc" -ne 2 ] || malo "una ruta extra ausente NO debe ser un error (exit 2): $(cat "$tmp/acl-out.txt")"
+grep -qi 'ausente' "$tmp/acl-out.txt" || malo "no reporta la ruta extra ausente: $(cat "$tmp/acl-out.txt")"
+grep -qF "$ausente_w" "$tmp/acl-out.txt" || malo "no nombra la ruta ausente: $(cat "$tmp/acl-out.txt")"
+grep -qi 'no se audita' "$tmp/acl-out.txt" || malo "no dice que la ruta ausente no se audita: $(cat "$tmp/acl-out.txt")"
+# cross-review grok r4 #7: el caso solo aseveraba sobre la ruta AUSENTE. Si
+# `-RutasExtra` se aceptara y se IGNORARA la ruta que SI existe — que es la
+# mitad util del parametro — el caso pasaba igual.
+#
+# Se mide por EFECTO, no por texto: la salida NO nombra las rutas extra (se
+# comprobo corriendo el ps1 a mano), asi que grepear el path daba un rojo falso.
+# Lo observable es el conteo de objetos: auditar el arbol MAS la ruta extra
+# tiene que cubrir mas objetos que auditar el arbol solo.
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -Command "& '$tool_win' -Path '$arbol_w'" > "$tmp/acl-solo.txt" 2>&1
+n_solo="$(grep -oE 'sobre [0-9]+ objeto' "$tmp/acl-solo.txt" | grep -oE '[0-9]+' | head -1)"
+n_extra="$(grep -oE 'sobre [0-9]+ objeto' "$tmp/acl-out.txt" | grep -oE '[0-9]+' | head -1)"
+sin_conteo=0
+if [ -z "$n_solo" ] || [ -z "$n_extra" ]; then
+  # Sin hallazgos no hay conteo que comparar. CodeRabbit (PR #108) atrapo que la
+  # primera version solo imprimia el aviso y dejaba `fail` en 0: el archivo podia
+  # cerrar con "test_hook_acl: OK" sin haber comprobado -RutasExtra ni una vez —
+  # el mismo pase en vacio que esta ronda existe para cerrar. Un unknown NO es un
+  # OK: se marca y el archivo sale 3, que tests/run.sh cuenta aparte.
+  printf '    unknown: la auditoria no reporto conteo de objetos en este host; no se pudo medir si la ruta extra se audita\n' >&2
+  sin_conteo=1
+else
+  [ "$n_extra" -gt "$n_solo" ] \
+    || malo "la ruta extra EXISTENTE no se audito: mismo conteo con y sin -RutasExtra ($n_solo vs $n_extra)"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_acl: FAIL" >&2
   exit 1
+fi
+# Un unknown NO es un OK (contrato de datos del repo: not_observed != absent).
+# exit 3 es el codigo que tests/run.sh cuenta aparte como "no se pudo verificar";
+# un fallo real (arriba) sigue mandando sobre un unknown.
+if [ "${sin_conteo:-0}" -ne 0 ]; then
+  echo "test_hook_acl: unknown — no se pudo medir si -RutasExtra audita la ruta existente" >&2
+  exit 3
 fi
 echo "test_hook_acl: OK"
