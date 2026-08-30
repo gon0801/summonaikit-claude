@@ -566,6 +566,10 @@ caso_g1_contrato_nombra_recetario() {
   # sesion del propio lead). Nada fijaba esta instruccion — por eso pudo pedir
   # durante toda la fase algo que nadie hizo, sin que ningun caso se enterara.
   _no_contiene "stdout" "$LAB_OUT" 'todolist'
+  # Y por su NOMBRE real (CodeRabbit, PR #113): la asercion de arriba solo cubre
+  # la palabra en minusculas, asi que una regresion que escribiera `TodoWrite`
+  # —el nombre con el que la herramienta se invoca de verdad— pasaba el candado.
+  _no_contiene "stdout" "$LAB_OUT" 'TodoWrite'
   _contiene "stdout" "$LAB_OUT" 'follow its steps IN ORDER'
 }
 caso_g1_sin_recetario_contrato_igual() {
