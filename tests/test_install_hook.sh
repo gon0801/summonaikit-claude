@@ -2216,6 +2216,7 @@ printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run de
 caso "recetario: un symlink del destino no se sigue (archivo externo intacto y se reporta)"
 nuevo_destino; nuevo_casa_recetas
 mkdir -p "$(dirname "$dest")/recetas"
+mkdir -p "$casa_recetas"   # la raiz HOME del caso; el instalador la crea, pero externo.md va ANTES
 printf -- 'contenido externo, ajeno al kit\n' > "$casa_recetas/externo.md"
 if ln -s "$casa_recetas/externo.md" "$(dirname "$dest")/recetas/bug.md" 2>/dev/null && [ -L "$(dirname "$dest")/recetas/bug.md" ]; then
   antes="$(cksum < "$casa_recetas/externo.md")"
