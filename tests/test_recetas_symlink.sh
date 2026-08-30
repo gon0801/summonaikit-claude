@@ -185,6 +185,60 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ -e "$externo/SKILL.md" ] || malo "el symlink de /sencillo hizo que se borrara la skill externa"
 printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el symlink de /sencillo como 'enlace, intacto': $out"
 
+# 16.5 (cross-review Codex, P3-2): el guard de `recetas_publicar_dir` es
+# compartido por recetas y /sencillo, pero el lado INSTALAR solo se probaba con
+# recetas/ symlink. Falta el caso de /sencillo symlink al instalar: fail-closed
+# (exit != 0), sin tocar el externo ni reemplazar el enlace.
+caso "recetario: un symlink de DIRECTORIO en /sencillo no se publica al instalar (externo intacto)"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$casa_recetas/.claude/skills"
+externo="$casa_recetas/skill-externa"
+mkdir -p "$externo"
+escribir_receta_kit "$externo/SKILL.md"
+ln -s "$externo" "$casa_recetas/.claude/skills/sencillo" 2>/dev/null
+[ -L "$casa_recetas/.claude/skills/sencillo" ] || { echo "    unknown: no se pudo crear el symlink de directorio"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+antes="$(cksum < "$externo/SKILL.md")"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "instalar con /sencillo-symlink debe salir != 0 (fail-closed), dio 0: $out"
+[ -L "$casa_recetas/.claude/skills/sencillo" ] || malo "el instalador reemplazo el symlink de /sencillo (lo importo en un dir real)"
+[ "$antes" = "$(cksum < "$externo/SKILL.md")" ] || malo "se toco el SKILL.md externo via el symlink de /sencillo"
+printf '%s' "$out" | grep -qi 'enlace, no se publica nada' || malo "debe reportar 'enlace, no se publica nada': $out"
+
+# 16.5 (cross-review Codex, P3-3): el guard NO debe sobreproteger. Si recetas/
+# es symlink (r_enlace=1) pero /sencillo es un dir REAL con contenido nuestro,
+# al quitar se deja intacta recetas y SI se borra el SKILL.md nuestro de sencillo
+# (independencia de los dos flags).
+caso "recetario: recetas/ symlink + /sencillo REAL — al quitar solo se borra lo nuestro de /sencillo"
+nuevo_destino; nuevo_casa_recetas
+recetas_dir="$(dirname "$dest")/recetas"
+externo_recetas="$casa_recetas/recetas-externas"
+mkdir -p "$externo_recetas" "$casa_recetas/.claude/skills/sencillo"
+escribir_receta_kit "$externo_recetas/bug.md"
+escribir_receta_kit "$casa_recetas/.claude/skills/sencillo/SKILL.md"
+ln -s "$externo_recetas" "$recetas_dir" 2>/dev/null
+[ -L "$recetas_dir" ] || { echo "    unknown: no se pudo crear el symlink de directorio"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "deberia salir 0, dio $rc: $out"
+[ -e "$externo_recetas/bug.md" ] || malo "recetas/ symlink NO debe tocar el externo (sobreprotege): $externo_recetas/bug.md"
+[ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "el SKILL.md nuestro de /sencillo REAL deberia BORRARSE (independencia de s_enlace)"
+printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar recetas/ como 'enlace, intacto': $out"
+
+# 16.5 (cross-review codex/grok, P3): el manifiesto es un symlink de ARCHIVO —
+# no es nuestro y no se lee al quitar (rm -f solo des-enlazaria, pero se trata
+# como ajeno, igual que las recetas symlink).
+caso "recetario: un symlink de ARCHIVO en el MANIFEST no se lee al quitar (externo intacto)"
+nuevo_destino; nuevo_casa_recetas
+recetas_dir="$(dirname "$dest")/recetas"
+mkdir -p "$recetas_dir" "$casa_recetas"
+printf 'deadbeef\treceta\tbug\tfull\tTitulo externo\n' > "$casa_recetas/manifiesto-externo.sha256"
+ln -s "$casa_recetas/manifiesto-externo.sha256" "$recetas_dir/MANIFEST.sha256" 2>/dev/null
+[ -L "$recetas_dir/MANIFEST.sha256" ] || { echo "    unknown: no se pudo crear el symlink de archivo"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "deberia salir 0, dio $rc: $out"
+[ -e "$casa_recetas/manifiesto-externo.sha256" ] || malo "se borro el manifiesto externo via el symlink de archivo"
+[ -L "$recetas_dir/MANIFEST.sha256" ] || malo "se reemplazo el symlink del manifiesto"
+printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el manifiesto-symlink como 'enlace, intacto': $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_recetas_symlink: FAIL" >&2
   exit 1

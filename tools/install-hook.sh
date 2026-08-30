@@ -2233,10 +2233,15 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # que solo nombre recetas inexistentes) quedaria "nuestro" y se borraria. Aca
   # se mira con las recetas TODAVIA presentes. Si recetas/ es un enlace, no se
   # lee el manifiesto a traves de el: podria ser externo y atribuirse la
-  # propiedad a un manifiesto ajeno.
+  # propiedad a un manifiesto ajeno. Un manifiesto que sea un symlink de ARCHIVO
+  # tampoco es nuestro y no se lee (consistencia con las recetas, cross-review
+  # codex/grok): rm -f solo des-enlazaria, pero tratarlo como ajeno evita leer
+  # un manifiesto externo.
   local m="$1/recetas/MANIFEST.sha256" sha tipo nombre carril titulo
   local n_confirmadas=0 ajeno=0
-  if [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
+  if [ "$r_enlace" -eq 0 ] && [ -L "$m" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $m"
+  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
     if [ ! -r "$m" ]; then
       decir "[summonaikit] recetario: el manifiesto no se puede leer; intacto: $m"
     else
@@ -2319,7 +2324,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
       decir "[summonaikit] recetario: quitado el manifiesto"
     fi
-  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
+  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ] && [ ! -L "$m" ]; then
     decir "[summonaikit] recetario: el manifiesto no es atribuible al kit, intacto: $m"
   fi
   return 0
