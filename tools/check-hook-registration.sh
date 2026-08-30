@@ -515,6 +515,13 @@ reportar_recetario() {
   fi
   while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
     [ "$tipo" = "receta" ] || continue
+    # 16.5 (cross-review codex, P2): el manifiesto no es de confianza ciega (igual
+    # que en el hook). Un `nombre` fuera de ^[a-z][a-z0-9-]*$ (traversal ../, glob
+    # *) no debe usarse para armar una ruta: se reporta y se omite. Sin el guard,
+    # un manifiesto manipulado haria que el checker calculara hashes de .md
+    # FUERA de recetas/.
+    printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || {
+      reportar "[summonaikit] recetario: entrada insegura en el manifiesto ($m): nombre [$nombre]; se omite"; continue; }
     if [ ! -f "$hookdir/recetas/$nombre.md" ]; then
       reportar "[summonaikit] recetario: ausente o con hash distinto en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
       continue

@@ -2179,7 +2179,14 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   for f in "$1"/recetas/*.md "$2/sencillo/SKILL.md"; do
     [ -f "$f" ] || continue
     if zcode_agente_tiene_marca "$f"; then
-      [ "$DRY_RUN" -eq 0 ] && rm -f "$f"; decir "[summonaikit] recetario: quitado $f"
+      # dry-run NO borra y NO debe decirlo como hecho (12.9 #4 / 13.9): un aviso
+      # "quitado" que no borro entrena a confiar en un dry-run que miente.
+      if [ "$DRY_RUN" -eq 1 ]; then
+        decir "[summonaikit] recetario: se quitara $f (dry-run)"
+      else
+        rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+        decir "[summonaikit] recetario: quitado $f"
+      fi
     else
       decir "[summonaikit] recetario: ajeno, intacto: $f"
     fi
@@ -2195,7 +2202,12 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       zcode_agente_tiene_marca "$1/recetas/$nombre.md" || nuestro=0
     done < "$m"
     if [ "$nuestro" -eq 1 ]; then
-      [ "$DRY_RUN" -eq 0 ] && rm -f "$m"; decir "[summonaikit] recetario: quitado el manifiesto"
+      if [ "$DRY_RUN" -eq 1 ]; then
+        decir "[summonaikit] recetario: se quitara el manifiesto (dry-run)"
+      else
+        rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
+        decir "[summonaikit] recetario: quitado el manifiesto"
+      fi
     else
       decir "[summonaikit] recetario: el manifiesto nombra recetas ajenas, intacto: $m"
     fi

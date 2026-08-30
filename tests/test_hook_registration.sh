@@ -887,6 +887,23 @@ if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=
 printf '%s' "$out_b" | grep -q 'no ofrecera esa receta' \
   || malo "con hash distinto debe decir 'no ofrecera esa receta': $out_b"
 
+# 16.5 (cross-review codex, P2): el hook valida `nombre` contra ^[a-z][a-z0-9-]*$,
+# pero el checker NO lo hacia — un manifiesto manipulado podia hacerle hashear un
+# .md FUERA de recetas/ (traversal). Se agrega el guard en reportar_recetario y
+# este caso lo ata (advisory: exit 0 siempre; reporta la entrada insegura).
+caso "recetario: un nombre inseguro del manifiesto NO se usa como ruta"
+inseg_dir="$tmp/recetario-inseguro"
+mkdir -p "$inseg_dir/hooks/recetas"
+escribir_settings_completo "$inseg_dir/settings.json"
+printf '%s\treceta\t../blanco\tfull\tTitulo ajeno\n' "aaaa" > "$inseg_dir/hooks/recetas/MANIFEST.sha256"
+printf 'x\n' > "$inseg_dir/hooks/blanco.md"   # el archivo fuera de recetas/ que el checker NO debe leer
+if out_i="$(bash "$tool" --settings "$inseg_dir/settings.json" 2>&1)"; then rc_i=0; else rc_i=$?; fi
+[ "$rc_i" -eq 0 ] || malo "un nombre inseguro debe seguir exit 0 (advisory), dio $rc_i: $out_i"
+printf '%s' "$out_i" | grep -q 'entrada insegura' \
+  || malo "debe reportar 'entrada insegura' para el nombre ../blanco: $out_i"
+printf '%s' "$out_i" | grep -q 'blanco.md' \
+  && malo "no debe hashear un .md fuera de recetas/ (uso ../blanco como ruta): $out_i"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

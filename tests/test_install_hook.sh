@@ -2166,6 +2166,20 @@ out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$tool" --dest "$de
 [ ! -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--quitar-recetas (flujo por defecto) no quito el manifiesto"
 [ ! -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--quitar-recetas (flujo por defecto) no quito la skill"
 
+# 16.5 (cross-review codex, P2): --dry-run --quitar-recetas NO borra y NO debe
+# decir "quitado" (un dry-run que miente entrena a confiar); debe decir
+# "se quitara (dry-run)" y dejar los archivos.
+caso "recetario: --dry-run --quitar-recetas NO borra y NO dice 'quitado'"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1   # instala
+out="$(host_claude_recetas --quitar-recetas --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas --dry-run deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/bug.md" ] || malo "--dry-run --quitar-recetas borro bug.md"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "--dry-run --quitar-recetas borro el manifiesto"
+[ -e "$casa_recetas/.claude/skills/sencillo/SKILL.md" ] || malo "--dry-run --quitar-recetas borro la skill"
+printf '%s' "$out" | grep -q 'quitado' && malo "--quitar-recetas --dry-run NO debe decir 'quitado': $out"
+printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run debe decir 'se quitara (dry-run)': $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1
