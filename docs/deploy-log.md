@@ -7,6 +7,23 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-30 — PR #110 / Task 16.8 (smoke de las 6 recetas) — deploy NO-OP del hook, pero **reparó la skill `/sencillo`**
+
+- **Qué traía:** solo `docs/smoke-recetas-2026-08-30.md`. El hook no cambió.
+- **Merge:** `28d55ad`. CI run `33339398780` success. Master en `28d55ad`.
+- **Deploy:** `YA AL DIA` para el hook, pero el instalador reportó
+  `NUESTRO_DISTINTO -> ~/.claude/skills/sencillo/SKILL.md` y la republicó con
+  backup.
+- **Qué era esa deriva, medido antes de alarmarse:** solo el **fin de línea**.
+  El contenido es idéntico; la copia instalada el 2026-08-30 09:33 tenía LF (464
+  bytes) y la del repo tiene CRLF (470). Una segunda corrida del deploy sale
+  **limpia** (0 líneas de recetario), así que fue un desajuste de una sola vez y
+  no un bucle que reescriba en cada deploy. Quedan 2 backups en
+  `~/.claude/skills/sencillo/saikit-backups/`, ninguno perdido.
+- **Por qué se anota igual:** un `NUESTRO_DISTINTO` sobre un archivo que nadie
+  editó es exactamente el aviso que este log existe para no dejar pasar. Se
+  miró, se midió y resultó inocuo — que es distinto de suponerlo.
+
 ## 2026-08-30 — PR #108 / Task 16.5 (el instalador planta el recetario y `/sencillo`) — deploy REAL y **primera vez que el recetario llega al perfil vivo**
 
 - **Qué traía:** `install-hook.sh` planta `~/.claude/hooks/recetas/` (7 archivos +
