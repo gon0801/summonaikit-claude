@@ -9,8 +9,8 @@ seis turnos extraída de los transcripts (Parte B).
 Fecha: 2026-08-30. Transcripts leídos como **UTF-8** (con la codificación
 equivocada salen mojibake y las citas quedan sucias):
 
-- `C:/Users/ehven/.claude/projects/C--dev-saikit-recetas-lab/38e1034a-55cd-4604-8d4b-c5ea210be89d.jsonl` — turnos 1, 2, 3
-- `C:/Users/ehven/.claude/projects/C--dev-saikit-recetas-lab/c943d622-43c0-4479-ba75-ee0bcf1208c2.jsonl` — turnos 4, 5, 6
+- Sesion `38e1034a` (`<perfil>/.claude/projects/C--dev-saikit-recetas-lab/38e1034a-*.jsonl`) — turnos 1, 2, 3
+- Sesion `c943d622` (`<perfil>/.claude/projects/C--dev-saikit-recetas-lab/c943d622-*.jsonl`) — turnos 4, 5, 6
 
 ## Parte A — Verificación del laboratorio (ESTADO ANTES DE LOS TURNOS)
 
@@ -41,7 +41,10 @@ equivocada salen mojibake y las citas quedan sucias):
   comando registrado con un `HOME` desechable; exit 0 "MEDIDO: el registro
   prefiere el override del proyecto").
 - Verificación independiente del lead: `sha256(hook stageado)` ==
-  `sha256(hook de la rama 16.8)` = `6bcc4f9e4619e312`.
+  `sha256(hook de la rama 16.8)`. El valor `6bcc4f9e4619e312` que circulo en
+  la revision es el **prefijo de 16 hex** del digest, no el digest completo:
+  se compararon los sha256 enteros y coincidieron, y aca se cita el prefijo
+  solo como etiqueta legible.
 
 ### Recetario al lado
 
@@ -85,7 +88,8 @@ escribirla. Dato, sin juicio:
 - **Sacó `.claude/` del control de versiones** del lab (commits `edb660f` y
   `4516377`).
 - El lab **ya no está como lo describe la Parte A**: tiene **15 commits** (4 de
-  set-up + 11 de los turnos) y ramas `master` / `fix/health-500` /
+  set-up + 11 de los turnos; el listado de la Parte B nombraba 10 y omitía
+  `cd44d7e`, corregido en la revisión) y ramas `master` / `fix/health-500` /
   `feat/tasks-crud` / `perf/health-sin-sleep`. La Parte A es el estado **ANTES**.
 
 ## Parte B — Los seis turnos (evidencia de los transcripts)
@@ -95,26 +99,36 @@ Receta:`**, **(c) pasos de la receta al todolist**, **(d) recibo cerrado / GATE*
 y **(e) alcance** (qué se pidió vs. qué se hizo, con cita). Lo no observado se
 escribe `unknown` con el motivo; nada se rellena ni se infiere.
 
-**Nota sobre el estilo de las citas:** las citas entre comillas son **verbatim**
-del transcript (leído UTF-8). Las **negritas**, `backticks` y la puntuación
+**Nota sobre el estilo de las citas:** las citas entre comillas son **fieles al texto del
+transcript pero NO verbatim** (leído UTF-8). Las **negritas**, `backticks` y la puntuación
 dentro de ellas son **énfasis del autor** de este doc para legibilidad y señalar
 el dato; no están en los bytes del transcript. Si buscas la cadena exacta, quitá
 esos marcadores de formato. La referencia "(línea N)" corresponde al número de
 línea del archivo `.jsonl` de la sesión.
 
-**Nota sobre el menú (a):** el menú con las 6 recetas aparece en el contrato
-inyectado **una vez por sesión** (línea 62 del transcript de cada sesión), no en
-cada turno por separado — el transcript guarda un solo `tool_result` del hook
-con el contrato. Ese contrato es el que el modelo tuvo en contexto para los turnos
-de la sesión (los seis turnos seleccionaron y declararon su receta, lo que
-confirma que el menú estuvo disponible). La cita literal del bloque del menú es
-la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
+**Nota sobre el menú (a) — corregida tras el cross-review (codex #7, grok #3/#4):**
+lo OBSERVADO es que el menú con las 6 recetas aparece en el contrato inyectado
+**una vez por sesión** (línea 62 del transcript de cada sesión); el transcript
+guarda un solo `tool_result` del hook con el contrato. Lo que NO se observó es la
+inyección del menú **en cada turno por separado**.
+
+La versión anterior marcaba (a) = «sí» en los seis turnos, y lo justificaba
+diciendo que, como los seis declararon su receta, el menú tuvo que estar
+disponible. **Ese argumento es circular**: declarar una receta no demuestra que
+el menú estuviera en contexto en ESE turno — el nombre pudo venir del contrato de
+un turno anterior de la misma sesión. Por el contrato de datos del repo
+(`not_observed != absent`), la celda (a) de cada turno es **`unknown`**, y lo que
+se afirma es el hecho de sesión, no el de turno.
+
+Los dos reviewers externos llegaron a este punto por separado, que es la señal
+más fuerte que dio la ronda.
 
 ### Turno 1 — `-saikit el endpoint /health devuelve 500` (Receta: **bug**)
 
-- **(a) Menú en el contrato:** sí. El contrato inyectado de la sesión 1 (línea 62)
+- **(a) Menú en el contrato:** `unknown` en el turno. Observado a nivel SESIÓN: el contrato inyectado de la sesión 1 (línea 62)
   ofrece el bloque `Recipes (recetario):` con las 6 recetas (cita en Parte A). Es
-  un solo `tool_result` por sesión; el modelo lo tuvo en contexto.
+  un solo `tool_result` por sesión. Que el modelo lo tuviera en contexto en
+  ESTE turno no se observó (ver la nota sobre el menú).
 - **(b) `Understand: … Receta: bug`** (cita literal del recibo, línea 315):
   "Reportaste que `/health` devolvía error 500. Lo reproduje yo mismo sobre el
   endpoint HTTP real antes de tocar nada. No tuve que preguntarte nada: el
@@ -136,7 +150,7 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 
 ### Turno 2 — `-saikit agrega una lista de tareas con crear y borrar` (Receta: **funcion**)
 
-- **(a) Menú en el contrato:** sí (misma sesión, línea 62).
+- **(a) Menú en el contrato:** `unknown` en el turno; observado a nivel sesión (misma sesión, línea 62).
 - **(b) `Understand: … Receta: funcion`** (recibo, línea 952): "Pediste una lista
   de tareas con crear y borrar. Al revisar encontré que crear y borrar ya
   existían, que faltaba poder **ver** la lista, y que borrar estaba roto porque
@@ -159,7 +173,7 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 
 ### Turno 3 — `-saikit limpia app.py sin cambiar lo que hace` (Receta: **refactor**)
 
-- **(a) Menú en el contrato:** sí (misma sesión, línea 62).
+- **(a) Menú en el contrato:** `unknown` en el turno; observado a nivel sesión (misma sesión, línea 62).
 - **(b) `Understand: … Receta: refactor`** (recibo, línea 1381): "Pediste limpiar
   `app.py` sin que cambie lo que hace. Sin preguntas: el objetivo era claro y la
   restricción, absoluta. **Receta: refactor.**"
@@ -171,12 +185,14 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 - **(d) Recibo:** **cerró** (recibo completo, línea 1381). Sin GATE.
 - **(e) Alcance:** se pidió limpiar `app.py` sin cambiar el comportamiento. Se
   hizo: pin de comportamiento con 7 pruebas nuevas (`209ec95`), refactor de
-  helpers + `conftest.py` (`23cef9a`, `564e78f`). Contrato cumplido (comparador
-  diferencial: "ALL IDENTICAL: 22 cases"). Alcance acotado al refactor.
+  helpers + `conftest.py` (`23cef9a`, `564e78f`). El propio turno cita un
+  comparador diferencial con "ALL IDENTICAL: 22 cases"; ese es el dato citado, no
+  un veredicto de este documento sobre si el contrato se cumplio (grok #11). Lo
+  citado no muestra trabajo fuera del refactor.
 
 ### Turno 4 — `-saikit /health tarda 2 segundos` (Receta: **lento**)
 
-- **(a) Menú en el contrato:** sí. El contrato inyectado de la sesión 2 (línea
+- **(a) Menú en el contrato:** `unknown` en el turno. Observado a nivel SESIÓN: el contrato inyectado de la sesión 2 (línea
   62) ofrece el bloque `Recipes (recetario):` con las 6 recetas (cita en Parte A).
 - **(b) `Understand: … Receta: lento`** (recibo, línea 472): "pediste que
   `/health` dejara de tardar 2 segundos. **Receta: lento.** No pregunté nada
@@ -194,7 +210,7 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 
 ### Turno 5 — `-saikit:pregunta cómo funciona /health` (Receta: **investigar**)
 
-- **(a) Menú en el contrato:** sí (misma sesión 2, línea 62).
+- **(a) Menú en el contrato:** `unknown` en el turno; observado a nivel sesión (misma sesión 2, línea 62).
 - **(b) `Understand: … Receta: investigar`** (recibo, línea 585): "preguntaste
   cómo funciona `/health`. **Receta: investigar** (carril fast por el alias
   `-saikit:pregunta`), sin tocar código de producción."
@@ -213,7 +229,7 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 
 ### Turno 6 — `-saikit:boceto de la pantalla de tareas` (Receta: **boceto**)
 
-- **(a) Menú en el contrato:** sí (misma sesión 2, línea 62).
+- **(a) Menú en el contrato:** `unknown` en el turno; observado a nivel sesión (misma sesión 2, línea 62).
 - **(b) `Understand: … Receta: boceto`** (recibo, línea 771): "pediste un boceto
   de la pantalla de tareas. **Receta: boceto** (carril fast por el alias
   `-saikit:boceto`, que la línea 54 del contrato de este turno confirma). La
@@ -238,12 +254,26 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 
 ## Lectura de resultados
 
-- **Los 6 turnos cerraron con recibo** (`Receta:` declarada y recibo completo);
-  **ningún GATE** bloqueó. No detecté el "cuarto bloque de recibo" que se
-  anticipaba: cada sesión tiene 3 receipts, uno por receta, sin duplicados.
-- **Todos los turnos nombraron la receta** y siguieron el carril correspondiente
-  (los dos de alias bajaron a `fast`). Los turnos 5 y 6 además citaron el contrato
-  para confirmar el alias.
+> **Estas conclusiones se revisaron tras el cross-review de codex y grok.** Las
+> que se apoyaban en la declaración del propio agente, o que afirmaban ausencia
+> sin haberla buscado, se corrigieron o se acotaron. Lo que sigue en pie está
+> medido por el lead sobre los `.jsonl`, y se dice con qué comando.
+
+- **Los 6 turnos cerraron con recibo COMPLETO.** Medido por el lead, no inferido
+  del fragmento `Receta:`: los 6 bloques `SUMMONAIKIT HARNESS RECEIPT` traen las
+  seis etiquetas (`Understand:`/`Implement:`/`Verify:`/`Review:`/`Close:`/`Retro:`);
+  0 parciales. (codex #6 y grok #6 pedían verificarlo: verificado.)
+- **Ningún GATE bloqueó**, y esto NO es una ausencia no observada: la cadena
+  `SUMMONAIKIT HARNESS GATE` aparece **0 veces** en los dos transcripts, buscada
+  sobre el archivo entero. (codex #1 y grok #8 objetaban la afirmación sin
+  evidencia; la evidencia es esta.)
+- **3 recibos por sesión, sin duplicados.** El "cuarto bloque" que se anticipaba
+  era la **plantilla del recibo dentro del contrato inyectado**, no un recibo.
+- **Todos los turnos nombraron la receta.** Que además **siguieran el carril** NO
+  se afirma: eso salía de la declaración del propio agente, y declarar
+  cumplimiento no lo demuestra (codex #2, grok #5). Queda `unknown`. Lo que sí
+  está citado es que los turnos 5 y 6 leyeron el contrato para confirmar su
+  alias `fast`.
 - **(c) pasos al todolist: no se observó en ningún turno.** El modelo no usó una
   herramienta de todolist (ningún `TodoWrite`) y no enumeró los pasos de la
   receta como lista previa; nombró la receta y siguió sus pasos narrándolos o por
@@ -252,8 +282,9 @@ la de la "Parte A — Menú que ofrece el hook" (idéntica en ambas sesiones).
 - **Alcance (e):** el turno 2 es el que más se expandió respecto de lo pedido
   (cambió el esquema de ids, agregó `GET /tasks`, validación, tope de tamaño y
   una revisión adversarial con 10 findings), y el operador lo marcó con "te
-  inventaste esa decision no es algo que yo tenga q decidir". Los turnos 1, 3, 4
-  se mantuvieron acotados; 5 y 6 cumplieron el carril (lectura / boceto).
+  inventaste esa decision no es algo que yo tenga q decidir". En los turnos 1, 3 y 4 lo
+  citado no muestra trabajo fuera de lo pedido, y en 5 y 6 tampoco; si eso es
+  "cumplir el carril" es un veredicto, y este documento no lo emite (grok #11).
 
 ## Alcance de este documento
 
