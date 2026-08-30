@@ -108,7 +108,28 @@ recetas_menu() {
       # cuerpo, porque la ultima coincidencia pisa a la del frontmatter.
       f_meta="$(awk 'NR>1 && $0=="---"{exit} /^titulo:/&&!t{sub(/^titulo:[[:space:]]*/,"",$0);t=$0} /^carril:/&&!c{sub(/^carril:[[:space:]]*/,"",$0);c=$0} END{printf "%s\t%s",t,c}' "$RECETAS_DIR/$nombre.md")"
       f_titulo="${f_meta%%$'\t'*}"; f_carril="${f_meta#*$'\t'}"
-      [ "$n" -eq 0 ] && printf '%s\n' 'Recipes (recetario): pick ONE that matches the task, read it in full, copy its steps into your todolist before reasoning, and declare it in the receipt as "Understand: ... Receta: <nombre>". A step you skip stays listed as "skip: <razón>". If none matches, follow this contract as usual.'
+      # 16.10: la instruccion pide lo que el gate PUEDE ver, y solo eso.
+      #
+      # La 16.8 midio seis turnos vivos y encontro que el contrato se obedece
+      # exactamente donde el gate mira. El menu pedia tres cosas: elegir la
+      # receta y declararla en el recibo, copiar los pasos a un todolist, y
+      # anotar los saltos como "skip: <razon>". La declaracion aparecio 11 y 12
+      # veces sobre 2 inyecciones por sesion — se cumplio de sobra. El todolist:
+      # CERO en 6 de 6 (`TodoWrite` no se invoco ni una vez), y los saltos
+      # tampoco (los 2 "skip:" por sesion son el texto de este mismo contrato,
+      # no uso). La diferencia entre lo que se cumplio y lo que no es que el
+      # recibo se revisa y el todolist no.
+      #
+      # Ademas el todolist es una herramienta de UN host: este contrato tambien
+      # se inyecta en codex, grok y dsh. Pedir ahi una herramienta que puede no
+      # existir es pedir lo imposible; y donde SI existe tampoco se uso — se
+      # verifico que no hay ninguna restriccion de herramientas que lo explique.
+      #
+      # Asi que la instruccion deja de nombrar una herramienta y pide la
+      # conducta, con su rastro en el recibo, que es la superficie que ya
+      # demostro funcionar. Una instruccion que nadie obedece no es inocua:
+      # entrena a leer el resto del contrato como decorativo.
+      [ "$n" -eq 0 ] && printf '%s\n' 'Recipes (recetario): pick ONE that matches the task, read it in full, and follow its steps IN ORDER — do not improvise your own sequence. Declare it in the receipt as "Understand: ... Receta: <nombre>", and name there any step you did not do, as "skip: <razón>". If none matches, follow this contract as usual.'
       printf -- '- %s — %s — %s\n' "$nombre" "$f_titulo" "$f_carril"; n=$((n+1))
     else
       omit="$omit $nombre"

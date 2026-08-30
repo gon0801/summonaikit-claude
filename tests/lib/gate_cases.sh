@@ -560,6 +560,13 @@ caso_g1_contrato_nombra_recetario() {
   _contiene "stdout" "$LAB_OUT" 'Receta: <nombre>'
   _contiene "stdout" "$LAB_OUT" 'skip: <razón>'
   _no_contiene "stdout" "$LAB_OUT" "$LAB/hooks/recetas"     # D1: sin ruta absoluta
+  # 16.10: el menu NO puede pedir una herramienta de UN solo host. Este contrato
+  # tambien se inyecta en codex, grok y dsh, donde el todolist puede no existir;
+  # y donde SI existe, la 16.8 midio 0 usos en 6 de 6 turnos (y 0 tambien en la
+  # sesion del propio lead). Nada fijaba esta instruccion — por eso pudo pedir
+  # durante toda la fase algo que nadie hizo, sin que ningun caso se enterara.
+  _no_contiene "stdout" "$LAB_OUT" 'todolist'
+  _contiene "stdout" "$LAB_OUT" 'follow its steps IN ORDER'
 }
 caso_g1_sin_recetario_contrato_igual() {
   export SAIKIT_RECETAS_DIR="$LAB/hooks/no-existe"
