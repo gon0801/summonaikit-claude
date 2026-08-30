@@ -192,9 +192,15 @@ grep -qi 'no se audita' "$tmp/acl-out.txt" || malo "no dice que la ruta ausente 
 "$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -Command "& '$tool_win' -Path '$arbol_w'" > "$tmp/acl-solo.txt" 2>&1
 n_solo="$(grep -oE 'sobre [0-9]+ objeto' "$tmp/acl-solo.txt" | grep -oE '[0-9]+' | head -1)"
 n_extra="$(grep -oE 'sobre [0-9]+ objeto' "$tmp/acl-out.txt" | grep -oE '[0-9]+' | head -1)"
+sin_conteo=0
 if [ -z "$n_solo" ] || [ -z "$n_extra" ]; then
-  # Sin hallazgos no hay conteo que comparar: se dice, no se pasa en silencio.
-  printf '    unknown: la auditoria no reporto conteo de objetos en este host; no se pudo medir si la ruta extra se audita\n'
+  # Sin hallazgos no hay conteo que comparar. CodeRabbit (PR #108) atrapo que la
+  # primera version solo imprimia el aviso y dejaba `fail` en 0: el archivo podia
+  # cerrar con "test_hook_acl: OK" sin haber comprobado -RutasExtra ni una vez —
+  # el mismo pase en vacio que esta ronda existe para cerrar. Un unknown NO es un
+  # OK: se marca y el archivo sale 3, que tests/run.sh cuenta aparte.
+  printf '    unknown: la auditoria no reporto conteo de objetos en este host; no se pudo medir si la ruta extra se audita\n' >&2
+  sin_conteo=1
 else
   [ "$n_extra" -gt "$n_solo" ] \
     || malo "la ruta extra EXISTENTE no se audito: mismo conteo con y sin -RutasExtra ($n_solo vs $n_extra)"
@@ -203,5 +209,12 @@ fi
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_acl: FAIL" >&2
   exit 1
+fi
+# Un unknown NO es un OK (contrato de datos del repo: not_observed != absent).
+# exit 3 es el codigo que tests/run.sh cuenta aparte como "no se pudo verificar";
+# un fallo real (arriba) sigue mandando sobre un unknown.
+if [ "${sin_conteo:-0}" -ne 0 ]; then
+  echo "test_hook_acl: unknown — no se pudo medir si -RutasExtra audita la ruta existente" >&2
+  exit 3
 fi
 echo "test_hook_acl: OK"

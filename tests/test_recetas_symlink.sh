@@ -240,6 +240,40 @@ printf '%s' "$out_c" | grep -q 'recetario: unknown' \
 printf '%s' "$out_c" | grep -q 'hash distinto' \
   && malo "no puede afirmar 'hash distinto' sobre contenido al que llega por un enlace: $out_c"
 
+# CodeRabbit (PR #108): un enlace COLGANTE da `-e` FALSO y `-L` verdadero. Con
+# el guard de enlace DESPUES del de existencia, el checker reportaba "ausente"
+# algo que si esta — como enlace — y solo apunta a la nada. Los dos niveles
+# (el directorio/manifiesto y la receta) tienen su caso.
+caso "checker: recetas/ como enlace COLGANTE => unknown, nunca 'ausente'"
+nuevo_destino; nuevo_casa_recetas
+chk_dir="$casa_recetas/perfil-colgante"
+mkdir -p "$chk_dir/hooks"
+ln -s "$casa_recetas/no-existe-este-destino" "$chk_dir/hooks/recetas" 2>/dev/null
+[ -L "$chk_dir/hooks/recetas" ] || { echo "    unknown: no se pudo crear el symlink"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+[ -e "$chk_dir/hooks/recetas" ] && malo "el enlace no quedo colgante; el caso no mide lo que dice"
+printf '{"hooks":{}}\n' > "$chk_dir/settings.json"
+out_d="$(bash "$repo/tools/check-hook-registration.sh" --settings "$chk_dir/settings.json" 2>&1)"
+printf '%s' "$out_d" | grep -q 'recetario: unknown' \
+  || malo "un enlace colgante debe dar 'recetario: unknown': $out_d"
+printf '%s' "$out_d" | grep -q 'recetario: ausente' \
+  && malo "un enlace colgante NO es 'ausente': esta ahi, apunta a la nada: $out_d"
+
+caso "checker: una receta como enlace COLGANTE => unknown, nunca 'ausente'"
+nuevo_destino; nuevo_casa_recetas
+chk_dir="$casa_recetas/perfil-colgante-receta"
+mkdir -p "$chk_dir/hooks/recetas"
+printf '%s\treceta\tbug\tfull\tTitulo\n' "$(printf 'a%.0s' $(seq 1 64))" \
+  > "$chk_dir/hooks/recetas/MANIFEST.sha256"
+ln -s "$casa_recetas/no-existe-esta-receta" "$chk_dir/hooks/recetas/bug.md" 2>/dev/null
+[ -L "$chk_dir/hooks/recetas/bug.md" ] || { echo "    unknown: no se pudo crear el symlink"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+[ -e "$chk_dir/hooks/recetas/bug.md" ] && malo "el enlace de la receta no quedo colgante"
+printf '{"hooks":{}}\n' > "$chk_dir/settings.json"
+out_e="$(bash "$repo/tools/check-hook-registration.sh" --settings "$chk_dir/settings.json" 2>&1)"
+printf '%s' "$out_e" | grep -q 'recetario: unknown' \
+  || malo "una receta con enlace colgante debe dar 'recetario: unknown': $out_e"
+printf '%s' "$out_e" | grep -q 'recetario: ausente' \
+  && malo "una receta con enlace colgante NO es 'ausente': $out_e"
+
 # 16.5 (cross-review Codex, P3-3): el guard NO debe sobreproteger. Si recetas/
 # es symlink (r_enlace=1) pero /sencillo es un dir REAL con contenido nuestro,
 # al quitar se deja intacta recetas y SI se borra el SKILL.md nuestro de sencillo

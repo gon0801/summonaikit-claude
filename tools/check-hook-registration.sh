@@ -531,21 +531,26 @@ reportar_recetario() {
   # salian todos con el mismo texto. No se puede afirmar "hash distinto" (cambio
   # ajeno) si el hash no se pudo calcular: seria exactamente la alarma falsa que
   # el contrato de este archivo prohibe.
+  # cross-review grok r4 #8: un directorio o un manifiesto que sean ENLACE
+  # apuntan a contenido cuya propiedad nadie clasifico. Hashear a traves del
+  # enlace y despues decir "hash distinto" seria afirmar integridad rota sobre
+  # algo que no esta en el arbol gestionado — la misma alarma falsa que este
+  # archivo prohibe en su cabecera. Es `unknown`, no un veredicto.
+  #
+  # El guard va ANTES del de existencia (CodeRabbit, PR #108): un enlace
+  # COLGANTE da `-e` FALSO y `-L` verdadero, asi que con el orden inverso se
+  # reportaba "ausente" algo que si esta — como enlace — y solo apunta a la
+  # nada. Afirmar ausencia de lo que no se llego a mirar es el mismo defecto.
+  if [ -L "$hookdir/recetas" ] || [ -L "$m" ]; then
+    reportar "[summonaikit] recetario: unknown — $hookdir/recetas o su manifiesto son un enlace; el contenido apuntado no es del arbol gestionado y no se afirma integridad."
+    return 0
+  fi
   if [ ! -e "$m" ]; then
     reportar "[summonaikit] recetario: ausente en $m — el contrato no ofrecera ninguna receta"
     return 0
   fi
   if [ ! -f "$m" ] || [ ! -r "$m" ]; then
     reportar "[summonaikit] recetario: unknown — $m existe pero no se pudo leer; no se afirma ausencia."
-    return 0
-  fi
-  # cross-review grok r4 #8: un directorio o un manifiesto que sean ENLACE
-  # apuntan a contenido cuya propiedad nadie clasifico. Hashear a traves del
-  # enlace y despues decir "hash distinto" seria afirmar integridad rota sobre
-  # algo que no esta en el arbol gestionado — la misma alarma falsa que este
-  # archivo prohibe en su cabecera. Es `unknown`, no un veredicto.
-  if [ -L "$hookdir/recetas" ] || [ -L "$m" ]; then
-    reportar "[summonaikit] recetario: unknown — $hookdir/recetas o su manifiesto son un enlace; el contenido apuntado no es del arbol gestionado y no se afirma integridad."
     return 0
   fi
   while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
@@ -557,14 +562,15 @@ reportar_recetario() {
     # FUERA de recetas/.
     printf '%s' "$nombre" | grep -Eq '^[a-z][a-z0-9-]*$' || {
       reportar "[summonaikit] recetario: entrada insegura en el manifiesto ($m): nombre [$nombre]; se omite"; continue; }
+    # Enlace (grok r4 #8): mismo criterio que el directorio, por receta. Va
+    # ANTES del chequeo de existencia por el enlace colgante (CodeRabbit).
+    if [ -L "$hookdir/recetas/$nombre.md" ]; then
+      reportar "[summonaikit] recetario: unknown — $hookdir/recetas/$nombre.md es un enlace; no se afirma integridad de contenido fuera del arbol gestionado."
+      continue
+    fi
     # El archivo de esa receta no existe: observado como ausente.
     if [ ! -e "$hookdir/recetas/$nombre.md" ]; then
       reportar "[summonaikit] recetario: ausente en $hookdir/recetas/$nombre.md — el contrato no ofrecera esa receta"
-      continue
-    fi
-    # Enlace (grok r4 #8): mismo criterio que el directorio, por receta.
-    if [ -L "$hookdir/recetas/$nombre.md" ]; then
-      reportar "[summonaikit] recetario: unknown — $hookdir/recetas/$nombre.md es un enlace; no se afirma integridad de contenido fuera del arbol gestionado."
       continue
     fi
     if [ ! -f "$hookdir/recetas/$nombre.md" ] || [ ! -r "$hookdir/recetas/$nombre.md" ]; then
