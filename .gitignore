@@ -5,3 +5,4 @@ out/
 .zcode/
 .harness-mem/
 node_modules/
+hooks/state/
