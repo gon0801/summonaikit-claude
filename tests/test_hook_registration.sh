@@ -888,6 +888,14 @@ if out_b="$(bash "$tool" --settings "$inca_dir/settings.json" 2>&1)"; then rc_b=
 [ "$rc_b" -eq 0 ] || malo "con hash distinto: esperaba exit 0, dio $rc_b"
 printf '%s' "$out_b" | grep -q 'no ofrecera esa receta' \
   || malo "con hash distinto debe decir 'no ofrecera esa receta': $out_b"
+# cross-review grok r4 #3: exigir SOLO 'no ofrecera esa receta' no discrimina —
+# esa frase la lleva tambien el mensaje de ausente, y el archivo bug.md de este
+# caso SI existe. Sin esta linea, una regresion que reportara "ausente" un
+# archivo presente con hash distinto dejaba el caso verde.
+printf '%s' "$out_b" | grep -q 'hash distinto' \
+  || malo "con un archivo PRESENTE y hash distinto debe decir 'hash distinto', no 'ausente': $out_b"
+printf '%s' "$out_b" | grep -q 'ausente en' \
+  && malo "un archivo presente NO debe reportarse como ausente: $out_b"
 
 # 16.5 (cross-review codex, P2): el hook valida `nombre` contra ^[a-z][a-z0-9-]*$,
 # pero el checker NO lo hacia — un manifiesto manipulado podia hacerle hashear un

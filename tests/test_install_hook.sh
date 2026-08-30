@@ -2142,6 +2142,32 @@ out="$(host_claude_recetas 2>&1)"; rc=$?
 printf '%s' "$out" | grep -q 'ajeno' || malo "no reporto la receta ajena: $out"
 cmp -s "$(dirname "$dest")/recetas/bug.md" "$repo/recetas/bug.md" || malo "las recetas propias no se instalaron"
 
+# cross-review grok r4 #2: el bucle de "ajenos" decidia SOLO por "no existe en el
+# repo", sin mirar la marca — y eso no mide propiedad. Una receta NUESTRA
+# retirada en una version posterior del kit lleva `saikit_owned`, y
+# `--quitar-recetas` SI la borra porque ese lado si mira la marca: anunciarla
+# como "ajena, intacta" contradecia al desinstalador y afirmaba una propiedad
+# que nadie observo. El caso planta las DOS a la vez para que el mensaje tenga
+# que distinguirlas.
+caso "recetario: una receta NUESTRA retirada del kit no se anuncia como ajena"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+# retirada del kit: lleva la marca, pero ya no existe en el repo
+printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: vieja\ntitulo: Receta retirada\ncarril: full\n---\ncuerpo\n' \
+  > "$(dirname "$dest")/recetas/vieja.md"
+# ajena de verdad: sin marca y sin correlato en el repo
+printf -- '---\nname: ajena\ndescription: de otro\n---\ncambio ajeno\n' \
+  > "$(dirname "$dest")/recetas/ajena.md"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "no debe abortar la instalacion, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/vieja.md" ] || malo "la receta retirada se borro; el instalador solo reporta"
+printf '%s' "$out" | grep -q 'retirada del kit' \
+  || malo "una receta con la marca debe reportarse como retirada del kit, no como ajena: $out"
+printf '%s' "$out" | grep -q 'archivo ajeno reportado, intacto: .*vieja.md' \
+  && malo "una receta CON marca no puede anunciarse como ajena (contradice a --quitar-recetas): $out"
+printf '%s' "$out" | grep -q 'archivo ajeno reportado, intacto: .*ajena.md' \
+  || malo "la receta sin marca si debe reportarse como ajena: $out"
+
 caso "recetario: --dry-run no crea recetas/ ni la skill, reporta por archivo"
 nuevo_destino; nuevo_casa_recetas
 out="$(host_claude_recetas --dry-run 2>&1)"; rc=$?

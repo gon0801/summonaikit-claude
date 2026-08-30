@@ -2108,9 +2108,17 @@ refrescar_manifiesto_vendor() {  # $1=dest_dir  $2=etiqueta
 
 # Task 16.5 (D1/D8): planta el recetario y la skill /sencillo con la maquina de
 # estados POR ARCHIVO de los perfiles (marca saikit_owned; ajeno => DESCONOCIDO,
-# no se toca). Clasifica TODO antes de escribir nada (12.9) y publica cada
-# directorio de un solo golpe (dos renames); la ventana entre los dos mv se
-# declara, no se esconde.
+# no se toca). Cada directorio se publica de un solo golpe (dos renames); la
+# ventana entre los dos mv se declara, no se esconde.
+#
+# ALCANCE del todo-o-nada, dicho con precision (cross-review grok r4 #1): es POR
+# DIRECTORIO, no entre los dos. `instalar_recetas_claude` publica `recetas/` y
+# DESPUES `skills/sencillo/`, asi que un aborto del segundo deja el primero ya
+# escrito. Lo que si se hace antes de tocar nada es rechazar los dos destinos
+# que son enlace (la causa de aborto que depende del estado del perfil) y
+# comprobar que las tres fuentes se lean; para lo que no se puede saber de
+# antemano (un mktemp o un cp que falle a mitad), el mensaje de aborto DICE que
+# recetas/ ya quedo publicado en vez de afirmar que no se toco nada.
 recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva frontmatter)
   # 16.5 (cross-review, hilo symlink): un $dest que sea symlink NO es nuestro —
   # nunca lo plantamos asi — y no se toca. Antes agente_estado_con_vendor lo
@@ -2198,15 +2206,40 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   return 0
 }
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
-  local f
+  local f rc_sencillo
   for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" "$repo/skills/sencillo/SKILL.md"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
   done
+  # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
+  # NINGUNO. Un enlace en el segundo abortaba despues de haber escrito el
+  # primero, y el aviso decia "no se publica nada" nombrando solo el segundo.
+  # Esta es la unica causa de aborto que se puede saber de antemano; el resto
+  # (mktemp/cp) se declara abajo en vez de esconderse.
+  for f in "$1/recetas" "$2/sencillo"; do
+    if [ -L "$f" ]; then
+      decir "[summonaikit] recetario: enlace, no se publica nada: $f"
+      return 5
+    fi
+  done
   recetas_publicar_dir "$1/recetas" "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" || return $?
-  recetas_publicar_dir "$2/sencillo" "$repo/skills/sencillo/SKILL.md" || return $?
-  for f in "$1"/recetas/*.md; do   # ajenos: solo reportar
+  # Si ESTE falla, recetas/ ya quedo publicado: se dice, no se calla.
+  recetas_publicar_dir "$2/sencillo" "$repo/skills/sencillo/SKILL.md" || {
+    rc_sencillo=$?
+    decir "[summonaikit] recetario: la skill /sencillo no se publico, pero $1/recetas SI quedo publicado (el todo-o-nada es por directorio)"
+    return "$rc_sencillo"; }
+  # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
+  # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
+  # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la
+  # borra: anunciarla como "ajena" contradecia al desinstalador y afirmaba una
+  # propiedad que nadie midio. Ahora la marca decide, igual que al quitar.
+  for f in "$1"/recetas/*.md; do
     [ -e "$f" ] || continue
-    [ -e "$repo/recetas/$(basename "$f")" ] || decir "[summonaikit] recetario: archivo ajeno reportado, intacto: $f"
+    [ -e "$repo/recetas/$(basename "$f")" ] && continue
+    if zcode_agente_tiene_marca "$f"; then
+      decir "[summonaikit] recetario: receta nuestra retirada del kit, intacta (--quitar-recetas la borra): $f"
+    else
+      decir "[summonaikit] recetario: archivo ajeno reportado, intacto: $f"
+    fi
   done
   return 0
 }

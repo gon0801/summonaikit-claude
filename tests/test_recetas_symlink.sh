@@ -168,6 +168,10 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ -e "$externo/bug.md" ] || malo "el symlink de directorio hizo que se borrara el archivo externo (CON marca): $externo/bug.md"
 [ -e "$externo/MANIFEST.sha256" ] || malo "el symlink de directorio hizo que se borrara el manifiesto externo"
 printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el symlink de directorio como 'enlace, intacto': $out"
+# cross-review grok r4 #9: no alcanza con que el DESTINO externo siga; el
+# ENLACE tambien tiene que seguir en su lugar. "Intacto" es las dos cosas: un
+# rm que se llevara el enlace y dejara el destino pasaba este caso igual.
+[ -L "$recetas_dir" ] || malo "el enlace recetas/ no quedo intacto (se lo llevaron aunque el destino siga)"
 
 # 16.5 (cross-review, hilo symlink de DIRECTORIO): lo mismo aplica a la skill
 # /sencillo — "$2/sencillo/SKILL.md" atravesaba un symlink de directorio en
@@ -184,6 +188,8 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--quitar-recetas con /sencillo-symlink deberia salir 0, dio $rc: $out"
 [ -e "$externo/SKILL.md" ] || malo "el symlink de /sencillo hizo que se borrara la skill externa"
 printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el symlink de /sencillo como 'enlace, intacto': $out"
+# cross-review grok r4 #9: el enlace tambien tiene que seguir (ver arriba).
+[ -L "$casa_recetas/.claude/skills/sencillo" ] || malo "el enlace /sencillo no quedo intacto (se lo llevaron aunque el destino siga)"
 
 # 16.5 (cross-review Codex, P3-2): el guard de `recetas_publicar_dir` es
 # compartido por recetas y /sencillo, pero el lado INSTALAR solo se probaba con
@@ -203,6 +209,36 @@ out="$(host_claude_recetas 2>&1)"; rc=$?
 [ -L "$casa_recetas/.claude/skills/sencillo" ] || malo "el instalador reemplazo el symlink de /sencillo (lo importo en un dir real)"
 [ "$antes" = "$(cksum < "$externo/SKILL.md")" ] || malo "se toco el SKILL.md externo via el symlink de /sencillo"
 printf '%s' "$out" | grep -qi 'enlace, no se publica nada' || malo "debe reportar 'enlace, no se publica nada': $out"
+# cross-review grok r4 #1: el aviso dice "no se publica nada", y eso tiene que
+# ser CIERTO tambien para el otro directorio. Antes recetas/ se publicaba
+# ENTERO y despues abortaba al llegar a /sencillo: el operador leia "no se
+# publica nada" con el recetario ya escrito. Ahora los dos destinos se miran
+# antes de tocar ninguno.
+[ ! -e "$(dirname "$dest")/recetas/bug.md" ] \
+  || malo "dijo 'no se publica nada' pero recetas/ SI quedo publicado: $(dirname "$dest")/recetas/bug.md"
+[ ! -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] \
+  || malo "dijo 'no se publica nada' pero el manifiesto SI quedo publicado"
+
+# cross-review grok r4 #8: el advisory del checker no puede afirmar integridad
+# de contenido al que llega POR un enlace — no es del arbol gestionado. Es
+# `unknown`, no "hash distinto" ni "ausente".
+caso "checker: recetas/ como enlace => unknown, no un veredicto de integridad"
+nuevo_destino; nuevo_casa_recetas
+checker="$repo/tools/check-hook-registration.sh"
+chk_dir="$casa_recetas/perfil-checker"
+mkdir -p "$chk_dir/hooks" "$casa_recetas/recetario-externo"
+escribir_receta_kit "$casa_recetas/recetario-externo/bug.md"
+printf '%s\treceta\tbug\tfull\tTitulo\n' "$(printf 'a%.0s' $(seq 1 64))" \
+  > "$casa_recetas/recetario-externo/MANIFEST.sha256"
+ln -s "$casa_recetas/recetario-externo" "$chk_dir/hooks/recetas" 2>/dev/null
+[ -L "$chk_dir/hooks/recetas" ] || { echo "    unknown: no se pudo crear el symlink de directorio"; exit "$SAIKIT_EXIT_UNKNOWN"; }
+printf '{"hooks":{}}\n' > "$chk_dir/settings.json"
+if out_c="$(bash "$checker" --settings "$chk_dir/settings.json" 2>&1)"; then rc_c=0; else rc_c=$?; fi
+[ "$rc_c" -eq 0 ] || malo "el checker es fail-open: esperaba exit 0, dio $rc_c: $out_c"
+printf '%s' "$out_c" | grep -q 'recetario: unknown' \
+  || malo "con recetas/ como enlace debe decir 'recetario: unknown': $out_c"
+printf '%s' "$out_c" | grep -q 'hash distinto' \
+  && malo "no puede afirmar 'hash distinto' sobre contenido al que llega por un enlace: $out_c"
 
 # 16.5 (cross-review Codex, P3-3): el guard NO debe sobreproteger. Si recetas/
 # es symlink (r_enlace=1) pero /sencillo es un dir REAL con contenido nuestro,
