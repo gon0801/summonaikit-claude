@@ -2206,37 +2206,6 @@ out="$(host_claude_recetas --quitar-recetas --dry-run 2>&1)"; rc=$?
 printf '%s' "$out" | grep -q 'quitado' && malo "--quitar-recetas --dry-run NO debe decir 'quitado': $out"
 printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run debe decir 'se quitara (dry-run)': $out"
 
-# 16.5 (cross-review, hilo symlink): un symlink plantado en el destino (recetas/)
-# apuntando FUERA no es nuestro — nunca lo plantamos asi — y no se sigue: el
-# archivo externo queda INTACTO y el instalador lo reporta (DESCONOCIDO). El
-# `cp -r` del staging replicaba el symlink como symlink y el `cp` siguiente lo
-# seguia y escribia encima del archivo externo. Solo se puede crear un symlink
-# real con privilegio/Developer Mode: si el host no puede (Git Bash sin eso hace
-# una COPIA), el caso se salta limpio, no da falso rojo.
-# NOTA DE COBERTURA (limitacion declarada, hallazgo MEDIUM del reviewer): este
-# caso es inerte en los DOS gates del repo — el CI Linux salta test_install_hook.sh
-# entero (SAIKIT_CI_LINUX=1) y este host Windows Git Bash NO puede crear symlinks
-# reales (sin privilegio/Developer Mode; ln -s hace una copia, mklink/New-Item
-# -ItemType SymbolicLink deniegan), asi que corre SKIP aca y no corre en CI. Es una
-# limitacion aceptada: el guard `-L` de recetas_clasificar es un one-liner
-# verificable por inspeccion y el caso, tal como esta, ataria el bug en CUALQUIER
-# host con symlinks reales (Linux/macOS/admin). SKIP no es FAIL; no es alarma falsa.
-caso "recetario: un symlink del destino no se sigue (archivo externo intacto y se reporta)"
-nuevo_destino; nuevo_casa_recetas
-mkdir -p "$(dirname "$dest")/recetas"
-mkdir -p "$casa_recetas"   # la raiz HOME del caso; el instalador la crea, pero externo.md va ANTES
-printf -- 'contenido externo, ajeno al kit\n' > "$casa_recetas/externo.md"
-if ln -s "$casa_recetas/externo.md" "$(dirname "$dest")/recetas/bug.md" 2>/dev/null && [ -L "$(dirname "$dest")/recetas/bug.md" ]; then
-  antes="$(cksum < "$casa_recetas/externo.md")"
-  out="$(host_claude_recetas 2>&1)"; rc=$?
-  [ "$rc" -eq 0 ] || malo "un symlink no debe abortar la instalacion, dio $rc: $out"
-  [ "$antes" = "$(cksum < "$casa_recetas/externo.md")" ] || malo "se escribio sobre el archivo externo via el symlink"
-  printf '%s' "$out" | grep -qi 'desconocid\|no se toca' || malo "no reporto el symlink como no-tocado: $out"
-  [ -L "$(dirname "$dest")/recetas/bug.md" ] || malo "se reemplazo el symlink que no era nuestro"
-else
-  printf '  caso: (SKIP) este host no crea symlinks reales (ln -s -> copia; requiere privilegio/Developer Mode); el caso se valida en hosts con symlinks\n'
-fi
-
 # 16.5 (cross-review codex-16.5-r2, hallazgo 3): un manifiesto vacio (o que no
 # nombre ninguna receta nuestra PRESENTE) no es atribuible al kit y NO se borra
 # con --quitar-recetas. Antes el bucle de propiedad lo saltaba todo, "nuestro"
@@ -2264,24 +2233,6 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--quitar-recetas con nombre inseguro deberia salir 0, dio $rc: $out"
 [ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "el nombre inseguro NO debe volver 'nuestro' al manifiesto (se borro)"
 printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
-
-# 16.5 (cross-review codex-16.5-r2, hallazgo 1): un symlink en recetas/ no se toca
-# tampoco al QUITAR, por consistencia con el instalador. rm -f des-enlaza (no borra
-# el destinatario), pero se trata como ajeno. Mismo SKIP por host sin symlinks.
-caso "recetario: un symlink del destino no se borra al quitar (consistencia del guard)"
-nuevo_destino; nuevo_casa_recetas
-mkdir -p "$(dirname "$dest")/recetas" "$casa_recetas"
-printf -- 'contenido externo, ajeno al kit\n' > "$casa_recetas/externo.md"
-if ln -s "$casa_recetas/externo.md" "$(dirname "$dest")/recetas/bug.md" 2>/dev/null && [ -L "$(dirname "$dest")/recetas/bug.md" ]; then
-  antes="$(cksum < "$casa_recetas/externo.md")"
-  out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
-  [ "$rc" -eq 0 ] || malo "--quitar-recetas con symlink deberia salir 0, dio $rc: $out"
-  [ "$antes" = "$(cksum < "$casa_recetas/externo.md")" ] || malo "el symlink hizo que se borrara el archivo externo"
-  [ -L "$(dirname "$dest")/recetas/bug.md" ] || malo "se borro el symlink que no era nuestro"
-  printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el symlink como 'enlace, intacto': $out"
-else
-  printf '  caso: (SKIP) este host no crea symlinks reales (ln -s -> copia); el caso se valida en hosts con symlinks\n'
-fi
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2

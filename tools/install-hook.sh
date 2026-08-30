@@ -2138,6 +2138,18 @@ recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva f
 recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocado
   local destdir="$1"; shift
   local f dest est nuevo old cambios=0
+  # 16.5 (cross-review, hilo symlink de DIRECTORIO): un $destdir que sea symlink
+  # NO es nuestro — nunca lo plantamos asi — y no se toca. `recetas_clasificar`
+  # mira el ARCHIVO ($dest), no al directorio que lo contiene; y aca un $destdir
+  # symlink haria que `[ -d "$destdir" ]` lo SIGA (lineas de abajo), que el
+  # `cp -p -r "$destdir"/.` copiara el contenido ajeno al staging y que el swap
+  # dejara un DIRECTORIO REAL en lugar del enlace — importando contenido cuya
+  # propiedad nunca se clasifico. Se rechaza ANTES de leer el manifiesto,
+  # expandir el glob, copiar o hacer el swap.
+  if [ -L "$destdir" ]; then
+    decir "[summonaikit] recetario: enlace, no se publica nada: $destdir"
+    return 5
+  fi
   # 1) clasificar todo; cualquier NO_OBSERVABLE aborta sin escribir
   for f in "$@"; do
     dest="$destdir/$(basename "$f")"
@@ -2200,14 +2212,31 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
 }
 quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   local f
+  # 16.5 (cross-review, hilo symlink de DIRECTORIO): un directorio gestionado que
+  # sea symlink NO es nuestro — nunca lo plantamos asi — y no se toca. El glob
+  # "$1/recetas/*.md" atravesaba el enlace y `rm -f` borraba archivos EXTERNOS,
+  # y el manifiesto leido a traves del symlink podia atribuir la propiedad a un
+  # manifiesto externo. Se rechaza ANTES de leer el manifiesto, expandir el glob
+  # o borrar: se reporta y se deja intacto, igual que los archivos symlink.
+  local r_enlace=0 s_enlace=0
+  if [ -L "$1/recetas" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $1/recetas"
+    r_enlace=1
+  fi
+  if [ -L "$2/sencillo" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $2/sencillo"
+    s_enlace=1
+  fi
   # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
   # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
   # propias recien borradas ya no existen y se saltan, y un manifiesto VACIO (o
   # que solo nombre recetas inexistentes) quedaria "nuestro" y se borraria. Aca
-  # se mira con las recetas TODAVIA presentes.
+  # se mira con las recetas TODAVIA presentes. Si recetas/ es un enlace, no se
+  # lee el manifiesto a traves de el: podria ser externo y atribuirse la
+  # propiedad a un manifiesto ajeno.
   local m="$1/recetas/MANIFEST.sha256" sha tipo nombre carril titulo
   local n_confirmadas=0 ajeno=0
-  if [ -f "$m" ]; then
+  if [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
     if [ ! -r "$m" ]; then
       decir "[summonaikit] recetario: el manifiesto no se puede leer; intacto: $m"
     else
@@ -2236,26 +2265,49 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   local m_nuestro=0
   [ "$ajeno" -eq 0 ] && [ "$n_confirmadas" -gt 0 ] && m_nuestro=1
 
-  for f in "$1"/recetas/*.md "$2/sencillo/SKILL.md"; do
-    # Consistencia con el instalador (cross-review codex-16.5-r2, hallazgo 1):
-    # un symlink no es nuestro — nunca lo plantamos asi — y no se toca. rm -f
-    # des-enlaza el symlink (no borra el destinatario), pero tratarlo como ajeno
-    # evita seguir enlaces que podrian apuntar fuera del recetario.
-    [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
-    [ -f "$f" ] || continue
-    if zcode_agente_tiene_marca "$f"; then
-      # dry-run NO borra y NO debe decirlo como hecho (12.9 #4 / 13.9): un aviso
-      # "quitado" que no borro entrena a confiar en un dry-run que miente.
-      if [ "$DRY_RUN" -eq 1 ]; then
-        decir "[summonaikit] recetario: se quitara $f (dry-run)"
+  # Borrar las recetas propias (solo si recetas/ no es un enlace). Consistencia
+  # con el instalador (cross-review codex-16.5-r2, hallazgo 1): un symlink no es
+  # nuestro — nunca lo plantamos asi — y no se toca. rm -f des-enlaza el symlink
+  # (no borra el destinatario), pero tratarlo como ajeno evita seguir enlaces que
+  # podrian apuntar fuera del recetario.
+  if [ "$r_enlace" -eq 0 ]; then
+    for f in "$1"/recetas/*.md; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        # dry-run NO borra y NO debe decirlo como hecho (12.9 #4 / 13.9): un aviso
+        # "quitado" que no borro entrena a confiar en un dry-run que miente.
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
       else
-        rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
-        decir "[summonaikit] recetario: quitado $f"
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
       fi
-    else
-      decir "[summonaikit] recetario: ajeno, intacto: $f"
-    fi
-  done
+    done
+  fi
+  # La skill /sencillo (solo si sencillo/ no es un enlace): misma regla. El
+  # glob de arriba era "$1/recetas/*.md $2/sencillo/SKILL.md"; al separarlo, un
+  # symlink de DIRECTORIO en sencillo/ no se atraviesa para borrar su SKILL.md
+  # externo.
+  if [ "$s_enlace" -eq 0 ]; then
+    for f in "$2/sencillo/SKILL.md"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
 
   # Comparar contra el manifiesto del repo no sirve tras un upgrade del kit sin
   # reinstalar (Greptile, PR #97): el instalado viejo difiere y seguiria siendo
@@ -2267,7 +2319,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
       decir "[summonaikit] recetario: quitado el manifiesto"
     fi
-  elif [ -f "$m" ]; then
+  elif [ "$r_enlace" -eq 0 ] && [ -f "$m" ]; then
     decir "[summonaikit] recetario: el manifiesto no es atribuible al kit, intacto: $m"
   fi
   return 0
