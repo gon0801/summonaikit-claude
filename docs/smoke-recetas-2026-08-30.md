@@ -61,9 +61,10 @@ Lo copió el instalador de 16.5 durante el staging.
 ### Menú que ofrece el hook
 
 El menú que devuelve el hook stageado, al correrlo en el lab con un prompt
-`-saikit`, ofrece las 6 recetas (cita literal del contrato):
+`-saikit`, ofrece las 6 recetas. Este bloque SI es verbatim: es la salida cruda
+del hook, sin formato agregado.
 
-```
+```text
 Recipes (recetario): pick ONE that matches the task, read it in full, copy its steps into your todolist before reasoning, and declare it in the receipt as "Understand: ... Receta: <nombre>". A step you skip stays listed as "skip: <razón>". If none matches, follow this contract as usual.
 - boceto — Probar una idea con variantes desechables — fast
 - bug — Arreglar algo que no funciona — full
@@ -129,7 +130,8 @@ más fuerte que dio la ronda.
   ofrece el bloque `Recipes (recetario):` con las 6 recetas (cita en Parte A). Es
   un solo `tool_result` por sesión. Que el modelo lo tuviera en contexto en
   ESTE turno no se observó (ver la nota sobre el menú).
-- **(b) `Understand: … Receta: bug`** (cita literal del recibo, línea 315):
+- **(b) `Understand: … Receta: bug`** (cita del recibo, fiel pero con énfasis
+  del autor — ver la nota de estilo; línea 315):
   "Reportaste que `/health` devolvía error 500. Lo reproduje yo mismo sobre el
   endpoint HTTP real antes de tocar nada. No tuve que preguntarte nada: el
   síntoma era concreto y la causa quedó clara en la primera lectura. **Receta:
@@ -167,7 +169,7 @@ más fuerte que dio la ronda.
   la rama `feat/tasks-crud`, bastante más: ids con contador monótono
   (`40a2013`), `GET /tasks` + validación de entrada + tope 1 MiB (`6a94742`,
   `52d852b`), cierre de 6 hallazgos y una revisión adversarial con 10 findings
-  (`3e262b0`). El operador lo marcó como decisión inventada (cita literal, línea
+  (`3e262b0`). El operador lo marcó como decisión inventada (cita fiel, línea
   958): "1. te inventaste esa decision no es algo que yo tenga q decidir 2.
   nadie te pidio eso 3 si". Es la cita de alcance de este turno.
 
