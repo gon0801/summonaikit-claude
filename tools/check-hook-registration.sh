@@ -501,11 +501,11 @@ reportar_session_rules() {
 # corre en los desenlaces verdes, como reportar_session_rules. El hookdir se
 # deriva del settings en modo Claude (el hook vive en <dir del settings>/hooks).
 # 16.5 (cross-review, hilo sha256sum): la seleccion del binario de hash es UNA
-# sola regla junto con install-hook.sh (lineas 1689-1699, identicas). En un host
+# sola regla con tools/install-hook.sh (misma eleccion: sha256sum -> shasum -a 256;
+# la costura SAIKIT_SHA_BIN de test vive SOLO aca, en el checker). En un host
 # que solo tenga `shasum`, `sha256sum` a pelo devolvia vacio y este advisory
 # acusaba "ausente o con hash distinto" en TODAS las recetas — la alarma falsa
-# que entrena a ignorar el aviso. SAIKIT_SHA_BIN es la costura de test: al
-# forzarlo a un nombre inexistente se simula un host sin binario de hash.
+# que entrena a ignorar el aviso.
 sha_bin=''
 if [ -n "${SAIKIT_SHA_BIN:-}" ]; then
   if command -v "$SAIKIT_SHA_BIN" >/dev/null 2>&1; then sha_bin="$SAIKIT_SHA_BIN"; fi

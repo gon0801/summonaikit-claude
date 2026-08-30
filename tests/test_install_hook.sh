@@ -2213,6 +2213,14 @@ printf '%s' "$out" | grep -q 'se quitara' || malo "--quitar-recetas --dry-run de
 # seguia y escribia encima del archivo externo. Solo se puede crear un symlink
 # real con privilegio/Developer Mode: si el host no puede (Git Bash sin eso hace
 # una COPIA), el caso se salta limpio, no da falso rojo.
+# NOTA DE COBERTURA (limitacion declarada, hallazgo MEDIUM del reviewer): este
+# caso es inerte en los DOS gates del repo — el CI Linux salta test_install_hook.sh
+# entero (SAIKIT_CI_LINUX=1) y este host Windows Git Bash NO puede crear symlinks
+# reales (sin privilegio/Developer Mode; ln -s hace una copia, mklink/New-Item
+# -ItemType SymbolicLink deniegan), asi que corre SKIP aca y no corre en CI. Es una
+# limitacion aceptada: el guard `-L` de recetas_clasificar es un one-liner
+# verificable por inspeccion y el caso, tal como esta, ataria el bug en CUALQUIER
+# host con symlinks reales (Linux/macOS/admin). SKIP no es FAIL; no es alarma falsa.
 caso "recetario: un symlink del destino no se sigue (archivo externo intacto y se reporta)"
 nuevo_destino; nuevo_casa_recetas
 mkdir -p "$(dirname "$dest")/recetas"
