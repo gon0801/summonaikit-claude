@@ -2115,6 +2115,22 @@ out="$(host_claude_recetas 2>&1)"; rc=$?
 [ "$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)" = "$n_bak" ] \
   || malo "la segunda corrida creo un backup"
 
+# 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto se reemplaza SIEMPRE
+# al instalar (no lleva marca; si gana un manifiesto viejo/ajeno, nuestras recetas
+# recien plantadas no aparecerian en el menu) y el anterior queda respaldado — es
+# la asimetria DELIBERADA que recetas_clasificar declara frente a la regla de
+# propiedad que si aplica quitar_recetas_claude. El caso ata esa conducta.
+caso "recetario: un manifiesto distinto se reemplaza al instalar y el previo queda respaldado"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\treceta\tbug\tfull\tViejo manifiesto ajeno\n' > "$(dirname "$dest")/recetas/MANIFEST.sha256"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "un manifiesto distinto no debe abortar la instalacion, dio $rc: $out"
+cmp -s "$(dirname "$dest")/recetas/MANIFEST.sha256" "$repo/recetas/MANIFEST.sha256" \
+  || malo "el manifiesto distinto NO se reemplazo por el nuestro (nuestras recetas no aparecerian en el menu)"
+[ -n "$(find "$(dirname "$dest")/recetas/saikit-backups" -name 'MANIFEST.sha256*.nuestro.*.bak' 2>/dev/null)" ] \
+  || malo "el manifiesto previo no quedo respaldado en saikit-backups/"
+
 caso "recetario: archivo ajeno (sin marca) en recetas/ queda intacto y se reporta; las nuestras se instalan"
 nuevo_destino; nuevo_casa_recetas
 mkdir -p "$(dirname "$dest")/recetas"

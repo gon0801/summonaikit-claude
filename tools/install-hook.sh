@@ -2117,6 +2117,17 @@ recetas_clasificar() {  # $1=dest $2=fuente → estado (el manifiesto no lleva f
   # reemplazarlo, y el cp del staging (que replica el symlink como symlink) lo
   # seguia y escribia FUERA de recetas/. Esto lo saca del juego antes de eso.
   if [ -L "$1" ]; then printf DESCONOCIDO; return 0; fi
+  # 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto no lleva marca de
+  # propiedad y aca se reemplaza SIEMPRE que difiera (NUESTRO_DISTINTO), SIN la
+  # prueba de propiedad que si aplica quitar_recetas_claude. La asimetria es
+  # DELIBERADA y se declara, no se esconde:
+  #   - al INSTALAR, el manifiesto es parte del recetario que plantamos: si gana
+  #     un manifiesto viejo/ajeno, nuestras recetas recien plantadas NO aparecen
+  #     en el menu (recetas_menu lee el manifiesto). Para que el recetario nuevo
+  #     funcione, el manifiesto sale reemplazado por el nuestro; el anterior queda
+  #     respaldado en saikit-backups/ dentro del staging (nunca se pierde).
+  #   - al QUITAR (quitar_recetas_claude) somos cuidadosos: el manifiesto es
+  #     nuestro solo si cada receta que nombra lleva la marca; si no, intacto.
   if [ "$(basename "$2")" = "MANIFEST.sha256" ]; then
     if [ ! -e "$1" ]; then printf AUSENTE; elif cmp -s "$1" "$2"; then printf NUESTRO_IDENTICO; else printf NUESTRO_DISTINTO; fi
   else
