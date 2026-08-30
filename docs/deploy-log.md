@@ -7,6 +7,34 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-30 — PR #108 / Task 16.5 (el instalador planta el recetario y `/sencillo`) — deploy REAL y **primera vez que el recetario llega al perfil vivo**
+
+- **Qué traía:** `install-hook.sh` planta `~/.claude/hooks/recetas/` (7 archivos +
+  `MANIFEST.sha256`) y `~/.claude/skills/sencillo/SKILL.md`, con la máquina de
+  estados por archivo (marca `saikit_owned`; lo ajeno se reporta y no se toca) y
+  publicación todo-o-nada por directorio. `--quitar-recetas` borra solo lo
+  nuestro. El advisory del recetario en `check-hook-registration.sh`.
+  El hook (`summonaikit-harness.sh`) NO cambió en este PR.
+- **Merge:** `aa9c0ac` (rama `phase-16/16.5`, head `463f61c`). Master en `aa9c0ac`.
+- **CI:** run `33301267516` success, los 8 jobs incluido el agregado `gate`.
+- **Deploy medido:** primera corrida ⇒ 9 × `AUSENTE ->` (las 7 recetas, el
+  manifiesto y la skill) y todo plantado; segunda corrida ⇒ silencio sobre el
+  recetario (idempotente) y `YA AL DIA` para el hook.
+  `check-hook-registration.sh` ⇒ exit 0 sin salida = registro completo en las 3
+  fases. **El harness levantó la skill `sencillo` en el acto**, sin reiniciar.
+- **Trampa a no repetir:** la primera vez que se corrió el deploy fue con
+  `install-hook.sh 2>&1 | head -8`, y salió `exit 2` sin plantar nada. NO era un
+  defecto del instalador: `head` cierra el pipe y lo mata por SIGPIPE a mitad de
+  la publicación. Para mirar la salida del deploy, `tee` a un archivo — nunca
+  `head`.
+- **Verificación del lead sobre el árbol real** (4ª ronda de cross-review, corrida
+  por el lead a pedido del operador): 10 hallazgos, 6 reales cerrados con rojo
+  medido uno por uno, 3 falsos positivos VERIFICADOS (entre ellos el junction de
+  Windows: se creó uno con `mklink /J` y `[ -L ]` da verdadero en MSYS2) y 1
+  fuera de alcance. Artefacto: `.saikit/findings/grok-16.5-r4.md`.
+- **Límite declarado:** la carrera TOCTOU entre el chequeo `-L` y el borrado no
+  se cierra; se declara. Ver la fila 16.5.
+
 ## 2026-08-29 — PR #105 / Tasks 16.4 + 16.6 (menú de recetas en el contrato, alias del carril fast) + PR #104 (guía de usuario) — deploy REAL (el hook cambió)
 
 - **Qué traía:** `recetas_menu()` y `receta_valida()` en el hook — el menú se arma
