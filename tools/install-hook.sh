@@ -2199,7 +2199,41 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
 }
 quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   local f
+  # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
+  # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
+  # propias recien borradas ya no existen y se saltan, y un manifiesto VACIO (o
+  # que solo nombre recetas inexistentes) quedaria "nuestro" y se borraria. Aca
+  # se mira con las recetas TODAVIA presentes.
+  local m="$1/recetas/MANIFEST.sha256" sha tipo nombre carril titulo
+  local n_confirmadas=0 ajeno=0
+  if [ -f "$m" ]; then
+    if [ ! -r "$m" ]; then
+      decir "[summonaikit] recetario: el manifiesto no se puede leer; intacto: $m"
+    else
+      while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
+        [ "$tipo" = "receta" ] || continue
+        # Solo lo que EXISTE confirma o niega propiedad; lo inexistente no.
+        [ -f "$1/recetas/$nombre.md" ] || continue
+        if zcode_agente_tiene_marca "$1/recetas/$nombre.md"; then
+          n_confirmadas=$((n_confirmadas + 1))
+        else
+          ajeno=1
+        fi
+      done < "$m"
+    fi
+  fi
+  # El manifiesto es nuestro si, ANTES de borrar, nombro al menos una receta
+  # nuestra presente y ninguna receta presente ajena. Un manifiesto vacio o que
+  # solo nombre recetas inexistentes no es atribuible al kit: intacto.
+  local m_nuestro=0
+  [ "$ajeno" -eq 0 ] && [ "$n_confirmadas" -gt 0 ] && m_nuestro=1
+
   for f in "$1"/recetas/*.md "$2/sencillo/SKILL.md"; do
+    # Consistencia con el instalador (cross-review codex-16.5-r2, hallazgo 1):
+    # un symlink no es nuestro — nunca lo plantamos asi — y no se toca. rm -f
+    # des-enlaza el symlink (no borra el destinatario), pero tratarlo como ajeno
+    # evita seguir enlaces que podrian apuntar fuera del recetario.
+    [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
     [ -f "$f" ] || continue
     if zcode_agente_tiene_marca "$f"; then
       # dry-run NO borra y NO debe decirlo como hecho (12.9 #4 / 13.9): un aviso
@@ -2214,26 +2248,19 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       decir "[summonaikit] recetario: ajeno, intacto: $f"
     fi
   done
-  # El manifiesto no lleva marca: es NUESTRO si cada receta que nombra lleva
-  # la marca (o ya no existe). Comparar contra el manifiesto del repo no sirve
-  # tras un upgrade del kit sin reinstalar (Greptile, PR #97): el instalado
-  # viejo difiere del actual y seguiria siendo nuestro.
-  local m="$1/recetas/MANIFEST.sha256" nuestro=1 sha tipo nombre carril titulo
-  if [ -f "$m" ]; then
-    while IFS="$(printf '\t')" read -r sha tipo nombre carril titulo; do
-      [ -f "$1/recetas/$nombre.md" ] || continue
-      zcode_agente_tiene_marca "$1/recetas/$nombre.md" || nuestro=0
-    done < "$m"
-    if [ "$nuestro" -eq 1 ]; then
-      if [ "$DRY_RUN" -eq 1 ]; then
-        decir "[summonaikit] recetario: se quitara el manifiesto (dry-run)"
-      else
-        rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
-        decir "[summonaikit] recetario: quitado el manifiesto"
-      fi
+
+  # Comparar contra el manifiesto del repo no sirve tras un upgrade del kit sin
+  # reinstalar (Greptile, PR #97): el instalado viejo difiere y seguiria siendo
+  # nuestro.
+  if [ "$m_nuestro" -eq 1 ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      decir "[summonaikit] recetario: se quitara el manifiesto (dry-run)"
     else
-      decir "[summonaikit] recetario: el manifiesto nombra recetas ajenas, intacto: $m"
+      rm -f "$m" || { decir "[summonaikit] recetario: no se pudo borrar el manifiesto $m"; return 1; }
+      decir "[summonaikit] recetario: quitado el manifiesto"
     fi
+  elif [ -f "$m" ]; then
+    decir "[summonaikit] recetario: el manifiesto no es atribuible al kit, intacto: $m"
   fi
   return 0
 }

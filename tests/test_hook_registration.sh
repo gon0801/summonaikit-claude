@@ -915,7 +915,12 @@ caso "recetario: sin binario de hash disponible => unknown, NO integridad rota"
 shbo_dir="$tmp/recetario-sin-binario"
 mkdir -p "$shbo_dir/hooks/recetas"
 escribir_settings_completo "$shbo_dir/settings.json"
-realsha="$(sha256sum "$repo/recetas/bug.md" 2>/dev/null | cut -c1-64)"
+# El fixture necesita un hash VALIDO; la costura del test fuerza la falta de
+# binario SOLO en la invocacion del checker, no en la preparacion. Se usa el
+# mismo fallback sha256sum->shasum que el propio tool, para no depender de que
+# sha256sum exista en el host (cross-review codex-16.5-r2, hallazgo 5).
+if command -v sha256sum >/dev/null 2>&1; then realsha="$(sha256sum "$repo/recetas/bug.md" | cut -d' ' -f1)"
+else realsha="$(shasum -a 256 "$repo/recetas/bug.md" | cut -d' ' -f1)"; fi
 printf '%s\treceta\tbug\tfull\tArreglar algo que no funciona\n' "$realsha" > "$shbo_dir/hooks/recetas/MANIFEST.sha256"
 cp "$repo/recetas/bug.md" "$shbo_dir/hooks/recetas/bug.md"
 if out_sh="$(SAIKIT_SHA_BIN='__no_such_hash_bin__' bash "$tool" --settings "$shbo_dir/settings.json" 2>&1)"; then rc_sh=0; else rc_sh=$?; fi

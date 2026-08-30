@@ -2237,6 +2237,37 @@ else
   printf '  caso: (SKIP) este host no crea symlinks reales (ln -s -> copia; requiere privilegio/Developer Mode); el caso se valida en hosts con symlinks\n'
 fi
 
+# 16.5 (cross-review codex-16.5-r2, hallazgo 3): un manifiesto vacio (o que no
+# nombre ninguna receta nuestra PRESENTE) no es atribuible al kit y NO se borra
+# con --quitar-recetas. Antes el bucle de propiedad lo saltaba todo, "nuestro"
+# quedaba 1 y se borraba de forma vacua.
+caso "recetario: un manifiesto no-atribuible (vacio) NO se borra al quitar"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas"
+: > "$(dirname "$dest")/recetas/MANIFEST.sha256"   # manifiesto vacio
+out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas con manifiesto vacio deberia salir 0, dio $rc: $out"
+[ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "un manifiesto vacio NO se borra (no es atribuible al kit)"
+printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
+
+# 16.5 (cross-review codex-16.5-r2, hallazgo 1): un symlink en recetas/ no se toca
+# tampoco al QUITAR, por consistencia con el instalador. rm -f des-enlaza (no borra
+# el destinatario), pero se trata como ajeno. Mismo SKIP por host sin symlinks.
+caso "recetario: un symlink del destino no se borra al quitar (consistencia del guard)"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$(dirname "$dest")/recetas" "$casa_recetas"
+printf -- 'contenido externo, ajeno al kit\n' > "$casa_recetas/externo.md"
+if ln -s "$casa_recetas/externo.md" "$(dirname "$dest")/recetas/bug.md" 2>/dev/null && [ -L "$(dirname "$dest")/recetas/bug.md" ]; then
+  antes="$(cksum < "$casa_recetas/externo.md")"
+  out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "--quitar-recetas con symlink deberia salir 0, dio $rc: $out"
+  [ "$antes" = "$(cksum < "$casa_recetas/externo.md")" ] || malo "el symlink hizo que se borrara el archivo externo"
+  [ -L "$(dirname "$dest")/recetas/bug.md" ] || malo "se borro el symlink que no era nuestro"
+  printf '%s' "$out" | grep -qi 'enlace, intacto' || malo "debe reportar el symlink como 'enlace, intacto': $out"
+else
+  printf '  caso: (SKIP) este host no crea symlinks reales (ln -s -> copia); el caso se valida en hosts con symlinks\n'
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1
