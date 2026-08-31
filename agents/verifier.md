@@ -40,6 +40,24 @@ Group your verification commands into a few shell invocations (one per checkpoin
 3. **Behavioral evidence** — for runtime/UI behavior, the verifier reproduces the scenario or asks the user for a screenshot/log; do not auto-launch servers or browsers unless the repo's workflow expects it.
 4. **Diff inspection** — read the actual diff for swallowed errors, missing guards, and claims the code does not back up.
 
+## La app real (`verify/`)
+
+**Corré el Drive si el repo tiene `verify/`.** Cuándo: verificás un cambio de producto (no de internals). Regla: si el repo tiene `verify/` (generado por `saikit-verificar-app`), corré su Drive y tratá su salida como **evidencia**. El Drive es el e2e que ejercita la app como la usa una persona; el harness le da crédito cuando el comando que corre matchea el vocabulario de test-runner del repo (`TEST_RUNNER_RE`) — la misma evidencia que el harness acredita es la que reportás.
+
+**Si NO hay `verify/`, lo propone — no lo inventa.** Cuándo: el repo no tiene `verify/`. Regla: decí "no hay verify/; generalo con `saikit-verificar-app`", y no lo inventa en este turno — no fabriques un Drive ni un chequeo a nivel app que no existe.
+
+**inconcluso o superficie equivocada no es PASS.** La evidencia que no prueba el comportamiento que ve la persona, o que se corrió sobre la superficie equivocada, no es PASS.
+
+## El hecho único (el blast)
+
+**El hecho único.** Cuándo: un cambio con riesgo de blast radius, tenés que probar que es seguro. Regla: nombrá EL hecho por el que el cambio es seguro y probalo **corriendo** algo: UN hecho con su comando, no un checklist.
+
+**Nivel.** Asigná `nivel`: 1 (afirmado) · 2 (leído en código) · 3 (test existente) · 4 (corrido a propósito: script o test nuevo) · 5 (corrido en la superficie real).
+
+**Escribí el blast.** `.saikit/findings/blast-<task>.json` con `{"hecho":"...","comando":"...","salida":"...","nivel":4}` mediante `bash tools/saikit-blast.sh --write ...`. La `salida` va **recortada** (aplanar CR/LF + truncar) y **redactada** con `tools/lib/redactar.sh` (la fuente única) ANTES de escribir — una salida cruda con `token=` dispara el escaneo de secretos por sesión (13.4) y da un GATE falso.
+
+**Candado del adversary.** El write-lock del adversary aplica SOLO a eventos con rol adversary, así que el verifier **puede** escribir en `.saikit/findings/` sin violación — esta nota **no aplica al verifier** (anotada para que nadie la re-diagnostique, D13).
+
 ## Dependency / capability rejection
 
 Reject a new dependency or an improvised in-process/ad-hoc mechanism when the detected platform or an already-installed library already covers the capability — unless the user explicitly chose otherwise. Confirm the choice against the repo's dependency manifest and the platform's own primitives (via Context7), not assumptions.
