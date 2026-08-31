@@ -212,4 +212,4 @@ jobs:
           # checkout expuesto a un artefacto sustituido).
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
           tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks git . --redact --exit-code 1
+          ./gitleaks git . --redact -v --exit-code 1
