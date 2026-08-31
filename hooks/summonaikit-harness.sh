@@ -1637,7 +1637,13 @@ $context"
 redact_secrets() {
   printf '%s' "$1" | sed -E \
     -e "s/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=('[^']*'|\"[^\"]*\"|[^[:space:]]*)/\1=[REDACTED]/g" \
-    -e 's,://[^[:space:]@/?#]*@,://[REDACTED]@,g'
+    -e 's,://[^[:space:]@/?#]*@,://[REDACTED]@,g' \
+    -e 's/ghp_[A-Za-z0-9_-]*/[REDACTED]/g' \
+    -e 's/github_pat_[A-Za-z0-9_-]*/[REDACTED]/g' \
+    -e 's/gho_[A-Za-z0-9_-]*/[REDACTED]/g' \
+    -e 's/(^|[^A-Za-z0-9])(sk-[A-Za-z0-9_-]*)/\1[REDACTED]/g' \
+    -e 's/AKIA[0-9A-Z]{16}/[REDACTED]/g' \
+    -e 's/xox[bp]-[A-Za-z0-9_-]*/[REDACTED]/g'
 }
 
 # >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
@@ -1672,6 +1678,15 @@ ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
 # ia drift sin candado de fuente unica. Capa reducida, declarada: falso
 # negativo por regex que no matchea y falso positivo por repro legitimo, ambos
 # con la ruta de fuga manual de arriba.
+#
+# Familia ampliada en la Task 17.3 / D12: ademas de `token=`/`password=` y las
+# credenciales de URI, la familia cubre ahora las FORMAS DE TOKEN conocidas —
+# ghp_, github_pat_, gho_, sk-, AKIA y xox[bp]- (el set que redact_secrets NO
+# cubria, medido). La MISMA familia vive en tools/lib/redactar.sh, fuente unica
+# para las HERRAMIENTAS del repo (rastro de decisiones y blast); el hook
+# conserva su copia INLINE porque corre instalado, solo, en el repo consumer,
+# donde `tools/` no existe. Quien toque la familia aca lo refleja en
+# tools/lib/redactar.sh, y al reves — el test test_saikit_decision.sh lo canda.
 # El valor exige AL MENOS un caracter ([^[:space:]]): un `token=` pelado no
 # persiste nada. Y las formas YA redactadas se DESCUENTAN antes de grepear
 # (lead + kimi #2, r2 PR #65): el artefacto redactado EXACTAMENTE como manda
@@ -1680,7 +1695,7 @@ ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
 # documentado como correcto bloqueaba el cierre. El sed preserva lineas (los
 # numeros del reporte siguen validos) y una linea MIXTA (valor real junto al
 # redactado) sigue matcheando por el vecino.
-SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@'
+SAIKIT_ADV_SECRET_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@|ghp_[A-Za-z0-9]|github_pat_[A-Za-z0-9]|gho_[A-Za-z0-9]|(^|[^A-Za-z0-9])sk-[A-Za-z0-9]|AKIA[0-9A-Z]|xox[bp]-[A-Za-z0-9]'
 # El reemplazo deja un ESPACIO donde estaba el marcador (adversary r1 EN VIVO,
 # 13.9, hallazgo HIGH): sin el, un marcador que cierra un string JSON — la
 # forma que el propio contrato del artefacto exige — dejaba `token="` con la
