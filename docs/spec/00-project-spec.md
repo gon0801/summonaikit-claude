@@ -2208,18 +2208,25 @@ autopilot hasta una ola posterior. No se leen transcripts para auditar (A6).
 Lo de arriba eran límites *declarados* al diseñar. Estos son los que la fase
 midió, y difieren en un punto importante.
 
-- **Las 6 recetas se eligen y se siguen.** Seis turnos vivos, uno por receta
+- **Las 6 recetas se ELIGEN y se declaran.** Que además se *sigan* paso a paso
+  NO se midió, y el propio smoke lo dice: la evidencia (c) —los pasos copiados—
+  dio cero en los seis. Lo acreditado es elección, declaración y recibo. Seis
+  turnos vivos, uno por receta
   (`docs/smoke-recetas-2026-08-30.md`): en los seis el líder eligió la que
   correspondía, la declaró en el recibo y cerró con recibo COMPLETO — los seis
   bloques con las seis etiquetas. `SUMMONAIKIT HARNESS GATE` aparece 0 veces en
   los transcripts. n=1 por receta, como el diseño anticipaba.
-- **El contrato se obedece exactamente donde el gate mira, y eso NO estaba
-  previsto.** De las tres cosas que el menú pedía, la única cumplida fue la que
+- **En estos seis turnos, lo único cumplido fue lo que el recibo exigía — y eso
+  NO estaba previsto.** La regla general («el contrato se obedece donde el gate
+  mira») es la HIPÓTESIS que explica el dato, no algo que seis turnos en un solo
+  harness demuestren. Se escribe como hipótesis útil para diseñar, no como ley:
+  cross-review codex+grok, 2026-08-30, los dos la señalaron por separado. De las tres cosas que el menú pedía, la única cumplida fue la que
   aterriza en el recibo (`Receta:`, 11 y 12 apariciones sobre 2 inyecciones por
   sesión). El todolist y los `skip:` dieron CERO en 6 de 6 — y no por falta de
-  la herramienta: no hay restricción de tools en ningún lado, `TodoWrite` es
-  default de Claude Code, y el propio lead registró 0 invocaciones en una sesión
-  de horas. La 16.10 movió la instrucción a la superficie que funciona.
+  la herramienta: no se encontró restricción de tools **en las dos superficies
+  que se miraron** (el repo laboratorio y el perfil global) — fuera de ahí es
+  `unknown`, no ausencia—, `TodoWrite` es default de Claude Code, y el propio
+  lead registró 0 invocaciones en una sesión de horas. La 16.10 movió la instrucción a la superficie que funciona.
   **Consecuencia para el diseño futuro:** una instrucción del contrato que no
   aterrice en el recibo no se cumple, y una que nadie cumple entrena a leer el
   resto como decorativo.

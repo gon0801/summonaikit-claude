@@ -7,6 +7,35 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-30 — PR #117 / Task 16.9 (cierre de la Phase 16) — deploy NO-OP
+
+- **Qué traía:** guía de usuario, spec, README, archivo de la Phase 15 y filas.
+  Sin código.
+- **Merge:** `03ebcad`. CI run `33349348268` success (9 checks). Master en
+  `03ebcad`; el hook vivo quedó en `10649d2e93115d67…`, el mismo de la 16.10.
+- **Deploy:** `YA AL DIA`, 0 líneas de recetario. `check-hook-registration.sh`
+  exit 0 sin salida.
+- **Esta entrada faltaba, y su ausencia es parte del incidente de abajo.**
+
+### Incidente: el cierre se dio por hecho sin cumplir su propia DoD
+
+Un cross-review con codex y grok sobre el diff del cierre encontró que 16.9 se
+marcó terminada sin tres de los cinco puntos de su DoD. Se completaron después:
+
+- `tests/test_recetas.sh` → **OK** (4 casos: linter de las recetas del repo y
+  manifiesto al día).
+- `python tools/check_context_docs.py . --sweep` → **limpio**.
+- Contraste de los sentinels de la guía contra el hook. **Encontró un
+  incumplimiento real:** la guía listaba `-saikit:autopilot` y el hook NO
+  reconoce ese sufijo, así que escribirlo hoy da un turno normal sin avisar de
+  nada. La guía ahora lo dice.
+- Esta entrada del deploy-log, que era el tercer punto.
+
+**Lo que hay que aprender de esto**, y por eso queda escrito acá y no solo en el
+ledger: el cierre citó las comprobaciones que sí se corrieron y no notó las que
+faltaban. Un recibo que solo lista éxitos no distingue «lo corrí y pasó» de «no
+lo corrí». La DoD estaba escrita en la propia fila desde el principio.
+
 ## 2026-08-30 — PR #115 / Task 16.11 (`funcion` contiene el alcance) — deploy REAL del recetario
 
 - **Qué traía:** `recetas/funcion.md` gana el paso 3 (nombrar y proponer aparte
