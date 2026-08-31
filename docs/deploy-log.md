@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-31 — PR #128 / cross-review de 17.3 (codex+grok) — deploy NO-OP
+
+- **Qué traía:** los hallazgos con rojo medido del cross-review pedido por el
+  operador sobre el código mergeado de 17.3 — 27 hallazgos entre los dos
+  revisores. Cerrados con tests-primero (7 FAIL contra el código mergeado,
+  citados en el commit): los 6 campos del rastro se redactan, `--task` ya no
+  admite rutas, el parser ya no cuelga con un flag sin valor (el bug de la
+  0.4, medido con rc=124), CR y líneas `#` inyectadas son malformado, y el
+  grep vacío del caso (e) — error del lead — quedó con needle real más la
+  aserción de que la COLA tampoco quede.
+- **Merge:** `8bde4fa`. CI 9 checks en verde. El hook NO cambió (la familia de
+  redacción del hook quedó como estaba; los arreglos son de la lib y el tool).
+- **Deploy:** `YA AL DIA`.
+- **Lo estructural va a la fila 17.8**, no a un parche: carrera ABA del
+  candado, trap que borra el lock ajeno, atomicidad del append ante
+  SIGKILL/ENOSPC, `--check` sin candado. Y la nota para la Phase 18: el blast
+  debe APLANAR antes de redactar, porque la lib procesa por líneas.
+
 ## 2026-08-31 — PR #126 / Task 17.3 (rastro de decisiones) — deploy REAL, tras TRES rondas de gitleaks
 
 - **Qué traía:** `tools/lib/redactar.sh` compartido, `tools/saikit-decision.sh`
