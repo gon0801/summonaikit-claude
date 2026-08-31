@@ -593,6 +593,35 @@ maintain-verification-skill, technical-writing, automate-me ("el modo de Gon"
 tras la primera ola), typescript-best-practices. NO: no-comments (choca con
 "escribe el supuesto en el código"), make-bot-ui (100 % Cursor).
 
+## Decision del operador (2026-08-30): el autopilot prepara y PARA
+
+Posterior a todo lo de arriba, y manda sobre lo que lo contradiga.
+
+El autopilot **no mergea solo**. Prepara: abre el PR, espera el CI, adjudica lo
+que dicen los bots, arregla lo valido, contesta los hilos, vuelve a esperar
+verde. Y ahi **para y pregunta**. Recien con el si explicito hace merge, deploy,
+bitacora y cierre de fila.
+
+**La razon es medida, no preferencia.** El 2026-08-30, sobre ~15 PRs de un dia,
+los bots dejaron una veintena de hallazgos. Varios eran validos; otros los
+refuto el lead midiendo — una supuesta contaminacion de evidencia que era falsa,
+y un junction de Windows que el guard si atrapaba. Un veredicto automatico que
+mergeara sobre esos hallazgos habria acertado a veces.
+
+**Corrige una premisa que se discutio:** hacerlo "como pstack" seria MAS
+autonomo, no menos. pstack autoriza con un *full-autonomy grant* del operador
+dado una vez (Apendice B, abajo). Aca el autopilot se arma POR TURNO con
+`-saikit:autopilot` y ademas para antes de publicar.
+
+**Lo que la decision cuesta, declarado:** el revert automatico se cae (D19). Sin
+merge desatendido no hay nada que deshacer sin aviso; queda el aviso con el
+comando listo para copiar. Si el operador no lo mira, nada revierte solo. La
+D24/18.11 (negar `gh pr merge` a pelo) pasa a valer MAS: ya no protege un
+automatismo, protege el punto donde el humano decide.
+
+Filas afectadas: 18.4 (prepara y pide el si), 18.5 (reducida a aviso), 18.6 (el
+parrafo del contrato no puede prometer merge solo), 18.11 (vigente, otra razon).
+
 ## Apéndice B — Lo que pstack dice del CI y del merge (citas)
 
 - "CI green is an input to a verdict, not a verdict." / "Green is not safe."
