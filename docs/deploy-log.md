@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-31 — PRs #120 (Task 17.1) y #119 (decisión de la Phase 18) — deploy NO-OP
+
+- **Qué traían:** #120: la skill `saikit-verificar-app` (fuente en
+  `skills/saikit-verificar-app/`, con su batería portable) — la Phase 17
+  arranca. #119: la decisión del operador de que el autopilot prepara y PARA
+  antes de publicar, escrita en ledger y diseño, con dos correcciones de
+  CodeRabbit: el propósito de la fase contradecía la decisión diez líneas más
+  arriba, y `--confirmado` ahora revalida el gate completo, no solo el sha.
+- **Merges:** `7dd2ba9` (#120) y `3cb9c5b` (#119). Master en `3cb9c5b`.
+- **Deploy:** `YA AL DIA`, 0 líneas de recetario. La skill nueva NO se instala
+  en el perfil todavía: eso es de la 17.6, y está declarado en la fila 17.1.
+- **Verificación del lead sobre #120:** reproducción propia de los tres Major
+  (test falso ⇒ `n/a`; ESM ⇒ `drive.test.cjs` corre — distinguiendo fallo de
+  carga de aserción del fixture; fecha rota + sha real ⇒ `unknown`). Trampa
+  medida en el camino: editar un archivo del sandbox MSYS con python de Windows
+  falla en silencio por la ruta `/tmp/...` — la primera medición del sello dio
+  `al_dia` sobre el archivo INTACTO y no probaba nada; se repitió con `sed`.
+
 ## 2026-08-30 — PR #117 / Task 16.9 (cierre de la Phase 16) — deploy NO-OP
 
 - **Qué traía:** guía de usuario, spec, README, archivo de la Phase 15 y filas.
