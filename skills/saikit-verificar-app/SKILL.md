@@ -41,13 +41,24 @@ internos ni nombres de archivo.
 ## 3. Completar el Drive (la prueba de superficie)
 
 El `Drive.md` trae el `COMANDO_DRIVE` y el archivo de test e2e bajo `verify/`
-(`drive.test.js` para node, `test_drive.py` para pytest). **El Drive ejercita la
+(`drive.test.cjs` para node, `test_drive.py` para pytest). `.cjs` A PROPÓSITO:
+usa `require`/`__dirname`, y en un package `"type": "module"` un `.js` se cargaría
+como ESM y fallaría antes de correr; `.cjs` fuerza CommonJS en cualquier proyecto.
+**El Drive ejercita la
 superficie de usuario — la app como la usa un usuario (CLI o navegador) —, no los
 internos.** Reglas que no se aflojan:
 
 - El comando de Drive **incluye la ruta `verify/`** y lo acredita `TEST_RUNNER_RE`
   (lo lee el generador del hook; por eso `node --test` solo se envuelve como
-  `npm test -- verify/`).
+  `npm test -- verify/drive.test.cjs`). Se apunta al **archivo**, no a la carpeta,
+  a propósito: `node --test <directorio>` no recursa en todas las versiones de
+  node (en v24 lanza `MODULE_NOT_FOUND`), mientras que un archivo explícito corre
+  en cualquier versión. El Drive es un archivo, no la suite.
+- El `COMANDO_DRIVE` solo se publica si el script `test` del `package.json`
+  invoca un runner admitido — `node --test`, `vitest`, `jest`, `mocha`. Si el
+  script `test` es p.ej. `echo ok`, no prueba nada y el Drive queda `manual,
+  pendiente` con `verify_app: n/a` (un `n/a` honesto vale más que un Drive que
+  miente).
 - **La suite unitaria del repo NO es el Drive.** Si el comando corriera la suite
   del repo y no el `verify/`, no cuenta.
 - Completá los `_ENTRADA_` y los `test(...)` con lo que la app realmente responde.
@@ -66,7 +77,11 @@ bash <directorio_de_esta_skill>/verificar.sh estado <repo>
 
 Devuelve `al_dia` | `desactualizado` | `viejo` | `unknown` | `sin_mapa`.
 **Sin el sello `generado:` en el frontmatter de `LEEME.md` SIEMPRE dice `unknown`,
-nunca "al día".** Reportá en el recibo el estado y, si no es `al_dia`, la
+nunca "al día".** E igual si el sello existe pero la fecha no se puede interpretar
+(p.ej. `generado: fecha-invalida · <sha>`): un sello que no se puede datar no
+comprueba que la app siga siendo la que describe, y reportarlo `al_dia` sería el
+"aprobado sin medir" que el sello existe para impedir. Reportá en el recibo el
+estado y, si no es `al_dia`, la
 antigüedad: un mapa viejo no comprueba que la app siga siendo la que describe,
 solo avisa que envejeció.
 

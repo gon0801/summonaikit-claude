@@ -56,11 +56,11 @@ gen_out="$(generar "$node_repo")" || malo "generar fallo en node: $gen_out"
 for f in LEEME.md Launch.md Doctor.md Drive.md Evidence.txt Cleanup.md; do
   [ -f "$node_repo/verify/$f" ] || malo "falta verify/$f (node)"
 done
-[ -f "$node_repo/verify/drive.test.js" ] || malo "falta verify/drive.test.js (node)"
+[ -f "$node_repo/verify/drive.test.cjs" ] || malo "falta verify/drive.test.cjs (node)"
 
 caso "repo node: Drive incluye verify/ y matchea TEST_RUNNER_RE (grep -o del hook)"
 node_cmd="$(sed -n 's/^COMANDO_DRIVE:[[:space:]]*//p' "$node_repo/verify/Drive.md" | head -n 1)"
-[ "$node_cmd" = "npm test -- verify/" ] || malo "comando de Drive distinto en node: [$node_cmd]"
+[ "$node_cmd" = "npm test -- verify/drive.test.cjs" ] || malo "comando de Drive distinto en node: [$node_cmd]"
 printf '%s' "$node_cmd" | grep -Eo "$test_runner_re" >/dev/null || malo "comando de Drive NO acredita TEST_RUNNER_RE: [$node_cmd]"
 printf '%s' "$node_cmd" | grep -Eo 'verify/' >/dev/null || malo "comando de Drive NO incluye verify/: [$node_cmd]"
 [ "$(grep -q 'ESTADO_DRIVE: drive' "$node_repo/verify/Drive.md"; echo $?)" = 0 ] || malo "Drive no queda 'drive' en node"
@@ -131,6 +131,7 @@ for f in LEEME.md Launch.md Doctor.md Drive.md Evidence.txt Cleanup.md; do
 done
 necesita "$(cat "$none_repo/verify/Drive.md")" "manual, pendiente" "Drive sin framework no queda manual, pendiente"
 necesita "$(cat "$none_repo/verify/LEEME.md")" "verify_app: n/a" "sin framework no declara verify_app: n/a"
+[ -f "$none_repo/verify/drive.test.cjs" ] && malo "sin framework no debe haber drive node (.cjs)"
 [ -f "$none_repo/verify/drive.test.js" ] && malo "sin framework no debe haber drive node"
 [ -f "$none_repo/verify/test_drive.py" ] && malo "sin framework no debe haber drive python"
 
@@ -142,5 +143,51 @@ sed -i '/^generado:/d' "$node_repo/verify/LEEME.md"
 estado="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$node_repo")"
 [ "$estado" = "unknown" ] || malo "sin sello el estado debe ser 'unknown', da $estado"
 [ "$estado" != "al_dia" ] || malo "sin sello NUNCA puede decir 'al dia'"
+
+# ---------------------- test falso (echo ok) NO es un Drive acreditable (CodeRabbit #1)
+caso "repo con test falso (echo ok): NO publica COMANDO_DRIVE ni ESTADO_DRIVE: drive"
+fake_repo="$SANDBOX/app-fake"; mkdir -p "$fake_repo"
+printf 'console.log("Entraste. Bienvenido.");\n' > "$fake_repo/app.js"
+cat > "$fake_repo/package.json" <<'EOF'
+{ "name": "app-fake", "scripts": { "test": "echo ok" } }
+EOF
+hacer_repo "$fake_repo" >/dev/null || malo "no pudo crear el repo con test falso"
+gen_out="$(generar "$fake_repo")" || malo "generar fallo en test-falso: $gen_out"
+# un "echo ok" no invoca ningun runner admitido => el Drive NO se acredita.
+necesita "$(cat "$fake_repo/verify/Drive.md")" "manual, pendiente" "Drive con test falso no queda manual/pendiente"
+if grep -q 'COMANDO_DRIVE:' "$fake_repo/verify/Drive.md"; then
+  malo "test falso NO debe publicar COMANDO_DRIVE"
+fi
+necesita "$(cat "$fake_repo/verify/LEEME.md")" "verify_app: n/a" "test falso no declara verify_app: n/a"
+[ -f "$fake_repo/verify/drive.test.cjs" ] && malo "test falso no debe generar drive.test.cjs"
+[ -f "$fake_repo/verify/drive.test.js" ] && malo "test falso no debe generar drive.test.js"
+
+# ---------------------- ESM (type: module): el Drive corre de verdad (CodeRabbit #2)
+caso "repo ESM (type: module): el Drive corre de verdad (drive.test.cjs)"
+esm_repo="$SANDBOX/app-esm"; mkdir -p "$esm_repo"
+printf 'console.log("Entraste. Bienvenido.");\n' > "$esm_repo/app.js"
+cat > "$esm_repo/package.json" <<'EOF'
+{ "name": "app-esm", "type": "module", "scripts": { "test": "node --test" } }
+EOF
+hacer_repo "$esm_repo" >/dev/null || malo "no pudo crear el repo ESM"
+gen_out="$(generar "$esm_repo")" || malo "generar fallo en ESM: $gen_out"
+[ -f "$esm_repo/verify/drive.test.cjs" ] || malo "repo ESM: falta verify/drive.test.cjs"
+esm_cmd="$(sed -n 's/^COMANDO_DRIVE:[[:space:]]*//p' "$esm_repo/verify/Drive.md" | head -n 1)"
+[ "$esm_cmd" = "npm test -- verify/drive.test.cjs" ] || malo "comando de Drive ESM distinto: [$esm_cmd]"
+# el COMANDO_DRIVE corre DE VERDAD en un package ESM (drive.test.cjs se carga como CJS)
+if ! bash -c "export APP_ENTRADA=app.js; cd '$esm_repo' && $esm_cmd" >/dev/null 2>&1; then
+  malo "el COMANDO_DRIVE NO corrió de verdad en el repo ESM"
+fi
+
+# ---------------------- sello con fecha rota => unknown, nunca al dia (CodeRabbit #3)
+caso "sello con fecha rota: el verifier declara unknown, jamas 'al dia'"
+bad_repo="$SANDBOX/app-badfecha"; mkdir -p "$bad_repo"
+printf '# App\n' > "$bad_repo/README.md"
+bad_sha="$(hacer_repo "$bad_repo")" || malo "no pudo crear el repo de fecha rota"
+mkdir -p "$bad_repo/verify"
+printf 'generado: fecha-invalida · %s\n' "$bad_sha" > "$bad_repo/verify/LEEME.md"
+es_bad="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$bad_repo")"
+[ "$es_bad" = "unknown" ] || malo "fecha rota debe ser 'unknown', da $es_bad"
+[ "$es_bad" != "al_dia" ] || malo "fecha rota NUNCA puede decir 'al dia' (el sello no se pudo datar)"
 
 [ "$fail" -eq 0 ] && echo "test_verificar_app: OK" || { echo "test_verificar_app: FAIL" >&2; exit 1; }

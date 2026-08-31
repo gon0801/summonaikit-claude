@@ -41,15 +41,32 @@ comando_acredita() {
 # --- utilidades ---------------------------------------------------------------
 sha_actual() { git -C "$1" rev-parse HEAD 2>/dev/null || true; }
 
+# Un runner de test node es "admitido" si puede procesar la ruta que `npm test
+# -- verify/` agrega como argumento. Lista DECIDIDA y escrita (no exhaustiva, a
+# proposito): node --test (viene con node), vitest, jest, mocha. Si el script
+# `test` del package.json NO invoca ninguno, el repo no tiene un framework
+# acreditable: `npm test` correria algo que no prueba la app (p.ej. "echo ok") y
+# el Drive no debe afirmarse — un n/a honesto vale mas que un Drive que miente.
+NODE_TEST_RUNNER_RE='node[[:space:]]+--test|vitest|jest|mocha'
+
+# true si el script `test` del package.json invoca un runner admitido.
+test_script_invoca_runner() {
+  local repo="$1"
+  grep -Eq '"test"[[:space:]]*:[[:space:]]*"[^"]*'"$NODE_TEST_RUNNER_RE"'[^"]*"' "$repo/package.json" 2>/dev/null
+}
+
 # Detecta el framework de test que el repo YA tiene y devuelve el comando de
 # Drive acreditable (incluye `verify/`). Vacio => no hay Drive automatizable.
 drive_para_repo() {
   local repo="$1" cmd=""
   if [ -f "$repo/package.json" ]; then
-    # node: `node --test` NO acredita suelto; se envuelve como `npm test -- verify/`
-    if grep -Eq '"[^"]*node[[:space:]]+--test[^"]*"' "$repo/package.json" 2>/dev/null \
-       || grep -Eq '"test"[[:space:]]*:[[:space:]]*"[^"]*"' "$repo/package.json" 2>/dev/null; then
-      cmd="npm test -- verify/"
+    # node: `node --test` NO acredita suelto; se envuelve como `npm test --`.
+    # El comando apunta al ARCHIVO de Drive (no a la carpeta `verify/`) a
+    # proposito: `node --test <directorio>` NO recursa en todas las versiones de
+    # node (medido: en v24 lanza MODULE_NOT_FOUND sobre la carpeta), mientras que
+    # un archivo explicito corre en cualquier version. El Drive es UN archivo.
+    if test_script_invoca_runner "$repo"; then
+      cmd="npm test -- verify/drive.test.cjs"
     fi
   elif [ -f "$repo/pyproject.toml" ] || [ -f "$repo/requirements.txt" ] || [ -f "$repo/pytest.ini" ]; then
     if grep -qiE 'pytest' "$repo/pyproject.toml" "$repo/requirements.txt" "$repo/pytest.ini" 2>/dev/null; then
@@ -94,15 +111,19 @@ generar_verify() {
   local drive_file=""
   if [ -n "$cmd" ]; then
     case "$cmd" in
-      npm*) drive_file="drive.test.js" ;;
+      npm*) drive_file="drive.test.cjs" ;;
       pytest*) drive_file="test_drive.py" ;;
     esac
-    if [ "$drive_file" = "drive.test.js" ]; then
+    if [ "$drive_file" = "drive.test.cjs" ]; then
       cat > "$repo/verify/$drive_file" <<'EOF'
 // Drive e2e de superficie de usuario: la app como la ve el usuario, NO sus
 // internos. Se corre con el COMANDO_DRIVE del Drive.md. Reutiliza el framework
-// de test que el repo YA tiene (node --test) y lo apunta SOLO a `verify/`; NO es
-// la suite unitaria del repo.
+// de test que el repo YA tiene (node --test) y lo apunta SOLO al Drive; NO es la
+// suite unitaria del repo.
+//
+// El archivo es .cjs A PROPOSITO: usa require/__dirname, y en un package
+// "type": "module" un .js se cargaria como ESM y fallaria antes de correr. .cjs
+// fuerza CommonJS en cualquier proyecto, ESM o no.
 //
 // COMPLETAR en el turno (el agente lee la app y agrega las funciones del mapa):
 //   - _ENTRADA_: como se lanza la app por su superficie (p.ej. "app.js").
@@ -227,10 +248,15 @@ estado_mapa() {
   actual="$(sha_actual "$repo")"
   [ -n "$actual" ] || { printf 'unknown'; return 0; }
   if [ "$sha" != "$actual" ]; then printf 'desactualizado'; return 0; fi
-  if [ -n "$fecha" ] && date -d "$fecha" >/dev/null 2>&1; then
-    dias=$(( ( $(date +%s) - $(date -d "$fecha" +%s) ) / 86400 ))
-    if [ "$dias" -gt 30 ]; then printf 'viejo'; return 0; fi
+  # La fecha es parte del sello: si falta o no se puede interpretar, el mapa no
+  # se puede datar y NO se afirma "al dia". Un sello con fecha ilegible es un
+  # sello roto — reportarlo al dia seria el "aprobado sin medir" que el sello
+  # existe para impedir: mediria la deriva justo cuando mas hace falta.
+  if [ -z "$fecha" ] || ! date -d "$fecha" >/dev/null 2>&1; then
+    printf 'unknown'; return 0
   fi
+  dias=$(( ( $(date +%s) - $(date -d "$fecha" +%s) ) / 86400 ))
+  if [ "$dias" -gt 30 ]; then printf 'viejo'; return 0; fi
   printf 'al_dia'
 }
 
