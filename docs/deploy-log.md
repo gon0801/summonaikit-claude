@@ -7,6 +7,21 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-30 — PR #113 / Task 16.10 (el menú pide la conducta, no una herramienta) — deploy REAL
+
+- **Qué traía:** el texto del menú del recetario en `recetas_menu`. Deja de pedir
+  `copy its steps into your todolist` y pide `follow its steps IN ORDER`, con los
+  saltos nombrados en el recibo.
+- **Merge:** `0fd64db`. CI run `33342983052` success. Master en `0fd64db`.
+- **Deploy:** `REPARADO: el destino era nuestro y difiere de la fuente`, con
+  backup en `saikit-backups/summonaikit-harness.sh.nuestro.20260830-165734.bak`.
+  Vivo == master por sha256 (`10649d2e93115d67…` en los dos), y la instrucción
+  nueva está en el hook vivo (comprobado por `grep`). Registro completo en las
+  3 fases.
+- **Por qué importa este deploy en particular:** es el primero que cambia lo que
+  el contrato le PIDE al líder en cada turno armado, en todos los hosts. Los
+  anteriores agregaban capacidades; este edita la instrucción.
+
 ## 2026-08-30 — PR #110 / Task 16.8 (smoke de las 6 recetas) — deploy NO-OP del hook, pero **reparó la skill `/sencillo`**
 
 - **Qué traía:** solo `docs/smoke-recetas-2026-08-30.md`. El hook no cambió.
