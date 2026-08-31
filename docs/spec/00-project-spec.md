@@ -2227,9 +2227,10 @@ midió, y difieren en un punto importante.
   que se miraron** (el repo laboratorio y el perfil global) — fuera de ahí es
   `unknown`, no ausencia—, `TodoWrite` es default de Claude Code, y el propio
   lead registró 0 invocaciones en una sesión de horas. La 16.10 movió la instrucción a la superficie que funciona.
-  **Consecuencia para el diseño futuro:** una instrucción del contrato que no
-  aterrice en el recibo no se cumple, y una que nadie cumple entrena a leer el
-  resto como decorativo.
+  **Consecuencia para el diseño futuro, en el mismo plano de hipótesis:** conviene
+  asumir que una instrucción del contrato que no aterrice en el recibo NO se va a
+  cumplir, y que una que nadie cumple entrena a leer el resto como decorativo.
+  Es una guía para diseñar con prudencia, no un hecho demostrado.
 - **La medición no cubre otros hosts.** El recetario solo se planta en `claude`
   (las tres llamadas a `instalar_recetas_claude` están en el flujo por defecto y
   en `--host claude`); en codex, grok y dsh el contrato dice *No recipe book on

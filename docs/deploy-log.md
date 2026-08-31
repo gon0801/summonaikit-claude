@@ -11,7 +11,10 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
 - **Qué traía:** guía de usuario, spec, README, archivo de la Phase 15 y filas.
   Sin código.
-- **Merge:** `03ebcad`. CI run `33349348268` success (9 checks). Master en
+- **Merge:** `03ebcad`. CI run `33349348268` success: **8 jobs** del workflow,
+  incluido el agregado `gate`; el PR mostraba **9 checks** en verde porque suma
+  los de los bots. (La primera versión decía «9 checks» atribuyéndoselos al run,
+  que tiene 8 — cross-review kimi.) Master en
   `03ebcad`; el hook vivo quedó en `10649d2e93115d67…`, el mismo de la 16.10.
 - **Deploy:** `YA AL DIA`, 0 líneas de recetario. `check-hook-registration.sh`
   exit 0 sin salida.
@@ -20,7 +23,8 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 ### Incidente: el cierre se dio por hecho sin cumplir su propia DoD
 
 Un cross-review con codex y grok sobre el diff del cierre encontró que 16.9 se
-marcó terminada sin tres de los cinco puntos de su DoD. Se completaron después:
+marcó terminada sin **cuatro** de los cinco puntos de su DoD — el único cumplido
+era `Plans.md ≤200 líneas`. Se completaron después:
 
 - `tests/test_recetas.sh` → **OK** (4 casos: linter de las recetas del repo y
   manifiesto al día).
@@ -29,7 +33,13 @@ marcó terminada sin tres de los cinco puntos de su DoD. Se completaron después
   incumplimiento real:** la guía listaba `-saikit:autopilot` y el hook NO
   reconoce ese sufijo, así que escribirlo hoy da un turno normal sin avisar de
   nada. La guía ahora lo dice.
-- Esta entrada del deploy-log, que era el tercer punto.
+- Esta entrada del deploy-log, que era el cuarto.
+
+**Y una corrección sobre la corrección** (cross-review kimi, misma fecha): la
+primera versión de este párrafo decía «tres puntos» y listaba cuatro viñetas,
+llamando «el tercero» a la cuarta. Un incidente sobre no declarar lo que no se
+corrió, contando mal lo que no se corrió. Está anotado porque el error importa
+menos que la forma en que se repite.
 
 **Lo que hay que aprender de esto**, y por eso queda escrito acá y no solo en el
 ledger: el cierre citó las comprobaciones que sí se corrieron y no notó las que
