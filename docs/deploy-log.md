@@ -26,8 +26,15 @@ Un cross-review con codex y grok sobre el diff del cierre encontró que 16.9 se
 marcó terminada sin **cuatro** de los cinco puntos de su DoD — el único cumplido
 era `Plans.md ≤200 líneas`. Se completaron después:
 
-- `tests/test_recetas.sh` → **OK** (4 casos: linter de las recetas del repo y
-  manifiesto al día).
+- `tests/test_recetas.sh` → **OK**, **30 casos** (el archivo tiene 30 llamadas a
+  `caso` y las corre todas; no acepta filtro).
+  **La primera versión de esta entrada decía «4 casos»** (CodeRabbit lo atrapó):
+  leí la salida con `tail -5` y reporté los cuatro últimos como si fueran el
+  total. Es el **tercer** error de conteo de esta misma jornada y los tres tienen
+  la misma causa — tomar una vista parcial por el total: «tres instrucciones» que
+  eran dos, «tres puntos de la DoD» que eran cuatro, y ahora «4 casos» que son 30.
+  Cuando el número importa, hay que contarlo con un comando, no leerlo de una
+  cola.
 - `python tools/check_context_docs.py . --sweep` → **limpio**.
 - Contraste de los sentinels de la guía contra el hook. **Encontró un
   incumplimiento real:** la guía listaba `-saikit:autopilot` y el hook NO
