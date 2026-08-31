@@ -87,6 +87,7 @@ G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
 G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
+G2|redaccion_sin_ghp|la regla de redaccion de ghp_ se neutraliza y un token ghp_ vuelve al log
 G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
@@ -385,6 +386,15 @@ mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}';
 # arreglo: movida al call site, el sed no matchea y salta la guardia 2 del
 # driver ("la mutacion no cambio nada del hook").
 mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
+# Task 17.3 / D12 — la regla de redaccion de ghp_ se neutraliza y un token
+# ghp_ vuelve al log. Se ancla en el literal unico `'s/ghp_` (comilla simple +
+# `s/ghp_`), que aparece UNA vez, adentro de la regla sed del ghp_ y en ningun
+# otro lado (el RE de escaneo usa `|ghp_`, y github_pat_/gho_ difieren). Con
+# `@` de delimitador se esquiva la barra `/` de la regla. La regla mutada queda
+# `s/ghp_NOPE_...`, que nunca matchea `ghp_`, asi que el token viaja en claro y
+# lo atrapa caso_g2_credenciales_token_nuevas_se_redactan (su _no_contiene de
+# `ghp_...` deja de cumplirse).
+mut_redaccion_sin_ghp() { sed "s@'s/ghp_@'s/ghp_NOPE_@"; }
 # Quita el tramo ES de VERIFY_SKIP_RE. El catch es caso_g2_excusa_espanol_no_reclama
 # (el recibo del vivo zcode). skipped/not run siguen, el resto de G2 no se rompe.
 mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
