@@ -7,6 +7,23 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-30 — PR #115 / Task 16.11 (`funcion` contiene el alcance) — deploy REAL del recetario
+
+- **Qué traía:** `recetas/funcion.md` gana el paso 3 (nombrar y proponer aparte
+  lo que aparece de más, en vez de hacerlo) y una línea nueva del recibo
+  `Fuera de alcance (propuesto aparte): <…; si no hubo, ninguno>`. Manifiesto
+  regenerado. El hook no cambió.
+- **Merge:** `5128410`. CI run `33347396488` success. Master en `5128410`.
+- **Deploy:** hook `YA AL DIA`; el instalador reportó
+  `NUESTRO_DISTINTO -> funcion.md` y `-> MANIFEST.sha256` y los republicó.
+  Aquí el `NUESTRO_DISTINTO` es lo ESPERADO —la receta cambió de verdad— a
+  diferencia del de la 16.8, que resultó ser solo fin de línea. Comprobado en el
+  perfil vivo: `~/.claude/hooks/recetas/funcion.md` ya trae el paso nuevo.
+  `check-hook-registration.sh` exit 0 sin salida.
+- **Por qué el manifiesto viaja con la receta:** si el sha no coincide, el hook
+  NO ofrece esa receta y el recetario queda mudo sin avisar. Por eso los dos
+  archivos se publican juntos.
+
 ## 2026-08-30 — PR #113 / Task 16.10 (el menú pide la conducta, no una herramienta) — deploy REAL
 
 - **Qué traía:** el texto del menú del recetario en `recetas_menu`. Deja de pedir
