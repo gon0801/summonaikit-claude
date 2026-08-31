@@ -153,8 +153,15 @@ bash "$tool" --write --dir "$SANDBOX" --task "../fuera" \
 cabeza_big() { printf '%*s' 990 '' | tr ' ' 'A'; }   # 990 'A' para empujar el corte
 
 caso "adversary HIGH: una credencial user:pass con el corte encima queda sin el secreto"
+# El padding es 975, no cabeza_big: el corte (RECORTE=1000) tiene que caer
+# JUSTO despues de la clave (975 + 8 "https://" + 8 user + 1 ":" + 8 pass =
+# 1000) para que, con el orden roto (recortar antes de redactar), user y pass
+# sobrevivan COMPLETOS y los greps de abajo se pongan rojos. Con 990 el corte
+# caia en "https://FA" y el caso quedaba VERDE con el codigo roto (vacuo,
+# medido por el lead con la mutacion de orden).
 u="FAKEUSER"; p="FAKEPASS"
-sal_cred="$(cabeza_big)https://${u}:${p}@example.invalid/path"
+pad_cred="$(printf '%*s' 975 '' | tr ' ' 'A')"
+sal_cred="${pad_cred}https://${u}:${p}@example.invalid/path"
 bash "$tool" --write --dir "$SANDBOX" --task cred --hecho h \
   --comando "cmd" --salida "$sal_cred" --nivel 4 >/dev/null 2>&1
 [ $? -eq 0 ] || malo "el blast con credencial grande no salio 0"
