@@ -622,6 +622,15 @@ automatismo, protege el punto donde el humano decide.
 Filas afectadas: 18.4 (prepara y pide el si), 18.5 (reducida a aviso), 18.6 (el
 parrafo del contrato no puede prometer merge solo), 18.11 (vigente, otra razon).
 
+**Regla de lectura para las decisiones numeradas** (CodeRabbit, PR #119):
+D15 (permiso de dos llaves), D18 (merge), D19 (revert) y D21 (parrafo del
+contrato) se leen BAJO esta decision donde la contradigan. En particular:
+donde D18 diga que el script mergea, mergea SOLO tras el si del operador y
+revalidando el gate completo; donde D19 diga que revierte, AVISA con el
+comando listo y no ejecuta; donde D21 prometa merge dentro del turno sin
+pregunta, la promesa es 'preparo y pregunto'. No se reescriben en el lugar
+para no perder el rastro de lo que se diseno primero y por que cambio.
+
 ## Apéndice B — Lo que pstack dice del CI y del merge (citas)
 
 - "CI green is an input to a verdict, not a verdict." / "Green is not safe."
