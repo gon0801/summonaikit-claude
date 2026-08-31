@@ -86,6 +86,14 @@ while [ $# -gt 0 ]; do
       if [ $# -lt 2 ]; then
         printf 'saikit-decision: %s exige un valor\n' "$1" >&2; exit 2
       fi
+      # kimi #11: `--etapa --decision` asignaba "--decision" como VALOR de
+      # etapa y seguia — un tipeo corrompia la fila en silencio.
+      case "$2" in --*)
+        # El valor NO se repite crudo (CodeRabbit, PR #130): `--task --token=secreto`
+        # matchea esta rama y el diagnostico lo volcaba a stderr — el mismo pecado
+        # que este commit cierra en el veto de --task.
+        printf 'saikit-decision: %s recibio otro flag como valor (empieza con --)\n' "$1" >&2; exit 2 ;;
+      esac
       case "$1" in
         --task)      TASK="$2" ;;
         --etapa)     ETAPA="$2" ;;
@@ -116,11 +124,27 @@ if [ -z "$DIR" ]; then
   repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   DIR="$repo_root/.saikit/decisiones"
 fi
-# --task es un NOMBRE de archivo, no una ruta: `--task ../fuera` escribia
-# FUERA del directorio del rastro (hallazgo del lead en el cross-review).
+# --task es un NOMBRE de archivo con contrato (cross-review kimi+qwen):
+# charset seguro y acotado, no vacio, sin rutas — y SIN forma de secreto,
+# porque el nombre acaba commiteado en .saikit/decisiones/ y la redaccion de
+# campos no lo cubre (un `--task ghp_abc` creaba `ghp_abc.tsv` en el repo).
+# El patron `..` es deliberadamente conservador: tambien rechaza `release..2`
+# — un falso positivo aceptable frente a una ruta que se escapa.
+# Los mensajes NO repiten el valor crudo: si el valor ES un secreto, el error
+# no puede ser la via por la que se imprime.
+if [ -z "$TASK" ]; then
+  printf 'saikit-decision: --task no puede ser vacio\n' >&2
+  exit 2
+fi
 case "$TASK" in
-  */*|*\\*|..*|*..*)
-    printf 'saikit-decision: --task no admite rutas (/, \\ o ..): %s\n' "$TASK" >&2
+  */*|*\\*|..*|*..*|.*)
+    printf 'saikit-decision: --task no admite rutas ni nombres ocultos (/, \\, .. o punto inicial)\n' >&2
+    exit 2 ;;
+  ghp_*|github_pat_*|gho_*|sk-*|AKIA*|xoxb-*|xoxp-*)
+    printf 'saikit-decision: --task tiene forma de secreto; el nombre se commitea y no se redacta\n' >&2
+    exit 2 ;;
+  *[!A-Za-z0-9._-]*)
+    printf 'saikit-decision: --task solo admite [A-Za-z0-9._-]\n' >&2
     exit 2 ;;
 esac
 archivo="$DIR/$TASK.tsv"
@@ -129,6 +153,7 @@ archivo="$DIR/$TASK.tsv"
 # Sale 2 (sin tocar el archivo) al primer problema; 0 si esta bien formado.
 validar_archivo() {
   local f="$1"
+  local CR; CR="$(printf '\r')"
   [ -f "$f" ] || return 0   # no existe: nada que validar (append lo crea)
 
   local primera="" linea num=0 campos corta
@@ -136,7 +161,9 @@ validar_archivo() {
     num=$((num + 1))
     # Un CR embebido parte el contrato de "una fila = una linea" a medias:
     # --append lo veta, y --check juzga con el MISMO criterio (codex #7).
-    case "$linea" in *"$(printf '\r')"*)
+    # $CR se computa una vez fuera del loop (kimi #8: un fork por linea son
+    # ~28 ms cada uno en MSYS, medido en AGENTS.md).
+    case "$linea" in *"$CR"*)
       printf 'TSV malformado: linea %s trae retorno de carro\n' "$num" >&2
       exit 2 ;;
     esac
@@ -154,7 +181,7 @@ validar_archivo() {
     esac
     campos="$(printf '%s' "$linea" | awk -F'|' '{print NF}')"
     if [ "$campos" != "6" ]; then
-      corta="$(printf '%s' "$linea" | cut -d'|' -f1 | cut -c1-20)"
+      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1)" | cut -c1-20)"
       printf 'TSV malformado: linea %s (%s...) tiene %s columnas, se esperaban 6\n' "$num" "$corta" "$campos" >&2
       exit 2
     fi
@@ -163,7 +190,7 @@ validar_archivo() {
     # con el mismo criterio. Un `|` final (campo 6 vacio) es una fila incompleta.
     ult="$(printf '%s' "$linea" | cut -d'|' -f6)"
     if [ -z "$ult" ]; then
-      corta="$(printf '%s' "$linea" | cut -d'|' -f1 | cut -c1-20)"
+      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1)" | cut -c1-20)"
       printf 'TSV malformado: linea %s (%s...) tiene el resultado (columna 6) vacio\n' "$num" "$corta" >&2
       exit 2
     fi
