@@ -319,26 +319,30 @@ bash "$tool" --append --task "../fuera" --dir "$tmp" --etapa E \
 [ $? -eq 2 ] || malo "--task ../fuera debio salir 2"
 [ ! -e "$tmp/../fuera.tsv" ] || malo "--task ../fuera ESCRIBIO fuera del dir"
 
-caso "--task con backslash se rechaza (kimi 4: la mitad Windows del veto no tenia caso)"
-bash "$tool" --append --task "..\\fuera" --dir "$tmp" --etapa E \
+caso "--task con backslash SOLO se rechaza (kimi 4; el fixture con .. tambien matcheaba esa regla)"
+bash "$tool" --append --task "ruta\\fuera" --dir "$tmp" --etapa E \
   --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
 [ $? -eq 2 ] || malo "--task con backslash debio salir 2"
 
-caso "--task con forma de secreto se rechaza: el nombre se commitea (qwen 1)"
-bash "$tool" --append --task "ghp_abc123" --dir "$tmp" --etapa E \
-  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+caso "--task con forma de secreto se rechaza SIN repetirlo (qwen 1 + CodeRabbit)"
+err="$(bash "$tool" --append --task "ghp_abc123" --dir "$tmp" --etapa E \
+  --decision d --por-que p --evidencia e --resultado ok 2>&1 >/dev/null)"
 [ $? -eq 2 ] || malo "--task ghp_abc123 debio salir 2"
 [ ! -e "$tmp/ghp_abc123.tsv" ] || malo "el secreto quedo como NOMBRE de archivo"
+printf '%s' "$err" | grep -qF 'ghp_abc123' && malo "el mensaje de error REPITIO el secreto: $err"
 
 caso "--task vacio se rechaza (qwen 11)"
 bash "$tool" --append --task "" --dir "$tmp" --etapa E \
   --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
 [ $? -eq 2 ] || malo "--task vacio debio salir 2"
 
-caso "un flag conocido como VALOR de otro flag se rechaza (kimi 11)"
-bash "$tool" --append --task tipeo --dir "$tmp" --etapa --decision \
-  --por-que p --evidencia e --resultado ok >/dev/null 2>&1
-[ $? -eq 2 ] || malo "--etapa --decision debio salir 2, no tragar el flag como valor"
+caso "un flag como VALOR se rechaza con SU mensaje y sin repetir el valor (kimi 11 + CodeRabbit)"
+err="$(bash "$tool" --append --task tipeo --dir "$tmp" --etapa --token=secreto123 \
+  --decision d --por-que p --evidencia e --resultado ok 2>&1 >/dev/null)"
+[ $? -eq 2 ] || malo "--etapa --token=... debio salir 2"
+printf '%s' "$err" | grep -qF 'recibio otro flag como valor' \
+  || malo "no es el rechazo del parser (pudo ser otro exit 2): $err"
+printf '%s' "$err" | grep -qF 'secreto123' && malo "el diagnostico REPITIO el valor: $err"
 
 # La dependencia de `timeout` se DECLARA (qwen 13): existe en el CI Linux y en
 # MSYS2/coreutils; en un macOS pelado daria rc=127 — un rojo RUIDOSO, no un

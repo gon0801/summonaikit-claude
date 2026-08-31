@@ -89,7 +89,10 @@ while [ $# -gt 0 ]; do
       # kimi #11: `--etapa --decision` asignaba "--decision" como VALOR de
       # etapa y seguia — un tipeo corrompia la fila en silencio.
       case "$2" in --*)
-        printf 'saikit-decision: %s recibio otro flag (%s) como valor\n' "$1" "$2" >&2; exit 2 ;;
+        # El valor NO se repite crudo (CodeRabbit, PR #130): `--task --token=secreto`
+        # matchea esta rama y el diagnostico lo volcaba a stderr — el mismo pecado
+        # que este commit cierra en el veto de --task.
+        printf 'saikit-decision: %s recibio otro flag como valor (empieza con --)\n' "$1" >&2; exit 2 ;;
       esac
       case "$1" in
         --task)      TASK="$2" ;;
@@ -178,7 +181,7 @@ validar_archivo() {
     esac
     campos="$(printf '%s' "$linea" | awk -F'|' '{print NF}')"
     if [ "$campos" != "6" ]; then
-      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1 | cut -c1-20)")"
+      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1)" | cut -c1-20)"
       printf 'TSV malformado: linea %s (%s...) tiene %s columnas, se esperaban 6\n' "$num" "$corta" "$campos" >&2
       exit 2
     fi
@@ -187,7 +190,7 @@ validar_archivo() {
     # con el mismo criterio. Un `|` final (campo 6 vacio) es una fila incompleta.
     ult="$(printf '%s' "$linea" | cut -d'|' -f6)"
     if [ -z "$ult" ]; then
-      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1 | cut -c1-20)")"
+      corta="$(redactar "$(printf '%s' "$linea" | cut -d'|' -f1)" | cut -c1-20)"
       printf 'TSV malformado: linea %s (%s...) tiene el resultado (columna 6) vacio\n' "$num" "$corta" >&2
       exit 2
     fi
