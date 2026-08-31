@@ -7,6 +7,29 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-31 — PR #126 / Task 17.3 (rastro de decisiones) — deploy REAL, tras TRES rondas de gitleaks
+
+- **Qué traía:** `tools/lib/redactar.sh` compartido, `tools/saikit-decision.sh`
+  (append seguro), la batería, el rastro `17.3.tsv`, y la familia de redacción
+  del hook extendida (`ghp_`/`github_pat_`/`gho_`/`sk-`/`AKIA`/`xox[bp]-`).
+  Implementó DeepSeek (#122); el lead corrigió la higiene de fixtures.
+- **Merge:** `aecae38` (rama `phase-17/17.3c`, head `d164316`). CI run
+  `33424788197` success, con **`secrets` en verde — el criterio de esta task**.
+- **Deploy:** `REPARADO` con backup fechado; vivo == master por sha256
+  (`017515e21f2c8b53…`); registro completo en las 3 fases.
+- **El incidente que costó tres rondas, contado entero:** gitleaks escanea el
+  HISTORIAL, así que cada arreglo exigió rama nueva + borrado de la anterior
+  (el force-push está prohibido por el guard). Ronda 1: fixtures con forma de
+  secreto real. Ronda 2: mi corrección dejó `xox[bp]-1234567890` contiguo en
+  los format strings — `slack-legacy-token` matchea el prefijo con UN segmento.
+  Ronda 3: un COMENTARIO de redactar.sh con `flag=-sk-proj` de ejemplo —
+  `generic-api-key` salta con palabra-clave + forma de asignación incluso en
+  comentarios; se identificó agregando `-v` al job en una rama desechable
+  (#125), porque sin `-v` gitleaks solo imprime el conteo.
+- **Lección, tres veces pagada:** el verificador es gitleaks, no un grep
+  propio. Y el candado local (`check-secrets.sh`) dejó pasar los tres — queda
+  como fila 17.7.
+
 ## 2026-08-31 — PRs #120 (Task 17.1) y #119 (decisión de la Phase 18) — deploy NO-OP
 
 - **Qué traían:** #120: la skill `saikit-verificar-app` (fuente en
