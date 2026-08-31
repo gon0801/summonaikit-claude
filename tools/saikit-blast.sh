@@ -52,7 +52,7 @@ RECORTE=1000
 TASK=""; HECHO=""; COMANDO=""; SALIDA=""; NIVEL=""; DIR=""; MODO=""
 
 uso() {
-  sed -n '2,45p' "$0"
+  sed -n '2,37p' "$0"
 }
 
 while [ $# -gt 0 ]; do
@@ -133,7 +133,11 @@ if [ -z "$HECHO_T" ]; then
   exit 2
 fi
 
-if [ "$NIVEL" -ge 4 ] && [ -z "$COMANDO" ]; then
+# El comando, recortado de espacios: un `--comando "   "` es tan vacio como un
+# `--comando ""` y dejaria pasar un "corrido" sin comando util (hallazgo
+# repetido del cross-review codex+glm). Para nivel >= 4 tiene que ser algo.
+COMANDO_T="$(printf '%s' "$COMANDO" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+if [ "$NIVEL" -ge 4 ] && [ -z "$COMANDO_T" ]; then
   printf 'saikit-blast: nivel >= 4 exige comando (un hecho serio sin forma de correrlo es opinion, no hecho)\n' >&2
   exit 2
 fi
@@ -161,7 +165,7 @@ flat() { printf '%s' "$1" | tr -d '\r\n'; }
 
 SALIDA_F="$(flat "$SALIDA")"
 HECHO_F="$(flat "$HECHO_T")"
-COMANDO_F="$(flat "$COMANDO")"
+COMANDO_F="$(flat "$COMANDO_T")"
 
 SALIDA_R="$(redactar "$SALIDA_F")"
 HECHO_R="$(redactar "$HECHO_F")"

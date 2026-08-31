@@ -124,6 +124,15 @@ bash "$tool" --write --dir "$SANDBOX" --task demo \
 [ "$(cat "$file")" = "$prev_demo" ] || malo "el artefacto se modifico tras un write invalido"
 grep -q 'comando' "$SANDBOX/niv.err" || malo "no se explico la falta de comando: $(cat "$SANDBOX/niv.err")"
 
+caso "nivel >= 4 con comando de solo espacios => invalido (cross-review codex+glm)"
+# Un `--comando "   "` es tan vacio como "": pasa el `-z` como no vacio y
+# dejaria pasar un "corrido" sin comando util. El trim lo rechaza.
+bash "$tool" --write --dir "$SANDBOX" --task demo --hecho "hecho" \
+  --comando "   " --salida "ok" --nivel 4 >/dev/null 2>"$SANDBOX/ws.err"
+[ $? -eq 2 ] || malo "nivel>=4 con comando de espacios debio salir 2"
+[ "$(cat "$file")" = "$prev_demo" ] || malo "el artefacto se modifico con comando de espacios"
+grep -q 'comando' "$SANDBOX/ws.err" || malo "no se explico el comando de espacios: $(cat "$SANDBOX/ws.err")"
+
 caso "nivel fuera de 1-5 => invalido (exit 2, no crea el archivo)"
 for n in 6 0; do
   bash "$tool" --write --dir "$SANDBOX" --task "demo$n" \
