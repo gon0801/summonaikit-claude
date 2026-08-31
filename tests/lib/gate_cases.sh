@@ -1975,15 +1975,16 @@ caso_g2_credenciales_token_nuevas_se_redactan() {
   # DISTINTIVOS (token completo), como pedia el comentario de arriba: se pasan
   # por variable, no por subcadena banal.
   local c36='FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE' c16='FAKEFAKEFAKEFAKE'
-  local t_ghp t_pat t_gho t_sk t_akia t_xoxb
+  local t_ghp t_pat t_gho t_sk t_akia t_xoxb t_xoxp
   t_ghp="$(printf 'ghp_%s' "$c36")"
   t_pat="$(printf 'github_pat_%s' "$c36")"
   t_gho="$(printf 'gho_%s' "$c36")"
   t_sk="$(printf 'sk-proj-%s' "$c36")"
   t_akia="$(printf 'AKIA%s' "$c16")"
   t_xoxb="$(printf 'xox%s' "b-1234567890-$c16")"
+  t_xoxp="$(printf 'xox%s' "p-1234567890-$c16")"
   lab_sembrar 123456 0 0 0 ""
-  lab_run tool claude "$(lab_payload_bash "pytest --token $t_ghp --pat $t_pat --oauth $t_gho --openai $t_sk --aws $t_akia --slack $t_xoxb")"
+  lab_run tool claude "$(lab_payload_bash "pytest --token $t_ghp --pat $t_pat --oauth $t_gho --openai $t_sk --aws $t_akia --slack $t_xoxb --slack-user $t_xoxp")"
   _igual "verified (el runner pytest sigue contando)" "$(lab_estado verified)" "1"
   _no_contiene "ghp no en log" "$(lab_log)" "$t_ghp"
   _no_contiene "github_pat no en log" "$(lab_log)" "$t_pat"
@@ -1991,10 +1992,10 @@ caso_g2_credenciales_token_nuevas_se_redactan() {
   _no_contiene "sk-proj no en log" "$(lab_log)" "$t_sk"
   _no_contiene "AKIA no en log" "$(lab_log)" "$t_akia"
   _no_contiene "xoxb no en log" "$(lab_log)" "$t_xoxb"
-  # grok 13: xoxp tambien tiene regla propia y no tenia needle; y codex 9: si
-  # la redaccion tapara solo el prefijo, el token completo desapareceria pero
-  # la cola quedaria — la cola tampoco puede estar.
-  local t_xoxp; t_xoxp="$(printf 'xox%s' "p-1234567890-$c16")"
+  # grok 13: xoxp tiene regla propia. La primera version de este needle era
+  # VACIA (qwen, cross-review de la correccion): comprobaba la ausencia de un
+  # token que el payload JAMAS inyectaba — por eso el xoxp ahora viaja en el
+  # payload de arriba. Y codex 9: la cola tampoco puede quedar.
   _no_contiene "xoxp no en log" "$(lab_log)" "$t_xoxp"
   _no_contiene "cola FAKE no en log" "$(lab_log)" "$c36"
   _contiene "marcador REDACTED presente" "$(lab_log)" '[REDACTED]'

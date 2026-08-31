@@ -291,9 +291,14 @@ bash "$tool" --append --task todos --dir "$tmp" \
   --resultado "ok pero $(form_token AKIA)" \
   --cuando "2026-08-31T00:00:00Z" >/dev/null 2>&1 \
   || malo "append con secretos en etapa/resultado no salio 0"
+[ -s "$tmp/todos.tsv" ] || malo "todos.tsv no existe: los greps de abajo no medirian nada (kimi 10)"
 tok_g="$(form_token gho_)"; tok_a="$(form_token AKIA)"
 grep -qF "$tok_g" "$tmp/todos.tsv" && malo "gho_ quedo en claro en la ETAPA"
 grep -qF "$tok_a" "$tmp/todos.tsv" && malo "AKIA quedo en claro en el RESULTADO"
+# kimi 12: no basta con que el token desaparezca — el marcador tiene que
+# APARECER donde se redacto, si no una "redaccion" que borre el campo pasa.
+n_red="$(grep -oF '[REDACTED]' "$tmp/todos.tsv" | wc -l | tr -d ' ')"
+[ "$n_red" -ge 2 ] || malo "esperaba [REDACTED] en etapa Y resultado, hay $n_red"
 
 caso "un campo con '|' se rechaza sin escribir (inyecta columnas)"
 antes="$(wc -l < "$tmp/todos.tsv")"
@@ -314,6 +319,30 @@ bash "$tool" --append --task "../fuera" --dir "$tmp" --etapa E \
 [ $? -eq 2 ] || malo "--task ../fuera debio salir 2"
 [ ! -e "$tmp/../fuera.tsv" ] || malo "--task ../fuera ESCRIBIO fuera del dir"
 
+caso "--task con backslash se rechaza (kimi 4: la mitad Windows del veto no tenia caso)"
+bash "$tool" --append --task "..\\fuera" --dir "$tmp" --etapa E \
+  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "--task con backslash debio salir 2"
+
+caso "--task con forma de secreto se rechaza: el nombre se commitea (qwen 1)"
+bash "$tool" --append --task "ghp_abc123" --dir "$tmp" --etapa E \
+  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "--task ghp_abc123 debio salir 2"
+[ ! -e "$tmp/ghp_abc123.tsv" ] || malo "el secreto quedo como NOMBRE de archivo"
+
+caso "--task vacio se rechaza (qwen 11)"
+bash "$tool" --append --task "" --dir "$tmp" --etapa E \
+  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "--task vacio debio salir 2"
+
+caso "un flag conocido como VALOR de otro flag se rechaza (kimi 11)"
+bash "$tool" --append --task tipeo --dir "$tmp" --etapa --decision \
+  --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "--etapa --decision debio salir 2, no tragar el flag como valor"
+
+# La dependencia de `timeout` se DECLARA (qwen 13): existe en el CI Linux y en
+# MSYS2/coreutils; en un macOS pelado daria rc=127 — un rojo RUIDOSO, no un
+# pase en vacio, que es el lado seguro del que fallar.
 caso "flag sin valor => exit 2 rapido, no un bucle infinito (codex 13, bug de la 0.4)"
 out="$(timeout 5 bash "$tool" --append --dir "$tmp" --task 2>&1)"; rc=$?
 [ "$rc" -ne 124 ] || malo "flag sin valor COLGO el parser (timeout): el bug de la Task 0.4"
