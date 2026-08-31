@@ -9,6 +9,12 @@ archivo vivo el contrato que le inyecta al modelo.
 El contrato de producto está en `docs/spec/00-project-spec.md`. El ledger de
 tareas, en `Plans.md`.
 
+**Si no vas a leer código:** `docs/guia-usuario.html` explica en palabras
+normales qué se escribe y qué hace el sistema solo — las palabras que lo
+activan, las recetas, quién revisa y hasta dónde llega. Este README es para
+quien lee código; la guía es para quien lo usa. No se duplican a propósito: si
+las dos explican lo mismo, una de las dos va a envejecer mal.
+
 ## Instalación
 
 El archivo que gatea cada turno vive **fuera** del repo. No se sincroniza con
