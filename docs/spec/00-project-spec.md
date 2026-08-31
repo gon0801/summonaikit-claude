@@ -2203,6 +2203,49 @@ gate, no si el modelo sigue la receta: eso lo mide un turno vivo por receta
 (`docs/smoke-recetas-<fecha>.md`), n=1. Los demás hosts quedan sin menú y sin
 autopilot hasta una ola posterior. No se leen transcripts para auditar (A6).
 
+### Límites MEDIDOS de la Phase 16 (cierre, 2026-08-30)
+
+Lo de arriba eran límites *declarados* al diseñar. Estos son los que la fase
+midió, y difieren en un punto importante.
+
+- **Las 6 recetas se eligen y se siguen.** Seis turnos vivos, uno por receta
+  (`docs/smoke-recetas-2026-08-30.md`): en los seis el líder eligió la que
+  correspondía, la declaró en el recibo y cerró con recibo COMPLETO — los seis
+  bloques con las seis etiquetas. `SUMMONAIKIT HARNESS GATE` aparece 0 veces en
+  los transcripts. n=1 por receta, como el diseño anticipaba.
+- **El contrato se obedece exactamente donde el gate mira, y eso NO estaba
+  previsto.** De las tres cosas que el menú pedía, la única cumplida fue la que
+  aterriza en el recibo (`Receta:`, 11 y 12 apariciones sobre 2 inyecciones por
+  sesión). El todolist y los `skip:` dieron CERO en 6 de 6 — y no por falta de
+  la herramienta: no hay restricción de tools en ningún lado, `TodoWrite` es
+  default de Claude Code, y el propio lead registró 0 invocaciones en una sesión
+  de horas. La 16.10 movió la instrucción a la superficie que funciona.
+  **Consecuencia para el diseño futuro:** una instrucción del contrato que no
+  aterrice en el recibo no se cumple, y una que nadie cumple entrena a leer el
+  resto como decorativo.
+- **La medición no cubre otros hosts.** El recetario solo se planta en `claude`
+  (las tres llamadas a `instalar_recetas_claude` están en el flujo por defecto y
+  en `--host claude`); en codex, grok y dsh el contrato dice *No recipe book on
+  this host*. Que las recetas funcionen ahí es `unknown`, no un supuesto.
+- **La medición tampoco cubre otro harness.** Los seis turnos corrieron dentro
+  de Claude Code. Quien escribió las recetas (16.2) no podía medirlas, así que
+  los turnos los tecleó el operador; pero eso controla el sesgo del autor, no la
+  variedad de harness.
+- **Fuga cerrada y medida** (16.5): un `recetas/` que fuera symlink a un
+  directorio externo hacía que el glob expandiera hacia afuera y `rm -f` borrara
+  archivos ajenos. Reproducida en Linux y cerrada a nivel archivo Y directorio,
+  en instalar y en quitar. Su cobertura vive en `tests/test_recetas_symlink.sh`,
+  archivo propio porque `test_install_hook.sh` es Windows-bound y el CI Linux lo
+  saltea entero: los casos de symlink no corrían en NINGÚN gate.
+- **Límite NO cerrado, declarado:** la carrera TOCTOU entre el chequeo `-L` y el
+  borrado. Quien la explota ya tiene escritura en `~/.claude/hooks/` — nivel que
+  cubren la Phase 0 y `hook-acl.ps1`, no el instalador — y el arreglo no se
+  expresa en shell portable. Mismo criterio que la fila 0.2 con A7-bis: *ese
+  vector se detecta, no se previene*.
+- **Hueco del PLAN, no del trabajo:** `hook-acl.ps1 -RutasExtra` no tiene caller
+  de producción. El plan pedía un parámetro, no un caller, así que la cobertura
+  ACL de `recetas/` y `skills/*` solo aplica si el operador pasa el flag.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
