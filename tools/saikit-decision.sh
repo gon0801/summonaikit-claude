@@ -79,14 +79,24 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --append)    MODO="append"; shift ;;
     --check)     MODO="check"; shift ;;
-    --task)      TASK="${2:-}"; shift 2 ;;
-    --etapa)     ETAPA="${2:-}"; shift 2 ;;
-    --decision)  DECISION="${2:-}"; shift 2 ;;
-    --por-que)   POR_QUE="${2:-}"; shift 2 ;;
-    --evidencia) EVIDENCIA="${2:-}"; shift 2 ;;
-    --resultado) RESULTADO="${2:-}"; shift 2 ;;
-    --cuando)    CUANDO="${2:-}"; shift 2 ;;
-    --dir)       DIR="${2:-}"; shift 2 ;;
+    --task|--etapa|--decision|--por-que|--evidencia|--resultado|--cuando|--dir)
+      # El bug de la Task 0.4, que este repo ya pago una vez: `shift 2` con un
+      # solo argumento no consume nada y el while gira para siempre (medido
+      # aca tambien: rc=124 por timeout). Un flag con valor EXIGE el valor.
+      if [ $# -lt 2 ]; then
+        printf 'saikit-decision: %s exige un valor\n' "$1" >&2; exit 2
+      fi
+      case "$1" in
+        --task)      TASK="$2" ;;
+        --etapa)     ETAPA="$2" ;;
+        --decision)  DECISION="$2" ;;
+        --por-que)   POR_QUE="$2" ;;
+        --evidencia) EVIDENCIA="$2" ;;
+        --resultado) RESULTADO="$2" ;;
+        --cuando)    CUANDO="$2" ;;
+        --dir)       DIR="$2" ;;
+      esac
+      shift 2 ;;
     -h|--help)   uso; exit 0 ;;
     *)           printf 'saikit-decision: opcion desconocida: %s\n' "$1" >&2; uso >&2; exit 2 ;;
   esac
@@ -106,6 +116,13 @@ if [ -z "$DIR" ]; then
   repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   DIR="$repo_root/.saikit/decisiones"
 fi
+# --task es un NOMBRE de archivo, no una ruta: `--task ../fuera` escribia
+# FUERA del directorio del rastro (hallazgo del lead en el cross-review).
+case "$TASK" in
+  */*|*\\*|..*|*..*)
+    printf 'saikit-decision: --task no admite rutas (/, \\ o ..): %s\n' "$TASK" >&2
+    exit 2 ;;
+esac
 archivo="$DIR/$TASK.tsv"
 
 # ---------------------------------------------------------------- validacion
@@ -117,11 +134,24 @@ validar_archivo() {
   local primera="" linea num=0 campos corta
   while IFS= read -r linea || [ -n "$linea" ]; do
     num=$((num + 1))
-    case "$linea" in ''|\#*) continue ;; esac
+    # Un CR embebido parte el contrato de "una fila = una linea" a medias:
+    # --append lo veta, y --check juzga con el MISMO criterio (codex #7).
+    case "$linea" in *"$(printf '\r')"*)
+      printf 'TSV malformado: linea %s trae retorno de carro\n' "$num" >&2
+      exit 2 ;;
+    esac
+    # Las lineas '#' NO se saltan (grok #8 / codex #6): saltarlas dejaba
+    # inyectar filas que --check jamas miraba. El unico texto especial es la
+    # primera linea, que debe ser el encabezado; lo vacio sigue tolerado.
+    case "$linea" in '') continue ;; esac
     if [ -z "$primera" ]; then
       primera="$linea"
       continue
     fi
+    case "$linea" in \#*)
+      printf 'TSV malformado: linea %s es un comentario inyectado (no se admiten)\n' "$num" >&2
+      exit 2 ;;
+    esac
     campos="$(printf '%s' "$linea" | awk -F'|' '{print NF}')"
     if [ "$campos" != "6" ]; then
       corta="$(printf '%s' "$linea" | cut -d'|' -f1 | cut -c1-20)"
@@ -266,12 +296,18 @@ if [ "$MODO" = "append" ]; then
   fi
   validar_archivo "$archivo" || exit $?
 
-  # Redactar SOLO los campos de texto libre; etapa y resultado son estructurales.
+  # Se redactan TODOS los campos (cross-review codex #2). La version anterior
+  # decia "etapa y resultado son estructurales" — era una intencion, no una
+  # regla: nada los restringe a un vocabulario, asi que un secreto pegado ahi
+  # viajaba en claro al archivo commiteado.
+  CUANDO_R="$(redactar "$CUANDO")"
+  ETAPA_R="$(redactar "$ETAPA")"
   DECISION_R="$(redactar "$DECISION")"
   POR_QUE_R="$(redactar "$POR_QUE")"
   EVIDENCIA_R="$(redactar "$EVIDENCIA")"
+  RESULTADO_R="$(redactar "$RESULTADO")"
 
-  fila="${CUANDO}|${ETAPA}|${DECISION_R}|${POR_QUE_R}|${EVIDENCIA_R}|${RESULTADO}"
+  fila="${CUANDO_R}|${ETAPA_R}|${DECISION_R}|${POR_QUE_R}|${EVIDENCIA_R}|${RESULTADO_R}"
   # La escritura se VERIFICA: sin esto, un fallo de I/O (disco lleno, permisos,
   # ruta que es un directorio) dejaba la fila sin escribir pero el tool seguia y
   # reportaba "registrado" con exit 0 — una fila del rastro que nunca llego al

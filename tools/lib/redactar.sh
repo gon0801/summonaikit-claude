@@ -63,7 +63,7 @@ saikit_secret_re() {
 # entrecomillado o pelado), luego credenciales en URI, luego las formas de token
 # conocidas. El ultimo `-e` no lleva `\` de continuacion.
 redactar() {
-  printf '%s' "$1" | sed -E \
+  printf '%s\n' "$1" | LC_ALL=C sed -E \
     -e "s/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=('[^']*'|\"[^\"]*\"|[^[:space:]]*)/\1=[REDACTED]/g" \
     -e 's,://[^[:space:]@/?#]*@,://[REDACTED]@,g' \
     -e 's/ghp_[A-Za-z0-9_-]*/[REDACTED]/g' \
