@@ -190,8 +190,18 @@ bash "$tool" --append --task rastro --dir "$tmp" --etapa Diseno \
   --evidencia "la evidencia trae $(form_token ghp_)" \
   --resultado ok
 [ $? -eq 0 ] || malo "el append del rastro no salio 0"
-grep -qF '$(form_token ghp_)' "$tmp/rastro.tsv" \
+# El needle va por VARIABLE con comillas dobles. La version anterior ponia
+# $(form_token ghp_) entre comillas SIMPLES: buscaba esa cadena literal, que
+# jamas aparece, y el caso pasaba en vacio (cross-review grok+codex, error del
+# lead al des-literalizar los fixtures).
+tok_e="$(form_token ghp_)"
+grep -qF "$tok_e" "$tmp/rastro.tsv" \
   && malo "el token quedo en claro en el rastro"
+# Y no basta con que el token completo desaparezca: una redaccion que tapara
+# solo el prefijo dejaria casi toda la clave (codex 9). La cola tampoco puede
+# quedar.
+grep -qF 'FAKEFAKEFAKE' "$tmp/rastro.tsv" \
+  && malo "la cola del token quedo en claro en el rastro"
 grep -qF '[REDACTED]' "$tmp/rastro.tsv" || malo "el rastro no trae [REDACTED]"
 
 # ------------------------------------------------------------------- (f)
@@ -272,6 +282,60 @@ mkdir -p "$tmp/dirdir.tsv" || malo "no se pudo crear el directorio-trampa"
 bash "$tool" --append --task dirdir --dir "$tmp" --etapa X --decision D --por-que P --evidencia E --resultado ok >/dev/null 2>"$tmp/dirdir.err"
 [ $? -eq 2 ] || malo "escribir a un directorio se esperaba exit 2, no un 'registrado' mentiroso"
 grep -q 'no se pudo' "$tmp/dirdir.err" || malo "no se explico el fallo de escritura: $(cat "$tmp/dirdir.err")"
+
+# ------------------------------------------------- hallazgos cross-review 17.3
+caso "todos los campos se redactan, no solo los de texto libre (codex 2)"
+bash "$tool" --append --task todos --dir "$tmp" \
+  --etapa "etapa con $(form_token gho_)" \
+  --decision d --por-que p --evidencia e \
+  --resultado "ok pero $(form_token AKIA)" \
+  --cuando "2026-08-31T00:00:00Z" >/dev/null 2>&1 \
+  || malo "append con secretos en etapa/resultado no salio 0"
+tok_g="$(form_token gho_)"; tok_a="$(form_token AKIA)"
+grep -qF "$tok_g" "$tmp/todos.tsv" && malo "gho_ quedo en claro en la ETAPA"
+grep -qF "$tok_a" "$tmp/todos.tsv" && malo "AKIA quedo en claro en el RESULTADO"
+
+caso "un campo con '|' se rechaza sin escribir (inyecta columnas)"
+antes="$(wc -l < "$tmp/todos.tsv")"
+bash "$tool" --append --task todos --dir "$tmp" --etapa "a|b" \
+  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "campo con | debio salir 2"
+[ "$(wc -l < "$tmp/todos.tsv")" = "$antes" ] || malo "campo con | escribio igual"
+
+caso "un campo con salto de linea se rechaza sin escribir"
+bash "$tool" --append --task todos --dir "$tmp" --etapa "a
+b" --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "campo con NL debio salir 2"
+[ "$(wc -l < "$tmp/todos.tsv")" = "$antes" ] || malo "campo con NL escribio igual"
+
+caso "--task con '/' o '..' se rechaza: es nombre de archivo, no ruta (lead)"
+bash "$tool" --append --task "../fuera" --dir "$tmp" --etapa E \
+  --decision d --por-que p --evidencia e --resultado ok >/dev/null 2>&1
+[ $? -eq 2 ] || malo "--task ../fuera debio salir 2"
+[ ! -e "$tmp/../fuera.tsv" ] || malo "--task ../fuera ESCRIBIO fuera del dir"
+
+caso "flag sin valor => exit 2 rapido, no un bucle infinito (codex 13, bug de la 0.4)"
+out="$(timeout 5 bash "$tool" --append --dir "$tmp" --task 2>&1)"; rc=$?
+[ "$rc" -ne 124 ] || malo "flag sin valor COLGO el parser (timeout): el bug de la Task 0.4"
+[ "$rc" -eq 2 ] || malo "flag sin valor debio salir 2, dio $rc: $out"
+
+caso "una fila con retorno de carro se reporta malformada (codex 7)"
+cp "$tmp/todos.tsv" "$tmp/concr.tsv"
+printf '2026-08-31T00:00:01Z|E|d|p|e|ok\r\n' >> "$tmp/concr.tsv"
+bash "$tool" --check --task concr --dir "$tmp" >/dev/null 2>&1
+[ $? -eq 2 ] || malo "una fila con CR debio reportarse malformada"
+
+caso "una fila de 7 columnas se reporta malformada (codex 14)"
+cp "$tmp/todos.tsv" "$tmp/siete.tsv"
+printf '2026-08-31T00:00:01Z|E|d|p|e|ok|extra\n' >> "$tmp/siete.tsv"
+bash "$tool" --check --task siete --dir "$tmp" >/dev/null 2>&1
+[ $? -eq 2 ] || malo "una fila de 7 columnas debio reportarse malformada"
+
+caso "una linea '#comentario' inyectada ya no se oculta (grok 8 / codex 6)"
+cp "$tmp/todos.tsv" "$tmp/coment.tsv"
+printf '#fila oculta que el check ignoraba\n' >> "$tmp/coment.tsv"
+bash "$tool" --check --task coment --dir "$tmp" >/dev/null 2>&1
+[ $? -eq 2 ] || malo "una linea # inyectada debio reportarse, no ignorarse"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_saikit_decision: FAIL" >&2

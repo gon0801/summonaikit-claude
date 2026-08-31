@@ -1991,6 +1991,12 @@ caso_g2_credenciales_token_nuevas_se_redactan() {
   _no_contiene "sk-proj no en log" "$(lab_log)" "$t_sk"
   _no_contiene "AKIA no en log" "$(lab_log)" "$t_akia"
   _no_contiene "xoxb no en log" "$(lab_log)" "$t_xoxb"
+  # grok 13: xoxp tambien tiene regla propia y no tenia needle; y codex 9: si
+  # la redaccion tapara solo el prefijo, el token completo desapareceria pero
+  # la cola quedaria — la cola tampoco puede estar.
+  local t_xoxp; t_xoxp="$(printf 'xox%s' "p-1234567890-$c16")"
+  _no_contiene "xoxp no en log" "$(lab_log)" "$t_xoxp"
+  _no_contiene "cola FAKE no en log" "$(lab_log)" "$c36"
   _contiene "marcador REDACTED presente" "$(lab_log)" '[REDACTED]'
 }
 
