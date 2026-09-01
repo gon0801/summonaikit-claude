@@ -301,11 +301,21 @@ fi
 
 caso "sin pasar -RutasExtra, el default cubre las skills del perfil (mas objetos que solo -Path)"
 "$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$perfil_hooks_w" > "$tmp/acl-default.txt" 2>&1
+rc_default=$?
 "$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$perfil_hooks_w" -RutasExtra '' > "$tmp/acl-solo-path.txt" 2>&1
+# Contrato de exit codes (codex xrev #4): con el ACE sembrado HAY hallazgo, asi
+# que el exit tiene que ser exactamente 1 -- una regresion que reporte hallazgos
+# y salga 0 pasaba toda la suite (ningun caso fijaba el 1 exacto).
+[ "$rc_default" -eq 1 ] \
+  || malo "con hallazgo sembrado el exit debe ser 1 (contrato), fue $rc_default"
 grep -qi 'RutasExtra por defecto' "$tmp/acl-default.txt" \
   || malo "sin flags no se anuncia el default de RutasExtra: $(cat "$tmp/acl-default.txt")"
-grep -qi 'skills' "$tmp/acl-default.txt" \
-  || malo "el default no nombra la carpeta de skills: $(cat "$tmp/acl-default.txt")"
+# La RUTA derivada, no solo la palabra del mensaje fijo (codex xrev #3): si la
+# derivacion devolviera $Path (duplicando la auditoria), el conteo tambien
+# subia y el grep de 'skills' coincidia con la etiqueta del anuncio -- el caso
+# pasaba sin auditar skills. La ruta literal ancla el hecho.
+grep -qF "$perfil_skills_w" "$tmp/acl-default.txt" \
+  || malo "el default no nombra la RUTA derivada real ($perfil_skills_w): $(cat "$tmp/acl-default.txt")"
 grep -qi 'RutasExtra por defecto' "$tmp/acl-solo-path.txt" \
   && malo "-RutasExtra '' explicito (opt-out documentado, forma -File) no debe activar el default: $(cat "$tmp/acl-solo-path.txt")"
 n_default="$(grep -oE 'sobre [0-9]+ objeto' "$tmp/acl-default.txt" | grep -oE '[0-9]+' | head -1)"
@@ -484,6 +494,13 @@ touch "$tmp/perfilFix/.claude/skills/archivo.txt"
 # reparacion tenga algo deterministico que degradar en AMBAS raices.
 icacls "$tmp/perfilFix/.claude/hooks" //grant "Everyone:(OI)(CI)M" >/dev/null 2>&1
 icacls "$tmp/perfilFix/.claude/skills" //grant "Everyone:(OI)(CI)M" >/dev/null 2>&1
+# La siembra se VERIFICA antes de correr -Fix (codex xrev #5): si el grant de
+# hooks fallara, "Everyone ya no esta" seria verdad sin que la reparacion
+# hiciera nada -- el caso aceptaba un no-op como correccion.
+icacls "$tmp/perfilFix/.claude/hooks" 2>&1 | grep -qi 'Everyone:.*(M)' \
+  || malo "precondicion: el grant de Everyone sobre hooks no tomo; el caso no mide la reparacion"
+icacls "$tmp/perfilFix/.claude/skills" 2>&1 | grep -qi 'Everyone:.*(M)' \
+  || malo "precondicion: el grant de Everyone sobre skills no tomo; el caso no mide el radio"
 if command -v cygpath >/dev/null 2>&1; then
   perfilFix_hooks_w="$(cygpath -w "$tmp/perfilFix/.claude/hooks")"
   perfilFix_backup_w="$(cygpath -w "$tmp/perfilFix-backup")"
