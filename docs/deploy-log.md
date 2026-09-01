@@ -7,6 +7,25 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-31 — PR #133 / Tasks 17.7+17.8 (candado local pinneado + concurrencia del rastro) — deploy NO-OP
+
+- **Qué traía:** 17.7 — gitleaks pinneado 8.30.1 como capa local (opción a),
+  AVISO ante versión distinta, fallback grep que DECLARA que su PASS no es el
+  veredicto; el hallazgo #3 de 17.3 reproducido (el fallback lo pasa, el
+  pinneado lo atrapa). 17.8 — lock con token dueño `pid:nonce`, reclamación
+  re-verificada con `mv` atómico, guard de fila truncada + delta de bytes en
+  el append (tradeoff declarado: detecta, no repara), `--check` bajo candado,
+  `stat` GNU declarado. Casos deterministas con pausa inyectable (`test_knee`).
+- **Implementó DeepSeek.** Auditoría del lead: 3 mutaciones medidas, las 3
+  atrapadas; el caso fuerte de 17.7 corrido con el binario 8.30.1 real.
+  CodeRabbit: 1 Major REAL — `SAIKIT_GITLEAKS` pisado por el PATH, la
+  remediación documentada era mentira; cerrado por el lead con rojo medido
+  (2 FAIL) y shims que registran QUIÉN corrió. Noted declarado: microventana
+  SIGKILL en la reclamación puede dejar el lock clavado.
+- **Merge:** `ecee3b4e`. CI 9/9.
+- **Deploy:** NO-OP (tools/tests; hook vivo == repo verificado byte a byte,
+  perfiles intactos).
+
 ## 2026-08-31 — PR #131 / Tasks 17.2+17.4 (lane de app real + el hecho único) — deploy REAL (perfiles)
 
 - **Qué traía:** 17.2 y 17.4 agrupadas (un solo toque a `agents/verifier.md`):
