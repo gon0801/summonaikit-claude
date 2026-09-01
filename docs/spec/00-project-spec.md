@@ -2250,9 +2250,33 @@ midió, y difieren en un punto importante.
   cubren la Phase 0 y `hook-acl.ps1`, no el instalador — y el arreglo no se
   expresa en shell portable. Mismo criterio que la fila 0.2 con A7-bis: *ese
   vector se detecta, no se previene*.
-- **Hueco del PLAN, no del trabajo:** `hook-acl.ps1 -RutasExtra` no tiene caller
-  de producción. El plan pedía un parámetro, no un caller, así que la cobertura
-  ACL de `recetas/` y `skills/*` solo aplica si el operador pasa el flag.
+- **Cerrado en la Task 16.12, con premisa corregida:** `hook-acl.ps1
+  -RutasExtra` no tenía caller de producción, pero la premisa original estaba
+  parcialmente equivocada — `hooks/recetas` YA vivía dentro del árbol de hooks
+  y la recursión por defecto (`Get-HookAclTarget`, sin `-RootOnly`) ya lo
+  cubría sin pasar nada. Lo que de verdad quedaba sin cubrir era
+  `~/.claude/skills/*`, que sí vive fuera del árbol. Ahora, si el operador NO
+  pasa `-RutasExtra` Y `-Path` tiene la forma exacta `<perfil>\.claude\hooks`,
+  el script deriva por defecto la carpeta de skills de ESE `-Path` y la
+  **AUDITA únicamente** — corregirla con `-Fix` sigue exigiendo un
+  `-RutasExtra` explícito, así el radio destructivo de una corrida `-Fix` sin
+  flags queda igual al de antes de este default. Si `-Path` no tiene esa
+  forma (perfil a secas, `%TEMP%`, ruta relativa, raíz de unidad, UNC que no
+  calce el patrón), no hay default: se avisa que la cobertura queda acotada a
+  `-Path`, en vez de reventar con una excepción. Un `-RutasExtra` explícito
+  sigue mandando (reemplaza el default, no se le suma) — medido con una
+  aserción que exige la ruta derivada AUSENTE de la auditoría, no solo la
+  ausencia de un mensaje. **Segunda puerta cerrada (revisión cruzada):** el
+  radio destructivo tiene DOS pasos que mutan ACL, no uno — `Repair-HookAcl`
+  (respeta el default desde el primer cierre) y `Repair-StaleInherited`
+  (`icacls /reset` sobre lo que sobrevive, que corría sobre TODAS las raíces
+  auditadas y sí alcanzaba a la derivada). Los dos pasos respetan ahora la
+  MISMA lista de raíces mutables (`$Path` + `-RutasExtra` explícito) — el
+  primero porque solo se INVOCA sobre esas raíces, el segundo porque FILTRA
+  sus hallazgos contra ellas — con
+  comparación de ruta normalizada — no la cadena por defecto. Medido en
+  `tests/test_hook_acl.sh` con un hijo de la skills-root (no el directorio),
+  con un ACE heredado obsoleto sembrado por un `move` real.
 
 ### Límites MEDIDOS de la Phase 17 (cierre, 2026-08-31)
 
