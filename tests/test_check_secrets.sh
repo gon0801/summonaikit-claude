@@ -142,6 +142,54 @@ else
   printf '    skip: hay gitleaks en /usr/bin, el fallback no se puede forzar con este PATH\n'
 fi
 
+# ---------------------------------------------------------------------------
+# DoD 17.7 — el candado local NO es mas laxo que el CI. Se reproduce el hallazgo
+# #3 medido en 17.3: un COMENTARIO con palabra-clave + forma de asignacion —
+# la regla `generic-api-key` de gitleaks salta con keyword + asignacion AUN EN
+# COMENTARIOS, pero el fallback grep (que no conoce la palabra-clave "access")
+# lo dejaba pasar (medido en 17.7: la capa local decia PASS sobre lo que el CI
+# rechaza). Con la capa local pinneada a gitleaks 8.30.1 (MISMO binario/version
+# que el job `secrets` del CI) el hallazgo se ATRAPA; sin gitleaks el fallback
+# pasa pero DECLARA que su PASS no es el veredicto, nunca un skip silencioso.
+#
+# El fixture se arma TODO en runtime, prefijo partido y cola FAKE (baja entropia,
+# como form_token de test_saikit_decision.sh): gitleaks escanea el HISTORIAL
+# COMPLETO de la rama y un literal real quedaria commiteado para siempre.
+# ---------------------------------------------------------------------------
+caso "17.7: el comentario con keyword+asignacion que el CI rechaza es atrapado (gitleaks) o declarado (fallback)"
+# access_key, jamás contiguo en el blob: se arma en runtime con el prefijo partido
+# (el 17.3 pagó tres veces que un literal real queda en el historial de la rama).
+kw="$(printf 'access_%s' 'key')"
+# Cola FAKE con entropia suficiente para que la regla `generic-api-key` salte
+# (pide ~3.5; una cola repetida de "FAKE" no llega y la regla la ignora, medido
+# en 17.7). Se parte tambien: nada contiguo con forma de valor en el blob.
+v1='z9y8x7w6v5u4t3s2'; v2='r1q0'; val="${v1}${v2}"
+printf '# la %s se roto: %s\n' "$kw" "$val" > "$tmp/comentario_clave.txt"
+
+# Con gitleaks (la capa local fuerte, pinneada al 8.30.1 del CI) el hallazgo se
+# ATRAPA: exit 1. Es la afirmacion central de 17.7 — la capa local no deja pasar
+# lo que el job `secrets` rechazaria.
+gl="$(command -v gitleaks 2>/dev/null || true)"
+[ -z "$gl" ] && [ -x /tmp/gitleaks-bin/gitleaks.exe ] && gl=/tmp/gitleaks-bin/gitleaks.exe
+if [ -n "$gl" ]; then
+  SAIKIT_GITLEAKS="$gl" bash "$tool" "$tmp/comentario_clave.txt" >/dev/null 2>&1
+  [ $? -eq 1 ] || malo "gitleaks NO atrapo el comentario keyword+asignacion (la capa local quedo mas laxa que el CI)"
+else
+  printf '    skip (17.7): sin gitleaks local en esta maquina; la declaracion del fallback se verifica abajo\n'
+fi
+
+# Sin gitleaks el fallback PASA en el hallazgo (esa es justo la limitacion
+# medida) — pero DECLARA que su PASS no es el veredicto, no lo calla. Ese es el
+# "fallback declarado" de la decision 17.7-a.
+if [ "$fb_ok" -eq 1 ]; then
+  out="$(fb "$tmp/comentario_clave.txt" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "el fallback no dejo pasar el comentario (rc=$rc); no reproduce la limitacion medida"
+  case "$out" in
+    *"sin gitleaks local"*) ;;
+    *) malo "el fallback no DECLARO que su PASS no es el veredicto (el juez es el job secrets del CI)" ;;
+  esac
+fi
+
 # --- aridad ---------------------------------------------------------------
 caso "sin archivos => exit 2"
 bash "$tool" >/dev/null 2>&1

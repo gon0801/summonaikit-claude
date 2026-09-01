@@ -25,9 +25,33 @@
 # viene a impedir): solo archivo y numero de linea.
 set -u
 
+# El PIN del gitleaks local: la MISMA version que el job `secrets` del CI usa
+# (.github/workflows/quality.yml, gitleaks_8.30.1_linux_x64.tar.gz + sha256
+# pinneado). La capa local no es el veredicto fuerte, pero si existe un gitleaks
+# local DEBE ser el mismo binario/version del CI, o su familia de reglas puede
+# diferir y dar un PASS que el job `secrets` rechazaria (medido en 17.7/17.3).
+# Si en algun momento se actualiza el job `secrets`, este PIN se actualiza con
+# el MISMO commit: el `grep` del CI y esta constante no pueden divergir sin
+# aviso. Se verifica la version encontrada y se DECLARA el mismatch (ver abajo).
+SAIKIT_GITLEAKS_PIN='8.30.1'
+
 GL_BIN="$(command -v gitleaks 2>/dev/null || true)"
 if [ -z "$GL_BIN" ] && [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "$SAIKIT_GITLEAKS" ]; then
   GL_BIN="$SAIKIT_GITLEAKS"
+fi
+
+# PIN activo: si hay gitleaks, se verifica contra $SAIKIT_GITLEAKS_PIN. Un
+# mismatch NO bloquea el commit (el veredicto fuerte es el job `secrets`; un
+# version mismatch de gitleaks no debe detener el trabajo que la capa fuerte
+# igual va a juzgar), pero se declara en stderr: un PASS de una version distinta
+# NO es el mismo PASS del CI, y quien lo lee tiene que saberlo. Si la version no
+# se puede determinar (binario roto, output distinto) se calla: no hay evidencia
+# de mismatch, y un falso aviso entrenaria a ignorarlo.
+if [ -n "$GL_BIN" ]; then
+  gl_ver="$("$GL_BIN" version 2>/dev/null | tr -d '[:space:]')"
+  if [ -n "$gl_ver" ] && [ "$gl_ver" != "$SAIKIT_GITLEAKS_PIN" ]; then
+    printf 'check-secrets: AVISO — gitleaks local es %s, el CI usa %s; este PASS puede diferir del job `secrets`\n' "$gl_ver" "$SAIKIT_GITLEAKS_PIN" >&2
+  fi
 fi
 
 if [ "$#" -eq 0 ]; then
@@ -103,6 +127,19 @@ if [ -n "$GL_BIN" ]; then
   fi
   exit 0
 fi
+
+# ---------------------------------------------------------------------------
+# MOTOR 2 (fallback grep): sin gitleaks local el veredicto fuerte NO esta.
+# Esto se DECLARA aca y no se calla — un PASS de este motor no es el veredicto
+# (el juez es el job `secrets` del CI, que escanea el HISTORIAL COMPLETO con
+# gitleaks 8.30.1). Es la leccion de 17.7: un candado local que dice PASS sin
+# cualificar entrena a confiar, y el rojo llega en CI con el literal ya
+# commiteado. El grep sigue corriendo (es un filtro de primera linea util, y un
+# secreto obvio igual lo atrapa), pero quien lee sabe que un verde aca no es el
+# veredicto. Para tener el veredicto fuerte en local: instalar gitleaks 8.30.1
+# (o apuntar $SAIKIT_GITLEAKS a el).
+# ---------------------------------------------------------------------------
+printf 'check-secrets: AVISO — sin gitleaks local (v%s) este chequeo NO es el veredicto; el juez es el job `secrets` del CI (gitleaks sobre el historial completo)\n' "$SAIKIT_GITLEAKS_PIN" >&2
 
 # ---------------------------------------------------------------------------
 # Motor 2: fallback grep. Tres patrones, los dos primeros son la familia del
