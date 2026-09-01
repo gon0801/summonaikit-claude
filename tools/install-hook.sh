@@ -2206,8 +2206,11 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   return 0
 }
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
-  local f rc_sencillo
-  for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" "$repo/skills/sencillo/SKILL.md"; do
+  local f rc_sencillo rc_verif
+  for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" \
+           "$repo/skills/sencillo/SKILL.md" \
+           "$repo/skills/saikit-verificar-app/SKILL.md" \
+           "$repo/skills/saikit-verificar-app/verificar.sh"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
   done
   # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
@@ -2215,7 +2218,7 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
   # primero, y el aviso decia "no se publica nada" nombrando solo el segundo.
   # Esta es la unica causa de aborto que se puede saber de antemano; el resto
   # (mktemp/cp) se declara abajo en vez de esconderse.
-  for f in "$1/recetas" "$2/sencillo"; do
+  for f in "$1/recetas" "$2/sencillo" "$2/saikit-verificar-app"; do
     if [ -L "$f" ]; then
       decir "[summonaikit] recetario: enlace, no se publica nada: $f"
       return 5
@@ -2227,6 +2230,18 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
     rc_sencillo=$?
     decir "[summonaikit] recetario: la skill /sencillo no se publico, pero $1/recetas SI quedo publicado (el todo-o-nada es por directorio)"
     return "$rc_sencillo"; }
+  # Task 17.6: la skill de verificacion de app. Son DOS archivos (SKILL.md y el
+  # generador verificar.sh), no uno como /sencillo. La medicion viva de 17.5 la
+  # tuvo que copiar A MANO a los labs porque el instalador no la plantaba: sin
+  # ella, el comando que `agents/verifier.md` enseña no existe en el repo del
+  # usuario. El generador lleva la marca `saikit_owned` en un bloque no-op para
+  # que la MISMA maquina de estados por archivo lo repare cuando el kit cambie.
+  recetas_publicar_dir "$2/saikit-verificar-app" \
+    "$repo/skills/saikit-verificar-app/SKILL.md" \
+    "$repo/skills/saikit-verificar-app/verificar.sh" || {
+    rc_verif=$?
+    decir "[summonaikit] recetario: la skill saikit-verificar-app no se publico, pero $1/recetas y $2/sencillo SI quedaron publicados (el todo-o-nada es por directorio)"
+    return "$rc_verif"; }
   # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
   # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
   # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la
@@ -2251,7 +2266,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # y el manifiesto leido a traves del symlink podia atribuir la propiedad a un
   # manifiesto externo. Se rechaza ANTES de leer el manifiesto, expandir el glob
   # o borrar: se reporta y se deja intacto, igual que los archivos symlink.
-  local r_enlace=0 s_enlace=0
+  local r_enlace=0 s_enlace=0 v_enlace=0
   if [ -L "$1/recetas" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $1/recetas"
     r_enlace=1
@@ -2259,6 +2274,10 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   if [ -L "$2/sencillo" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $2/sencillo"
     s_enlace=1
+  fi
+  if [ -L "$2/saikit-verificar-app" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $2/saikit-verificar-app"
+    v_enlace=1
   fi
   # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
   # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
@@ -2332,6 +2351,25 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # externo.
   if [ "$s_enlace" -eq 0 ]; then
     for f in "$2/sencillo/SKILL.md"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+
+  # Task 17.6: la skill saikit-verificar-app, misma regla por ARCHIVO (la marca
+  # decide, un ajeno queda intacto) sobre sus DOS archivos.
+  if [ "$v_enlace" -eq 0 ]; then
+    for f in "$2/saikit-verificar-app/SKILL.md" "$2/saikit-verificar-app/verificar.sh"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
       if zcode_agente_tiene_marca "$f"; then

@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 # skills/saikit-verificar-app/verificar.sh
+#
+# MARCA DE PROPIEDAD (Task 17.6). El instalador mide la propiedad con
+# `zcode_agente_tiene_marca`, que lee el PRIMER bloque `---` del archivo: sin
+# marca, este .sh — que el kit mismo planto — se clasificaba DESCONOCIDO y no
+# se actualizaba NUNCA (un generador viejo escribiendo verify/ para siempre, en
+# silencio). El bloque va aca arriba A PROPOSITO: mas abajo hay heredocs que
+# escriben el frontmatter del LEEME.md, y el lector se quedaria con ESE bloque.
+# `: <<'...'` es un no-op: no ejecuta nada y no cuesta un fork.
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # Genera `verify/` en el repo de un usuario y reporta el estado/antiguedad del
 # mapa. Es la parte mecanica de la skill `saikit-verificar-app` (D11 / Task 17.1):
 # - `generar <repo>`: escribe `verify/` con LEEME.md (sello fecha·sha), Launch,

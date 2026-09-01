@@ -130,6 +130,30 @@ cambia el exit code del instalador.
 `quality-kit` ya **no** parchea `.claude` (Task 4.1). Los parches del sentinel
 y del aviso de revisión van adentro de la fuente de este repo.
 
+### Recetario y skills (Phases 16-17)
+
+`--host claude` (y el flujo por defecto) planta además el recetario y dos
+skills de usuario, cada una con la **misma máquina de estados por archivo** que
+los perfiles — nuestro idéntico no se reescribe, nuestro distinto se repara con
+backup, ajeno no se toca:
+
+| Qué | Dónde |
+|---|---|
+| `recetas/*.md` + `MANIFEST.sha256` | `<hookdir>/recetas/` |
+| skill `/sencillo` | `~/.claude/skills/sencillo/` |
+| skill `saikit-verificar-app` | `~/.claude/skills/saikit-verificar-app/` |
+
+`saikit-verificar-app` son DOS archivos (`SKILL.md` y el generador
+`verificar.sh`). El generador lleva la marca de propiedad en un bloque no-op al
+inicio: la marca se lee del primer bloque `---` del archivo, y sin ella un
+`.sh` que el kit mismo plantó se clasificaba **DESCONOCIDO** y no se
+actualizaba nunca.
+
+El todo-o-nada es **por directorio**, no entre los tres: si falla el tercero,
+los dos anteriores ya quedaron publicados y el mensaje lo dice en vez de
+afirmar que no se tocó nada. `--quitar-recetas` borra solo lo que lleva la
+marca.
+
 ## Staging por override
 
 Estrenar una versión nueva en `~/.claude/hooks/` es estrenarla en producción,
