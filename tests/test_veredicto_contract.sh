@@ -113,6 +113,23 @@ caso "contrato_campo_faltante_invalido"
 }
 fin_caso "contrato_campo_faltante_invalido"
 
+caso "contrato_sin_blast_o_adversary_invalido"
+{
+  # Regresion dedicada (regla de hierro): el reviewer (rol) encontro que el
+  # validador aceptaba un veredicto sin las claves contenedor blast/adversary.
+  # Un veredicto con TODAS las hojas pero SIN adversary (o SIN blast) debe ser
+  # invalido — y este caso lo atrapa si la lista de requeridos pierde esas dos.
+  printf '{"sha":"abc","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"reviewer":"clean","decisiones":"d"}\n' > "$tmp/sin-adversary.json"
+  if veredicto_validar "$tmp/sin-adversary.json" "$HEAD_SHA" >/dev/null; then
+    _mal "acepto un veredicto SIN adversary"
+  fi
+  printf '{"sha":"abc","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}\n' > "$tmp/sin-blast.json"
+  if veredicto_validar "$tmp/sin-blast.json" "$HEAD_SHA" >/dev/null; then
+    _mal "acepto un veredicto SIN blast"
+  fi
+}
+fin_caso "contrato_sin_blast_o_adversary_invalido"
+
 # --------------------------------------------------------- gate: sello del hook
 verdict_reviewer_write_registra_hash() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
