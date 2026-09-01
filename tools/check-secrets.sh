@@ -40,20 +40,6 @@ if [ -z "$GL_BIN" ] && [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "$SAIKIT_GITLEAKS" 
   GL_BIN="$SAIKIT_GITLEAKS"
 fi
 
-# PIN activo: si hay gitleaks, se verifica contra $SAIKIT_GITLEAKS_PIN. Un
-# mismatch NO bloquea el commit (el veredicto fuerte es el job `secrets`; un
-# version mismatch de gitleaks no debe detener el trabajo que la capa fuerte
-# igual va a juzgar), pero se declara en stderr: un PASS de una version distinta
-# NO es el mismo PASS del CI, y quien lo lee tiene que saberlo. Si la version no
-# se puede determinar (binario roto, output distinto) se calla: no hay evidencia
-# de mismatch, y un falso aviso entrenaria a ignorarlo.
-if [ -n "$GL_BIN" ]; then
-  gl_ver="$("$GL_BIN" version 2>/dev/null | tr -d '[:space:]')"
-  if [ -n "$gl_ver" ] && [ "$gl_ver" != "$SAIKIT_GITLEAKS_PIN" ]; then
-    printf 'check-secrets: AVISO — gitleaks local es %s, el CI usa %s; este PASS puede diferir del job `secrets`\n' "$gl_ver" "$SAIKIT_GITLEAKS_PIN" >&2
-  fi
-fi
-
 if [ "$#" -eq 0 ]; then
   echo "check-secrets: falta al menos un archivo" >&2
   exit 2
@@ -82,6 +68,18 @@ fi
 # solo ese archivo (12 bytes medidos junto a una trampa que ignoro).
 # ---------------------------------------------------------------------------
 if [ -n "$GL_BIN" ]; then
+  # PIN activo: solo cuando gitleaks va a escanear (hay archivos), se verifica
+  # contra $SAIKIT_GITLEAKS_PIN. Se extrae la version con una regex de semver
+  # (no `tr -d`): un `gitleaks version` puede traer contexto alrededor (prefijo
+  # `v`, commit-hash, build-id) y un comaparacion exacta daria un falso aviso.
+  # Un mismatch NO bloquea el commit (el veredicto fuerte es el job `secrets`),
+  # pero se declara en stderr: un PASS de una version distinta NO es el mismo
+  # PASS del CI. Si no se puede extraer un semver, se calla (un falso aviso
+  # entrenaria a ignorarlo).
+  gl_ver="$("$GL_BIN" version 2>/dev/null | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n 1)"
+  if [ -n "$gl_ver" ] && [ "$gl_ver" != "$SAIKIT_GITLEAKS_PIN" ]; then
+    printf 'check-secrets: AVISO — gitleaks local es %s, el CI usa %s; este PASS puede diferir del job `secrets`\n' "$gl_ver" "$SAIKIT_GITLEAKS_PIN" >&2
+  fi
   repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   gl_args=(dir --no-banner --exit-code 1 --redact --report-format json)
   if [ -f "$repo_dir/.gitleaks.toml" ]; then

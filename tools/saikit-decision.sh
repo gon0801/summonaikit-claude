@@ -21,7 +21,11 @@
 #
 # Opciones:
 #   --append        agrega una fila (es la operacion de escritura).
-#   --check         valida SOLO el archivo existente; no escribe nada.
+#   --check         valida el archivo existente. Para leer un snapshot estable
+#                   (no una fila a medio escribir, hallazgo 17.8-c) adquiere el
+#                   MISMO candado que el append, asi que necesita escritura en
+#                   $DIR (para el dir de candado); si el candado no se adquiere
+#                   en ~3 s sale 3. No modifica el tsv (REPORT, NO REPARAR).
 #   --task <id>     cual archivo (el nombre es <dir>/<task>.tsv). Obligatorio.
 #   --etapa <v>     columna etapa (estructura, NO se redacta).
 #   --decision <v>  columna decision (texto libre; se redacta).
@@ -168,7 +172,7 @@ validar_archivo() {
   # lo recorta y queda vacio; cualquier otro byte queda y se detecta. Un archivo
   # vacio (0 bytes) deja `-s` falso y se saltea (lo juzga el encabezado abajo).
   if [ -s "$f" ] && [ -n "$(tail -c 1 "$f" 2>/dev/null)" ]; then
-    printf 'TSV malformado: %s no termina en salto de linea (append truncado)\n' "$f" >&2
+    printf 'TSV malformado: %s no termina en salto de linea (fila final incompleta)\n' "$f" >&2
     exit 2
   fi
 
@@ -237,8 +241,16 @@ test_knee() {
   [ -n "$d" ] || return 0
   mkdir -p "$d" 2>/dev/null || true
   touch "$d/at-$knee.$$" 2>/dev/null || true
-  while [ ! -e "$d/go-$knee.$$" ]; do sleep 0.01; done
+  # Espera ACOTADA (fail-fast): si el go nunca aparece (test mal orquestado, o un
+  # env de test presente sin el go), no gira infinito agarrado del candado — sale
+  # 2 y el trap libera. Un bucle sin tope colgaba el tool indefinidamente.
+  local cont=0
+  while [ ! -e "$d/go-$knee.$$" ] && [ "$cont" -lt 500 ]; do sleep 0.01; cont=$((cont + 1)); done
   rm -f "$d/go-$knee.$$" "$d/at-$knee.$$" 2>/dev/null || true
+  if [ "$cont" -ge 500 ]; then
+    printf 'saikit-decision: knee %s sin liberar en ~5s (test mal orquestado)\n' "$knee" >&2
+    exit 2
+  fi
 }
 
 # Suelta SOLO el candado propio. Se re-lee el token y se compara con el OWNER
@@ -301,16 +313,20 @@ adquirir_candado() {
       # RE-VERIFICACION y RECLAMACION. La decision de "huerfano" vino de un read
       # de arriba; entre ese read y este punto OTRO pudo readquirir el lock (la
       # carrera ABA del hallazgo a). Por eso, justo antes de tocar, se RE-LEE el
-      # token: si el dueno sigue vivo NO se reclama — se espera. Un dueno vivo
-      # solo puede existir si el dir YA fue removido (mkdir lo recrea), asi que
-      # llegar aca con el dueno muerto garantiza que no hay un lock vivo que
-      # borrar — el rm del pid no se lo lleva a nadie.
+      # token y SOLO se reclama si el dueno sigue muerto. Limitacion declarada
+      # (best-effort, candado sin mutex): el re-read (cat) y el rm son dos
+      # operaciones no atomicas, asi que media una ventana de microsegundos en la
+      # que un tercero que re-adquiera pareceria "vivo" recien despues del cat —
+      # en la practica es inalcanzable (requiere que otro reclaimer haga
+      # rm+rmdir+mkdir+write en esa ventana), pero NO es una garantia dura. Si
+      # este reclamante eliminara un pid re-adquirido, el rm+rmdir de abajo
+      # puede fallar (rmdir sobre dir no vacio) y el otro quedaria como dueno.
       # La reclamacion es rm del pid + rmdir del dir vacio. Se elige sin `mv` a
-      # proposito: si nos matan entre el rm y el rmdir, el dir queda VACIO (se
-      # re-clama por edad) — self-heal. Con un `mv` del pid adentro del dir (la
-      # version anterior) un kill en esa ventana dejaba `pid.reclaim.<pid>` en
-      # el dir, que lo volvia NO-vacio para siempre y clavaba el candado
-      # (hallazgo de la revision de 17.8). El rm+rmdir no tiene ese wedge.
+      # proposito: si nos matan entre el rm y el rmdir, el dir queda VACIO y el
+      # reclamo por edad lo toma (~2 s despues de que envejece) — self-heal.
+      # Con un `mv` del pid adentro del dir (la version anterior) un kill en esa
+      # ventana dejaba `pid.reclaim.<pid>` en el dir, que lo volvia NO-vacio
+      # para siempre y clavaba el candado. El rm+rmdir no tiene ese wedge.
       dueno="$(cat "$lock_dir/pid" 2>/dev/null || true)"
       if [ -n "$dueno" ]; then
         pid_guardado="${dueno%%:*}"
@@ -342,11 +358,12 @@ if [ "$MODO" = "check" ]; then
     printf 'TSV invalido: no existe %s\n' "$archivo" >&2
     exit 2
   fi
-  # --check lee SOLO, pero sin candado podia leer una fila a medio escribir y
-  # reportar "malformado" falso (hallazgo 17.8-c). Se adquiere el MISMO candado
-  # que el append para leer un snapshot estable; si no se adquiere (3s) sale 3,
-  # sin tocar un byte. El trap de liberar_candado lo suelta al salir (aun por
-  # exit 2), asi un --check sobre un archivo malformado no deja el candado puesto.
+  # --check adquiere el candado para leer un snapshot estable: sin el, podia
+  # leer una fila a medio escribir y reportar "malformado" falso (hallazgo
+  # 17.8-c). Necesita escritura en $DIR (el dir de candado); si el candado no se
+  # adquiere en ~3 s sale 3 (contencion o $DIR sin escritura), sin tocar un
+  # byte. El trap de liberar_candado lo suelta al salir (aun por exit 2), asi un
+  # --check sobre un archivo malformado no deja el candado puesto.
   adquirir_candado || exit $?
   validar_archivo "$archivo" || exit $?
   liberar_candado
