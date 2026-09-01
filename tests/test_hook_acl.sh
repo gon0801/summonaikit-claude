@@ -510,6 +510,11 @@ else
 fi
 "$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$perfilFix_hooks_w" \
   -BackupRoot "$perfilFix_backup_w" -Fix > "$tmp/acl-fix-default.txt" 2>&1
+rc_fix=$?
+# grok xrev #4: el exit exacto se fija tambien aqui -- tras el -Fix queda el
+# hallazgo de la skills-root (POLITICA), asi que el contrato exige 1.
+[ "$rc_fix" -eq 1 ] \
+  || malo "tras -Fix con la skills-root sucia el exit debe ser 1 (POLITICA), fue $rc_fix"
 grep -qi 'RutasExtra por defecto NO se corrige' "$tmp/acl-fix-default.txt" \
   || malo "no avisa que la skills-root por defecto no se corrige: $(cat "$tmp/acl-fix-default.txt")"
 hooks_despues="$(icacls "$tmp/perfilFix/.claude/hooks" 2>&1)"
@@ -518,6 +523,55 @@ printf '%s' "$hooks_despues" | grep -qi 'Everyone:.*(M)' \
   && malo "-Path SI deberia haberse corregido (Everyone sigue con Modify): $hooks_despues"
 printf '%s' "$skills_despues" | grep -qi 'Everyone:.*(M)' \
   || malo "la skills-root por defecto se corrigio SIN -RutasExtra explicito (radio destructivo de mas): $skills_despues"
+
+# grok xrev #1 (PR #138): con -Path LIMPIO y solo la skills-root sucia, un
+# -Fix sin flags tiene que ser NO-OP total sobre -Path -- el guard viejo
+# (`$before.Count -eq 0`) contaba los hallazgos de la raiz derivada y le
+# cortaba la herencia a un arbol sin hallazgos propios. La asercion compara
+# la ACL COMPLETA de hooks antes/despues (el hecho), no un mensaje.
+caso "hooks limpio + skills sucio: -Fix sin flags no toca -Path (no-op por radio)"
+mkdir -p "$tmp/perfilNop/.claude/hooks"
+mkdir -p "$tmp/perfilNop/.claude/skills"
+if command -v cygpath >/dev/null 2>&1; then
+  perfilNop_hooks_w="$(cygpath -w "$tmp/perfilNop/.claude/hooks")"
+  perfilNop_backup_w="$(cygpath -w "$tmp/perfilNop-backup")"
+else
+  perfilNop_hooks_w="$tmp/perfilNop/.claude/hooks"
+  perfilNop_backup_w="$tmp/perfilNop-backup"
+fi
+# hooks tiene que estar LIMPIO de verdad: bajo %TEMP% hereda ACEs ajenos del
+# tmpdir (medido: un SID con (I)(M) volvia la premisa falsa y la reparacion
+# corria con razon). Herencia cortada + solo keep-list, ANTES de crear hijos
+# para que hereden lo limpio.
+icacls "$perfilNop_hooks_w" //inheritance:r >/dev/null 2>&1
+icacls "$perfilNop_hooks_w" //grant "*S-1-5-18:(OI)(CI)F" >/dev/null 2>&1
+icacls "$perfilNop_hooks_w" //grant "*S-1-5-32-544:(OI)(CI)F" >/dev/null 2>&1
+icacls "$perfilNop_hooks_w" //grant "$(whoami):(OI)(CI)F" >/dev/null 2>&1
+touch "$tmp/perfilNop/.claude/hooks/limpio.txt"
+touch "$tmp/perfilNop/.claude/skills/sucio.txt"
+# Precondicion dura: hooks SOLO (opt-out) audita limpio, o la premisa del caso
+# es falsa y nada de lo de abajo mide lo que dice medir.
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$perfilNop_hooks_w" -RutasExtra '' >/dev/null 2>&1
+[ $? -eq 0 ] || malo "precondicion: hooks del fixture no quedo limpio (la premisa del caso seria falsa)"
+icacls "$tmp/perfilNop/.claude/skills" //grant "Everyone:(OI)(CI)M" >/dev/null 2>&1
+icacls "$tmp/perfilNop/.claude/skills" 2>&1 | grep -qi 'Everyone:.*(M)' \
+  || malo "precondicion: el grant sobre skills no tomo; el caso no mide el no-op"
+nop_antes="$(icacls "$tmp/perfilNop/.claude/hooks" 2>&1)"
+"$pwsh_bin" -NoProfile -ExecutionPolicy Bypass -File "$tool_win" -Path "$perfilNop_hooks_w" \
+  -BackupRoot "$perfilNop_backup_w" -Fix > "$tmp/acl-nop.txt" 2>&1
+rc_nop=$?
+nop_despues="$(icacls "$tmp/perfilNop/.claude/hooks" 2>&1)"
+[ "$nop_antes" = "$nop_despues" ] \
+  || malo "-Fix con -Path limpio le cambio la ACL a hooks por hallazgos ajenos (regresion grok #1): antes<<$nop_antes>> despues<<$nop_despues>>"
+[ "$rc_nop" -eq 1 ] \
+  || malo "el no-op por radio debe salir 1 (hay hallazgo, fuera del radio), fue $rc_nop"
+# La frase DISTINTIVA del gate nuevo ('No se modifico nada'), no 'POLITICA' a
+# secas: el cierre viejo tambien imprimia POLITICA y ese grep no discriminaba
+# (medido: 0 apariciones de la frase nueva en la salida del tool sin fix).
+grep -qi 'No se modifico nada' "$tmp/acl-nop.txt" \
+  || malo "el no-op por radio no declaro 'No se modifico nada': $(cat "$tmp/acl-nop.txt")"
+[ -d "$tmp/perfilNop-backup" ] \
+  && malo "el no-op por radio NO debio crear backup (no va a modificar nada)"
 
 # ------------------------------------- Gap 1 (segundo ciclo, 16.12)
 # Reproduccion del reviewer: `Repair-HookAcl` (linea ~708) SI respeta el radio

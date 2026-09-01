@@ -231,9 +231,12 @@ function Get-DefaultSkillsRoot {
     #
     # El default SOLO aplica cuando `-Path` tiene la forma exacta
     # `<perfil>\.claude\hooks`: hoja `hooks`, con padre de hoja `.claude`.
-    # Cualquier otra forma -- `~/.claude` a secas, `%TEMP%`, `AppData`, ruta
-    # relativa (`hooks`, `.`), raiz de unidad (`C:\`), UNC que no calce el
-    # patron -- devuelve `$null`: falla SUAVE, nunca excepcion. Antes,
+    # Cualquier otra forma -- `~/.claude` a secas, `%TEMP%`, `AppData`, una
+    # relativa SIN esa forma (`hooks`, `.`), raiz de unidad (`C:\`), UNC que
+    # no calce el patron -- devuelve `$null`: falla SUAVE, nunca excepcion.
+    # OJO (grok xrev #5): una relativa que SI calza la forma
+    # (`sub\.claude\hooks`) deriva su hermana relativa al cwd -- el criterio
+    # es la FORMA, no que sea absoluta. Antes,
     # `Split-Path -Parent 'hooks'` da cadena vacia y `Join-Path ''` revienta
     # con `$ErrorActionPreference='Stop'` (exit 1), un codigo que el contrato
     # de este script reserva para "hay hallazgo", no para "me rompi".
@@ -759,11 +762,27 @@ $rutasParaFix = if ($RutasExtraEsDefault) { @() } else { $RutasExtra }
 # la raiz derivada por defecto), pero solo se MUTA lo que cuelga de aca.
 $raicesMutables = @($Path) + @($rutasParaFix)
 
+# grok xrev #1 (PR #138): el no-op se decide por el RADIO MUTABLE, no por
+# $before entero. $before incluye la raiz derivada (solo auditada); con
+# `-Path` limpio y skills sucio, el guard viejo (`$before.Count -eq 0`, mas
+# arriba) dejaba pasar y `Repair-HookAcl` le cortaba la herencia a un arbol
+# SIN hallazgos -- una corrida que antes del default era no-op. Si nada de lo
+# hallado cae dentro del radio, -Fix no toca un byte: ni backup ni reparacion.
+$beforeMutables = @($before | Where-Object { Test-PathUnderAnyRoot -ChildPath $_.Path -Roots $raicesMutables })
+if ($beforeMutables.Count -eq 0) {
+    Write-Output ""
+    Write-Output "POLITICA: todos los hallazgos quedan FUERA del radio que -Fix corrige (la raiz derivada por defecto solo se AUDITA). No se modifico nada; pasar -RutasExtra explicito para corregirla."
+    exit 1
+}
+
 # Se respalda exactamente lo que `Repair-HookAcl` va a tocar: la raiz (se le
 # corta la herencia), cada raiz extra EXPLICITA existente (nunca la derivada
 # por defecto) y cualquier hijo con ACE explicito propio.
+# grok xrev #2: los hijos con ACE explicito solo entran al backup si cuelgan
+# del radio MUTABLE -- un hallazgo explicito bajo la raiz derivada jamas se
+# muta, y meterlo inflaba el conteo de "objeto(s) a modificar" (reviewer r3).
 $aTocar = @(@($Path) + @($rutasParaFix | Where-Object { Test-Path -LiteralPath $_ }) +
-           @($before | Where-Object { -not $_.IsInherited } |
+           @($beforeMutables | Where-Object { -not $_.IsInherited } |
              Select-Object -ExpandProperty Path) | Select-Object -Unique)
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -831,7 +850,11 @@ if ($dentroDeAlcance.Count -gt 0) {
     Write-FindingSummary -Findings $dentroDeAlcance
 }
 if ($fueraDeAlcance.Count -gt 0) {
-    Write-Output "POLITICA (no es fallo de la correccion): quedaron ACE con escritura fuera del radio que -Fix corrige -- la raiz derivada por defecto solo se AUDITA. Pasar -RutasExtra explicito para que -Fix tambien la corrija."
+    # grok xrev #3: aca caen DOS clases -- la raiz derivada (solo auditada) y
+    # cualquier ruta que GetFullPath no normaliza (fail-closed: no se muta lo
+    # que no se puede comparar). El texto nombra ambas; atribuir todo a la
+    # derivada mentia cuando lo excluido era una ruta rara dentro de -Path.
+    Write-Output "POLITICA (no es fallo de la correccion): quedaron ACE con escritura fuera del radio que -Fix corrige -- la raiz derivada por defecto solo se AUDITA, y una ruta no normalizable (comodines, >259 chars) no se muta por postura fail-closed. Pasar -RutasExtra explicito para corregir la derivada."
     Write-FindingSummary -Findings $fueraDeAlcance
 }
 Write-Output "Revertir con: -Restore `"$backupJson`""
