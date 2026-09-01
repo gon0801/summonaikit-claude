@@ -1838,6 +1838,10 @@ verdict_ensure_gitignore() {
 # basta el prefijo. El backslash de Windows se normaliza antes de comparar.
 verdict_path_dentro() {
   local vp="${1//\\//}"
+  # Normaliza un prefijo de repo con ./ delante (./.saikit/veredictos/...): el
+  # Write del reviewer llega relativo sin ./ en la forma medida, pero aceptar la
+  # forma con ./ evita perder el sello por un detalle de escritura (CodeRabbit).
+  case "$vp" in ./.*) vp="${vp#./}" ;; esac
   case "$vp" in
     .saikit/veredictos/*|"$VERDICTOS_DIR"/*) return 0 ;;
   esac
