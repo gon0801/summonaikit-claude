@@ -8,10 +8,10 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: 017515e21f2c8b530e405d7121a38c6faab82eb4f74c652c2465d4ed475dc989
-# hook_bytes: 181319
-# hook_lineas: 2992
-# escenarios: 54
+# hook_sha256: fc48f8e83c24b56e58c9121cad77537547d3b39b36b65ee66d5fc83fc7858f97
+# hook_bytes: 187230
+# hook_lineas: 3107
+# escenarios: 55
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
 #   <SANDBOX>      la raiz temporal de cada escenario
@@ -5839,4 +5839,67 @@ hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
 | adv_violation=
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
+| *
+
+=== escenario 56-veredicto-sellado
+# Escenario 56 — el sello del veredicto (D16, Task 18.3).
+# 
+# Un turno armado donde el reviewer escribe `.saikit/veredictos/<sha>.json` con la
+# tool `Write`. El hook (en el PostToolUse atribuido al rol reviewer sobre
+# veredictos/) debe registrar `veredicto_sha256 = sha256(tool_input.content)` en
+# el estado de sesion (registro de estado, NO un check del Stop) y crear el
+# `.gitignore` de `.saikit/veredictos/`.
+# 
+# Pasos:
+#   01. prompt  — armado con `-saikit sellar el veredicto`.
+#   02. tool    — Write (agent_type=reviewer) sobre `.saikit/veredictos/abc123...json`
+#                 con el contenido del veredicto en `tool_input.content`.
+# 
+# El estado resultante lleva `veredicto_sha256` (el hash del contenido) y el
+# `.gitignore` se crea bajo `.saikit/veredictos/`.
+--- paso 01  phase=prompt target=claude  payload=01.prompt.claude.json
+exit 0
+stdout (sha 75b29eb1e7a52962, 14866 bytes) identico a 02-armado-contrato/paso 01
+stderr <vacio>
+--- estado tras el paso 01
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 3447296417
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
+| task_hash=3447296417
+| cycle=0
+| implemented=0
+| verified=0
+| agents_seen=
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+--- paso 02  phase=tool target=claude  payload=02.tool.claude.json
+exit 0
+stdout <vacio>
+stderr <vacio>
+--- estado tras el paso 02
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-evidence.log
+| prompt task started: 3447296417
+| agent: reviewer
+| implemented: .saikit/veredictos/abc123abc123abc123.json
+| veredicto_sha256: 0bff977fae91e525ed506886fb68b1d36772321757dd60836c07fad89609db32
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state-review-notice.env
+| counter=1
+| last_code_edit=1
+| last_review=1
+hooks/state/<PROJECT_KEY>/c1a70000-1111-4222-8333-444455556666/harness-state.env
+| task_hash=3447296417
+| cycle=0
+| implemented=1
+| verified=0
+| agents_seen=reviewer
+| lane=full
+| adv_epoch=<TS>
+| adv_paths=
+| adv_violation=
+| adv_violation_paths=
+| veredicto_sha256=0bff977fae91e525ed506886fb68b1d36772321757dd60836c07fad89609db32
+proyecto/.saikit/veredictos/.gitignore
 | *

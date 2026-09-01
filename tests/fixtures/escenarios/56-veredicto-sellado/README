@@ -1,0 +1,15 @@
+Escenario 56 — el sello del veredicto (D16, Task 18.3).
+
+Un turno armado donde el reviewer escribe `.saikit/veredictos/<sha>.json` con la
+tool `Write`. El hook (en el PostToolUse atribuido al rol reviewer sobre
+veredictos/) debe registrar `veredicto_sha256 = sha256(tool_input.content)` en
+el estado de sesion (registro de estado, NO un check del Stop) y crear el
+`.gitignore` de `.saikit/veredictos/`.
+
+Pasos:
+  01. prompt  — armado con `-saikit sellar el veredicto`.
+  02. tool    — Write (agent_type=reviewer) sobre `.saikit/veredictos/abc123...json`
+                con el contenido del veredicto en `tool_input.content`.
+
+El estado resultante lleva `veredicto_sha256` (el hash del contenido) y el
+`.gitignore` se crea bajo `.saikit/veredictos/`.
