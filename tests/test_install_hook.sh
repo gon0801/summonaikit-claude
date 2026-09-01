@@ -2170,8 +2170,14 @@ host_claude_recetas --dry-run >/dev/null 2>&1
 caso "17.6: --quitar-recetas borra los dos archivos propios de saikit-verificar-app"
 nuevo_destino; nuevo_casa_recetas
 host_claude_recetas >/dev/null 2>&1
-[ -f "$casa_recetas/.claude/skills/saikit-verificar-app/SKILL.md" ] \
-  || malo "precondicion: la skill no se instalo; el quitar no mide nada"
+# La precondicion cubre los DOS archivos (CodeRabbit, PR #136): con solo
+# SKILL.md, un install que no publicara verificar.sh dejaba la asercion de
+# ausencia de abajo pasando EN VACIO — el caso diria "quitado" sin que nada se
+# hubiera instalado.
+for b in SKILL.md verificar.sh; do
+  [ -f "$casa_recetas/.claude/skills/saikit-verificar-app/$b" ] \
+    || malo "precondicion: $b no se instalo; el quitar no mide nada"
+done
 host_claude_recetas --quitar-recetas >/dev/null 2>&1
 [ ! -f "$casa_recetas/.claude/skills/saikit-verificar-app/SKILL.md" ] \
   || malo "--quitar-recetas no quito saikit-verificar-app/SKILL.md"
