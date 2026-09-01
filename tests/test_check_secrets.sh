@@ -142,6 +142,110 @@ else
   printf '    skip: hay gitleaks en /usr/bin, el fallback no se puede forzar con este PATH\n'
 fi
 
+# ---------------------------------------------------------------------------
+# DoD 17.7 — el candado local NO es mas laxo que el CI. Se reproduce el hallazgo
+# #3 medido en 17.3: un COMENTARIO con palabra-clave + forma de asignacion —
+# la regla `generic-api-key` de gitleaks salta con keyword + asignacion AUN EN
+# COMENTARIOS, pero el fallback grep (que no conoce la palabra-clave "access")
+# lo dejaba pasar (medido en 17.7: la capa local decia PASS sobre lo que el CI
+# rechaza). Con la capa local pinneada a gitleaks 8.30.1 (MISMO binario/version
+# que el job `secrets` del CI) el hallazgo se ATRAPA; sin gitleaks el fallback
+# pasa pero DECLARA que su PASS no es el veredicto, nunca un skip silencioso.
+#
+# El fixture se arma TODO en runtime, prefijo partido y cola FAKE (baja entropia,
+# como form_token de test_saikit_decision.sh): gitleaks escanea el HISTORIAL
+# COMPLETO de la rama y un literal real quedaria commiteado para siempre.
+# ---------------------------------------------------------------------------
+caso "17.7: el comentario con keyword+asignacion que el CI rechaza es atrapado (gitleaks) o declarado (fallback)"
+# access_key, jamás contiguo en el blob: se arma en runtime con el prefijo partido
+# (el 17.3 pagó tres veces que un literal real queda en el historial de la rama).
+kw="$(printf 'access_%s' 'key')"
+# Cola FAKE con entropia suficiente para que la regla `generic-api-key` salte
+# (pide ~3.5; una cola repetida de "FAKE" no llega y la regla la ignora, medido
+# en 17.7). Se parte tambien: nada contiguo con forma de valor en el blob.
+v1='z9y8x7w6v5u4t3s2'; v2='r1q0'; val="${v1}${v2}"
+printf '# la %s se roto: %s\n' "$kw" "$val" > "$tmp/comentario_clave.txt"
+
+# Con gitleaks (la capa local fuerte, pinneada al 8.30.1 del CI) el hallazgo se
+# ATRAPA: exit 1. Es la afirmacion central de 17.7 — la capa local no deja pasar
+# lo que el job `secrets` rechazaria.
+gl="$(command -v gitleaks 2>/dev/null || true)"
+[ -z "$gl" ] && [ -x /tmp/gitleaks-bin/gitleaks.exe ] && gl=/tmp/gitleaks-bin/gitleaks.exe
+if [ -n "$gl" ]; then
+  SAIKIT_GITLEAKS="$gl" bash "$tool" "$tmp/comentario_clave.txt" >/dev/null 2>&1
+  [ $? -eq 1 ] || malo "gitleaks NO atrapo el comentario keyword+asignacion (la capa local quedo mas laxa que el CI)"
+else
+  printf '    skip (17.7): sin gitleaks local en esta maquina; la declaracion del fallback se verifica abajo\n'
+fi
+
+# Sin gitleaks el fallback PASA en el hallazgo (esa es justo la limitacion
+# medida) — pero DECLARA que su PASS no es el veredicto, no lo calla. Ese es el
+# "fallback declarado" de la decision 17.7-a.
+if [ "$fb_ok" -eq 1 ]; then
+  out="$(fb "$tmp/comentario_clave.txt" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "el fallback no dejo pasar el comentario (rc=$rc); no reproduce la limitacion medida"
+  case "$out" in
+    *"sin gitleaks local"*) ;;
+    *) malo "el fallback no DECLARO que su PASS no es el veredicto (el juez es el job secrets del CI)" ;;
+  esac
+fi
+
+# ---------------------------------------------------------------------------
+# 17.7 (cross-review codex#6/grok#4) — el chequeo del PIN no debe dar FALSO AVISO
+# con un output que trae contexto alrededor de la version, y SI debe avisar en un
+# mismatch real. Antes, `tr -d '[:space:]'` dejaba 'v8.30.1' != '8.30.1' y daba
+# un falso aviso. Se usa un stub de gitleaks: para `version` imprime $FAKE_GL_VERSION
+# (con contexto); para el "escaneo" no encuentra nada (exit 0).
+# ---------------------------------------------------------------------------
+caso "17.7: el pin de version no da falso aviso con contexto, y si avisa en mismatch real"
+cat > "$tmp/fake-gitleaks" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "version" ]; then
+  printf '%s\n' "$FAKE_GL_VERSION"
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$tmp/fake-gitleaks" 2>/dev/null || true
+if [ -x "$tmp/fake-gitleaks" ]; then
+  # Cada invocacion sale con PATH=/usr/bin a secas (como fb()): si en la maquina
+  # hay un gitleaks real en el PATH, `command -v gitleaks` lo ganaria y el stub
+  # de $SAIKIT_GITLEAKS seria ignorado — el caso mediria la version real, no la
+  # del stub, y fallaria s puriamente segun la maquina. Con PATH=/usr/bin el
+  # stub de $SAIKIT_GITLEAKS manda siempre (determinista).
+  #
+  # (a) version con contexto que matchea el pin (v-prefix + build-id): NO falso aviso
+  out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "con version que matchea el pin el chequeo fallo (rc=$rc): $out"
+  case "$out" in
+    *"AVISO — gitleaks local es"*) malo "falso AVISO de version con contexto que matchea el pin: $out" ;;
+  esac
+
+  # (b) mismatch real (9.9.9): SI avisa (y el escaneo no se bloquea)
+  out="$(FAKE_GL_VERSION="9.9.9" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "con version distinta el escaneo no debio fallar (rc=$rc): $out"
+  case "$out" in
+    *"AVISO — gitleaks local es 9.9.9"*) ;;
+    *) malo "no aviso en un mismatch real de version: $out" ;;
+  esac
+else
+  printf '    skip (17.7 pin): no se pudo hacer ejecutable el stub de gitleaks\n'
+fi
+
+caso "17.7: SAIKIT_GITLEAKS explicito GANA sobre el gitleaks del PATH (CodeRabbit PR #133)"
+# La remediacion documentada en el tool ("apuntar SAIKIT_GITLEAKS al 8.30.1")
+# era mentira con otro gitleaks en el PATH: el PATH lo pisaba y el escaneo
+# corria con el binario incompatible. Dos shims que registran QUIEN corrio:
+# el configurado debe escanear; el del PATH no debe ni tocarse.
+mkdir -p "$tmp/pathbin" "$tmp/cfgbin"
+printf '#!/bin/sh\ntouch "%s/marca_path"\n[ "$1" = version ] && echo 8.30.1\nexit 0\n' "$tmp" > "$tmp/pathbin/gitleaks"
+printf '#!/bin/sh\ntouch "%s/marca_cfg"\n[ "$1" = version ] && echo 8.30.1\nexit 0\n' "$tmp" > "$tmp/cfgbin/gl-pin"
+chmod +x "$tmp/pathbin/gitleaks" "$tmp/cfgbin/gl-pin"
+rm -f "$tmp/marca_path" "$tmp/marca_cfg"
+PATH="$tmp/pathbin:$PATH" SAIKIT_GITLEAKS="$tmp/cfgbin/gl-pin" bash "$tool" "$tmp/limpio.sh" >/dev/null 2>&1
+[ -e "$tmp/marca_cfg" ] || malo "el binario configurado en SAIKIT_GITLEAKS no corrio (el PATH lo piso)"
+[ -e "$tmp/marca_path" ] && malo "el gitleaks del PATH corrio pese a SAIKIT_GITLEAKS configurado"
+
 # --- aridad ---------------------------------------------------------------
 caso "sin archivos => exit 2"
 bash "$tool" >/dev/null 2>&1

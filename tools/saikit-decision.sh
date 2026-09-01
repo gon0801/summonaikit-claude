@@ -21,7 +21,11 @@
 #
 # Opciones:
 #   --append        agrega una fila (es la operacion de escritura).
-#   --check         valida SOLO el archivo existente; no escribe nada.
+#   --check         valida el archivo existente. Para leer un snapshot estable
+#                   (no una fila a medio escribir, hallazgo 17.8-c) adquiere el
+#                   MISMO candado que el append, asi que necesita escritura en
+#                   $DIR (para el dir de candado); si el candado no se adquiere
+#                   en ~3 s sale 3. No modifica el tsv (REPORT, NO REPARAR).
 #   --task <id>     cual archivo (el nombre es <dir>/<task>.tsv). Obligatorio.
 #   --etapa <v>     columna etapa (estructura, NO se redacta).
 #   --decision <v>  columna decision (texto libre; se redacta).
@@ -70,6 +74,10 @@ HEADER='cuando|etapa|decision|por_que|evidencia|resultado'
 
 TASK=""; ETAPA=""; DECISION=""; POR_QUE=""; EVIDENCIA=""; RESULTADO=""
 CUANDO=""; DIR=""; MODO=""; candado_propio=0
+# Token de adquisicion: al obtener el candado se escribe "$$:<nonce>". El nonce
+# (generado por adquisicion) identifica UNA posesion, para que liberar_candado
+# conozca su propio candado y no le borre el de otro (hallazgo 17.8-a).
+lock_nonce=""; lock_dir=""
 
 uso() {
   sed -n '2,80p' "$0"
@@ -156,6 +164,19 @@ validar_archivo() {
   local CR; CR="$(printf '\r')"
   [ -f "$f" ] || return 0   # no existe: nada que validar (append lo crea)
 
+  # La ULTIMA fila tiene que terminar en salto de linea. Si el archivo no termina
+  # en \n, la fila final esta INCOMPLETA — tipicamente un append cortado por
+  # SIGKILL/ENOSPC, o un archivo externo sin el \n final — y esa fila parcial se
+  # "pegaria" a la siguiente cuando alguien escriba despues; el check la daria
+  # por buena (hallazgo 17.8-b). Se reporta malformado, no se da por buena ni se
+  # repara. El `tail -c 1` da \n => la sustitución de comando lo recorta y queda
+  # vacio; cualquier otro byte queda y se detecta. Un archivo vacio (0 bytes)
+  # deja `-s` falso y se saltea (lo juzga el encabezado abajo).
+  if [ -s "$f" ] && [ -n "$(tail -c 1 "$f" 2>/dev/null)" ]; then
+    printf 'TSV malformado: %s no termina en salto de linea (fila final incompleta)\n' "$f" >&2
+    exit 2
+  fi
+
   local primera="" linea num=0 campos corta
   while IFS= read -r linea || [ -n "$linea" ]; do
     num=$((num + 1))
@@ -209,58 +230,125 @@ validar_archivo() {
   return 0
 }
 
+# Punto de suspension SOLO bajo test (SAIKIT_DECISION_TEST=1). Permite a un test
+# de concurrencia detener el tool en un punto conocido y orquestar la carrera con
+# determinismo (precedente de la 0.4: un bucle se midio con timeout y rc=124).
+# Sin el guard, o sin SAIKIT_DECISION_TEST_DIR, es un no-op: PRODUCCION INTACTA.
+# El control es por archivo con el PID del proceso ($$), asi un test sabe por
+# PID a quien detuvo: el tool escribe at-<knee>.$$ y espera go-<knee>.$$.
+test_knee() {
+  [ "${SAIKIT_DECISION_TEST:-}" = "1" ] || return 0
+  local knee="$1" d="${SAIKIT_DECISION_TEST_DIR:-}"
+  [ -n "$d" ] || return 0
+  mkdir -p "$d" 2>/dev/null || true
+  touch "$d/at-$knee.$$" 2>/dev/null || true
+  # Espera ACOTADA (fail-fast): si el go nunca aparece (test mal orquestado, o un
+  # env de test presente sin el go), no gira infinito agarrado del candado — sale
+  # 2 y el trap libera. Un bucle sin tope colgaba el tool indefinidamente.
+  local cont=0
+  while [ ! -e "$d/go-$knee.$$" ] && [ "$cont" -lt 500 ]; do sleep 0.01; cont=$((cont + 1)); done
+  # Timeout REAL: solo si el cont llego al tope Y el go SIGUE ausente. Si el go
+  # aparecio justo en la ultima ventana (cont==500), no es un fallo: se suelta
+  # normal. Se limpia el at y se sale 2 (el trap libera el candado); no gire.
+  if [ "$cont" -ge 500 ] && [ ! -e "$d/go-$knee.$$" ]; then
+    rm -f "$d/at-$knee.$$" 2>/dev/null || true
+    printf 'saikit-decision: knee %s sin liberar en ~5s (test mal orquestado)\n' "$knee" >&2
+    exit 2
+  fi
+  rm -f "$d/go-$knee.$$" "$d/at-$knee.$$" 2>/dev/null || true
+}
+
+# Suelta SOLO el candado propio. Se re-lee el token y se compara con el OWNER
+# ("$$:$lock_nonce"): si en el ínterin el candado fue reclamado por otro (otro
+# pid/nonce), NO se toca — el trap EXIT de un proceso no le borra el candado al
+# otro (hallazgo 17.8-a). Antes, el trap borraba sin mirar y, tras la carrera
+# ABA, los dos terminaban con candado_propio=1 y se destrozaban el lock mutuo.
 liberar_candado() {
   if [ "$candado_propio" -ne 1 ]; then return 0; fi
-  rm -f "$lock_dir/pid" 2>/dev/null || true
-  rmdir "$lock_dir" 2>/dev/null || true
+  local token=""
+  token="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+  if [ "$token" = "$$:$lock_nonce" ]; then
+    rm -f "$lock_dir/pid" 2>/dev/null || true
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+  candado_propio=0
 }
 
 adquirir_candado() {
   lock_dir="$DIR/.saikit-decision-$TASK.lock"
-  local intentos=0 pid_guardado vivo
+  local intentos=0 pid_guardado vivo dueno
   while [ "$intentos" -lt 60 ]; do
     if mkdir "$lock_dir" 2>/dev/null; then
-      printf '%s' "$$" > "$lock_dir/pid" 2>/dev/null
+      # Somos el dueno. Se escribe el token y se VERIFICA que llego (hallazgo c:
+      # antes se tragaba el fallo y quedaba un lock SIN pid que nadie podia
+      # reclamar de forma segura). Si la escritura falla, esta adquisicion no es
+      # un lock valido: se suelta (el dir es nuestro) y se reintenta.
+      lock_nonce="$RANDOM${RANDOM}${RANDOM}"
+      if ! printf '%s:%s' "$$" "$lock_nonce" > "$lock_dir/pid" 2>/dev/null; then
+        rmdir "$lock_dir" 2>/dev/null || true
+        sleep 0.05; intentos=$((intentos + 1)); continue
+      fi
       candado_propio=1
       trap 'liberar_candado' EXIT
+      test_knee hold
       return 0
     fi
-    # El dir existe. Solo se considera huerfano si su pid esta escrito y murio:
-    # sin pid legible (otro proceso lo acaba de crear o esta por escribirlo) NO
-    # se toca — rmdirlo ahi seria robarle el candado a alguien que ya lo tiene,
-    # y seria la puerta a partir una fila. En lo ambiguo se espera y se reintenta.
-    pid_guardado=""; vivo=0
-    if [ -f "$lock_dir/pid" ]; then
-      pid_guardado="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    # El dir existe. Se lee el dueno. Si esta escrito y vivo => esperar. Si esta
+    # escrito y muerto => huerfano candidato. Sin pid: o un writer a mitad del
+    # mkdir+pid (microsegundos) o un huerfano muerto ANTES de escribir el pid;
+    # se distingue por la EDAD del dir (un writer vivo escribe el pid en
+    # microsegundos). Portabilidad (hallazgo d): `stat -c %Y` es GNU (MSYS/Linux
+    # del repo); donde no exista el fallback deja edad 0, que es "nunca
+    # reclamar" — fail-safe declarado: en un sistema sin stat GNU no se reclama
+    # un huerfano a ciegas, se espera (mejor bloquear 3s que partir una fila).
+    vivo=0
+    dueno="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    if [ -n "$dueno" ]; then
+      pid_guardado="${dueno%%:*}"
       if [ -n "$pid_guardado" ] && kill -0 "$pid_guardado" 2>/dev/null; then
         vivo=1
-      elif [ -n "$pid_guardado" ]; then
-        vivo=0   # pid escrito pero muerto: huerfano, se limpia y se reintenta
-      else
-        vivo=1   # pid ilegible/vacio: no es evidencia de huerfano, esperar
       fi
     else
-      # Sin pid: o un writer a mitad del mkdir+pid (microsegundos) o un huerfano
-      # (writer muerto ANTES de escribir el pid — un SIGKILL en esa ventana no
-      # corre el trap). Se distingue por la EDAD del dir: un recien creado tiene
-      # mtime fresco; uno que lleva >2s sin pid es un huerfano (un writer vivo
-      # escribe el pid en microsegundos). Reclamarlo no arriesga partir una fila:
-      # el rmdir solo funciona sobre un dir VACIO (sin pid); si el writer vivo
-      # siguiera ahi, ya habria escrito el pid y el rmdir fallaria. Si `stat` no
-      # esta disponible se espera (direccion segura: jamás reclamar a ciegas).
       dir_m="$(stat -c %Y "$lock_dir" 2>/dev/null || echo "$(date +%s)")"
-      if [ $(( $(date +%s) - dir_m )) -gt 2 ]; then
-        vivo=0   # huerfano sin pid y viejo: se limpia y se reintenta
-      else
+      if [ $(( $(date +%s) - dir_m )) -le 2 ]; then
         vivo=1
       fi
     fi
-    if [ "$vivo" -ne 1 ]; then
-      # Huerfano con pid muerto: el dir NO esta vacio (tiene el pid), asi que un
-      # rmdir pelado fallaria y el candado quedaria clavado para siempre. Se saca
-      # el pid y recien entonces el dir. Es la MISMA limpieza que liberar_candado.
-      rm -f "$lock_dir/pid" 2>/dev/null || true
-      rmdir "$lock_dir" 2>/dev/null || true
+    if [ "$vivo" -eq 0 ]; then
+      # RE-VERIFICACION y RECLAMACION. La decision de "huerfano" vino de un read
+      # de arriba; entre ese read y este punto OTRO pudo readquirir el lock (la
+      # carrera ABA del hallazgo a). Por eso, justo antes de tocar, se RE-LEE el
+      # token y SOLO se reclama si el dueno sigue muerto. Limitacion declarada
+      # (best-effort, candado sin mutex): el re-read (cat) y el rm son dos
+      # operaciones no atomicas, asi que media una ventana de microsegundos en la
+      # que un tercero que re-adquiera pareceria "vivo" recien despues del cat —
+      # en la practica es inalcanzable (requiere que otro reclaimer haga
+      # rm+rmdir+mkdir+write en esa ventana), pero NO es una garantia dura. Si
+      # este reclamante eliminara un pid re-adquirido, el rm+rmdir de abajo
+      # puede fallar (rmdir sobre dir no vacio) y el otro quedaria como dueno.
+      # La reclamacion es rm del pid + rmdir del dir vacio. Se elige sin `mv` a
+      # proposito: si nos matan entre el rm y el rmdir, el dir queda VACIO y el
+      # reclamo por edad lo toma (~2 s despues de que envejece) — self-heal.
+      # Con un `mv` del pid adentro del dir (la version anterior) un kill en esa
+      # ventana dejaba `pid.reclaim.<pid>` en el dir, que lo volvia NO-vacio
+      # para siempre y clavaba el candado. El rm+rmdir no tiene ese wedge.
+      dueno="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+      if [ -n "$dueno" ]; then
+        pid_guardado="${dueno%%:*}"
+        if [ -n "$pid_guardado" ] && kill -0 "$pid_guardado" 2>/dev/null; then
+          vivo=1
+        else
+          # Sigue siendo huerfano (re-verificado). rm del pid + rmdir del dir
+          # vacio: si en el ínterin OTRO re-creo el dir con pid, el rmdir falla
+          # (no vacio) y se espera — nunca se le borra el candado a un vivo.
+          rm -f "$lock_dir/pid" 2>/dev/null || true
+          rmdir "$lock_dir" 2>/dev/null || true
+        fi
+      else
+        # Dir vacio y viejo (huerfano sin pid). rmdir pelado: si en el instante
+        # OTRO acaba de re-crearlo con pid, el rmdir falla (no vacio) y se espera.
+        rmdir "$lock_dir" 2>/dev/null || true
+      fi
     fi
     sleep 0.05
     intentos=$((intentos + 1))
@@ -275,7 +363,15 @@ if [ "$MODO" = "check" ]; then
     printf 'TSV invalido: no existe %s\n' "$archivo" >&2
     exit 2
   fi
+  # --check adquiere el candado para leer un snapshot estable: sin el, podia
+  # leer una fila a medio escribir y reportar "malformado" falso (hallazgo
+  # 17.8-c). Necesita escritura en $DIR (el dir de candado); si el candado no se
+  # adquiere en ~3 s sale 3 (contencion o $DIR sin escritura), sin tocar un
+  # byte. El trap de liberar_candado lo suelta al salir (aun por exit 2), asi un
+  # --check sobre un archivo malformado no deja el candado puesto.
+  adquirir_candado || exit $?
   validar_archivo "$archivo" || exit $?
+  liberar_candado
   exit 0
 fi
 
@@ -335,13 +431,29 @@ if [ "$MODO" = "append" ]; then
   RESULTADO_R="$(redactar "$RESULTADO")"
 
   fila="${CUANDO_R}|${ETAPA_R}|${DECISION_R}|${POR_QUE_R}|${EVIDENCIA_R}|${RESULTADO_R}"
-  # La escritura se VERIFICA: sin esto, un fallo de I/O (disco lleno, permisos,
-  # ruta que es un directorio) dejaba la fila sin escribir pero el tool seguia y
-  # reportaba "registrado" con exit 0 — una fila del rastro que nunca llego al
-  # disco y se daba por registrada. El rastro existe para dejar evidencia, asi
-  # que escribir mal es un fallo duro (exit 2), no un "aviso" en stderr.
+
+  # APPEND ATOMICO — diseño declarado con su tradeoff. La fila se escribe con UNA
+  # sola escritura (`printf >>` con O_APPEND = una unica write(2), atomica para
+  # filas cortas en un archivo local) y se VERIFICA por delta de tamaño: si
+  # SIGKILL/ENOSPC corta la escritura a medias, el archivo no crece los bytes
+  # esperados y se reporta — nunca se dice "registrado" por una fila que no llego
+  # entera (hallazgo b). Tradeoff: esto DETECTA y falla cerrado (exit 2), pero NO
+  # revierte los bytes parciales (un append no se deshace in place); la fila
+  # truncada queda visible y le pega el guardia de validar_archivo (que ya juzgo
+  # la ultima fila terminada en \n) al proximo append. Es deteccion + rechazo,
+  # no reparacion.
+  antes="$(wc -c < "$archivo" | tr -d ' ')"
   if ! printf '%s\n' "$fila" >> "$archivo"; then
     printf 'saikit-decision: no se pudo escribir %s\n' "$archivo" >&2
+    exit 2
+  fi
+  despues="$(wc -c < "$archivo" | tr -d ' ')"
+  # ${#fila} cuenta CARACTERES; el archivo guarda BYTES. El rastro es en espanol
+  # (acentos), asi que el largo de la fila se mide en bytes, no en caracteres.
+  len_fila="$(LC_ALL=C printf '%s' "$fila" | wc -c | tr -d ' ')"
+  esperado=$((antes + len_fila + 1))   # +1 por el salto final
+  if [ "$despues" -ne "$esperado" ]; then
+    printf 'saikit-decision: escritura incompleta en %s (se esperaban %s bytes, hay %s)\n' "$archivo" "$esperado" "$despues" >&2
     exit 2
   fi
 

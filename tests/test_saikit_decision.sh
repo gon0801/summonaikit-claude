@@ -370,6 +370,59 @@ printf '#fila oculta que el check ignoraba\n' >> "$tmp/coment.tsv"
 bash "$tool" --check --task coment --dir "$tmp" >/dev/null 2>&1
 [ $? -eq 2 ] || malo "una linea # inyectada debio reportarse, no ignorarse"
 
+# ---------------------------------------------------- hallazgos 17.8 DoD
+# Casos DETERMINISTAS. El mecanismo de inyeccion es un knee que el tool respeta
+# SOLO bajo test (SAIKIT_DECISION_TEST=1 + SAIKIT_DECISION_TEST_DIR; en
+# produccion es un no-op): el tool escribe at-<knee>.$$ y espera go-<knee>.$$,
+# y el test conoce el PID del proceso por $! (== $$ del tool). Es el paradigma
+# del precedente de la 0.4: pausa en un punto conocido, no un sleep con suerte.
+#
+# (a) la carrera ABA — el trap EXIT de un proceso le borraba el candado al otro
+#     (y tras la ABA los dos terminaban con candado_propio=1). El fix suelta
+#     SOLO el candado cuyo token es el propio.
+# (b) el append no es atomico — una fila truncada sin \n final se pegaba a la
+#     siguiente y el check la daba por buena. El fix exige que la ultima fila
+#     termine en \n (lo juzga validar_archivo) y verifica la escritura por delta.
+caso "17.8-a: el trap EXIT no le borra el candado a otro (carrera ABA)"
+mkdir -p "$tmp/knees"
+export SAIKIT_DECISION_TEST=1
+export SAIKIT_DECISION_TEST_DIR="$tmp/knees"
+bash "$tool" --append --task aba --dir "$tmp" --etapa X --decision D \
+  --por-que P --evidencia E --resultado ok >/dev/null 2>"$tmp/aba.err" &
+p=$!
+i=0
+while [ ! -e "$tmp/knees/at-hold.$p" ] && [ "$i" -lt 200 ]; do sleep 0.05; i=$((i+1)); done
+[ -e "$tmp/knees/at-hold.$p" ] || malo "el append no llego al knee hold (no se pudo orquestar la carrera)"
+lo="$tmp/.saikit-decision-aba.lock"
+printf '999999:%s\n' "foraneo" > "$lo/pid" 2>/dev/null || malo "no se pudo despojar el candado del proceso pausado"
+touch "$tmp/knees/go-hold.$p"
+wait "$p"; r=$?
+[ "$r" -eq 0 ] || malo "el append despojado no termino (rc=$r): $(cat "$tmp/aba.err")"
+# El candado NO debe haberse borrado: el trap solo suelta el candado cuyo token
+# es el propio, no el ajeno que dejo el proceso pausado.
+[ -d "$lo" ] || malo "el trap EXIT borro el candado ajeno (carrera ABA 17.8-a)"
+[ "$(cat "$lo/pid" 2>/dev/null)" = "999999:foraneo" ] || malo "el trap EXIT toco el token ajeno (borro el candado de otro)"
+rm -rf "$lo" || true
+unset SAIKIT_DECISION_TEST SAIKIT_DECISION_TEST_DIR
+
+caso "17.8-b: el append no se pega a una fila truncada (escritura no atomica)"
+# Append truncado (SIGKILL/ENOSPC corto la fila a mitad del \n final): la ultima
+# fila queda sin salto. El append siguiente se le PEGABA, y el check la daba por
+# buena (hallazgo b). El fix lo rechaza cerrado (exit 2) y no toca el archivo.
+printf 'cuando|etapa|decision|por_que|evidencia|resultado\n' > "$tmp/ab.tsv"
+printf '2026-08-31T00:00:01Z|E|d|p|e|ok' >> "$tmp/ab.tsv"   # fila truncada: sin \n final
+cp "$tmp/ab.tsv" "$tmp/ab.bak"
+bash "$tool" --append --task ab --dir "$tmp" --etapa X --decision D \
+  --por-que P --evidencia E --resultado ok >/dev/null 2>"$tmp/ab.err"
+rc=$?
+[ "$rc" -eq 2 ] || malo "append sobre fila truncada debio salir 2, dio $rc (se habria pegado)"
+cmp -s "$tmp/ab.tsv" "$tmp/ab.bak" || malo "el append modifico el archivo con la fila truncada (se pego)"
+grep -q 'salto de linea' "$tmp/ab.err" || malo "no explico la fila truncada: $(cat "$tmp/ab.err")"
+
+caso "17.8-b: --check marca la fila truncada (no la da por buena)"
+bash "$tool" --check --task ab --dir "$tmp" >/dev/null 2>&1
+[ $? -eq 2 ] || malo "el check NO marco la fila truncada (la daba por buena)"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_saikit_decision: FAIL" >&2
   exit 1
