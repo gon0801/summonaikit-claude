@@ -35,9 +35,15 @@ set -u
 # aviso. Se verifica la version encontrada y se DECLARA el mismatch (ver abajo).
 SAIKIT_GITLEAKS_PIN='8.30.1'
 
-GL_BIN="$(command -v gitleaks 2>/dev/null || true)"
-if [ -z "$GL_BIN" ] && [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "$SAIKIT_GITLEAKS" ]; then
+# SAIKIT_GITLEAKS explicito GANA sobre el PATH (CodeRabbit, PR #133): la
+# remediacion documentada abajo ("apuntar SAIKIT_GITLEAKS al binario del PIN")
+# era mentira con otro gitleaks en el PATH — el PATH la pisaba y el escaneo
+# corria con el binario incompatible. Una configuracion explicita es una
+# decision del operador; el PATH es una circunstancia.
+if [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "$SAIKIT_GITLEAKS" ]; then
   GL_BIN="$SAIKIT_GITLEAKS"
+else
+  GL_BIN="$(command -v gitleaks 2>/dev/null || true)"
 fi
 
 if [ "$#" -eq 0 ]; then

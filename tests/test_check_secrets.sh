@@ -232,6 +232,20 @@ else
   printf '    skip (17.7 pin): no se pudo hacer ejecutable el stub de gitleaks\n'
 fi
 
+caso "17.7: SAIKIT_GITLEAKS explicito GANA sobre el gitleaks del PATH (CodeRabbit PR #133)"
+# La remediacion documentada en el tool ("apuntar SAIKIT_GITLEAKS al 8.30.1")
+# era mentira con otro gitleaks en el PATH: el PATH lo pisaba y el escaneo
+# corria con el binario incompatible. Dos shims que registran QUIEN corrio:
+# el configurado debe escanear; el del PATH no debe ni tocarse.
+mkdir -p "$tmp/pathbin" "$tmp/cfgbin"
+printf '#!/bin/sh\ntouch "%s/marca_path"\n[ "$1" = version ] && echo 8.30.1\nexit 0\n' "$tmp" > "$tmp/pathbin/gitleaks"
+printf '#!/bin/sh\ntouch "%s/marca_cfg"\n[ "$1" = version ] && echo 8.30.1\nexit 0\n' "$tmp" > "$tmp/cfgbin/gl-pin"
+chmod +x "$tmp/pathbin/gitleaks" "$tmp/cfgbin/gl-pin"
+rm -f "$tmp/marca_path" "$tmp/marca_cfg"
+PATH="$tmp/pathbin:$PATH" SAIKIT_GITLEAKS="$tmp/cfgbin/gl-pin" bash "$tool" "$tmp/limpio.sh" >/dev/null 2>&1
+[ -e "$tmp/marca_cfg" ] || malo "el binario configurado en SAIKIT_GITLEAKS no corrio (el PATH lo piso)"
+[ -e "$tmp/marca_path" ] && malo "el gitleaks del PATH corrio pese a SAIKIT_GITLEAKS configurado"
+
 # --- aridad ---------------------------------------------------------------
 caso "sin archivos => exit 2"
 bash "$tool" >/dev/null 2>&1
