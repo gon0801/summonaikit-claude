@@ -207,22 +207,30 @@ fi
 exit 0
 EOF
 chmod +x "$tmp/fake-gitleaks" 2>/dev/null || true
-[ -x "$tmp/fake-gitleaks" ] || { printf '    skip: no se pudo hacer ejecutable el stub de gitleaks\n'; }
+if [ -x "$tmp/fake-gitleaks" ]; then
+  # Cada invocacion sale con PATH=/usr/bin a secas (como fb()): si en la maquina
+  # hay un gitleaks real en el PATH, `command -v gitleaks` lo ganaria y el stub
+  # de $SAIKIT_GITLEAKS seria ignorado — el caso mediria la version real, no la
+  # del stub, y fallaria s puriamente segun la maquina. Con PATH=/usr/bin el
+  # stub de $SAIKIT_GITLEAKS manda siempre (determinista).
+  #
+  # (a) version con contexto que matchea el pin (v-prefix + build-id): NO falso aviso
+  out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "con version que matchea el pin el chequeo fallo (rc=$rc): $out"
+  case "$out" in
+    *"AVISO — gitleaks local es"*) malo "falso AVISO de version con contexto que matchea el pin: $out" ;;
+  esac
 
-# (a) version con contexto que matchea el pin (v-prefix + build-id): NO falso aviso
-out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] || malo "con version que matchea el pin el chequeo fallo (rc=$rc): $out"
-case "$out" in
-  *"AVISO — gitleaks local es"*) malo "falso AVISO de version con contexto que matchea el pin: $out" ;;
-esac
-
-# (b) mismatch real (9.9.9): SI avisa (y el escaneo no se bloquea)
-out="$(FAKE_GL_VERSION="9.9.9" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] || malo "con version distinta el escaneo no debio fallar (rc=$rc): $out"
-case "$out" in
-  *"AVISO — gitleaks local es 9.9.9"*) ;;
-  *) malo "no aviso en un mismatch real de version: $out" ;;
-esac
+  # (b) mismatch real (9.9.9): SI avisa (y el escaneo no se bloquea)
+  out="$(FAKE_GL_VERSION="9.9.9" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "con version distinta el escaneo no debio fallar (rc=$rc): $out"
+  case "$out" in
+    *"AVISO — gitleaks local es 9.9.9"*) ;;
+    *) malo "no aviso en un mismatch real de version: $out" ;;
+  esac
+else
+  printf '    skip (17.7 pin): no se pudo hacer ejecutable el stub de gitleaks\n'
+fi
 
 # --- aridad ---------------------------------------------------------------
 caso "sin archivos => exit 2"
