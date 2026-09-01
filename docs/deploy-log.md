@@ -7,6 +7,35 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-08-31 — PR #131 / Tasks 17.2+17.4 (lane de app real + el hecho único) — deploy REAL (perfiles)
+
+- **Qué traía:** 17.2 y 17.4 agrupadas (un solo toque a `agents/verifier.md`):
+  la lane de app real (`verify/` corrido = evidencia; sin `verify/` se propone,
+  no se inventa; "inconcluso o superficie equivocada no es PASS") y el hecho
+  único (D13): `tools/saikit-blast.sh` escribe `.saikit/findings/blast-<task>.json`
+  con orden aplana → redacta → recorta → re-redacta, contrato de `--task`
+  reusado byte a byte de `saikit-decision.sh`, adjudicación en `reviewer.md`.
+- **Implementó DeepSeek**; corrió por su cuenta un cross-review codex+glm y un
+  adversary y cerró hallazgos reales (comando de solo espacios, orden de
+  redacción, control chars). El PR no traía el rojo medido: lo midió el lead
+  con 3 mutaciones (evidencia comentada en el PR #131).
+- **Hallazgo del lead:** el caso de la credencial `user:pass@` cortada era
+  VACUO — con la mutación de orden quedaba verde (padding 990: el corte caía
+  en `https://FA` y el user jamás sobrevivía ni con el código roto). Corregido
+  en `c1107b0` (padding 975 = corte justo tras la clave), rojo/verde
+  re-medidos. La clase ya conocida: un caso que no puede ponerse rojo no es
+  un caso.
+- **Merge:** `4e17f07e`. CI 9/9 (run `33449646189` sobre `c1107b0`).
+  CodeRabbit NO revisó — rate limit semanal agotado; cero hilos = "no corrió",
+  declarado.
+- **Deploy:** hook `YA AL DIA` (el PR no lo toca). Perfiles: `AGENTE CLAUDE
+  REPARADO: verifier, reviewer` — OJO: la corrida pelada de `install-hook.sh`
+  NO toca perfiles; para cambios de `agents/*.md` el deploy es
+  `bash tools/install-hook.sh --host claude`. Verificado byte a byte.
+- **Registro faltante de hoy más temprano:** el PR #130 (CodeRabbit sobre la
+  ronda kimi+qwen de 17.3) se mergeó y deployó sin entrada propia — deploy
+  `YA AL DIA` (tool+tests, hook intacto); queda registrado aquí.
+
 ## 2026-08-31 — PR #128 / cross-review de 17.3 (codex+grok) — deploy NO-OP
 
 - **Qué traía:** los hallazgos con rojo medido del cross-review pedido por el
