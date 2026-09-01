@@ -7,6 +7,36 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-01 — PR #138 / Task 16.12 (caller por defecto de -RutasExtra) — deploy NO-OP; cierra la Phase 16
+
+- **Qué traía:** `hook-acl.ps1` deriva y AUDITA por defecto la carpeta de
+  skills del perfil (solo con `-Path` en la forma exacta `<perfil>\.claude\hooks`);
+  corregirla con `-Fix` sigue exigiendo `-RutasExtra` explícito. Premisa de la
+  fila corregida y medida: `hooks/recetas` ya estaba cubierto por la recursión.
+- **La task "chica" que no lo era:** tres ciclos internos — adversary (9
+  hallazgos, 3 altas: derivación fuera de `.claude` con la invocación
+  documentada de la 0.2, junctions, TOCTOU) y reviewer que la declaró NO
+  PUBLICABLE dos veces; la segunda por la **segunda puerta**
+  (`Repair-StaleInherited` mutaba bajo la raíz derivada SIN respaldo), atrapada
+  midiendo un HIJO de la carpeta y no el directorio — la granularidad de la
+  aserción decidió el veredicto.
+- **Cross-review externo (pedido por el operador):** codex 3/5 reales; grok
+  encontró el hallazgo de la ronda — con `-Path` LIMPIO y solo la derivada
+  sucia, `-Fix` sin flags le cortaba la herencia a un árbol sin hallazgos
+  propios (corrida que antes era no-op). Reproducido en vivo por el lead y
+  cerrado: el no-op se decide por el radio mutable. Nadie lo vio en tres
+  ciclos internos — el valor de la ronda externa quedó medido.
+- **Incidente del harness, declarado:** el candado del adversary (13.4) bloqueó
+  el cierre del turno porque el rol escribió sus fixtures fuera de
+  `.saikit/findings/` — su trabajo real lo exige y no tiene zona declarada;
+  va a la Phase 18. El revert incluyó desenlazar un junction con `rmdir` (no
+  `rm -rf`, que borra el destino). Un verifier murió por sesión expirada y se
+  reintentó una vez (regla del contrato).
+- **Merge:** `d203b864`. CI 9/9. Suite del guardrail: 24 casos, 0 FAIL.
+- **Deploy:** NO-OP verificado — el guardrail vive en `tools/` del repo, no en
+  el perfil; hook vivo byte a byte igual, perfiles y skills intactos.
+- **Con esta fila cierra la Phase 16 completa.**
+
 ## 2026-09-01 — PR #136 / Task 17.6 (cierre de la Phase 17) — deploy REAL (skill nueva)
 
 - **Qué traía:** el instalador planta `saikit-verificar-app` (los DOS archivos),
