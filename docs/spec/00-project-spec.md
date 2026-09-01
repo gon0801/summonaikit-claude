@@ -2254,6 +2254,49 @@ midió, y difieren en un punto importante.
   de producción. El plan pedía un parámetro, no un caller, así que la cobertura
   ACL de `recetas/` y `skills/*` solo aplica si el operador pasa el flag.
 
+### Límites MEDIDOS de la Phase 17 (cierre, 2026-08-31)
+
+La fase pedía que el verifier probara **la app como usuario**. Lo que dos
+turnos vivos midieron (`docs/smoke-verificacion-2026-08-31.md`, labs node y
+python tecleados por el operador):
+
+- **Qué runners ACREDITA la lane de app real.** El Drive solo cuenta si el
+  comando que lo corre incluye la ruta `verify/` **y** matchea el
+  `TEST_RUNNER_RE` del hook. Medido de punta a punta con dos:
+  `npm test -- verify/drive.test.cjs` (node, con `node --test` ENVUELTO en el
+  script `test` del `package.json`) y `pytest verify/` (python). Un
+  `node --test verify/` pelado NO se publica como comando: no recursa en todas
+  las versiones de node (v24 lanza `MODULE_NOT_FOUND`), por eso el Drive apunta
+  al ARCHIVO. Cualquier otro runner es `unknown`, no "no funciona".
+- **Qué NO acredita.** Un script `test` que no invoque un runner admitido
+  (p. ej. `echo ok`) deja el Drive `manual, pendiente` con `verify_app: n/a`;
+  y la suite unitaria del repo NO es el Drive. Las dos reglas están medidas en
+  `tests/test_verificar_app.sh`, no supuestas.
+- **El rastro (17.3) y el blast (17.4) NO se disparan solos.** Ausencia
+  MEDIDA, no `unknown`: cero invocaciones de `saikit-decision.sh` y
+  `saikit-blast.sh` en los dos transcripts, y `.saikit/` no existe en ninguno
+  de los dos labs. Los perfiles los describen y el hook es advisory: **nada del
+  contrato los EXIGE**. Es coherente con la hipótesis que dejó la Phase 16 —
+  una instrucción que no aterriza donde el gate mira no se cumple — y es lo que
+  cierra la fila 18.12 antes de que el autopilot dependa del hecho único (D13).
+- **El sello del mapa se reporta vivo.** Un turno declaró el estado del mapa
+  (`desactualizado`, 0 días, 1 commit) sin que nadie se lo pidiera: la deriva
+  del mapa es observable, como la fila 17.1 prometía. Su límite sigue en pie:
+  **avisa que el mapa envejeció, no comprueba que siga describiendo la app.**
+- **La cobertura del instalador es Windows-bound.** Los casos que atan que
+  `saikit-verificar-app` se planta, se repara y se quita viven en
+  `tests/test_install_hook.sh`, que el CI Linux saltea entero. Que la skill se
+  plante bien en Linux es `unknown`, no un supuesto — el mismo límite que la
+  Phase 16 declaró para el recetario, y por el que existe
+  `tests/test_recetas_symlink.sh`.
+- **Un `.sh` no llevaba prueba de propiedad** (encontrado al cerrar): la marca
+  `saikit_owned` se lee del primer bloque `---` del archivo, así que el
+  generador `verificar.sh` — plantado por el kit — se clasificaba DESCONOCIDO y
+  **no se actualizaba nunca**. Cerrado con la marca en un bloque no-op al
+  inicio del script (antes de los heredocs que escriben el frontmatter del
+  `LEEME.md`, o el lector se quedaría con ESE bloque), con su caso de
+  regresión.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

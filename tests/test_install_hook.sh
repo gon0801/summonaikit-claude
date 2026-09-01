@@ -2115,6 +2115,69 @@ out="$(host_claude_recetas 2>&1)"; rc=$?
 [ "$(find "$(dirname "$dest")/recetas" -name '*.bak' 2>/dev/null | wc -l)" = "$n_bak" ] \
   || malo "la segunda corrida creo un backup"
 
+# ============================================================================
+# Task 17.6 — el instalador planta la skill `saikit-verificar-app`
+# ============================================================================
+# La skill de 17.1 vive en $HOME/.claude/skills/saikit-verificar-app/ y son DOS
+# archivos (SKILL.md + verificar.sh), no uno como /sencillo. La medicion viva de
+# 17.5 la copio A MANO a los labs porque el instalador no la plantaba: sin eso,
+# el comando que `agents/verifier.md` enseña no existe en el repo del usuario.
+caso "17.6: limpio => planta saikit-verificar-app (SKILL.md + verificar.sh) byte a byte"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install limpio deberia salir 0, dio $rc: $out"
+for b in SKILL.md verificar.sh; do
+  [ -f "$casa_recetas/.claude/skills/saikit-verificar-app/$b" ] \
+    || malo "no planto saikit-verificar-app/$b"
+  cmp -s "$casa_recetas/.claude/skills/saikit-verificar-app/$b" \
+    "$repo/skills/saikit-verificar-app/$b" \
+    || malo "saikit-verificar-app/$b instalado difiere del fuente"
+done
+
+caso "17.6: un verificar.sh NUESTRO con deriva se REPARA (un .sh sin marca quedaba DESCONOCIDO)"
+# El generador es un .sh, no un .md: su propiedad se mide con la MISMA marca
+# `saikit_owned` del resto del kit, en un bloque no-op al inicio que ES el
+# frontmatter que lee el instalador. Sin esa marca, el archivo que el kit MISMO
+# planto se clasificaba DESCONOCIDO y no se actualizaba nunca — un generador
+# viejo escribiendo `verify/` para siempre, y en silencio.
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+sk_v="$casa_recetas/.claude/skills/saikit-verificar-app/verificar.sh"
+[ -f "$sk_v" ] || malo "precondicion: verificar.sh no se instalo; el caso no mide nada"
+printf '\n# deriva local\n' >> "$sk_v"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "la reparacion deberia salir 0, dio $rc: $out"
+cmp -s "$sk_v" "$repo/skills/saikit-verificar-app/verificar.sh" \
+  || malo "verificar.sh NO se reparo: quedo la deriva local (se clasifico DESCONOCIDO)"
+
+caso "17.6: un verificar.sh AJENO (sin marca) no se toca y se reporta"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$casa_recetas/.claude/skills/saikit-verificar-app"
+aj_v="$casa_recetas/.claude/skills/saikit-verificar-app/verificar.sh"
+printf '#!/usr/bin/env bash\n# generador de otra persona\n' > "$aj_v"
+prev_aj="$(cat "$aj_v")"
+out="$(host_claude_recetas 2>&1)"
+[ "$(cat "$aj_v")" = "$prev_aj" ] || malo "piso un verificar.sh ajeno (sin marca)"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' \
+  || malo "no reporto el verificar.sh ajeno como DESCONOCIDO: $out"
+
+caso "17.6: --dry-run no crea la skill saikit-verificar-app"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas --dry-run >/dev/null 2>&1
+[ ! -e "$casa_recetas/.claude/skills/saikit-verificar-app" ] \
+  || malo "--dry-run creo saikit-verificar-app"
+
+caso "17.6: --quitar-recetas borra los dos archivos propios de saikit-verificar-app"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+[ -f "$casa_recetas/.claude/skills/saikit-verificar-app/SKILL.md" ] \
+  || malo "precondicion: la skill no se instalo; el quitar no mide nada"
+host_claude_recetas --quitar-recetas >/dev/null 2>&1
+[ ! -f "$casa_recetas/.claude/skills/saikit-verificar-app/SKILL.md" ] \
+  || malo "--quitar-recetas no quito saikit-verificar-app/SKILL.md"
+[ ! -f "$casa_recetas/.claude/skills/saikit-verificar-app/verificar.sh" ] \
+  || malo "--quitar-recetas no quito saikit-verificar-app/verificar.sh"
+
 # 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto se reemplaza SIEMPRE
 # al instalar (no lleva marca; si gana un manifiesto viejo/ajeno, nuestras recetas
 # recien plantadas no aparecerian en el menu) y el anterior queda respaldado — es
