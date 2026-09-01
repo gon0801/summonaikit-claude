@@ -11,7 +11,7 @@ adversary: opcional
 
 1. Declara el modo **revisar** (leer y opinar, sin tocar) · **cuidar** (arreglar y dejar listo, pero nunca mergear) · **solo-hilos** (responder a los bots, no tocar código). En **cuidar** y **solo-hilos** la regla madre no cambia: dejar listo no es publicar.
 2. Orden fijo: **conflictos → hilos de bots → CI**. No saltes a CI si hay conflictos de merge sin resolver.
-3. **Conflictos**: si la rama quedó atrás de la base, hacé `git fetch origin <base>` primero, confirmá con `git merge-base --is-ancestor origin/<base> <rama>` que efectivamente quedó atrás, y recién entonces mergeá `origin/<base>` en la rama — nunca rebases a ciegas — y dejá que CI corra de nuevo. Un conflicto real se resuelve a mano, no forzando.
+3. **Conflictos**: si la rama quedó atrás de la base, hacé `git fetch origin <base>` primero, confirmá con `git merge-base --is-ancestor origin/<base> <rama>` (rc **1** ⇒ quedó atrás ⇒ mergeá `origin/<base>`; rc **0** ⇒ al día ⇒ no toques la rama), y recién entonces mergeá `origin/<base>` en la rama — nunca rebases a ciegas — y dejá que CI corra de nuevo. Un conflicto real se resuelve a mano, no forzando.
 4. **CI rojo**: clasificalo ANTES de tocar nada.
    - **flake** (inestable; pasó en un rebuild): re-corre UNA sola build. Si vuelve a fallar, ya no es flake.
    - **base vieja** (falló porque la base avanzó): mergeá la base en la rama, NO edites el código.

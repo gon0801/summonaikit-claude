@@ -153,7 +153,12 @@ verdict_edit_posterior_deja_hash_distinto() {
   lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
   h1="$(lab_estado veredicto_sha256)"
   _no_vacio "hash registrado" "$h1"
-  # Edicion posterior (contenido distinto): el hash del archivo ya no coincide.
+  # Un Edit posterior (observado como tool) NO re-sella (el sello es solo del
+  # Write del reviewer, D16): el hash registrado queda igual.
+  lab_run tool claude "$(lab_payload_edit ".saikit/veredictos/$vsha.json")"
+  _igual "el Edit no re-sella (hash registrado intacto)" "$(lab_estado veredicto_sha256)" "$h1"
+  # Y una edicion REAL del archivo (contenido distinto) deja el hash del archivo
+  # distinto al registrado (el sello detecta la manipulacion).
   V2="{\"sha\":\"$vsha\",\"verifier\":\"PASS\",\"reviewer\":\"clean\",\"tampered\":true}"
   printf '%s' "$V2" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   h2="$(printf '%s' "$V2" | sha256sum | cut -c1-64)"

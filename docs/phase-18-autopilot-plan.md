@@ -184,8 +184,18 @@ rol reviewer** sobre `.saikit/veredictos/`, el hook registra en el estado de
 sesión `veredicto_sha256 = sha256(tool_input.content)` (registro de estado, sin
 check nuevo en el Stop — el gate sigue advisory). Cualquier escritura posterior
 (`Edit`, otro rol, `Bash`) cambia el archivo y el hash deja de coincidir. El
-hook también crea el `.gitignore` de `veredictos/` (siempre, como con
-`findings/`). Contrato: la línea `Close:` del recibo cita `sha` y ruta.
+hook **crea** el `.gitignore` de `veredictos/` en ese mismo `Write` del reviewer
+(no en cualquier escritura: el `.gitignore` lo crea el guard del sello, que solo
+dispara en el Write del reviewer sobre `veredictos/`, como con `findings/`).
+Contrato: la línea `Close:` del recibo cita `sha` y ruta.
+
+**Límites declarados del sello (medidos/declarados, no inventados):** el digest
+decodifica los escapes JSON (`\n \t \r \\ \"`) pero **no** los escapes Unicode
+`\uXXXX` ni `\/ \b \f` — un veredicto cuyo contenido lleve esos escapes tendría
+un sha del sello distinto al del archivo materializado (límite POC; el contenido
+de veredicto medido es ASCII). La forma de ruta medida/esperada es la relativa
+`.saikit/veredictos/<sha>.json`; la forma absoluta es best-effort (en Windows el
+path MSYS `/c/…` y el `C:/…` de la tool difieren en prefijo).
 
 ### 4.2 `.saikit/autopilot.json` (D15) — leído SOLO de `origin/<rama>`
 

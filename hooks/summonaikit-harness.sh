@@ -1845,6 +1845,11 @@ verdict_path_dentro() {
   case "$vp" in
     .saikit/veredictos/*|"$VERDICTOS_DIR"/*) return 0 ;;
   esac
+  # Best-effort declarado: la forma MEDIDA/usada es la relativa
+  # `.saikit/veredictos/<sha>.json` (el Write del reviewer). La rama absoluta
+  # compara el prefijo literal — en Windows el path MSYS `/c/...` del sello y el
+  # `C:/...` que entrega la tool difieren en prefijo, asi que la forma absoluta
+  # puede no matchear; se documenta como limite, no como soporte garantizado.
   return 1
 }
 

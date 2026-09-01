@@ -12,13 +12,19 @@
 #     "reviewer", "decisiones" }
 #
 # `veredicto_validar` valida el CONTRATO ESTRUCTURAL (es un objeto JSON, estan
-# los campos requeridos, y el sha del veredicto coincide con el HEAD dado). No
-# juzga los VALORES semantico-sesion (verifier=PASS, blast.nivel>=4, ...) — eso
-# es del merge (D18), que los exige ademas del contrato. Postura de falla:
-# report + exit 1 (invalido), nunca exit 0 por ausencia (un veredicto que no se
-# pudo leer no es "valido" por defecto, Core Rule 2).
-
-VEREDICTO_REQUERIDOS='"sha" "pr" "verifier" "verify_app" "reviewer" "decisiones" "nivel" "hecho" "resultado" "comando"'
+# los campos requeridos — las claves CONTENEDOR y sus HOJAS — y el sha del
+# veredicto coincide con el HEAD dado). No juzga los VALORES semantico-sesion
+# (verifier=PASS, blast.nivel>=4, ...) — eso es del merge (D18), que los exige
+# ademas del contrato. Postura de falla: report + exit 1 (invalido), nunca exit
+# 0 por ausencia (un veredicto que no se pudo leer no es "valido" por defecto,
+# Core Rule 2).
+#
+# LIMITE DECLARADO (POC): la validacion es por presencia de clave con grep, no
+# un parser JSON. Un campo requerido que aparezca solo como VALOR (p.ej.
+# `"reviewer"` dentro de un string) no satisface la clave, pero el anidamiento
+# exacto (que "nivel" este DENTRO de "blast", y no en otro objeto) no se
+# impone — se exigen los contenedores y las hojas, no el arbol exacto. El
+# endur ecimiento con un parser JSON real (sin jq) queda para el merge (18.4).
 
 # veredicto_validar <archivo> [head]
 #   0 => valido (esquema + sha==head si head viene).
@@ -38,11 +44,12 @@ veredicto_validar() {
     *) printf 'no es un objeto JSON (no cierra con })\n'; return 1 ;;
   esac
 
-  # Campos requeridos. Se buscan como substrings de clave (comilla + clave)
-  # porque el esquema es conocido y las claves son unicas; un substring suelto
-  # (p.ej. "verif" matcheando "verifier") no alcanza porque se exige la clave
-  # entrecomillada completa.
-  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"'; do
+  # Campos requeridos — las CLAVES del esquema (contenedores y hojas). Se exige
+  # la clave entrecomillada completa (un substring "verif" no alcanza) y se
+  # listan TAMBIEN los contenedores blast/adversary: un veredicto sin ellos es
+  # invalido (hallazgo del reviewer, 18.3). Se busca sobre el texto crudo, por
+  # lo que un campo que aparezca solo como VALOR no satisface (exige la clave).
+  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"'; do
     printf '%s' "$txt" | grep -qF "$campo" || { printf 'falta el campo %s\n' "$campo"; return 1; }
   done
 
