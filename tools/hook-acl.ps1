@@ -52,6 +52,32 @@
   Ruta a un `acl-backup.json` generado por una corrida previa con `-Fix`.
   Devuelve las ACL exactamente al estado guardado.
 
+.PARAMETER RutasExtra
+  Raices adicionales a auditar junto con `-Path`. Si NO se pasa este flag, Y
+  `-Path` tiene la forma exacta `<perfil>\.claude\hooks` (hoja `hooks`, cuyo
+  padre tiene hoja `.claude`), deriva por defecto `<perfil>\.claude\skills`:
+  esa carpeta vive FUERA del arbol de hooks y por eso nunca la alcanza la
+  recursion por defecto. Si `-Path` NO tiene esa forma (perfil a secas,
+  `%TEMP%`, `AppData`, ruta relativa, raiz de unidad, UNC que no calce el
+  patron), NO hay default: se avisa que la cobertura queda acotada a `-Path`
+  y se sigue -- nunca una excepcion. El recetario (`hooks/recetas`) NO
+  necesita entrar aca -- ya es descendiente de `-Path` y ya se recorre solo.
+  Pasar `-RutasExtra` a mano REEMPLAZA el default (no se suma); para auditar
+  unicamente `-Path`, pasar `-RutasExtra ''` (funciona igual con `-File`; con
+  esa forma `-RutasExtra @()` llega como la cadena literal `@()`, no como
+  arreglo vacio).
+  Una ruta extra que aun no existe se reporta `ausente` y se salta, nunca es
+  un hallazgo. Si la raiz derivada por defecto resulta ser un reparse point
+  (junction/symlink) tampoco se recorre -- se reporta fuerte y se salta.
+  La raiz derivada por DEFECTO solo se AUDITA: `-Fix` nunca la corrige a
+  menos que se pase `-RutasExtra` explicito (asi el radio destructivo de
+  `-Fix` sin flags queda identico al de antes de este default). El TOCTOU
+  entre comprobar una ruta extra EXPLICITA y corregirla queda diferido y
+  declarado, con el mismo criterio que el limite TOCTOU de `Plans.md:47`
+  (Task 16.5, `-L` vs borrado) y el residual de backup que declara
+  `docs/plans-archivo.md:28` (Task 0.5): quien lo explota ya tiene escritura
+  en el arbol auditado.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\hook-acl.ps1
   Audita. Exit 0 = limpio, exit 1 = hay escritura de mas.
@@ -78,6 +104,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Raices extra que se decidio NO observar (ausentes o reparse point saltado),
+# con su motivo. Alimenta `Get-ScopeCaveat` (punto 4) y la linea "Arbol
+# auditado". Se inicializa siempre, aunque el modo biblioteca no ejecute el
+# flujo principal, para que un test que llame a `Get-ScopeCaveat` directo no
+# pise una variable inexistente.
+$script:RaicesNoObservadas = @()
 
 # Derechos que permiten alterar el script o plantar estado. Cualquiera de estos
 # bits en un principal fuera de la keep-list es un hallazgo.
@@ -186,6 +219,148 @@ function Get-KeepListSid {
         Write-Warning "No se pudo leer el duenio de $RootPath : $($_.Exception.Message)"
     }
     return $keep
+}
+
+function Get-DefaultSkillsRoot {
+    param([string]$HooksPath)
+    # `~/.claude/skills` es hermano de `~/.claude/hooks`, no descendiente: nunca
+    # lo alcanza la recursion de `Get-HookAclTarget`. Se deriva del `$Path` que
+    # de verdad se esta auditando (no de `$env:USERPROFILE` a ciegas) para que
+    # auditar el perfil de OTRO usuario (via `-Path`) traiga las skills de ESE
+    # perfil, no las del que corre el script.
+    #
+    # El default SOLO aplica cuando `-Path` tiene la forma exacta
+    # `<perfil>\.claude\hooks`: hoja `hooks`, con padre de hoja `.claude`.
+    # Cualquier otra forma -- `~/.claude` a secas, `%TEMP%`, `AppData`, ruta
+    # relativa (`hooks`, `.`), raiz de unidad (`C:\`), UNC que no calce el
+    # patron -- devuelve `$null`: falla SUAVE, nunca excepcion. Antes,
+    # `Split-Path -Parent 'hooks'` da cadena vacia y `Join-Path ''` revienta
+    # con `$ErrorActionPreference='Stop'` (exit 1), un codigo que el contrato
+    # de este script reserva para "hay hallazgo", no para "me rompi".
+    $hooksLeaf = Split-Path -Path $HooksPath -Leaf
+    if ($hooksLeaf -ne 'hooks') { return $null }
+
+    $claudeRoot = Split-Path -Path $HooksPath -Parent
+    if ([string]::IsNullOrEmpty($claudeRoot)) { return $null }
+
+    $claudeLeaf = Split-Path -Path $claudeRoot -Leaf
+    if ($claudeLeaf -ne '.claude') { return $null }
+
+    return Join-Path $claudeRoot 'skills'
+}
+
+# Guard del punto 2 (ciclo de revision 16.12): la raiz derivada por defecto
+# nunca se eligio a mano, asi que si resulta ser un reparse point (junction o
+# symlink) no se recorre ni se corrige -- solo se reporta. `.Attributes` no
+# lanza excepcion sobre un item valido; el bit ReparsePoint es la misma señal
+# que este repo ya usa en bash (`[ -L ]`, `tools/install-hook.sh` ~2123-2350),
+# expresada con la API que existe en PowerShell.
+#
+# Gap 5 (segundo ciclo, 16.12): entre el `Test-Path` del llamador y este
+# `Get-Item` hay una ventana TOCTOU (borrado, acceso denegado). Con
+# `$ErrorActionPreference = 'Stop'` a nivel script, un error terminante aca
+# mataba el proceso entero con una excepcion cruda -- exactamente la falla
+# dura que el punto 1 (ciclo previo) ya habia cerrado para el resto del
+# script. Tri-estado como `Test-SidResolvable`: `$true`/`$false` es haber
+# podido mirar, `$null` es no haber podido mirar -- y ante `$null` el llamador
+# trata la raiz como NO OBSERVADA (nunca como "limpia"), mismo criterio que un
+# reparse point.
+function Test-ReparsePoint {
+    param([string]$TargetPath)
+    try {
+        $item = Get-Item -LiteralPath $TargetPath -Force
+        return [bool]($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+    } catch {
+        return $null
+    }
+}
+
+# Filtra las raices (`$Path` + `$RutasExtra`) a las que de verdad hay que
+# recorrer. Centraliza en UN lugar lo que antes se repetia tres veces
+# (auditoria antes de -Fix, despues de -Fix, despues de Repair-StaleInherited)
+# con criterios que podian divergir. Alimenta `$script:RaicesNoObservadas`
+# para que el caveat de alcance (punto 4) y el reporte final nombren lo que
+# no se miro.
+#
+# Devuelve un objeto { Kept; Messages }, NUNCA imprime con Write-Output desde
+# adentro: en PowerShell cualquier `Write-Output` dentro de una funcion se
+# suma al stream de SALIDA de esa funcion, asi que un `@(Resolve-AuditRoots
+# ...)` mezclaria las rutas buenas con las lineas de aviso -- medido: el
+# aviso "ADVERTENCIA: ... reparse point" terminaba adentro de
+# `$raicesAuditadas` y `Get-HookAclTarget` lo tomaba como ruta, reventando
+# con `Cannot find drive`. El caller imprime `.Messages` y usa `.Kept`.
+#
+# El guard de reparse point (punto 2) SOLO aplica a la raiz derivada por
+# defecto -- `$RutasExtraEsDefault` -- porque esa raiz nunca la eligio el
+# operador a mano; un `-RutasExtra` explicito es su responsabilidad y ya
+# tenia esta disciplina fuera de alcance (ver nota TOCTOU del parametro).
+function Resolve-AuditRoots {
+    param(
+        [string[]]$Roots,
+        [string]$PrimaryPath,
+        [bool]$RutasExtraEsDefault
+    )
+    $kept = @()
+    $messages = @()
+    foreach ($raiz in $Roots) {
+        if (-not (Test-Path -LiteralPath $raiz)) {
+            $messages += "Ruta extra ausente: $raiz (no se audita)"
+            $script:RaicesNoObservadas += "$raiz (ausente)"
+            continue
+        }
+        if ($RutasExtraEsDefault -and $raiz -ne $PrimaryPath) {
+            $esReparse = Test-ReparsePoint -TargetPath $raiz
+            if ($null -eq $esReparse) {
+                # Gap 5: no se pudo determinar (TOCTOU / acceso denegado). Se trata
+                # como no observada -- mismo camino que el reparse point -- nunca
+                # como observada y limpia.
+                $messages += "ADVERTENCIA: no se pudo determinar si $raiz es un reparse point; no se recorre ni se corrige."
+                $script:RaicesNoObservadas += "$raiz (error al inspeccionar, no observada)"
+                continue
+            }
+            if ($esReparse) {
+                $messages += "ADVERTENCIA: $raiz es un reparse point (junction o symlink); no se recorre ni se corrige."
+                $script:RaicesNoObservadas += "$raiz (reparse point, no observada)"
+                continue
+            }
+        }
+        $kept += $raiz
+    }
+    return [pscustomobject]@{ Kept = $kept; Messages = $messages }
+}
+
+# Gap 1 (segundo ciclo, 16.12): quien decide el radio de `-Fix` (linea ~692,
+# `$rutasParaFix`) y quien filtra que mutar (`Repair-StaleInherited`, mas
+# abajo) tienen que usar el MISMO criterio de pertenencia, no dos reglas que
+# puedan divergir -- ese fue el defecto que ya cobro la Task 0.5 en este mismo
+# archivo (politica de reparacion duplicada entre raiz e hijos). Comparacion
+# por ruta NORMALIZADA: ni un `StartsWith` ingenuo (`C:\a\skills2` NO cuelga de
+# `C:\a\skills`) ni sensible a mayusculas (NTFS no distingue).
+function Test-PathUnderRoot {
+    param([string]$ChildPath, [string]$RootPath)
+    # `GetFullPath` LANZA con comodines (`*`, `?`), `|`, chars de control, vacio
+    # o rutas >259 (medido en PS 5.1) -- y la excepcion escapa del `Where-Object`
+    # y mata el proceso con exit 1, el codigo que el contrato reserva para "hay
+    # hallazgo" (reviewer, segundo ciclo 16.12: la misma falla dura del gap 5,
+    # por la puerta de al lado; alcanzable con `-RutasExtra ...\skills\*` -Fix).
+    # Fail-closed: lo que no se puede normalizar NO cuelga de la raiz => no se
+    # muta. Es la postura segura para un filtro que decide que ACL se tocan.
+    try {
+        $child = [System.IO.Path]::GetFullPath($ChildPath).TrimEnd('\', '/')
+        $root  = [System.IO.Path]::GetFullPath($RootPath).TrimEnd('\', '/')
+    } catch {
+        return $false
+    }
+    if ($child.Equals($root, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+    return $child.StartsWith("$root\", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-PathUnderAnyRoot {
+    param([string]$ChildPath, [string[]]$Roots)
+    foreach ($r in $Roots) {
+        if (Test-PathUnderRoot -ChildPath $ChildPath -RootPath $r) { return $true }
+    }
+    return $false
 }
 
 function Get-HookAclTarget {
@@ -403,6 +578,11 @@ function Write-FindingSummary {
 # Core Rule 2: `not_observed != absent`. Cuando el alcance se acota, decir "limpio"
 # a secas seria afirmar ausencia sobre lo que ni se miro. El exito se sigue
 # reportando con exit 0, pero nombrando lo que quedo sin observar.
+#
+# `$script:RaicesNoObservadas` (punto 4, ciclo 16.12): una raiz extra ausente
+# o saltada por el guard de reparse point tambien es alcance acotado -- antes
+# el caveat solo hablaba de -RootOnly/-OrphansOnly y una skills-root ausente
+# quedaba fuera de "OK (ALCANCE ACOTADO)", como si se hubiera mirado.
 function Get-ScopeCaveat {
     $partes = @()
     if ($script:RootOnly) {
@@ -410,6 +590,9 @@ function Get-ScopeCaveat {
     }
     if ($script:OrphansOnly) {
         $partes += "solo se evaluaron SID no resolubles; un principal vivo con escritura NO se reporta"
+    }
+    if ($script:RaicesNoObservadas.Count -gt 0) {
+        $partes += "no se observaron: $($script:RaicesNoObservadas -join '; ')"
     }
     return $partes
 }
@@ -497,20 +680,52 @@ if (-not (Test-Path -LiteralPath $Path)) {
     exit 2
 }
 
-# Task 16.5 (D1): el recetario y las skills viven FUERA del arbol de hooks
-# (~/.claude/hooks/recetas, ~/.claude/skills/*). -RutasExtra los suma al arbol
-# auditado: una ruta que aun no existe NO es un error -- se reporta `ausente` y
-# se salta (Core Rule 2: no se acusa lo que no se pudo mirar).
-$before = @()
-foreach ($raiz in @($Path) + @($RutasExtra)) {
-    if (-not (Test-Path -LiteralPath $raiz)) {
-        Write-Output "Ruta extra ausente: $raiz (no se audita)"
-        continue
+# Task 16.5/16.12: el recetario (`~/.claude/hooks/recetas`) SI vive dentro del
+# arbol de hooks -- lo recorre `Get-HookAclTarget` por defecto, salvo
+# `-RootOnly` -- asi que ya se audita sin pasar nada. Lo que de verdad queda
+# FUERA del arbol es `~/.claude/skills/*`, y por eso -RutasExtra existia sin
+# quien lo llamara (Hueco del PLAN, spec linea ~2253). Task 16.12 le pone un
+# default: si el operador NO pasa `-RutasExtra` Y `-Path` tiene la forma
+# `<perfil>\.claude\hooks`, se deriva la carpeta de skills de ESE `-Path`
+# (hermana de `hooks`, no `$env:USERPROFILE` a ciegas) y se audita tambien.
+# Si `-Path` NO tiene esa forma, `Get-DefaultSkillsRoot` devuelve `$null` --
+# no hay default, y se avisa que la cobertura queda acotada a `-Path` (falla
+# suave, nunca excepcion: ver la nota de la funcion).
+#
+# Un `-RutasExtra` explicito -- incluido `-RutasExtra ''` -- REEMPLAZA el
+# default, nunca se le suma. Una ruta extra que aun no existe NO es un error
+# -- se reporta `ausente` y se salta (Core Rule 2: no se acusa lo que no se
+# pudo mirar); lo mismo si resulta un reparse point (guard del punto 2).
+$RutasExtraEsDefault = $false
+if (-not $PSBoundParameters.ContainsKey('RutasExtra')) {
+    $skillsRoot = Get-DefaultSkillsRoot -HooksPath $Path
+    if ($null -ne $skillsRoot) {
+        $RutasExtra = @($skillsRoot)
+        $RutasExtraEsDefault = $true
+        Write-Output "RutasExtra por defecto (skills del perfil): $($RutasExtra -join ', ')"
+        Write-Output "  (para auditar solo `$Path, pasar -RutasExtra '' -- con -File, -RutasExtra @() llega como la cadena literal '@()')"
+        Write-Output "  (el default SOLO se audita: -Fix no la corrige salvo que se pase -RutasExtra explicito)"
+    } else {
+        $RutasExtra = @()
+        Write-Output "No se deriva ninguna raiz extra (-Path no tiene la forma <perfil>\.claude\hooks). Cobertura acotada a -Path."
     }
+} else {
+    # Punto 5: `-RutasExtra $null` / `-RutasExtra ''` no deben reventar el bucle
+    # de raices de mas abajo; ademas es la grafia de opt-out documentada arriba.
+    $RutasExtra = @($RutasExtra | Where-Object { $_ })
+}
+
+$resuelto = Resolve-AuditRoots -Roots (@($Path) + @($RutasExtra)) `
+              -PrimaryPath $Path -RutasExtraEsDefault $RutasExtraEsDefault
+$resuelto.Messages | ForEach-Object { Write-Output $_ }
+$raicesAuditadas = @($resuelto.Kept)
+
+$before = @()
+foreach ($raiz in $raicesAuditadas) {
     $before += @(Invoke-Audit -RootPath $raiz)
 }
 
-Write-Output "Arbol auditado: $Path"
+Write-Output "Arbol auditado: $($raicesAuditadas -join ', ')"
 if ($before.Count -eq 0) {
     Write-CleanResult "ningun principal fuera de la keep-list tiene escritura."
     exit 0
@@ -528,10 +743,26 @@ if (-not $Fix) {
     exit 1
 }
 
+# Punto 3 (ciclo 16.12): la raiz derivada por DEFECTO nunca entra a -Fix. Solo
+# un -RutasExtra EXPLICITO habilita corregir fuera de -Path -- asi el radio
+# destructivo de una corrida `-Fix` sin flags queda exactamente donde estaba
+# antes de que existiera el default (hallazgo 1). El TOCTOU residual entre
+# comprobar y corregir una raiz extra EXPLICITA sigue diferido y declarado
+# (ver la nota del parametro `-RutasExtra`, mismo criterio que el limite
+# TOCTOU de `Plans.md:47`, Task 16.5, y el residual de backup declarado en
+# `docs/plans-archivo.md:28`, Task 0.5): no se cierra aca.
+$rutasParaFix = if ($RutasExtraEsDefault) { @() } else { $RutasExtra }
+
+# Gap 1 (segundo ciclo, 16.12): `$raicesMutables` es la MISMA lista que decide
+# el radio de arriba (`$Path` + `$rutasParaFix`), reusada -- no una segunda
+# regla que pueda divergir despues. Se AUDITA `$raicesAuditadas` entero (incluye
+# la raiz derivada por defecto), pero solo se MUTA lo que cuelga de aca.
+$raicesMutables = @($Path) + @($rutasParaFix)
+
 # Se respalda exactamente lo que `Repair-HookAcl` va a tocar: la raiz (se le
-# corta la herencia), cada raiz extra existente y cualquier hijo con ACE
-# explicito propio.
-$aTocar = @(@($Path) + @($RutasExtra | Where-Object { Test-Path -LiteralPath $_ }) +
+# corta la herencia), cada raiz extra EXPLICITA existente (nunca la derivada
+# por defecto) y cualquier hijo con ACE explicito propio.
+$aTocar = @(@($Path) + @($rutasParaFix | Where-Object { Test-Path -LiteralPath $_ }) +
            @($before | Where-Object { -not $_.IsInherited } |
              Select-Object -ExpandProperty Path) | Select-Object -Unique)
 
@@ -543,25 +774,41 @@ $backupJson = Save-AclBackup -RootPath $Path -Destination $backupDir -Target $aT
 
 Write-Output "Corrigiendo:"
 Repair-HookAcl -RootPath $Path
-foreach ($raiz in $RutasExtra) {
-    if (Test-Path -LiteralPath $raiz) { Repair-HookAcl -RootPath $raiz }
+if ($RutasExtraEsDefault) {
+    Write-Output "  (RutasExtra por defecto NO se corrige; pasar -RutasExtra explicito para incluirla en -Fix)"
+} else {
+    foreach ($raiz in $rutasParaFix) {
+        if (Test-Path -LiteralPath $raiz) { Repair-HookAcl -RootPath $raiz }
+    }
 }
 
+# Se reusan las MISMAS raices ya resueltas (`$raicesAuditadas`) en vez de
+# volver a llamar `Resolve-AuditRoots`: una ruta extra ausente o un reparse
+# point no cambian entre la auditoria previa y esta, y recalcular repetiria
+# los avisos y duplicaria las entradas de `$script:RaicesNoObservadas`.
 $after = @()
-foreach ($raiz in @($Path) + @($RutasExtra)) {
-    if (Test-Path -LiteralPath $raiz) { $after += @(Invoke-Audit -RootPath $raiz) }
-}
+foreach ($raiz in $raicesAuditadas) { $after += @(Invoke-Audit -RootPath $raiz) }
 
 # Lo que sobrevive a la correccion del origen son los ACE heredados obsoletos que
 # entraron por `move`. Se atacan solo si quedaron: cuesta una auditoria extra.
 if ($after.Count -gt 0 -and -not $RootOnly) {
-    Write-Output ""
-    Write-Output "Sobrevivieron ACE que el padre ya no otorga (llegaron por move):"
-    Repair-StaleInherited -Findings $after
-    $after = @()
-    foreach ($raiz in @($Path) + @($RutasExtra)) {
-        if (Test-Path -LiteralPath $raiz) { $after += @(Invoke-Audit -RootPath $raiz) }
+    # Gap 1: `Repair-StaleInherited` corre `icacls /reset`, que muta el objeto.
+    # Solo entran los hallazgos que cuelgan de `$raicesMutables` -- un hallazgo
+    # bajo la raiz derivada por defecto (auditada, no corregible sin
+    # `-RutasExtra` explicito) NO esta en `$aTocar`/el backup, asi que mutarlo
+    # aca lo dejaria sin como revertir con `-Restore`.
+    # OJO: eso NO implica que lo de adentro del radio sea revertible entero --
+    # los objetos que este `/reset` toca no llevan ACE explicito propio, asi que
+    # tampoco estan en el backup: es el residual PREEXISTENTE y declarado de la
+    # Task 0.5 (`docs/plans-archivo.md:28`), no lo introduce este filtro.
+    $paraStale = @($after | Where-Object { Test-PathUnderAnyRoot -ChildPath $_.Path -Roots $raicesMutables })
+    if ($paraStale.Count -gt 0) {
+        Write-Output ""
+        Write-Output "Sobrevivieron ACE que el padre ya no otorga (llegaron por move):"
+        Repair-StaleInherited -Findings $paraStale
     }
+    $after = @()
+    foreach ($raiz in $raicesAuditadas) { $after += @(Invoke-Audit -RootPath $raiz) }
 }
 
 Write-Output ""
@@ -571,7 +818,21 @@ if ($after.Count -eq 0) {
     exit 0
 }
 
-Write-Output "FALLO: quedaron ACE con escritura."
-Write-FindingSummary -Findings $after
+# Gap 1: distinguir hallazgos DENTRO del radio que -Fix corrige (fallo real de
+# la correccion) de los que quedan FUERA (la raiz derivada por defecto, que es
+# politica declarada -- se audita, no se corrige sin -RutasExtra explicito).
+# El exit 1 es correcto en los dos casos (hay hallazgo, Core Rule 2), pero el
+# texto no puede llamar "fallo de la correccion" a lo segundo.
+$dentroDeAlcance = @($after | Where-Object { Test-PathUnderAnyRoot -ChildPath $_.Path -Roots $raicesMutables })
+$fueraDeAlcance  = @($after | Where-Object { -not (Test-PathUnderAnyRoot -ChildPath $_.Path -Roots $raicesMutables) })
+
+if ($dentroDeAlcance.Count -gt 0) {
+    Write-Output "FALLO: quedaron ACE con escritura dentro del radio que -Fix corrige."
+    Write-FindingSummary -Findings $dentroDeAlcance
+}
+if ($fueraDeAlcance.Count -gt 0) {
+    Write-Output "POLITICA (no es fallo de la correccion): quedaron ACE con escritura fuera del radio que -Fix corrige -- la raiz derivada por defecto solo se AUDITA. Pasar -RutasExtra explicito para que -Fix tambien la corrija."
+    Write-FindingSummary -Findings $fueraDeAlcance
+}
 Write-Output "Revertir con: -Restore `"$backupJson`""
 exit 1
