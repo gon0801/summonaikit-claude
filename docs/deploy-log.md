@@ -7,6 +7,34 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-01 — PR #136 / Task 17.6 (cierre de la Phase 17) — deploy REAL (skill nueva)
+
+- **Qué traía:** el instalador planta `saikit-verificar-app` (los DOS archivos),
+  spec § **Límites MEDIDOS de la Phase 17** (qué runners acredita la lane de app
+  real y qué no), guía de usuario con `verificar-app` en **ya funciona** y el
+  mapa explicado sin jerga, README § recetario y skills.
+- **El hallazgo del cierre, con rojo medido:** la marca `saikit_owned` se lee del
+  PRIMER bloque `---` del archivo, y en `verificar.sh` ese bloque era el heredoc
+  que escribe el frontmatter del `LEEME.md` (el lector devolvía `generado: ...`,
+  no la marca). El generador que el kit MISMO planta se clasificaba DESCONOCIDO
+  y **no se actualizaba nunca**, en silencio. Cerrado con la marca en un bloque
+  no-op al inicio + 5 casos; 9 líneas de FAIL contra el instalador sin arreglar.
+- **CodeRabbit: 2 Minor, los dos reales.** Placeholders literales
+  (`#PRNUM`/`MERGESHA`/`CIRES`) en una fila marcada `cc:完了`, y **un caso vacuo
+  del lead**: la precondición del caso de `--quitar-recetas` solo cubría
+  `SKILL.md`, así que la aserción de ausencia pasaba en vacío si el install no
+  publicaba `verificar.sh`. Cerrado con mutación medida (`el instalador publica
+  solo SKILL.md` ⇒ la precondición nueva se pone roja).
+- **Merge:** `8504e585`. CI 9/9 (run `33518589146`).
+- **Deploy REAL:** `AUSENTE -> ~/.claude/skills/saikit-verificar-app/SKILL.md` y
+  `.../verificar.sh`. Verificado byte a byte contra el repo; hook y perfiles ya
+  al día. **Evidencia independiente:** tras el deploy, el propio harness lista
+  `saikit-verificar-app` entre las skills disponibles de la sesión — no solo mi
+  diff dice que aterrizó.
+- **Límite declarado:** la cobertura del instalador es **Windows-bound** (el CI
+  Linux saltea `test_install_hook.sh` entero), así que plantar la skill en Linux
+  queda `unknown`, no supuesto.
+
 ## 2026-08-31 — PR #133 / Tasks 17.7+17.8 (candado local pinneado + concurrencia del rastro) — deploy NO-OP
 
 - **Qué traía:** 17.7 — gitleaks pinneado 8.30.1 como capa local (opción a),
