@@ -301,20 +301,27 @@ adquirir_candado() {
       # RE-VERIFICACION y RECLAMACION. La decision de "huerfano" vino de un read
       # de arriba; entre ese read y este punto OTRO pudo readquirir el lock (la
       # carrera ABA del hallazgo a). Por eso, justo antes de tocar, se RE-LEE el
-      # token: si el dueno sigue vivo NO se reclama — se espera. Y la reclamacion
-      # se hace con `mv` (atomico): solo UN reclamante gana; el perdedor ve el
-      # candado del ganador, nunca se lo borra.
+      # token: si el dueno sigue vivo NO se reclama — se espera. Un dueno vivo
+      # solo puede existir si el dir YA fue removido (mkdir lo recrea), asi que
+      # llegar aca con el dueno muerto garantiza que no hay un lock vivo que
+      # borrar — el rm del pid no se lo lleva a nadie.
+      # La reclamacion es rm del pid + rmdir del dir vacio. Se elige sin `mv` a
+      # proposito: si nos matan entre el rm y el rmdir, el dir queda VACIO (se
+      # re-clama por edad) — self-heal. Con un `mv` del pid adentro del dir (la
+      # version anterior) un kill en esa ventana dejaba `pid.reclaim.<pid>` en
+      # el dir, que lo volvia NO-vacio para siempre y clavaba el candado
+      # (hallazgo de la revision de 17.8). El rm+rmdir no tiene ese wedge.
       dueno="$(cat "$lock_dir/pid" 2>/dev/null || true)"
       if [ -n "$dueno" ]; then
         pid_guardado="${dueno%%:*}"
         if [ -n "$pid_guardado" ] && kill -0 "$pid_guardado" 2>/dev/null; then
           vivo=1
         else
-          # Sigue siendo huerfano. mv atomico del pid (un ganador) + rmdir.
-          if mv "$lock_dir/pid" "$lock_dir/pid.reclaim.$$" 2>/dev/null; then
-            rm -f "$lock_dir/pid.reclaim.$$" 2>/dev/null || true
-            rmdir "$lock_dir" 2>/dev/null || true
-          fi
+          # Sigue siendo huerfano (re-verificado). rm del pid + rmdir del dir
+          # vacio: si en el ínterin OTRO re-creo el dir con pid, el rmdir falla
+          # (no vacio) y se espera — nunca se le borra el candado a un vivo.
+          rm -f "$lock_dir/pid" 2>/dev/null || true
+          rmdir "$lock_dir" 2>/dev/null || true
         fi
       else
         # Dir vacio y viejo (huerfano sin pid). rmdir pelado: si en el instante
