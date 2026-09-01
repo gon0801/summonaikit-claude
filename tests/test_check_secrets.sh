@@ -190,6 +190,40 @@ if [ "$fb_ok" -eq 1 ]; then
   esac
 fi
 
+# ---------------------------------------------------------------------------
+# 17.7 (cross-review codex#6/grok#4) — el chequeo del PIN no debe dar FALSO AVISO
+# con un output que trae contexto alrededor de la version, y SI debe avisar en un
+# mismatch real. Antes, `tr -d '[:space:]'` dejaba 'v8.30.1' != '8.30.1' y daba
+# un falso aviso. Se usa un stub de gitleaks: para `version` imprime $FAKE_GL_VERSION
+# (con contexto); para el "escaneo" no encuentra nada (exit 0).
+# ---------------------------------------------------------------------------
+caso "17.7: el pin de version no da falso aviso con contexto, y si avisa en mismatch real"
+cat > "$tmp/fake-gitleaks" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "version" ]; then
+  printf '%s\n' "$FAKE_GL_VERSION"
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$tmp/fake-gitleaks" 2>/dev/null || true
+[ -x "$tmp/fake-gitleaks" ] || { printf '    skip: no se pudo hacer ejecutable el stub de gitleaks\n'; }
+
+# (a) version con contexto que matchea el pin (v-prefix + build-id): NO falso aviso
+out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "con version que matchea el pin el chequeo fallo (rc=$rc): $out"
+case "$out" in
+  *"AVISO — gitleaks local es"*) malo "falso AVISO de version con contexto que matchea el pin: $out" ;;
+esac
+
+# (b) mismatch real (9.9.9): SI avisa (y el escaneo no se bloquea)
+out="$(FAKE_GL_VERSION="9.9.9" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "con version distinta el escaneo no debio fallar (rc=$rc): $out"
+case "$out" in
+  *"AVISO — gitleaks local es 9.9.9"*) ;;
+  *) malo "no aviso en un mismatch real de version: $out" ;;
+esac
+
 # --- aridad ---------------------------------------------------------------
 caso "sin archivos => exit 2"
 bash "$tool" >/dev/null 2>&1

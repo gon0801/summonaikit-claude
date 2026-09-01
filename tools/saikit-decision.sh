@@ -165,12 +165,13 @@ validar_archivo() {
   [ -f "$f" ] || return 0   # no existe: nada que validar (append lo crea)
 
   # La ULTIMA fila tiene que terminar en salto de linea. Si el archivo no termina
-  # en \n, viene de un append truncado (SIGKILL/ENOSPC corto el \n final) y la
-  # fila parcial se "pegaria" a la siguiente cuando alguien escriba despues —
-  # el check la daria por buena (hallazgo 17.8-b). Se reporta malformado, no se
-  # da por buena ni se repara. El `tail -c 1` da \n => la sustitución de comando
-  # lo recorta y queda vacio; cualquier otro byte queda y se detecta. Un archivo
-  # vacio (0 bytes) deja `-s` falso y se saltea (lo juzga el encabezado abajo).
+  # en \n, la fila final esta INCOMPLETA — tipicamente un append cortado por
+  # SIGKILL/ENOSPC, o un archivo externo sin el \n final — y esa fila parcial se
+  # "pegaria" a la siguiente cuando alguien escriba despues; el check la daria
+  # por buena (hallazgo 17.8-b). Se reporta malformado, no se da por buena ni se
+  # repara. El `tail -c 1` da \n => la sustitución de comando lo recorta y queda
+  # vacio; cualquier otro byte queda y se detecta. Un archivo vacio (0 bytes)
+  # deja `-s` falso y se saltea (lo juzga el encabezado abajo).
   if [ -s "$f" ] && [ -n "$(tail -c 1 "$f" 2>/dev/null)" ]; then
     printf 'TSV malformado: %s no termina en salto de linea (fila final incompleta)\n' "$f" >&2
     exit 2
@@ -246,11 +247,15 @@ test_knee() {
   # 2 y el trap libera. Un bucle sin tope colgaba el tool indefinidamente.
   local cont=0
   while [ ! -e "$d/go-$knee.$$" ] && [ "$cont" -lt 500 ]; do sleep 0.01; cont=$((cont + 1)); done
-  rm -f "$d/go-$knee.$$" "$d/at-$knee.$$" 2>/dev/null || true
-  if [ "$cont" -ge 500 ]; then
+  # Timeout REAL: solo si el cont llego al tope Y el go SIGUE ausente. Si el go
+  # aparecio justo en la ultima ventana (cont==500), no es un fallo: se suelta
+  # normal. Se limpia el at y se sale 2 (el trap libera el candado); no gire.
+  if [ "$cont" -ge 500 ] && [ ! -e "$d/go-$knee.$$" ]; then
+    rm -f "$d/at-$knee.$$" 2>/dev/null || true
     printf 'saikit-decision: knee %s sin liberar en ~5s (test mal orquestado)\n' "$knee" >&2
     exit 2
   fi
+  rm -f "$d/go-$knee.$$" "$d/at-$knee.$$" 2>/dev/null || true
 }
 
 # Suelta SOLO el candado propio. Se re-lee el token y se compara con el OWNER
