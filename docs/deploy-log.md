@@ -7,6 +7,39 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-02 — PR #140 / Tasks 18.1+18.2+18.3 (diseño medido, receta cuidar-pr, veredicto sellado) — deploy REAL
+
+- **Qué se mergeó:** merge `15af87a`, CI 9/9 en el head `0e798b7` (run
+  33660631758). El plan medido de la Phase 18, `recetas/cuidar-pr.md`, y el
+  sello del veredicto en el hook (`SAIKIT-VEREDICTO-SELLO`) con
+  `tools/lib/veredicto_contract.sh` y su batería.
+- **Deploy: NO fue no-op.** El vivo estaba en **181319 bytes** y con **CERO**
+  ocurrencias de `SAIKIT-VEREDICTO-SELLO`, o sea una versión anterior a 18.3.
+  `install-hook.sh` reportó `REPARADO: el destino era nuestro y difiere de la
+  fuente` y dejó el vivo en **187373 bytes / 3114 líneas / sha `4127f79a`**,
+  idéntico a `master`. Backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260902-102625.bak`.
+  De paso plantó el recetario y la skill `saikit-verificar-app`, que estaban
+  AUSENTES en este perfil.
+- **`check-hook-registration.sh`:** exit 0, sin hallazgos.
+- **Lo que costó tener el vivo desactualizado, y por qué este paso existe:**
+  `resolver_hook_bajo_prueba` prefiere el hook VIVO sobre la fuente del repo.
+  Con el vivo viejo, `test_veredicto_contract.sh` daba rojo en TODOS los casos
+  del sello y el diagnóstico natural —el que se dio— fue «brecha de macOS».
+  Era falso: la batería estaba ejercitando un hook sin el sello. Con
+  `SAIKIT_HOOK_VIVO` apuntando a la fuente, la suite cierra OK entera, mutación
+  incluida. Media revisión se fue en ese diagnóstico equivocado; el deploy tras
+  merge es exactamente lo que lo previene.
+- **Deriva detectada y NO resuelta:** la cabecera de `tests/golden/baseline.txt`
+  declara `hook_bytes: 187898` / `hook_lineas: 3116` / sha `adc0cb76`, pero el
+  hook de `master` y el recién desplegado son **187373 / 3114 / `4127f79a`**.
+  La línea base se grabó desde un hook que no existe ni en el repo ni en el
+  perfil vivo. El `--check` pasa por COMPORTAMIENTO (55/55) y avisa «el hook
+  cambio de identidad». Anotado en la fila **18.13**.
+- **Queda abierto:** fila **18.13** (la línea `Close:` del contrato, el «el
+  líder commitea antes de despachar», y el `Write` del veredicto acreditado
+  como edición de código). Las tres comparten una sola regrabación de la golden.
+
 ## 2026-09-01 — PR #138 / Task 16.12 (caller por defecto de -RutasExtra) — deploy NO-OP; cierra la Phase 16
 
 - **Qué traía:** `hook-acl.ps1` deriva y AUDITA por defecto la carpeta de
