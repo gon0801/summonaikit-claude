@@ -70,7 +70,7 @@ HEAD_SHA="$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo 'c56586f')"
 # Write materializa), asi que el contenido del payload tiene que ser igual al
 # que el caso escribe en el archivo (garantiza sha256(decodificado) ==
 # sha256(archivo), que es lo que el merge de D18 compara).
-verdict_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g'; }
+verdict_esc() { printf '%s' "$1" | perl -0pe 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g'; }
 verdict_payload_write() {  # $1=rol, $2=file_path, $3=contenido
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"vd000000-0000-4000-8000-000000000001","permission_mode":"auto","agent_id":"a00000001vdreview","agent_type":"%s","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s","content":"%s"},"tool_response":{"filePath":"%s"},"tool_use_id":"toolu_01vd0e1f2a3b4c5d6e7f8091a","duration_ms":1200}' "$1" "$2" "$(verdict_esc "$3")" "$2"
 }
@@ -119,11 +119,14 @@ caso "contrato_sin_blast_o_adversary_invalido"
   # validador aceptaba un veredicto sin las claves contenedor blast/adversary.
   # Un veredicto con TODAS las hojas pero SIN adversary (o SIN blast) debe ser
   # invalido — y este caso lo atrapa si la lista de requeridos pierde esas dos.
-  printf '{"sha":"abc","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"reviewer":"clean","decisiones":"d"}\n' > "$tmp/sin-adversary.json"
+  # El sha va = HEAD (veredicto por lo demas valido): asi lo UNICO que lo
+  # invalida es la ausencia del contenedor blast/adversary (r1 H3: con sha="abc"
+  # la validacion lo rechazaba por sha antes de aislar el campo).
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"reviewer":"clean","decisiones":"d"}\n' "$HEAD_SHA" > "$tmp/sin-adversary.json"
   if veredicto_validar "$tmp/sin-adversary.json" "$HEAD_SHA" >/dev/null; then
     _mal "acepto un veredicto SIN adversary"
   fi
-  printf '{"sha":"abc","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}\n' > "$tmp/sin-blast.json"
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d","nivel":4,"hecho":"h","comando":"c"}\n' "$HEAD_SHA" > "$tmp/sin-blast.json"
   if veredicto_validar "$tmp/sin-blast.json" "$HEAD_SHA" >/dev/null; then
     _mal "acepto un veredicto SIN blast"
   fi
@@ -184,6 +187,75 @@ verdict_edit_posterior_deja_hash_distinto() {
 caso "verdict_edit_posterior_deja_hash_distinto"
 verdict_edit_posterior_deja_hash_distinto
 fin_caso "verdict_edit_posterior_deja_hash_distinto"
+
+# H1 (lead r1): la ruta ABSOLUTA del Write sella (en Windows C:\...; la forma
+# medida del Write de Claude Code). En Windows se arma con cygpath -w.
+verdict_ruta_absoluta_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="pqr678pqr678pqr678"
+  V="{\"sha\":\"$vsha\",\"verifier\":\"PASS\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  if command -v cygpath >/dev/null 2>&1; then
+    fp="$(cygpath -w "$LAB/proyecto")\.saikit\veredictos\\$vsha.json"
+    fp="$(printf '%s' "$fp" | sed 's/\\/\\\\/g')"   # escapa los backslashes para el JSON
+  else
+    fp="$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  fi
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer "$fp" "$V")"
+  _igual "hash con ruta absoluta" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+}
+caso "verdict_ruta_absoluta_sella"
+verdict_ruta_absoluta_sella
+fin_caso "verdict_ruta_absoluta_sella"
+
+# H1 (lead r1): una ruta absoluta FUERA de veredictos/ NO sella (atrapa un fix que matchee de mas).
+verdict_ruta_absoluta_fuera_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/findings"
+  vsha="stu901stu901stu901"
+  V="{\"sha\":\"$vsha\",\"verifier\":\"PASS\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/findings/$vsha.json"
+  if command -v cygpath >/dev/null 2>&1; then
+    fp="$(cygpath -w "$LAB/proyecto")\.saikit\findings\\$vsha.json"
+    fp="$(printf '%s' "$fp" | sed 's/\\/\\\\/g')"   # escapa los backslashes para el JSON
+  else
+    fp="$LAB/proyecto/.saikit/findings/$vsha.json"
+  fi
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer "$fp" "$V")"
+  _vacio "hash NO registrado para ruta fuera de veredictos/" "$(lab_estado veredicto_sha256)"
+}
+caso "verdict_ruta_absoluta_fuera_no_sella"
+verdict_ruta_absoluta_fuera_no_sella
+fin_caso "verdict_ruta_absoluta_fuera_no_sella"
+
+# H2 (lead r1): el sello NO recorta el salto de linea final del contenido.
+verdict_contenido_con_salto_final_coincide() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="vwx234vwx234vwx234"
+  V=$'{\n\t"sha": "'$vsha'",\n\t"verifier": "PASS",\n\t"reviewer": "clean"\n}\n'
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "hash con salto final (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
+}
+caso "verdict_contenido_con_salto_final_coincide"
+verdict_contenido_con_salto_final_coincide
+fin_caso "verdict_contenido_con_salto_final_coincide"
+
+# H4 (lead r1): el \r SI se decodifica (contenido CRLF).
+verdict_contenido_crlf_coincide() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="yza567yza567yza567"
+  V=$'{\r\n\t"sha": "'$vsha'",\r\n\t"verifier": "PASS"\r\n}\r\n'
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "hash CRLF (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
+}
+caso "verdict_contenido_crlf_coincide"
+verdict_contenido_crlf_coincide
+fin_caso "verdict_contenido_crlf_coincide"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_veredicto_contract: FAIL (casos)" >&2
