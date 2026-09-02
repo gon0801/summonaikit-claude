@@ -193,9 +193,11 @@ Contrato: la línea `Close:` del recibo cita `sha` y ruta.
 decodifica los escapes JSON (`\n \t \r \\ \"`) pero **no** los escapes Unicode
 `\uXXXX` ni `\/ \b \f` — un veredicto cuyo contenido lleve esos escapes tendría
 un sha del sello distinto al del archivo materializado (límite POC; el contenido
-de veredicto medido es ASCII). La forma de ruta medida/esperada es la relativa
-`.saikit/veredictos/<sha>.json`; la forma absoluta es best-effort (en Windows el
-path MSYS `/c/…` y el `C:/…` de la tool difieren en prefijo).
+de veredicto medido es ASCII). La forma MEDIDA del `file_path` del `Write` del reviewer es la ABSOLUTA (en
+Windows `C:\…`; medido 2188 `C:\…` y 0 relativas en los transcripts del
+operador). El hook canoniciza el `file_path` con `adv_canon_path`
+(backslash→slash, relativo→root, `cd "$(dirname)" && pwd -P`) y compara contra
+`$VERDICTOS_DIR/*`, así que ambas formas sellan.
 
 ### 4.2 `.saikit/autopilot.json` (D15) — leído SOLO de `origin/<rama>`
 
