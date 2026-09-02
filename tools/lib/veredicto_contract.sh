@@ -38,7 +38,8 @@
 #     y \uXXXX (4 hex); control char crudo dentro de un string => error;
 #   - numeros sin cero inicial, con fraccion/exponente completos;
 #   - true/false/null literales; sin coma colgante; sin basura al final;
-#   - no rechaza claves duplicadas (la primera gana en el flat; declarado).
+#   - rechaza claves duplicadas y claves con '.'/'['/']' (el namespace del
+#     flat; hallazgos de codex en el cross-review del PR #142).
 # Los \uXXXX se VALIDAN pero no se decodifican (el contenido de veredicto
 # medido es ASCII; decodificar Unicode en awk no es portable).
 # ---------------------------------------------------------------------------
@@ -62,7 +63,9 @@ function parseString(   c, e, out) {
       else if (e == "t") { out = out "\t"; i += 2 }
       else if (e == "u") { if (!hex4(substr(s, i + 2, 4))) { err = "escape \\uXXXX invalido en " i; return "" }; out = out substr(s, i, 6); i += 6 }
       else { err = "escape invalido en " i; return "" }
-    } else if (c == "\n" || c == "\r" || c == "\t") {
+    } else if (c < " ") {
+      # RFC 8259: TODO U+0000-U+001F crudo esta prohibido en strings, no
+      # solo LF/CR/TAB (hallazgo de codex, cross-review PR #142).
       err = "control char crudo en string en " i; return ""
     } else { out = out c; i++ }
   }
@@ -79,7 +82,15 @@ function parseNumber(   j) {
   return substr(s, j, i - j)
 }
 function parseLiteral(lit) { if (substr(s, i, length(lit)) == lit) { i += length(lit); return lit }; err = "literal invalido en " i; return "" }
-function emit(p, v) { if (MODE == "flat" && p != "") print p "\t" v }
+function emit(p, v) {
+  # El valor se re-escapa (\\, tab, LF, CR): un tab/newline crudo partiria la
+  # linea `ruta\tvalor` y saikit_json_get devolveria el valor truncado
+  # (hallazgo de qwen, cross-review PR #142). Los consumidores del gate
+  # comparan enums/shas/comandos ASCII: el re-escape es inocuo y el formato
+  # queda inambiguo.
+  gsub(/\\/, "\\\\", v); gsub(/\t/, "\\t", v); gsub(/\n/, "\\n", v); gsub(/\r/, "\\r", v)
+  if (MODE == "flat" && p != "") print p "\t" v
+}
 function parseValue(p,   c, v) {
   ws(); c = substr(s, i, 1)
   if (c == "{") { parseObject(p); return }
@@ -91,14 +102,22 @@ function parseValue(p,   c, v) {
   if (c == "n") { v = parseLiteral("null"); if (!err) emit(p, "<null>"); return }
   err = "valor inesperado en " i
 }
-function parseObject(p,   k, kp, c2) {
+function parseObject(p,   seen, k, kp, c2) {
   i++
   ws()
   if (substr(s, i, 1) == "}") { i++; return }
+  seen = "\n"
   while (1) {
     ws()
     if (substr(s, i, 1) != "\"") { err = "clave sin comillas en " i; return }
     k = parseString(); if (err) return
+    # El aplanado arma rutas con '.' y '[]': una clave que los contenga
+    # falsifica rutas anidadas ("verify_app.resultado" pasando por hoja).
+    # Y una clave DUPLICADA es ambigua entre consumidores — en un gate
+    # fail-closed se rechaza en vez de elegir una en silencio (codex #1/#2).
+    if (index(k, ".") || index(k, "[") || index(k, "]")) { err = "clave con . o corchetes en " i; return }
+    if (index(seen, "\n" k "\n")) { err = "clave duplicada: " k; return }
+    seen = seen k "\n"
     ws()
     if (substr(s, i, 1) != ":") { err = "falta : en " i; return }
     i++
@@ -157,7 +176,7 @@ saikit_json_get() {
 veredicto_validar() {
   local f="$1" head="${2:-}" txt="" flat="" campo sha
   [ -f "$f" ] || { printf 'no existe el veredicto: %s\n' "$f"; return 1; }
-  txt="$(tr -d '\r' < "$f")"
+  txt="$(sed 's/\r$//' "$f")"   # CR de fin de linea (CRLF); un CR a media string lo rechaza el parser
 
   # Parser JSON real: un veredicto que no parsea ES invalido, aunque traiga
   # los textos de todas las claves (el limite POC por grep, cerrado en 18.4).

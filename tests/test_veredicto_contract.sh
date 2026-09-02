@@ -243,6 +243,48 @@ caso "contrato_json_malformado_numero_con_cero"
 }
 fin_caso "contrato_json_malformado_numero_con_cero"
 
+caso "contrato_json_clave_con_punto_colisiona_invalida"
+{
+  # Hallazgo de codex (cross-review PR #142), MEDIDO: una clave de primer
+  # nivel "verify_app.resultado" colisiona en el aplanado con la hoja anidada
+  # y saikit_json_get devolvia la PRIMERA — un veredicto podia poner
+  # "verify_app.resultado":"PASS" arriba y el FAIL real adentro. El parser
+  # ahora rechaza claves con '.' o corchetes (el namespace del flat).
+  if saikit_json_get '{"verify_app.resultado":"PASS","verify_app":{"resultado":"FAIL"}}' verify_app.resultado | grep -q PASS; then
+    _mal "la clave con punto colisiona con la ruta anidada y gana"
+  fi
+  printf '{"sha":"%s","pr":1,"verify_app.resultado":"PASS","verifier":"PASS","verify_app":{"resultado":"FAIL","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-punto.json"
+  if veredicto_validar "$tmp/mal-punto.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un veredicto con una clave que falsifica una ruta anidada"
+  fi
+}
+fin_caso "contrato_json_clave_con_punto_colisiona_invalida"
+
+caso "contrato_json_clave_duplicada_invalida"
+{
+  # Hallazgo de codex (cross-review PR #142): JSON con claves duplicadas es
+  # ambiguo entre consumidores y el parser elegia la primera en silencio. En
+  # un gate fail-closed se rechaza.
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verifier":"FAIL","verify_app":{"resultado":"PASS","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-dup.json"
+  if veredicto_validar "$tmp/mal-dup.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un veredicto con claves duplicadas"
+  fi
+}
+fin_caso "contrato_json_clave_duplicada_invalida"
+
+caso "contrato_json_control_crudo_en_string_invalido"
+{
+  # Hallazgo de codex: RFC 8259 prohibe TODOS los U+0000-U+001F crudos en
+  # strings; el parser solo rechazaba LF/CR/TAB y aceptaba p.ej. 0x01. El
+  # veredicto es por lo demas valido: lo UNICO en juego es el control crudo.
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d","nota":"ctrl:' "$HEAD_SHA" > "$tmp/mal-ctrl.json"
+  printf '\001aqui"}' >> "$tmp/mal-ctrl.json"
+  if veredicto_validar "$tmp/mal-ctrl.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un control crudo (0x01) dentro de un string"
+  fi
+}
+fin_caso "contrato_json_control_crudo_en_string_invalido"
+
 caso "contrato_json_valido_con_escapes_sigue_valido"
 {
   # El endurecimiento no puede romper lo legitimo: strings con escapes

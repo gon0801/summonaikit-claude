@@ -123,7 +123,9 @@ pr_leer() {
   MERGEABLE="$(saikit_json_get "$PR_RAW" mergeable)"
 }
 pr_leer
-[ -n "$PR" ] || no_merge "gh pr view no trajo numero de PR"
+case "$PR" in
+  ''|*[!0-9]*) no_merge "gh pr view no trajo un numero de PR valido: [$PR]" ;;
+esac
 
 # mergeable UNKNOWN: GitHub lo calcula en diferido; UN reintento, no mas.
 if [ "$MERGEABLE" = "UNKNOWN" ]; then
@@ -261,7 +263,11 @@ fi
 git merge-base --is-ancestor "$ORIGEN" HEAD || no_merge "base avanzada: origin/$RAMA tiene commits que esta rama no integra; merge de la base y CI de nuevo"
 
 # un PR que toca autopilot.json JAMAS se auto-mergea (la config es la autoridad).
-if git diff --name-only "$ORIGEN...HEAD" | grep -Fxq '.saikit/autopilot.json'; then
+# El exit de git diff se exige (hallazgo de qwen): un diff que falla con salida
+# vacia no puede pasar por "no toca la config".
+ARCHIVOS_PR="$(git diff --name-only "$ORIGEN...HEAD")" \
+  || no_merge "no se pudo listar los archivos del PR (git diff fallo)"
+if printf '%s\n' "$ARCHIVOS_PR" | grep -Fxq '.saikit/autopilot.json'; then
   no_merge "el PR toca .saikit/autopilot.json: la config no se autoreescribe via merge"
 fi
 

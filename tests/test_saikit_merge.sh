@@ -110,6 +110,7 @@ case "$1 $2" in
     exit 0 ;;
   "pr merge")
     if [ -f "$fix/merge-fail" ]; then cat "$fix/merge-fail"; exit 1; fi
+    [ -n "${SAIKIT_ORDEN_LOG:-}" ] && printf 'merge\n' >> "$SAIKIT_ORDEN_LOG"
     exit 0 ;;
 esac
 printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
@@ -120,6 +121,8 @@ GHEOF
   export SAIKIT_GH_LOG="$SB/gh.log"
   : > "$SAIKIT_GH_LOG"
   export SAIKIT_ESTADO_ROOT="$SB/estado"
+  export SAIKIT_ORDEN_LOG="$SB/orden.log"
+  : > "$SAIKIT_ORDEN_LOG"
   export SAIKIT_MERGE_RETRY_SEG=0
   export PATH="$SB/bin:$PATH"
 
@@ -399,6 +402,19 @@ caso "pr_de_otra_rama_base_no_merguea"
 }
 fin_caso "pr_de_otra_rama_base_no_merguea"
 
+caso "pr_numero_mal_no_merguea"
+{
+  # Hallazgo de codex (cross-review PR #142): `number` solo se exigiia no
+  # vacio; un gh que devuelva una CADENA-opcion (p.ej. --repo=otro/x) llegaba
+  # entero como primer argumento de `gh pr merge`. El gate exige numero.
+  sed -i.bak 's/"number":7/"number":"--repo=otro\/x"/' "$SB/ghfix/pr.json"
+  rm -f "$SB/ghfix/pr.json.bak"
+  correr --confirmado
+  _contiene "razon numero de PR" "$OUT" "NO-MERGE: gh pr view no trajo un numero de PR"
+  if merge_disparado; then _mal "disparo gh pr merge con un selector inyectado"; fi
+}
+fin_caso "pr_numero_mal_no_merguea"
+
 caso "repo_distinto_no_merguea"
 {
   printf '{"nameWithOwner":"otro/repo"}' > "$SB/ghfix/repo.json"
@@ -454,15 +470,21 @@ caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
   # pre-receive del origin rechaza TODO push (incluido el --delete): el merge
   # ya ocurrio y el borrado se reporta, una sola vez, sin reintentar.
-  printf '#!/bin/sh\necho delete >> "%s/recibidos.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
+  printf '#!/bin/sh\necho delete >> "%s/orden.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
   chmod +x "$SB/origin.git/hooks/pre-receive"
   correr --confirmado
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0 (el merge salio bien), dio $RC"
   _contiene "merge ok" "$OUT" "MERGE-OK:"
   _contiene "reporta el borrado fallido" "$OUT" "BORRADO-FALLO"
   _contiene "dice que no reintenta" "$OUT" "sin reintentar"
-  [ -f "$SB/recibidos.log" ] || _mal "el push de borrado nunca llego al origin"
-  n="$(wc -l < "$SB/recibidos.log" | tr -d ' ')"
+  # Codex BAJO-5 (adjudicado): el gh falso marca "merge" y el pre-receive
+  # marca "delete", ambos en orden.log — el orden de las lineas es el orden
+  # de ejecucion. Una regresion que borre la rama ANTES de mergear invierte
+  # las lineas y este caso la atrapa.
+  orden="$(grep -h . "$SB/orden.log" 2>/dev/null || true)"
+  [ "$(printf '%s\n' "$orden" | sed -n '1p')" = "merge" ] || _mal "el borrado no fue despues del merge; orden=[$orden]"
+  [ "$(printf '%s\n' "$orden" | sed -n '2p')" = "delete" ] || _mal "no hubo un intento de borrado tras el merge; orden=[$orden]"
+  n="$(printf '%s\n' "$orden" | grep -c delete || true)"
   [ "$n" -eq 1 ] || _mal "intentos de borrado: esperaba 1, hubo $n"
 }
 fin_caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
@@ -481,14 +503,20 @@ fin_caso "dry_run_dice_que_haria_sin_hacerlo"
 # monta_revert: master con un squash-merge con trailer (MC), y una rama
 # revert/task cuyo HEAD es el inverso exacto. Sin estado del hook a proposito:
 # D19 no lo exige.
-monta_revert() {
+monta_revert() {  # $1 = "sin-trailer": el merge commit se crea SIN el
+                   # trailer desde el arranque (rehacerlo despues dejaba el
+                   # rango con 2 commits y el caso media otro check)
   sb_reset master
   rm -rf "$SB/estado"
   git checkout -q master
   printf 'app v2\n' > app.sh   # el cambio que el squash aterrizo
-  git commit -qam "feat: task (#7)
+  if [ "${1:-}" = "sin-trailer" ]; then
+    git commit -qam "feat: task (#7)"
+  else
+    git commit -qam "feat: task (#7)
 
 Saikit-Merge: $SHA"
+  fi
   git push -q origin master
   MC="$(git rev-parse HEAD)"
   git checkout -qb revert/task
@@ -547,15 +575,7 @@ fin_caso "revert_commit_extra_no_merguea"
 
 caso "revert_sin_trailer_no_merguea"
 {
-  monta_revert
-  # Rehacer MC sin trailer: resetear master al padre y commitear pelado.
-  git checkout -q master
-  git reset -q --hard "$MC^"
-  printf 'app v2\n' > app.sh
-  git commit -qam "feat: task (#7)"
-  git push -qf origin master
-  MC="$(git rev-parse HEAD)"
-  git checkout -q revert/task
+  monta_revert sin-trailer
   correr --revert-de "$MC" --confirmado
   _contiene "razon sin trailer" "$OUT" "NO-MERGE: sin trailer"
   if merge_disparado; then _mal "mergeo un revert de un commit sin trailer"; fi
@@ -603,8 +623,13 @@ fi
 # proteccion y esta suite falla (la debilidad historica del repo: tests que
 # pasan igual sin el fix).
 mut_sed() {  # $1=sed-expr, aplica sobre el fuente y deja el mutado en $MUTADO
+  # HERE se reescribe al tools/ del repo: la copia mutada vive en el TMPDIR y
+  # si no, no resuelve lib/veredicto_contract.sh y muere en el source — todas
+  # las mutaciones daban "atrapadas" por no poder correr (medido midiendo el
+  # hallazgo MEDIO-1 de qwen: el motivo real del rojo era el source, no el
+  # caso). Un mutado que no corre no prueba nada.
   MUTADO="$SB-mutado-$$.sh"
-  sed "$1" "$MERGE" > "$MUTADO"
+  { sed "$1" "$MERGE"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
 }
 
 correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
@@ -730,23 +755,34 @@ c_sin_estado() {
 
 c_borrado() {
   CASO_ROJO=0; sb_reset master
-  printf '#!/bin/sh\necho delete >> "%s/recibidos.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
+  printf '#!/bin/sh\necho delete >> "%s/orden.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
   chmod +x "$SB/origin.git/hooks/pre-receive"
   correr --confirmado
   _contiene "reporta el borrado fallido" "$OUT" "BORRADO-FALLO"
-  n="$(wc -l < "$SB/recibidos.log" 2>/dev/null | tr -d ' ')"
+  n="$(grep -c delete "$SB/orden.log" 2>/dev/null || true)"
   [ "$n" -eq 1 ] || _mal "intentos de borrado: esperaba 1, hubo ${n:-0}"
 }
 
+c_verifier_fail() {
+  CASO_ROJO=0; sb_reset master
+  sed -i.bak 's/"verifier":"PASS"/"verifier":"FAIL"/' ".saikit/veredictos/$SHA.json"
+  rm -f ".saikit/veredictos/$SHA.json.bak"
+  correr --confirmado
+  _contiene "razon verifier" "$OUT" "NO-MERGE: verifier: FAIL"
+  if merge_disparado; then _mal "mergeo con verifier FAIL"; fi
+}
+
+c_autor() {
+  CASO_ROJO=0; sb_reset master
+  sed -i.bak 's/"author":{"login":"op"}/"author":{"login":"otro"}/' "$SB/ghfix/pr.json"
+  rm -f "$SB/ghfix/pr.json.bak"
+  correr --confirmado
+  _contiene "razon autor" "$OUT" "NO-MERGE: autor del PR distinto de la cuenta"
+  if merge_disparado; then _mal "mergeo un PR de otro autor"; fi
+}
+
 c_revert_trailer() {
-  CASO_ROJO=0; monta_revert
-  git checkout -q master
-  git reset -q --hard "$MC^"
-  printf 'app v2\n' > app.sh
-  git commit -qam "feat: task (#7)"
-  git push -qf origin master
-  MC="$(git rev-parse HEAD)"
-  git checkout -q revert/task
+  CASO_ROJO=0; monta_revert sin-trailer
   correr --revert-de "$MC" --confirmado
   _contiene "razon sin trailer" "$OUT" "NO-MERGE: sin trailer"
   if merge_disparado; then _mal "mergeo un revert de un commit sin trailer"; fi
@@ -755,7 +791,7 @@ c_revert_trailer() {
 c_revert_arbol() {
   CASO_ROJO=0; monta_revert
   printf ' \n' >> app.sh
-  git commit -qam "revert con whitespace de mas"
+  git commit -qa --amend --no-edit
   git push -q origin revert/task
   RHEAD="$(git rev-parse HEAD)"
   printf '{"number":8,"baseRefName":"master","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$RHEAD" > "$SB/ghfix/pr.json"
@@ -795,6 +831,8 @@ rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
 email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
 estado_opcional	s|if \[ -z "\$ESTADO_FILE" \]; then|if false; then|	c_sin_estado
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
+verifier_flojo	s|\[ "\$V_VERIFIER" = "PASS" \]|true|	c_verifier_fail
+autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor
 revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer
 revert_arbol_por_patchid	s|\[ "\$T_REVERT" = "\$T_PREVIO" \]|true|	c_revert_arbol
 revert_punta_floja	s|\[ "\$PUNTA" = "\$REVERT_DE" \]|true|	c_revert_punta
