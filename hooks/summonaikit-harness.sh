@@ -1123,6 +1123,7 @@ write_state() {
   adv_paths="$8"
   adv_violation="$9"
   adv_violation_paths="${10}"
+  veredicto_sha256="${11:-}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   {
     printf 'task_hash=%s\n' "$task_hash"
@@ -1135,6 +1136,11 @@ write_state() {
     printf 'adv_paths=%s\n' "$adv_paths"
     printf 'adv_violation=%s\n' "$adv_violation"
     printf 'adv_violation_paths=%s\n' "$adv_violation_paths"
+    # Sello del veredicto (D16): se escribe SOLO cuando hay hash (el hook lo
+    # registra en el Write del reviewer sobre veredictos/). Ausente para
+    # cualquier otro evento, asi la forma del estado de los demas turnos no
+    # cambia (los escenarios de la linea base siguen byte-identicos).
+    if [ -n "$veredicto_sha256" ]; then printf 'veredicto_sha256=%s\n' "$veredicto_sha256"; fi
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -1671,6 +1677,7 @@ redact_secrets() {
 # Fallback textual si el root no existe (fail-open, familia A6).
 ADV_PROJECT_CANON="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || ADV_PROJECT_CANON=""
 ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
+VERDICTOS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/veredictos"
 
 # Familia de patrones del escaneo de secretos = la MISMA que redact_secrets
 # lleva inline (claude #3 del cross-review): el hook corre en el repo CONSUMER,
@@ -1803,6 +1810,95 @@ adv_ensure_gitignore() {
   return 0
 }
 
+# Sello del veredicto (D16, Task 18.3). En un PostToolUse de un Write atribuido
+# al rol reviewer sobre `.saikit/veredictos/`, el hook registra en el estado de
+# sesion `veredicto_sha256` = sha256 del archivo que el reviewer acaba de
+# escribir (el tool_input.content que el Write materializo; en PostToolUse el
+# archivo ya existe). Es un **registro de estado**, NO un check del Stop — el
+# gate sigue advisory. Cualquier escritura posterior — del lider, de otro rol,
+# por Edit o por Bash — cambia el archivo y el hash deja de coincidir (asi el
+# merge de D18 detecta un veredicto tocado despues del sello).
+verdict_ensure_gitignore() {
+  # Igual disciplina que adv_ensure_gitignore: solo en sesion cuyo root pudo
+  # resolverse, jamas a traves de un enlace, idempotente y sin tocar uno ajeno.
+  if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
+  if [ -L "${VERDICTOS_DIR%/*}" ] || [ -L "$VERDICTOS_DIR" ]; then return 0; fi
+  mkdir -p "$VERDICTOS_DIR" 2>/dev/null || return 0
+  if [ ! -e "$VERDICTOS_DIR/.gitignore" ] && [ ! -L "$VERDICTOS_DIR/.gitignore" ]; then
+    printf '*\n' > "$VERDICTOS_DIR/.gitignore" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# ¿El blanco del Write es un veredicto? Se canonicaliza con `adv_canon_path`
+# (backslash→slash, relativo→root, cd dirname && pwd -P) y se compara contra
+# $VERDICTOS_DIR/*, asi la forma absoluta de Windows (C:\...) y la relativa
+# (.saikit/veredictos/...) sellan igual. Los -L evitan un .saikit enlazado
+# (misma disciplina que adv_path_dentro).
+verdict_path_dentro() {
+  local vp
+  vp="$(adv_canon_path "$1")"
+  [ -n "$vp" ] || return 1
+  if [ -L "${VERDICTOS_DIR%/*}" ]; then return 1; fi
+  if [ -L "$VERDICTOS_DIR" ]; then return 1; fi
+  case "$vp" in
+    "$VERDICTOS_DIR"/*) return 0 ;;
+  esac
+  return 1
+}
+
+# Decodifica los escapes JSON de un string LEIDO POR STDIN (el que
+# `json_tool_input_string` devuelve con los escapes crudos: `\"`, `\n`, `\t`,
+# `\\`, `\r`). Es lo que vuelve el `content` del Write equivalente al archivo que
+# materializa (D16: el sello se hashea sobre el contenido real, no sobre la forma
+# escapada). Decodifica `\r` a un retorno de carro (contenido CRLF).
+verdict_unescape() {
+  awk '
+    { out = ""; esc = 0
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (esc) {
+          if      (c == "n") out = out "\n"
+          else if (c == "t") out = out "\t"
+          else if (c == "r") out = out "\r"
+          else if (c == "\\") out = out "\\"
+          else if (c == "\"") out = out "\""
+          else                out = out "\\" c
+          esc = 0
+        } else if (c == "\\") { esc = 1 }
+        else out = out c
+      }
+      printf "%s", out
+    }'
+}
+
+verdict_registrar_sello() {
+  # $1 = sha256 (ya computado por el llamador con el pipeline del handler del
+  # Write: `printf '%s' "$vd_content" | verdict_unescape | sha256sum`). No se pasa
+  # el contenido por `$(...)` porque la sustitucion de comando recorta el salto de
+  # linea final; en su lugar el llamador computa el hash sobre el contenido exacto
+  # decodificado. Registra veredicto_sha256 = $1: es lo que el Write materializo
+  # en el archivo, asi la comparacion posterior (D18: sha256 del archivo actual vs
+  # estado) coincide mientras el archivo no se toque, y deja de coincidir tras
+  # cualquier escritura posterior.
+  local vd_sha="$1" vd_task vd_cycle vd_impl vd_verif vd_agents vd_lane vd_ae vd_ap vd_av vd_avp
+  vd_task="$(read_state_value task_hash)";  [ -z "$vd_task" ] && vd_task="unknown"
+  vd_cycle="$(read_state_value cycle)";     [ -z "$vd_cycle" ] && vd_cycle="0"
+  vd_impl="$(read_state_value implemented)"; [ -z "$vd_impl" ] && vd_impl="0"
+  vd_verif="$(read_state_value verified)";   [ -z "$vd_verif" ] && vd_verif="0"
+  vd_agents="$(read_state_value agents_seen)"
+  vd_lane="$(read_state_value lane)"
+  vd_ae="$(read_state_value adv_epoch)"
+  vd_ap="$(read_state_value adv_paths)"
+  vd_av="$(read_state_value adv_violation)"
+  vd_avp="$(read_state_value adv_violation_paths)"
+  write_state "$vd_task" "$vd_cycle" "$vd_impl" "$vd_verif" "$vd_agents" "$vd_lane" "$vd_ae" "$vd_ap" "$vd_av" "$vd_avp" "$vd_sha"
+  if [ -n "$vd_sha" ]; then
+    printf 'veredicto_sha256: %s\n' "$vd_sha" >> "$LOG_PATH" 2>/dev/null || true
+  fi
+  return 0
+}
+
 # Reescribe el estado preservando los 6 campos clasicos y poniendo los 4 del
 # candado ($1 epoca, $2 rutas permitidas, $3 violacion, $4 rutas violadas);
 # $5 opcional reemplaza el ciclo (lo usa el bloque temprano del Stop).
@@ -1813,12 +1909,13 @@ adv_reescribir_estado() {
   verified="$(read_state_value verified)"
   agents_seen="$(read_state_value agents_seen)"
   lane="$(read_state_value lane)"
+  veredicto_sha256="$(read_state_value veredicto_sha256)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
   if [ -z "$verified" ]; then verified="0"; fi
   if [ -n "${5:-}" ]; then cycle="$5"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4" "$veredicto_sha256"
 }
 
 adv_registrar_violacion() {
@@ -2045,6 +2142,7 @@ mark_evidence() {
   adv_paths="$(read_state_value adv_paths)"
   adv_violation="$(read_state_value adv_violation)"
   adv_violation_paths="$(read_state_value adv_violation_paths)"
+  veredicto_sha256="$(read_state_value veredicto_sha256)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
@@ -2052,7 +2150,7 @@ mark_evidence() {
 
   if [ "$kind" = "implemented" ]; then implemented="1"; fi
   if [ "$kind" = "verified" ]; then verified="1"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256"
   printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -2116,6 +2214,7 @@ record_agent() {
   adv_paths="$(read_state_value adv_paths)"
   adv_violation="$(read_state_value adv_violation)"
   adv_violation_paths="$(read_state_value adv_violation_paths)"
+  veredicto_sha256="$(read_state_value veredicto_sha256)"
   if [ -z "$task_hash" ]; then task_hash="unknown"; fi
   if [ -z "$cycle" ]; then cycle="0"; fi
   if [ -z "$implemented" ]; then implemented="0"; fi
@@ -2155,7 +2254,7 @@ record_agent() {
       if [ -z "$agents_seen" ]; then agents_seen="$agent"; else agents_seen="$agents_seen,$agent"; fi
       ;;
   esac
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256"
   printf 'agent: %s\n' "$agent" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -2237,6 +2336,28 @@ record_tool_evidence() {
   if printf '%s' "$combined" | grep -Eiq 'afterFileEdit|Edit|Write|apply_patch|file_path|edits'; then
     mark_evidence "implemented" "${file_path:-file edit}"
   fi
+
+  # >>> SAIKIT-VEREDICTO-SELLO v1 (D16, Task 18.3) >>>
+  # El sello corre SOLO en sesiones armadas (el early-exit de arriba ya lo acoto)
+  # y solo cuando el evento resuelve a reviewer por un canal medido ($subagent ya
+  # lleva el despacho o el interno, M1) Y es un Write cuyo blanco cae bajo
+  # .saikit/veredictos/. Es registro de estado — NO agrega nada al Stop gate.
+  if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ] \
+     && [ -n "$file_path" ] \
+     && printf '%s' "$tool_name" | grep -Eiq '^(write)$'; then
+    if verdict_path_dentro "$file_path"; then
+      verdict_ensure_gitignore
+      vd_content="$(json_tool_input_string content)"
+      [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
+      if [ -n "$vd_content" ]; then
+        vd_sha="$(printf '%s' "$vd_content" | verdict_unescape | sha256sum | cut -c1-64)"
+      else
+        vd_sha=""
+      fi
+      verdict_registrar_sello "$vd_sha"
+    fi
+  fi
+  # <<< SAIKIT-VEREDICTO-SELLO v1 <<<
 
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   # Senal PRECISA para el orden, distinta del grep laxo de arriba (ese matchea
@@ -2959,7 +3080,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
 
   next_cycle=$((cycle + 1))
   write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane" \
-    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)"
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$(read_state_value veredicto_sha256)"
   feedback="$(build_gate_feedback "$missing" "$next_cycle")"
   emit_gate_failure "$feedback"
 }
