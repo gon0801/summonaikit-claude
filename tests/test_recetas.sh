@@ -167,6 +167,27 @@ caso "todas las recetas del repo pasan el linter"
 for f in "$repo"/recetas/*.md; do
   out="$(lint_receta "$f")" || malo "$(basename "$f"): $out"
 done
+caso "cuidar-pr: los pasos numerados respetan el orden fijo que la receta declara"
+# Regresion (regla de hierro): la receta declaraba "conflictos -> hilos -> CI" y
+# despues numeraba conflictos(3), CI(4), hilos(5). Un modelo que sigue los pasos
+# en orden invertia el orden que la propia receta fija. El linter no lo veia
+# porque cada paso, por separado, era valido.
+cp_receta="$repo/recetas/cuidar-pr.md"
+if [ -r "$cp_receta" ]; then
+  grep -Fq 'Orden fijo' "$cp_receta" || malo "cuidar-pr ya no declara un orden fijo"
+  ln_conf="$(grep -nE '^[0-9]+\. \*\*Conflictos\*\*' "$cp_receta" | head -n1 | cut -d: -f1)"
+  ln_hilos="$(grep -nE '^[0-9]+\. \*\*Hilos de bots\*\*' "$cp_receta" | head -n1 | cut -d: -f1)"
+  ln_ci="$(grep -nE '^[0-9]+\. \*\*CI rojo\*\*' "$cp_receta" | head -n1 | cut -d: -f1)"
+  if [ -z "$ln_conf" ] || [ -z "$ln_hilos" ] || [ -z "$ln_ci" ]; then
+    malo "cuidar-pr: no se ubicaron los tres pasos (conflictos=$ln_conf hilos=$ln_hilos ci=$ln_ci)"
+  else
+    [ "$ln_conf" -lt "$ln_hilos" ] || malo "cuidar-pr: conflictos (linea $ln_conf) no va antes que hilos (linea $ln_hilos)"
+    [ "$ln_hilos" -lt "$ln_ci" ]   || malo "cuidar-pr: hilos (linea $ln_hilos) no va antes que CI (linea $ln_ci) — contradice el orden fijo declarado"
+  fi
+else
+  malo "no se puede leer recetas/cuidar-pr.md"
+fi
+
 caso "el manifiesto esta al dia (gen --check)"
 bash "$repo/tools/gen-recetas-manifest.sh" --check >/dev/null || malo "MANIFEST.sha256 desactualizado: corre tools/gen-recetas-manifest.sh"
 
