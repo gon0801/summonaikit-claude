@@ -1,64 +1,194 @@
 #!/usr/bin/env bash
 # tools/lib/veredicto_contract.sh — contrato/esquema del veredicto sellado
 # (D16). Se carga con `. tools/lib/veredicto_contract.sh`. Sin dependencias
-# fuera de coreutils (tr/grep/sed). Lo usan `tests/test_veredicto_contract.sh`
-# y el futuro `tools/saikit-merge.sh` (Task 18.4); el hook NO lo usa — el hook
-# solo SELLA, no valida (la validacion es del merge, que corre tras el
-# veredicto ya sellado; D16/D18).
+# fuera de coreutils+awk (SIN jq: no se puede asumir instalado). Lo usan
+# `tests/test_veredicto_contract.sh` y `tools/saikit-merge.sh` (Task 18.4);
+# el hook NO lo usa — el hook solo SELLA, no valida (la validacion es del
+# merge, que corre tras el veredicto ya sellado; D16/D18).
 #
 # Esquema del veredicto (`.saikit/veredictos/<sha>.json`):
 #   { "sha", "pr", "verifier", "verify_app":{resultado,comando},
 #     "blast":{nivel,hecho,comando}, "adversary":{findings,max_sev}|"n/a",
 #     "reviewer", "decisiones" }
 #
-# `veredicto_validar` valida el CONTRATO ESTRUCTURAL (es un objeto JSON, estan
-# los campos requeridos — las claves CONTENEDOR y sus HOJAS — y el sha del
-# veredicto coincide con el HEAD dado). No juzga los VALORES semantico-sesion
-# (verifier=PASS, blast.nivel>=4, ...) — eso es del merge (D18), que los exige
-# ademas del contrato. Postura de falla: report + exit 1 (invalido), nunca exit
-# 0 por ausencia (un veredicto que no se pudo leer no es "valido" por defecto,
+# `veredicto_validar` valida el CONTRATO ESTRUCTURAL: es un objeto JSON
+# (parseado con un parser JSON real en awk, no grep — el limite POC de la
+# 18.3 se cerro en la 18.4), estan los campos requeridos — las claves
+# CONTENEDOR y sus HOJAS en su nivel — y el sha del veredicto coincide con el
+# HEAD dado. No juzga los VALORES semantico-sesion (verifier=PASS,
+# blast.nivel>=4, ...) — eso es del merge (D18), que los exige ademas del
+# contrato. Postura de falla: report + exit 1 (invalido), nunca exit 0 por
+# ausencia (un veredicto que no se pudo leer no es "valido" por defecto,
 # Core Rule 2).
 #
-# LIMITE DECLARADO (POC): la validacion es por presencia de clave con grep, no
-# un parser JSON. Un campo requerido que aparezca solo como VALOR (p.ej.
-# `"reviewer"` dentro de un string) no satisface la clave, pero el anidamiento
-# exacto (que "nivel" este DENTRO de "blast", y no en otro objeto) no se
-# impone — se exigen los contenedores y las hojas, no el arbol exacto. El
-# endurecimiento con un parser JSON real (sin jq) queda para el merge (18.4).
+# Ademas del contrato, la lib expone el parser para el resto del flujo del
+# merge (gh falso o real, `.saikit/autopilot.json`):
+#   saikit_json_valido <texto>   — 0 si es JSON valido (cualquier valor raiz).
+#   saikit_json_flat  <texto>    — una linea `ruta\tvalor` por hoja escalar
+#                                  (arrays como ruta[0], raiz "" excluida;
+#                                  null se emite como el marcador <null>).
+#   saikit_json_get   <texto> <ruta> — valor de la hoja en esa ruta (primera
+#                                  ocurrencia), rc 1 si la ruta no existe.
+
+# ---------------------------------------------------------------------------
+# Parser JSON (awk). Recursivo por tabla: parseValue/parseObject/parseArray se
+# llaman entre si; awk soporta recursion mutua cuando las funciones estan
+# definidas en el mismo programa. Estricto segun RFC 8259:
+#   - claves y strings entre comillas dobles, escapes \" \\ \/ \b \f \n \r \t
+#     y \uXXXX (4 hex); control char crudo dentro de un string => error;
+#   - numeros sin cero inicial, con fraccion/exponente completos;
+#   - true/false/null literales; sin coma colgante; sin basura al final;
+#   - no rechaza claves duplicadas (la primera gana en el flat; declarado).
+# Los \uXXXX se VALIDAN pero no se decodifican (el contenido de veredicto
+# medido es ASCII; decodificar Unicode en awk no es portable).
+# ---------------------------------------------------------------------------
+SAIKIT_JSON_AWK="$(cat <<'AWK'
+function ws() { while (i <= n) { c = substr(s, i, 1); if (c == " " || c == "\t" || c == "\r" || c == "\n") i++; else break } }
+function hex4(h,   k) { if (length(h) != 4) return 0; for (k = 1; k <= 4; k++) if (substr(h, k, 1) !~ /^[0-9A-Fa-f]$/) return 0; return 1 }
+function parseString(   c, e, out) {
+  i++; out = ""
+  while (i <= n) {
+    c = substr(s, i, 1)
+    if (c == "\"") { i++; return out }
+    if (c == "\\") {
+      e = substr(s, i + 1, 1)
+      if (e == "\"") { out = out "\""; i += 2 }
+      else if (e == "\\") { out = out "\\"; i += 2 }
+      else if (e == "/") { out = out "/"; i += 2 }
+      else if (e == "b") { out = out "\b"; i += 2 }
+      else if (e == "f") { out = out "\f"; i += 2 }
+      else if (e == "n") { out = out "\n"; i += 2 }
+      else if (e == "r") { out = out "\r"; i += 2 }
+      else if (e == "t") { out = out "\t"; i += 2 }
+      else if (e == "u") { if (!hex4(substr(s, i + 2, 4))) { err = "escape \\uXXXX invalido en " i; return "" }; out = out substr(s, i, 6); i += 6 }
+      else { err = "escape invalido en " i; return "" }
+    } else if (c == "\n" || c == "\r" || c == "\t") {
+      err = "control char crudo en string en " i; return ""
+    } else { out = out c; i++ }
+  }
+  err = "string sin cerrar en " i; return ""
+}
+function parseNumber(   j) {
+  j = i
+  if (substr(s, i, 1) == "-") i++
+  if (substr(s, i, 1) == "0") i++
+  else if (substr(s, i, 1) ~ /^[1-9]$/) { while (substr(s, i, 1) ~ /^[0-9]$/) i++ }
+  else { err = "numero invalido en " j; return "" }
+  if (substr(s, i, 1) == ".") { i++; if (substr(s, i, 1) !~ /^[0-9]$/) { err = "fraccion invalida en " i; return "" }; while (substr(s, i, 1) ~ /^[0-9]$/) i++ }
+  if (substr(s, i, 1) ~ /^[eE]$/) { i++; if (substr(s, i, 1) ~ /^[+-]$/) i++; if (substr(s, i, 1) !~ /^[0-9]$/) { err = "exponente invalido en " i; return "" }; while (substr(s, i, 1) ~ /^[0-9]$/) i++ }
+  return substr(s, j, i - j)
+}
+function parseLiteral(lit) { if (substr(s, i, length(lit)) == lit) { i += length(lit); return lit }; err = "literal invalido en " i; return "" }
+function emit(p, v) { if (MODE == "flat" && p != "") print p "\t" v }
+function parseValue(p,   c, v) {
+  ws(); c = substr(s, i, 1)
+  if (c == "{") { parseObject(p); return }
+  if (c == "[") { parseArray(p); return }
+  if (c == "\"") { v = parseString(); if (err) return; emit(p, v); return }
+  if (c == "-" || c ~ /^[0-9]$/) { v = parseNumber(); if (err) return; emit(p, v); return }
+  if (c == "t") { v = parseLiteral("true"); if (!err) emit(p, v); return }
+  if (c == "f") { v = parseLiteral("false"); if (!err) emit(p, v); return }
+  if (c == "n") { v = parseLiteral("null"); if (!err) emit(p, "<null>"); return }
+  err = "valor inesperado en " i
+}
+function parseObject(p,   k, kp, c2) {
+  i++
+  ws()
+  if (substr(s, i, 1) == "}") { i++; return }
+  while (1) {
+    ws()
+    if (substr(s, i, 1) != "\"") { err = "clave sin comillas en " i; return }
+    k = parseString(); if (err) return
+    ws()
+    if (substr(s, i, 1) != ":") { err = "falta : en " i; return }
+    i++
+    kp = (p == "" ? k : p "." k)
+    parseValue(kp); if (err) return
+    ws()
+    c2 = substr(s, i, 1)
+    if (c2 == ",") { i++; continue }
+    if (c2 == "}") { i++; return }
+    err = "se esperaba , o } en " i; return
+  }
+}
+function parseArray(p,   idx, c2) {
+  i++
+  ws()
+  if (substr(s, i, 1) == "]") { i++; return }
+  idx = 0
+  while (1) {
+    parseValue(p "[" idx "]"); if (err) return
+    ws()
+    c2 = substr(s, i, 1)
+    if (c2 == ",") { i++; idx++; continue }
+    if (c2 == "]") { i++; return }
+    err = "se esperaba , o ] en " i; return
+  }
+}
+BEGIN { s = ""; err = "" }
+{ s = s $0 "\n" }
+END {
+  n = length(s); i = 1
+  parseValue("")
+  if (!err) { ws(); if (i <= n && substr(s, i, 1) != "") err = "basura tras el JSON en " i }
+  if (err) { print "JSON-INVALIDO: " err > "/dev/stderr"; exit 1 }
+}
+AWK
+)"
+
+# saikit_json_valido <texto> — 0 si el texto completo es un JSON valido.
+saikit_json_valido() {
+  printf '%s' "$1" | awk -v MODE=validate "$SAIKIT_JSON_AWK" 2>/dev/null
+}
+
+# saikit_json_flat <texto> — lineas `ruta\tvalor` por hoja escalar.
+saikit_json_flat() {
+  printf '%s' "$1" | awk -v MODE=flat "$SAIKIT_JSON_AWK" 2>/dev/null
+}
+
+# saikit_json_get <texto> <ruta> — valor de la hoja (rc 1 si no existe).
+saikit_json_get() {
+  saikit_json_flat "$1" | awk -F'\t' -v p="$2" '$1 == p { print $2; found = 1; exit } END { exit found ? 0 : 1 }'
+}
 
 # veredicto_validar <archivo> [head]
 #   0 => valido (esquema + sha==head si head viene).
 #   1 => invalido, con un motivo en stdout.
 veredicto_validar() {
-  local f="$1" head="${2:-}" txt="" campo sha
+  local f="$1" head="${2:-}" txt="" flat="" campo sha
   [ -f "$f" ] || { printf 'no existe el veredicto: %s\n' "$f"; return 1; }
   txt="$(tr -d '\r' < "$f")"
 
-  # Debe ser un objeto JSON (primer char no-espacio '{', ultimo '}').
-  case "$(printf '%s' "$txt" | tr -d '[:space:]' | head -c1)" in
-    '{') ;;
-    *) printf 'no es un objeto JSON (no abre con {)\n'; return 1 ;;
-  esac
-  case "$(printf '%s' "$txt" | tr -d '[:space:]' | tail -c1)" in
-    '}') ;;
-    *) printf 'no es un objeto JSON (no cierra con })\n'; return 1 ;;
-  esac
+  # Parser JSON real: un veredicto que no parsea ES invalido, aunque traiga
+  # los textos de todas las claves (el limite POC por grep, cerrado en 18.4).
+  if ! flat="$(printf '%s' "$txt" | awk -v MODE=flat "$SAIKIT_JSON_AWK" 2>&1 >/dev/null)"; then
+    printf 'no es un JSON valido: %s\n' "$flat"
+    return 1
+  fi
+  flat="$(saikit_json_flat "$txt")"
 
-  # Campos requeridos — las CLAVES del esquema (contenedores y hojas). Se exige
-  # la clave entrecomillada completa (un substring "verif" no alcanza) y se
-  # listan TAMBIEN los contenedores blast/adversary: un veredicto sin ellos es
-  # invalido (hallazgo del reviewer, 18.3). Se busca sobre el texto crudo, por
-  # lo que un campo que aparezca solo como VALOR no satisface (exige la clave).
-  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"'; do
-    printf '%s' "$txt" | grep -qF "$campo" || { printf 'falta el campo %s\n' "$campo"; return 1; }
+  # Hojas requeridas por ruta EXACTA (blast/verify_app quedan cubiertos por
+  # sus hojas; verify_app.comando puede valer <null>, la RUTA tiene que
+  # existir). El contenedor adversary se exige aparte, abajo: puede ser
+  # "n/a" (hoja) u objeto (prefijo de hojas).
+  for campo in 'sha' 'pr' 'verifier' 'reviewer' 'decisiones' \
+               'verify_app.resultado' 'verify_app.comando' \
+               'blast.nivel' 'blast.hecho' 'blast.comando'; do
+    if ! printf '%s\n' "$flat" | awk -F'\t' -v p="$campo" '$1 == p { f = 1 } END { exit f ? 0 : 1 }'; then
+      printf 'falta el campo %s\n' "$campo"
+      return 1
+    fi
   done
+  if ! printf '%s\n' "$flat" | awk -F'\t' '$1 == "adversary" || index($1, "adversary.") == 1 || index($1, "adversary[") == 1 { f = 1 } END { exit f ? 0 : 1 }'; then
+    printf 'falta el campo adversary\n'
+    return 1
+  fi
 
-  # sha == HEAD (si head viene). El sed toma la clave "sha" de PRIMER nivel: en
-  # un JSON de una sola linea el `.*` de la izquierda se queda con la ultima
-  # ocurrencia de "sha", y dentro del esquema "sha" solo existe una vez.
+  # sha == HEAD (si head viene). La ruta exacta `sha` (primer nivel) es la
+  # que manda: un sha anidado en otro objeto no cuenta.
   if [ -n "$head" ]; then
-    sha="$(printf '%s' "$txt" | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
-    if [ -z "$sha" ]; then
+    sha="$(printf '%s\n' "$flat" | awk -F'\t' '$1 == "sha" { print $2; exit }')"
+    if [ -z "$sha" ] || [ "$sha" = "<null>" ]; then
       printf 'el veredicto no trae un sha legible\n'
       return 1
     fi

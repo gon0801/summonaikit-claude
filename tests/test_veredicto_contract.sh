@@ -160,6 +160,100 @@ caso "contrato_clave_solo_como_valor_invalido"
 }
 fin_caso "contrato_clave_solo_como_valor_invalido"
 
+# ------------------------------------- JSON malformado (endurecimiento 18.4)
+# La cabecera de tools/lib/veredicto_contract.sh declaraba el limite POC: la
+# validacion era por presencia de clave con grep, no un parser JSON. Un JSON
+# malformado que abra con `{`, cierre con `}` y traiga los textos de clave
+# pasaba igual. Ese endurecimiento es de la Task 18.4: validacion con un
+# parser JSON real (awk, sin jq). Cada caso de esta seccion es un JSON que el
+# grep-based aceptaba (o que un parser flojo dejaria pasar) y el parser real
+# tiene que rechazar. El `sha` va = HEAD en todos: lo UNICO en juego es que
+# sea JSON valido o no (r1 H3).
+vjson_valido() {  # fixture base valido, con el sha que venga en $1
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/app.test.cjs"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/app.test.cjs"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$1"
+}
+
+caso "contrato_json_malformado_colado_pasa_por_grep"
+{
+  # EL caso del limite declarado: abre con {, cierra con }, trae TODAS las
+  # claves como texto — pero no es JSON (sin : despues de "sha", valor sin
+  # comillas, coma colgante). El grep por clave entrecomillada lo aceptaba.
+  printf '{ "sha" "%s" , "verifier": PASS ,"verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d",}\n' "$HEAD_SHA" > "$tmp/mal-colado.json"
+  if veredicto_validar "$tmp/mal-colado.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un JSON malformado que trae los textos de clave (limite POC)"
+  fi
+  out="$(veredicto_validar "$tmp/mal-colado.json" "$HEAD_SHA" 2>&1)"
+  _contiene "motivo" "$out" "JSON"
+}
+fin_caso "contrato_json_malformado_colado_pasa_por_grep"
+
+caso "contrato_json_malformado_sin_cerrar"
+{
+  printf '{"sha":"%s","verifier":"PASS"' "$HEAD_SHA" > "$tmp/mal-abierto.json"
+  if veredicto_validar "$tmp/mal-abierto.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un JSON sin cerrar"
+  fi
+}
+fin_caso "contrato_json_malformado_sin_cerrar"
+
+caso "contrato_json_malformado_coma_colgante"
+{
+  printf '{"sha":"%s","verifier":"PASS",}' "$HEAD_SHA" > "$tmp/mal-coma.json"
+  if veredicto_validar "$tmp/mal-coma.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un JSON con coma colgante"
+  fi
+}
+fin_caso "contrato_json_malformado_coma_colgante"
+
+caso "contrato_json_malformado_clave_sin_comillas"
+{
+  printf '{sha:"%s","verifier":"PASS"}' "$HEAD_SHA" > "$tmp/mal-clave.json"
+  if veredicto_validar "$tmp/mal-clave.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto una clave sin comillas"
+  fi
+}
+fin_caso "contrato_json_malformado_clave_sin_comillas"
+
+caso "contrato_json_malformado_basura_final"
+{
+  printf '{"sha":"%s"} xx' "$HEAD_SHA" > "$tmp/mal-cola.json"
+  if veredicto_validar "$tmp/mal-cola.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto basura tras el cierre del objeto"
+  fi
+}
+fin_caso "contrato_json_malformado_basura_final"
+
+caso "contrato_json_malformado_escape_invalido"
+{
+  printf '{"sha":"%s","nota":"un \\q no es un escape"}' "$HEAD_SHA" > "$tmp/mal-esc.json"
+  if veredicto_validar "$tmp/mal-esc.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un escape invalido dentro de un string"
+  fi
+}
+fin_caso "contrato_json_malformado_escape_invalido"
+
+caso "contrato_json_malformado_numero_con_cero"
+{
+  # 04 no es un numero JSON valido (leading zero); un parser de numeros flojo
+  # lo deja pasar. La hoja blast.nivel es la que importa en el merge.
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":04,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-cero.json"
+  if veredicto_validar "$tmp/mal-cero.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "acepto un numero con cero inicial"
+  fi
+}
+fin_caso "contrato_json_malformado_numero_con_cero"
+
+caso "contrato_json_valido_con_escapes_sigue_valido"
+{
+  # El endurecimiento no puede romper lo legitimo: strings con escapes
+  # comunes y el fixture base siguen validos (regresion del parser).
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/ \\"con comillas\\""},"blast":{"nivel":4,"hecho":"linea1\\nlinea2","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/ok-esc.json"
+  if ! veredicto_validar "$tmp/ok-esc.json" "$HEAD_SHA" >/dev/null 2>&1; then
+    _mal "rechazo un JSON valido con escapes"
+  fi
+}
+fin_caso "contrato_json_valido_con_escapes_sigue_valido"
+
 # ------------------------------------------- productor: el PERFIL lo tiene que pedir
 # Leccion pagada en 17.5 y anotada en la fila 18.12: un perfil puede DESCRIBIR un
 # artefacto y no jalarlo nunca (0 invocaciones en 2 turnos vivos). El sello del
