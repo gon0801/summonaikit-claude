@@ -1830,42 +1830,37 @@ verdict_ensure_gitignore() {
   return 0
 }
 
-# ¿El blanco del Write es un veredicto? Prefijo `.saikit/veredictos/` relativo o
-# absoluto (el file_path de la tool puede venir en cualquiera de las dos formas:
-# relativo al repo, o absoluto con el root delante). No se canonicaliza a ciegas:
-# `verdict_registrar_sello` no necesita que el archivo exista (hashea el
-# contenido), y el sello es un registro de estado, no una barrera de seguridad;
-# basta el prefijo. El backslash de Windows se normaliza antes de comparar.
+# ¿El blanco del Write es un veredicto? Se canonicaliza con `adv_canon_path`
+# (backslash→slash, relativo→root, cd dirname && pwd -P) y se compara contra
+# $VERDICTOS_DIR/*, asi la forma absoluta de Windows (C:\...) y la relativa
+# (.saikit/veredictos/...) sellan igual. Los -L evitan un .saikit enlazado
+# (misma disciplina que adv_path_dentro).
 verdict_path_dentro() {
-  local vp="${1//\\//}"
-  # Normaliza un prefijo de repo con ./ delante (./.saikit/veredictos/...): el
-  # Write del reviewer llega relativo sin ./ en la forma medida, pero aceptar la
-  # forma con ./ evita perder el sello por un detalle de escritura (CodeRabbit).
-  case "$vp" in ./.*) vp="${vp#./}" ;; esac
+  local vp
+  vp="$(adv_canon_path "$1")"
+  [ -n "$vp" ] || return 1
+  if [ -L "${VERDICTOS_DIR%/*}" ]; then return 1; fi
+  if [ -L "$VERDICTOS_DIR" ]; then return 1; fi
   case "$vp" in
-    .saikit/veredictos/*|"$VERDICTOS_DIR"/*) return 0 ;;
+    "$VERDICTOS_DIR"/*) return 0 ;;
   esac
-  # Best-effort declarado: la forma MEDIDA/usada es la relativa
-  # `.saikit/veredictos/<sha>.json` (el Write del reviewer). La rama absoluta
-  # compara el prefijo literal — en Windows el path MSYS `/c/...` del sello y el
-  # `C:/...` que entrega la tool difieren en prefijo, asi que la forma absoluta
-  # puede no matchear; se documenta como limite, no como soporte garantizado.
   return 1
 }
 
-# Decodifica los escapes JSON de un string (el que `json_tool_input_string`
-# devuelve con los escapes crudos: `\"`, `\n`, `\t`, `\\`, `\r`). Es lo que
-# vuelve el `content` del Write equivalente al archivo que materializa (D16:
-# el sello se hashea sobre el contenido real, no sobre la forma escapada).
+# Decodifica los escapes JSON de un string LEIDO POR STDIN (el que
+# `json_tool_input_string` devuelve con los escapes crudos: `\"`, `\n`, `\t`,
+# `\\`, `\r`). Es lo que vuelve el `content` del Write equivalente al archivo que
+# materializa (D16: el sello se hashea sobre el contenido real, no sobre la forma
+# escapada). Decodifica `\r` a un retorno de carro (contenido CRLF).
 verdict_unescape() {
-  printf '%s' "$1" | awk '
+  awk '
     { out = ""; esc = 0
       for (i = 1; i <= length($0); i++) {
         c = substr($0, i, 1)
         if (esc) {
           if      (c == "n") out = out "\n"
           else if (c == "t") out = out "\t"
-          else if (c == "r") out = out ""
+          else if (c == "r") out = out "\r"
           else if (c == "\\") out = out "\\"
           else if (c == "\"") out = out "\""
           else                out = out "\\" c
@@ -1878,17 +1873,15 @@ verdict_unescape() {
 }
 
 verdict_registrar_sello() {
-  # $1 = contenido del veredicto (ya decodificado de tool_input.content). Registra
-  # veredicto_sha256 = sha256 de ESE contenido: es lo que el Write materializo en
-  # el archivo, asi la comparacion posterior (D18: sha256 del archivo actual vs
+  # $1 = sha256 (ya computado por el llamador con el pipeline del handler del
+  # Write: `printf '%s' "$vd_content" | verdict_unescape | sha256sum`). No se pasa
+  # el contenido por `$(...)` porque la sustitucion de comando recorta el salto de
+  # linea final; en su lugar el llamador computa el hash sobre el contenido exacto
+  # decodificado. Registra veredicto_sha256 = $1: es lo que el Write materializo
+  # en el archivo, asi la comparacion posterior (D18: sha256 del archivo actual vs
   # estado) coincide mientras el archivo no se toque, y deja de coincidir tras
-  # cualquier escritura posterior. Se hashea el contenido (no el archivo) para que
-  # el sello no dependa de que el archivo exista en el filesystem al momento del
-  # evento (el hook observa la tool, no la ejecuta).
-  local vd_content="$1" vd_sha="" vd_task vd_cycle vd_impl vd_verif vd_agents vd_lane vd_ae vd_ap vd_av vd_avp
-  if [ -n "$vd_content" ]; then
-    vd_sha="$(printf '%s' "$vd_content" | sha256sum | cut -c1-64)"
-  fi
+  # cualquier escritura posterior.
+  local vd_sha="$1" vd_task vd_cycle vd_impl vd_verif vd_agents vd_lane vd_ae vd_ap vd_av vd_avp
   vd_task="$(read_state_value task_hash)";  [ -z "$vd_task" ] && vd_task="unknown"
   vd_cycle="$(read_state_value cycle)";     [ -z "$vd_cycle" ] && vd_cycle="0"
   vd_impl="$(read_state_value implemented)"; [ -z "$vd_impl" ] && vd_impl="0"
@@ -2356,7 +2349,12 @@ record_tool_evidence() {
       verdict_ensure_gitignore
       vd_content="$(json_tool_input_string content)"
       [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
-      verdict_registrar_sello "$(verdict_unescape "$vd_content")"
+      if [ -n "$vd_content" ]; then
+        vd_sha="$(printf '%s' "$vd_content" | verdict_unescape | sha256sum | cut -c1-64)"
+      else
+        vd_sha=""
+      fi
+      verdict_registrar_sello "$vd_sha"
     fi
   fi
   # <<< SAIKIT-VEREDICTO-SELLO v1 <<<
