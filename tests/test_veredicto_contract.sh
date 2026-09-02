@@ -133,6 +133,46 @@ caso "contrato_sin_blast_o_adversary_invalido"
 }
 fin_caso "contrato_sin_blast_o_adversary_invalido"
 
+# ------------------------------------------- productor: el PERFIL lo tiene que pedir
+# Leccion pagada en 17.5 y anotada en la fila 18.12: un perfil puede DESCRIBIR un
+# artefacto y no jalarlo nunca (0 invocaciones en 2 turnos vivos). El sello del
+# hook no vale nada si NADIE escribe el veredicto, asi que el contrato del
+# PRODUCTOR se ata acá, igual que el blast en test_blast_artifact_contract.sh.
+# Cada grep de este caso estaba en CERO antes del fix: el perfil no nombraba el
+# veredicto en ninguna forma.
+REVIEWER_MD="$repo/agents/reviewer.md"
+
+caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
+{
+  [ -r "$REVIEWER_MD" ] || _mal "no se puede leer agents/reviewer.md"
+  perfil="$(cat "$REVIEWER_MD" 2>/dev/null || printf '')"
+
+  # (a) nombra el artefacto y de donde sale el sha.
+  _contiene "el perfil nombra el directorio del veredicto" "$perfil" '.saikit/veredictos/'
+  _contiene "el perfil dice de donde sale el sha" "$perfil" 'git rev-parse HEAD'
+
+  # (b) EXIGE la tool Write. El sello del hook dispara SOLO en un Write
+  # (`grep -Eiq '^(write)$'` sobre tool_name): si el perfil deja que el
+  # veredicto se escriba con Edit o con Bash, el archivo existe y el sello NO,
+  # que es la falla silenciosa que este caso impide.
+  # La frase completa, no el token suelto: `Write` ya aparece en el frontmatter
+  # (`tools: Read, Edit, Write, ...`), asi que grepear 'Write' pasaria sin que el
+  # perfil pida nada. Se exige la instruccion.
+  _contiene "el perfil exige la tool Write" "$perfil" 'la tool `Write`'
+  _contiene "el perfil advierte que Edit/Bash no sellan" "$perfil" 'no sella'
+
+  # (c) el esquema completo (D16) — las claves contenedor y las hojas, las
+  # mismas que veredicto_validar exige mas arriba.
+  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"'; do
+    _contiene "el perfil documenta el campo $campo" "$perfil" "$campo"
+  done
+
+  # (d) una sola escritura: reescribir el archivo despues deja el hash del
+  # estado viejo y el merge de 18.4 lo leeria como veredicto tocado.
+  _contiene "el perfil prohibe reescribir el veredicto" "$perfil" 'una sola vez'
+}
+fin_caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
+
 # --------------------------------------------------------- gate: sello del hook
 verdict_reviewer_write_registra_hash() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"

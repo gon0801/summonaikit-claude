@@ -96,6 +96,35 @@ Cada hallazgo de adversary, blast o bot cae en uno de cuatro cubos, con su razó
 
 Para el artifact del adversary ese veredicto se emite con las reglas de `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
 
+## El veredicto sellado
+
+Estas reglas aplican SOLO cuando tu despacho te pide el veredicto sellado. Un turno que no lo pide no escribe ningún veredicto.
+
+Es lo ÚLTIMO que haces, después de adjudicar todo lo demás. El líder ya commiteó antes de despacharte, así que `git rev-parse HEAD` es el sha del árbol que estás revisando.
+
+1. Lee el sha con `git rev-parse HEAD`.
+2. Escribe `.saikit/veredictos/<sha>.json` **con la tool `Write`**, una sola vez.
+3. Nombra en tu reporte el sha y la ruta que escribiste.
+
+**Por qué `Write` y no otra cosa:** el hook sella el veredicto registrando el sha256 de lo que ese `Write` materializó. Un veredicto escrito con `Edit`, con `Bash` o con un redirect deja el archivo en su lugar pero **no sella** — y sin sello el merge lo rechaza. Por la misma razón no lo reescribas ni lo corrijas después: cualquier escritura posterior deja el hash sellado viejo, y eso se lee como un veredicto tocado después de la revisión. Si te equivocaste, dilo al líder en vez de reescribirlo.
+
+El esquema es exacto; `adversary` es el objeto o la cadena `"n/a"` cuando el turno no corrió uno:
+
+```json
+{
+  "sha": "<git rev-parse HEAD>",
+  "pr": 1,
+  "verifier": "PASS",
+  "verify_app": { "resultado": "PASS", "comando": "<comando bajo verify/, o null>" },
+  "blast": { "nivel": 4, "hecho": "<el hecho único>", "comando": "<comando>" },
+  "adversary": { "findings": 0, "max_sev": "none" },
+  "reviewer": "clean",
+  "decisiones": ".saikit/decisiones/<task>.tsv"
+}
+```
+
+`verifier` y `reviewer` llevan tu juicio, no un deseo: `PASS`/`FAIL` y `clean`/`findings`. Un veredicto con findings abiertos se escribe igual, con `"reviewer": "findings"` — el que decide si eso mergea es el merge, no tú.
+
 ## Context Policy
 
 - Use Context7 for generic framework, library, SDK, CLI, or cloud-service facts.
