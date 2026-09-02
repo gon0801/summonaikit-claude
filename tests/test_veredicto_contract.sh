@@ -133,6 +133,33 @@ caso "contrato_sin_blast_o_adversary_invalido"
 }
 fin_caso "contrato_sin_blast_o_adversary_invalido"
 
+caso "contrato_clave_solo_como_valor_invalido"
+{
+  # Hallazgo de CodeRabbit en el PR #140 («required-key text inside a string can
+  # pass»), adjudicado DISMISS *verificado* — y este caso es lo que lo mantiene
+  # cierto. Medido: en JSON VALIDO las comillas de adentro de un string van
+  # escapadas (`\"decisiones\"`), asi que la subcadena `"decisiones"` NO aparece
+  # y el grep por clave ENTRECOMILLADA ya rechaza el veredicto. El hallazgo no
+  # aplica al codigo como esta.
+  #
+  # Se deja como REGRESION porque el poder discriminante esta medido: mutando el
+  # bucle a palabras desnudas (`for campo in sha pr ...` sin comillas) este caso
+  # se pone ROJO y NINGUN otro lo atrapa. Es lo que impide que una "simplificacion"
+  # del grep vuelva cierto el hallazgo de CodeRabbit.
+  #
+  # Lo que SI queda abierto de ese hilo, y es de 18.4: un JSON malformado que
+  # abra con `{`, cierre con `}` y traiga los textos de clave pasa igual, porque
+  # esto no parsea. Declarado en la cabecera de tools/lib/veredicto_contract.sh.
+  # El sha va = HEAD para que lo UNICO en juego sea la clave.
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","nota":"a este veredicto le falta la clave \\"decisiones\\" y hay que agregarla"}\n' "$HEAD_SHA" > "$tmp/clave-en-valor.json"
+  if veredicto_validar "$tmp/clave-en-valor.json" "$HEAD_SHA" >/dev/null; then
+    _mal "acepto un veredicto donde \"decisiones\" aparece SOLO como texto de un valor, no como clave"
+  fi
+  out="$(veredicto_validar "$tmp/clave-en-valor.json" "$HEAD_SHA")"
+  _contiene "motivo de la clave que solo era valor" "$out" "falta el campo"
+}
+fin_caso "contrato_clave_solo_como_valor_invalido"
+
 # ------------------------------------------- productor: el PERFIL lo tiene que pedir
 # Leccion pagada en 17.5 y anotada en la fila 18.12: un perfil puede DESCRIBIR un
 # artefacto y no jalarlo nunca (0 invocaciones en 2 turnos vivos). El sello del
@@ -187,6 +214,34 @@ verdict_reviewer_write_registra_hash() {
 caso "verdict_reviewer_write_registra_hash"
 verdict_reviewer_write_registra_hash
 fin_caso "verdict_reviewer_write_registra_hash"
+
+caso "verdict_repo_fresco_sin_saikit_sella_igual"
+{
+  # Hallazgo de codex (cross-review del PR #140), adjudicado con MEDICION: «en
+  # un repo nuevo .saikit/veredictos/ no existe y el hook solo lo crea despues
+  # del Write; el test los precrea y no cubre el primer uso real».
+  #
+  # Medido con la tool real sobre un arbol SIN `.saikit`: el `Write` crea los
+  # directorios padre que faltan y deja el archivo con su contenido exacto. Asi
+  # que el primer uso real NO falla. Este caso es esa medicion convertida en
+  # regresion: `verdict_reset` deja `proyecto/` vacio, y aca se crean SOLO los
+  # padres del archivo (lo que hace el Write), nunca el arbol de antemano.
+  #
+  # El hash se compara contra el sha256 del ARCHIVO EN DISCO, no contra el
+  # contenido que el caso conoce: es la comparacion exacta que hara el merge de
+  # 18.4 (estado vs archivo actual).
+  [ -e "$LAB/proyecto/.saikit" ] && _mal "el caso arranca con .saikit ya existente; no prueba un repo fresco"
+  vsha="fresco00fresco00"
+  Vf="{\"sha\":\"$vsha\",\"pr\":1,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"PASS\",\"comando\":\"npm test -- verify/\"},\"blast\":{\"nivel\":4,\"hecho\":\"h\",\"comando\":\"npm test -- verify/\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"d\"}"
+  fpf="$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  mkdir -p "$(dirname "$fpf")"
+  printf '%s' "$Vf" > "$fpf"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$Vf")"
+  _igual "hash en repo fresco (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$fpf" | cut -c1-64)"
+  _contiene "gitignore creado en repo fresco" "$(cat "$LAB/proyecto/.saikit/veredictos/.gitignore" 2>/dev/null)" '*'
+}
+fin_caso "verdict_repo_fresco_sin_saikit_sella_igual"
 
 verdict_otro_rol_no_registra_hash() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
