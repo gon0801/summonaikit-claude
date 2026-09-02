@@ -24,7 +24,7 @@
 # `"reviewer"` dentro de un string) no satisface la clave, pero el anidamiento
 # exacto (que "nivel" este DENTRO de "blast", y no en otro objeto) no se
 # impone — se exigen los contenedores y las hojas, no el arbol exacto. El
-# endur ecimiento con un parser JSON real (sin jq) queda para el merge (18.4).
+# endurecimiento con un parser JSON real (sin jq) queda para el merge (18.4).
 
 # veredicto_validar <archivo> [head]
 #   0 => valido (esquema + sha==head si head viene).

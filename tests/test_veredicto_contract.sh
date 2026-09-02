@@ -6,8 +6,8 @@
 #     con un campo requerido faltante => invalido. La validacion es la de
 #     `tools/lib/veredicto_contract.sh` (la reusara `tools/saikit-merge.sh`, D18).
 #   - GATE (comportamiento del hook): el `Write` atribuido al reviewer sobre
-#     `.saikit/veredictos/` regustra `veredicto_sha256` en el estado; el `Write`
-#     de OTRO rol NO lo regustra; un `Edit` posterior deja el archivo con hash
+#     `.saikit/veredictos/` registra `veredicto_sha256` en el estado; el `Write`
+#     de OTRO rol NO lo registra; un `Edit` posterior deja el archivo con hash
 #     distinto al registrado (el sello es del archivo escrito).
 #
 # La mitad mutation-test vive al final: romper el sello (`sello_veredicto_apagado`)
