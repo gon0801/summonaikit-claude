@@ -260,7 +260,8 @@ avisar_registro() {
   # vive en hooks.json (hermano del dir de hooks). La forma codex del
   # verificador hace las DOS afirmaciones (registro->wrapper, wrapper->hook).
   if [ "$HOST" = "codex" ]; then
-    bash "$verificador" --codex-hooks-json "$(dirname "$(dirname "$DEST")")/hooks.json" || true
+    bash "$verificador" --codex-hooks-json "$(dirname "$(dirname "$DEST")")/hooks.json" \
+      --codex-wrapper "$(codex_wrapper_path)" || true
     return 0
   fi
   # Task 7.5: en grok el registro es el JSON hermano del hook
@@ -279,6 +280,103 @@ avisar_registro() {
   fi
   settings="$(dirname "$(dirname "$DEST")")/settings.json"
   bash "$verificador" --settings "$settings" --hook-name "$(basename "$DEST")" || true
+}
+
+# Task 18.15 — cadena codex. En Windows el registro nombra un .ps1 (medido 6.1);
+# el kit NUNCA lo entrego (find summonaikit-harness.ps1 = vacio). En POSIX se
+# midio (2026-09-02, CODEX_HOME de prueba, codex 0.152.0) que hooks.json puede
+# apuntar a un .sh y SessionStart/UserPromptSubmit disparan. El HOST=codex del
+# harness exige SUMMONAIKIT_HOOK_TARGET=codex (sin eso no hay TARGET); el wrap
+# POSIX lo setea, analogo al .ps1. hooks.json sigue fuera del instalador
+# (fase 6); el wrap SI se planta. Sin wrap la instalacion era fail-OPEN.
+codex_wrapper_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    printf '%s' "$(dirname "$DEST")/summonaikit-harness.ps1"
+  else
+    printf '%s' "$(dirname "$DEST")/summonaikit-harness-codex-wrap.sh"
+  fi
+}
+
+codex_plant_wrap_posix() {
+  local wrap dir tmp
+  wrap="$(codex_wrapper_path)"
+  case "$wrap" in
+    *.ps1) return 0 ;;  # Windows: el kit no entrega el .ps1
+  esac
+  # Escritura atomica (mismo patron que DEST/JSON/patch): temporal EN EL MISMO
+  # dir + validar + mv -f. `cat > "$wrap"` truncaba el wrap previo si la
+  # escritura fallaba a medias (CodeRabbit / lead, PR #153); codex_exige_wrapper
+  # restaura DEST pero no el wrap.
+  dir="$(dirname "$wrap")"
+  umask 077
+  tmp="$(mktemp "$dir/.saikit-codex-wrap-XXXXXX")" || return 1
+  if ! cat > "$tmp" <<EOF
+#!/usr/bin/env bash
+# SAIKIT-CLAUDE-OWNED summonaikit-claude wrap-codex
+# Task 18.15: setea TARGET y delega al harness (analogia del .ps1 en Windows).
+export SUMMONAIKIT_HOOK_TARGET=codex
+exec bash "$(dirname "$wrap")/summonaikit-harness.sh" "\$@"
+EOF
+  then
+    rm -f "$tmp"; return 1
+  fi
+  chmod +x "$tmp" || { rm -f "$tmp"; return 1; }
+  # El checker exige que una linea de codigo nombre summonaikit-harness.sh.
+  if ! grep -q 'summonaikit-harness\.sh' "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  if ! mv -f "$tmp" "$wrap"; then
+    rm -f "$tmp"; return 1
+  fi
+  return 0
+}
+
+# Fail-closed: sin el eslabon wrapper la cadena no corre. En dry-run se reporta
+# y se sale 2 en Windows si falta el .ps1 (antes mentia exit 0). En POSIX se
+# planta el wrap DESPUES de publicar DEST y se exige que quede en disco.
+# El chequeo Windows va en preflight (antes de escribir); el plant POSIX va
+# al cerrar (despues de publicar).
+codex_preflight_wrapper() {
+  local wrap
+  [ "$HOST" = "codex" ] || return 0
+  wrap="$(codex_wrapper_path)"
+  if command -v cygpath >/dev/null 2>&1; then
+    if [ ! -f "$wrap" ]; then
+      decir "[summonaikit] instalador: --host codex requiere el wrapper ($wrap)."
+      decir "              Cadena medida: hooks.json -> .ps1 -> harness.sh. El kit no entrega el .ps1."
+      decir "              Nada se escribe / dry-run no afirma exito (Task 18.15 fail-closed)."
+      exit 2
+    fi
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    decir "[summonaikit] dry-run: (codex POSIX) se plantaria el wrap $wrap (TARGET=codex)."
+    decir "              Forma medida del command en hooks.json: \"$wrap\""
+    decir "              (hooks.json no lo escribe este instalador; fase 6 / limite declarado)."
+  fi
+}
+
+codex_exige_wrapper() {
+  local wrap
+  [ "$HOST" = "codex" ] || return 0
+  wrap="$(codex_wrapper_path)"
+  # Windows: ya se exigio en preflight.
+  command -v cygpath >/dev/null 2>&1 && return 0
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  if ! codex_plant_wrap_posix || [ ! -f "$wrap" ]; then
+    decir "[summonaikit] instalador: no se pudo plantar el wrap POSIX de codex ($wrap)."
+    # Si el hook se publico en ESTA corrida, no dejar la cadena a medias.
+    if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
+      cp "$backup" "$DEST" 2>/dev/null && decir "              hook restaurado desde $backup" \
+        || decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST"
+    elif [ "${estado:-}" = 'AUSENTE' ]; then
+      rm -f "$DEST" 2>/dev/null && decir "              hook retirado (esta corrida lo habia creado)" \
+        || decir "              ROLLBACK INCOMPLETO: no se pudo retirar $DEST"
+    fi
+    exit 2
+  fi
+  decir "[summonaikit] WRAP CODEX POSIX PLANTADO: $wrap"
+  decir "              Forma medida (hooks.json command): \"$wrap\""
+  decir "              hooks.json no se escribe aqui (fase 6); el operador o una fila"
+  decir "              posterior debe registrar esa forma. Sin el, el wrap no dispara."
 }
 
 # ----------------------------------------------------------- Task 5.4: zcode
@@ -311,6 +409,16 @@ zcode_bash_win() {
   done
   if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && command -v cygpath >/dev/null 2>&1; then
     bw="$(cygpath -w "$b" 2>/dev/null)" && [ -n "$bw" ] && { printf '%s' "$bw"; return 0; }
+  fi
+  # Task 18.15: en POSIX (Darwin/Linux) no hay cygpath ni bash.exe de Git.
+  # El bash real del PATH es la forma medida. NUNCA caer aca en MSYS: cygpath
+  # ya cubrio arriba, y /usr/bin/bash virtual de MSYS sigue prohibido (R2.5).
+  if ! command -v cygpath >/dev/null 2>&1; then
+    if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
+      case "$b" in
+        /*) printf '%s' "$b"; return 0 ;;
+      esac
+    fi
   fi
   return 1
 }
@@ -565,7 +673,7 @@ zcode_instalar() {
   # bash.exe ANTES de escribir agentes (hallazgo 3): si no hay bash no
   # quedan perfiles huerfanos con el hook sin registrar.
   bash_win="$(zcode_bash_win)" || {
-    decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command."; exit 2; }
+    decir "[summonaikit] instalador: no encontre un bash para el command (bash.exe en Windows, bash en POSIX)."; exit 2; }
   # 13.9 (adversary r1 EN VIVO): --dry-run tambien vale para --host zcode — el
   # dispatch nunca miraba DRY_RUN y una corrida de verificacion "sin escribir"
   # dejo un backup REAL del user-config (config.json.zcode.20260825-102205.bak).
@@ -781,8 +889,14 @@ grok_json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 # es el call operator: & "<bash.exe>" "<hook>". bash.exe viene en forma
 # forward-slashes de zcode_bash_win y el hook va con su ruta tal cual (la misma
 # forma verificada en los 37 payloads de la 7.1 via capture-payloads.sh).
+# Task 18.15: en POSIX el shell de hooks NO es PowerShell — el `&` es operador
+# de PS y rompe; la forma medida es '"<bash>" "<hook>"' (sin call operator).
 grok_hook_cmd() {  # $1=bash_win
-  printf '& "%s" "%s"' "$1" "$DEST"
+  if command -v cygpath >/dev/null 2>&1; then
+    printf '& "%s" "%s"' "$1" "$DEST"
+  else
+    printf '"%s" "%s"' "$1" "$DEST"
+  fi
 }
 
 # El JSON canonico completo (design D1): entero y a proposito repetitivo, sin
@@ -1011,8 +1125,8 @@ grok_preflight() {
   command -v jq >/dev/null 2>&1 || {
     decir "[summonaikit] instalador: --host grok requiere jq (no encontrado)."; exit 2; }
   GROK_BASH_WIN="$(grok_bash_win)" || {
-    decir "[summonaikit] instalador: no encontre un bash.exe de Windows para el command del JSON de grok."
-    decir "              Sin el no existe la forma PowerShell '& \"bash.exe\" \"hook\"' que 7.1 midio."; exit 2; }
+    decir "[summonaikit] instalador: no encontre un bash para el command del JSON de grok (bash.exe en Windows, bash en POSIX)."
+    decir "              Sin el no existe la forma medida del command (PowerShell '& ...' en Windows; quoted en POSIX)."; exit 2; }
   json="$(grok_json_path)"
   canon="$(grok_json_canonico "$GROK_BASH_WIN")"
   estado_json="$(grok_json_estado "$json" "$canon")"
@@ -1092,7 +1206,11 @@ grok_publicar_json() {
   if ! mv -f "$tmp" "$json"; then rm -f "$tmp"; return 1; fi
   GROK_JSON_PUBLICADO=1
   decir "[summonaikit] REGISTRO GROK PUBLICADO: $json"
-  decir "              command: & \"<bash.exe>\" \"<hook>\" (PowerShell; shell medido en 7.1)"
+  if command -v cygpath >/dev/null 2>&1; then
+    decir "              command: & \"<bash.exe>\" \"<hook>\" (PowerShell; shell medido en 7.1)"
+  else
+    decir "              command: \"<bash>\" \"<hook>\" (POSIX; Task 18.15)"
+  fi
   [ -n "$GROK_JSON_BACKUP" ] && decir "              backup:  $GROK_JSON_BACKUP"
   return 0
 }
@@ -1619,7 +1737,7 @@ dsh_rollback_publicar() {
 dsh_preflight() {
   local medida esperada
   if ! dsh_bash_win >/dev/null 2>&1; then
-    decir "[summonaikit] instalador: --host dsh requiere bash.exe (no encontrado); nada se escribio."
+    decir "[summonaikit] instalador: --host dsh requiere bash (bash.exe en Windows, bash en POSIX); nada se escribio."
     exit 2
   fi
   esperada="$(sed -n 's/.*"measuredAgainst"[[:space:]]*:[[:space:]]*"@deepseek-ai\/dsh@\([^"]*\)".*/\1/p' "$repo/hosts/dsh/package.json" | head -1)"
@@ -2571,6 +2689,11 @@ fi
 if [ "$HOST" = "dsh" ]; then
   dsh_preflight
 fi
+# Task 18.15: preflight codex (wrapper). En Windows corta ANTES de escribir si
+# falta el .ps1; en POSIX dry-run solo reporta la forma medida.
+if [ "$HOST" = "codex" ]; then
+  codex_preflight_wrapper
+fi
 
 # ------------------------------------------------- la vuelta: --restore-vendor
 if [ "$RESTORE" -eq 1 ]; then
@@ -2684,6 +2807,7 @@ if [ "$RESTORE" -eq 1 ]; then
     decir "[summonaikit] YA RESTAURADO: el destino ya es byte a byte ese backup."
     decir "              destino: $DEST"
     decir "              backup:  $elegido"
+    codex_exige_wrapper
     avisar_registro
     exit 0
   fi
@@ -2708,6 +2832,7 @@ if [ "$RESTORE" -eq 1 ]; then
     decir "[summonaikit] dry-run: se restauraria el backup del vendor."
     decir "              destino: $DEST"
     decir "              backup:  $elegido"
+    codex_exige_wrapper
     avisar_registro
     exit 0
   fi
@@ -2720,6 +2845,7 @@ if [ "$RESTORE" -eq 1 ]; then
   decir "              destino: $DEST"
   decir "              backup:  $elegido"
   [ -n "$backup" ] && decir "              lo anterior quedo archivado en: $backup"
+  codex_exige_wrapper
   avisar_registro
   exit 0
 fi
@@ -2775,6 +2901,7 @@ if [ "$estado" = 'NUESTRO_IDENTICO' ]; then
   if [ -z "$HOST" ]; then
     instalar_recetas_claude "$(dirname "$DEST")" "$HOME/.claude/skills" || exit $?
   fi
+  codex_exige_wrapper
   avisar_registro
   exit 0
 fi
@@ -2793,6 +2920,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   if [ "$HOST" = "dsh" ]; then
     decir "              (dsh: dry-run tampoco publica el plugin ni el patch del profile)"
   fi
+  codex_exige_wrapper
   avisar_registro
   exit 0
 fi
@@ -2849,5 +2977,6 @@ case "$estado" in
 esac
 decir "              destino: $DEST"
 [ -n "$backup" ] && decir "              backup:  $backup"
+codex_exige_wrapper
 avisar_registro
 exit 0

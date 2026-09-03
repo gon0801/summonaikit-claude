@@ -101,10 +101,16 @@ escribir_nuestro_viejo() {
 
 # Un temporal huerfano dejado en el directorio del destino seria basura que el
 # host ve en cada arranque, y ademas la senal de que la escritura no se limpio.
+# Task 18.15: el wrap POSIX de codex (summonaikit-harness-codex-wrap.sh) es
+# carga estructural, no un temporal.
 sin_temporales_sueltos() {
   local dir n
   dir="$(dirname "$1")"
-  n="$(find "$dir" -maxdepth 1 -type f ! -name 'summonaikit-harness.sh' 2>/dev/null | wc -l)"
+  n="$(find "$dir" -maxdepth 1 -type f \
+       ! -name 'summonaikit-harness.sh' \
+       ! -name 'summonaikit-harness-codex-wrap.sh' \
+       ! -name 'summonaikit-harness.ps1' \
+       2>/dev/null | wc -l)"
   [ "$n" -eq 0 ]
 }
 
@@ -761,6 +767,98 @@ out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
 [ ! -e "$zcode_agents/implementer.md" ] \
   || malo "no debe instalar agentes si bash.exe no se encontro"
 
+# Task 18.15 — forma de comando: Windows queda fija via override; POSIX usa
+# bash real del PATH. hooks.enabled:true es PRECONDICION del fixture (el
+# instalador se niega con enabled:false; no se cambia el criterio).
+#
+# Acreditacion de la CONFIG zcode: pre-18.14 el instalador tenia
+# local omitir='a^' y el awk BSD lo rechaza con
+# "awk: syntax error in regular expression a^" (medido macOS BSD awk;
+# ver fila 18.14). Aca se SONDEA el INSTALADOR ($tool), no el awk de la
+# plataforma: si $tool aun tiene omitir='a^', el camino unknown/bloqueo
+# sigue vivo (pre-18.14); si ya no (omitir='' + ENVIRON, post-18.14), se
+# exige (a) forma Windows via override en el config y (b) en POSIX el
+# resolvedor deja de morir en bash.exe.
+instalador_usa_omitir_a_caret() {
+  grep -q "local omitir='a^'" "$tool"
+}
+
+caso "18.15 zcode: forma Windows del command queda byte a byte con override (no se mueve)"
+dest_listo; nuevo_zcode_cfg
+win_bash="$tmp/18.15-win-bash.exe"
+: > "$win_bash"
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+       SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+       SAIKIT_ZCODE_BASH_WIN="$win_bash" \
+       bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+if instalador_usa_omitir_a_caret; then
+  printf '%s' "$out" | grep -q 'bash.exe de Windows' \
+    && malo "18.15 zcode: con override no debe morir buscando bash.exe: $out"
+  printf '%s' "$out" | grep -q 'regular expression a^' \
+    || malo "18.15 zcode: sin 18.14 esperaba bloqueo a^ (unknown config), dio rc=$rc: $out"
+  printf '    (unknown config: awk BSD rechaza omitir=a^; ver 18.14 — bash via override SI se acepto)\n'
+else
+  [ "$rc" -eq 0 ] || malo "18.15 zcode Windows-form deberia salir 0, dio $rc: $out"
+  esperado_cmd="$(printf '"%s" "%s" --saikit-harness-id 5.4' "$win_bash" "$dest")"
+  python - "$zcode_cfg" "$esperado_cmd" <<'PY' || malo "18.15 zcode: la forma Windows del command se movio"
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+want = sys.argv[2]
+cmds = []
+for fase, grupos in d["hooks"]["events"].items():
+    for g in grupos:
+        for h in g.get("hooks", []):
+            c = h.get("command", "")
+            if "saikit-harness-id 5.4" in c:
+                cmds.append(c)
+assert cmds, "no hay command 5.4 en el config"
+assert all(c == want for c in cmds), "command Windows distinto: %r (esperaba %r)" % (cmds[0], want)
+PY
+fi
+
+caso "18.15 zcode: en POSIX sin override el command usa bash real (inspecciona config)"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath presente; este caso es la rama POSIX)\n'
+else
+  dest_listo; nuevo_zcode_cfg
+  bash_posix="$(command -v bash)"
+  [ -n "$bash_posix" ] && [ -x "$bash_posix" ] \
+    || malo "18.15 precondicion: hace falta un bash ejecutable en PATH"
+  out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+         SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+         env -u SAIKIT_ZCODE_BASH_WIN \
+         bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+  printf '%s' "$out" | grep -q 'bash.exe de Windows' \
+    && malo "18.15 zcode POSIX aun busca bash.exe: $out"
+  if [ "$rc" -eq 0 ]; then
+    esperado_cmd="$(printf '"%s" "%s" --saikit-harness-id 5.4' "$bash_posix" "$dest")"
+    python - "$zcode_cfg" "$esperado_cmd" "$bash_posix" <<'PY' || malo "18.15 zcode: forma POSIX ausente o inventada"
+import json, sys, os
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+want, bash = sys.argv[2], sys.argv[3]
+cmds = []
+for fase, grupos in d["hooks"]["events"].items():
+    for g in grupos:
+        for h in g.get("hooks", []):
+            c = h.get("command", "")
+            if "saikit-harness-id 5.4" in c:
+                cmds.append(c)
+assert cmds, "parche que saltea bash sin emitir forma: config sin command 5.4"
+assert all(c == want for c in cmds), "command POSIX: %r (esperaba %r)" % (cmds[0], want)
+assert "bash.exe" not in cmds[0], "no debe inventar bash.exe en POSIX: %r" % cmds[0]
+assert os.path.isabs(bash) and os.path.isfile(bash), "bash del PATH no es ruta real: %r" % bash
+PY
+  else
+    if instalador_usa_omitir_a_caret; then
+      printf '%s' "$out" | grep -q 'regular expression a^' \
+        || malo "18.15 zcode POSIX: tras hallar bash, fallo inesperado rc=$rc: $out"
+      printf '    (unknown config: bash POSIX resuelto; escritura bloqueada por 18.14 a^)\n'
+    else
+      malo "18.15 zcode POSIX: tras hallar bash, fallo inesperado rc=$rc: $out"
+    fi
+  fi
+fi
+
 caso "zcode: sin --host no escribe AGENTS_DIR"
 dest_listo; nuevo_zcode_cfg
 SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
@@ -836,6 +934,89 @@ if printf '%s' "$out" | grep -qi 'Una sola copia'; then
 fi
 printf '%s' "$out" | grep -qi -- '--host' || malo "el rechazo debe explicar la regla nueva (el destino lo decide --host): $out"
 
+# Task 18.15 — codex fail-closed / wrap POSIX.
+# Medido 2026-09-02: hooks.json puede apuntar a un .sh y SessionStart/UPS
+# disparan (codex 0.152.0). El kit planta un wrap que setea TARGET=codex.
+# hooks.json sigue fuera del instalador (limite declarado, fase 6).
+caso "18.15 codex: dry-run en POSIX reporta la forma del wrap y no miente silenciosamente"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath; el fail-closed Windows del .ps1 se mide aparte)\n'
+else
+  nuevo_home_codex
+  rm -f "$dest"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check --dry-run 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 codex dry-run POSIX deberia salir 0 (reporta forma), dio $rc: $out"
+  printf '%s' "$out" | grep -q 'summonaikit-harness-codex-wrap.sh' \
+    || malo "18.15 codex dry-run debe nombrar el wrap POSIX: $out"
+  [ ! -e "$dest" ] || malo "18.15 dry-run no debe escribir el hook"
+fi
+
+caso "18.15 codex: en POSIX instala el hook Y planta el wrap (fail-closed si no)"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath; este caso es la rama POSIX)\n'
+else
+  nuevo_home_codex
+  rm -f "$dest"
+  wrap="$(dirname "$dest")/summonaikit-harness-codex-wrap.sh"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 codex POSIX deberia salir 0, dio $rc: $out"
+  [ -f "$dest" ] || malo "18.15 codex: no instalo el hook"
+  [ -f "$wrap" ] || malo "18.15 codex: no planto el wrap POSIX"
+  grep -q 'SUMMONAIKIT_HOOK_TARGET=codex' "$wrap" \
+    || malo "18.15 wrap debe setear TARGET=codex: $(cat "$wrap")"
+  grep -v '^[[:space:]]*#' "$wrap" | grep -q 'summonaikit-harness\.sh' \
+    || malo "18.15 wrap debe nombrar el harness en linea de codigo"
+  printf '%s' "$out" | grep -q 'WRAP CODEX POSIX PLANTADO' \
+    || malo "18.15 debe reportar el plantado: $out"
+fi
+
+# Task 18.15 / CodeRabbit (PR #153): `cat > "$wrap"` truncaba el wrap previo
+# si la escritura fallaba a medias (medido: wrap de 310 B -> 0 B con un `cat`
+# falso que consume stdin y sale 1; el shell ya habia abierto el destino).
+# La planta atomica (tmp en el mismo dir + validar + mv -f) deja el previo
+# byte a byte. El fake solo rompe `cat` SIN args (heredoc); `cat archivo` sigue.
+caso "18.15 codex: si falla la escritura del wrap, el wrap previo queda byte a byte"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath; este caso es la rama POSIX)\n'
+else
+  nuevo_home_codex
+  rm -f "$dest"
+  wrap="$(dirname "$dest")/summonaikit-harness-codex-wrap.sh"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 precondicion: primera planta deberia salir 0, dio $rc: $out"
+  [ -f "$wrap" ] || malo "18.15 precondicion: wrap debe existir antes del fallo forzado"
+  ck_prev="$(cksum < "$wrap")"
+  fakebin="$tmp/18.15-fake-cat-bin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/cat" <<'FAKE'
+#!/usr/bin/env bash
+if [ "$#" -gt 0 ]; then exec /bin/cat "$@"; fi
+/bin/cat >/dev/null
+exit 1
+FAKE
+  chmod +x "$fakebin/cat"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" PATH="$fakebin:$PATH" \
+         bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "18.15 wrap: escritura fallida debe salir 2, dio $rc: $out"
+  [ -f "$wrap" ] || malo "18.15 wrap: el previo no debe borrarse tras fallo de escritura"
+  [ "$ck_prev" = "$(cksum < "$wrap")" ] \
+    || malo "18.15 wrap: el previo debia quedar byte a byte (truncado por cat > directo): $(wc -c < "$wrap") B"
+  printf '%s' "$out" | grep -q 'no se pudo plantar el wrap POSIX' \
+    || malo "18.15 wrap: debe reportar el fallo de planta: $out"
+fi
+
+caso "18.15 codex: en Windows sin .ps1, dry-run e install fallan cerrados (exit 2)"
+if ! command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: sin cygpath; este caso es la rama Windows)\n'
+else
+  nuevo_home_codex
+  rm -f "$(dirname "$dest")/summonaikit-harness.ps1"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check --dry-run 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "18.15 codex Windows dry-run sin .ps1 debe salir 2, dio $rc: $out"
+  printf '%s' "$out" | grep -qi 'wrapper\|ps1' \
+    || malo "18.15 debe mencionar el wrapper ausente: $out"
+fi
+
 # ================================================================ Task 7.5 — grok
 # --host grok publica TRES cosas en orden (D1): (1) el hook por el flujo comun
 # de 3 estados, (2) el JSON de registro propio ~/.grok/hooks/summonaikit.json
@@ -869,15 +1050,23 @@ host_grok() {
     bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" --no-registration-check "$@"
 }
 
-# La estructura del JSON canonico (D1, forma PowerShell medida en 7.1), dicha
-# desde el test y no desde el instalador: eventos, matcher SOLO en PTU/PTUF,
-# timeout 30 (Stop 600), env por handler y saikit_owned top-level. El command
-# esperado viaja por ENV y no por argv: el python de Windows convierte las
-# rutas POSIX de los argumentos (medido: /tmp/... llega como C:/...Temp/...) y
-# la comparacion contra el contenido del JSON daria un falso por el motivo
-# equivocado. Los valores de entorno no se convierten.
+# La estructura del JSON canonico (D1, forma PowerShell medida en 7.1 en
+# Windows; en POSIX sin `&`, Task 18.15), dicha desde el test y no desde el
+# instalador: eventos, matcher SOLO en PTU/PTUF, timeout 30 (Stop 600), env
+# por handler y saikit_owned top-level. El command esperado viaja por ENV y
+# no por argv: el python de Windows convierte las rutas POSIX de los
+# argumentos (medido: /tmp/... llega como C:/...Temp/...) y la comparacion
+# contra el contenido del JSON daria un falso por el motivo equivocado. Los
+# valores de entorno no se convierten.
+grok_expect_cmd() {
+  if command -v cygpath >/dev/null 2>&1; then
+    printf '& "%s" "%s"' "$bash_gk" "$dest"
+  else
+    printf '"%s" "%s"' "$bash_gk" "$dest"
+  fi
+}
 grok_json_asserts() {
-  GROK_EXPECT_CMD="$(printf '& "%s" "%s"' "$bash_gk" "$dest")" \
+  GROK_EXPECT_CMD="$(grok_expect_cmd)" \
   python - "$1" <<'PY'
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -1093,6 +1282,88 @@ out="$(HOME="$home_gk" USERPROFILE="$home_gk" \
 [ ! -e "$dest" ] || malo "sin bash.exe no debe publicar el hook"
 [ ! -e "$gk_json" ] || malo "sin bash.exe no debe publicar el JSON"
 [ ! -e "$gk_agents/implementer.md" ] || malo "sin bash.exe no debe instalar agentes"
+
+# Task 18.15 — forma grok: en POSIX sin `&` (operador de PowerShell). El
+# router stub emite UNA sola linea para no chocar con awk BSD multiline
+# (18.14-b); aca se acredita la FORMA del command, no la inyeccion completa.
+router_stub_18_15="$tmp/router-stub-18.15-oneline.sh"
+cat > "$router_stub_18_15" <<'STUB'
+#!/usr/bin/env bash
+set -u
+host=''; role=''; format='json'; field=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host) host="$2"; shift 2 ;;
+    --role) role="$2"; shift 2 ;;
+    --format) format="$2"; shift 2 ;;
+    --field) field="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ "$field" = 'effort-key' ] && { printf 'effort\n'; exit 0; }
+[ "$field" = 'model' ] && { printf 'modelo-18-15\n'; exit 0; }
+[ "$field" = 'effort' ] && { printf 'low\n'; exit 0; }
+[ "$format" = 'frontmatter' ] || exit 0
+printf 'model: modelo-18-15\n'
+STUB
+chmod +x "$router_stub_18_15"
+
+caso "18.15 grok: forma Windows del command (con &) queda en el JSON cuando hay cygpath"
+if ! command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: sin cygpath; la forma Windows se fija en la rama cygpath de grok_hook_cmd)\n'
+else
+  nuevo_home_grok
+  out="$(SAIKIT_MODEL_ROUTING_TOOL="$router_stub_18_15" host_grok 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 grok Windows-form deberia salir 0, dio $rc: $out"
+  [ -f "$gk_json" ] || malo "18.15 grok: no publico JSON"
+  GROK_EXPECT_CMD="$(printf '& "%s" "%s"' "$bash_gk" "$dest")" \
+  python3 - "$gk_json" <<'PY' || malo "18.15 grok: forma Windows (&) se movio"
+import json, os, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+want = os.environ["GROK_EXPECT_CMD"]
+cmds = [e["command"] for g in d["hooks"].values() for grp in g for e in grp["hooks"]]
+assert cmds and all(c == want for c in cmds), cmds[:1]
+assert cmds[0].startswith("& "), "faltaba el call operator de PowerShell: %r" % cmds[0]
+PY
+fi
+
+caso "18.15 grok: en POSIX el JSON usa forma sin & (inspecciona command)"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath presente; este caso es la rama POSIX)\n'
+else
+  nuevo_home_grok
+  out="$(SAIKIT_MODEL_ROUTING_TOOL="$router_stub_18_15" host_grok 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 grok POSIX deberia salir 0, dio $rc: $out"
+  [ -f "$gk_json" ] || malo "18.15 grok: no publico JSON"
+  esperado="$(printf '"%s" "%s"' "$bash_gk" "$dest")"
+  GROK_EXPECT_CMD="$esperado" python3 - "$gk_json" <<'PY' || malo "18.15 grok: forma POSIX mala o con &"
+import json, os, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+want = os.environ["GROK_EXPECT_CMD"]
+cmds = [e["command"] for g in d["hooks"].values() for grp in g for e in grp["hooks"]]
+assert cmds, "JSON sin commands (parche que saltea forma)"
+assert all(c == want for c in cmds), "command: %r (esperaba %r)" % (cmds[0], want)
+assert not cmds[0].startswith("& "), "en POSIX no debe quedar el & de PowerShell: %r" % cmds[0]
+PY
+  # Sin override: bash real del PATH en el command.
+  nuevo_home_grok
+  bash_posix="$(command -v bash)"
+  out="$(HOME="$home_gk" USERPROFILE="$home_gk" \
+         SAIKIT_GROK_AGENTS_DIR="$gk_agents" \
+         SAIKIT_MODEL_ROUTING_TOOL="$router_stub_18_15" \
+         env -u SAIKIT_GROK_BASH_WIN \
+         bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 grok POSIX sin override deberia salir 0, dio $rc: $out"
+  esperado_real="$(printf '"%s" "%s"' "$bash_posix" "$dest")"
+  GROK_EXPECT_CMD="$esperado_real" python3 - "$gk_json" <<'PY' || malo "18.15 grok: command sin bash real del PATH"
+import json, os, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+want = os.environ["GROK_EXPECT_CMD"]
+cmds = [e["command"] for g in d["hooks"].values() for grp in g for e in grp["hooks"]]
+assert cmds and all(c == want for c in cmds), "command: %r (esperaba %r)" % (cmds[0], want)
+assert "bash.exe" not in cmds[0], cmds[0]
+PY
+fi
 
 caso "grok: fallo al publicar agentes => ROLLBACK de hook y JSON (exit 5, perfil como estaba)"
 nuevo_home_grok
@@ -2141,6 +2412,25 @@ out="$(SAIKIT_DSH_HOME="$home_dh" SAIKIT_DSH_BASH_WIN= \
        bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "dsh sin bash.exe deberia salir 2, dio $rc: $out"
 [ ! -e "$dsh_patch" ] || malo "dsh sin bash.exe no debe tocar el patch"
+
+# Task 18.15: dsh_bash_win delega en zcode_bash_win; en POSIX sin override
+# el patch debe llevar bash: con la ruta real (no un invento ni vacio).
+caso "18.15 dsh: en POSIX sin override el patch lleva bash: con ruta real"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath presente; este caso es la rama POSIX)\n'
+else
+  nuevo_home_dsh
+  bash_posix="$(command -v bash)"
+  [ -n "$bash_posix" ] && [ -x "$bash_posix" ] \
+    || malo "18.15 dsh precondicion: hace falta un bash ejecutable en PATH"
+  out="$(SAIKIT_DSH_HOME="$home_dh" env -u SAIKIT_DSH_BASH_WIN \
+         bash "$tool" --host dsh --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 dsh POSIX deberia salir 0, dio $rc: $out"
+  [ -f "$dsh_patch" ] || malo "18.15 dsh: no escribio el patch"
+  grep -qF "bash: '$bash_posix'" "$dsh_patch" \
+    || malo "18.15 dsh: patch sin bash: real ($bash_posix): $(grep -E 'bash:' "$dsh_patch" | head -3)"
+  grep -q 'bash: '\'''\''' "$dsh_patch" && malo "18.15 dsh: bash: vacio (salteo sin forma)"
+fi
 
 caso "dsh: patch usa name:=paquete y hook: en forma WINDOWS (C:/), no POSIX (/c/) (turno vivo, PR #91)"
 # El turno vivo revelo que: (a) el name: por ruta (C:/...) no lo importa dsh
