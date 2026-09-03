@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #154 / Task 18.13 (Close cita el sello, líder commitea antes, el veredicto no es trabajo) — deploy REAL
+
+- **Qué se mergeó:** merge `59d45b4`, CI 9/9 en el head `57e32de` (run
+  33728651684). Tres cambios al hook en una sola regrabación de la golden.
+  Implementó qwen; revisó el lead.
+- **Deploy: REPARADO, no no-op.** El hook cambió. `install-hook.sh` reportó
+  `REPARADO: el destino era nuestro y difiere de la fuente`, con backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260903-122550.bak`.
+  `check-hook-registration.sh` exit 0.
+- **La deriva de identidad de la golden, CURADA.** Desde la 18.3 la cabecera
+  declaraba un hook que no existía en ninguna forma (187898 bytes / 3116
+  líneas). Tras este deploy, hook vivo y cabecera coinciden byte a byte:
+  `36b436ae…`, 188880 bytes, 3134 líneas. `golden-harness.sh --check` contra el
+  vivo: 55/55 y, por primera vez, **sin** el aviso «el hook cambio de identidad».
+- **Efecto en los otros hosts cableados:** zcode y grok apuntan a este mismo
+  hook en `~/.claude/hooks/`, así que reciben el cambio con este deploy. dsh
+  tiene copia propia en `~/.dsh/hooks/`: la reinstala `--host dsh` cuando toque.
+- **Auditoría del ledger (paso 4):** `test_plans_ledger` OK; `audita-ledger`
+  sigue marcando la 18.16 (falso positivo por scope `docs(18.16)`, desaparece al
+  cerrarla). No marcó la 18.13 porque los commits usaron scope `hook`/`veredicto`.
+
 ## 2026-09-03 — PR #153 / Task 18.15 (formas de comando de macOS) — deploy NO-OP del hook, pero el PERFIL cambió
 
 - **Qué se mergeó:** merge `b945da4`, CI 9/9 en el head `a5d5511` (run
