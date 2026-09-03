@@ -1660,6 +1660,113 @@ host_kimi >/dev/null 2>&1
 [ "$antes_s" = "$(cksum < "$kimi_agents/../skills/x.md")" ] || malo "se toco algo fuera de agents/"
 
 # ============================================================================
+# Task 18.14 — agente_traducido bajo el awk BSD de macOS: DOS incompatibilidades
+# ============================================================================
+# Medido el 2026-09-02 en macOS (awk version 20200816, el unico del sistema):
+#
+#   (a) `local omitir='a^'` es un idiom de GNU awk. El awk BSD lo rechaza en la
+#       compilacion del programa, ANTES de leer ninguna entrada:
+#       "awk: syntax error in regular expression a^". Mata toda llamada, pero se
+#       ve primero en la forma con inyectar VACIO (kimi, zcode).
+#   (b) `awk -v inyectar=<valor de DOS lineas>`: el awk BSD rechaza el newline
+#       literal del valor ANTES de compilar el programa:
+#       "awk: newline in string ... at source line 1". Mata la forma con
+#       inyectar MULTILINEA (claude, grok: model: + effort: del router).
+#
+# El DoD las discrimina por separado a proposito: un fix que arregle SOLO la
+# regex (a) deja rota la forma multilinea (b) y pasa igual un gate que solo
+# mire la forma kimi. Acreditacion declarada: estos casos acreditan en macOS
+# (el awk BSD es el que rompe); en el CI Linux test_install_hook se saltea
+# (tests/run.sh con SAIKIT_CI_LINUX=1), y el gawk de Linux aceptaba las dos
+# formas viejas, asi que ahi estos casos no distinguen.
+#
+# Forma kimi: inyectar vacio con el router REAL (la fila de kimi es vacia,
+# 12.3: el host no acepta ruteo por agente).
+caso "18.14 (a) kimi: inyectar VACIO atraviesa el awk del sistema (sin 'syntax error in regular expression')"
+dest_listo; nuevo_kimi_agents
+out="$(host_kimi 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "kimi con inyectar vacio deberia instalar, dio $rc: $out"
+printf '%s' "$out" | grep -q 'syntax error in regular expression' \
+  && malo "el awk del sistema rechazo la regex nunca-match del omitir: $out"
+[ -f "$kimi_agents/reviewer.md" ] || malo "no instalo reviewer.md"
+grep -q '^saikit_owned: summonaikit-claude$' "$kimi_agents/reviewer.md" \
+  || malo "el perfil kimi instalado no lleva la marca"
+
+# Forma claude/grok: inyectar de DOS lineas (model: + effort:) via el stub de
+# la 12.5, que emite exactamente esa forma para todos los hosts.
+caso "18.14 (b) claude: inyectar MULTILINEA (model: + effort:) atraviesa el awk del sistema (sin 'newline in string')"
+dest_listo; nuevo_claude_agents
+out="$(host_claude 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "claude con inyectar multilinea deberia instalar, dio $rc: $out"
+printf '%s' "$out" | grep -q 'newline in string' \
+  && malo "el awk del sistema rechazo el valor multilinea del inyectar: $out"
+linea_model_1814="$(grep -n '^model: modelo-de-prueba-claude-reviewer$' "$claude_agents/reviewer.md" | cut -d: -f1)"
+linea_effort_1814="$(grep -n '^effort: low$' "$claude_agents/reviewer.md" | cut -d: -f1)"
+[ -n "$linea_model_1814" ] || malo "falta el model: del router en el perfil claude instalado"
+[ -n "$linea_effort_1814" ] || malo "falta el effort: del router en el perfil claude instalado"
+if [ -n "$linea_model_1814" ] && [ -n "$linea_effort_1814" ]; then
+  linea_cierre_1814="$(grep -n '^---' "$claude_agents/reviewer.md" | sed -n 2p | cut -d: -f1)"
+  [ "$linea_model_1814" -lt "$linea_cierre_1814" ] || malo "el model: inyectado cayo fuera del frontmatter"
+  [ "$linea_effort_1814" -lt "$linea_cierre_1814" ] || malo "el effort: inyectado cayo fuera del frontmatter"
+fi
+
+# FIXTURE que discrimina el fix ingenuo: cambiar `a^` por `^$` (otra regex que
+# "no matchea nada" en GNU awk) matchea las lineas VACIAS y se las comeria del
+# frontmatter, porque el omitir solo aplica con n == 1 (dentro del primer
+# bloque). Los perfiles reales del repo (agents/*.md) no tienen lineas vacias
+# ahi, asi que este fixture es lo unico que distingue el fix correcto del
+# ingenuo. Corre por la via zcode porque es la unica con costura de fuente
+# (SAIKIT_ZCODE_AGENTS_SOURCE); el bash.exe de Windows se resuelve con el
+# override de medicion (SAIKIT_ZCODE_BASH_WIN), y el router stub emite cero
+# lineas de frontmatter: la forma con inyectar VACIO, igual que la de kimi.
+src_linea_vacia="$tmp/agents-linea-vacia"
+mkdir -p "$src_linea_vacia"
+for rol in implementer verifier reviewer adversary; do
+  {
+    printf -- '---\n'
+    printf 'name: %s\n' "$rol"
+    printf 'description: fixtura 18.14 con linea vacia\n'
+    printf '\n'
+    printf 'saikit_owned: summonaikit-claude\n'
+    printf -- '---\n'
+    printf 'cuerpo del %s\n' "$rol"
+  } > "$src_linea_vacia/$rol.md"
+done
+router_stub_vacio="$tmp/router-stub-vacio.sh"
+cat > "$router_stub_vacio" <<'STUB'
+#!/usr/bin/env bash
+set -u
+format='json'; field=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --format) format="$2"; shift 2 ;;
+    --field) field="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ "$field" = 'effort-key' ]; then printf 'effort\n'; exit 0; fi
+[ "$format" = 'frontmatter' ] || exit 0
+# Cero lineas: la forma de inyectar vacio (kimi/zcode).
+exit 0
+STUB
+bash_win_1814="$tmp/18.14-fake-bash.exe"
+: > "$bash_win_1814"
+
+caso "18.14 fixture: una linea vacia DENTRO del frontmatter sobrevive a la traduccion (descarta el fix ingenuo a^ -> ^$)"
+dest_listo; nuevo_zcode_cfg
+out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
+       SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
+       SAIKIT_ZCODE_AGENTS_SOURCE="$src_linea_vacia" \
+       SAIKIT_ZCODE_BASH_WIN="$bash_win_1814" \
+       SAIKIT_MODEL_ROUTING_TOOL="$router_stub_vacio" \
+       bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "zcode con el fixture de linea vacia deberia instalar, dio $rc: $out"
+# Con inyectar vacio y nada que omitir/desechar, la traduccion es la identidad:
+# el instalado debe ser byte-a-byte la fuente, linea vacia incluida.
+cmp -s "$src_linea_vacia/reviewer.md" "$zcode_agents/reviewer.md" \
+  || malo "la linea vacia dentro del frontmatter no sobrevivio (el instalado difiere de la fuente)"
+
+# ============================================================================
 # Task 12.9 — correcciones del cross-review externo (codex + grok, 1 ronda)
 # ============================================================================
 # Los 7 hallazgos con caso propio: instalacion a medias (#1), NO_OBSERVABLE
