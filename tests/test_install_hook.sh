@@ -102,7 +102,7 @@ mtime_de() {
   return 1
 }
 
-# Task 18.16: el caso que candá la exigencia de medicion no vacia. El fix
+# Task 18.16: el caso que canda la exigencia de medicion no vacia. El fix
 # ingenuo (un `stat -f` portable sin verificar la salida) pasa igual si el
 # archivo no existe: este caso lo pone rojo exigiendo grito y exit != 0.
 caso "mtime_de: medicion vacia (archivo inexistente) => grito y exit != 0"

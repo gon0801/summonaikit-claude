@@ -134,7 +134,7 @@ for t in "$repo_root"/tests/test_*.sh; do
   # test_hook_acl fue RETIRADO — su objeto eran las ACLs/SIDs de Windows
   # (tools/hook-acl.ps1, S-1-5-18), que en macOS no existen como concepto;
   # portarlo a permisos de macOS seria inventar cobertura de una herramienta
-  # muerta. La variable existe para que test_runner_guards candá el mecanismo
+  # muerta. La variable existe para que test_runner_guards canda el mecanismo
   # con un repo sintetico aunque la lista real este vacia.
   if sin_ejecutor_de "$nombre"; then
     echo "SKIP (sin ejecutor): $nombre — no lo corre NADIE en ningun entorno; cuenta como unknown"
