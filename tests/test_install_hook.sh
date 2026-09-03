@@ -85,9 +85,46 @@ nuevo_destino() {
   dest="$d/summonaikit-harness.sh"
 }
 
-# mtime con nanosegundos: dos corridas seguidas caen en el mismo segundo, asi
-# que `%Y` no distinguiria "no lo toco" de "lo reescribio identico".
-mtime_de() { stat -c '%y' "$1" 2>/dev/null; }
+# mtime con la mejor resolucion del host. GNU: `%y` (nanosegundos — dos
+# corridas seguidas caen en el mismo segundo y `%Y` no distinguiria "no lo
+# toco" de "lo reescribio identico"). BSD/macOS: `%m` (epoch en segundos; los
+# casos que comparan mtimes de corridas consecutivas ya duermen 1s entre ellas).
+# Task 18.16: `stat -c ... 2>/dev/null` devolvia cadena VACIA en macOS y las
+# comparaciones quedaban "" == "" — pasaban en falso sin discriminar nada (el
+# mismo patron que el cross-review de la 16.5 cerro en UN sitio y este dejo
+# vivo). La medicion VACIA ahora grita y sale != 0: nunca se sigue callado.
+mtime_de() {
+  local m=''
+  m="$(stat -c '%y' "$1" 2>/dev/null)" || m=''
+  [ -n "$m" ] || m="$(stat -f '%m' "$1" 2>/dev/null)" || m=''
+  if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
+  echo "mtime_de: medicion VACIA de [$1] — ni stat GNU (-c) ni BSD (-f) pudieron medir (¿archivo ausente?)" >&2
+  return 1
+}
+
+# Task 18.16: el caso que candá la exigencia de medicion no vacia. El fix
+# ingenuo (un `stat -f` portable sin verificar la salida) pasa igual si el
+# archivo no existe: este caso lo pone rojo exigiendo grito y exit != 0.
+caso "mtime_de: medicion vacia (archivo inexistente) => grito y exit != 0"
+grito_mtime="$(mtime_de "$tmp/no-existe-para-mtime" 2>&1 >/dev/null)"; rc_mtime=$?
+[ "$rc_mtime" -ne 0 ] || malo "mtime_de salio 0 con medicion vacia — seguiria comparando '' == '' en falso"
+case "$grito_mtime" in
+  *VACIA*) ;;
+  *) malo "mtime_de no explico la medicion vacia: [$grito_mtime]" ;;
+esac
+
+# Interprete de Python para los casos que inspeccionan el JSON de zcode/grok.
+# macOS no trae `python` a secas (solo `python3`): un `python -` literal mataba
+# los casos con `command not found` — fallo de portabilidad del TEST, no del
+# instalador. Se resuelve python3 y se cae a python; si NO hay ninguno se GRITA
+# y se sale unknown (exit 3), jamas se sigue en silencio: un caso que no puede
+# inspeccionar la config no puede afirmar nada sobre ella (la linea divisoria
+# de los tres estados es si hubo OBSERVACION, no si hubo ejecucion).
+SAIKIT_PY="$(command -v python3 || command -v python || true)"
+if [ -z "$SAIKIT_PY" ]; then
+  echo "test_install_hook: unknown — no hay python3 ni python en este host; los casos que inspeccionan el JSON no pueden medir nada." >&2
+  exit 3
+fi
 
 # Un archivo con marcador propio pero contenido distinto al de la fuente: el
 # estado "nuestro, hay que reparar".
@@ -352,7 +389,7 @@ dest_ck="$(cksum < "$dest")"
 out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
 [ "$dest_ck" = "$(cksum < "$dest")" ] || malo "--host zcode no debe tocar DEST (cksum cambio)"
-python - "$zcode_cfg" <<'PY' || malo "estructura appendeada distinta de la esperada"
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY' || malo "estructura appendeada distinta de la esperada"
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 ev = d["hooks"]["events"]
@@ -399,7 +436,7 @@ PY
 caso "zcode: registra la 4a fase (SessionStart) — habilitado por la medicion de la 10.9"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1
-python - "$zcode_cfg" <<'PY' || malo "zcode: la 4a fase no quedo registrada como la medicion habilito"
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY' || malo "zcode: la 4a fase no quedo registrada como la medicion habilito"
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 ev = d["hooks"]["events"]
@@ -427,7 +464,7 @@ despues=$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")
 
 caso "zcode: una entrada 5.4 malformada se repara (r2.3/r3.2: command canonico exacto)"
 dest_listo; nuevo_zcode_cfg
-python - "$zcode_cfg" <<'PY'
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]
 d = json.load(open(p, encoding='utf-8'))
@@ -437,7 +474,7 @@ json.dump(d, open(p, 'w', encoding='utf-8'))
 PY
 out="$(host_zcode 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0 reparando, dio $rc: $out"
-python - "$zcode_cfg" <<'PY' || malo "la malformada (type process/timeout 500) no se reparo"
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY' || malo "la malformada (type process/timeout 500) no se reparo"
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 for g in d["hooks"]["events"]["UserPromptSubmit"]:
@@ -450,7 +487,7 @@ PY
 caso "zcode: parcial (falta Stop) => re-anade solo Stop"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1
-python - "$zcode_cfg" <<'PY'
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["events"]["Stop"]
 json.dump(d, open(p, 'w', encoding='utf-8'))
@@ -474,7 +511,7 @@ out="$(HOME="$tmp/fake-zc-home" bash "$tool" --host zcode --dest "$bad_dest" 2>&
 for val in 'false' '"yes"' '1'; do
   caso "zcode: enabled=$val => exit 2 y config byte-igual"
   dest_listo; nuevo_zcode_cfg
-  python - "$zcode_cfg" "$val" <<'PY'
+  "$SAIKIT_PY" - "$zcode_cfg" "$val" <<'PY'
 import json, sys
 p, val = sys.argv[1], sys.argv[2]
 d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = json.loads(val)
@@ -487,7 +524,7 @@ PY
 done
 caso "zcode: enabled ausente => exit 2"
 dest_listo; nuevo_zcode_cfg
-python - "$zcode_cfg" <<'PY'
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); del d["hooks"]["enabled"]
 json.dump(d, open(p, 'w', encoding='utf-8'))
@@ -508,7 +545,7 @@ out="$(host_zcode 2>&1)"; rc=$?
 caso "zcode: --quitar-zcode saca 5.4 y deja vecinos, incluido en el MISMO hooks[] (r2.2)"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1
-python - "$zcode_cfg" <<'PY'
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8'))
 for g in d["hooks"]["events"]["UserPromptSubmit"]:
@@ -528,7 +565,7 @@ grep -q 'tokentracker-dummy' "$zcode_cfg" || malo "vecino tokentracker borrado"
 caso "zcode: --quitar-zcode corre con enabled:false y DEST ausente (r3.3)"
 dest_listo; nuevo_zcode_cfg
 host_zcode >/dev/null 2>&1
-python - "$zcode_cfg" <<'PY'
+"$SAIKIT_PY" - "$zcode_cfg" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p, encoding='utf-8')); d["hooks"]["enabled"] = False
 json.dump(d, open(p, 'w', encoding='utf-8'))
@@ -741,7 +778,7 @@ dest_listo; nuevo_zcode_cfg
 src_crlf="$tmp/agents-crlf"
 mkdir -p "$src_crlf"
 for rol in implementer verifier reviewer adversary; do
-  python - "$agentes_fuente/$rol.md" "$src_crlf/$rol.md" <<'PY'
+  "$SAIKIT_PY" - "$agentes_fuente/$rol.md" "$src_crlf/$rol.md" <<'PY'
 import sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
@@ -800,7 +837,7 @@ if instalador_usa_omitir_a_caret; then
 else
   [ "$rc" -eq 0 ] || malo "18.15 zcode Windows-form deberia salir 0, dio $rc: $out"
   esperado_cmd="$(printf '"%s" "%s" --saikit-harness-id 5.4' "$win_bash" "$dest")"
-  python - "$zcode_cfg" "$esperado_cmd" <<'PY' || malo "18.15 zcode: la forma Windows del command se movio"
+  "$SAIKIT_PY" - "$zcode_cfg" "$esperado_cmd" <<'PY' || malo "18.15 zcode: la forma Windows del command se movio"
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 want = sys.argv[2]
@@ -832,7 +869,7 @@ else
     && malo "18.15 zcode POSIX aun busca bash.exe: $out"
   if [ "$rc" -eq 0 ]; then
     esperado_cmd="$(printf '"%s" "%s" --saikit-harness-id 5.4' "$bash_posix" "$dest")"
-    python - "$zcode_cfg" "$esperado_cmd" "$bash_posix" <<'PY' || malo "18.15 zcode: forma POSIX ausente o inventada"
+    "$SAIKIT_PY" - "$zcode_cfg" "$esperado_cmd" "$bash_posix" <<'PY' || malo "18.15 zcode: forma POSIX ausente o inventada"
 import json, sys, os
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 want, bash = sys.argv[2], sys.argv[3]
@@ -1067,7 +1104,7 @@ grok_expect_cmd() {
 }
 grok_json_asserts() {
   GROK_EXPECT_CMD="$(grok_expect_cmd)" \
-  python - "$1" <<'PY'
+  "$SAIKIT_PY" - "$1" <<'PY'
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 assert d["saikit_owned"] == "summonaikit-claude", "falta saikit_owned top-level"
@@ -1317,7 +1354,7 @@ else
   [ "$rc" -eq 0 ] || malo "18.15 grok Windows-form deberia salir 0, dio $rc: $out"
   [ -f "$gk_json" ] || malo "18.15 grok: no publico JSON"
   GROK_EXPECT_CMD="$(printf '& "%s" "%s"' "$bash_gk" "$dest")" \
-  python3 - "$gk_json" <<'PY' || malo "18.15 grok: forma Windows (&) se movio"
+  "$SAIKIT_PY" - "$gk_json" <<'PY' || malo "18.15 grok: forma Windows (&) se movio"
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 want = os.environ["GROK_EXPECT_CMD"]
@@ -1336,7 +1373,7 @@ else
   [ "$rc" -eq 0 ] || malo "18.15 grok POSIX deberia salir 0, dio $rc: $out"
   [ -f "$gk_json" ] || malo "18.15 grok: no publico JSON"
   esperado="$(printf '"%s" "%s"' "$bash_gk" "$dest")"
-  GROK_EXPECT_CMD="$esperado" python3 - "$gk_json" <<'PY' || malo "18.15 grok: forma POSIX mala o con &"
+  GROK_EXPECT_CMD="$esperado" "$SAIKIT_PY" - "$gk_json" <<'PY' || malo "18.15 grok: forma POSIX mala o con &"
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 want = os.environ["GROK_EXPECT_CMD"]
@@ -1355,7 +1392,7 @@ PY
          bash "$tool" --host grok --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "18.15 grok POSIX sin override deberia salir 0, dio $rc: $out"
   esperado_real="$(printf '"%s" "%s"' "$bash_posix" "$dest")"
-  GROK_EXPECT_CMD="$esperado_real" python3 - "$gk_json" <<'PY' || malo "18.15 grok: command sin bash real del PATH"
+  GROK_EXPECT_CMD="$esperado_real" "$SAIKIT_PY" - "$gk_json" <<'PY' || malo "18.15 grok: command sin bash real del PATH"
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 want = os.environ["GROK_EXPECT_CMD"]
