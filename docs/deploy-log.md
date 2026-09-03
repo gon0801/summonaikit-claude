@@ -23,6 +23,13 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   `~/.grok/hooks/summonaikit.json`, 5 fases, 4 agentes, hook propio). **Los tres
   dispararon en turnos reales.** Antes de hoy, en esta Mac solo Claude estaba
   cableado; ahora lo están Claude, zcode, dsh y grok.
+- **codex, para que cuadre con el 4 de 4 de la fila:** su disparo lo midió
+  Cursor, no el lead, y en un `CODEX_HOME` **aislado**, no en el perfil real:
+  `codex exec ... -c 'features.hooks=true'` → `hook: SessionStart` y
+  `hook: UserPromptSubmit` completados, con el marcador del probe
+  `FIRED tag=codex TARGET=codex` vía el wrap. Está medido, pero **NO quedó
+  cableado en el perfil real del operador** — es el único de los cuatro en esa
+  situación, y cablearlo es un paso aparte (`--host codex`).
 - **Estado del hook fuera de `~/.claude`:** dsh y grok escriben su estado junto
   a SU hook (`~/.dsh/hooks/state/`, `~/.grok/hooks/state/`). Buscar solo en
   `~/.claude/hooks/state/` da un falso «no disparó».
@@ -31,9 +38,18 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   de docs, desaparece al cerrarla. La 18.15 no la marcó porque los commits de
   Cursor usaron scope `install-hook`, no el número de fila: el auditor solo ve
   lo que el scope le dice.
-- **Seguridad, pendiente del operador:** dos claves de Z.AI en texto plano
-  (script `glm` y config de zcode) quedaron expuestas en la sesión del lead.
-  Rotarlas.
+- **SEGURIDAD — ACCIÓN ABIERTA, DUEÑO: EL OPERADOR.** Durante la medición el
+  lead imprimió en la salida de su sesión dos claves de Z.AI que viven en texto
+  plano en la máquina del operador: en el script `glm` y en
+  `~/.zcode/cli/config.json`. La exposición fue **solo en la sesión del lead**
+  (transcripción y logs de esa sesión); **ningún valor de clave se escribió en
+  este repo** — verificado antes de este commit con el escaneo de secretos y con
+  grep sobre el árbol. Lo que queda es del operador y no del kit: **revocar las
+  dos claves en Z.AI, crear reemplazos y sacarlas del texto plano** (variable de
+  entorno o llavero). Esta fila 18.15 se cierra por su alcance (formas de
+  comando), NO porque la rotación esté hecha; la rotación se registra aquí con
+  fecha cuando ocurra. CodeRabbit mantiene abierto ese hilo hasta entonces, y
+  está bien que así sea.
 
 ## 2026-09-03 — PR #150 / Task 18.14 (agente_traducido bajo awk BSD) — deploy NO-OP
 
