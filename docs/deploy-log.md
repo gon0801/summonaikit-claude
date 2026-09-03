@@ -11,7 +11,7 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
 - **Qué se mergeó:** merge `f1063af`, CI 9/9 en el head `2c58ea1` (run
   33699818088). `tools/saikit-merge.sh` (D18 + D19), su batería de 34 casos con
-  banco de 16 mutaciones, y el endurecimiento de
+  banco de 18 mutaciones, y el endurecimiento de
   `tools/lib/veredicto_contract.sh` con un parser JSON real en awk, sin `jq`.
   Implementó GLM; revisó el lead.
 - **Deploy NO-OP:** el PR **no toca** `hooks/summonaikit-harness.sh`.
@@ -22,7 +22,7 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   existe en un clon del repo. Plantarlo es alcance de la fila 18.12, y sin eso
   el autopilot de un repo ajeno no tendría con qué mergear.
 - **Lo que el lead verificó por su cuenta**, sin tomar el PR por bueno: la suite
-  entera (34 casos OK) con **las 15 mutaciones del banco atrapadas**, y el
+  entera (34 casos OK) con **las 18 mutaciones del banco atrapadas** (18/18, cero sobrevivientes), y el
   parser fuzzeado contra el módulo `json` de Python con 33 casos adversarios,
   con **cero discrepancias**.
 - **Tres hallazgos cerrados en la revisión:** el registro del merge en
