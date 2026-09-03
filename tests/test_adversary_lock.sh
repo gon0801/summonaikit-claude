@@ -581,6 +581,12 @@ advlock_artefacto_redactado_no_bloquea() {
   # llegaba con cycle=2 y caia al camino de presupuesto agotado (informa con
   # exit 0) en vez del bloqueo — el caso media el presupuesto, no el escaneo.
   lab_limpiar_estado
+  # LIMPIEZA como en el sub-caso de abajo: sin ella, si este armado cae en el
+  # MISMO segundo que el anterior, los artefactos sk-vivo-* previos siguen
+  # siendo >= epoca-1 para el escaneo por mtime, el turno bloquea igual (rc 2)
+  # pero nombrando otro archivo y la asercion del nombre falla solo por timing
+  # (flake medido en el CI del PR #142, dos corridas el 2026-09-02).
+  rm -f "$LAB/proyecto/.saikit/findings"/adversary-*.json 2>/dev/null || true
   adv_armar
   adv_despachar
   printf 'mix: token=[REDACTED] password=hunter2-real\n' > "$LAB/proyecto/.saikit/findings/adversary-mixto.json"
