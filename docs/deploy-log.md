@@ -7,6 +7,34 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #153 / Task 18.15 (formas de comando de macOS) — deploy NO-OP del hook, pero el PERFIL cambió
+
+- **Qué se mergeó:** merge `b945da4`, CI 9/9 en el head `a5d5511` (run
+  33728994135). Formas POSIX del instalador para grok, dsh, codex y zcode; guarda
+  que sondea el instalador; planta atómica del wrap de codex. Implementó Cursor;
+  midió y revisó el lead.
+- **Deploy del hook: NO-OP.** El PR no toca `hooks/summonaikit-harness.sh`.
+  `install-hook.sh` reportó `YA AL DIA`; `check-hook-registration.sh` exit 0.
+- **Lo que SÍ cambió, y es lo importante: el perfil real del operador.** Para
+  medir el disparo del hook, el lead cableó con el instalador del PR, con
+  permiso explícito y respaldos en `~/Desktop/saikit-briefs/respaldos-turnos-*`:
+  `zcode` (`hooks.enabled` habilitado, 4 fases, 4 agentes), `dsh` (patch en
+  `~/.dsh/cordis.patch.yml` + hook en `~/.dsh/hooks/`), `grok` (registro en
+  `~/.grok/hooks/summonaikit.json`, 5 fases, 4 agentes, hook propio). **Los tres
+  dispararon en turnos reales.** Antes de hoy, en esta Mac solo Claude estaba
+  cableado; ahora lo están Claude, zcode, dsh y grok.
+- **Estado del hook fuera de `~/.claude`:** dsh y grok escriben su estado junto
+  a SU hook (`~/.dsh/hooks/state/`, `~/.grok/hooks/state/`). Buscar solo en
+  `~/.claude/hooks/state/` da un falso «no disparó».
+- **Auditoría del ledger (paso 4):** `test_plans_ledger` OK; `audita-ledger`
+  marca la 18.16 — es un falso positivo por el scope `docs(18.16)` de un commit
+  de docs, desaparece al cerrarla. La 18.15 no la marcó porque los commits de
+  Cursor usaron scope `install-hook`, no el número de fila: el auditor solo ve
+  lo que el scope le dice.
+- **Seguridad, pendiente del operador:** dos claves de Z.AI en texto plano
+  (script `glm` y config de zcode) quedaron expuestas en la sesión del lead.
+  Rotarlas.
+
 ## 2026-09-03 — PR #150 / Task 18.14 (agente_traducido bajo awk BSD) — deploy NO-OP
 
 - **Qué se mergeó:** merge `802611d`, CI 9/9. `agente_traducido` deja de usar una
