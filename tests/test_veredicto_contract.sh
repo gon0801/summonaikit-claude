@@ -518,6 +518,105 @@ caso "verdict_contenido_crlf_coincide"
 verdict_contenido_crlf_coincide
 fin_caso "verdict_contenido_crlf_coincide"
 
+# ---------------------- Task 18.13 (c): el Write del veredicto NO es trabajo
+# Un turno de SOLO revision escribe una sola cosa: el veredicto. Si ese Write
+# se acredita como trabajo, el estado reporta implementacion y edicion de
+# codigo que no existieron — la golden del escenario 56 lo mostraba
+# (implemented=1 y last_code_edit=1). Las DOS senales van en casos separados
+# porque nacen de caminos distintos y un caso que solo mire una no discrimina:
+# `implemented` viene del grep laxo del PostToolUse; `last_code_edit` de
+# rn_mark_code_edit via rn_is_noncode_path.
+verdict_payload_revision() {  # $1=vsha — contenido minimo de veredicto valido
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"n/a","comando":null},"blast":{"nivel":4,"hecho":"h","comando":"c"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/t.tsv"}' "$1"
+}
+
+verdict_write_no_acredita_implemented() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="notrab01notrab01"
+  V="$(verdict_payload_revision "$vsha")"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
+  _igual "implemented queda en 0 (el veredicto no es trabajo)" "$(lab_estado implemented)" "0"
+  _vacio "el log no acredita implemented con el veredicto" "$(lab_log | grep '^implemented:')"
+}
+caso "verdict_write_no_acredita_implemented"
+verdict_write_no_acredita_implemented
+fin_caso "verdict_write_no_acredita_implemented"
+
+verdict_write_no_marca_code_edit() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="notrab02notrab02"
+  V="$(verdict_payload_revision "$vsha")"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
+  rn_file="$(dirname "$LAB_ESTADO_PATH")/harness-state-review-notice.env"
+  _no_vacio "el evento del reviewer SI deja last_review" "$(grep '^last_review=.' "$rn_file" 2>/dev/null)"
+  _vacio "el Write del veredicto NO marca last_code_edit" "$(grep '^last_code_edit=.' "$rn_file" 2>/dev/null)"
+}
+caso "verdict_write_no_marca_code_edit"
+verdict_write_no_marca_code_edit
+fin_caso "verdict_write_no_marca_code_edit"
+
+# El detalle que la fila 18.13 pide DECLARAR y atar: un turno de solo
+# revision NO dispara la falsa alarma de "codigo tocado despues del review".
+# Pre-fix no disparaba porque rn_mark_review y rn_mark_code_edit caen en el
+# MISMO contador y el Stop compara con -gt; post-fix el Write del veredicto
+# ya no marca last_code_edit en absoluto. El caso ata el observable por
+# cualquiera de los dos mecanismos.
+verdict_turno_solo_revision_sin_falso_aviso() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="notrab03notrab03"
+  V="$(verdict_payload_revision "$vsha")"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  lab_run stop claude "$(lab_payload_stop)"
+  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
+  _vacio "sin aviso pendiente de review-notice para el turno siguiente" "$(find "$LAB/hooks/state" -name 'review-notice-pending.log' 2>/dev/null)"
+  _vacio "el log no registra el aviso de codigo tras el review" "$(lab_log | grep 'review-notice:')"
+}
+caso "verdict_turno_solo_revision_sin_falso_aviso"
+verdict_turno_solo_revision_sin_falso_aviso
+fin_caso "verdict_turno_solo_revision_sin_falso_aviso"
+
+# ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
+# agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
+# despacharte, asi que git rev-parse HEAD es el sha del arbol que estas
+# revisando») y NADIE instruye al lider a hacerlo (medido en la fila: 0
+# menciones en recetas/00-lider.md). El sello cita el sha del HEAD al momento
+# del review (docs/phase-18-autopilot-plan.md §4.1); sin commit previo, el
+# veredicto apuntaria a un arbol que no incluye el trabajo del turno y el
+# cruce del merge (D18) nunca cerraria.
+contrato_lider_commitea_antes_de_despachar_al_reviewer() {
+  verdict_armar
+  _contiene "el contrato instruye commitear antes de despachar al reviewer" "$LAB_OUT" 'Commit BEFORE dispatching the reviewer'
+  _contiene "el contrato nombra el rastro (.saikit/decisiones/)" "$LAB_OUT" '.saikit/decisiones/'
+}
+caso "contrato_lider_commitea_antes_de_despachar_al_reviewer"
+contrato_lider_commitea_antes_de_despachar_al_reviewer
+fin_caso "contrato_lider_commitea_antes_de_despachar_al_reviewer"
+
+# ---------------------- Task 18.13 (a): Close cita el sha y la ruta del veredicto
+# Alcance original de la 18.3, documentado en §4.1 del plan de la fase y nunca
+# entregado: «Contrato: la linea Close: del recibo cita sha y ruta». Decision
+# sobre los DOS bloques de recibo del hook (declarada en el PR): la instruccion
+# va en el Close: SUSTANTIVO de harness_context («Final receipt required before
+# stopping»); los shapes bare (el ejemplo «Bare, the six lines are» y el
+# «Required receipt shape» de build_gate_feedback) quedan bare — el gate solo
+# chequea label+colon, y el contrato sustantivo ya se inyecta en el armado.
+contrato_close_cita_sha_y_ruta_del_veredicto_sellado() {
+  verdict_armar
+  _contiene "Close cita el sha y la ruta del veredicto sellado" "$LAB_OUT" 'cite the sha and path of the sealed verdict'
+  _contiene "Close nombra la ruta donde vive el veredicto" "$LAB_OUT" '.saikit/veredictos/<sha>.json'
+}
+caso "contrato_close_cita_sha_y_ruta_del_veredicto_sellado"
+contrato_close_cita_sha_y_ruta_del_veredicto_sellado
+fin_caso "contrato_close_cita_sha_y_ruta_del_veredicto_sellado"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_veredicto_contract: FAIL (casos)" >&2
   exit 1
@@ -529,7 +628,26 @@ fi
 # el mutado parsea, y algun caso lo atrapa.
 mut_veredicto_sello_apagado() { sed 's/^verdict_registrar_sello() {$/verdict_registrar_sello() {\n  return 0/'; }
 
-MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash"
+# Task 18.13 (c): las dos mitades del fix, cada una atrapada por SU caso — un
+# caso que solo mire `implemented` no veria el contador del review-notice, y
+# viceversa. La primera quita la exclusion de .saikit/veredictos/ en
+# rn_is_noncode_path (vuelve last_code_edit); la segunda quita la guardia del
+# grep laxo (vuelve implemented).
+mut_veredicto_rn_noncode_sin_veredictos() { sed '/\.saikit\/veredictos\/\*|\.saikit\/veredictos\/\*) return 0 ;;/d'; }
+mut_veredicto_implemented_sin_guardia() { sed 's/\[ -z "$vd_write_reviewer" \] && //'; }
+
+# Task 18.13 (b): el contrato pierde la instruccion de commitear ANTES del
+# reviewer — la atrapa contrato_lider_commitea_antes_de_despachar_al_reviewer.
+mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the reviewer/Commit once the reviewer has already run/'; }
+# Task 18.13 (a): el Close: pierde la clausula que cita el sha y la ruta del
+# veredicto sellado — la atrapa contrato_close_cita_sha_y_ruta_del_veredicto_sellado.
+mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
+
+MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
+rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
+implemented_sin_guardia|verdict_write_no_acredita_implemented
+lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
+close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

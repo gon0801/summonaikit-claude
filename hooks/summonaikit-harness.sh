@@ -1076,6 +1076,11 @@ rn_is_noncode_path() {
     *.md|*.txt|*.rst|*.adoc|*.markdown) return 0 ;;
     */docs/*|docs/*) return 0 ;;
     *.lock) return 0 ;;
+    # Task 18.13 (c): el Write del veredicto es el artefacto de cierre del
+    # reviewer, no una edicion de codigo: acreditarlo hacia que un turno de
+    # SOLO revision reportara trabajo que no existio (la golden del escenario
+    # 56 lo mostraba: last_code_edit=1).
+    */.saikit/veredictos/*|.saikit/veredictos/*) return 0 ;;
   esac
   case "$rn_base" in
     package-lock.json|yarn.lock|pnpm-lock.yaml|composer.lock) return 0 ;;
@@ -1201,6 +1206,7 @@ Delegation rule:
   correctly-delegated turn still satisfies it.
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
+- Commit BEFORE dispatching the reviewer — the code AND the trail (.saikit/decisiones/<task>.tsv and the blast artifact) — so `git rev-parse HEAD` during the review is the sha of the tree under review: the sealed verdict cites that sha, and the merge cross-checks it against the PR head.
 - The adversary is an OPTIONAL fourth role, opt-in — a turn that does not dispatch it closes exactly as today. Delegate it between the verifier and the reviewer via $TOOL_HINT when the change touches auth, payments, migrations or pre-existing data, or this harness itself (the same bar that triggers a cross-review). It reports findings to an artifact under .saikit/findings/ and never repairs. When you ran an adversary this turn, dispatch the reviewer NAMING the artifact to adjudicate (e.g. "adjudica .saikit/findings/<file>.json"); if this turn did NOT run an adversary, the reviewer adjudicates nothing. Declared limit: an adversary whose invocation is never observed is indistinguishable from not invoked.
 - Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
 
@@ -1273,7 +1279,7 @@ Understand: in one or two plain sentences, what the user asked for, plus any que
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
 Verify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. "No corri los candados" counts; "PASS" or od/wc alone does not.
 Review: findings, risks, or "no findings" with basis.
-Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits. Say first what changes for the user, then how, then why; never invent a link, citation or command you did not produce or read this turn.
+Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (.saikit/veredictos/<sha>.json). Say first what changes for the user, then how, then why; never invent a link, citation or command you did not produce or read this turn.
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
 )"
@@ -2333,7 +2339,23 @@ record_tool_evidence() {
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
 
-  if printf '%s' "$combined" | grep -Eiq 'afterFileEdit|Edit|Write|apply_patch|file_path|edits'; then
+  # Task 18.13 (c): el Write del veredicto del reviewer NO es trabajo — es el
+  # artefacto de cierre de la propia revision. Acreditarlo hacia que un turno
+  # de SOLO revision reportara trabajo que no existio (la golden del escenario
+  # 56 lo media: implemented=1 y last_code_edit=1). El flag guarda el grep
+  # laxo de implemented de abajo; para last_code_edit, rn_is_noncode_path
+  # excluye .saikit/veredictos/. Es el MISMO molde que el sello (D16):
+  # reviewer por un canal medido + Write bajo veredictos/, calculado UNA sola
+  # vez y reusado por el sello mas abajo.
+  vd_write_reviewer=""
+  if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ] \
+     && [ -n "$file_path" ] \
+     && printf '%s' "$tool_name" | grep -Eiq '^(write)$' \
+     && verdict_path_dentro "$file_path"; then
+    vd_write_reviewer=1
+  fi
+
+  if [ -z "$vd_write_reviewer" ] && printf '%s' "$combined" | grep -Eiq 'afterFileEdit|Edit|Write|apply_patch|file_path|edits'; then
     mark_evidence "implemented" "${file_path:-file edit}"
   fi
 
@@ -2341,21 +2363,19 @@ record_tool_evidence() {
   # El sello corre SOLO en sesiones armadas (el early-exit de arriba ya lo acoto)
   # y solo cuando el evento resuelve a reviewer por un canal medido ($subagent ya
   # lleva el despacho o el interno, M1) Y es un Write cuyo blanco cae bajo
-  # .saikit/veredictos/. Es registro de estado — NO agrega nada al Stop gate.
-  if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ] \
-     && [ -n "$file_path" ] \
-     && printf '%s' "$tool_name" | grep -Eiq '^(write)$'; then
-    if verdict_path_dentro "$file_path"; then
-      verdict_ensure_gitignore
-      vd_content="$(json_tool_input_string content)"
-      [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
-      if [ -n "$vd_content" ]; then
-        vd_sha="$(printf '%s' "$vd_content" | verdict_unescape | sha256sum | cut -c1-64)"
-      else
-        vd_sha=""
-      fi
-      verdict_registrar_sello "$vd_sha"
+  # .saikit/veredictos/ — la resolucion que el flag vd_write_reviewer de la
+  # 18.13 (c) calcula arriba una sola vez. Es registro de estado — NO agrega
+  # nada al Stop gate.
+  if [ -n "$vd_write_reviewer" ]; then
+    verdict_ensure_gitignore
+    vd_content="$(json_tool_input_string content)"
+    [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
+    if [ -n "$vd_content" ]; then
+      vd_sha="$(printf '%s' "$vd_content" | verdict_unescape | sha256sum | cut -c1-64)"
+    else
+      vd_sha=""
     fi
+    verdict_registrar_sello "$vd_sha"
   fi
   # <<< SAIKIT-VEREDICTO-SELLO v1 <<<
 
