@@ -617,6 +617,33 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
+c_revert_registro() {
+  # Hallazgo de CodeRabbit en el PR #142, CONFIRMADO por el lead.
+  #
+  # En --revert-de el directorio `.saikit/veredictos/` puede NO existir: lo crea
+  # el hook y su .gitignore lleva `*`, asi que NO viaja en un clon fresco — que
+  # es justo donde se revierte. Sin `mkdir -p`, la redireccion del registro
+  # fallaba, y como el script corre con `set -u` pero SIN `set -e`, seguia
+  # adelante e imprimia MERGE-OK igual: reportaba un registro que no escribio.
+  #
+  # El banco no lo veia por dos razones a la vez: `monta_revert` llama a
+  # `sb_reset`, que crea el directorio, y NO habia ningun caso FELIZ de revert
+  # (los tres existentes son negativos), asi que esa rama de `merge_final` no se
+  # ejercitaba nunca. Este caso cierra las dos.
+  CASO_ROJO=0
+  monta_revert
+  rm -rf ".saikit/veredictos"
+  if [ -d ".saikit/veredictos" ]; then _mal "el caso no arranca sin el directorio"; fi
+  correr --revert-de "$MC" --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  _no_contiene "no anuncia un registro que no hizo" "$OUT" "SIN registrar"
+  _contiene "registro escrito" "$(cat ".saikit/veredictos/$RHEAD.merge" 2>/dev/null)" "f000000000000000000000000000000000000000"
+}
+caso "revert_ok_sin_dir_de_veredictos_registra_igual"
+c_revert_registro
+fin_caso "revert_ok_sin_dir_de_veredictos_registra_igual"
+
 # ------------------------------------------------------- mutation-test propio
 # Cada mutacion rompe UNA proteccion del script; el caso que la nombra tiene
 # que ponerse rojo. Si una mutacion sobrevive en verde, el test no prueba esa
@@ -836,6 +863,7 @@ autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor
 revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer
 revert_arbol_por_patchid	s|\[ "\$T_REVERT" = "\$T_PREVIO" \]|true|	c_revert_arbol
 revert_punta_floja	s|\[ "\$PUNTA" = "\$REVERT_DE" \]|true|	c_revert_punta
+registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
 MUTS
 
 if [ "$fail" -ne 0 ]; then

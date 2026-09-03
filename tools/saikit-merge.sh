@@ -223,9 +223,22 @@ merge_final() {
     || no_merge "el merge salio pero gh pr view --json mergeCommit no respondio; mirar el PR a mano"
   MERGE_COMMIT="$(saikit_json_get "$MC_RAW" mergeCommit.oid)" \
     || no_merge "no se pudo leer el merge_commit: $MC_RAW"
-  printf '%s\n' "$MERGE_COMMIT" > "$VERDICTOS/$SHA.merge"   # el veredicto sellado no se toca
+  # El directorio puede NO existir: lo crea el hook y su .gitignore lleva '*',
+  # asi que no viaja en un clon fresco — que es JUSTO donde corre --revert-de
+  # (ese modo no exige veredicto, asi que nada garantiza el dir). Sin `set -e`
+  # una redireccion fallida no detenia nada y MERGE-OK anunciaba un registro
+  # inexistente (CodeRabbit, PR #142). Misma postura que borrado_remoto: el
+  # merge YA esta hecho, se reporta y no se reintenta — pero NO se miente sobre
+  # lo que se escribio. El veredicto sellado no se toca en ningun caso.
+  if mkdir -p "$VERDICTOS" 2>/dev/null \
+     && printf '%s\n' "$MERGE_COMMIT" > "$VERDICTOS/$SHA.merge" 2>/dev/null; then
+    REGISTRO="registrado en .saikit/veredictos/$SHA.merge"
+  else
+    printf 'REGISTRO-FALLO: no se pudo escribir %s/%s.merge — se reporta sin reintentar (el merge ya esta hecho)\n' "$VERDICTOS" "$SHA"
+    REGISTRO="SIN registrar (ver REGISTRO-FALLO)"
+  fi
   borrado_remoto
-  printf 'MERGE-OK: %s (registrado en .saikit/veredictos/%s.merge)\n' "$MERGE_COMMIT" "$SHA"
+  printf 'MERGE-OK: %s (%s)\n' "$MERGE_COMMIT" "$REGISTRO"
   exit 0
 }
 
