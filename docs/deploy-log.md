@@ -7,6 +7,33 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-02 — PR #142 / Task 18.4 (`tools/saikit-merge.sh`) — deploy NO-OP
+
+- **Qué se mergeó:** merge `f1063af`, CI 9/9 en el head `2c58ea1` (run
+  33699818088). `tools/saikit-merge.sh` (D18 + D19), su batería de 34 casos con
+  banco de 18 mutaciones, y el endurecimiento de
+  `tools/lib/veredicto_contract.sh` con un parser JSON real en awk, sin `jq`.
+  Implementó GLM; revisó el lead.
+- **Deploy NO-OP:** el PR **no toca** `hooks/summonaikit-harness.sh`.
+  `install-hook.sh` reportó `YA AL DIA: el destino es nuestro y byte a byte
+  igual a la fuente`. `check-hook-registration.sh`: exit 0, sin hallazgos.
+- **Ojo para la 18.12:** el instalador **no planta** `tools/saikit-merge.sh` ni
+  `tools/lib/veredicto_contract.sh` en el perfil del usuario. Hoy el script solo
+  existe en un clon del repo. Plantarlo es alcance de la fila 18.12, y sin eso
+  el autopilot de un repo ajeno no tendría con qué mergear.
+- **Lo que el lead verificó por su cuenta**, sin tomar el PR por bueno: la suite
+  entera (34 casos OK) con **las 18 mutaciones del banco atrapadas** (18/18, cero sobrevivientes), y el
+  parser fuzzeado contra el módulo `json` de Python con 33 casos adversarios,
+  con **cero discrepancias**.
+- **Tres hallazgos cerrados en la revisión:** el registro del merge en
+  `--revert-de` escribía en un directorio que puede no existir y aun así
+  anunciaba éxito; una clave con escapes `\uXXXX` burlaba las dos guardas del
+  parser; y un hallazgo del bot descartado midiendo. Los tres con su caso y su
+  rojo medido, salvo el descartado.
+- **Queda abierto:** fila **18.13** (las dos piezas del contrato y el crédito
+  del `Write` del veredicto, que comparten una regrabación de la golden) y el
+  residual declarado del arnés de mutaciones, anotado en la fila 18.4.
+
 ## 2026-09-02 — PR #140 / Tasks 18.1+18.2+18.3 (diseño medido, receta cuidar-pr, veredicto sellado) — deploy REAL
 
 - **Qué se mergeó:** merge `15af87a`, CI 9/9 en el head `0e798b7` (run
