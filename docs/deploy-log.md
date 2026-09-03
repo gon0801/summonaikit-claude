@@ -14,6 +14,10 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   `awk -v`. Implementó qwen; revisó el lead.
 - **Deploy NO-OP:** el PR no toca `hooks/summonaikit-harness.sh`.
   `install-hook.sh` reportó `YA AL DIA`; `check-hook-registration.sh` exit 0.
+- **Auditoría del ledger (paso 4 de AGENTS.md):** `tests/test_plans_ledger.sh` OK
+  (5 celdas en todas las filas) y `tools/audita-ledger.sh` OK. Esto último
+  importa: al cerrar la 18.14 **desapareció el falso positivo** que el auditor
+  arrastraba desde que la fila se abrió con un scope de commit `docs(18.14)`.
 - **Lo que destraba, medido:** `--host kimi` y `--host claude` pasan de morir con
   su error de awk a salir exit 0. El delta de `test_install_hook` en macOS es de
   **230 FAIL a 61**, y los de awk de **45 a 2**. `zcode` ya no muere por awk sino
