@@ -7,6 +7,30 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #150 / Task 18.14 (agente_traducido bajo awk BSD) — deploy NO-OP
+
+- **Qué se mergeó:** merge `802611d`, CI 9/9. `agente_traducido` deja de usar una
+  regex «que no matchea nada» y pasa sus valores por `ENVIRON` en vez de
+  `awk -v`. Implementó qwen; revisó el lead.
+- **Deploy NO-OP:** el PR no toca `hooks/summonaikit-harness.sh`.
+  `install-hook.sh` reportó `YA AL DIA`; `check-hook-registration.sh` exit 0.
+- **Auditoría del ledger (paso 4 de AGENTS.md):** `tests/test_plans_ledger.sh` OK
+  (5 celdas en todas las filas) y `tools/audita-ledger.sh` OK. Esto último
+  importa: al cerrar la 18.14 **desapareció el falso positivo** que el auditor
+  arrastraba desde que la fila se abrió con un scope de commit `docs(18.14)`.
+- **Lo que destraba, medido:** `--host kimi` y `--host claude` pasan de morir con
+  su error de awk a salir exit 0. El delta de `test_install_hook` en macOS es de
+  **230 FAIL a 61**, y los de awk de **45 a 2**. `zcode` ya no muere por awk sino
+  por su bloqueo previo, que es de la fila 18.15.
+- **Lo que NO destraba, y conviene no confundirlo:** el kit sigue cableando solo
+  Claude. Esta fila arregla la traducción de perfiles; el cableado de los otros
+  hosts es la 18.15.
+- **Hallazgo derivado a la 18.16:** `mtime_de` (`tests/test_install_hook.sh:90`)
+  usa `stat -c '%y'` de GNU con `2>/dev/null`, así que en macOS devuelve cadena
+  vacía y sus aserciones comparan vacío contra vacío: **pasan en falso**. El repo
+  ya había hallado y cerrado ese patrón en el cross-review de la 16.5, pero en un
+  solo sitio.
+
 ## 2026-09-02 — PR #142 / Task 18.4 (`tools/saikit-merge.sh`) — deploy NO-OP
 
 - **Qué se mergeó:** merge `f1063af`, CI 9/9 en el head `2c58ea1` (run
