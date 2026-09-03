@@ -924,10 +924,13 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
     || effort_key='effort'
   [ -z "$effort_key" ] && effort_key='effort'
 
-  # `^$` NO sirve como "regex que no matchea nada": matchea las lineas vacias y
-  # se las comeria del frontmatter, y ahi el instalado dejaria de ser la fuente
-  # traducida. `a^` no matchea nunca.
-  local omitir='a^'
+  # Sin regex "que no matchea nada": `a^` es un idiom de GNU awk que el awk
+  # BSD rechaza en la compilacion ("syntax error in regular expression a^",
+  # medido en macOS, Task 18.14), y `^$` matchea las lineas vacias y se las
+  # comeria del frontmatter (el instalado dejaria de ser la fuente traducida).
+  # String vacio = nada que omitir; la regla del awk solo aplica si es no
+  # vacio.
+  local omitir=''
   [ "$host" = 'grok' ] && omitir='^skills:'
 
   # Claves nuestras que ya vinieran en la fuente se descartan: manda el
@@ -937,14 +940,24 @@ agente_traducido() {  # $1=host  $2=fuente → stdout
   desechar='model|effort'
   [ "$effort_key" != 'effort' ] && desechar="$desechar|$effort_key"
 
-  awk -v omitir="$omitir" -v inyectar="$inyectar" -v desechar="$desechar" '
+  # Los valores van por el entorno (ENVIRON), NO por `awk -v`: el awk BSD
+  # rechaza un newline literal en el valor de -v ANTES de compilar el programa
+  # ("awk: newline in string ... at source line 1", medido en macOS, Task
+  # 18.14), e inyectar lleva DOS lineas cuando el router da model: y effort:.
+  # ENVIRON es POSIX y pasa el valor crudo, sin procesamiento de escapes.
+  SAIKIT_OMITIR="$omitir" SAIKIT_INYECTAR="$inyectar" SAIKIT_DESECHAR="$desechar" awk '
+    BEGIN {
+      omitir = ENVIRON["SAIKIT_OMITIR"]
+      inyectar = ENVIRON["SAIKIT_INYECTAR"]
+      desechar = ENVIRON["SAIKIT_DESECHAR"]
+    }
     /^---[[:space:]]*\r?$/ {
       n++
       # El cierre del primer bloque: inyectar JUSTO ANTES.
       if (n == 2 && inyectar != "") print inyectar
       print; next
     }
-    n == 1 && $0 ~ omitir { next }
+    n == 1 && omitir != "" && $0 ~ omitir { next }
     n == 1 && $0 ~ ("^(" desechar "):") { next }
     { print }
   ' "$fuente"
