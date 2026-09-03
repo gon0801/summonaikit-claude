@@ -771,13 +771,16 @@ out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
 # bash real del PATH. hooks.enabled:true es PRECONDICION del fixture (el
 # instalador se niega con enabled:false; no se cambia el criterio).
 #
-# Acreditacion de la CONFIG zcode: agente_traducido con omitir='a^' rompe el
-# awk BSD (fila 18.14). Sin esa fila no se escribe el config; aca se exige
-# (a) que la forma Windows via override quede en el config CUANDO el awk lo
-# permita, y (b) que en POSIX el resolvedor deje de morir en bash.exe. Si el
-# awk bloquea, se declara unknown con esa razon (no se inventa la forma).
-awk_omite_a_caret_ok() {
-  awk -v omitir='a^' 'BEGIN{ x="y"; if (x ~ omitir) {} }' >/dev/null 2>&1
+# Acreditacion de la CONFIG zcode: pre-18.14 el instalador tenia
+# local omitir='a^' y el awk BSD lo rechaza con
+# "awk: syntax error in regular expression a^" (medido macOS BSD awk;
+# ver fila 18.14). Aca se SONDEA el INSTALADOR ($tool), no el awk de la
+# plataforma: si $tool aun tiene omitir='a^', el camino unknown/bloqueo
+# sigue vivo (pre-18.14); si ya no (omitir='' + ENVIRON, post-18.14), se
+# exige (a) forma Windows via override en el config y (b) en POSIX el
+# resolvedor deja de morir en bash.exe.
+instalador_usa_omitir_a_caret() {
+  grep -q "local omitir='a^'" "$tool"
 }
 
 caso "18.15 zcode: forma Windows del command queda byte a byte con override (no se mueve)"
@@ -788,7 +791,7 @@ out="$(SAIKIT_ZCODE_USER_CONFIG="$zcode_cfg" \
        SAIKIT_ZCODE_AGENTS_DIR="$zcode_agents" \
        SAIKIT_ZCODE_BASH_WIN="$win_bash" \
        bash "$tool" --host zcode --dest "$dest" 2>&1)"; rc=$?
-if ! awk_omite_a_caret_ok; then
+if instalador_usa_omitir_a_caret; then
   printf '%s' "$out" | grep -q 'bash.exe de Windows' \
     && malo "18.15 zcode: con override no debe morir buscando bash.exe: $out"
   printf '%s' "$out" | grep -q 'regular expression a^' \
@@ -846,9 +849,13 @@ assert "bash.exe" not in cmds[0], "no debe inventar bash.exe en POSIX: %r" % cmd
 assert os.path.isabs(bash) and os.path.isfile(bash), "bash del PATH no es ruta real: %r" % bash
 PY
   else
-    printf '%s' "$out" | grep -q 'regular expression a^' \
-      || malo "18.15 zcode POSIX: tras hallar bash, fallo inesperado rc=$rc: $out"
-    printf '    (unknown config: bash POSIX resuelto; escritura bloqueada por 18.14 a^)\n'
+    if instalador_usa_omitir_a_caret; then
+      printf '%s' "$out" | grep -q 'regular expression a^' \
+        || malo "18.15 zcode POSIX: tras hallar bash, fallo inesperado rc=$rc: $out"
+      printf '    (unknown config: bash POSIX resuelto; escritura bloqueada por 18.14 a^)\n'
+    else
+      malo "18.15 zcode POSIX: tras hallar bash, fallo inesperado rc=$rc: $out"
+    fi
   fi
 fi
 
