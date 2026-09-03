@@ -272,6 +272,36 @@ caso "contrato_json_clave_duplicada_invalida"
 }
 fin_caso "contrato_json_clave_duplicada_invalida"
 
+caso "contrato_json_clave_con_escape_burla_las_guardas_invalida"
+{
+  # Hallazgo de CodeRabbit en el PR #142, adjudicado FIX y CONFIRMADO midiendo.
+  # `parseString` NO decodifica escapes, asi que las dos guardas de la clave se
+  # burlaban con \uXXXX: "a" no colisiona con "a" en `seen` (duplicada que
+  # pasa) y "." no contiene un '.' literal (delimitador del flat que pasa).
+  # La cabecera del archivo AFIRMABA rechazar ambas cosas, asi que la afirmacion
+  # era falsa para la forma escapada.
+  #
+  # Postura elegida, fail-closed y coherente con el limite ya declarado (los
+  # \uXXXX se validan pero NO se decodifican): una clave con CUALQUIER escape no
+  # se interpreta, se RECHAZA. Las claves del esquema son ASCII planas.
+  for j in \
+    '{"a":1,"\u0061":2}' \
+    '{"\u002e":1}' \
+    '{"a\u002eb":1}' \
+    '{"\u005b0\u005d":1}' \
+  ; do
+    if saikit_json_valido "$j" >/dev/null 2>&1; then
+      _mal "acepto una clave con escape que burla las guardas: $j"
+    fi
+  done
+  # Control: el mismo escape en un VALOR sigue siendo valido (solo la CLAVE se
+  # restringe; si no, este caso pasaria por prohibir \u en todos lados).
+  if ! saikit_json_valido '{"a":"\u0061 y \u002e"}' >/dev/null 2>&1; then
+    _mal "rechazo un escape en un VALOR, que si es legitimo"
+  fi
+}
+fin_caso "contrato_json_clave_con_escape_burla_las_guardas_invalida"
+
 caso "contrato_json_control_crudo_en_string_invalido"
 {
   # Hallazgo de codex: RFC 8259 prohibe TODOS los U+0000-U+001F crudos en

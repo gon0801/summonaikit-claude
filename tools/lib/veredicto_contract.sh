@@ -39,7 +39,9 @@
 #   - numeros sin cero inicial, con fraccion/exponente completos;
 #   - true/false/null literales; sin coma colgante; sin basura al final;
 #   - rechaza claves duplicadas y claves con '.'/'['/']' (el namespace del
-#     flat; hallazgos de codex en el cross-review del PR #142).
+#     flat; hallazgos de codex en el cross-review del PR #142), y rechaza toda
+#     clave que traiga un ESCAPE: sin decodificar, "\u002e" y "\u0061" burlaban
+#     esas dos guardas (CodeRabbit, PR #142). En un VALOR el escape es legitimo.
 # Los \uXXXX se VALIDAN pero no se decodifican (el contenido de veredicto
 # medido es ASCII; decodificar Unicode en awk no es portable).
 # ---------------------------------------------------------------------------
@@ -115,6 +117,12 @@ function parseObject(p,   seen, k, kp, c2) {
     # falsifica rutas anidadas ("verify_app.resultado" pasando por hoja).
     # Y una clave DUPLICADA es ambigua entre consumidores — en un gate
     # fail-closed se rechaza en vez de elegir una en silencio (codex #1/#2).
+    # Un escape en la CLAVE burla las DOS guardas de abajo, porque parseString
+    # NO decodifica: "\u002e" no lleva un '.' literal y "\u0061" no colisiona
+    # con "a" en `seen`. En un gate fail-closed una clave escapada no se
+    # interpreta: se RECHAZA (CodeRabbit, PR #142). Las claves del esquema son
+    # ASCII planas; el escape en un VALOR sigue siendo legitimo.
+    if (index(k, "\\")) { err = "clave con escape (no se interpreta en un gate): " k; return }
     if (index(k, ".") || index(k, "[") || index(k, "]")) { err = "clave con . o corchetes en " i; return }
     if (index(seen, "\n" k "\n")) { err = "clave duplicada: " k; return }
     seen = seen k "\n"
