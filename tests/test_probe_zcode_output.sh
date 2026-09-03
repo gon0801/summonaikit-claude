@@ -596,9 +596,21 @@ if command -v jq >/dev/null 2>&1; then
   jq -e '(.hooks.UserPromptSubmit[0]|has("matcher")|not) and (.hooks.Stop[0]|has("matcher")|not)' "$gpjson" >/dev/null 2>&1 \
     || malo "UPS y Stop van sin matcher"
   jq -e '.saikit_probe == "7.2"' "$gpjson" >/dev/null 2>&1 || malo "falta la marca top-level saikit_probe=7.2"
-  jq -e 'all(.hooks[][].hooks[]; (.type=="command") and (.timeout==30)
-         and (.command|startswith("& ")) and (.command|test("bash[.]exe")))' "$gpjson" >/dev/null 2>&1 \
-    || malo "todo handler debe ser type=command, timeout 30, forma PowerShell '& \"<bash.exe>\"'"
+  # Task 18.16: la forma del command depende de la plataforma — con cygpath
+  # (Windows/MSYS) es el call operator de PowerShell sobre un bash.exe; en
+  # POSIX la forma citada simple con el bash real del PATH (misma decision que
+  # 18.15 tomo para install-hook). Exigir la forma de Windows en POSIX (o al
+  # reves) seria rojo por la plataforma, no por el registrador.
+  if command -v cygpath >/dev/null 2>&1; then
+    jq -e 'all(.hooks[][].hooks[]; (.type=="command") and (.timeout==30)
+           and (.command|startswith("& ")) and (.command|test("bash[.]exe")))' "$gpjson" >/dev/null 2>&1 \
+      || malo "todo handler debe ser type=command, timeout 30, forma PowerShell '& \"<bash.exe>\"'"
+  else
+    jq -e 'all(.hooks[][].hooks[]; (.type=="command") and (.timeout==30)
+           and (.command|startswith("\"")) and (.command|startswith("& ")|not)
+           and (.command|test("bash[.]exe")|not))' "$gpjson" >/dev/null 2>&1 \
+      || malo "todo handler debe ser type=command, timeout 30, forma POSIX '\"<bash>\"' (sin call operator)"
+  fi
 else
   echo "    unknown: jq no disponible; el parseo del JSON grok no se pudo medir"
 fi

@@ -181,6 +181,17 @@ zcode_bash_win() {
   if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && command -v cygpath >/dev/null 2>&1; then
     bw="$(cygpath -w "$b" 2>/dev/null)" && [ -n "$bw" ] && { printf '%s' "$bw"; return 0; }
   fi
+  # Task 18.16: en POSIX (Darwin/Linux) no hay cygpath ni bash.exe de Git.
+  # El bash real del PATH es la forma registrable, igual que en install-hook
+  # (18.15). NUNCA caer aca en MSYS: cygpath ya cubrio arriba, y /usr/bin/bash
+  # virtual de MSYS sigue prohibido (leccion 5.1).
+  if ! command -v cygpath >/dev/null 2>&1; then
+    if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
+      case "$b" in
+        /*) printf '%s' "$b"; return 0 ;;
+      esac
+    fi
+  fi
   return 1
 }
 
@@ -577,7 +588,7 @@ probe_instalar() {
     echo "                   No lo creo de cero: el operador ya tiene uno." >&2
     exit 2; }
   bash_win="$(zcode_bash_win)" || {
-    echo "probe-zcode-output: no encontre un bash.exe de Windows para registrar el probe" >&2
+    echo "probe-zcode-output: no encontre un bash para el command (bash.exe en Windows, bash en POSIX)" >&2
     exit 2; }
 
   umask 077
@@ -711,7 +722,7 @@ grok_probe_instalar() {
   json="$(grok_probe_json)"
   marca="$(grok_probe_marca)"
   bash_win="$(zcode_bash_win)" || {
-    echo "probe-zcode-output: no encontre un bash.exe de Windows para registrar el probe" >&2
+    echo "probe-zcode-output: no encontre un bash para el command (bash.exe en Windows, bash en POSIX)" >&2
     exit 2; }
   grok_rechaza_metacaracteres "$bash_win" "$probe" "$destino_real"
   if [ -e "$json" ] && ! grok_json_es_nuestro "$json" "$marca"; then
@@ -726,7 +737,14 @@ grok_probe_instalar() {
 
   # El command lleva --host grok: sin eso el modo hook esperaria los literales
   # UserPromptSubmit/Stop de zcode y nunca emitiria (7.1: Grok manda snake).
-  cmd="& \"$bash_win\" \"$probe\" --saikit-probe-id 7.2 --host grok --only-cwd \"$destino_real\" --mode-file \"$destino_real/probe-mode.txt\""
+  # Task 18.16: el call operator `& ` es de PowerShell — en POSIX el shell de
+  # hooks no lo interpreta y la forma es la citada simple (misma decision que
+  # 18.15 para install-hook).
+  if command -v cygpath >/dev/null 2>&1; then
+    cmd="& \"$bash_win\" \"$probe\" --saikit-probe-id 7.2 --host grok --only-cwd \"$destino_real\" --mode-file \"$destino_real/probe-mode.txt\""
+  else
+    cmd="\"$bash_win\" \"$probe\" --saikit-probe-id 7.2 --host grok --only-cwd \"$destino_real\" --mode-file \"$destino_real/probe-mode.txt\""
+  fi
   cmd="$(grok_json_esc "$cmd")"
   tmp_new="$(mktemp)" || { echo "probe-zcode-output: no pude crear tmp" >&2; exit 2; }
   cat > "$tmp_new" <<JSON

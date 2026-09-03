@@ -605,12 +605,18 @@ printf '%s' '{"hookEventName":"UserPromptSubmit","prompt":"x"}' \
   || malo "no nombro el archivo por hookEventName: los eventos de Grok colisionarian en 'sin-evento'"
 
 caso "grok modo hook: el env dump trae GROK_HOOK_EVENT/GROK_SESSION_ID y NUNCA GROK_API_KEY"
+# Dir PROPIO para este caso (18.16): el `find | head -1` de antes elegia entre
+# el .env del caso anterior y el de este segun el orden de directorio de
+# find — en macOS (APFS) devolvia el del caso anterior (sin GROK_*) y el caso
+# fallaba por orden de listado, no por comportamiento del capturador.
+grkcap9="$SANDBOX/cap-grok-env"
+rm -rf "$grkcap9"; mkdir -p "$grkcap9"
 printf '%s' '{"hookEventName":"Stop","reason":"end_turn"}' \
-  | ( cd "$SANDBOX" && SAIKIT_CAPTURE_DIR="$grkcap" \
+  | ( cd "$SANDBOX" && SAIKIT_CAPTURE_DIR="$grkcap9" \
       GROK_HOOK_EVENT=stop GROK_SESSION_ID=g123 GROK_WORKSPACE_ROOT=/x \
       GROK_API_KEY=no-volcar-esto bash "$tool" ); rc=$?
 [ "$rc" -eq 0 ] || malo "fail-open roto con env grok (dio $rc)"
-envfile="$(find "$grkcap" -name '*.env' 2>/dev/null | head -1)"
+envfile="$(find "$grkcap9" -name '*.env' 2>/dev/null | head -1)"
 [ -n "$envfile" ] || malo "no escribio el .env"
 grep -q 'GROK_HOOK_EVENT=stop' "$envfile" 2>/dev/null || malo "el env dump no trae GROK_HOOK_EVENT (D2 no se puede medir)"
 grep -q 'GROK_SESSION_ID=g123' "$envfile" 2>/dev/null || malo "el env dump no trae GROK_SESSION_ID"
