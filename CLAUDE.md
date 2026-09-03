@@ -15,3 +15,11 @@ Reglas de hierro:
 Candado extra (repo-hygiene, `install-repo-hygiene.ps1`): `context-docs-budget` —
 CLAUDE.md raíz ≤200 líneas, anidados ≤80, AGENTS.md ≤400, sin diarios de sesión.
 Sweep manual de basura (reporta, no borra): `python tools/check_context_docs.py . --sweep`.
+
+## Formato del receipt del harness (regla del operador, 2026-09-03)
+
+El `SUMMONAIKIT HARNESS RECEIPT` se entrega SIEMPRE con un parrafo por
+punto: **Understand:**, **Implement:**, **Verify:**, **Review:**, **Close:**,
+**Retro:** — cada etiqueta abre su propio parrafo, sin mezclar puntos ni
+dejar etiquetas sin parrafo. (Cuando corrio adversario o hubo fallback de
+rol, sus lineas van con el mismo trato.)
