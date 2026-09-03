@@ -970,6 +970,41 @@ else
     || malo "18.15 debe reportar el plantado: $out"
 fi
 
+# Task 18.15 / CodeRabbit (PR #153): `cat > "$wrap"` truncaba el wrap previo
+# si la escritura fallaba a medias (medido: wrap de 310 B -> 0 B con un `cat`
+# falso que consume stdin y sale 1; el shell ya habia abierto el destino).
+# La planta atomica (tmp en el mismo dir + validar + mv -f) deja el previo
+# byte a byte. El fake solo rompe `cat` SIN args (heredoc); `cat archivo` sigue.
+caso "18.15 codex: si falla la escritura del wrap, el wrap previo queda byte a byte"
+if command -v cygpath >/dev/null 2>&1; then
+  printf '    (skip: cygpath; este caso es la rama POSIX)\n'
+else
+  nuevo_home_codex
+  rm -f "$dest"
+  wrap="$(dirname "$dest")/summonaikit-harness-codex-wrap.sh"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "18.15 precondicion: primera planta deberia salir 0, dio $rc: $out"
+  [ -f "$wrap" ] || malo "18.15 precondicion: wrap debe existir antes del fallo forzado"
+  ck_prev="$(cksum < "$wrap")"
+  fakebin="$tmp/18.15-fake-cat-bin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/cat" <<'FAKE'
+#!/usr/bin/env bash
+if [ "$#" -gt 0 ]; then exec /bin/cat "$@"; fi
+/bin/cat >/dev/null
+exit 1
+FAKE
+  chmod +x "$fakebin/cat"
+  out="$(HOME="$home_cx" USERPROFILE="$home_cx" PATH="$fakebin:$PATH" \
+         bash "$tool" --host codex --source "$fuente" --manifest "$manifiesto" --no-registration-check 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "18.15 wrap: escritura fallida debe salir 2, dio $rc: $out"
+  [ -f "$wrap" ] || malo "18.15 wrap: el previo no debe borrarse tras fallo de escritura"
+  [ "$ck_prev" = "$(cksum < "$wrap")" ] \
+    || malo "18.15 wrap: el previo debia quedar byte a byte (truncado por cat > directo): $(wc -c < "$wrap") B"
+  printf '%s' "$out" | grep -q 'no se pudo plantar el wrap POSIX' \
+    || malo "18.15 wrap: debe reportar el fallo de planta: $out"
+fi
+
 caso "18.15 codex: en Windows sin .ps1, dry-run e install fallan cerrados (exit 2)"
 if ! command -v cygpath >/dev/null 2>&1; then
   printf '    (skip: sin cygpath; este caso es la rama Windows)\n'

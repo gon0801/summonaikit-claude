@@ -298,22 +298,36 @@ codex_wrapper_path() {
 }
 
 codex_plant_wrap_posix() {
-  local wrap
+  local wrap dir tmp
   wrap="$(codex_wrapper_path)"
   case "$wrap" in
     *.ps1) return 0 ;;  # Windows: el kit no entrega el .ps1
   esac
+  # Escritura atomica (mismo patron que DEST/JSON/patch): temporal EN EL MISMO
+  # dir + validar + mv -f. `cat > "$wrap"` truncaba el wrap previo si la
+  # escritura fallaba a medias (CodeRabbit / lead, PR #153); codex_exige_wrapper
+  # restaura DEST pero no el wrap.
+  dir="$(dirname "$wrap")"
   umask 077
-  cat > "$wrap" <<EOF
+  tmp="$(mktemp "$dir/.saikit-codex-wrap-XXXXXX")" || return 1
+  if ! cat > "$tmp" <<EOF
 #!/usr/bin/env bash
 # SAIKIT-CLAUDE-OWNED summonaikit-claude wrap-codex
 # Task 18.15: setea TARGET y delega al harness (analogia del .ps1 en Windows).
 export SUMMONAIKIT_HOOK_TARGET=codex
 exec bash "$(dirname "$wrap")/summonaikit-harness.sh" "\$@"
 EOF
-  chmod +x "$wrap" || return 1
+  then
+    rm -f "$tmp"; return 1
+  fi
+  chmod +x "$tmp" || { rm -f "$tmp"; return 1; }
   # El checker exige que una linea de codigo nombre summonaikit-harness.sh.
-  grep -q 'summonaikit-harness\.sh' "$wrap" || return 1
+  if ! grep -q 'summonaikit-harness\.sh' "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  if ! mv -f "$tmp" "$wrap"; then
+    rm -f "$tmp"; return 1
+  fi
   return 0
 }
 
