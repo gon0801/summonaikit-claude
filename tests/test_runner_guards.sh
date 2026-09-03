@@ -25,7 +25,7 @@ malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 # de los casos de abajo indistinguible de una mitad — que es exactamente como el
 # caso de la union salio verde en local y ROJO en CI. Los casos que necesitan
 # una particion la ponen ellos, por comando. Misma leccion que ya aplica mas
-# abajo con SAIKIT_CI_LINUX.
+# abajo con SAIKIT_TESTS_SIN_EJECUTOR.
 unset SAIKIT_PARTICION
 
 # ------------------------------------------------- 1) repo vacio de logica
@@ -157,29 +157,61 @@ caso "raiz inexistente => falla, no pasa como verde con cobertura cero"
 out="$(bash "$run_sh" "$SANDBOX/no-existe" 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] || malo "una raiz inexistente NO puede salir 0: $out"
 
-# ------------------------------- 8) skip linux-ci + unknown a la vez (codex r1)
-# Hallazgo 3 de la cross-review: con UNKNOWN y SKIP simultaneos, la rama de
-# UNKNOWN salia antes del resumen de SKIP y los omitidos no se nombraban nunca
-# — contradecia la garantia declarada. El resumen de skips tiene que imprimir
-# SIEMPRE que haya skips, en cualquier camino de salida (tambien el exit 3).
-caso "unknown + SKIP linux-ci simultaneos => el resumen de skips igual imprime"
+# ----------------- 8) skip sin ejecutor + unknown a la vez (18.16, ex codex r1)
+# El skip ya no promete "lo corre Windows" (18.16): declara que NADIE lo corre,
+# se lista y cuenta como unknown. La garantia del resumen (codex r1, hallazgo 3
+# de la 10.5) se mantiene: imprime SIEMPRE que haya skips, en cualquier camino
+# de salida (tambien el exit 3). env -u porque este test puede correr DENTRO de
+# un runner que exporte la variable: heredarla volveria la mitad "sin variable"
+# indistinguible de la primera (la misma leccion de determinismo del lab).
+caso "unknown + SKIP sin ejecutor simultaneos => el resumen de skips igual imprime"
 mkdir -p "$SANDBOX/unk-y-skip/tests"
 printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk-y-skip/tests/test_no_observado.sh"
-printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/unk-y-skip/tests/test_capture_payloads.sh"
-out="$(SAIKIT_CI_LINUX=1 bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
-[ "$rc" -eq 3 ] || malo "todos los corridos unknown y con skip => exit 3, dio $rc: $out"
-printf '%s' "$out" | grep -q 'SKIP (linux-ci): test_capture_payloads' \
-  || malo "el skip del Windows-bound no se lista: $out"
-printf '%s' "$out" | grep -q 'SKIP linux-ci declarados' \
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/unk-y-skip/tests/test_huerfano.sh"
+out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_huerfano' bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
+[ "$rc" -eq 3 ] || malo "todo sin verificar (unknown + skip) => exit 3, dio $rc: $out"
+printf '%s' "$out" | grep -q 'SKIP (sin ejecutor): test_huerfano' \
+  || malo "el skip sin ejecutor no se lista: $out"
+printf '%s' "$out" | grep -q 'SKIP (sin ejecutor) declarados' \
   || malo "el resumen de skips no imprime antes del exit 3 (codex r1, hallazgo 3): $out"
-# Y el mismo repo SIN la variable: nada se salta, los dos corren y quedan
-# unknown (el fallback honesto de 10.5 sigue intacto). env -u porque este test
-# puede correr DENTRO de un runner con SAIKIT_CI_LINUX=1 (el job suite del CI):
-# heredarla volveria la mitad "sin variable" indistinguible de la primera (la
-# misma leccion de determinismo que el lab aplica con CLAUDECODE/ZCODE_*).
-out="$(env -u SAIKIT_CI_LINUX bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
-[ "$rc" -eq 3 ] || malo "sin SAIKIT_CI_LINUX el skip no aplica, dos unknown => exit 3, dio $rc: $out"
-printf '%s' "$out" | grep -q 'SKIP (linux-ci)' && malo "sin la variable no hay skips que listar: $out"
+# Y el mismo repo SIN la variable: nada se salta, el huerfano corre y es PASS,
+# y el unknown solo ya no hunde la corrida (1 de 2 verificado).
+out="$(env -u SAIKIT_TESTS_SIN_EJECUTOR bash "$run_sh" "$SANDBOX/unk-y-skip" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "sin SAIKIT_TESTS_SIN_EJECUTOR el skip no aplica; con 1 PASS de 2 cierra 0, dio $rc: $out"
+printf '%s' "$out" | grep -q 'PASS: test_huerfano' || malo "sin la variable el huerfano debe correr y pasar: $out"
+printf '%s' "$out" | grep -q 'SKIP (sin ejecutor)' && malo "sin la variable no hay skips que listar: $out"
+
+# ------------------- 18.16: el resumen distingue FAIL de unknown (f1/f2) -----
+# La linea divisoria es si hubo OBSERVACION: un test que ARRANCA y muere en
+# exit 1 es FAIL, jamas unknown; un test SIN ejecutor es unknown — corre en
+# ningun entorno, no verifica nada. Confundirlos esconderia una regresion
+# observada como falta de cobertura, o al reves.
+caso "un test que CORRIO y salio exit 1 => el resumen dice FAIL y NO cierra OK"
+mkdir -p "$SANDBOX/corrio-rojo/tests"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$SANDBOX/corrio-rojo/tests/test_rojo.sh"
+out="$(bash "$run_sh" "$SANDBOX/corrio-rojo" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "corrio y fallo => exit 1, dio $rc: $out"
+printf '%s' "$out" | grep -q 'FAIL: test_rojo' || malo "el resumen no dice FAIL del test que corrio y fallo: $out"
+printf '%s' "$out" | grep -q 'run.sh: OK' && malo "no puede decir OK con un test en FAIL: $out"
+printf '%s' "$out" | grep -q 'UNKNOWN: test_rojo' && malo "un exit 1 del test es FAIL, jamas unknown: $out"
+
+caso "un test SIN ejecutor => el resumen lo dice y lo cuenta como unknown"
+# Con un verde al lado: 1 corrido PASS + 1 skip-sin-ejecutor = unknown parcial.
+mkdir -p "$SANDBOX/sin-exec/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/sin-exec/tests/test_verde.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/sin-exec/tests/test_nadie.sh"
+out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_nadie' bash "$run_sh" "$SANDBOX/sin-exec" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "1 PASS + 1 sin ejecutor cierra 0 (unknown parcial), dio $rc: $out"
+printf '%s' "$out" | grep -q 'SKIP (sin ejecutor): test_nadie' || malo "el sin ejecutor no se lista: $out"
+printf '%s' "$out" | grep -q '1 de 1 en unknown' || malo "el resumen no cuenta el sin ejecutor como unknown: $out"
+printf '%s' "$out" | grep -q 'PASS: test_nadie' && malo "un skip sin ejecutor NO puede publicarse como PASS: $out"
+# Y si NADIE corre nada: la corrida NO cierra OK (la misma disciplina del
+# exit 3 — no se afirma lo que no se mido).
+mkdir -p "$SANDBOX/solo-sin-exec/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/solo-sin-exec/tests/test_nadie.sh"
+out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_nadie' bash "$run_sh" "$SANDBOX/solo-sin-exec" 2>&1)"; rc=$?
+[ "$rc" -eq 3 ] || malo "todo sin ejecutor => exit 3, dio $rc: $out"
+printf '%s' "$out" | grep -q 'run.sh: OK' && malo "todo sin ejecutor no puede cerrar OK: $out"
 
 # ------------------------------- 7) particion de la bateria para CI (2026-08-28)
 # El job `suite` tarda ~7 min y `test_gate_mutations` es 4.8 de esos minutos
@@ -237,18 +269,18 @@ out="$(SAIKIT_PARTICION=lentos bash "$run_sh" "$SANDBOX/part-huerfana" 2>&1)"; r
 [ "$rc" -ne 0 ] || malo "una mitad vacia no puede reportar verde: $out"
 printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que la mitad no corrio nada: $out"
 
-caso "una mitad cuyos tests se saltan TODOS por plataforma tampoco cierra en verde"
-# Greptile (PR #101): con `skipped > 0` y `corridos == 0` la guardia no
-# disparaba y el job cerraba `OK (0 tests)` — verde sin haber probado nada, que
-# es justo lo que esta guardia existe para impedir. `test_hook_acl` esta en la
-# lista de Windows-bound, asi que en CI Linux se salta entero.
+caso "una mitad cuyos tests se saltan TODOS (sin ejecutor) tampoco cierra en verde"
+# Greptile (PR #101): con el contador de skips en la guardia y `corridos == 0`
+# no disparaba — el job cerraba `OK (0 tests)`, verde sin haber probado nada.
+# Desde 18.16 los skips son "sin ejecutor" (nadie los corre), y la guardia
+# sigue mirando SOLO `corridos`.
 mkdir -p "$SANDBOX/part-solo-skip/tests"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/part-solo-skip/tests/test_hook_acl.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/part-solo-skip/tests/test_nadie.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/part-solo-skip/tests/test_gate_mutations.sh"
-out="$(SAIKIT_CI_LINUX=1 SAIKIT_PARTICION=rapidos bash "$run_sh" "$SANDBOX/part-solo-skip" 2>&1)"; rc=$?
+out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_nadie' SAIKIT_PARTICION=rapidos bash "$run_sh" "$SANDBOX/part-solo-skip" 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] || malo "una mitad con todo salteado cerro en verde: $out"
 printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que no corrio nada: $out"
-printf '%s' "$out" | grep -q 'SKIP (linux-ci): test_hook_acl' || malo "el skip se sigue listando: $out"
+printf '%s' "$out" | grep -q 'SKIP (sin ejecutor): test_nadie' || malo "el skip se sigue listando: $out"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2

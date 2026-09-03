@@ -30,7 +30,8 @@ fi
 fail=0
 unknown=0
 corridos=0
-skipped=0
+pasaron=0
+sin_ejecutados=0
 # Mismo codigo que usan los tests para "no se pudo verificar" (ver
 # `tests/lib/hook_bajo_prueba.sh`). Se define aca tambien porque el runner no
 # carga esa lib: la cargan los tests, en sus propios procesos.
@@ -56,6 +57,15 @@ SAIKIT_TESTS_LENTOS='test_gate_mutations'
 
 es_lento() {  # $1 = nombre del test, sin .sh
   case " $SAIKIT_TESTS_LENTOS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+# Task 18.16: declaracion de tests SIN EJECUTOR (nadie los corre en ningun
+# entorno). Vacio por defecto; ver el comentario del bucle para la razon de
+# cada ausencia. Mismo mecanismo de lista que SAIKIT_TESTS_LENTOS para que
+# test_runner_guards pueda candarlo con nombres sinteticos.
+SAIKIT_TESTS_SIN_EJECUTOR="${SAIKIT_TESTS_SIN_EJECUTOR:-}"
+sin_ejecutor_de() {  # $1 = nombre del test, sin .sh
+  case " $SAIKIT_TESTS_SIN_EJECUTOR " in *" $1 "*) return 0 ;; *) return 1 ;; esac
 }
 
 particion="${SAIKIT_PARTICION:-}"
@@ -112,24 +122,24 @@ for t in "$repo_root"/tests/test_*.sh; do
   if [ "$particion" = lentos ] && ! es_lento "$nombre"; then continue; fi
   if [ "$particion" = rapidos ] && es_lento "$nombre"; then continue; fi
 
-  # Task 10.5 (CI Linux): tests atados a WINDOWS, declarados uno por uno. Con
-  # SAIKIT_CI_LINUX=1 (lo setea el job `suite` del workflow) se saltan CON
-  # LISTADO — not_observed != absent: el skip se imprime y se cuenta aparte,
-  # nunca se publica como PASS. Sin la variable corren normal: en una maquina
-  # Linux sin la variable fallan honestamente (esa no es su plataforma), y en
-  # Windows corren siempre. Ninguno de los cuatro prueba el gate hook: son el
-  # tooling que REGISTRA hooks (exige bash.exe de Windows para armar el
-  # command del registro) y la clasificacion de ACLs/SIDs de Windows.
-  skip_razon=""
-  case "$nombre" in
-    test_capture_payloads)   skip_razon="capture-payloads exige un bash.exe de Windows para armar el comando de registro" ;;
-    test_install_hook)       skip_razon="install-hook exige un bash.exe de Windows para el command del registro y prueba perfiles de hosts Windows" ;;
-    test_probe_zcode_output) skip_razon="probe-zcode-output exige un bash.exe de Windows para registrar el probe" ;;
-    test_hook_acl)           skip_razon="clasifica SIDs de Windows via PowerShell; el pwsh de Linux no resuelve los SIDs locales" ;;
-  esac
-  if [ -n "$skip_razon" ] && [ "${SAIKIT_CI_LINUX:-}" = "1" ]; then
-    echo "SKIP (linux-ci): $nombre — $skip_razon"
-    skipped=$((skipped + 1))
+  # Task 18.16 — el skip de plataforma era una PROMESA muerta: "los corre
+  # Windows" ya no lo cumple nadie (el operador dejo Windows). Un skip ya no
+  # puede declarar cobertura ajena; lo unico que puede declarar honestamente
+  # es que NADIE corre ese test, y eso es exactamente un `unknown`: se lista,
+  # se cuenta aparte y vuelve a cerrar en exit 3 si no queda nada verificado —
+  # nunca se publica como PASS, y "no lo corre NADIE" ya no es un verde.
+  # La lista vive en SAIKIT_TESTS_SIN_EJECUTOR (nombres separados por espacio)
+  # y hoy esta VACIA a proposito: los tres ex-Windows-bound (capture-payloads,
+  # install-hook, probe-zcode-output) corren en POSIX desde 18.15/18.16, y
+  # test_hook_acl fue RETIRADO — su objeto eran las ACLs/SIDs de Windows
+  # (tools/hook-acl.ps1, S-1-5-18), que en macOS no existen como concepto;
+  # portarlo a permisos de macOS seria inventar cobertura de una herramienta
+  # muerta. La variable existe para que test_runner_guards candá el mecanismo
+  # con un repo sintetico aunque la lista real este vacia.
+  if sin_ejecutor_de "$nombre"; then
+    echo "SKIP (sin ejecutor): $nombre — no lo corre NADIE en ningun entorno; cuenta como unknown"
+    unknown=$((unknown + 1))
+    sin_ejecutados=$((sin_ejecutados + 1))
     continue
   fi
 
@@ -153,7 +163,7 @@ for t in "$repo_root"/tests/test_*.sh; do
   # semantica (revision cruzada de la Phase 1, Task 1.5). Contarlo aparte es lo
   # que vuelve visible la diferencia entre verificado y no observado.
   case "$rc" in
-    0) echo "PASS: $nombre" ;;
+    0) echo "PASS: $nombre"; pasaron=$((pasaron + 1)) ;;
     3) echo "UNKNOWN: $nombre — no se pudo verificar (no es PASS)"; unknown=$((unknown + 1)) ;;
     *) echo "FAIL: $nombre" >&2; fail=1 ;;
   esac
@@ -167,22 +177,24 @@ for t in "$repo_root"/tests/test_*.sh; do
   fi
 done
 
-# Task 10.5 / codex r1 (hallazgo 3): el resumen de skips imprime SIEMPRE que
-# haya skips, ANTES de ramificar la salida — antes vivia al final y con
-# UNKNOWN y SKIP a la vez la rama de UNKNOWN salia antes: los omitidos no se
-# nombraban nunca, contradiciendo la garantia declarada.
-if [ "$skipped" -gt 0 ]; then
-  echo "tests/run.sh: $skipped SKIP linux-ci declarados — ver arriba"
+# Task 10.5 / codex r1 (hallazgo 3), reencarnado para la semantica de 18.16:
+# el resumen de skips imprime SIEMPRE que haya skips, ANTES de ramificar la
+# salida — antes vivia al final y con UNKNOWN y SKIP a la vez la rama de
+# UNKNOWN salia antes: los omitidos no se nombraban nunca, contradiciendo la
+# garantia declarada.
+if [ "$sin_ejecutados" -gt 0 ]; then
+  echo "tests/run.sh: $sin_ejecutados SKIP (sin ejecutor) declarados — nadie los corre; cuentan como unknown (ver arriba)"
 fi
 
 # Una mitad que no corrio NINGUN test es un job verde que no probo nada: es la
 # falla que esta particion podria introducir (renombrar un test lento deja la
 # lista huerfana). Se rompe la corrida en vez de publicar un OK vacio.
 #
-# Se mira SOLO `corridos`, no `skipped` (Greptile, PR #101): una mitad cuyos
-# tests son todos Windows-bound se salta entera en Linux, y con `skipped > 0`
-# la guardia no disparaba — el job cerraba `OK (0 tests)`, que es exactamente el
-# verde vacio que esto existe para impedir. Los skips se siguen listando arriba.
+# Se mira SOLO `corridos`, no `sin_ejecutados` (Greptile, PR #101, cuando los
+# skips eran de plataforma): una mitad cuyos tests se saltan todos, con el
+# contador de skips en la guardia no disparaba — el job cerraba `OK (0
+# tests)`, que es exactamente el verde vacio que esto existe para impedir.
+# Los skips se siguen listando arriba.
 if [ -n "$particion" ] && [ "$corridos" -eq 0 ]; then
   echo "tests/run.sh: la particion '$particion' no corrio NINGUN test — lista huerfana o glob vacio" >&2
   echo "              (lentos declarados: $SAIKIT_TESTS_LENTOS)" >&2
@@ -197,10 +209,16 @@ fi
 # Un `unknown` NO es un OK. Se dice cuantos hubo, siempre, para que el resumen
 # no afirme mas de lo que se midio.
 if [ "$unknown" -gt 0 ]; then
-  if [ "$unknown" -ge "$corridos" ]; then
+  # 18.16: con skips-sin-ejecutor sumando a `unknown`, "nada se verifico" ya
+  # no se lee de unknown-vs-corridos sino de pasaron==0 — ningun test hizo una
+  # observacion que valga. (Sin skips era equivalente: unknown>=corridos
+  # solo cuando ningun corrido pasaba.)
+  if [ "$pasaron" -eq 0 ]; then
     # Nada se verifico: cerrar con OK seria la afirmacion mas falsa que este
-    # runner puede emitir — verde entero sin haber probado nada.
-    echo "tests/run.sh: UNKNOWN — $unknown de $corridos tests no pudieron verificar nada." >&2
+    # runner puede emitir — verde entero sin haber probado nada. El conteo
+    # incluye los SKIP (sin ejecutor): nadie los corre, y eso tambien es no
+    # haber verificado (18.16).
+    echo "tests/run.sh: UNKNOWN — $unknown sin verificar de $corridos corridos (incluye los SKIP sin ejecutor)." >&2
     echo "              No se afirma que el repo este sano: no se pudo mirar." >&2
     exit "$SAIKIT_EXIT_UNKNOWN_RUNNER"
   fi

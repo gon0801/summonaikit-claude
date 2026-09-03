@@ -1984,11 +1984,11 @@ host_kimi >/dev/null 2>&1
 # El DoD las discrimina por separado a proposito: un fix que arregle SOLO la
 # regex (a) deja rota la forma multilinea (b) y pasa igual un gate que solo
 # mire la forma kimi. Acreditacion declarada: estos casos acreditan en macOS
-# (el awk BSD es el que rompe); en el CI Linux test_install_hook se saltea
-# (tests/run.sh con SAIKIT_CI_LINUX=1). Que el gawk de Linux acepte las dos
-# formas viejas es PREMISA NO MEDIDA (no hay ejecutor gawk en este proyecto;
-# el PR la declara unknown): lo unico sostenido aca es el skip del CI, asi
-# que en Linux-CI estos casos directamente no corren.
+# (el awk BSD es el que rompe); desde la 18.16 test_install_hook CORRE en el
+# CI Linux (el skip de SAIKIT_CI_LINUX ya no existe). Que el gawk de Linux
+# acepte las dos formas viejas es PREMISA NO MEDIDA en esta rama (no hay
+# ejecutor gawk a mano; el CI la medira): lo unico sostenido aca es lo que
+# esta bateria observa en el host que la corre.
 #
 # Forma kimi: inyectar vacio con el router REAL (la fila de kimi es vacia,
 # 12.3: el host no acepta ruteo por agente).
