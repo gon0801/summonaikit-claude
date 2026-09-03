@@ -1,0 +1,10 @@
+{
+  "sha": "01f452500a15626eb07d67c7ab0b115a686e12ba",
+  "pr": 157,
+  "verifier": "PASS",
+  "verify_app": { "resultado": "PASS", "comando": null },
+  "blast": "n/a",
+  "adversary": "n/a",
+  "reviewer": "clean",
+  "decisiones": ".saikit/decisiones/18.16.tsv"
+}
