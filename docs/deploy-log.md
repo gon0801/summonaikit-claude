@@ -7,6 +7,31 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PRs #160 y #163 (protocolo de entrega + fila 18.18) — deploy REPARA el vivo
+
+- **Qué se mergeó:** #160 (`AGENTS.md` gana la sección "Protocolo de entrega":
+  los tres estados, tope de cross-review, "no mergees", y que el número de fila
+  no va como scope del commit — medido, ninguna de esas cuatro estaba escrita) y
+  #163 (fila 18.18: la declaración `VERIFIED BY SUBAGENT` no acredita en canal
+  ciego, hallada en vivo en el turno zcode que cerraba la 18.6). Docs-only las
+  dos; ninguna toca `hooks/summonaikit-harness.sh`.
+- **El deploy NO fue no-op pese a eso:** `install-hook.sh` reportó **REPARADO —
+  el destino era nuestro y difiere de la fuente**, con backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260903-204302.bak`.
+  El vivo había derivado porque la ola paralela de las filas 18.5/18.6/18.7/18.17
+  compartió un solo checkout y una rama en curso quedó instalada en el perfil
+  real. Tras el deploy, vivo == `origin/master`.
+- **`check-hook-registration.sh`:** exit 0, silencio.
+- **Auditoría del ledger (paso 4):** `audita-ledger` OK — ninguna fila en
+  `cc:TODO` con trabajo ya mergeado.
+- **Lección de proceso registrada:** la ola paralela partió los ARCHIVOS pero no
+  los DIRECTORIOS de trabajo. Los cuatro diffs salieron disjuntos y los cuatro PR
+  `MERGEABLE`, pero el reflog del checkout principal rebotó ocho veces entre dos
+  ramas y el rastro de la 18.6 (`.saikit/decisiones/18.6.tsv`) registra que su WIP
+  se perdió dos veces. El aislamiento correcto es un `git worktree` por
+  implementador.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-03 — PR #157 / Task 18.16 (los cuatro tests que quedaban sin ejecutor) — deploy NO-OP
 
 - **Qué se mergeó:** merge `ffd90a0`, CI 9/9 (run 33820109339). Los tres tests
