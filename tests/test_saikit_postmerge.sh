@@ -111,6 +111,7 @@ TGEOF
   : > "$SAIKIT_TG_LOG"
   export SAIKIT_CURL_CODIGO=200 SAIKIT_CURL_RC=0 SAIKIT_TG_RC=0
   export SAIKIT_POSTMERGE_TIMEOUT_SEG=0 SAIKIT_POSTMERGE_SALUD_SEG=2
+  unset SAIKIT_CURL_BIN SAIKIT_TELEGRAM_BIN
   export PATH="$SB/bin:$PATH"
   printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
 }
@@ -246,6 +247,103 @@ caso "telegram_true_invoca_con_el_mensaje"
 }
 fin_caso "telegram_true_invoca_con_el_mensaje"
 
+caso "flag_sin_valor_sale_2_no_gira (cross-review kimi)"
+{
+  OUT="$(timeout 5 bash "$POST" --merge-commit 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _contiene "exige el valor" "$OUT" "exige un valor"
+}
+fin_caso "flag_sin_valor_sale_2_no_gira (cross-review kimi)"
+
+caso "sha_corto_se_normaliza_a_completo (cross-review grok)"
+{
+  corto="$(git rev-parse --short HEAD)"
+  [ "$corto" != "$MC" ] || _mal "precondicion: el corto deberia diferir del completo"
+  OUT="$(bash "$POST" --merge-commit "$corto" --rama master 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "dice VERDE" "$OUT" "VERDE:"
+  _no_contiene "sin falso no-es-punta" "$OUT" "ya no es la punta"
+}
+fin_caso "sha_corto_se_normaliza_a_completo (cross-review grok)"
+
+caso "sin_rama_se_deriva_de_origin_contains (cross-review grok)"
+{
+  # El uso desarmado tipico corre desde la rama del PR: sin --rama el script
+  # deriva la base de las ramas remotas que contienen al commit.
+  git checkout -q -b feat/otra 2>/dev/null
+  OUT="$(bash "$POST" --merge-commit "$MC" 2>&1)"
+  RC=$?
+  git checkout -q master
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "derivo la base" "$OUT" "origin/master"
+}
+fin_caso "sin_rama_se_deriva_de_origin_contains (cross-review grok)"
+
+caso "rojo_con_pendiente_avisa_rojo_igual (cross-review grok, alta)"
+{
+  # Un failure concluido con otro run aun corriendo: el veredicto es ROJO,
+  # no UNKNOWN. Antes el pendiente tapaba el rojo y no salia PARA REVERTIR.
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"quality"},{"event":"push","status":"in_progress","conclusion":null,"workflow":"suite"}]' > "$SB/ghfix/runs.json"
+  antes="$(arbol_huella)"
+  correr
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "dice ROJO" "$OUT" "ROJO:"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+  _contiene "menciona lo pendiente" "$OUT" "pendiente"
+  despues="$(arbol_huella)"
+  [ "$antes" = "$despues" ] || _mal "el arbol cambio pese a que solo debia avisar"
+}
+fin_caso "rojo_con_pendiente_avisa_rojo_igual (cross-review grok, alta)"
+
+caso "rojo_sin_curl_avisa_igual_con_salud_no_observable (cross-review kimi)"
+{
+  CASO_ROJO=0; sb_reset "https://api.example.com/salud" false
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  export SAIKIT_CURL_BIN=curl-que-no-existe
+  correr
+  unset SAIKIT_CURL_BIN
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "dice ROJO" "$OUT" "ROJO:"
+  _contiene "declara la salud no observable" "$OUT" "no observable"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+}
+fin_caso "rojo_sin_curl_avisa_igual_con_salud_no_observable (cross-review kimi)"
+
+caso "gh_se_llama_con_limite_alto (cross-review kimi)"
+{
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "pide mas que el default 20" "$(cat "$SAIKIT_GH_LOG")" "--limit 100"
+}
+fin_caso "gh_se_llama_con_limite_alto (cross-review kimi)"
+
+caso "secreto_en_salud_sale_redactado_en_stdout_y_telegram (cross-review kimi+grok)"
+{
+  CASO_ROJO=0; sb_reset "https://usr:clave-ejemplo@example.com/salud" true
+  export SAIKIT_CURL_CODIGO=500
+  correr
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "stdout redacta" "$OUT" "[REDACTED]"
+  _no_contiene "stdout sin el secreto" "$OUT" "clave-ejemplo"
+  [ -s "$SAIKIT_TG_LOG" ] || _mal "con telegram:true no invoco telegram-send"
+  _contiene "telegram redacta" "$(cat "$SAIKIT_TG_LOG")" "[REDACTED]"
+  _no_contiene "telegram sin el secreto" "$(cat "$SAIKIT_TG_LOG")" "clave-ejemplo"
+}
+fin_caso "secreto_en_salud_sale_redactado_en_stdout_y_telegram (cross-review kimi+grok)"
+
+caso "telegram_sin_cli_declara_pendiente_a_mano (cross-review grok)"
+{
+  CASO_ROJO=0; sb_reset "" true
+  export SAIKIT_TELEGRAM_BIN=tg-que-no-existe
+  correr
+  unset SAIKIT_TELEGRAM_BIN
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "declara pendiente a mano" "$OUT" "pendiente a mano"
+}
+fin_caso "telegram_sin_cli_declara_pendiente_a_mano (cross-review grok)"
+
 caso "mensaje_rojo_cabe_en_4096_y_va_redactado"
 {
   printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
@@ -319,6 +417,49 @@ c_telegram_off() {
   [ ! -s "$SAIKIT_TG_LOG" ] || _mal "con telegram:false invoco telegram-send"
 }
 
+c_flag_post() {
+  CASO_ROJO=0; sb_reset
+  OUT="$(timeout 5 bash "$POST" --merge-commit 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+}
+
+c_corto() {
+  CASO_ROJO=0; sb_reset
+  corto="$(git rev-parse --short HEAD)"
+  OUT="$(bash "$POST" --merge-commit "$corto" --rama master 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _no_contiene "sin falso no-es-punta" "$OUT" "ya no es la punta"
+}
+
+c_mezcla() {
+  CASO_ROJO=0; sb_reset
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"quality"},{"event":"push","status":"in_progress","conclusion":null,"workflow":"suite"}]' > "$SB/ghfix/runs.json"
+  correr
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+}
+
+c_rojo_sin_curl() {
+  CASO_ROJO=0; sb_reset "https://api.example.com/salud" false
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  export SAIKIT_CURL_BIN=curl-que-no-existe
+  correr
+  unset SAIKIT_CURL_BIN
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+}
+
+c_secreto() {
+  CASO_ROJO=0; sb_reset "https://usr:clave-ejemplo@example.com/salud" true
+  export SAIKIT_CURL_CODIGO=500
+  correr
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _no_contiene "stdout sin el secreto" "$OUT" "clave-ejemplo"
+  _no_contiene "telegram sin el secreto" "$(cat "$SAIKIT_TG_LOG")" "clave-ejemplo"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
@@ -326,6 +467,12 @@ done <<'MUTS'
 trailer_no_se_exige	s|grep -Fq 'Saikit-Merge:'|true|	c_sin_trailer
 punta_no_se_exige	s|\[ "\$PUNTA" = "\$MC" \]|true|	c_no_punta
 telegram_sin_gate	s|if \[ "\$TG" = "true" \]; then|if true; then|	c_telegram_off
+flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_post
+mc_sin_normalizar	s|MC="\$(git rev-parse "\$MC" 2>/dev/null)"|MC="$MC"|	c_corto
+rojo_pierde_con_pendiente	s|if \[ -n "\$rojos" \]; then|if false; then|	c_mezcla
+salud_traga_rojo	s|if \[ -n "\$ROJO_MOTIVO" \]; then|if false; then|	c_rojo_sin_curl
+aviso_sin_redactar	s|texto="\$(redactar "\$texto")"|texto="$texto"|	c_secreto
+telegram_sin_redactar	s|TG_MSG="\$(redactar "\$MENSAJE")"|TG_MSG="$MENSAJE"|	c_secreto
 MUTS
 
 if [ "$fail" -ne 0 ]; then

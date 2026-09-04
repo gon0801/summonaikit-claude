@@ -46,9 +46,18 @@ MAX_MENSAJE=4096
 MC=""; RAMA=""; PR=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --merge-commit) MC="${2:-}"; shift 2 ;;
-    --rama)         RAMA="${2:-}"; shift 2 ;;
-    --pr)           PR="${2:-}"; shift 2 ;;
+    --merge-commit|--rama|--pr)
+      # Mismo bug de la Task 0.4 que en el setup (cross-review kimi): un flag
+      # con valor EXIGE el valor, o el while gira para siempre (rc=124).
+      if [ $# -lt 2 ]; then
+        printf 'saikit-postmerge: %s exige un valor\n' "$1" >&2; exit 2
+      fi
+      case "$1" in
+        --merge-commit) MC="$2" ;;
+        --rama)         RAMA="$2" ;;
+        --pr)           PR="$2" ;;
+      esac
+      shift 2 ;;
     -h|--help)      sed -n '2,40p' "$0"; exit 0 ;;
     *) printf 'saikit-postmerge: opcion desconocida: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -59,9 +68,18 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
   || { printf 'saikit-postmerge: el cwd no es un repo git\n' >&2; exit 2; }
 cd "$ROOT" || exit 2
 if [ -z "$RAMA" ]; then
-  RAMA="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" \
-    || { printf 'saikit-postmerge: no se pudo derivar la rama; pasa --rama\n' >&2; exit 2; }
-  [ "$RAMA" != "HEAD" ] || { printf 'saikit-postmerge: HEAD detached; pasa --rama\n' >&2; exit 2; }
+  # Sin --rama no se usa HEAD a ciegas (cross-review grok): tras el merge el
+  # cwd suele seguir en la rama del PR y el merge_commit vive en la base, lo
+  # que daba un falso "ya no es la punta". Se deriva de las ramas remotas que
+  # contienen al commit; si no hay exactamente una, se pide explicito.
+  ramas_mc="$(git branch -r --contains "$MC" 2>/dev/null | sed 's/^ *//' | grep -v -- '->' | grep '^origin/' | sed 's|^origin/||' | sort -u)"
+  n_ramas="$(printf '%s\n' "$ramas_mc" | grep -c .)"
+  if [ "$n_ramas" -eq 1 ]; then
+    RAMA="$ramas_mc"
+  else
+    printf 'saikit-postmerge: no se pudo derivar --rama del commit %s (candidatas: %s); pasalo explicito\n' "$MC" "${ramas_mc:-ninguna}" >&2
+    exit 2
+  fi
 fi
 ORIGEN="origin/$RAMA"
 
@@ -89,6 +107,10 @@ TG="$(saikit_json_get "$CFG_RAW" telegram)" || TG="false"
 # ------------------------------------------------- el commit es nuestro?
 git cat-file -e "$MC" 2>/dev/null \
   || { printf 'saikit-postmerge: el merge_commit %s no existe en este repo\n' "$MC" >&2; exit 2; }
+# Normalizar a sha completo (cross-review grok): un sha corto pasa cat-file y
+# el trailer, pero nunca iguala la punta de 40 y miente "ya no es la punta".
+MC="$(git rev-parse "$MC" 2>/dev/null)" \
+  || { printf 'saikit-postmerge: no se pudo resolver %s a sha completo\n' "$MC" >&2; exit 2; }
 if ! git log -1 --format=%B "$MC" 2>/dev/null | grep -Fq 'Saikit-Merge:'; then
   aviso AVISO "el commit $MC no trae el trailer 'Saikit-Merge:': no es un merge del autopilot. No se ofrece revert; si hay que deshacerlo, a mano y con criterio."
   exit 2
@@ -104,7 +126,11 @@ PUNTA="$(git rev-parse "$ORIGEN" 2>/dev/null)" \
 RUNS_RAW=""
 esperado_fin=$(( $(date +%s) + TIMEOUT_SEG ))
 while :; do
-  RUNS_RAW="$(gh run list --commit "$MC" --json status,conclusion 2>/dev/null)" \
+  # --limit 100, no el default 20 de gh (cross-review kimi): con mas de 20
+  # runs sobre el commit, el corte silencioso podia esconder un rojo o un
+  # pendiente y dar VERDE falso. Techo declarado: mas de 100 runs sobre un
+  # mismo commit excede lo que este aviso mira.
+  RUNS_RAW="$(gh run list --commit "$MC" --json status,conclusion --limit 100 2>/dev/null)" \
     || { aviso UNKNOWN "gh run list fallo para $MC; sin el run no se observa nada"; exit 3; }
   saikit_json_valido "$RUNS_RAW" \
     || { aviso UNKNOWN "gh run list devolvio algo que no es JSON"; exit 3; }
@@ -134,31 +160,60 @@ if [ "$n" -eq 0 ]; then
   aviso UNKNOWN "sin run aun para $MC en $ORIGEN: el CI todavia no arranca o el commit no disparo workflow. Vuelve a mirar en unos minutos con: tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
   exit 3
 fi
-if [ "$pendientes" -gt 0 ]; then
+# Un rojo conocido gana a lo pendiente (cross-review grok, alta): con un
+# failure ya concluido el veredicto es ROJO aunque otro run siga corriendo;
+# esperar al pendiente solo retrasaba el aviso y, peor, el UNKNOWN tapaba el
+# rojo y no imprimia PARA REVERTIR. Lo pendiente se menciona en el texto.
+if [ -n "$rojos" ]; then
+  ROJO_MOTIVO="CI rojo en $MC:$rojos"
+  [ "$pendientes" -eq 0 ] || ROJO_MOTIVO="$ROJO_MOTIVO (mas $pendientes run(s) aun pendientes)"
+elif [ "$pendientes" -gt 0 ]; then
   aviso UNKNOWN "CI pendiente para $MC ($pendientes run(s) sin concluir). Vuelve a mirar con: tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
   exit 3
 fi
-[ -z "$rojos" ] || ROJO_MOTIVO="CI rojo en $MC:$rojos"
 
 # ------------------------------------------------- salud
+# Costuras de test (precedente SAIKIT_INSTALL_TOOL): el binario real se puede
+# sustituir por falso o por un nombre inexistente para simular ausencia.
+CURL_BIN="${SAIKIT_CURL_BIN:-curl}"
 SALUD_TXT="sin URL de salud en la config (n/a)"
+salud_medir=0
 if [ "$SALUD" != "<null>" ] && [ -n "$SALUD" ]; then
   case "$SALUD" in
-    http://*|https://*) ;;
-    *) printf 'saikit-postmerge: salud_url con esquema no http(s): %s\n' "$SALUD" >&2; exit 2 ;;
+    http://*|https://*) salud_medir=1 ;;
+    *) # Esquema roto con ROJO ya conocido: se reporta ROJO con la salud sin
+       # evaluar (cross-review kimi+grok); sin ROJO es config rota (exit 2).
+       if [ -n "$ROJO_MOTIVO" ]; then
+         SALUD_TXT="salud no evaluable (esquema no http(s) en la config)"
+       else
+         printf 'saikit-postmerge: salud_url con esquema no http(s): %s\n' "$SALUD" >&2; exit 2
+       fi ;;
   esac
-  command -v curl >/dev/null 2>&1 \
-    || { aviso UNKNOWN "hay salud_url pero no hay curl en este host: la salud no es observable"; exit 3; }
-  codigo="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SALUD_SEG" -- "$SALUD" 2>/dev/null)"
-  rc_curl=$?
-  if [ "$rc_curl" -ne 0 ]; then
-    ROJO_MOTIVO="${ROJO_MOTIVO:+$ROJO_MOTIVO; }la salud no responde (curl rc=$rc_curl)"
-    SALUD_TXT="salud CAIDA (curl rc=$rc_curl)"
-  elif printf '%s' "$codigo" | grep -Eq '^2'; then
-    SALUD_TXT="salud ok (http $codigo)"
+fi
+if [ "$salud_medir" -eq 1 ]; then
+  if ! command -v "$CURL_BIN" >/dev/null 2>&1; then
+    # Sin curl con ROJO ya conocido: ROJO igual, la salud queda como no
+    # observable en el texto (cross-review kimi). Sin ROJO es unknown.
+    if [ -n "$ROJO_MOTIVO" ]; then
+      SALUD_TXT="salud no observable (sin $CURL_BIN en este host)"
+    else
+      aviso UNKNOWN "hay salud_url pero no hay $CURL_BIN en este host: la salud no es observable"; exit 3
+    fi
   else
-    ROJO_MOTIVO="${ROJO_MOTIVO:+$ROJO_MOTIVO; }la salud devolvio http $codigo"
-    SALUD_TXT="salud CAIDA (http $codigo)"
+    codigo="$("$CURL_BIN" -sS -o /dev/null -w '%{http_code}' --max-time "$SALUD_SEG" -- "$SALUD" 2>/dev/null)"
+    rc_curl=$?
+    # La URL viaja CRUDA en el texto y la redaccion la pone aviso()/TG_MSG
+    # (cross-review kimi+grok): asi el operador ve QUE url cayo sin que unas
+    # credenciales embebidas (user:pass@) fuguen al aviso ni a telegram.
+    if [ "$rc_curl" -ne 0 ]; then
+      ROJO_MOTIVO="${ROJO_MOTIVO:+$ROJO_MOTIVO; }la salud no responde (curl rc=$rc_curl)"
+      SALUD_TXT="salud CAIDA (curl rc=$rc_curl en $SALUD)"
+    elif printf '%s' "$codigo" | grep -Eq '^2'; then
+      SALUD_TXT="salud ok (http $codigo en $SALUD)"
+    else
+      ROJO_MOTIVO="${ROJO_MOTIVO:+$ROJO_MOTIVO; }la salud devolvio http $codigo"
+      SALUD_TXT="salud CAIDA (http $codigo en $SALUD)"
+    fi
   fi
 fi
 
@@ -183,12 +238,21 @@ else
 fi
 
 # ------------------------------------------------- telegram (solo opt-in)
+# TG_BIN con default al nombre real (costura de test, igual que CURL_BIN).
+TG_BIN="${SAIKIT_TELEGRAM_BIN:-telegram-send}"
 if [ "$TG" = "true" ]; then
-  if command -v telegram-send >/dev/null 2>&1; then
-    telegram-send "${MENSAJE:0:$MAX_MENSAJE}" >/dev/null 2>&1 \
-      || printf 'TELEGRAM-FALLO: telegram-send no pudo enviar (el aviso de arriba sigue valiendo)\n'
+  # El mensaje viaja REDACTADO tambien a telegram (cross-review kimi): antes
+  # se enviaba MENSAJE crudo mientras stdout si iba redactado.
+  TG_MSG="$(redactar "$MENSAJE")"
+  TG_MSG="${TG_MSG:0:$((MAX_MENSAJE - 16))}"
+  if command -v "$TG_BIN" >/dev/null 2>&1; then
+    "$TG_BIN" "$TG_MSG" >/dev/null 2>&1 \
+      || printf 'TELEGRAM-FALLO: %s no pudo enviar (el aviso de arriba sigue valiendo)\n' "$TG_BIN"
   else
-    printf 'TELEGRAM: pendiente a mano (telegram: true pero telegram-send no esta en el PATH)\n'
+    # Sin CLI no hay transporte: la skill telegram-send vive en el agente, no
+    # en el PATH (cross-review grok). Se declara pendiente a mano con el
+    # rc del veredicto intacto, no se finge el envio.
+    printf 'TELEGRAM: pendiente a mano (telegram: true pero %s no esta en el PATH; copia el aviso de arriba con la skill telegram-send)\n' "$TG_BIN"
   fi
 fi
 exit "$rc"
