@@ -680,7 +680,7 @@ fi
 mut_advlock_gitignore_neutralizado() { sed 's/^adv_ensure_gitignore() {$/adv_ensure_gitignore() {\n  return 0/'; }
 mut_advlock_violacion_ciega()        { sed 's/^adv_registrar_violacion() {$/adv_registrar_violacion() {\n  return 0/'; }
 mut_advlock_secreto_ciego()          { sed 's/^adv_chequear_secretos() {$/adv_chequear_secretos() {\n  return 0/'; }
-mut_advlock_epoca_no_se_inicializa() { sed 's/"\$adv_epoch_armado" "" "" ""$/"ADV-MUT" "" "" ""/'; }
+mut_advlock_epoca_no_se_inicializa() { sed 's/"\$adv_epoch_armado" "" "" "" "" "\$autopilot"$/"ADV-MUT" "" "" "" "" "$autopilot"/'; }
 mut_advlock_prefijo_roto()           { sed 's|"\$ADV_FINDINGS_DIR"/\*)|*)|'; }
 mut_advlock_bash_ciego()             { sed 's/^adv_guard_bash() {$/adv_guard_bash() {\n  return 0/'; }
 # Fixes del cross-review r2 del PR #65: revertir la resolucion FISICA de paths
