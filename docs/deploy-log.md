@@ -13,6 +13,9 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   propio (`tests/run.sh`), que el carril de evento ya aceptaba y éste no. Antes
   del fix, en un host ciego **ningún comando que fuera la verificación real de
   este repo podía acreditar**: el mecanismo era inusable en su propio repo.
+- **SHA del despliegue:** merge `762dcdd`, head desplegado `f538a4b`, CI 9/9
+  (run 33852389037). Hook vivo tras el deploy: `sha256` idéntico al de
+  `origin/master`, verificado por `install-hook.sh` en su segunda corrida.
 - **Deploy:** `install-hook.sh` → REPARADO con backup en
   `…saikit-backups/summonaikit-harness.sh.nuestro.20260904-011944.bak`.
   `check-hook-registration.sh` exit 0. `audita-ledger` OK.
