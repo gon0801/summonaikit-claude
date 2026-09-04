@@ -252,6 +252,17 @@ zcode_bash_win() {
   if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && command -v cygpath >/dev/null 2>&1; then
     bw="$(cygpath -w "$b" 2>/dev/null)" && [ -n "$bw" ] && { printf '%s' "$bw"; return 0; }
   fi
+  # Task 18.16: en POSIX (Darwin/Linux) no hay cygpath ni bash.exe de Git.
+  # El bash real del PATH es la forma registrable, igual que en install-hook
+  # (18.15). NUNCA caer aca en MSYS: cygpath ya cubrio arriba, y /usr/bin/bash
+  # virtual de MSYS sigue prohibido (R2.5).
+  if ! command -v cygpath >/dev/null 2>&1; then
+    if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
+      case "$b" in
+        /*) printf '%s' "$b"; return 0 ;;
+      esac
+    fi
+  fi
   return 1
 }
 
@@ -274,7 +285,7 @@ zcode_install() {
     echo "                  No lo creo de cero: el operador ya tiene uno." >&2
     exit 2; }
   bash_win="$(zcode_bash_win)" || {
-    echo "capture-payloads: no encontre un bash.exe de Windows para registrar el hook" >&2
+    echo "capture-payloads: no encontre un bash para el command (bash.exe en Windows, bash en POSIX)" >&2
     exit 2; }
 
   umask 077
@@ -479,9 +490,14 @@ grok_json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 #     operator: `& "<bash.exe>" "<script>" args`.
 # --only-cwd contiene por si el trust del folder sobrevive a la captura: fuera
 # del descartable el hook calla.
+# Task 18.16: en POSIX el shell de hooks NO es PowerShell — el `&` es operador
+# de PS y rompe; la forma es '"<bash>" "<script>" args' (sin call operator),
+# la misma decision que 18.15 tomo para install-hook.
 grok_hook_cmd() {  # $1=bash_win  $2=tag
-  printf '& "%s" "%s" --saikit-capture-id 7.1 --only-cwd "%s" --capture-dir "%s" --tag %s' \
-    "$1" "$capturador" "$destino_real" "$destino_real/capturas" "$2"
+  local call
+  if command -v cygpath >/dev/null 2>&1; then call='& '; else call=''; fi
+  printf '%s"%s" "%s" --saikit-capture-id 7.1 --only-cwd "%s" --capture-dir "%s" --tag %s' \
+    "$call" "$1" "$capturador" "$destino_real" "$destino_real/capturas" "$2"
 }
 
 grok_install() {
@@ -489,7 +505,7 @@ grok_install() {
   json="$(grok_json_path)"
   marca="$(grok_marca)"
   bash_win="$(zcode_bash_win)" || {
-    echo "capture-payloads: no encontre un bash.exe de Windows para registrar el hook" >&2
+    echo "capture-payloads: no encontre un bash para el command (bash.exe en Windows, bash en POSIX)" >&2
     exit 2; }
   if [ -e "$json" ] && ! grep -q -- '--saikit-capture-id 7.1' "$json" 2>/dev/null; then
     echo "capture-payloads: $json existe y no lo escribi yo — no lo toco." >&2

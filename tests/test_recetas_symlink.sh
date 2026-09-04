@@ -3,8 +3,9 @@
 # archivo PROPIO que corre en el CI de Linux.
 #
 # Por que un archivo aparte (cross-review, hilo "la cobertura no corre en ningun
-# gate"): tests/test_install_hook.sh es Windows-bound y el CI Linux lo saltea
-# ENTERO con SAIKIT_CI_LINUX=1, y este host Windows no crea symlinks reales (ln
+# gate"): test_install_hook.sh nacio Windows-bound y el CI Linux lo salteaba
+# ENTERO (SAIKIT_CI_LINUX=1, retirado en 18.16), y este host Windows no crea
+# symlinks reales (ln
 # -s hace una copia), asi que los casos de symlink de ese archivo eran inertes en
 # los DOS gates: no corrian en CI y aca daban SKIP. Este archivo NO esta en la
 # lista de saltos Windows-bound (tests/run.sh la declara por nombre), asi que el

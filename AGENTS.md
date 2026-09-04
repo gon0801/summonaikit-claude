@@ -67,9 +67,11 @@ locales serializadas por el candado.
    cierre en Plans.md cita ese run de Actions donde antes citaba la corrida
    local. La suite completa local queda como opcion (medir la forma Windows
    entera), no como requisito.
-3. **Excepcion Windows-bound:** si el cambio toca lo que el CI saltea con
-   `SAIKIT_CI_LINUX=1` (install/capture/probe/hook-acl — el runner los NOMBRA
-   en su output), correr ESOS archivos de test sueltos en local, ademas del CI.
+3. **Excepcion Windows-bound (hoy vacia):** hasta la 18.16 el CI salteaba
+   cuatro tests con `SAIKIT_CI_LINUX=1`; esos tres tools ya corren en POSIX y
+   `test_hook_acl` fue retirado (su objeto eran ACLs/SIDs de Windows). Si algun
+   dia vuelve a haber un test que el CI no corre (SKIP sin ejecutor — el runner
+   lo NOMBRA en su output), correr ESE archivo suelto en local, ademas del CI.
 4. **Candado de una-sola-suite** (sesiones paralelas): aplica a corridas
    locales pesadas. Antes de declarar "ocupado", distinguir corredor REAL de
    huerfano: fecha de inicio del proceso y que el arbol de su command line

@@ -123,9 +123,6 @@ jobs:
       - name: Run the gate suite — fast half (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
-          # Task 10.5: marca los 4 tests Windows-bound como SKIP CON LISTADO
-          # (los nombra el runner uno por uno; razones en Plans.md, fila 10.5).
-          SAIKIT_CI_LINUX: '1'
           SAIKIT_PARTICION: rapidos
         run: bash tests/run.sh
 
@@ -142,7 +139,6 @@ jobs:
       - name: Run the gate suite — slow half, shard ${{ matrix.shard }} (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
-          SAIKIT_CI_LINUX: '1'
           SAIKIT_PARTICION: lentos
           SAIKIT_MUT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
