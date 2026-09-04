@@ -326,6 +326,99 @@ caso "contrato_json_valido_con_escapes_sigue_valido"
 }
 fin_caso "contrato_json_valido_con_escapes_sigue_valido"
 
+# ---------------------------------- Task 18.17: blast omitido (la trampa D13)
+# El PR #157 sello un veredicto real con `"blast": "n/a"` (escalar, por analogia
+# con adversary). El perfil documentaba SOLO la triada, el validador exigia SOLO
+# la triada, y un turno sin blast no tenia forma valida de decirlo. Diseno
+# cerrado: blast es XOR de dos formas — la triada {nivel,hecho,comando} o
+# {"omitido": "<razon no vacia>"}. El escalar "n/a" sigue INVALIDO: un blast
+# que no corrio se declara con su razon, no con un placeholder.
+vjson_blast() {  # fixture con el sha = HEAD y el blast que venga en $1 (JSON crudo)
+  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":null},"blast":%s,"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" "$1"
+}
+
+caso "contrato_pr157_blast_na_invalido"
+{
+  # El veredicto REAL del PR #157 (.saikit/veredictos/f5d06916….json), con el
+  # sha = HEAD para que lo UNICO en juego sea el blast escalar.
+  printf '{\n  "sha": "%s",\n  "pr": 157,\n  "verifier": "PASS",\n  "verify_app": { "resultado": "PASS", "comando": null },\n  "blast": "n/a",\n  "adversary": "n/a",\n  "reviewer": "findings",\n  "decisiones": ".saikit/decisiones/18.16.tsv"\n}\n' "$HEAD_SHA" > "$tmp/pr157.json"
+  if veredicto_validar "$tmp/pr157.json" "$HEAD_SHA" >/dev/null; then
+    _mal "acepto el veredicto del PR #157 con blast escalar \"n/a\""
+  fi
+  out="$(veredicto_validar "$tmp/pr157.json" "$HEAD_SHA")"
+  _contiene "el motivo nombra el escalar" "$out" "escalar"
+  _contiene "el motivo guia a la forma omitido" "$out" "omitido"
+}
+fin_caso "contrato_pr157_blast_na_invalido"
+
+contrato_blast_con_hecho_sigue_valido() {
+  vjson_blast '{"nivel":4,"hecho":"el drive de la app corre","comando":"npm test -- verify/app.test.cjs"}' > "$tmp/blast-triada.json"
+  if ! veredicto_validar "$tmp/blast-triada.json" "$HEAD_SHA" >/dev/null; then
+    _mal "rechazo la triada nivel/hecho/comando: $(veredicto_validar "$tmp/blast-triada.json" "$HEAD_SHA")"
+  fi
+}
+caso "contrato_blast_con_hecho_sigue_valido"
+contrato_blast_con_hecho_sigue_valido
+fin_caso "contrato_blast_con_hecho_sigue_valido"
+
+contrato_blast_omitido_con_razon_valido() {
+  vjson_blast '{"omitido":"turno de solo revision: no hubo cambio de codigo que blastear"}' > "$tmp/blast-omitido.json"
+  if ! veredicto_validar "$tmp/blast-omitido.json" "$HEAD_SHA" >/dev/null; then
+    _mal "rechazo blast.omitido con razon: $(veredicto_validar "$tmp/blast-omitido.json" "$HEAD_SHA")"
+  fi
+}
+caso "contrato_blast_omitido_con_razon_valido"
+contrato_blast_omitido_con_razon_valido
+fin_caso "contrato_blast_omitido_con_razon_valido"
+
+contrato_blast_na_sin_razon_invalido() {
+  # omitido sin razon real: vacio, solo espacios, null, o el placeholder n/a en
+  # cualquier caja. Cada uno tiene que caer con un motivo que nombre la razon.
+  for b in \
+    '{"omitido":""}' \
+    '{"omitido":"   "}' \
+    '{"omitido":null}' \
+    '{"omitido":"n/a"}' \
+    '{"omitido":" N/A "}' \
+    '{"omitido":"0"}' \
+    '{"omitido":0}' \
+    '{"omitido":"-"}' \
+    '{"omitido":"corta"}' \
+  ; do
+    vjson_blast "$b" > "$tmp/blast-sin-razon.json"
+    if veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA" >/dev/null; then
+      _mal "acepto blast.omitido sin razon: $b"
+    fi
+    out="$(veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA")"
+    _contiene "el motivo pide la razon ($b)" "$out" "razon"
+  done
+}
+caso "contrato_blast_na_sin_razon_invalido"
+contrato_blast_na_sin_razon_invalido
+fin_caso "contrato_blast_na_sin_razon_invalido"
+
+caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
+{
+  for b in \
+    '{"omitido":"razon","nivel":4,"hecho":"h","comando":"c"}' \
+    '{"omitido":"razon","hecho":"h"}' \
+    '{"omitido":"razon","nivel":4}' \
+    '{"omitido":"razon","comando":"c"}' \
+  ; do
+    vjson_blast "$b" > "$tmp/blast-mezcla.json"
+    if veredicto_validar "$tmp/blast-mezcla.json" "$HEAD_SHA" >/dev/null; then
+      _mal "acepto una mezcla de omitido con la triada: $b"
+    fi
+    out="$(veredicto_validar "$tmp/blast-mezcla.json" "$HEAD_SHA")"
+    _contiene "el motivo nombra la mezcla ($b)" "$out" "mezcla"
+  done
+  vjson_blast '{}' > "$tmp/blast-vacio.json"
+  if veredicto_validar "$tmp/blast-vacio.json" "$HEAD_SHA" >/dev/null; then
+    _mal "acepto un blast sin ninguna de las dos formas"
+  fi
+}
+fin_caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
+
 # ------------------------------------------- productor: el PERFIL lo tiene que pedir
 # Leccion pagada en 17.5 y anotada en la fila 18.12: un perfil puede DESCRIBIR un
 # artefacto y no jalarlo nunca (0 invocaciones en 2 turnos vivos). El sello del
@@ -356,7 +449,7 @@ caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
 
   # (c) el esquema completo (D16) — las claves contenedor y las hojas, las
   # mismas que veredicto_validar exige mas arriba.
-  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"'; do
+  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"' '"omitido"'; do
     _contiene "el perfil documenta el campo $campo" "$perfil" "$campo"
   done
 
@@ -365,6 +458,48 @@ caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
   _contiene "el perfil prohibe reescribir el veredicto" "$perfil" 'una sola vez'
 }
 fin_caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
+
+caso "contrato_perfil_vs_validador_campos_blast"
+{
+  # El acople que hubiera atrapado la divergencia del PR #157: el perfil
+  # documentaba una forma de blast y el validador exigia otra, y ninguno de los
+  # dos sabia del otro. Aca las hojas de blast que el perfil muestra en su
+  # seccion del veredicto tienen que ser EXACTAMENTE las que la lib expone
+  # (VEREDICTO_BLAST_TRIADA + VEREDICTO_BLAST_OMITIDO), y esas listas tienen que
+  # ser las que veredicto_validar usa de verdad (fixtures armados desde ellas).
+  _no_vacio "la lib expone VEREDICTO_HOJAS_REQUERIDAS" "${VEREDICTO_HOJAS_REQUERIDAS:-}"
+  _no_vacio "la lib expone VEREDICTO_BLAST_TRIADA" "${VEREDICTO_BLAST_TRIADA:-}"
+  _no_vacio "la lib expone VEREDICTO_BLAST_OMITIDO" "${VEREDICTO_BLAST_OMITIDO:-}"
+
+  seccion="$(sed -n '/^## El veredicto sellado/,/^## Context Policy/p' "$REVIEWER_MD" 2>/dev/null || printf '')"
+  _no_vacio "el perfil tiene la seccion del veredicto sellado" "$seccion"
+
+  perfil_blast="$(printf '%s\n' "$seccion" | grep -o '"blast": *{[^}]*}' | sed 's/^"blast": *{//' | grep -o '"[a-z_]*":' | tr -d '":' | sort -u | tr '\n' ' ')"
+  validador_blast="$(for h in ${VEREDICTO_BLAST_TRIADA:-} ${VEREDICTO_BLAST_OMITIDO:-}; do printf '%s\n' "${h#blast.}"; done | sort -u | tr '\n' ' ')"
+  _igual "las hojas de blast del perfil son las del validador" "$perfil_blast" "$validador_blast"
+  _contiene "el perfil documenta la forma omitido" "$perfil_blast" "omitido"
+  _contiene "el perfil documenta la triada" "$perfil_blast" "hecho"
+  _contiene "el perfil declara INVALIDO el escalar (D13)" "$seccion" '"blast": "n/a"'
+
+  for h in ${VEREDICTO_HOJAS_REQUERIDAS:-}; do
+    _contiene "el perfil documenta la hoja requerida $h" "$seccion" "\"${h##*.}\""
+  done
+
+  # Las listas expuestas son las que el validador USA: un veredicto armado solo
+  # con la triada expuesta pasa, y otro armado solo con la hoja omitido expuesta
+  # pasa. Si la lib renombra una hoja sin tocar la lista, uno de los dos cae.
+  triada_json="$(for h in ${VEREDICTO_BLAST_TRIADA:-}; do printf '"%s":"x",' "${h#blast.}"; done)"
+  vjson_blast "{${triada_json%,}}" > "$tmp/acople-triada.json"
+  if ! veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA" >/dev/null; then
+    _mal "la triada que expone la lib no es la que el validador exige: $(veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA")"
+  fi
+  omitido_json="$(for h in ${VEREDICTO_BLAST_OMITIDO:-}; do printf '"%s":"razon real",' "${h#blast.}"; done)"
+  vjson_blast "{${omitido_json%,}}" > "$tmp/acople-omitido.json"
+  if ! veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA" >/dev/null; then
+    _mal "la hoja omitido que expone la lib no es la que el validador acepta: $(veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA")"
+  fi
+}
+fin_caso "contrato_perfil_vs_validador_campos_blast"
 
 # --------------------------------------------------------- gate: sello del hook
 verdict_reviewer_write_registra_hash() {
@@ -676,6 +811,57 @@ while IFS='|' read -r nombre caso_atrapa; do
   lab_hook_swap "$vivo"
 done <<EOF
 $MUTS_VERDICT
+EOF
+
+# ------------------------------------- mutation-test de la LIB (Task 18.17)
+# La lib no es el hook: se muta el archivo, se RE-CARGA en este shell y se corre
+# el caso que lo atrapa; despues se recarga la lib original. La mutacion quita
+# la exigencia de razon no vacia en blast.omitido: {"omitido":""} y
+# {"omitido":"n/a"} pasarian, que es exactamente el placeholder que la 18.17
+# prohibe.
+LIB_VERDICT="$repo/tools/lib/veredicto_contract.sh"
+# Quita el case de placeholders y el piso de longitud: {"omitido":""} y
+# {"omitido":"n/a"} pasan, que es exactamente lo que la 18.17 prohibe.
+mut_lib_omitido_sin_razon() {
+  awk '
+    /case "\$razon" in/ { skip=1; print "    : # mutacion: sin exigencia de razon"; next }
+    skip && /^    esac$/ { skip=0; next }
+    skip { next }
+    /\[ "\$\{#razon\}" -lt 8 \]/ { skip2=1; next }
+    skip2 && /^    fi$/ { skip2=0; next }
+    skip2 { next }
+    { print }
+  '
+}
+
+MUTS_LIB="omitido_sin_razon|contrato_blast_na_sin_razon_invalido"
+
+while IFS='|' read -r nombre caso_atrapa; do
+  [ -n "$nombre" ] || continue
+  mutado="$tmp/lib-$nombre.sh"
+  "mut_lib_$nombre" < "$LIB_VERDICT" > "$mutado"
+  if cmp -s "$LIB_VERDICT" "$mutado"; then
+    printf '    FAIL: lib %s no cambio nada — el sed quedo obsoleto\n' "$nombre" >&2
+    fail=1
+    continue
+  fi
+  if ! bash -n "$mutado" 2>/dev/null; then
+    printf '    FAIL: lib %s no parsea; asi no prueba nada\n' "$nombre" >&2
+    fail=1
+    continue
+  fi
+  . "$mutado"
+  CASO_ROJO=0
+  "$caso_atrapa" 2>/dev/null
+  . "$LIB_VERDICT"
+  if [ "$CASO_ROJO" -ne 0 ]; then
+    printf '    mutacion lib %s atrapada por %s\n' "$nombre" "$caso_atrapa"
+  else
+    printf '    FAIL: ningun caso detecto la mutacion de la lib [%s]\n' "$nombre" >&2
+    fail=1
+  fi
+done <<EOF
+$MUTS_LIB
 EOF
 
 if [ "$fail" -ne 0 ]; then
