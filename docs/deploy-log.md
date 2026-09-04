@@ -7,6 +7,34 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-04 — PR #174 / Task 18.18 (el label acepta el runner del repo) — deploy REAL
+
+- **Qué se mergeó:** el carril del label pasa a aceptar las formas del runner
+  propio (`tests/run.sh`), que el carril de evento ya aceptaba y éste no. Antes
+  del fix, en un host ciego **ningún comando que fuera la verificación real de
+  este repo podía acreditar**: el mecanismo era inusable en su propio repo.
+- **Deploy:** `install-hook.sh` → REPARADO con backup en
+  `…saikit-backups/summonaikit-harness.sh.nuestro.20260904-011944.bak`.
+  `check-hook-registration.sh` exit 0. `audita-ledger` OK.
+- **Golden:** `--check` OK, 55 escenarios igual, y la identidad **coincide** con
+  el hook vivo — el implementador regrabó después de su último cambio, la regla
+  que la 18.6 rompió y hubo que curar.
+- **De dónde salió esta fila, que es la parte que conviene no olvidar:** dos
+  implementadores reportaron el fallo y el lead los **desmintió dos veces, mal**.
+  La primera redacción de la fila dio por buena una lectura sin medirla; la
+  segunda midió el regex equivocado (`TEST_RUNNER_CMD_RE`, que gobierna el carril
+  de evento) y culpó a `agents_seen`. El carril del label nunca consulta ese
+  regex: usa `SAIKIT_VERIFIED_CMD_RE`. Lo destapó el cross-review de kimi
+  apuntado a las conclusiones del lead, no a la entrega de nadie.
+- **Dos rondas de review del lead sobre la entrega**, las dos por poder
+  discriminante: los casos afirmaban solo el mensaje genérico (las cuatro razones
+  nuevas podían regresar sin poner roja la batería), y las 27 fixtures del label
+  usaban todas `bash` delante (borrar la rama directa del regex pasaba en verde).
+- **Método corregido:** los hallazgos del lead se le pasan al implementador como
+  texto pegable, no como comentario del PR — los implementadores no leen GitHub;
+  el único canal es el operador.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-03 — PR #162 / Task 18.6 (carril `-saikit:autopilot`) — deploy REAL + golden regrabada
 
 - **Qué se mergeó:** el sentinel `-saikit:autopilot` (FULL + `autopilot=1`) y su
