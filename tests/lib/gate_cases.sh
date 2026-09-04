@@ -201,6 +201,36 @@ _RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: p
 # bare "en verde" era subcadena negable y se quito del RESULT_RE).
 _RECIBO_VERIF_SUBAGENTE_NO_EN_VERDE='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, no en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
 
+# 18.18 — el runner PROPIO del repo (tests/run.sh) en el span del label. Es el
+# bug de la fila: el carril del label no aceptaba NINGUNA forma del runner del
+# repo (mientras el carril de evento si), asi que en zcode el verifier corria la
+# bateria real y el gate seguia bloqueando. Comando del vocabulario nuevo +
+# resultado de exito en la MISMA linea: ACREDITA.
+_RECIBO_VERIF_LABEL_RUNNER_PROPIO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# 18.18 (negativo del veto) — mismo comando con resultado FALLIDO: el veto propio
+# del label (exit [1-9]) descalifica aunque el comando sea del vocabulario.
+_RECIBO_VERIF_LABEL_RUNNER_PROPIO_EXIT1='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh exit 1.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# 18.18 (caso discriminante de la guarda de resultado) — comando del vocabulario
+# SIN token de exito y SIN senal de fallo: no acredita porque falta el resultado
+# en el MISMO span. Un caso con resultado FALLIDO no discrimina esa guarda (el
+# veto global corre antes y bloquea igual con o sin guarda) — por eso existe este.
+_RECIBO_VERIF_LABEL_SIN_RESULTADO_SIN_FALLO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh (corrido por el verifier).\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# 18.18 (piezas dispersas, gemelo del label con pytest) — comando en un span,
+# resultado en OTRO: el credito exige el MISMO span.
+_RECIBO_VERIF_LABEL_SPANS_SEPARADOS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh.\n- Review: VERIFIED BY SUBAGENT: exit 0.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# 18.18 (veto global con el runner propio) — un span acreditable y otro con
+# fallo declarado: el veto corre sobre TODOS los spans y descuenta el turno.
+_RECIBO_VERIF_LABEL_EXITO_Y_FALLO_SPANS_DISTINTOS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh exit 0.\n- Review: VERIFIED BY SUBAGENT: pytest exit 1.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
+# 18.18 (mensaje especifico) — comando FUERA del vocabulario con resultado de
+# exito: no acredita Y el feedback tiene que NOMBRAR la condicion (vocabulario),
+# no solo el reclamo generico.
+_RECIBO_VERIF_LABEL_FUERA_DE_VOCABULARIO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tools/audita-ledger.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+
 # (c) credito por piezas DISPERSAS: el label esta VACIO; 'pytest' y 'ok' aparecen
 # en OTRA linea (Review). El predicado evalua SOLO el SPAN del label — con el fix
 # de raiz esto NO acredita (sin rastro); con el predicado sobre el recibo entero
@@ -1324,7 +1354,7 @@ caso_g5_autopilot_parrafo_en_budget_agotado() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_zcode_verif_label_runner_propio_acredita caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita caso_g2_zcode_verif_label_spans_separados_no_acreditan caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1967,6 +1997,99 @@ caso_g2_zcode_verif_subagente_no_en_verde_bloquea() {
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_NO_EN_VERDE")"
   LAB_ZCODE_SESSION_ID=""
   _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — carril del label con el runner PROPIO del repo. El bug: ninguna forma
+# de tests/run.sh estaba en SAIKIT_VERIFIED_CMD_RE, asi que en zcode el verifier
+# corria la bateria real y el gate segui bloqueando (el carril de evento si la
+# acepta). Con las dos ramas nuevas (SAIKIT_VERIFIED_RUNNER_PROPIO_RE) el label
+# comando+resultado en la MISMA linea ACREDITA y el turno CIERRA.
+# Lo atrapa la mutacion verif_label_vocabulario_cerrado (quita SOLO las ramas
+# nuevas y este caso vuelve a bloquear).
+caso_g2_zcode_verif_label_runner_propio_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_RUNNER_PROPIO")"
+  LAB_ZCODE_SESSION_ID=""
+  _igual "exit code" "$LAB_RC" "0"
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — mismo comando con resultado FALLIDO: el veto propio del label
+# (exit [1-9]) descalifica el turno entero. BLOQUEA (el vocabulario nuevo no
+# abre la puerta a un fallo declarado).
+caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_RUNNER_PROPIO_EXIT1")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — comando del vocabulario SIN resultado y SIN fallo: BLOQUEA por falta
+# de resultado en el MISMO span. Es el caso DISCRIMINANTE de la guarda de
+# RESULT_RE (un resultado FALLIDO no discrimina: el veto global bloquea igual
+# con o sin guarda). Lo atrapa verif_label_resulto_opcional.
+caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_SIN_RESULTADO_SIN_FALLO")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — comando en un span y exit 0 en OTRO: piezas dispersas, el credito
+# exige el MISMO span. BLOQUEA (tambien lo atrapa verif_label_resulto_opcional:
+# sin la guarda, el span del comando acredita solo).
+caso_g2_zcode_verif_label_spans_separados_no_acreditan() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_SPANS_SEPARADOS")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — un span acreditable (bash tests/run.sh exit 0) y OTRO con fallo
+# declarado (pytest exit 1): el veto corre sobre TODOS los spans. BLOQUEA.
+# Lo atrapa verif_label_veto_local (ademas de los casos de veto existentes).
+caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_EXITO_Y_FALLO_SPANS_DISTINTOS")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+}
+
+# 18.18 — comando FUERA del vocabulario con resultado de exito: BLOQUEA y el
+# feedback NOMBRA la condicion (comando fuera del vocabulario aceptado) en vez
+# del reclamo generico — el lead ve QUE corregir, no solo que falto.
+# Lo atrapa verif_label_mensaje_generico en su asercion de texto.
+caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice() {
+  LAB_ZCODE_SESSION_ID="sess_z_142"
+  lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
+  lab_run tool auto "$(lab_payload_agent 'implementer')"
+  lab_run tool auto "$(lab_payload_agent 'verifier')"
+  lab_run tool auto "$(lab_payload_agent 'reviewer')"
+  lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_FUERA_DE_VOCABULARIO")"
+  LAB_ZCODE_SESSION_ID=""
+  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+  _contiene "vocabulario" "$LAB_OUT" 'not in the accepted vocabulary'
+  _contiene "vocabulario nombra el runner del repo" "$LAB_OUT" 'tests/run.sh'
 }
 
 # DEFECTO A3, el caso que lo habria atrapado. `cat pytest.log` matchea el

@@ -230,6 +230,18 @@ Cómo se acota, sin aflojar en dónde sí se ve:
    `compileall`, `dotnet build`, `bash -n`, `sh -n`, `node --check`,
    `git diff --check`. Un nombre genérico ("batería", "checks", "lo de siempre")
    NO cuenta — no es re-corrible.
+   **Actualización 18.18:** el vocabulario suma también las DOS formas del
+   runner propio del repo (`tests/run.sh` con verbo shell opcional o invocación
+   directa, segmentos de path estrictos), con la MISMA forma interna que el
+   carril de evento (`TEST_RUNNER_CMD_RE`) pero sin sus anclas de posición —
+   en un span del label el comando viene tras el `: `, no en posición de
+   comando. El vocabulario sigue siendo CERRADO: son las mismas formas que el
+   carril de evento ya acepta (nada de "cualquier .sh"), y el crédito sigue
+   exigiendo resultado de ÉXITO en el MISMO span + veto global de fallos.
+   Además (18.18), cuando el label estuvo presente y no acreditó, el gate
+   nombra la condición incumplida en el reclamo (verifier no despachado / fallo
+   declarado en un span / resultado fuera del span del comando / comando fuera
+   del vocabulario) en vez del mensaje genérico.
 
    **Qué cuenta como RESULTADO (predicado `SAIKIT_VERIFIED_RESULT_RE`).** La
    declaración debe nombrar un resultado de ÉXITO: `exit 0`, `N passed`,
