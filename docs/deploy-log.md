@@ -7,6 +7,26 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #165 / Task 18.17 (blast es XOR entre la triada y omitido) — deploy NO-OP
+
+- **Qué se mergeó:** el hueco que la 18.3 dejó en el esquema del veredicto.
+  `blast` pasa a ser un XOR: la tríada `{nivel, hecho, comando}` cuando corrió,
+  o `{"omitido": "<razón no vacía>"}` cuando no. El escalar `"n/a"` pelado,
+  la razón vacía y la mezcla de las dos formas quedan inválidos.
+- **Deploy:** `install-hook.sh` → **YA AL DÍA** (la fila no toca
+  `hooks/summonaikit-harness.sh`; son perfil, plan, validador y su batería).
+  `check-hook-registration.sh` exit 0.
+- **Auditoría del ledger (paso 4):** OK. Vale la pena anotarlo: los commits
+  originales de qwen usaban `fix(18.17):` como scope, que `audita-ledger.sh`
+  parsea y habría marcado la fila como «trabajo ya mergeado» de forma
+  permanente. Se reescribieron a `fix(veredicto):` con cherry-pick antes de
+  abrir el PR, verificando árbol idéntico. El ledger sale OK **porque** se
+  corrigió; con el scope original estaría en falso positivo desde hoy.
+- **Primera corrida de CI de este trabajo:** la rama de qwen nunca se había
+  subido — el código estuvo terminado en local sin que ninguna batería lo
+  tocara. Al abrir el PR: 9/9 verde a la primera.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-03 — PRs #160 y #163 (protocolo de entrega + fila 18.18) — deploy REPARA el vivo
 
 - **Qué se mergeó:** #160 (`AGENTS.md` gana la sección "Protocolo de entrega":
