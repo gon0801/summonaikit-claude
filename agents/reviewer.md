@@ -123,7 +123,7 @@ El esquema es exacto. `adversary` es el objeto o la cadena `"n/a"` cuando el tur
 }
 ```
 
-Cuando el turno no corrió blast (solo revisión, carril rápido, verifier sin blast), la forma es esta — misma cerca, otro objeto:
+Cuando el turno no corrió blast (solo revisión, carril rápido, verifier sin blast), la forma es este otro bloque:
 
 ```json
 {
@@ -131,14 +131,14 @@ Cuando el turno no corrió blast (solo revisión, carril rápido, verifier sin b
   "pr": 1,
   "verifier": "PASS",
   "verify_app": { "resultado": "n/a", "comando": null },
-  "blast": { "omitido": "<por qué este turno no tuvo blast>" },
+  "blast": { "omitido": "turno de solo revision: el despacho no nombro blast" },
   "adversary": "n/a",
   "reviewer": "clean",
   "decisiones": ".saikit/decisiones/<task>.tsv"
 }
 ```
 
-La razón de `omitido` tiene que ser real: vacía, `null` o `"n/a"` invalida el veredicto, y mezclar `omitido` con cualquiera de `nivel`/`hecho`/`comando` también. **`"blast": "n/a"` es INVÁLIDO** (D13): a diferencia de `adversary`, blast no acepta la cadena suelta — el merge lo rechaza como esquema inválido.
+La razón de `omitido` tiene que ser real: vacía, `null`, `"n/a"`, bool, número o plantilla invalida el veredicto, y mezclar `omitido` con cualquiera de `nivel`/`hecho`/`comando` también. **`"blast": "n/a"` es INVÁLIDO** (D13): a diferencia de `adversary`, blast no acepta la cadena suelta. `omitido` sella y valida el contrato; el merge (D18) sigue exigiendo la triada con `nivel >= 4`, así que un turno sin blast **no mergea** — el omitido cierra la sesión con rastro, no abre el autopilot.
 
 `verifier` y `reviewer` llevan tu juicio, no un deseo: `PASS`/`FAIL` y `clean`/`findings`. Un veredicto con findings abiertos se escribe igual, con `"reviewer": "findings"` — el que decide si eso mergea es el merge, no tú.
 

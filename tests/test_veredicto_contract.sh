@@ -337,8 +337,7 @@ vjson_blast() {  # fixture con el sha = HEAD y el blast que venga en $1 (JSON cr
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":null},"blast":%s,"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" "$1"
 }
 
-caso "contrato_pr157_blast_na_invalido"
-{
+contrato_pr157_blast_na_invalido() {
   # El veredicto REAL del PR #157 (.saikit/veredictos/f5d06916….json), con el
   # sha = HEAD para que lo UNICO en juego sea el blast escalar.
   printf '{\n  "sha": "%s",\n  "pr": 157,\n  "verifier": "PASS",\n  "verify_app": { "resultado": "PASS", "comando": null },\n  "blast": "n/a",\n  "adversary": "n/a",\n  "reviewer": "findings",\n  "decisiones": ".saikit/decisiones/18.16.tsv"\n}\n' "$HEAD_SHA" > "$tmp/pr157.json"
@@ -349,6 +348,8 @@ caso "contrato_pr157_blast_na_invalido"
   _contiene "el motivo nombra el escalar" "$out" "escalar"
   _contiene "el motivo guia a la forma omitido" "$out" "omitido"
 }
+caso "contrato_pr157_blast_na_invalido"
+contrato_pr157_blast_na_invalido
 fin_caso "contrato_pr157_blast_na_invalido"
 
 contrato_blast_con_hecho_sigue_valido() {
@@ -372,8 +373,8 @@ contrato_blast_omitido_con_razon_valido
 fin_caso "contrato_blast_omitido_con_razon_valido"
 
 contrato_blast_na_sin_razon_invalido() {
-  # omitido sin razon real: vacio, solo espacios, null, o el placeholder n/a en
-  # cualquier caja. Cada uno tiene que caer con un motivo que nombre la razon.
+  # omitido sin razon real: vacio, espacios, null, placeholders, bool/numero,
+  # plantilla, escape \\u (el parser no decodifica). Motivo debe nombrar razon.
   for b in \
     '{"omitido":""}' \
     '{"omitido":"   "}' \
@@ -384,26 +385,31 @@ contrato_blast_na_sin_razon_invalido() {
     '{"omitido":0}' \
     '{"omitido":"-"}' \
     '{"omitido":"corta"}' \
+    '{"omitido":true}' \
+    '{"omitido":false}' \
+    '{"omitido":"<por que no hubo blast>"}' \
+    '{"omitido":"\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020"}' \
   ; do
     vjson_blast "$b" > "$tmp/blast-sin-razon.json"
     if veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA" >/dev/null; then
       _mal "acepto blast.omitido sin razon: $b"
     fi
     out="$(veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA")"
-    _contiene "el motivo pide la razon ($b)" "$out" "razon"
+    _contiene "el motivo pide la razon ($b)" "$out" "sin razon"
   done
 }
 caso "contrato_blast_na_sin_razon_invalido"
 contrato_blast_na_sin_razon_invalido
 fin_caso "contrato_blast_na_sin_razon_invalido"
 
-caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
-{
+contrato_blast_mezcla_omitido_y_hecho_invalido() {
   for b in \
-    '{"omitido":"razon","nivel":4,"hecho":"h","comando":"c"}' \
-    '{"omitido":"razon","hecho":"h"}' \
-    '{"omitido":"razon","nivel":4}' \
-    '{"omitido":"razon","comando":"c"}' \
+    '{"omitido":"razon larga ok","nivel":4,"hecho":"h","comando":"c"}' \
+    '{"omitido":"razon larga ok","hecho":"h"}' \
+    '{"omitido":"razon larga ok","nivel":4}' \
+    '{"omitido":"razon larga ok","comando":"c"}' \
+    '{"omitido":"razon larga ok","nivel":{"x":1}}' \
+    '{"omitido":"razon larga ok","nivel":[4]}' \
   ; do
     vjson_blast "$b" > "$tmp/blast-mezcla.json"
     if veredicto_validar "$tmp/blast-mezcla.json" "$HEAD_SHA" >/dev/null; then
@@ -417,6 +423,8 @@ caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
     _mal "acepto un blast sin ninguna de las dos formas"
   fi
 }
+caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
+contrato_blast_mezcla_omitido_y_hecho_invalido
 fin_caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
 
 # ------------------------------------------- productor: el PERFIL lo tiene que pedir
@@ -461,12 +469,10 @@ fin_caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
 
 caso "contrato_perfil_vs_validador_campos_blast"
 {
-  # El acople que hubiera atrapado la divergencia del PR #157: el perfil
-  # documentaba una forma de blast y el validador exigia otra, y ninguno de los
-  # dos sabia del otro. Aca las hojas de blast que el perfil muestra en su
-  # seccion del veredicto tienen que ser EXACTAMENTE las que la lib expone
-  # (VEREDICTO_BLAST_TRIADA + VEREDICTO_BLAST_OMITIDO), y esas listas tienen que
-  # ser las que veredicto_validar usa de verdad (fixtures armados desde ellas).
+  # Candado anti-deriva futura perfil↔validador (las hojas de blast del perfil
+  # tienen que ser EXACTAMENTE VEREDICTO_BLAST_TRIADA + VEREDICTO_BLAST_OMITIDO).
+  # El bug del PR #157 NO era divergencia entre capas: las tres coincidian en
+  # exigir solo la triada. Ese hueco lo atrapa contrato_pr157_blast_na_invalido.
   _no_vacio "la lib expone VEREDICTO_HOJAS_REQUERIDAS" "${VEREDICTO_HOJAS_REQUERIDAS:-}"
   _no_vacio "la lib expone VEREDICTO_BLAST_TRIADA" "${VEREDICTO_BLAST_TRIADA:-}"
   _no_vacio "la lib expone VEREDICTO_BLAST_OMITIDO" "${VEREDICTO_BLAST_OMITIDO:-}"
@@ -480,6 +486,7 @@ caso "contrato_perfil_vs_validador_campos_blast"
   _contiene "el perfil documenta la forma omitido" "$perfil_blast" "omitido"
   _contiene "el perfil documenta la triada" "$perfil_blast" "hecho"
   _contiene "el perfil declara INVALIDO el escalar (D13)" "$seccion" '"blast": "n/a"'
+  _contiene "el perfil declara que omitido no mergea" "$seccion" 'no mergea'
 
   for h in ${VEREDICTO_HOJAS_REQUERIDAS:-}; do
     _contiene "el perfil documenta la hoja requerida $h" "$seccion" "\"${h##*.}\""
@@ -493,7 +500,7 @@ caso "contrato_perfil_vs_validador_campos_blast"
   if ! veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA" >/dev/null; then
     _mal "la triada que expone la lib no es la que el validador exige: $(veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA")"
   fi
-  omitido_json="$(for h in ${VEREDICTO_BLAST_OMITIDO:-}; do printf '"%s":"razon real",' "${h#blast.}"; done)"
+  omitido_json="$(for h in ${VEREDICTO_BLAST_OMITIDO:-}; do printf '"%s":"razon real de omision",' "${h#blast.}"; done)"
   vjson_blast "{${omitido_json%,}}" > "$tmp/acople-omitido.json"
   if ! veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA" >/dev/null; then
     _mal "la hoja omitido que expone la lib no es la que el validador acepta: $(veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA")"
@@ -820,8 +827,7 @@ EOF
 # {"omitido":"n/a"} pasarian, que es exactamente el placeholder que la 18.17
 # prohibe.
 LIB_VERDICT="$repo/tools/lib/veredicto_contract.sh"
-# Quita el case de placeholders y el piso de longitud: {"omitido":""} y
-# {"omitido":"n/a"} pasan, que es exactamente lo que la 18.17 prohibe.
+# Quita el case de placeholders, plantillas, escapes y el piso de longitud.
 mut_lib_omitido_sin_razon() {
   awk '
     /case "\$razon" in/ { skip=1; print "    : # mutacion: sin exigencia de razon"; next }
@@ -833,8 +839,25 @@ mut_lib_omitido_sin_razon() {
     { print }
   '
 }
+# Acepta el escalar blast (deja el if pero sin return 1: cae al fi y sigue).
+mut_lib_blast_escalar_aceptado() {
+  sed '/if veredicto_tiene_hoja "\$flat" blast; then/,/return 1/{
+    /return 1/d
+  }'
+}
+# Acepta mezcla omitido+triada (quita el bloque del for de prefijos).
+mut_lib_blast_mezcla_aceptada() {
+  awk '
+    /for campo in \$VEREDICTO_BLAST_TRIADA; do/ && !seen++ { skip=1; next }
+    skip && /^    done$/ { skip=0; next }
+    skip { next }
+    { print }
+  '
+}
 
-MUTS_LIB="omitido_sin_razon|contrato_blast_na_sin_razon_invalido"
+MUTS_LIB="omitido_sin_razon|contrato_blast_na_sin_razon_invalido
+blast_escalar_aceptado|contrato_pr157_blast_na_invalido
+blast_mezcla_aceptada|contrato_blast_mezcla_omitido_y_hecho_invalido"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

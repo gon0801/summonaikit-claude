@@ -193,12 +193,28 @@ veredicto_tiene_hoja() {
   printf '%s\n' "$1" | awk -F'\t' -v p="$2" '$1 == p { f = 1 } END { exit f ? 0 : 1 }'
 }
 
+# veredicto_tiene_prefijo <flat> <prefijo> — 0 si hay hoja exacta o anidada
+# bajo prefijo. (prefijo. o prefijo[). Cierra mezcla omitido+nivel-objeto.
+veredicto_tiene_prefijo() {
+  printf '%s\n' "$1" | awk -F'\t' -v p="$2" '
+    $1 == p || index($1, p ".") == 1 || index($1, p "[") == 1 { f = 1 }
+    END { exit f ? 0 : 1 }
+  '
+}
+
 # veredicto_validar <archivo> [head]
 #   0 => valido (esquema + sha==head si head viene).
 #   1 => invalido, con un motivo en stdout.
 veredicto_validar() {
   local f="$1" head="${2:-}" txt="" flat="" campo sha razon
+  local IFS=' '
   [ -f "$f" ] || { printf 'no existe el veredicto: %s\n' "$f"; return 1; }
+  # Listas vacias = fail-open (Core Rule 2): un mutante o source raro no
+  # puede dejar el contrato sin dientes.
+  if [ -z "${VEREDICTO_HOJAS_REQUERIDAS:-}" ] || [ -z "${VEREDICTO_BLAST_TRIADA:-}" ] || [ -z "${VEREDICTO_BLAST_OMITIDO:-}" ]; then
+    printf 'contrato incompleto: faltan las listas VEREDICTO_*\n'
+    return 1
+  fi
   txt="$(sed 's/\r$//' "$f")"   # CR de fin de linea (CRLF); un CR a media string lo rechaza el parser
 
   # Parser JSON real: un veredicto que no parsea ES invalido, aunque traiga
@@ -227,20 +243,29 @@ veredicto_validar() {
     return 1
   elif veredicto_tiene_hoja "$flat" "$VEREDICTO_BLAST_OMITIDO"; then
     for campo in $VEREDICTO_BLAST_TRIADA; do
-      if veredicto_tiene_hoja "$flat" "$campo"; then
+      if veredicto_tiene_prefijo "$flat" "$campo"; then
         printf 'blast mezcla omitido con %s: es la triada nivel/hecho/comando O solo omitido\n' "$campo"
         return 1
       fi
     done
-    # Los escapes del flat (\t \n \r) cuentan como blanco para decidir si la
-    # razon esta vacia; la comparacion con placeholders es sin distinguir caja.
-    # Piso de longitud: un "0", "-" o "na" no es rastro (hallazgo del
-    # interrogate: el flat no distingue string de numero).
+    # Los escapes del flat (\t \n \r) cuentan como blanco. Placeholders
+    # (bool/numero/n-a/template) y backslash (\\uXXXX no se decodifica) no
+    # son rastro. Piso de longitud >= 8.
     razon="$(printf '%s\n' "$flat" | awk -F'\t' -v p="$VEREDICTO_BLAST_OMITIDO" '$1 == p { print $2; exit }' \
       | sed 's/\\[tnr]/ /g; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
     case "$razon" in
-      ''|'<null>'|'n/a'|'-'|'na'|'none'|'omitido'|'skip')
+      ''|'<null>'|'n/a'|'-'|'na'|'none'|'omitido'|'skip'|'true'|'false'|'.'|'tbd')
         printf 'blast.omitido sin razon (vacio, null o placeholder): di por que no corrio el blast\n'
+        return 1 ;;
+    esac
+    case "$razon" in
+      '<'*'>')
+        printf 'blast.omitido sin razon (placeholder de plantilla): di por que no corrio el blast\n'
+        return 1 ;;
+    esac
+    case "$razon" in
+      *'\\'*)
+        printf 'blast.omitido sin razon (escape en el valor): di por que no corrio el blast\n'
         return 1 ;;
     esac
     if [ "${#razon}" -lt 8 ]; then

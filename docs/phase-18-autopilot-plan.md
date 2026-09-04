@@ -181,11 +181,15 @@ Campos adicionales que nacen con default: `rama` (default `master`),
 
 **`blast` (Task 18.17):** dos formas excluyentes. La triada `nivel`/`hecho`/`comando`
 cuando el turno corrió un blast; `{ "omitido": "<razón>" }` cuando no lo corrió, con
-la razón no vacía (ni `null`, ni `"n/a"`). Mezclar `omitido` con alguna hoja de la
-triada es inválido. **La cadena suelta `"blast": "n/a"` es INVÁLIDA** (D13): el PR
-#157 selló un veredicto real así, por analogía con `adversary`, y el validador lo
-rechazaba sin ofrecer forma válida a un turno sin blast; `omitido` es esa forma.
-`adversary` sí sigue aceptando `"n/a"`.
+la razón no vacía (ni `null`, ni `"n/a"`, ni bool/número/plantilla). Mezclar
+`omitido` con alguna hoja de la triada es inválido. **La cadena suelta
+`"blast": "n/a"` es INVÁLIDA** (D13): el PR #157 selló un veredicto real así, por
+analogía con `adversary`, y el validador lo rechazaba sin ofrecer forma válida a
+un turno sin blast; `omitido` es esa forma. `adversary` sí sigue aceptando `"n/a"`.
+**Contrato ≠ merge:** `omitido` hace el veredicto estructuralmente válido y sellable;
+el merge (D18) sigue exigiendo `blast.nivel ≥ 4` y el comando en el evidence log —
+un turno sin blast no auto-mergea. El mensaje crudo del merge (`nivel < 4 (dio vacio)`)
+queda como deuda declarada de otra fila; no se afloja el gate aquí.
 
 **Sello (hook, Task 18.3):** en el `PostToolUse` de un `Write` **atribuido al
 rol reviewer** sobre `.saikit/veredictos/`, el hook registra en el estado de
