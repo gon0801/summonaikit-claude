@@ -103,3 +103,58 @@ merge a `master` (cierre de task o PR), **siempre**:
 Si el merge NO toco `hooks/summonaikit-harness.sh`, el deploy es no-op ("YA AL
 DIA") — igual se corre y se registra, para no perder la costumbre y detectar
 deriva del vivo respecto a master.
+
+## Protocolo de entrega (implementadores delegados)
+
+Este repo delega filas a implementadores externos. Lo que sigue vale para TODOS
+y **no se repite en cada brief**: el brief solo aporta lo que no esta ni aca ni
+en la fila de `Plans.md`.
+
+**La fila de `Plans.md` es el contrato.** Columna 2 el alcance, columna 3 la DoD
+literal. Si el brief y la fila se contradicen, gana la fila y se reporta.
+
+### Los tres estados. No hay un cuarto
+
+| Estado | Significa | Exit |
+|---|---|---|
+| PASS | corrio y verifico | 0 |
+| FAIL | corrio y una asercion fallo | 1 |
+| `unknown` | corrio pero NO pudo observar nada | 3 |
+
+La linea divisoria es si hubo **OBSERVACION**, no si hubo ejecucion
+(`tests/run.sh:150`). Un test que arranca y muere con `exit 1` es FAIL, jamas
+`unknown`. Confundirlos esconde una regresion observada como falta de cobertura.
+
+Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
+`unknown` **con su razon**, nunca se supone.
+
+### Evidencia
+
+1. **Rojo MEDIDO antes del verde**, con su salida pegada en el PR. Es lo primero
+   que mira el lider.
+2. **Poder discriminante**: por cada proteccion, una **mutacion** que muestre
+   que caso se pone rojo. Una mutacion que sobrevive en verde es un hueco, no un
+   detalle. Es la debilidad comun de todos los implementadores medidos hasta
+   hoy: tests que pasan igual sin el fix.
+3. **Nada inventado.** Ningun comando, link ni resultado que no hayas corrido.
+
+### Limites que no se cruzan
+
+- **`Plans.md`: PROHIBIDO.** Las filas las cierra el lider tras mergear.
+- **No mergees.** La entrega termina en **PR abierto con CI verde**.
+- **Prohibido tocar el perfil de produccion del operador** (`~/.claude`,
+  `~/.zcode`, `~/.grok`, `~/.codex`). Toda medicion va con HOME aislado. Si una
+  medicion SOLO se puede hacer contra el perfil real, **para y decilo: esa
+  corrida es del lider**.
+- **Cross-review: tope 1 ronda.** Una segunda SOLO si la primera hallo severidad
+  alta. Jamas una tercera; los residuales se declaran en el PR, no se
+  re-revisan.
+
+### Git
+
+- Rama desde `origin/master` con `git fetch` antes, **nunca** desde tu master
+  local.
+- Antes del PR: `git log origin/master..HEAD` lista SOLO tus commits.
+- **El numero de fila NO va como scope del commit** (`fix(18.7):` esta mal).
+  `tools/audita-ledger.sh` parsea el scope y marcaria esa fila como «trabajo ya
+  mergeado» de forma permanente. Usa el area: `feat(setup):`, `fix(tests):`.
