@@ -16,6 +16,18 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
 - **SHA del despliegue:** merge `762dcdd`, head desplegado `f538a4b`, CI 9/9
   (run 33852389037). Hook vivo tras el deploy: `sha256` idéntico al de
   `origin/master`, verificado por `install-hook.sh` en su segunda corrida.
+- **Contenido del cambio, para el índice:** `SAIKIT_VERIFIED_RUNNER_PROPIO_RE`
+  (las dos formas de `tests/run.sh`) interpolada en `SAIKIT_VERIFIED_CMD_RE`;
+  el missing line nombra la condición incumplida vía `saikit_verif_motivo`;
+  7 casos G2 nuevos y 4 mutaciones; golden regrabada con diff solo de identidad.
+- **Por qué este registro decía REAL y una sesión paralela lo anotó como NO-OP:**
+  la sesión que implementó la 18.18 deployó desde SU RAMA para poder regrabar la
+  golden, así que cuando ella corrió `install-hook.sh` el vivo ya coincidía y le
+  dio **YA AL DIA**. El lead, que había repuesto el vivo a `master` al cerrar la
+  18.6, obtuvo **REPARADO** con backup al desplegar tras el merge. Las dos
+  lecturas son ciertas en su momento; lo que las hace parecer contradictorias es
+  que dos sesiones desplegaron el mismo artefacto en distinto orden. **Regla:
+  el deploy post-merge y su registro son del lead, uno solo por PR.**
 - **Deploy:** `install-hook.sh` → REPARADO con backup en
   `…saikit-backups/summonaikit-harness.sh.nuestro.20260904-011944.bak`.
   `check-hook-registration.sh` exit 0. `audita-ledger` OK.
@@ -1966,17 +1978,3 @@ que estos dos van como cierre de la fila y no como deploy obligatorio.
   (el de 7.1/7.2). Nuestros `implementer.md`/`reviewer.md` presentes con frontmatter
   traducido.
 - **Operador:** Gon (sesión zcode).
-
-## 2026-09-04 — PR #174 (762dcdd): fila 18.18, el label VERIFIED BY SUBAGENT acepta el runner del repo — deploy NO-OP (YA AL DIA)
-
-- **Qué se mergeó:** `SAIKIT_VERIFIED_RUNNER_PROPIO_RE` (las dos formas de
-  `tests/run.sh`) interpolada en `SAIKIT_VERIFIED_CMD_RE`; el missing line nombra
-  la condición incumplida vía `saikit_verif_motivo`; 7 casos G2 + 4 mutaciones;
-  golden regrabada (55 escenarios, cero salidas movidas, diff solo identidad).
-- **¿Cambió el hook? SÍ** (18.18), pero el vivo ya lo tenía: la sesión de la 18.18
-  deployó desde su rama para regrabar la golden, y el merge entró sin cambios
-  adicionales de otros PR sobre el hook. `install-hook.sh`: **YA AL DIA**, byte a
-  byte igual a la fuente — deploy no-op corrido y verificado igual (protocolo).
-- **`check-hook-registration.sh`:** exit 0, silencio.
-- **`audita-ledger.sh`:** OK — ninguna fila en cc:TODO con trabajo ya mergeado.
-- **Operador:** Gon (sesión zcode, cron de la 18.18).
