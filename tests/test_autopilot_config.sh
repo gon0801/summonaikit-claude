@@ -37,6 +37,8 @@ _no_contiene() { if printf '%s' "$2" | grep -Fq -- "$3"; then _mal "$1: contiene
 SB=""
 OUT=""
 RC=0
+BASE=""
+MUTADO=""
 
 # ------------------------------------------------------------------ sandbox
 sb_reset() {
@@ -170,6 +172,37 @@ caso "salud_con_comilla_o_inyeccion_se_veta_sin_escribir (cross-review kimi+grok
 }
 fin_caso "salud_con_comilla_o_inyeccion_se_veta_sin_escribir (cross-review kimi+grok)"
 
+caso "escritura_fallida_no_pisa_config_previa (lead PR #161)"
+{
+  # Config previa VALIDA + intento que falla (salud_url que no puede entrar al
+  # JSON): la previa tiene que quedar byte-identica. Con el veto activo el
+  # rechazo es antes de escribir; la mutacion veto_y_validacion_fuera (abajo)
+  # ejerce la rama de escritura que este caso nombra.
+  mkdir -p .saikit
+  printf '{"merge":false}' > .saikit/autopilot.json
+  antes="$(cksum < .saikit/autopilot.json)"
+  correr --merge no --despliega no --salud-url 'https://x","merge":true' --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -ne 0 ] || _mal "rc esperaba != 0, dio $RC: $OUT"
+  [ "$(cksum < .saikit/autopilot.json)" = "$antes" ] || _mal "piso la config previa valida"
+}
+fin_caso "escritura_fallida_no_pisa_config_previa (lead PR #161)"
+
+caso "saikit_simbolico_se_rechaza_sin_escribir_a_traves (lead PR #161)"
+{
+  # .saikit como symlink a un dir ajeno con centinela: el setup falla (exit 2)
+  # y NUNCA escribe a traves del enlace.
+  mkdir -p "$SB/afuera"
+  printf 'centinela\n' > "$SB/afuera/centinela.txt"
+  ln -s "$SB/afuera" .saikit
+  correr --merge no --despliega no --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _contiene "nombra el enlace" "$OUT" "enlace simbolico"
+  [ ! -e "$SB/afuera/autopilot.json" ] || _mal "escribio autopilot.json a traves del enlace"
+  [ ! -e "$SB/afuera/veredictos" ] || _mal "escribio veredictos/ a traves del enlace"
+  [ "$(cat "$SB/afuera/centinela.txt")" = "centinela" ] || _mal "el centinela del dir apuntado no sobrevivio"
+}
+fin_caso "saikit_simbolico_se_rechaza_sin_escribir_a_traves (lead PR #161)"
+
 caso "gitignore_de_veredictos_idempotente"
 {
   correr --merge no --despliega no-se --sin-verify-app no --telegram no < /dev/null
@@ -259,22 +292,30 @@ fin_caso "liberar_lock_muestra_y_quita"
 # ------------------------------------------------------- mutation-test propio
 # Cada mutacion rompe UNA proteccion del script; el caso que la nombra tiene
 # que ponerse rojo (mismo mecanismo que tests/test_saikit_merge.sh).
-mut_sed() {  # $1=sed-expr, deja el mutado en $MUTADO con HERE al tools/ real
+# La guarda anti-sed-obsoleto baselinea contra BASE (la copia ya reescrita en
+# HERE, SIN mutar): comparar contra $SETUP_REAL nunca daba iguales porque el
+# original conserva su HERE real, y la guarda no disparaba jamas (hallazgo del
+# lead, PR #161).
+mut_sed() {  # $1=sed-expr; BASE=reescritura de HERE sin mutar, MUTADO=BASE mutado
+  BASE="$SB-base-$$.sh"
   MUTADO="$SB-mutado-$$.sh"
-  { sed "$1" "$SETUP_REAL"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$SETUP_REAL" > "$BASE"
+  sed "$1" "$BASE" > "$MUTADO"
 }
 
 correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
   local nombre="$1" expr="$2" fun="$3"
   mut_sed "$expr"
-  if cmp -s "$SETUP_REAL" "$MUTADO"; then
+  if cmp -s "$BASE" "$MUTADO"; then
     printf '    FAIL: mutacion %s no cambio nada - el sed quedo obsoleto\n' "$nombre" >&2
     fail=1
+    rm -f "$MUTADO" "$BASE"
     return
   fi
   if ! bash -n "$MUTADO" 2>/dev/null; then
     printf '    FAIL: mutacion %s no parsea; asi no prueba nada\n' "$nombre" >&2
     fail=1
+    rm -f "$MUTADO" "$BASE"
     return
   fi
   SETUP="$MUTADO"
@@ -287,7 +328,7 @@ correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
     fail=1
   fi
   SETUP="${SAIKIT_SETUP_TOOL:-$SETUP_REAL}"
-  rm -f "$MUTADO"
+  rm -f "$MUTADO" "$BASE"
 }
 
 c_defaults() {
@@ -321,6 +362,17 @@ c_veto_json() {
   correr --merge no --despliega no --salud-url 'https://x","inyectada":"si' --sin-verify-app no --telegram no < /dev/null
   [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
   [ ! -e .saikit/autopilot.json ] || _mal "escribio una salud_url con comillas"
+}
+
+c_atomico() {
+  # Con el veto Y la validacion del temporal anulados, una escritura que no
+  # valida tiene que dejar la config previa byte-identica (escritura atomica).
+  CASO_ROJO=0; sb_reset
+  mkdir -p .saikit
+  printf '{"merge":false}' > .saikit/autopilot.json
+  antes="$(cksum < .saikit/autopilot.json)"
+  correr --merge no --despliega no --salud-url 'https://x","merge":true' --sin-verify-app no --telegram no < /dev/null
+  [ "$(cksum < .saikit/autopilot.json)" = "$antes" ] || _mal "una escritura que no valida piso la config previa"
 }
 
 c_lock_viejo() {
@@ -369,6 +421,7 @@ lock_se_autolimpia	s|# NUNCA se borra solo|rm -rf "$LOCK_DIR"; # NUNCA se borra 
 flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor
 common_contra_root	s|cd "$INVOC" && cd "$COMMON"|cd "$ROOT" \&\& cd "$COMMON"|	c_subdir
 salud_sin_veto	s|printf 'saikit-setup-autopilot: --salud-url no puede traer comillas.*|    ;;|	c_veto_json
+veto_y_validacion_fuera	s|printf 'saikit-setup-autopilot: --salud-url no puede traer comillas.*|    ;;|;s|if ! saikit_json_valido "\$(cat "\$CFG_TMP")"; then|if false; then|	c_atomico
 MUTS
 
 if [ "$fail" -ne 0 ]; then

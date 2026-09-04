@@ -2657,23 +2657,27 @@ mkdir -p "$casa_recetas/.claude/skills/saikit-setup-autopilot"
 aj_sa="$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md"
 printf -- '---\nname: otro\ndescription: de otro\n---\ncambio ajeno\n' > "$aj_sa"
 prev_sa_aj="$(cat "$aj_sa")"
-out="$(host_claude_recetas 2>&1)"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install con SKILL.md ajeno deberia salir 0, dio $rc: $out"
 [ "$(cat "$aj_sa")" = "$prev_sa_aj" ] || malo "piso un SKILL.md ajeno (sin marca)"
 printf '%s' "$out" | grep -q 'DESCONOCIDO' \
   || malo "no reporto el SKILL.md ajeno como DESCONOCIDO: $out"
 
 caso "18.7: --dry-run no crea la skill saikit-setup-autopilot"
 nuevo_destino; nuevo_casa_recetas
-host_claude_recetas --dry-run >/dev/null 2>&1
+host_claude_recetas --dry-run >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || malo "--dry-run deberia salir 0, dio $rc"
 [ ! -e "$casa_recetas/.claude/skills/saikit-setup-autopilot" ] \
   || malo "--dry-run creo saikit-setup-autopilot"
 
 caso "18.7: --quitar-recetas borra el SKILL.md propio de saikit-setup-autopilot"
 nuevo_destino; nuevo_casa_recetas
-host_claude_recetas >/dev/null 2>&1
+host_claude_recetas >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || malo "install previo al quitar deberia salir 0, dio $rc"
 [ -f "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" ] \
   || malo "precondicion: la skill no se instalo; el quitar no mide nada"
-host_claude_recetas --quitar-recetas >/dev/null 2>&1
+host_claude_recetas --quitar-recetas >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-recetas deberia salir 0, dio $rc"
 [ ! -f "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" ] \
   || malo "--quitar-recetas no quito saikit-setup-autopilot/SKILL.md"
 

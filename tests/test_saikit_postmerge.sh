@@ -33,6 +33,8 @@ SB=""
 OUT=""
 RC=0
 MC=""
+BASE=""
+MUTADO=""
 
 # ------------------------------------------------------------------ sandbox
 # sb_reset [salud_url] [telegram]: monta work + origin bare + merge_commit con
@@ -354,23 +356,44 @@ caso "mensaje_rojo_cabe_en_4096_y_va_redactado"
 }
 fin_caso "mensaje_rojo_cabe_en_4096_y_va_redactado"
 
+caso "esquema_roto_con_token_sale_redactado (lead PR #161)"
+{
+  # La rama de esquema roto sin ROJO conocido no pasa por aviso(): la salud_url
+  # viaja cruda al terminal. Un token en el query string tiene que salir
+  # redactado igual (exit 2 intacto).
+  CASO_ROJO=0; sb_reset "ftp://x.example/h?key=sk-test-1234567890" false
+  correr
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _no_contiene "sin el token crudo" "$OUT" "sk-test-1234567890"
+  _contiene "token redactado" "$OUT" "[REDACTED]"
+}
+fin_caso "esquema_roto_con_token_sale_redactado (lead PR #161)"
+
 # ------------------------------------------------------- mutation-test propio
-mut_sed() {  # $1=sed-expr, deja el mutado en $MUTADO con HERE al tools/ real
+# La guarda anti-sed-obsoleto baselinea contra BASE (la copia ya reescrita en
+# HERE, SIN mutar): comparar contra $POST_REAL nunca daba iguales porque el
+# original conserva su HERE real, y la guarda no disparaba jamas (hallazgo del
+# lead, PR #161).
+mut_sed() {  # $1=sed-expr; BASE=reescritura de HERE sin mutar, MUTADO=BASE mutado
+  BASE="$SB-base-$$.sh"
   MUTADO="$SB-mutado-$$.sh"
-  { sed "$1" "$POST_REAL"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$POST_REAL" > "$BASE"
+  sed "$1" "$BASE" > "$MUTADO"
 }
 
 correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
   local nombre="$1" expr="$2" fun="$3"
   mut_sed "$expr"
-  if cmp -s "$POST_REAL" "$MUTADO"; then
+  if cmp -s "$BASE" "$MUTADO"; then
     printf '    FAIL: mutacion %s no cambio nada - el sed quedo obsoleto\n' "$nombre" >&2
     fail=1
+    rm -f "$MUTADO" "$BASE"
     return
   fi
   if ! bash -n "$MUTADO" 2>/dev/null; then
     printf '    FAIL: mutacion %s no parsea; asi no prueba nada\n' "$nombre" >&2
     fail=1
+    rm -f "$MUTADO" "$BASE"
     return
   fi
   POST="$MUTADO"
@@ -383,7 +406,7 @@ correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
     fail=1
   fi
   POST="${SAIKIT_POSTMERGE_TOOL:-$POST_REAL}"
-  rm -f "$MUTADO"
+  rm -f "$MUTADO" "$BASE"
 }
 
 c_sin_trailer() {
@@ -460,6 +483,13 @@ c_secreto() {
   _no_contiene "telegram sin el secreto" "$(cat "$SAIKIT_TG_LOG")" "clave-ejemplo"
 }
 
+c_token_esquema() {
+  CASO_ROJO=0; sb_reset "ftp://x.example/h?key=sk-test-1234567890" false
+  correr
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _no_contiene "sin el token crudo" "$OUT" "sk-test-1234567890"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
@@ -473,6 +503,7 @@ rojo_pierde_con_pendiente	s|if \[ -n "\$rojos" \]; then|if false; then|	c_mezcla
 salud_traga_rojo	s|if \[ -n "\$ROJO_MOTIVO" \]; then|if false; then|	c_rojo_sin_curl
 aviso_sin_redactar	s|texto="\$(redactar "\$texto")"|texto="$texto"|	c_secreto
 telegram_sin_redactar	s|TG_MSG="\$(redactar "\$MENSAJE")"|TG_MSG="$MENSAJE"|	c_secreto
+esquema_roto_sin_redactar	s|"\$(redactar "\$SALUD")"|"$SALUD"|	c_token_esquema
 MUTS
 
 if [ "$fail" -ne 0 ]; then
