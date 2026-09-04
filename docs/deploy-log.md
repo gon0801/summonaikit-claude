@@ -7,6 +7,33 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #157 / Task 18.16 (los cuatro tests que quedaban sin ejecutor) — deploy NO-OP
+
+- **Qué se mergeó:** merge `ffd90a0`, CI 9/9 (run 33820109339). Los tres tests
+  ex-Windows-bound corren y pasan en macOS; `test_hook_acl` retirado; el skip
+  del runner cambia de semántica; `SAIKIT_PY` y `mtime_de` portables.
+  Implementó Cursor; midió y revisó el lead.
+- **Deploy: NO-OP.** El PR no toca `hooks/summonaikit-harness.sh`.
+  `install-hook.sh` reportó `YA AL DIA`; `check-hook-registration.sh` exit 0.
+- **Verificado por el lead sobre master, y son DOS grupos distintos** (no
+  confundirlos: de los cuatro que el runner salteaba, solo TRES quedaron
+  verdes; el cuarto se retiró):
+  - los tres ex-Windows-bound, que ahora corren y pasan: `test_install_hook`,
+    `test_capture_payloads`, `test_probe_zcode_output` — exit 0 los tres;
+  - `test_hook_acl`, el cuarto de aquella lista: **retirado**, no verificado en
+    verde. Su archivo ya no existe;
+  - `test_runner_guards` — exit 0. **No** era de los cuatro salteados: es el que
+    ata el mecanismo nuevo de skip con casos sintéticos.
+- **Lo que esto cierra de fondo:** desde hoy no queda ningún test que el runner
+  saltee prometiendo que «lo corre Windows». La promesa que quedó incumplida al
+  dejar Windows ya no existe; el mecanismo nuevo distingue «lo corre otro» de
+  «no lo corre nadie» y cuenta el segundo como `unknown`.
+- **Corregido en la revisión:** el PR commiteaba un veredicto sellado, contra el
+  diseño de la 18.3. Sacado en `9d92a0a`.
+- **Residual declarado, con el hilo ABIERTO a propósito:** escaping de rutas en
+  los comandos de hook generados (`zcode_hook_cmd`, `zcode_probe_cmd`,
+  `grok_hook_cmd`). Es preexistente de `master`, no de esta rama.
+
 ## 2026-09-03 — PR #154 / Task 18.13 (Close cita el sello, líder commitea antes, el veredicto no es trabajo) — deploy REAL
 
 - **Qué se mergeó:** merge `59d45b4`, CI 9/9 en el head `57e32de` (run
