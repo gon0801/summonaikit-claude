@@ -172,12 +172,20 @@ Campos adicionales que nacen con default: `rama` (default `master`),
     "resultado": "PASS | FAIL | n/a",
     "comando": "<comando bajo verify/ que se corrio, o null si n/a>"
   },
-  "blast": { "nivel": 1, "hecho": "<hecho unico>", "comando": "<comando>" },
+  "blast": { "nivel": 1, "hecho": "<hecho unico>", "comando": "<comando>" } | { "omitido": "<razon no vacia>" },
   "adversary": { "findings": 0, "max_sev": "none" } | "n/a",
   "reviewer": "clean | findings",
   "decisiones": "<ruta del tsv .saikit/decisiones/<task>.tsv>"
 }
 ```
+
+**`blast` (Task 18.17):** dos formas excluyentes. La triada `nivel`/`hecho`/`comando`
+cuando el turno corrió un blast; `{ "omitido": "<razón>" }` cuando no lo corrió, con
+la razón no vacía (ni `null`, ni `"n/a"`). Mezclar `omitido` con alguna hoja de la
+triada es inválido. **La cadena suelta `"blast": "n/a"` es INVÁLIDA** (D13): el PR
+#157 selló un veredicto real así, por analogía con `adversary`, y el validador lo
+rechazaba sin ofrecer forma válida a un turno sin blast; `omitido` es esa forma.
+`adversary` sí sigue aceptando `"n/a"`.
 
 **Sello (hook, Task 18.3):** en el `PostToolUse` de un `Write` **atribuido al
 rol reviewer** sobre `.saikit/veredictos/`, el hook registra en el estado de

@@ -108,7 +108,7 @@ Es lo ÚLTIMO que haces, después de adjudicar todo lo demás. El líder ya comm
 
 **Por qué `Write` y no otra cosa:** el hook sella el veredicto registrando el sha256 de lo que ese `Write` materializó. Un veredicto escrito con `Edit`, con `Bash` o con un redirect deja el archivo en su lugar pero **no sella** — y sin sello el merge lo rechaza. Por la misma razón no lo reescribas ni lo corrijas después: cualquier escritura posterior deja el hash sellado viejo, y eso se lee como un veredicto tocado después de la revisión. Si te equivocaste, dilo al líder en vez de reescribirlo.
 
-El esquema es exacto; `adversary` es el objeto o la cadena `"n/a"` cuando el turno no corrió uno:
+El esquema es exacto. `adversary` es el objeto o la cadena `"n/a"` cuando el turno no corrió uno. `blast` es XOR de dos objetos (nunca la cadena `"n/a"`):
 
 ```json
 {
@@ -122,6 +122,23 @@ El esquema es exacto; `adversary` es el objeto o la cadena `"n/a"` cuando el tur
   "decisiones": ".saikit/decisiones/<task>.tsv"
 }
 ```
+
+Cuando el turno no corrió blast (solo revisión, carril rápido, verifier sin blast), la forma es esta — misma cerca, otro objeto:
+
+```json
+{
+  "sha": "<git rev-parse HEAD>",
+  "pr": 1,
+  "verifier": "PASS",
+  "verify_app": { "resultado": "n/a", "comando": null },
+  "blast": { "omitido": "<por qué este turno no tuvo blast>" },
+  "adversary": "n/a",
+  "reviewer": "clean",
+  "decisiones": ".saikit/decisiones/<task>.tsv"
+}
+```
+
+La razón de `omitido` tiene que ser real: vacía, `null` o `"n/a"` invalida el veredicto, y mezclar `omitido` con cualquiera de `nivel`/`hecho`/`comando` también. **`"blast": "n/a"` es INVÁLIDO** (D13): a diferencia de `adversary`, blast no acepta la cadena suelta — el merge lo rechaza como esquema inválido.
 
 `verifier` y `reviewer` llevan tu juicio, no un deseo: `PASS`/`FAIL` y `clean`/`findings`. Un veredicto con findings abiertos se escribe igual, con `"reviewer": "findings"` — el que decide si eso mergea es el merge, no tú.
 
