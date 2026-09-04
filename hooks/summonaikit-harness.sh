@@ -2622,6 +2622,16 @@ Still missing:
 $missing
 
 Stop now, report the failed gates, and ask the user before another retry."
+  # 18.6: tercer emisor de feedback del Stop (hallazgo adversary #1, medido):
+  # sin esto, agotar el presupuesto era la unica salida del gate que perdia las
+  # reglas de merge del turno autopilot. El flag llega por $2 porque los
+  # callers borran el estado (A4-c4) ANTES de llamar; caida a leerlo si viene
+  # solo $1.
+  if [ "${2:-$(read_state_value autopilot)}" = "1" ]; then
+    message="$message
+
+$(autopilot_parrafo)"
+  fi
 
   if [ "$TARGET" = "cursor" ]; then
     emit_cursor_json "followup_message" "$message"
@@ -2807,9 +2817,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     adv_cycle="$(read_state_value cycle)"
     case "$adv_cycle" in ''|*[!0-9]*) adv_cycle=0 ;; esac
     if [ "$adv_cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
+      _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
       podar_dir_sesion
-      emit_budget_exhausted "$adv_early_missing"
+      emit_budget_exhausted "$adv_early_missing" "$_ap_budget"
     fi
     adv_reescribir_estado "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" "$((adv_cycle + 1))"
     feedback="$(build_gate_feedback "$adv_early_missing" "$((adv_cycle + 1))")"
@@ -3147,9 +3158,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # RN_ORDER_PATH). RN_PENDING_PATH queda (per-project, ver comentario
     # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
     # cobrando recibo despues de declararse agotado (A4).
+    _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
     podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
-    emit_budget_exhausted "$missing"
+    emit_budget_exhausted "$missing" "$_ap_budget"
   fi
 
   next_cycle=$((cycle + 1))
