@@ -203,6 +203,22 @@ caso "saikit_simbolico_se_rechaza_sin_escribir_a_traves (lead PR #161)"
 }
 fin_caso "saikit_simbolico_se_rechaza_sin_escribir_a_traves (lead PR #161)"
 
+caso "veredictos_simbolico_se_rechaza_sin_escribir_a_traves (review ronda 2)"
+{
+  # .saikit real pero veredictos/ como symlink a un dir ajeno con centinela:
+  # mkdir -p "ya existe" a traves del enlace y el append del .gitignore
+  # escribiria FUERA del repo (hallazgo del reviewer, ronda 2).
+  mkdir -p .saikit "$SB/afuera-v"
+  printf 'centinela\n' > "$SB/afuera-v/centinela.txt"
+  ln -s "$SB/afuera-v" .saikit/veredictos
+  correr --merge no --despliega no --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _contiene "nombra el enlace" "$OUT" "enlace simbolico"
+  [ ! -e "$SB/afuera-v/.gitignore" ] || _mal "escribio el .gitignore a traves del enlace de veredictos"
+  [ "$(cat "$SB/afuera-v/centinela.txt")" = "centinela" ] || _mal "el centinela del dir apuntado no sobrevivio"
+}
+fin_caso "veredictos_simbolico_se_rechaza_sin_escribir_a_traves (review ronda 2)"
+
 caso "gitignore_de_veredictos_idempotente"
 {
   correr --merge no --despliega no-se --sin-verify-app no --telegram no < /dev/null

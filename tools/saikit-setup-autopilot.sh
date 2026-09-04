@@ -270,6 +270,15 @@ mv -f "$CFG_TMP" "$CFG" \
 umask "$umask_prev"
 
 # .gitignore de veredictos, idempotente (ver cabecera: por que no en la raiz).
+# Veto de componentes simbolicos (review ronda 2): mkdir -p sigue un
+# veredictos/ que sea symlink (el destino "ya existe" a traves del enlace) y el
+# printf >> escribiria el .gitignore FUERA del repo. Lo mismo si el .gitignore
+# mismo es un enlace: el append escribe a traves. mv -f sobre autopilot.json
+# esta cerrado por diseno (rename no sigue el enlace).
+if [ -L "$SAIKIT_DIR/veredictos" ] || [ -L "$SAIKIT_DIR/veredictos/.gitignore" ]; then
+  printf 'saikit-setup-autopilot: %s/veredictos (o su .gitignore) es un enlace simbolico; no se escribe a traves (quitalo a mano si es tuyo)\n' "$SAIKIT_DIR" >&2
+  exit 2
+fi
 mkdir -p "$SAIKIT_DIR/veredictos" 2>/dev/null \
   || { printf 'saikit-setup-autopilot: no se pudo crear %s/veredictos\n' "$SAIKIT_DIR" >&2; exit 2; }
 if ! grep -q -x -F '*' "$SAIKIT_DIR/veredictos/.gitignore" 2>/dev/null; then
