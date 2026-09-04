@@ -23,13 +23,20 @@ que siga registrado en las 3 fases de `~/.claude/settings.json`.
   **3 líneas de cabecera** y los 55 escenarios quedan byte a byte. Es la misma
   clase de deriva que la 18.13 curó una vez; conviene regrabar SIEMPRE después
   del último cambio al hook, no antes.
-- **Cuatro hallazgos del lead cerrados**, el último de ellos el más caro de
-  encontrar: el flag `autopilot` no estaba protegido en los rewrites de mitad de
+- **Cuatro hallazgos cerrados por el lead**, el último de ellos el más caro de
+  encontrar y el único que NO salió de la revisión del lead: el flag `autopilot` no estaba protegido en los rewrites de mitad de
   turno. Medido antes: quitar el flag del `write_state` de `mark_evidence` dejaba
   `test_gate_behavior` en OK con 0 fallas. Medido después:
   `FAIL: autopilot tras mark_evidence: esperaba [1], dio []`. Salió del
   cross-review de kimi sobre las conclusiones del lead, no de la revisión de la
   entrega.
+- **Alcance de esa medición, declarado:** el lead mutó y midió **solo**
+  `mark_evidence`. El caso hermano `caso_g1_autopilot_sobrevive_record_agent`
+  existe y las dos aserciones (`autopilot=1` y `verified=1`) están escritas en
+  los dos casos, pero la mutación de `record_agent` **no se midió por separado**:
+  queda `unknown`, no verificada. La aserción de `verified=1` sí quedó probada en
+  el caso de `mark_evidence`, y no es decoración — sin ella el caso pasaría sin
+  haber ejercitado el rewrite.
 - **Residual declarado:** `verdict_registrar_sello` y `adv_reescribir_estado`
   siguen sin caso que ate la preservación del flag.
 - **Operador:** Gon (sesión claude).
