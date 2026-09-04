@@ -186,7 +186,10 @@ if [ "$SALUD" != "<null>" ] && [ -n "$SALUD" ]; then
        if [ -n "$ROJO_MOTIVO" ]; then
          SALUD_TXT="salud no evaluable (esquema no http(s) en la config)"
        else
-         printf 'saikit-postmerge: salud_url con esquema no http(s): %s\n' "$SALUD" >&2; exit 2
+         # redactar SIEMPRE que la salud sale al terminal (hallazgo del lead,
+         # PR #161): esta rama no pasa por aviso() y un token en el query
+         # string viajaba crudo.
+         printf 'saikit-postmerge: salud_url con esquema no http(s): %s\n' "$(redactar "$SALUD")" >&2; exit 2
        fi ;;
   esac
 fi
