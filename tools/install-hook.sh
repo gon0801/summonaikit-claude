@@ -2341,7 +2341,8 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
   for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" \
            "$repo/skills/sencillo/SKILL.md" \
            "$repo/skills/saikit-verificar-app/SKILL.md" \
-           "$repo/skills/saikit-verificar-app/verificar.sh"; do
+           "$repo/skills/saikit-verificar-app/verificar.sh" \
+           "$repo/skills/saikit-setup-autopilot/SKILL.md"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
   done
   # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
@@ -2349,7 +2350,7 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
   # primero, y el aviso decia "no se publica nada" nombrando solo el segundo.
   # Esta es la unica causa de aborto que se puede saber de antemano; el resto
   # (mktemp/cp) se declara abajo en vez de esconderse.
-  for f in "$1/recetas" "$2/sencillo" "$2/saikit-verificar-app"; do
+  for f in "$1/recetas" "$2/sencillo" "$2/saikit-verificar-app" "$2/saikit-setup-autopilot"; do
     if [ -L "$f" ]; then
       decir "[summonaikit] recetario: enlace, no se publica nada: $f"
       return 5
@@ -2373,6 +2374,16 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
     rc_verif=$?
     decir "[summonaikit] recetario: la skill saikit-verificar-app no se publico, pero $1/recetas y $2/sencillo SI quedaron publicados (el todo-o-nada es por directorio)"
     return "$rc_verif"; }
+  # Task 18.7: la skill del setup del autopilot. Es UN archivo (SKILL.md),
+  # como /sencillo: el asistente de las 5 preguntas que escribe
+  # .saikit/autopilot.json. Sin ella, la skill que el ledger ya pre-aprueba
+  # en ~/.claude/skills/saikit-setup-autopilot/ no existiria en el perfil.
+  local rc_setup=0
+  recetas_publicar_dir "$2/saikit-setup-autopilot" \
+    "$repo/skills/saikit-setup-autopilot/SKILL.md" || {
+    rc_setup=$?
+    decir "[summonaikit] recetario: la skill saikit-setup-autopilot no se publico, pero $1/recetas, $2/sencillo y $2/saikit-verificar-app SI quedaron publicados (el todo-o-nada es por directorio)"
+    return "$rc_setup"; }
   # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
   # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
   # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la
@@ -2397,7 +2408,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # y el manifiesto leido a traves del symlink podia atribuir la propiedad a un
   # manifiesto externo. Se rechaza ANTES de leer el manifiesto, expandir el glob
   # o borrar: se reporta y se deja intacto, igual que los archivos symlink.
-  local r_enlace=0 s_enlace=0 v_enlace=0
+  local r_enlace=0 s_enlace=0 v_enlace=0 sa_enlace=0
   if [ -L "$1/recetas" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $1/recetas"
     r_enlace=1
@@ -2409,6 +2420,10 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   if [ -L "$2/saikit-verificar-app" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $2/saikit-verificar-app"
     v_enlace=1
+  fi
+  if [ -L "$2/saikit-setup-autopilot" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $2/saikit-setup-autopilot"
+    sa_enlace=1
   fi
   # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
   # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
@@ -2501,6 +2516,25 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # decide, un ajeno queda intacto) sobre sus DOS archivos.
   if [ "$v_enlace" -eq 0 ]; then
     for f in "$2/saikit-verificar-app/SKILL.md" "$2/saikit-verificar-app/verificar.sh"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+
+  # Task 18.7: la skill saikit-setup-autopilot, misma regla sobre su UNICO
+  # archivo (SKILL.md con la marca saikit_owned en el frontmatter).
+  if [ "$sa_enlace" -eq 0 ]; then
+    for f in "$2/saikit-setup-autopilot/SKILL.md"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
       if zcode_agente_tiene_marca "$f"; then

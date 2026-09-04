@@ -2620,6 +2620,63 @@ host_claude_recetas --quitar-recetas >/dev/null 2>&1
 [ ! -f "$casa_recetas/.claude/skills/saikit-verificar-app/verificar.sh" ] \
   || malo "--quitar-recetas no quito saikit-verificar-app/verificar.sh"
 
+# ============================================================================
+# Task 18.7 — el instalador planta la skill `saikit-setup-autopilot`
+# ============================================================================
+# La skill del asistente de las 5 preguntas (UN archivo SKILL.md, como
+# /sencillo). Medido en macOS: la publicacion es shell puro (mkdir/cmp/mv por
+# archivo con la marca saikit_owned) sin dependencia de Windows — la etiqueta
+# "Windows-bound" de la fila quedo obsoleta con la 18.16, y estos casos
+# acreditan donde corre esta suite (CI Linux + macOS).
+caso "18.7: limpio => planta saikit-setup-autopilot/SKILL.md byte a byte"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install limpio deberia salir 0, dio $rc: $out"
+[ -f "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" ] \
+  || malo "no planto saikit-setup-autopilot/SKILL.md"
+cmp -s "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" \
+  "$repo/skills/saikit-setup-autopilot/SKILL.md" \
+  || malo "saikit-setup-autopilot/SKILL.md instalado difiere del fuente"
+
+caso "18.7: dos corridas seguidas NO reescriben la skill del setup"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+sk_sa="$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md"
+[ -f "$sk_sa" ] || malo "precondicion: la skill no se instalo; el caso no mide nada"
+sk_sa_m="$(mtime_de "$sk_sa")"
+[ -n "$sk_sa_m" ] || malo "mtime de la skill vacio (stat fallo o archivo ausente)"
+sleep 1
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "segunda corrida deberia salir 0, dio $rc: $out"
+[ "$(mtime_de "$sk_sa")" = "$sk_sa_m" ] \
+  || malo "la segunda corrida reescribio saikit-setup-autopilot/SKILL.md"
+
+caso "18.7: un SKILL.md AJENO (sin marca) no se toca y se reporta"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$casa_recetas/.claude/skills/saikit-setup-autopilot"
+aj_sa="$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md"
+printf -- '---\nname: otro\ndescription: de otro\n---\ncambio ajeno\n' > "$aj_sa"
+prev_sa_aj="$(cat "$aj_sa")"
+out="$(host_claude_recetas 2>&1)"
+[ "$(cat "$aj_sa")" = "$prev_sa_aj" ] || malo "piso un SKILL.md ajeno (sin marca)"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' \
+  || malo "no reporto el SKILL.md ajeno como DESCONOCIDO: $out"
+
+caso "18.7: --dry-run no crea la skill saikit-setup-autopilot"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas --dry-run >/dev/null 2>&1
+[ ! -e "$casa_recetas/.claude/skills/saikit-setup-autopilot" ] \
+  || malo "--dry-run creo saikit-setup-autopilot"
+
+caso "18.7: --quitar-recetas borra el SKILL.md propio de saikit-setup-autopilot"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+[ -f "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" ] \
+  || malo "precondicion: la skill no se instalo; el quitar no mide nada"
+host_claude_recetas --quitar-recetas >/dev/null 2>&1
+[ ! -f "$casa_recetas/.claude/skills/saikit-setup-autopilot/SKILL.md" ] \
+  || malo "--quitar-recetas no quito saikit-setup-autopilot/SKILL.md"
+
 # 16.5 (cross-review, hilo manifiesto ajeno): el manifiesto se reemplaza SIEMPRE
 # al instalar (no lleva marca; si gana un manifiesto viejo/ajeno, nuestras recetas
 # recien plantadas no aparecerian en el menu) y el anterior queda respaldado — es
