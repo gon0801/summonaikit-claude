@@ -7,6 +7,32 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #161 / Tasks 18.7 y 18.5 (setup del autopilot y aviso post-merge) — deploy PLANTA la skill
+
+- **Qué se mergeó:** las dos filas en un solo PR a propósito — 18.5 lee el
+  `.saikit/autopilot.json` que 18.7 crea, así que juntas el esquema se define y
+  se consume en el mismo cambio, sin nada que sincronizar después.
+- **El deploy NO fue no-op**, aunque el hook no cambió: `install-hook.sh` plantó
+  la skill nueva (`recetario: AUSENTE -> ~/.claude/skills/saikit-setup-autopilot/SKILL.md`),
+  verificada en el perfil vivo. Segunda corrida: `YA AL DIA`, exit 0.
+  `check-hook-registration.sh` exit 0. `audita-ledger` OK.
+- **Tres defectos que encontró el lead y GLM cerró**, todos con caso propio: la
+  escritura de `autopilot.json` era destructiva (pisaba una config válida antes
+  de validar la nueva; ahora escribe un temporal, valida, y recién entonces lo
+  mueve — el patrón que ya usaba `install-hook.sh:312`); la `salud_url` con
+  esquema roto salía **cruda** por la única rama que no pasa por `aviso()`, o sea
+  sin `redactar`; y la guarda anti-sed-obsoleto de las dos baterías de mutación
+  estaba **muerta** — `mut_sed` reescribía `HERE=` siempre, así que el `cmp -s`
+  contra el original nunca podía dar iguales y una mutación que dejara de
+  aplicar habría pasado en falso. Las 14 mutaciones se verificaron aplicando de
+  verdad, una por una: ninguna estaba mintiendo todavía.
+- **Nota de proceso:** GLM reportó que el gate no le acreditó la verificación
+  pese a declarar `VERIFIED BY SUBAGENT`. Medido, su diagnóstico no se sostiene:
+  su comando (`bash tests/test_autopilot_config.sh`) no matchea
+  `TEST_RUNNER_CMD_RE`, que solo acredita `tests/run.sh`. Ver la fila 18.18,
+  reescrita el mismo día por esta causa.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-03 — PR #165 / Task 18.17 (blast es XOR entre la triada y omitido) — deploy NO-OP
 
 - **Qué se mergeó:** el hueco que la 18.3 dejó en el esquema del veredicto.
