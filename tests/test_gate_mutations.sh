@@ -71,6 +71,7 @@ G1|autopilot_no_se_detecta|el carril autopilot deja de detectarse y el flag desa
 G1|autopilot_parrafo_apagado|el parrafo del contrato deja de emitirse en turnos autopilot
 G5|autopilot_parrafo_apagado|el parrafo autopilot deja de emitirse tambien en el tercer emisor (presupuesto agotado)
 G1|autopilot_no_pisa_alias|autopilot deja de vaciar receta_alias y un turno -saikit:autopilot -saikit:pregunta queda con alias
+G1|grok_duplica_parrafo|build_gate_feedback vuelve a agregar el parrafo en grok, donde harness_context adosado ya lo trae (dos veces en el reason)
 G1|alias_sin_receta|el alias baja el carril pero no nombra la receta
 G1|alias_no_se_limpia|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
 G1|manifiesto_reinyecta_titulo|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
@@ -275,6 +276,7 @@ mut_alias_pregunta_apagado()    { sed 's/-saikit:pregunta(/-saikit:NUNCA(/'; }
 mut_autopilot_no_se_detecta()   { sed 's/-saikit:autopilot(/-saikit:NUNCA(/'; }
 mut_autopilot_parrafo_apagado() { sed -E 's/(read_state_value autopilot\)\}?" = )"1"/\1"1 NUNCA"/g'; }
 mut_autopilot_no_pisa_alias()   { sed 's/autopilot="1"; lane="full"; receta_alias=""/autopilot="1"; lane="full"/'; }
+mut_grok_duplica_parrafo()      { sed 's/if \[ "$TARGET" != "grok" \] \&\& \[ "$(read_state_value autopilot)" = "1" \]/if [ "$(read_state_value autopilot)" = "1" ]/'; }
 mut_alias_sin_receta()          { sed 's/receta_alias="investigar"/receta_alias=""/'; }
 # Task 16.6 (reviewer, hallazgo #4 / C13): la limpieza receta_alias de
 # podar_dir_sesion se neutraliza y el desarme tras un turno con alias deja el

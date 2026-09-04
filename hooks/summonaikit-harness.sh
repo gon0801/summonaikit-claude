@@ -1162,7 +1162,9 @@ write_state() {
 # tools/saikit-merge.sh, Close con sha mergeado o razon de no-merge); sin checks
 # nuevos en el Stop; D7 (lo autorizado en setup no se vuelve a preguntar);
 # sentinel POR TURNO (diferencia con el full-autonomy grant). UNA sola fuente:
-# la emiten los DOS bloques de contrato (harness_context y build_gate_feedback).
+# la emiten los TRES emisores del Stop (harness_context, build_gate_feedback y
+# emit_budget_exhausted); en grok build_gate_feedback lo omite porque el
+# bloqueo lleva harness_context adosado y ya viene ahi.
 autopilot_parrafo() {
   cat <<'AUTOPILOT_P'
 Autopilot lane (-saikit:autopilot):
@@ -2569,8 +2571,11 @@ EOF
   # 18.6, bloque 2 del contrato: mismo parrafo que harness_context (bloque 1),
   # SOLO cuando el estado del turno tiene autopilot=1 — el feedback de turnos
   # no-autopilot no cambia. Tocar un bloque solo dejaria el gate afirmando
-  # cosas distintas segun la rama que emita.
-  if [ "$(read_state_value autopilot)" = "1" ]; then
+  # cosas distintas segun la rama que emita. Excepcion grok: emit_gate_failure
+  # le adosa harness_context entero (7.4), que ya trae el parrafo; agregarlo
+  # aca tambien lo duplicaba en el mismo reason (medido: 2 en grok, 1 en
+  # claude). Atado por caso_g1_autopilot_parrafo_una_vez_en_grok.
+  if [ "$TARGET" != "grok" ] && [ "$(read_state_value autopilot)" = "1" ]; then
     _gf="$(printf '%s\n\n%s' "$_gf" "$(autopilot_parrafo)")"
   fi
   printf '%s\n' "$_gf"
