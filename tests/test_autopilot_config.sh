@@ -382,7 +382,8 @@ c_veto_json() {
 
 c_atomico() {
   # Con el veto Y la validacion del temporal anulados, una escritura que no
-  # valida tiene que dejar la config previa byte-identica (escritura atomica).
+  # valida tiene que dejar la config previa byte-identica (la compuerta es la
+  # validacion del temporal ANTES del mv; la atomicidad evita archivos a medias).
   CASO_ROJO=0; sb_reset
   mkdir -p .saikit
   printf '{"merge":false}' > .saikit/autopilot.json
