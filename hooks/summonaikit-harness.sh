@@ -1129,6 +1129,7 @@ write_state() {
   adv_violation="$9"
   adv_violation_paths="${10}"
   veredicto_sha256="${11:-}"
+  autopilot="${12:-}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   {
     printf 'task_hash=%s\n' "$task_hash"
@@ -1146,7 +1147,34 @@ write_state() {
     # cualquier otro evento, asi la forma del estado de los demas turnos no
     # cambia (los escenarios de la linea base siguen byte-identicos).
     if [ -n "$veredicto_sha256" ]; then printf 'veredicto_sha256=%s\n' "$veredicto_sha256"; fi
+    # 18.6: mismo patron que veredicto_sha256 — la linea autopilot se escribe
+    # SOLO en turnos autopilot. Se exige =1 (no solo no-vacio): el armado pasa
+    # "0" cuando el carril no se detecto, y escribir autopilot=0 cambiaria la
+    # forma del estado de TODOS los turnos (linea base dejaria de ser
+    # byte-identica); un sufijo typo cae a full con la linea AUSENTE.
+    if [ "$autopilot" = "1" ]; then printf 'autopilot=%s\n' "$autopilot"; fi
   } > "$STATE_PATH" 2>/dev/null || true
+}
+
+# 18.6: parrafo del contrato para el carril autopilot. Decision del 2026-08-30:
+# ya NO dice que mergea solo; prepara todo, para y pregunta antes de publicar,
+# merge solo con el si del operador; sobrevive D21 (merge antes del recibo, SOLO
+# tools/saikit-merge.sh, Close con sha mergeado o razon de no-merge); sin checks
+# nuevos en el Stop; D7 (lo autorizado en setup no se vuelve a preguntar);
+# sentinel POR TURNO (diferencia con el full-autonomy grant). UNA sola fuente:
+# la emiten los DOS bloques de contrato (harness_context y build_gate_feedback).
+autopilot_parrafo() {
+  cat <<'AUTOPILOT_P'
+Autopilot lane (-saikit:autopilot):
+- This turn runs the FULL ceremony above; the autopilot flag adds no new Stop checks.
+  You prepare everything — implementation, verification, review, the PR itself — but you
+  STOP AND ASK before publishing: the merge happens ONLY with the operator's explicit yes,
+  never on your own. With that yes, the merge goes BEFORE the receipt and ONLY via
+  tools/saikit-merge.sh, never a bare `gh pr merge`; the Close cites the merged sha or the
+  reason no merge happened. The sentinel is PER-TURN: it grants no standing permission
+  (that is the difference with a full-autonomy grant), and what the operator already
+  authorized in setup is not asked again.
+AUTOPILOT_P
 }
 
 # Task 10.12 -- el bloque de arriba (numerado 1-6, "1. Understand - ...")
@@ -1289,7 +1317,15 @@ HARNESS_CONTEXT
   [ -n "$_alias" ] && _alias_linea="Fast lane by alias: this turn is -saikit:$( [ "$_alias" = investigar ] && echo pregunta || echo boceto ); the recipe is $_alias. Do NOT touch production code."
   _hc="${_hc//\$TOOL_HINT/$TOOL_HINT}"
   _hc="${_hc//\$RECETAS_MENU/$_menu}"
-  printf '%s' "${_hc//\$ALIAS_LINEA/$_alias_linea}"
+  _hc="${_hc//\$ALIAS_LINEA/$_alias_linea}"
+  # 18.6, bloque 1 del contrato: el parrafo autopilot se emite SOLO cuando el
+  # estado del turno tiene autopilot=1 (el output de turnos no-autopilot no
+  # cambia). Bloque 2 (build_gate_feedback) emite el mismo parrafo — tocar uno
+  # solo dejaria el gate afirmando cosas distintas segun la rama que emita.
+  if [ "$(read_state_value autopilot)" = "1" ]; then
+    _hc="$(printf '%s\n\n%s' "$_hc" "$(autopilot_parrafo)")"
+  fi
+  printf '%s' "$_hc"
 }
 
 # Task 10.1: los clasificadores del vendor (is_engineering_task,
@@ -1578,6 +1614,15 @@ start_harness() {
   if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:boceto([^A-Za-z0-9_-]|$)'; then
     if receta_valida "boceto"; then lane="fast"; receta_alias="boceto"; fi
   fi
+  # 18.6: carril autopilot. Misma frontera exacta que :fast — el RE del
+  # sentinel no cambia. El flag NO baja el carril: autopilot gana sobre
+  # :fast/:alias porque su parrafo solo tiene sentido con ceremonia completa.
+  # Sufijo desconocido (-saikit:autopiloto) cae a full SIN flag, el mismo
+  # lado seguro que el typo de :fast. Atado por caso_g1_autopilot_arma_full_con_flag.
+  autopilot="0"
+  if printf '%s' "$prompt_text" | grep -Eq '(^|[^A-Za-z0-9_/-])-saikit:autopilot([^A-Za-z0-9_-]|$)'; then
+    autopilot="1"; lane="full"; receta_alias=""
+  fi
 
   task_hash="$(printf '%s' "$prompt_text" | cksum | awk '{print $1}')"
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
@@ -1595,7 +1640,7 @@ start_harness() {
   # previo sobreviviente de una sesion muerta con la misma llave, CodeRabbit
   # Major #64-b). ISO UTC: es la forma que la linea base dorada normaliza.
   adv_epoch_armado="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
-  write_state "$task_hash" "0" "0" "0" "" "$lane" "$adv_epoch_armado" "" "" ""
+  write_state "$task_hash" "0" "0" "0" "" "$lane" "$adv_epoch_armado" "" "" "" "" "$autopilot"
   rm -f "$STATE_DIR/receta_alias"; [ -n "$receta_alias" ] && printf '%s\n' "$receta_alias" > "$STATE_DIR/receta_alias"
   # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
   # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni
@@ -1898,7 +1943,7 @@ verdict_registrar_sello() {
   vd_ap="$(read_state_value adv_paths)"
   vd_av="$(read_state_value adv_violation)"
   vd_avp="$(read_state_value adv_violation_paths)"
-  write_state "$vd_task" "$vd_cycle" "$vd_impl" "$vd_verif" "$vd_agents" "$vd_lane" "$vd_ae" "$vd_ap" "$vd_av" "$vd_avp" "$vd_sha"
+  write_state "$vd_task" "$vd_cycle" "$vd_impl" "$vd_verif" "$vd_agents" "$vd_lane" "$vd_ae" "$vd_ap" "$vd_av" "$vd_avp" "$vd_sha" "$(read_state_value autopilot)"
   if [ -n "$vd_sha" ]; then
     printf 'veredicto_sha256: %s\n' "$vd_sha" >> "$LOG_PATH" 2>/dev/null || true
   fi
@@ -1921,7 +1966,7 @@ adv_reescribir_estado() {
   if [ -z "$implemented" ]; then implemented="0"; fi
   if [ -z "$verified" ]; then verified="0"; fi
   if [ -n "${5:-}" ]; then cycle="$5"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4" "$veredicto_sha256"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4" "$veredicto_sha256" "$(read_state_value autopilot)"
 }
 
 adv_registrar_violacion() {
@@ -2156,7 +2201,7 @@ mark_evidence() {
 
   if [ "$kind" = "implemented" ]; then implemented="1"; fi
   if [ "$kind" = "verified" ]; then verified="1"; fi
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256" "$(read_state_value autopilot)"
   printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -2260,7 +2305,7 @@ record_agent() {
       if [ -z "$agents_seen" ]; then agents_seen="$agent"; else agents_seen="$agents_seen,$agent"; fi
       ;;
   esac
-  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256"
+  write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256" "$(read_state_value autopilot)"
   printf 'agent: %s\n' "$agent" >> "$LOG_PATH" 2>/dev/null || true
 }
 
@@ -2494,7 +2539,7 @@ has_receipt_label() {
 build_gate_feedback() {
   missing="$1"
   next_cycle="$2"
-  cat <<EOF
+  _gf="$(cat <<EOF
 SUMMONAIKIT HARNESS GATE
 
 Failed gates:
@@ -2520,6 +2565,15 @@ Review: ...
 Close: ...
 Retro: ...
 EOF
+)"
+  # 18.6, bloque 2 del contrato: mismo parrafo que harness_context (bloque 1),
+  # SOLO cuando el estado del turno tiene autopilot=1 — el feedback de turnos
+  # no-autopilot no cambia. Tocar un bloque solo dejaria el gate afirmando
+  # cosas distintas segun la rama que emita.
+  if [ "$(read_state_value autopilot)" = "1" ]; then
+    _gf="$(printf '%s\n\n%s' "$_gf" "$(autopilot_parrafo)")"
+  fi
+  printf '%s\n' "$_gf"
 }
 
 emit_gate_failure() {

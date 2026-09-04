@@ -67,6 +67,8 @@ G1|estado_inmortal|la poda del dir de sesion se neutraliza y cada limpieza vuelv
 G1|barrido_sin_ttl|el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
 G1|menu_recetas_apagado|el menu del recetario se apaga y el contrato deja de ofrecer recetas aun con manifiesto valido
 G1|alias_pregunta_apagado|el alias -saikit:pregunta deja de bajar el carril
+G1|autopilot_no_se_detecta|el carril autopilot deja de detectarse y el flag desaparece del estado y del contrato
+G1|autopilot_parrafo_apagado|el parrafo del contrato deja de emitirse en turnos autopilot
 G1|alias_sin_receta|el alias baja el carril pero no nombra la receta
 G1|alias_no_se_limpia|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
 G1|manifiesto_reinyecta_titulo|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
@@ -258,6 +260,13 @@ mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 # porque 'the recipe is investigar' no aparece).
 mut_menu_recetas_apagado()      { sed 's/^  if \[ ! -r "\$m" \]; then printf/  if true; then printf/'; }
 mut_alias_pregunta_apagado()    { sed 's/-saikit:pregunta(/-saikit:NUNCA(/'; }
+# 18.6: el sed de autopilot_no_se_detecta solo toca la linea de DETECCION (el
+# patron `-saikit:autopilot(` vive una sola vez en el hook: el parrafo del
+# contrato trae `-saikit:autopilot)` con cierre, grep-verificado). El de
+# autopilot_parrafo_apagado rompe la igualdad a "1" en los DOS bloques de
+# contrato (harness_context y build_gate_feedback) con el mismo literal.
+mut_autopilot_no_se_detecta()   { sed 's/-saikit:autopilot(/-saikit:NUNCA(/'; }
+mut_autopilot_parrafo_apagado() { sed 's/"\$(read_state_value autopilot)" = "1"/"$(read_state_value autopilot)" = "1 NUNCA"/g'; }
 mut_alias_sin_receta()          { sed 's/receta_alias="investigar"/receta_alias=""/'; }
 # Task 16.6 (reviewer, hallazgo #4 / C13): la limpieza receta_alias de
 # podar_dir_sesion se neutraliza y el desarme tras un turno con alias deja el
