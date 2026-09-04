@@ -23,7 +23,8 @@ También toma el lock del repo y asegura el `.gitignore` de `veredictos/`.
   la config de ahí, nunca del disco. Dile que haga commit + push.
 - `merge_despliega: unknown` (nadie contestó) NO mergea: es distinto de "no".
 - Un solo setup a la vez por repo (lock compartido entre worktrees). Si otro
-  lo tiene, se reporta y se espera; solo `--liberar-lock` lo quita a mano.
+  lo tiene, el comando lo reporta y sale con código 3 SIN esperar: el operador
+  libera con `--liberar-lock` o reintenta cuando el otro termine.
 - Cada respuesta también llega por flag (`--merge si`, `--despliega no`,
   `--salud-url -`, `--sin-verify-app no`, `--telegram no`, `--rama master`,
   `--pr 7`); con todas por flag no pregunta nada.

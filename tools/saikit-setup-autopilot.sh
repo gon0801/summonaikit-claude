@@ -228,6 +228,12 @@ esac
 # ------------------------------------------------------------- escribir
 SAIKIT_DIR="$ROOT/.saikit"
 CFG="$SAIKIT_DIR/autopilot.json"
+# .saikit simbolico: mkdir -p lo seguiria y escribiria mas alla del repo
+# (hallazgo del lead, PR #161). Se rechaza ANTES de crear/escribir nada.
+if [ -L "$SAIKIT_DIR" ]; then
+  printf 'saikit-setup-autopilot: %s es un enlace simbolico; no se escribe a traves (quitalo a mano si es tuyo)\n' "$SAIKIT_DIR" >&2
+  exit 2
+fi
 mkdir -p "$SAIKIT_DIR" 2>/dev/null \
   || { printf 'saikit-setup-autopilot: no se pudo crear %s\n' "$SAIKIT_DIR" >&2; exit 2; }
 
@@ -240,12 +246,28 @@ fi
 
 contenido="$(printf '{"merge":%s,"merge_despliega":"%s","salud_url":%s,"revert_si_rojo":true,"rama":"%s","sin_verify_app":%s,"telegram":%s}' \
   "$merge_json" "$despliega_json" "$salud_json" "$rama_resp" "$sve_json" "$telegram_json")"
-printf '%s\n' "$contenido" > "$CFG" \
-  || { printf 'saikit-setup-autopilot: no se pudo escribir %s\n' "$CFG" >&2; exit 2; }
-if ! saikit_json_valido "$(cat "$CFG")"; then
-  printf 'saikit-setup-autopilot: lo escrito no valida como JSON; no se sigue\n' >&2
+# Escritura atomica (patron de tools/install-hook.sh): temporal EN EL MISMO
+# dir, validar el temporal, y recien entonces mv -f. Escribir directo a $CFG
+# perdia la config previa ANTES de validar: si lo producido no validaba (una
+# regresion del veto de arriba), el aviso salia con la config buena ya pisada
+# (hallazgo del lead, PR #161).
+umask_prev="$(umask)"
+umask 077
+CFG_TMP="$(mktemp "$SAIKIT_DIR/.autopilot.json.XXXXXX")" \
+  || { umask "$umask_prev"; printf 'saikit-setup-autopilot: no se pudo crear el temporal para %s\n' "$CFG" >&2; exit 2; }
+if ! printf '%s\n' "$contenido" > "$CFG_TMP"; then
+  rm -f "$CFG_TMP"; umask "$umask_prev"
+  printf 'saikit-setup-autopilot: no se pudo escribir %s\n' "$CFG" >&2
   exit 2
 fi
+if ! saikit_json_valido "$(cat "$CFG_TMP")"; then
+  rm -f "$CFG_TMP"; umask "$umask_prev"
+  printf 'saikit-setup-autopilot: lo escrito no valida como JSON; no se sigue (%s queda intacto)\n' "$CFG" >&2
+  exit 2
+fi
+mv -f "$CFG_TMP" "$CFG" \
+  || { rm -f "$CFG_TMP"; umask "$umask_prev"; printf 'saikit-setup-autopilot: no se pudo escribir %s\n' "$CFG" >&2; exit 2; }
+umask "$umask_prev"
 
 # .gitignore de veredictos, idempotente (ver cabecera: por que no en la raiz).
 mkdir -p "$SAIKIT_DIR/veredictos" 2>/dev/null \
