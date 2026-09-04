@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-04 — Deploy correctivo fuera de PR: grok y dsh estaban CINCO filas atras
+
+- **Qué pasó:** el cross-review de grok sobre el protocolo de deploy destapó que
+  el paso 2 de `AGENTS.md` (`install-hook.sh` sin `--host`) actualiza **una sola**
+  copia. Desde 7.5 / Phase 15 / 18.15, grok y dsh tienen `DEST` propio.
+- **Medido:** `~/.grok/hooks/…` y `~/.dsh/hooks/…` corrían `4127f79a` con mtime
+  del 3 de septiembre — se habían perdido 18.6, 18.7, 18.5, 18.17 y 18.18.
+  `~/.claude/hooks/…` (claude + zcode) sí estaba al día.
+- **Deploy correctivo del lead:** `install-hook.sh --host grok` y `--host dsh`,
+  los dos **REPARADO** con backup (`…saikit-backups/…20260904-080947.bak`).
+  Verificado después: los tres perfiles con el mismo `sha256` que la fuente del
+  repo. `check-hook-registration.sh` exit 0 en claude y en grok.
+- **Corrección a un registro anterior:** la entrada de la 18.13 afirma que grok
+  apunta al hook de `~/.claude/hooks/`. Dejó de ser cierto en la 18.15, cuando
+  `grok_hook_cmd` pasó a interpolar el `$DEST` propio de grok. Queda anotado acá
+  en vez de reescribir el registro histórico.
+- **Fila abierta:** 18.20 — el protocolo no puede verificar su invariante. El
+  instalador no consulta git (cero referencias a `origin/master` o `HEAD`), así
+  que `YA AL DIA` significa «igual a lo que tenga el que lo corrió».
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-04 — PR #174 / Task 18.18 (el label acepta el runner del repo) — deploy REAL
 
 - **Qué se mergeó:** el carril del label pasa a aceptar las formas del runner
