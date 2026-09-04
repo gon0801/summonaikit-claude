@@ -281,7 +281,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -1219,10 +1219,11 @@ caso_g1_alias_sin_recetario_queda_full() {
 # autopilot=1 en el estado. La linea se escribe SOLO en turnos autopilot, asi
 # el estado de los demas turnos queda byte-identico. Sufijo desconocido
 # (-saikit:autopiloto) cae a full SIN flag, el mismo lado seguro que el typo
-# de :fast. El parrafo del contrato tiene que llegar por los DOS bloques que
-# emiten contrato/feedback (harness_context al armar, build_gate_feedback al
-# bloquear): tocar uno solo dejaria el gate afirmando cosas distintas segun
-# la rama que emita.
+# de :fast. El parrafo del contrato tiene que llegar por los TRES emisores
+# (harness_context al armar, build_gate_feedback al bloquear,
+# emit_budget_exhausted al agotar): tocar uno solo dejaria el gate afirmando
+# cosas distintas segun la rama que emita. En grok el bloqueo adosa
+# harness_context, asi que ahi build_gate_feedback NO lo repite (una vez).
 caso_g1_autopilot_arma_full_con_flag() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot cierra la task')"
   _igual "lane" "$(lab_estado lane)" "full"
@@ -1235,6 +1236,22 @@ caso_g1_autopilot_gana_sobre_fast() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot -saikit:fast algo')"
   _igual "lane" "$(lab_estado lane)" "full"
   _igual "autopilot" "$(lab_estado autopilot)" "1"
+}
+
+# Autopilot tambien gana sobre un ALIAS con receta valida (la deteccion pisa
+# lane y receta_alias juntos): el turno queda full, con flag y sin alias en el
+# estado ni en el contrato. Sin este caso, la rama `receta_alias=""` del
+# autopilot no la ataba nadie (caso_g1_autopilot_gana_sobre_fast solo cubre :fast).
+caso_g1_autopilot_gana_sobre_alias() {
+  _recetas_lab
+  _receta_anadir investigar "Explicar cómo funciona algo" fast
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot -saikit:pregunta cómo funciona el login')"
+  unset SAIKIT_RECETAS_DIR
+  _igual "lane" "$(lab_estado lane)" "full"
+  _igual "autopilot" "$(lab_estado autopilot)" "1"
+  _vacio "receta_alias" "$(cat "$(dirname "$LAB_ESTADO_PATH")/receta_alias" 2>/dev/null)"
+  _no_contiene "stdout" "$LAB_OUT" 'the recipe is investigar'
+  _contiene "stdout con parrafo autopilot" "$LAB_OUT" 'Autopilot lane (-saikit:autopilot)'
 }
 
 caso_g1_autopilot_sufijo_desconocido_sin_flag() {
@@ -1250,6 +1267,21 @@ caso_g1_autopilot_parrafo_en_gate_failure() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot cierra la task')"
   lab_run stop claude "$(lab_payload_stop 'cierre sin recibo')"
   _contiene "feedback del gate con parrafo autopilot" "$LAB_OUT" 'Autopilot lane'
+}
+
+# En grok el bloqueo del Stop viaja con harness_context ADOSADO (7.4), y ese
+# contrato ya trae el parrafo autopilot: si build_gate_feedback lo agrega
+# tambien, el modelo lo lee dos veces en el mismo reason (medido: 2 en grok,
+# 1 en claude). Se exige UNA ocurrencia exacta, no "contiene".
+caso_g1_autopilot_parrafo_una_vez_en_grok() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit:autopilot cierra la task')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'cierre sin recibo' end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _contiene "Stop grok bloquea" "$LAB_OUT" '"decision":"block"'
+  _igual "ocurrencias del parrafo autopilot en el reason grok" \
+    "$(printf '%s' "$LAB_OUT" | grep -o 'Autopilot lane (-saikit:autopilot)' | wc -l | tr -d ' ')" "1"
 }
 
 # 18.6 (hallazgo adversary #1): el presupuesto agotado es un TERCER emisor de

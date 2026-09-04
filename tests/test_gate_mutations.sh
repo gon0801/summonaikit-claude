@@ -69,6 +69,8 @@ G1|menu_recetas_apagado|el menu del recetario se apaga y el contrato deja de ofr
 G1|alias_pregunta_apagado|el alias -saikit:pregunta deja de bajar el carril
 G1|autopilot_no_se_detecta|el carril autopilot deja de detectarse y el flag desaparece del estado y del contrato
 G1|autopilot_parrafo_apagado|el parrafo del contrato deja de emitirse en turnos autopilot
+G5|autopilot_parrafo_apagado|el parrafo autopilot deja de emitirse tambien en el tercer emisor (presupuesto agotado)
+G1|autopilot_no_pisa_alias|autopilot deja de vaciar receta_alias y un turno -saikit:autopilot -saikit:pregunta queda con alias
 G1|alias_sin_receta|el alias baja el carril pero no nombra la receta
 G1|alias_no_se_limpia|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
 G1|manifiesto_reinyecta_titulo|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
@@ -263,10 +265,16 @@ mut_alias_pregunta_apagado()    { sed 's/-saikit:pregunta(/-saikit:NUNCA(/'; }
 # 18.6: el sed de autopilot_no_se_detecta solo toca la linea de DETECCION (el
 # patron `-saikit:autopilot(` vive una sola vez en el hook: el parrafo del
 # contrato trae `-saikit:autopilot)` con cierre, grep-verificado). El de
-# autopilot_parrafo_apagado rompe la igualdad a "1" en los DOS bloques de
-# contrato (harness_context y build_gate_feedback) con el mismo literal.
+# autopilot_parrafo_apagado rompe la igualdad a "1" en los TRES emisores
+# (harness_context, build_gate_feedback y emit_budget_exhausted): el tercero
+# lee el flag por `${2:-$(read_state_value autopilot)}`, asi que el sed ancla
+# en la cola comun `autopilot)...}" = "1"` y no en el literal entero. Un sed
+# que solo tocara el literal de los dos primeros dejaba el budget agotado
+# emitiendo el parrafo con la mutacion puesta (medido). Catalogado en G1 (lo
+# atrapan arm/gate_failure) Y en G5 (caso_g5_autopilot_parrafo_en_budget_agotado).
 mut_autopilot_no_se_detecta()   { sed 's/-saikit:autopilot(/-saikit:NUNCA(/'; }
-mut_autopilot_parrafo_apagado() { sed 's/"\$(read_state_value autopilot)" = "1"/"$(read_state_value autopilot)" = "1 NUNCA"/g'; }
+mut_autopilot_parrafo_apagado() { sed -E 's/(read_state_value autopilot\)\}?" = )"1"/\1"1 NUNCA"/g'; }
+mut_autopilot_no_pisa_alias()   { sed 's/autopilot="1"; lane="full"; receta_alias=""/autopilot="1"; lane="full"/'; }
 mut_alias_sin_receta()          { sed 's/receta_alias="investigar"/receta_alias=""/'; }
 # Task 16.6 (reviewer, hallazgo #4 / C13): la limpieza receta_alias de
 # podar_dir_sesion se neutraliza y el desarme tras un turno con alias deja el
