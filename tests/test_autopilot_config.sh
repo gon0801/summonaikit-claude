@@ -32,6 +32,7 @@ CASO_ROJO=0
 _mal()      { printf '      FAIL: %s\n' "$1"; CASO_ROJO=1; }
 _contiene() { if ! printf '%s' "$2" | grep -Fq -- "$3"; then _mal "$1: no contiene [$3]"; fi; }
 _no_contiene() { if printf '%s' "$2" | grep -Fq -- "$3"; then _mal "$1: contiene [$3] y no deberia"; fi; }
+_no_contiene() { if printf '%s' "$2" | grep -Fq -- "$3"; then _mal "$1: contiene [$3] y no deberia"; fi; }
 
 SB=""
 OUT=""
@@ -130,6 +131,44 @@ caso "salud_url_con_otro_esquema_se_rechaza_sin_escribir"
   _contiene "nombra el esquema" "$OUT" "http"
 }
 fin_caso "salud_url_con_otro_esquema_se_rechaza_sin_escribir"
+
+caso "flag_sin_valor_sale_2_no_gira (cross-review kimi)"
+{
+  # El bug de la Task 0.4: `shift 2` con un solo argumento no consume nada y
+  # el while gira para siempre. Acotado con timeout: 124 es bucle, 2 es fix.
+  OUT="$(timeout 5 bash "$SETUP" --merge 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  _contiene "exige el valor" "$OUT" "exige un valor"
+}
+fin_caso "flag_sin_valor_sale_2_no_gira (cross-review kimi)"
+
+caso "desde_subdir_toma_el_lock_real (cross-review kimi)"
+{
+  # El common-dir relativo (`../.git`) lo es al cwd de invocacion: correr
+  # desde un subdir tomaba un lock fantasma en / y reportaba LOCK ocupado.
+  mkdir -p sub
+  cd sub || exit 1
+  OUT="$(bash "$SETUP" --merge no --despliega no --sin-verify-app no --telegram no 2>&1)"
+  RC=$?
+  cd "$SB/work" || exit 1
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -f .saikit/autopilot.json ] || _mal "no escribio corriendo desde el subdir: $OUT"
+  _no_contiene "sin falso LOCK ocupado" "$OUT" "LOCK ocupado"
+}
+fin_caso "desde_subdir_toma_el_lock_real (cross-review kimi)"
+
+caso "salud_con_comilla_o_inyeccion_se_veta_sin_escribir (cross-review kimi+grok)"
+{
+  correr --merge no --despliega no --salud-url 'https://x","inyectada":"si' --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  [ ! -e .saikit/autopilot.json ] || _mal "escribio una salud_url con comillas"
+  _contiene "nombra el veto" "$OUT" "comillas"
+  correr --merge no --despliega no --salud-url 'https://x\y.example.com/s' --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2 con backslash, dio $RC: $OUT"
+  [ ! -e .saikit/autopilot.json ] || _mal "escribio una salud_url con backslash"
+}
+fin_caso "salud_con_comilla_o_inyeccion_se_veta_sin_escribir (cross-review kimi+grok)"
 
 caso "gitignore_de_veredictos_idempotente"
 {
@@ -259,6 +298,31 @@ c_defaults() {
     || _mal "merge_despliega deberia nacer unknown"
 }
 
+c_flag_valor() {
+  CASO_ROJO=0; sb_reset
+  OUT="$(timeout 5 bash "$SETUP" --merge 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+}
+
+c_subdir() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p sub
+  cd sub || exit 1
+  OUT="$(bash "$SETUP" --merge no --despliega no --sin-verify-app no --telegram no 2>&1)"
+  RC=$?
+  cd "$SB/work" || exit 1
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -f .saikit/autopilot.json ] || _mal "no escribio desde el subdir"
+}
+
+c_veto_json() {
+  CASO_ROJO=0; sb_reset
+  correr --merge no --despliega no --salud-url 'https://x","inyectada":"si' --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+  [ ! -e .saikit/autopilot.json ] || _mal "escribio una salud_url con comillas"
+}
+
 c_lock_viejo() {
   CASO_ROJO=0; sb_reset
   lock=".git/saikit-autopilot.lock"
@@ -302,6 +366,9 @@ done <<'MUTS'
 despliega_default_false	s|despliega_default="no-se"|despliega_default="xxx"|	c_defaults
 lock_sin_mkdir	s|if mkdir "$LOCK_DIR" 2>/dev/null; then|if true; then|	c_contencion
 lock_se_autolimpia	s|# NUNCA se borra solo|rm -rf "$LOCK_DIR"; # NUNCA se borra solo|	c_lock_viejo
+flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor
+common_contra_root	s|cd "$INVOC" && cd "$COMMON"|cd "$ROOT" \&\& cd "$COMMON"|	c_subdir
+salud_sin_veto	s|printf 'saikit-setup-autopilot: --salud-url no puede traer comillas.*|    ;;|	c_veto_json
 MUTS
 
 if [ "$fail" -ne 0 ]; then

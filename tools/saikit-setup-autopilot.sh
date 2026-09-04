@@ -60,13 +60,24 @@ uso() { sed -n '2,40p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --merge)          merge_flag="${2:-}"; shift 2 ;;
-    --despliega)      despliega_flag="${2:-}"; shift 2 ;;
-    --salud-url)      salud_flag="${2:-}"; shift 2 ;;
-    --sin-verify-app) sve_flag="${2:-}"; shift 2 ;;
-    --telegram)       telegram_flag="${2:-}"; shift 2 ;;
-    --rama)           rama_flag="${2:-}"; shift 2 ;;
-    --pr)             pr_flag="${2:-}"; shift 2 ;;
+    --merge|--despliega|--salud-url|--sin-verify-app|--telegram|--rama|--pr)
+      # El bug de la Task 0.4, que este repo ya pago dos veces (decision.sh y
+      # el cross-review de esta fila): `shift 2` con un solo argumento no
+      # consume nada y el while gira para siempre (rc=124 por timeout). Un
+      # flag con valor EXIGE el valor.
+      if [ $# -lt 2 ]; then
+        printf 'saikit-setup-autopilot: %s exige un valor\n' "$1" >&2; exit 2
+      fi
+      case "$1" in
+        --merge)          merge_flag="$2" ;;
+        --despliega)      despliega_flag="$2" ;;
+        --salud-url)      salud_flag="$2" ;;
+        --sin-verify-app) sve_flag="$2" ;;
+        --telegram)       telegram_flag="$2" ;;
+        --rama)           rama_flag="$2" ;;
+        --pr)             pr_flag="$2" ;;
+      esac
+      shift 2 ;;
     --liberar-lock)   liberar=1; shift ;;
     -h|--help)        uso; exit 0 ;;
     *) printf 'saikit-setup-autopilot: opcion desconocida: %s\n' "$1" >&2; uso >&2; exit 2 ;;
@@ -74,11 +85,20 @@ while [ $# -gt 0 ]; do
 done
 
 # Repo y lock ANTES de todo (hasta --liberar-lock los necesita).
+INVOC="$(pwd -P 2>/dev/null)" \
+  || { printf 'saikit-setup-autopilot: no se pudo resolver el cwd\n' >&2; exit 2; }
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
   || { printf 'saikit-setup-autopilot: el cwd no es un repo git\n' >&2; exit 2; }
 COMMON="$(git rev-parse --git-common-dir 2>/dev/null)" \
   || { printf 'saikit-setup-autopilot: no se pudo resolver el git-common-dir\n' >&2; exit 2; }
-case "$COMMON" in /*) ;; *) COMMON="$(cd "$ROOT" && cd "$COMMON" && pwd -P)" ;; esac
+# El common-dir relativo lo es AL CWD DE INVOCACION (medido: `../.git` desde
+# un subdir; cross-review kimi): resolverlo contra ROOT apunta fuera del repo
+# y el script reportaba un falso "LOCK ocupado" en /saikit-autopilot.lock.
+case "$COMMON" in
+  /*) ;;
+  *) COMMON="$(cd "$INVOC" && cd "$COMMON" && pwd -P)" \
+    || { printf 'saikit-setup-autopilot: no se pudo resolver %s desde %s\n' "$COMMON" "$INVOC" >&2; exit 2; } ;;
+esac
 LOCK_DIR="$COMMON/saikit-autopilot.lock"
 
 mostrar_lock() {  # reporta el contenido del lock ajeno, campo por campo
@@ -174,6 +194,13 @@ salud_resp="$salud_flag"
 if [ "$salud_resp" = "__sin_dato__" ]; then
   salud_resp="$(preguntar '3/5 URL https para checar que la app sigue viva? (vacio = ninguna)' "")"
 fi
+# Veto JSON (cross-review kimi+grok): salud_url se interpola cruda en el
+# JSON. Una `"` o `\` rompia el archivo o inyectaba claves (`https://x","
+# inyectada":"` validaba con rc=0). Se veta ANTES de escribir, no despues.
+case "$salud_resp" in
+  *\"*|*\\*|*[[:cntrl:]]*)
+    printf 'saikit-setup-autopilot: --salud-url no puede traer comillas, barras invertidas ni controles\n' >&2; exit 2 ;;
+esac
 case "$salud_resp" in
   ""|"-") salud_json="null" ;;
   http://*|https://*) salud_json="\"$salud_resp\"" ;;
@@ -191,6 +218,11 @@ telegram_json="$(normalizar_si_no "$telegram_resp" --telegram)" || exit 2
 rama_resp="${rama_flag:-$rama_default}"
 case "$rama_resp" in
   ""|*[[:space:]]*) printf 'saikit-setup-autopilot: --rama no puede ser vacia ni llevar espacios\n' >&2; exit 2 ;;
+esac
+# Mismo veto JSON que salud_url: la rama tambien se interpola cruda.
+case "$rama_resp" in
+  *\"*|*\\*|*[[:cntrl:]]*)
+    printf 'saikit-setup-autopilot: --rama no puede traer comillas, barras invertidas ni controles\n' >&2; exit 2 ;;
 esac
 
 # ------------------------------------------------------------- escribir
