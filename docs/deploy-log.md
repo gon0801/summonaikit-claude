@@ -7,6 +7,33 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-03 — PR #162 / Task 18.6 (carril `-saikit:autopilot`) — deploy REAL + golden regrabada
+
+- **Qué se mergeó:** el sentinel `-saikit:autopilot` (FULL + `autopilot=1`) y su
+  párrafo del contrato en los tres emisores. El párrafo dice que PREPARA y PARA
+  A PREGUNTAR antes de publicar; el merge solo con el sí del operador y solo por
+  `saikit-merge.sh`.
+- **Deploy:** `install-hook.sh` → **REPARADO** con backup en
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260903-231656.bak`.
+  `check-hook-registration.sh` exit 0. `audita-ledger` OK.
+- **Deriva de identidad de la golden, curada en este PR:** tras el deploy,
+  `golden-harness.sh --check` pasaba (55 escenarios se comportan igual) pero la
+  cabecera declaraba `e71820af…` mientras el hook vivo era `e2916156…` — el
+  implementador regrabó antes de su último arreglo. Regrabada: el diff son
+  **3 líneas de cabecera** y los 55 escenarios quedan byte a byte. Es la misma
+  clase de deriva que la 18.13 curó una vez; conviene regrabar SIEMPRE después
+  del último cambio al hook, no antes.
+- **Cuatro hallazgos del lead cerrados**, el último de ellos el más caro de
+  encontrar: el flag `autopilot` no estaba protegido en los rewrites de mitad de
+  turno. Medido antes: quitar el flag del `write_state` de `mark_evidence` dejaba
+  `test_gate_behavior` en OK con 0 fallas. Medido después:
+  `FAIL: autopilot tras mark_evidence: esperaba [1], dio []`. Salió del
+  cross-review de kimi sobre las conclusiones del lead, no de la revisión de la
+  entrega.
+- **Residual declarado:** `verdict_registrar_sello` y `adv_reescribir_estado`
+  siguen sin caso que ate la preservación del flag.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-03 — PR #161 / Tasks 18.7 y 18.5 (setup del autopilot y aviso post-merge) — deploy PLANTA la skill
 
 - **Qué se mergeó:** las dos filas en un solo PR a propósito — 18.5 lee el
