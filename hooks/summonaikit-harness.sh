@@ -3155,7 +3155,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   next_cycle=$((cycle + 1))
   write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane" \
     "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
-    "$(read_state_value veredicto_sha256)"
+    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
   feedback="$(build_gate_feedback "$missing" "$next_cycle")"
   emit_gate_failure "$feedback"
 }
