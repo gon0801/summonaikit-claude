@@ -112,6 +112,10 @@ G2|verif_fallo_pelado_apagado|el veto del fallo PELADO se apaga y 'pytest -q, ok
 G2|verif_fallo_negado_apagado|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
 G2|verif_fallo_ruta_no_descontada|el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)
 G2|verif_fallo_pegado_sin_normalizar|la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)
+G2|verif_label_vocabulario_cerrado|las dos ramas del runner propio (tests/run.sh) salen del vocabulario del label y 'VERIFIED BY SUBAGENT: bash tests/run.sh exit 0' vuelve a NO acreditar (18.18)
+G2|verif_label_resulto_opcional|la guarda de resultado en el MISMO span se quita y un label con comando del vocabulario pero sin resultado acredita (18.18)
+G2|verif_label_veto_local|el veto global del label se neutraliza y un fallo declarado en otro span ya no descalifica (18.18)
+G2|verif_label_mensaje_generico|el motivo especifico del label deja de llegar al missing y el reclamo vuelve al mensaje generico (18.18)
 G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
 G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
 G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
@@ -517,6 +521,33 @@ mut_verif_fallo_negado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_NEGADO_RE=.*/SA
 # caso_g2_zcode_verif_subagente_fallo_pegado_bloquea.
 mut_verif_fallo_ruta_no_descontada() { sed "s/^SAIKIT_VERIFIED_FALLO_RUTA_RE=.*/SAIKIT_VERIFIED_FALLO_RUTA_RE='NUNCA_MATCHEA_ESTO_RUTA'/"; }
 mut_verif_fallo_pegado_sin_normalizar() { sed 's/^saikit_verif_fallo_norm() .*/saikit_verif_fallo_norm() { cat; }/'; }
+# 18.18 — una mutacion por condicion nueva del carril del label con el runner
+# propio, cada una acreditada a su caso (los literales aparecen una sola vez en
+# el hook). vocabulario_cerrado apaga SOLO la constante de las dos ramas nuevas
+# (el resto del vocabulario queda intacto: pytest/py_compile siguen
+# acreditando) — lo atrapa caso_g2_zcode_verif_label_runner_propio_acredita.
+# resulto_opcional neutraliza la guarda de RESULT_RE del loop de credito (el
+# `|| continue` de esa linea deja de cortar) — lo atrapan los dos casos de
+# "comando sin resultado": el preexistente ..._verif_subagente_sin_resultado_
+# bloquea (py_compile sin resultado, corre antes en CASOS_G2 y se lleva el
+# credito) y el nuevo caso_g2_zcode_verif_label_sin_resultado_sin_fallo_
+# no_acredita (runner propio sin resultado — el DISCRIMINANTE pensado para esta
+# mutacion: un caso con resultado FALLIDO no sirve porque el veto global corre
+# antes y bloquea igual con o sin la guarda).
+# veto_local apaga el veto global: los CUATRO greps del bloque leen entrada
+# vacia (dejan de ver los spans; el calculo sigue, jamas descalifica por
+# FAILURE_SIGNAL/exit [1-9]/cero) — lo atrapa
+# caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita (y los
+# casos de veto preexistentes: exit1/fallido/exito_luego_fallo/cero, que corren
+# antes en CASOS_G2 y pueden quedarse con el credito).
+# mensaje_generico rompe el nombre de la variable que lleva el motivo al Stop
+# (queda siempre vacia y el mensaje vuelve al generico) — lo atrapa
+# caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice
+# en su asercion de texto (el generico no nombra el vocabulario).
+mut_verif_label_vocabulario_cerrado() { sed "s/^SAIKIT_VERIFIED_RUNNER_PROPIO_RE=.*/SAIKIT_VERIFIED_RUNNER_PROPIO_RE='NUNCA_MATCHEA_ESTO_RUNNER_PROPIO'/"; }
+mut_verif_label_resulto_opcional()    { sed 's/grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE"/true/'; }
+mut_verif_label_veto_local()          { sed "s/printf '%s\\\\n' \"\$saikit_spans\"/printf '%s\\\\n' \"\"/g"; }
+mut_verif_label_mensaje_generico()    { sed 's/"${saikit_verif_motivo:-}"/"${saikit_verif_motivo_NUNCA:-}"/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en

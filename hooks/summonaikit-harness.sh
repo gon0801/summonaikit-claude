@@ -307,7 +307,33 @@ SAIKIT_VERIFIED_SUBAGENT_RE='VERIFIED[[:space:]]+BY[[:space:]]+SUBAGENT:'
 # vocabulario de runners (TEST_RUNNER_RE) + comandos de compilacion/type-check/
 # sintaxis que hoy NO estan en la lista de runners pero son verificaciones
 # legitimas. Con fronteras de palabra: "bateria"/"checks" NO cuentan.
-SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
+#
+# 18.18 — DOS ramas nuevas para el runner PROPIO del repo (tests/run.sh): en
+# host ciego el label es el UNICO juez de la evidencia (saikit_verif_evidence_ok)
+# y ninguna forma del runner del repo estaba en ESTE vocabulario, mientras que el
+# carril de evento (TEST_RUNNER_CMD_RE) si la acepta — el verifier corria la
+# bateria del repo y el gate la rechazaba igual. Decision de diseño (DECLARADA):
+# NO se embebe TEST_RUNNER_CMD_RE literal porque sus anclas de POSICION
+# `(^|[;&|]...)` no aplican a un span donde el comando viene tras el `: ` del
+# label; se agregan las DOS formas internas de ese carril (verbo shell opcional +
+# invocacion directa, segmentos de path estrictos `([^/[:space:]]*/)*` para que
+# "contest/run.sh" no matchee) SIN exigir posicion, y la frontera derecha la
+# sigue poniendo el cierre del wrapper de abajo. Viven en constante PROPIA (como
+# TEST_RUNNER_RE dentro del mismo grupo central) para que la bateria de
+# mutaciones pueda quitarlas SIN tocar al resto del vocabulario.
+#
+# Justificacion vs D13 (vocabulario cerrado): el vocabulario SIGUE cerrado — son
+# las mismas formas que el carril de evento ya acepta, no "cualquier .sh" — y el
+# credito sigue exigiendo resultado de EXITO en el MISMO span + veto global de
+# fallos sobre TODOS los spans. La palabra en prosa `tests/run.sh` sin resultado
+# en la misma linea no acredita, igual que `pytest` en prosa no acredita sin
+# resultado. Limites declarados del lado del wrapper (heredados de su frontera,
+# mas laxa que el terminador `([[:space:]]|$)` del carril de evento): un sufijo
+# con `/` o un verbo delante del runner dentro del span ("echo bash
+# tests/run.sh") pasan la frontera — aceptados a proposito: el span ES la
+# declaracion del lead, no un comando que el hook ejecuta.
+SAIKIT_VERIFIED_RUNNER_PROPIO_RE='(ba|z|da|k)?sh[[:space:]]+([^/[:space:]]*/)*tests?/run\.sh|(\./)?([^/[:space:]]*/)*tests?/run\.sh'
+SAIKIT_VERIFIED_CMD_RE="(^|[^A-Za-z0-9_.-])($TEST_RUNNER_RE|py_compile|compileall|python[0-9]?[[:space:]]+-m[[:space:]]+py_compile|dotnet[[:space:]]+build|bash[[:space:]]+-n|sh[[:space:]]+-n|node[[:space:]]+--check|git[[:space:]]+diff[[:space:]]+--check|$SAIKIT_VERIFIED_RUNNER_PROPIO_RE)([^A-Za-z0-9_.-]|\.([^A-Za-z0-9_.-]|$)|$)"
 # Resultado de EXITO que el label DEBE declarar (el veto de fallo aparte, abajo).
 # OJO a dos aristas (grok r1 #3): el conteo de "passed" es [1-9][0-9]*, y NO se
 # acepta "en verde" suelto (negable: "no en verde" lo matchearia) — queda "todo
@@ -388,12 +414,21 @@ saikit_verif_spans() {
 # cubre 'exit 1'. (Responsabilidad del lead: el diseño original tenia exit [1-9];
 # se reuso la constante del raíl y se re-sumo el exit aca. NUNCA comillas
 # simples: buscaria el literal del nombre y el veto jamas dispararia — §4.3.)
+#
+# 18.18 — cada salida SIN credito deja en $saikit_verif_motivo (GLOBAL a
+# proposito, jamas `local`: el Stop la lee para nombrar la condicion incumplida)
+# la razon especifica. Solo se setea cuando el label estuvo PRESENTE y fue el
+# juez: saikit_verif_evidence_ok la resetea a "" antes de cada llamada, asi un
+# turno SIN label (o en host no ciego) conserva el mensaje generico de siempre.
 saikit_verif_subagente_credita() {
   local saikit_text="$1"
-  local saikit_spans saikit_span saikit_credito
+  local saikit_spans saikit_span saikit_credito saikit_cmd_visto
   saikit_host_ciego || return 1
-  printf '%s' ",$agents_seen," | grep -q ",verifier," || return 1
+  printf '%s' ",$agents_seen," | grep -q ",verifier," \
+    || { saikit_verif_motivo="the VERIFIED BY SUBAGENT label was present but no verifier subagent ran this turn"; return 1; }
   saikit_spans="$(saikit_verif_spans "$saikit_text")"
+  # Sin spans no hay motivo especifico (defensivo: evidence_ok solo llama con
+  # label presente, asi que este retorno no deberia alcanzarse): mensaje generico.
   [ -n "$saikit_spans" ] || return 1
   # Veto sobre TODOS los spans (Greptile P1, PR #72): cualquier label con señal
   # de fallo descalifica el turno entero — un exito declarado antes o despues de
@@ -405,20 +440,33 @@ saikit_verif_subagente_credita() {
     || printf '%s\n' "$saikit_spans" | grep -Eq "$FAILURE_SIGNAL_RE_CS" \
     || printf '%s\n' "$saikit_spans" | grep -Eiq 'exit[[:space:]]+[1-9]' \
     || printf '%s\n' "$saikit_spans" | grep -Eiq "$SAIKIT_VERIFIED_CERO_RE" \
-    || saikit_verif_fallo_pelado "$saikit_spans"; } && return 1
+    || saikit_verif_fallo_pelado "$saikit_spans"; } \
+    && { saikit_verif_motivo="the VERIFIED BY SUBAGENT label was present but one of its spans declares a failure: declared failures never count as verification"; return 1; }
   # Credito: ALGUN span trae comando Y resultado de exito en la MISMA linea.
   # Comando en un span y resultado en otro siguen siendo piezas dispersas (codex
   # #2) y no acreditan.
   saikit_credito=1
+  saikit_cmd_visto=0
   while IFS= read -r saikit_span; do
     [ -n "$saikit_span" ] || continue
     printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_CMD_RE" || continue
+    saikit_cmd_visto=1
     printf '%s' "$saikit_span" | grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE" || continue
     saikit_credito=0
     break
   done <<SAIKIT_SPANS_EOF
 $saikit_spans
 SAIKIT_SPANS_EOF
+  # Sin credito: el motivo distingue si ALGUN span nombro comando del
+  # vocabulario (fallo el resultado en el MISMO span) o si ninguno lo nombro
+  # (comando fuera del vocabulario cerrado).
+  if [ "$saikit_credito" != "0" ]; then
+    if [ "$saikit_cmd_visto" = "1" ]; then
+      saikit_verif_motivo="the VERIFIED BY SUBAGENT label was present but its command line carries no SUCCESS result (e.g. exit 0) on the SAME line as the command"
+    else
+      saikit_verif_motivo="the VERIFIED BY SUBAGENT label was present but its command is not in the accepted vocabulary (runner words like pytest/npm test, or this repo's tests/run.sh)"
+    fi
+  fi
   return "$saikit_credito"
 }
 
@@ -430,6 +478,10 @@ SAIKIT_SPANS_EOF
 # label, comportamiento identico al de antes (design 14.1 §3/§4.3).
 saikit_verif_evidence_ok() {
   local saikit_ok_text="$1"
+  # 18.18 — el motivo se resetea EN LA ENTRADA (no en la salida): un turno sin
+  # label, o en host no ciego, no debe heredar el motivo de la ultima llamada y
+  # el Stop tiene que armar el mensaje generico de siempre.
+  saikit_verif_motivo=""
   # El label solo es juez en hosts de canal interno ciego (zcode). En cualquier
   # otro host (o sin label), la evidencia se juzga por el camino de antes
   # (prosa runner|skip OR runner en posicion de comando) — asi el label no cambia
@@ -3022,7 +3074,16 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # ni servir su span para acreditar el turno nuevo — la misma clase que las
   # escotillas PAUSED/DELEGATED ya cierran con text_hatch (Task 8.2).
   if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text_hatch"; then
-    missing="$missing- Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a \`VERIFIED BY SUBAGENT: <command> <result>\` on one line counts; otherwise declare an explicit skipped-check reason).\n"
+    # 18.18 — cuando el label estuvo PRESENTE y no acredito, saikit_verif_motivo
+    # (seteado por saikit_verif_subagente_credita) nombra la condicion incumplida
+    # en vez del reclamo generico: el lead ve QUE falto (verifier, fallo declarado,
+    # resultado fuera del span, comando fuera del vocabulario) y no solo que falto.
+    # Vacio = el label no fue el juez este turno: mensaje generico intacto.
+    if [ -n "${saikit_verif_motivo:-}" ]; then
+      missing="$missing- Missing verification evidence: ${saikit_verif_motivo}.\n"
+    else
+      missing="$missing- Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a \`VERIFIED BY SUBAGENT: <command> <result>\` on one line counts; otherwise declare an explicit skipped-check reason).\n"
+    fi
   fi
 
   # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude
