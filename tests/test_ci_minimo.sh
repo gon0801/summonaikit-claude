@@ -77,24 +77,38 @@ correr_gen() {
 
 yml_dest() { printf '%s' "$SB/work/.github/workflows/saikit-ci-minimo.yml"; }
 
-# Extrae lineas run: reales. Un '# run: ...' NO cuenta.
-run_reales() {  # $1=yaml → stdout con las lineas run:
+# Extrae valores de run: reales. '# run: ...' no cuenta; tampoco
+# 'run: true  # bash tests/run.sh' (el comando util solo vive tras #).
+run_reales() {  # $1=yaml → stdout con el valor util de cada run:
+  local linea val
   [ -f "$1" ] || return 1
-  grep -E '^[[:space:]]*run:' "$1" || true
+  while IFS= read -r linea; do
+    val="${linea#*run:}"
+    val="${val#"${val%%[![:space:]]*}"}"
+    # Recorta comentario inline (ataque DoD: comando solo tras #).
+    case "$val" in
+      \"*) val="${val#\"}"; val="${val%%\"*}" ;;
+      \'*) val="${val#\'}"; val="${val%%\'*}" ;;
+      *) val="${val%%#*}"; val="${val%"${val##*[![:space:]]}"}" ;;
+    esac
+    [ -n "$val" ] || continue
+    printf '%s\n' "$val"
+  done < <(grep -E '^[[:space:]]*run:' "$1" || true)
 }
 
-# 0 si hay un run de test y uno de verify. El YAML solo-comentario falla.
+# 0 si hay un run de test del repo (linea exacta) y otro que invoca verify/.
+# El bash -c de verify contiene la palabra npm test: no puede satisfacer el test.
 afirma_run_reales() {  # $1=yaml
   local lineas
   lineas="$(run_reales "$1")"
-  printf '%s\n' "$lineas" | grep -Eq 'bash tests/run\.sh|npm test|python -m pytest' || return 1
-  printf '%s\n' "$lineas" | grep -Fq 'verify' || return 1
+  printf '%s\n' "$lineas" | grep -Exq 'bash tests/run\.sh|npm test|python -m pytest' || return 1
+  printf '%s\n' "$lineas" | grep -Eq 'npm test -- verify/|python -m pytest verify/|find verify' || return 1
   return 0
 }
 
 afirma_sin_secrets() {  # $1=yaml
   [ -f "$1" ] || return 1
-  ! grep -Fq 'secrets.' "$1"
+  ! grep -Eq 'secrets\.|secrets\[|secrets:[[:space:]]*inherit' "$1"
 }
 
 # Cada uses: termina en @ + 40 hex. Tags (@v4) fallan.
@@ -166,9 +180,14 @@ fin_caso "run_reales_test_y_verify"
 caso "comentario_no_cuenta_como_run"
 {
   # El helper tiene que rechazar un run que solo vive en comentario.
-  printf '# run: bash tests/run.sh\n# run: verify/\n' > "$SB/solo-comentario.yml"
+  printf '# run: bash tests/run.sh\n# run: find verify\n' > "$SB/solo-comentario.yml"
   if afirma_run_reales "$SB/solo-comentario.yml"; then
     _mal "el helper acepto run: solo en comentario"
+  fi
+  # Ataque DoD: comando util solo tras # en la misma linea.
+  printf 'run: true  # bash tests/run.sh\nrun: true  # find verify -type f\n' > "$SB/inline-comentario.yml"
+  if afirma_run_reales "$SB/inline-comentario.yml"; then
+    _mal "el helper acepto run: true con el comando solo en comentario inline"
   fi
 }
 fin_caso "comentario_no_cuenta_como_run"
@@ -459,13 +478,6 @@ EOF
   unset SAIKIT_SPY_LOG
 }
 
-c_acepta() {
-  CASO_ROJO=0; sb_reset
-  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
-  RC=$?
-  [ -f "$(yml_dest)" ] || _mal "no escribio el workflow: $OUT"
-}
-
 c_uses_sha() {
   CASO_ROJO=0; sb_reset
   OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
@@ -507,7 +519,8 @@ done <<'MUTS'
 no_invoca_desde_setup	s|bash "\$GEN" --ofrecer --root "\$ROOT".*|true|	c_wiring	setup
 escribe_tag_no_sha	s/PIN_CHECKOUT_SHA=.*/PIN_CHECKOUT_SHA=v4.2.2/	c_uses_sha	gen
 mete_secrets	s/WORKFLOW_NAME='saikit-ci-minimo'/WORKFLOW_NAME='saikit-ci-minimo secrets.FOO'/	c_sin_secrets	gen
-run_solo_en_comentario	s/run: \$test_cmd/# run: $test_cmd/	c_run_reales	gen
+run_solo_en_comentario	s|run: \$test_cmd|run: true  # $test_cmd|	c_run_reales	gen
+default_no_escribe_igual	s/printf 'DEFAULT_NO'/printf 'SI'/	c_default_no	gen
 MUTS
 
 if [ "$fail" -ne 0 ]; then

@@ -28,7 +28,10 @@ DESTINO_REL='.github/workflows/saikit-ci-minimo.yml'
 RUNNER='ubuntu-latest'
 WORKFLOW_NAME='saikit-ci-minimo'
 
-VERIFY_CMD='bash -c '\''if [ -d verify ]; then find verify -type f | head -n 5; else echo saikit: verify/ ausente; fi'\'''
+# Si verify/ existe, se invoca un runner sobre esa ruta (no un echo).
+# Si no existe, sale 0: el scaffold no exige verify en repos que aun no lo tienen.
+# Sin comillas dobles internas: el YAML envuelve todo el run: en ".
+VERIFY_CMD='bash -c '\''if [ ! -d verify ]; then echo saikit: verify/ ausente; exit 0; fi; if [ -f package.json ]; then npm test -- verify/; elif [ -f pytest.ini ] || { [ -f pyproject.toml ] && grep -Fq pytest pyproject.toml; } || { [ -f requirements.txt ] && grep -Fq pytest requirements.txt; }; then python -m pytest verify/; else find verify -type f -print -quit | grep -q .; fi'\'''
 
 uso() { sed -n '2,20p' "$0"; }
 
@@ -151,7 +154,8 @@ EOF
 
 yaml_seguro() {  # $1=yaml → 0 o die
   local yaml="$1" linea rest sha n=0
-  printf '%s' "$yaml" | grep -Fq 'secrets.' && die "secrets prohibidos en el workflow"
+  printf '%s' "$yaml" | grep -Eq 'secrets\.|secrets\[|secrets:[[:space:]]*inherit' \
+    && die "secrets prohibidos en el workflow"
   while IFS= read -r linea; do
     n=$((n + 1))
     rest="${linea#*uses:}"
