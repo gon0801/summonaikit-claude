@@ -2014,6 +2014,61 @@ if [ "$CHECK" -eq 1 ]; then
       codex)  [ -e "${HOME:-}/.codex" ] || [ -e "$2" ] ;;
     esac
   }
+  # Inspector de registro: independiente de check-hook-registration.sh
+  # (ese es fail-open y emite unknown). Tabla host -> path + kind.
+  # Observacion: ausente|ilegible|parse-fail|ok.
+  # Token: falta-registro|no-observable|ok.
+  check_registro_de() {  # $1=host -> path<TAB>kind; rc 1 si host desconocido
+    case "$1" in
+      claude) printf '%s\t%s\n' "${HOME:-}/.claude/settings.json" json ;;
+      grok)   printf '%s\t%s\n' "${SAIKIT_GROK_HOOKS_DIR:-${HOME:-}/.grok/hooks}/summonaikit.json" json ;;
+      dsh)    printf '%s\t%s\n' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}/cordis.patch.yml" yml ;;
+      codex)  printf '%s\t%s\n' "${HOME:-}/.codex/hooks.json" json ;;
+      *)      return 1 ;;
+    esac
+  }
+  registro_parsea() {  # $1=path $2=json|yml -> 0 si parece el objeto
+    [ -f "$1" ] && [ -r "$1" ] || return 1
+    case "$2" in
+      json)
+        case "$(tr -d '[:space:]' < "$1" | head -c 1)" in
+          '{'|'[') return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+      yml)
+        [ -s "$1" ] && grep -q summonaikit "$1"
+        ;;
+      *) return 1 ;;
+    esac
+  }
+  registro_observar() {  # $1=host -> ausente|ilegible|parse-fail|ok
+    local _rp _rk
+    _rp="$(check_registro_de "$1")" || { printf ilegible; return 0; }
+    _rk="${_rp##*$'\t'}"
+    _rp="${_rp%%$'\t'*}"
+    if [ ! -e "$_rp" ]; then
+      printf ausente
+      return 0
+    fi
+    if [ ! -f "$_rp" ] || [ ! -r "$_rp" ]; then
+      printf ilegible
+      return 0
+    fi
+    if registro_parsea "$_rp" "$_rk"; then
+      printf ok
+    else
+      printf parse-fail
+    fi
+  }
+  registro_token() {  # $1=observacion -> falta-registro|no-observable|ok
+    case "$1" in
+      ausente) printf falta-registro ;;
+      ilegible|parse-fail) printf no-observable ;;
+      ok) printf ok ;;
+      *) return 1 ;;
+    esac
+  }
   # Juicio de bytes contra master: la fuente instalada son los bytes de
   # origin/master, o no. .gitattributes fuerza eol=lf en *.sh, asi que el blob
   # y el worktree son comparables tal cual. Sin git, sin ref o sin blob: no se
@@ -2038,6 +2093,8 @@ if [ "$CHECK" -eq 1 ]; then
     _res=''; _det=''
     if ! check_host_presente "$_h" "$_d"; then
       _res='no-aplica'; _det='host ausente'
+    elif [ -L "$_d" ]; then
+      _res='no-observable'; _det='destino es symlink'
     elif [ ! -e "$_d" ]; then
       _res='falta'; _det='copia ausente'
     elif [ ! -f "$_d" ] || [ ! -r "$_d" ]; then
@@ -2047,14 +2104,24 @@ if [ "$CHECK" -eq 1 ]; then
     else
       _res='difiere'; _det='bytes distintos de la fuente'
     fi
+    _reg=''
+    if [ "$_res" != no-aplica ]; then
+      _reg="$(registro_token "$(registro_observar "$_h")")"
+    fi
+    _fila="[summonaikit] check: host=$_h dest=$_d resultado=$_res"
+    [ -n "$_reg" ] && _fila="$_fila registro=$_reg"
     if [ -n "$_det" ]; then
-      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res ($_det)"
+      decir "$_fila ($_det)"
     else
-      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res"
+      decir "$_fila"
     fi
     case "$_res" in
       al-dia|no-aplica) ;;
       *) _fallo=1; _causas="$_causas copia-$_h-$_res" ;;
+    esac
+    case "$_reg" in
+      falta-registro|no-observable)
+        _fallo=1; _causas="$_causas registro-$_h-$_reg" ;;
     esac
   done
   if [ "$PROC_CONOCIDA" -eq 0 ]; then

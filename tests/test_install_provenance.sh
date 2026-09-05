@@ -70,6 +70,29 @@ repo_sandbox() {
   printf '%s' "$r"
 }
 
+# Stub minimo parseable. --check exige el archivo (ausente = falta-registro);
+# no afirma que nombre al hook. No crear dirs de hosts ajenos: eso los mete
+# al conjunto.
+plantar_registro() {
+  case "$1" in
+    claude)
+      mkdir -p "$HOME/.claude"
+      printf '%s\n' '{}' > "$HOME/.claude/settings.json" ;;
+    grok)
+      mkdir -p "$HOME/.grok/hooks"
+      printf '%s\n' '{}' > "$HOME/.grok/hooks/summonaikit.json" ;;
+    dsh)
+      mkdir -p "$HOME/.dsh"
+      printf '%s\n' 'summonaikit:' > "$HOME/.dsh/cordis.patch.yml" ;;
+    codex)
+      mkdir -p "$HOME/.codex"
+      printf '%s\n' '{}' > "$HOME/.codex/hooks.json" ;;
+    *)
+      malo "plantar_registro: host desconocido $1"
+      return 1 ;;
+  esac
+}
+
 # P1: instalar por defecto declara procedencia con los cuatro campos. Acepta la
 # forma shallow (rama+sha conocidos, coincide unknown): en CI no hay ref remoto.
 caso "P1: install por defecto imprime procedencia (rama, sha, sucio, coincide)"
@@ -242,6 +265,9 @@ mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.grok/hooks/summonaikit-harness.sh"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.dsh/hooks/summonaikit-harness.sh"
+plantar_registro claude
+plantar_registro grok
+plantar_registro dsh
 out="$(bash "$r2/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check al dia salio $rc: $out"
 for h in claude grok dsh; do
@@ -332,6 +358,8 @@ export HOME="$tmp/casa-c7"
 mkdir -p "$HOME/.claude/hooks" "$HOME/.codex/hooks"
 cp "$r7/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
 cp "$r7/hooks/summonaikit-harness.sh" "$HOME/.codex/hooks/summonaikit-harness.sh"
+plantar_registro claude
+plantar_registro codex
 out="$(bash "$r7/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check con codex al dia salio $rc: $out"
 case "$out" in
@@ -345,6 +373,7 @@ r8="$(repo_sandbox repo-c8)"
 export HOME="$tmp/casa-c8"
 mkdir -p "$HOME/.grok/hooks"
 cp "$r8/hooks/summonaikit-harness.sh" "$HOME/.grok/hooks/summonaikit-harness.sh"
+plantar_registro grok
 out="$(bash "$r8/tools/install-hook.sh" --check --host grok 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check --host grok salio $rc: $out"
 case "$out" in
@@ -400,6 +429,47 @@ esac
 printf '%s' "$out" | grep -qi 'unknown' && malo "--check sin ref colgo UNKNOWN: [$out]"
 printf '%s' "$out" | grep -qi 'desconocid' && malo "--check sin ref colgo DESCONOCIDO: [$out]"
 
+# C12: el hueco de 18.21(a). Cuatro copias al dia, registros parseables en
+# claude/grok/dsh, SIN ~/.codex/hooks.json. Antes: veredicto=ok. Ahora: fallo
+# con registro=falta-registro y causa registro-codex-falta-registro.
+caso "C12: cuatro copias al dia, registro codex ausente => fallo"
+r12="$(repo_sandbox repo-c12)"
+export HOME="$tmp/casa-c12"
+mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"
+for _hd in "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"; do
+  cp "$r12/hooks/summonaikit-harness.sh" "$_hd/summonaikit-harness.sh"
+done
+plantar_registro claude
+plantar_registro grok
+plantar_registro dsh
+[ ! -e "$HOME/.codex/hooks.json" ] || malo "C12 no debio plantar hooks.json de codex"
+out="$(bash "$r12/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C12 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'host=codex'*'resultado=al-dia'*'registro=falta-registro'*) ;;
+  *) malo "C12 no mostro registro=falta-registro en codex: [$out]" ;;
+esac
+case "$out" in
+  *'registro-codex-falta-registro'*) ;;
+  *) malo "C12 no nombro la causa registro-codex-falta-registro: [$out]" ;;
+esac
+case "$out" in *'veredicto=fallo'*) ;; *) malo "C12 no cerro en fallo: [$out]" ;; esac
+
+# C13: [ -L ] antes de cmp. Un symlink a los mismos bytes pasaba al-dia
+# porque -f sigue el enlace.
+caso "C13: dest symlink => no-observable"
+r13="$(repo_sandbox repo-c13)"
+export HOME="$tmp/casa-c13"
+mkdir -p "$HOME/.claude/hooks"
+ln -s "$r13/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(bash "$r13/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C13 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'host=claude'*'resultado=no-observable'*) ;;
+  *) malo "C13 no marco dest symlink como no-observable: [$out]" ;;
+esac
+
 # ------------------------------------------------------- bloque de mutaciones
 # Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
 # exacto: otro rc es mutante invalido, no kill). Guarda anti-sed-obsoleto,
@@ -429,6 +499,8 @@ if mut_preparar "$rmut3" "s/_res='falta'/_res='no-aplica'/" "falta->no-aplica"; 
   mkdir -p "$HOME/.claude/hooks" "$HOME/.grok" "$HOME/.dsh/hooks"
   cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
   cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.dsh/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  plantar_registro dsh
   out="$(bash "$mutado" --check 2>&1)"; rc=$?
   if [ "$rc" -eq 0 ]; then
     printf '    mutacion falta->no-aplica atrapada (C4 en rojo)\n'
@@ -471,6 +543,44 @@ if mut_preparar "$rmut9" "s/PROC_COINCIDE='sin-ref'/PROC_COINCIDE='unknown'/" "c
     printf '    mutacion coincide-unknown atrapada (P9 en rojo)\n'
   else
     malo "mutacion coincide-unknown SOBREVIVIO: P9 no vio el unknown"
+  fi
+fi
+
+caso "mutacion: ausente como ok => C12 la atrapa"
+rmut12="$(repo_sandbox repo-mut12)"
+if mut_preparar "$rmut12" 's/ausente) printf falta-registro/ausente) printf ok/' "ausente-como-ok"; then
+  export HOME="$tmp/casa-mut12"
+  mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"
+  for _hd in "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"; do
+    cp "$rmut12/hooks/summonaikit-harness.sh" "$_hd/summonaikit-harness.sh"
+  done
+  plantar_registro claude
+  plantar_registro grok
+  plantar_registro dsh
+  out="$(bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion ausente-como-ok atrapada (C12 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion ausente-como-ok SOBREVIVIO: C12 dio fallo con ausente=ok"
+  else
+    malo "mutacion ausente-como-ok invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: sin guarda -L => C13 la atrapa"
+rmut13="$(repo_sandbox repo-mut13)"
+if mut_preparar "$rmut13" 's/\[ -L /[ ! -L /' "sin-guarda-L"; then
+  export HOME="$tmp/casa-mut13"
+  mkdir -p "$HOME/.claude/hooks"
+  ln -s "$rmut13/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion sin-guarda-L atrapada (C13 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion sin-guarda-L SOBREVIVIO: C13 dio fallo sin [ -L ]"
+  else
+    malo "mutacion sin-guarda-L invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 
