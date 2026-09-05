@@ -304,6 +304,37 @@ correr "$SANDBOX/rec3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --base
 correr "$SANDBOX/chk3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --check
 [ "$rc" -eq 0 ] || malo "--check (5 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
 
+# Clase Task 0.4 (`shift 2` con un solo argumento gira para siempre).
+# Medido pre-fix: timeout 5 => rc=124 en --hook/--scenarios/--baseline.
+caso "P10: flag con valor sin valor sale 2, no gira"
+for _f in --hook --scenarios --baseline; do
+  out="$(timeout 5 bash "$arnes" "$_f" 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "$_f sin valor dio $rc, se esperaba 2 (124=cuelgue)"
+  case "$out" in
+    *'exige un valor'*) ;;
+    *) malo "$_f sin valor no nombro la falta: [$out]" ;;
+  esac
+done
+
+# Quitar las guardas [ $# -ge 2 ] restaura el shift 2 desnudo: un --hook
+# sin valor no consume el flag y el while gira. timeout 5 => 124.
+caso "mutacion: sin guarda [ \$# -ge 2 ] => P10 cuelga"
+mutado="$SANDBOX/golden-ge2-mutado.sh"
+sed '/\[ \$# -ge 2 \]/d' "$arnes" > "$mutado"
+if cmp -s "$arnes" "$mutado"; then
+  malo "mutacion sin-guarda-ge2 no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mutado" 2>/dev/null; then
+  malo "mutacion sin-guarda-ge2 no parsea; asi no prueba nada"
+else
+  out="$(timeout 5 bash "$mutado" --hook 2>&1)"; rc=$?
+  if [ "$rc" -eq 124 ]; then
+    printf '    mutacion sin-guarda-ge2 atrapada (P10 en rojo: cuelgue)\n'
+  else
+    malo "mutacion sin-guarda-ge2 SOBREVIVIO: rc=$rc, se esperaba 124"
+  fi
+fi
+rm -f "$mutado"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2
   exit 1

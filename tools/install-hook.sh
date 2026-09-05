@@ -68,6 +68,7 @@ set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
+. "$here/lib/restaurar_desde_backup.sh"
 
 DEST="${HOME:-}/.claude/hooks/summonaikit-harness.sh"
 SOURCE="$repo/hooks/summonaikit-harness.sh"
@@ -412,7 +413,7 @@ codex_exige_wrapper() {
     decir "[summonaikit] instalador: no se pudo plantar el wrap POSIX de codex ($wrap)."
     # Si el hook se publico en ESTA corrida, no dejar la cadena a medias.
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      cp "$backup" "$DEST" 2>/dev/null && decir "              hook restaurado desde $backup" \
+      restaurar_desde_backup "$backup" "$DEST" && decir "              hook restaurado desde $backup" \
         || decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST"
     elif [ "${estado:-}" = 'AUSENTE' ]; then
       rm -f "$DEST" 2>/dev/null && decir "              hook retirado (esta corrida lo habia creado)" \
@@ -1368,7 +1369,7 @@ grok_rollback() {
   fi
   if [ "$GROK_HOOK_PUBLICADO" -eq 1 ]; then
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      if cp "$backup" "$DEST" 2>/dev/null; then
+      if restaurar_desde_backup "$backup" "$DEST"; then
         decir "              hook restaurado desde $backup"
       else
         fallo=1
@@ -1898,6 +1899,87 @@ sha_de() {
 # ajenos, testeable). El ref puede estar viejo y se declara en la salida.
 # Costura de test: SAIKIT_GIT_BIN (por defecto "git").
 GIT_BIN="${SAIKIT_GIT_BIN:-git}"
+# Umbral: --check afirma vivo == origin/master local; esa afirmacion
+# solo es tan fresca como el ultimo fetch. Un dia = misma sesion de
+# deploy. Override de test: SAIKIT_REF_EDAD_MAX_S.
+: "${SAIKIT_REF_EDAD_MAX_S:=86400}"
+# Reloj: mtime del ref loose origin/master; si no, %ct. Nunca FETCH_HEAD.
+# Edad = now - clock, en segundos de pared. Nunca la palabra unknown.
+PROC_EDAD_S='no-calculable'
+PROC_EDAD_ORIGEN=''
+mtime_de() {  # $1=archivo -> epoch stdout; GNU stat, si no BSD
+  local _m
+  _m="$(stat -c %Y "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  _m="$(stat -f %m "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  return 1
+}
+edad_del_ref() {
+  PROC_EDAD_S='no-calculable'
+  PROC_EDAD_ORIGEN=''
+  [ "$PROC_CONOCIDA" -eq 1 ] || return 0
+  local _gd _now _clock _refpath _clock_file
+  _now="$(date +%s)" || return 0
+  case "$_now" in *[!0-9]*) return 0 ;; esac
+  _gd="$("$GIT_BIN" -C "$repo" rev-parse --git-dir 2>/dev/null)" || return 0
+  [ -n "$_gd" ] || return 0
+  case "$_gd" in
+    /*) ;;
+    *) _gd="$repo/$_gd" ;;
+  esac
+  _refpath="$("$GIT_BIN" -C "$repo" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || _refpath=
+  case "$_refpath" in
+    '') ;;
+    /*) ;;
+    *) _refpath="$repo/$_refpath" ;;
+  esac
+  _clock_file="$_refpath"
+  if [ -f "$_clock_file" ]; then
+    _clock="$(mtime_de "$_clock_file")" || _clock=
+    case "$_clock" in
+      ''|*[!0-9]*) ;;
+      *) PROC_EDAD_ORIGEN='ref-mtime' ;;
+    esac
+  fi
+  if [ -z "$PROC_EDAD_ORIGEN" ] && _proc_es_sha "${_master:-}"; then
+    _clock="$("$GIT_BIN" -C "$repo" log -1 --format=%ct origin/master 2>/dev/null)" || _clock=
+    case "$_clock" in
+      ''|*[!0-9]*) ;;
+      *) PROC_EDAD_ORIGEN='committerdate' ;;
+    esac
+  fi
+  if [ -z "$PROC_EDAD_ORIGEN" ]; then
+    if _proc_es_sha "${_master:-}"; then
+      PROC_EDAD_S='no-calculable'
+    else
+      PROC_EDAD_S='sin-ref'
+    fi
+    return 0
+  fi
+  case "$_clock" in *[!0-9]*) PROC_EDAD_S='no-calculable'; return 0 ;; esac
+  PROC_EDAD_S=$((_now - _clock))
+  [ "$PROC_EDAD_S" -lt 0 ] && PROC_EDAD_S=0
+}
+check_edad_excede() {
+  [ "$PROC_CONOCIDA" -eq 1 ] || return 0
+  case "${PROC_EDAD_S:-}" in
+    ''|*[!0-9]*)
+      _fallo=1
+      _causas="$_causas edad-no-observable"
+      return 0
+      ;;
+  esac
+  # umbral: solo digitos; si no, edad-no-observable
+  case "${SAIKIT_REF_EDAD_MAX_S:-}" in
+    ''|*[!0-9]*)
+      _fallo=1
+      _causas="$_causas edad-no-observable"
+      return 0
+      ;;
+  esac
+  [ "$PROC_EDAD_S" -gt "$SAIKIT_REF_EDAD_MAX_S" ] || return 0
+  _fallo=1
+  _causas="$_causas ref-excede-edad"
+}
 _proc_es_sha() {  # $1=candidato -> 0 si son 40 hex
   [ "${#1}" -eq 40 ] || return 1
   case "$1" in *[!0-9a-f]*|'') return 1 ;; *) return 0 ;; esac
@@ -1962,6 +2044,7 @@ _PROC_EOF
     fi
   fi
 fi
+edad_del_ref
 if [ "$PROC_CONOCIDA" -eq 1 ]; then
   # "no-calculable" y NO "desconocida" a proposito: DESCONOCIDO es el tercer
   # estado del instalador (un destino que SE MIRO y no es nuestro), y un sha
@@ -1973,7 +2056,7 @@ if [ "$PROC_CONOCIDA" -eq 1 ]; then
   fi
   _ff='por-defecto'
   [ "$VIO_SOURCE" -eq 1 ] && _ff='explicita'
-  decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE fuente=$_ff fuente_sha256=$_fsh"
+  decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE edad_s=$PROC_EDAD_S origen=$PROC_EDAD_ORIGEN fuente=$_ff fuente_sha256=$_fsh"
   if [ "$PROC_COINCIDE" != 'sin-ref' ]; then
     decir "[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo)."
   else
@@ -2014,6 +2097,61 @@ if [ "$CHECK" -eq 1 ]; then
       codex)  [ -e "${HOME:-}/.codex" ] || [ -e "$2" ] ;;
     esac
   }
+  # Inspector de registro: independiente de check-hook-registration.sh
+  # (ese es fail-open y emite unknown). Tabla host -> path + kind.
+  # Observacion: ausente|ilegible|parse-fail|ok.
+  # Token: falta-registro|no-observable|ok.
+  check_registro_de() {  # $1=host -> path<TAB>kind; rc 1 si host desconocido
+    case "$1" in
+      claude) printf '%s\t%s\n' "${HOME:-}/.claude/settings.json" json ;;
+      grok)   printf '%s\t%s\n' "${SAIKIT_GROK_HOOKS_DIR:-${HOME:-}/.grok/hooks}/summonaikit.json" json ;;
+      dsh)    printf '%s\t%s\n' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}/cordis.patch.yml" yml ;;
+      codex)  printf '%s\t%s\n' "${HOME:-}/.codex/hooks.json" json ;;
+      *)      return 1 ;;
+    esac
+  }
+  registro_parsea() {  # $1=path $2=json|yml -> 0 si parece el objeto
+    [ -f "$1" ] && [ -r "$1" ] || return 1
+    case "$2" in
+      json)
+        case "$(tr -d '[:space:]' < "$1" | head -c 1)" in
+          '{'|'[') return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+      yml)
+        [ -s "$1" ] && grep -q summonaikit "$1"
+        ;;
+      *) return 1 ;;
+    esac
+  }
+  registro_observar() {  # $1=host -> ausente|ilegible|parse-fail|ok
+    local _rp _rk
+    _rp="$(check_registro_de "$1")" || { printf ilegible; return 0; }
+    _rk="${_rp##*$'\t'}"
+    _rp="${_rp%%$'\t'*}"
+    if [ ! -e "$_rp" ]; then
+      printf ausente
+      return 0
+    fi
+    if [ ! -f "$_rp" ] || [ ! -r "$_rp" ]; then
+      printf ilegible
+      return 0
+    fi
+    if registro_parsea "$_rp" "$_rk"; then
+      printf ok
+    else
+      printf parse-fail
+    fi
+  }
+  registro_token() {  # $1=observacion -> falta-registro|no-observable|ok
+    case "$1" in
+      ausente) printf falta-registro ;;
+      ilegible|parse-fail) printf no-observable ;;
+      ok) printf ok ;;
+      *) return 1 ;;
+    esac
+  }
   # Juicio de bytes contra master: la fuente instalada son los bytes de
   # origin/master, o no. .gitattributes fuerza eol=lf en *.sh, asi que el blob
   # y el worktree son comparables tal cual. Sin git, sin ref o sin blob: no se
@@ -2038,6 +2176,8 @@ if [ "$CHECK" -eq 1 ]; then
     _res=''; _det=''
     if ! check_host_presente "$_h" "$_d"; then
       _res='no-aplica'; _det='host ausente'
+    elif [ -L "$_d" ]; then
+      _res='no-observable'; _det='destino es symlink'
     elif [ ! -e "$_d" ]; then
       _res='falta'; _det='copia ausente'
     elif [ ! -f "$_d" ] || [ ! -r "$_d" ]; then
@@ -2047,14 +2187,24 @@ if [ "$CHECK" -eq 1 ]; then
     else
       _res='difiere'; _det='bytes distintos de la fuente'
     fi
+    _reg=''
+    if [ "$_res" != no-aplica ]; then
+      _reg="$(registro_token "$(registro_observar "$_h")")"
+    fi
+    _fila="[summonaikit] check: host=$_h dest=$_d resultado=$_res"
+    [ -n "$_reg" ] && _fila="$_fila registro=$_reg"
     if [ -n "$_det" ]; then
-      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res ($_det)"
+      decir "$_fila ($_det)"
     else
-      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res"
+      decir "$_fila"
     fi
     case "$_res" in
       al-dia|no-aplica) ;;
       *) _fallo=1; _causas="$_causas copia-$_h-$_res" ;;
+    esac
+    case "$_reg" in
+      falta-registro|no-observable)
+        _fallo=1; _causas="$_causas registro-$_h-$_reg" ;;
     esac
   done
   if [ "$PROC_CONOCIDA" -eq 0 ]; then
@@ -2064,6 +2214,7 @@ if [ "$CHECK" -eq 1 ]; then
   elif [ "$_master_juicio" = 'no-observable' ]; then
     _fallo=1; _causas="$_causas juicio-master-no-observable"
   fi
+  check_edad_excede
   if [ "$_fallo" -eq 0 ]; then
     decir "[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)"
     exit 0
@@ -3227,7 +3378,7 @@ if [ "$HOST" = "dsh" ]; then
     # Revertir lo publicado (patch + archivos de plugin) antes de tocar el hook.
     dsh_rollback_publicar
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      if cp "$backup" "$DEST" 2>/dev/null; then
+      if restaurar_desde_backup "$backup" "$DEST"; then
         decir "              hook restaurado desde $backup"
       else
         decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST desde $backup"

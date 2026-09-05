@@ -57,17 +57,62 @@ fixture_hook() {
 # hooks/summonaikit-harness.sh, origin/master apuntando a HEAD, y una COPIA del
 # instalador en tools/. Imprime la raiz. Es la unica forma hermetica de juzgar
 # valores de procedencia (el checkout real va en rama y sucio durante el dev).
-# $1 = nombre del sandbox.
+# $1 = nombre del sandbox. $2 opcional = GIT_COMMITTER_DATE (hermetico para edad).
 repo_sandbox() {
   local r="$tmp/$1"
-  mkdir -p "$r/tools" "$r/hooks"
+  local fecha="${2:-}"
+  mkdir -p "$r/tools/lib" "$r/hooks"
   fixture_hook "$r/hooks/summonaikit-harness.sh"
   cp "$tool" "$r/tools/install-hook.sh"
+  if [ -d "$(dirname "$tool")/lib" ]; then
+    cp -R "$(dirname "$tool")/lib/." "$r/tools/lib/"
+  fi
   ( cd "$r" && git init -q \
     && git -c user.email=t@t -c user.name=t add hooks/summonaikit-harness.sh \
-    && git -c user.email=t@t -c user.name=t commit -qm fixture \
+    && if [ -n "$fecha" ]; then
+         GIT_COMMITTER_DATE="$fecha" GIT_AUTHOR_DATE="$fecha" \
+           git -c user.email=t@t -c user.name=t commit -qm fixture
+       else
+         git -c user.email=t@t -c user.name=t commit -qm fixture
+       fi \
     && git update-ref refs/remotes/origin/master HEAD ) >/dev/null 2>&1
   printf '%s' "$r"
+}
+
+# Envejece el ref loose origin/master. El reloj de --check es ese mtime,
+# no FETCH_HEAD ni %ct. $1 = raiz del sandbox.
+envejecer_ref_master() {
+  local p
+  p="$(git -C "$1" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || return 1
+  case "$p" in
+    /*) ;;
+    *) p="$1/$p" ;;
+  esac
+  [ -f "$p" ] || return 1
+  touch -t 202001010000 "$p"
+}
+
+# Stub minimo parseable. --check exige el archivo (ausente = falta-registro);
+# no afirma que nombre al hook. No crear dirs de hosts ajenos: eso los mete
+# al conjunto.
+plantar_registro() {
+  case "$1" in
+    claude)
+      mkdir -p "$HOME/.claude"
+      printf '%s\n' '{}' > "$HOME/.claude/settings.json" ;;
+    grok)
+      mkdir -p "$HOME/.grok/hooks"
+      printf '%s\n' '{}' > "$HOME/.grok/hooks/summonaikit.json" ;;
+    dsh)
+      mkdir -p "$HOME/.dsh"
+      printf '%s\n' 'summonaikit:' > "$HOME/.dsh/cordis.patch.yml" ;;
+    codex)
+      mkdir -p "$HOME/.codex"
+      printf '%s\n' '{}' > "$HOME/.codex/hooks.json" ;;
+    *)
+      malo "plantar_registro: host desconocido $1"
+      return 1 ;;
+  esac
 }
 
 # P1: instalar por defecto declara procedencia con los cuatro campos. Acepta la
@@ -76,7 +121,7 @@ caso "P1: install por defecto imprime procedencia (rama, sha, sucio, coincide)"
 out="$(bash "$tool" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "install por defecto salio $rc: $out"
 case "$out" in
-  *'procedencia: rama='*' sha='*' sucio='*'coincide_origin_master='*) ;;
+  *'procedencia: rama='*' sha='*' sucio='*'coincide_origin_master='*'edad_s='*'origen='*) ;;
   *) malo "falta la linea de procedencia: [$out]" ;;
 esac
 
@@ -242,6 +287,9 @@ mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.grok/hooks/summonaikit-harness.sh"
 cp "$r2/hooks/summonaikit-harness.sh" "$HOME/.dsh/hooks/summonaikit-harness.sh"
+plantar_registro claude
+plantar_registro grok
+plantar_registro dsh
 out="$(bash "$r2/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check al dia salio $rc: $out"
 for h in claude grok dsh; do
@@ -332,6 +380,8 @@ export HOME="$tmp/casa-c7"
 mkdir -p "$HOME/.claude/hooks" "$HOME/.codex/hooks"
 cp "$r7/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
 cp "$r7/hooks/summonaikit-harness.sh" "$HOME/.codex/hooks/summonaikit-harness.sh"
+plantar_registro claude
+plantar_registro codex
 out="$(bash "$r7/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check con codex al dia salio $rc: $out"
 case "$out" in
@@ -345,6 +395,7 @@ r8="$(repo_sandbox repo-c8)"
 export HOME="$tmp/casa-c8"
 mkdir -p "$HOME/.grok/hooks"
 cp "$r8/hooks/summonaikit-harness.sh" "$HOME/.grok/hooks/summonaikit-harness.sh"
+plantar_registro grok
 out="$(bash "$r8/tools/install-hook.sh" --check --host grok 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "--check --host grok salio $rc: $out"
 case "$out" in
@@ -400,6 +451,157 @@ esac
 printf '%s' "$out" | grep -qi 'unknown' && malo "--check sin ref colgo UNKNOWN: [$out]"
 printf '%s' "$out" | grep -qi 'desconocid' && malo "--check sin ref colgo DESCONOCIDO: [$out]"
 
+# C12: el hueco de 18.21(a). Cuatro copias al dia, registros parseables en
+# claude/grok/dsh, SIN ~/.codex/hooks.json. Antes: veredicto=ok. Ahora: fallo
+# con registro=falta-registro y causa registro-codex-falta-registro.
+caso "C12: cuatro copias al dia, registro codex ausente => fallo"
+r12="$(repo_sandbox repo-c12)"
+export HOME="$tmp/casa-c12"
+mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"
+for _hd in "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"; do
+  cp "$r12/hooks/summonaikit-harness.sh" "$_hd/summonaikit-harness.sh"
+done
+plantar_registro claude
+plantar_registro grok
+plantar_registro dsh
+[ ! -e "$HOME/.codex/hooks.json" ] || malo "C12 no debio plantar hooks.json de codex"
+out="$(bash "$r12/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C12 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'host=codex'*'resultado=al-dia'*'registro=falta-registro'*) ;;
+  *) malo "C12 no mostro registro=falta-registro en codex: [$out]" ;;
+esac
+case "$out" in
+  *'registro-codex-falta-registro'*) ;;
+  *) malo "C12 no nombro la causa registro-codex-falta-registro: [$out]" ;;
+esac
+case "$out" in *'veredicto=fallo'*) ;; *) malo "C12 no cerro en fallo: [$out]" ;; esac
+
+# C13: [ -L ] antes de cmp. Un symlink a los mismos bytes pasaba al-dia
+# porque -f sigue el enlace.
+caso "C13: dest symlink => no-observable"
+r13="$(repo_sandbox repo-c13)"
+export HOME="$tmp/casa-c13"
+mkdir -p "$HOME/.claude/hooks"
+ln -s "$r13/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(bash "$r13/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C13 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'host=claude'*'resultado=no-observable'*) ;;
+  *) malo "C13 no marco dest symlink como no-observable: [$out]" ;;
+esac
+
+# C14: el reloj es mtime del ref loose. touch viejo + umbral chico (env)
+# => fallo ref-excede-edad. Stubs para no fallar por registro.
+caso "C14: ref mas viejo que el umbral => fallo ref-excede-edad"
+r14="$(repo_sandbox repo-c14)"
+envejecer_ref_master "$r14" || malo "C14 no pudo envejecer el ref loose"
+[ ! -e "$r14/.git/FETCH_HEAD" ] || malo "C14 no debio tener FETCH_HEAD"
+export HOME="$tmp/casa-c14"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r14/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C14 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'edad_s='*'origen=ref-mtime'*) ;;
+  *) malo "C14 no imprimio edad_s/origen=ref-mtime: [$out]" ;;
+esac
+case "$out" in
+  *'ref-excede-edad'*) ;;
+  *) malo "C14 no nombro ref-excede-edad: [$out]" ;;
+esac
+case "$out" in *'veredicto=fallo'*) ;; *) malo "C14 no cerro en fallo: [$out]" ;; esac
+
+# C15: la edad se IMPRIME en install/dry-run pero no mueve el rc.
+caso "C15: dry-run con ref viejo imprime edad y sale 0"
+export HOME="$tmp/casa-c15"
+mkdir -p "$HOME"
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run C15 salio $rc: $out"
+case "$out" in
+  *'edad_s='*'origen=ref-mtime'*) ;;
+  *) malo "C15 no imprimio edad: [$out]" ;;
+esac
+
+# C16: FETCH_HEAD fresco no es el reloj. Ref viejo + FETCH_HEAD nuevo
+# sigue fallando (prueba que FETCH_HEAD se ignora).
+caso "C16: FETCH_HEAD fresco no tapa un ref viejo"
+r16="$(repo_sandbox repo-c16)"
+envejecer_ref_master "$r16" || malo "C16 no pudo envejecer el ref loose"
+: > "$r16/.git/FETCH_HEAD"
+export HOME="$tmp/casa-c16"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r16/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r16/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C16 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'origen=FETCH_HEAD'*) malo "C16 uso FETCH_HEAD como reloj: [$out]" ;;
+  *'edad_s='*'origen=ref-mtime'*) ;;
+  *) malo "C16 no imprimio origen=ref-mtime: [$out]" ;;
+esac
+case "$out" in
+  *'ref-excede-edad'*) ;;
+  *) malo "C16 no nombro ref-excede-edad: [$out]" ;;
+esac
+
+# C17: umbral no numerico => fail-closed edad-no-observable.
+caso "C17: umbral no numerico => fallo edad-no-observable"
+r17="$(repo_sandbox repo-c17)"
+export HOME="$tmp/casa-c17"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r17/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=no bash "$r17/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C17 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'edad-no-observable'*) ;;
+  *) malo "C17 no nombro edad-no-observable: [$out]" ;;
+esac
+
+# R1/R2: restaurar_desde_backup se sourcea y se llama. No hay env que
+# desvie el main del instalador. R2 aborta a mitad (despues de cmp,
+# antes de mv): DEST queda el anterior, no vacio ni el backup.
+. "$repo/tools/lib/restaurar_desde_backup.sh"
+# modo_de: portable GNU/BSD. R1 afirma modo ademas de bytes: sin eso,
+# quitar el cp -p sobrevive (mktemp 0600 + cp contenido => dest no ejecutable).
+modo_de() {
+  local _m
+  _m="$(stat -c %a "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  _m="$(stat -f %OLp "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  return 1
+}
+caso "R1: restore exitoso deja DEST = backup (bytes y modo)"
+rb="$tmp/restore-r1"
+mkdir -p "$rb"
+printf 'NUEVO-publicado\n' > "$rb/dest"
+printf 'VIEJO-backup\n' > "$rb/bak"
+chmod 755 "$rb/bak"
+chmod 644 "$rb/dest"
+sha_bak="$(sha256sum < "$rb/bak")"
+modo_bak="$(modo_de "$rb/bak")" || malo "R1 no pudo leer modo del backup"
+restaurar_desde_backup "$rb/bak" "$rb/dest"; rc=$?
+[ "$rc" -eq 0 ] || malo "R1 salio $rc"
+[ "$(sha256sum < "$rb/dest")" = "$sha_bak" ] || malo "R1 DEST no igualo al backup"
+[ "$(modo_de "$rb/dest")" = "$modo_bak" ] \
+  || malo "R1 DEST modo=$(modo_de "$rb/dest") != backup $modo_bak (0755 esperado)"
+_rbtmp="$(find "$rb" -name '.saikit-restore-*' 2>/dev/null)"
+[ -z "$_rbtmp" ] || malo "R1 dejo un tmp de restore: $_rbtmp"
+
+caso "R2: abort a mitad deja DEST intacto (no truncado)"
+rb2="$tmp/restore-r2"
+mkdir -p "$rb2"
+printf 'NUEVO-publicado\n' > "$rb2/dest"
+printf 'VIEJO-backup\n' > "$rb2/bak"
+sha_nuevo="$(sha256sum < "$rb2/dest")"
+SAIKIT_RESTORE_ABORT=1 restaurar_desde_backup "$rb2/bak" "$rb2/dest"; rc=$?
+[ "$rc" -ne 0 ] || malo "R2 debio fallar el restore, salio 0"
+[ "$(sha256sum < "$rb2/dest")" = "$sha_nuevo" ] \
+  || malo "R2 DEST no quedo intacto: $(cat "$rb2/dest")"
+[ -s "$rb2/dest" ] || malo "R2 DEST quedo vacio (truncado)"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
 # exacto: otro rc es mutante invalido, no kill). Guarda anti-sed-obsoleto,
@@ -429,6 +631,8 @@ if mut_preparar "$rmut3" "s/_res='falta'/_res='no-aplica'/" "falta->no-aplica"; 
   mkdir -p "$HOME/.claude/hooks" "$HOME/.grok" "$HOME/.dsh/hooks"
   cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
   cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.dsh/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  plantar_registro dsh
   out="$(bash "$mutado" --check 2>&1)"; rc=$?
   if [ "$rc" -eq 0 ]; then
     printf '    mutacion falta->no-aplica atrapada (C4 en rojo)\n'
@@ -473,6 +677,154 @@ if mut_preparar "$rmut9" "s/PROC_COINCIDE='sin-ref'/PROC_COINCIDE='unknown'/" "c
     malo "mutacion coincide-unknown SOBREVIVIO: P9 no vio el unknown"
   fi
 fi
+
+caso "mutacion: ausente como ok => C12 la atrapa"
+rmut12="$(repo_sandbox repo-mut12)"
+if mut_preparar "$rmut12" 's/ausente) printf falta-registro/ausente) printf ok/' "ausente-como-ok"; then
+  export HOME="$tmp/casa-mut12"
+  mkdir -p "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"
+  for _hd in "$HOME/.claude/hooks" "$HOME/.grok/hooks" "$HOME/.dsh/hooks" "$HOME/.codex/hooks"; do
+    cp "$rmut12/hooks/summonaikit-harness.sh" "$_hd/summonaikit-harness.sh"
+  done
+  plantar_registro claude
+  plantar_registro grok
+  plantar_registro dsh
+  out="$(bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion ausente-como-ok atrapada (C12 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion ausente-como-ok SOBREVIVIO: C12 dio fallo con ausente=ok"
+  else
+    malo "mutacion ausente-como-ok invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: sin guarda -L => C13 la atrapa"
+rmut13="$(repo_sandbox repo-mut13)"
+if mut_preparar "$rmut13" 's/\[ -L /[ ! -L /' "sin-guarda-L"; then
+  export HOME="$tmp/casa-mut13"
+  mkdir -p "$HOME/.claude/hooks"
+  ln -s "$rmut13/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion sin-guarda-L atrapada (C13 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion sin-guarda-L SOBREVIVIO: C13 dio fallo sin [ -L ]"
+  else
+    malo "mutacion sin-guarda-L invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: sin comparar umbral de edad => C14 la atrapa"
+rmut14="$(repo_sandbox repo-mut14)"
+envejecer_ref_master "$rmut14" || malo "mut14 no pudo envejecer el ref loose"
+if mut_preparar "$rmut14" 's/PROC_EDAD_S" -gt/PROC_EDAD_S" -lt/' "edad-sin-umbral"; then
+  export HOME="$tmp/casa-mut14"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut14/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion edad-sin-umbral atrapada (C14 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion edad-sin-umbral SOBREVIVIO: C14 dio fallo sin el -gt"
+  else
+    malo "mutacion edad-sin-umbral invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: preferir FETCH_HEAD => C16 la atrapa"
+rmut16="$(repo_sandbox repo-mut16)"
+envejecer_ref_master "$rmut16" || malo "mut16 no pudo envejecer el ref loose"
+: > "$rmut16/.git/FETCH_HEAD"
+if mut_preparar "$rmut16" 's/_clock_file="\$_refpath"/_clock_file="$_gd\/FETCH_HEAD"/; s/PROC_EDAD_ORIGEN='\''ref-mtime'\''/PROC_EDAD_ORIGEN='\''FETCH_HEAD'\''/' "preferir-FETCH_HEAD"; then
+  export HOME="$tmp/casa-mut16"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut16/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion preferir-FETCH_HEAD atrapada (C16 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion preferir-FETCH_HEAD SOBREVIVIO: C16 dio fallo con FETCH_HEAD preferido"
+  else
+    malo "mutacion preferir-FETCH_HEAD invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: umbral no numerico no cierra => C17 la atrapa"
+rmut17="$(repo_sandbox repo-mut17)"
+if mut_preparar "$rmut17" 's/# umbral: solo digitos; si no, edad-no-observable/return 0 #/' "umbral-no-cierra"; then
+  export HOME="$tmp/casa-mut17"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut17/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=no bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion umbral-no-cierra atrapada (C17 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion umbral-no-cierra SOBREVIVIO: C17 dio fallo sin validar el umbral"
+  else
+    malo "mutacion umbral-no-cierra invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: restore via cp => R2 la atrapa"
+lib_base="$repo/tools/lib/restaurar_desde_backup.sh"
+lib_mut="$tmp/restaurar-mutado.sh"
+sed 's/# restore: tmp+cmp+mv (no truncar dest); cp -p preserva modo/cp "$1" "$2"; return 0;/' "$lib_base" > "$lib_mut"
+if cmp -s "$lib_base" "$lib_mut"; then
+  malo "mutacion restore-via-cp no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$lib_mut" 2>/dev/null; then
+  malo "mutacion restore-via-cp no parsea; asi no prueba nada"
+else
+  rb3="$tmp/restore-mut"
+  mkdir -p "$rb3"
+  printf 'NUEVO-publicado\n' > "$rb3/dest"
+  printf 'VIEJO-backup\n' > "$rb3/bak"
+  sha_nuevo="$(sha256sum < "$rb3/dest")"
+  (
+    . "$lib_mut"
+    SAIKIT_RESTORE_ABORT=1 restaurar_desde_backup "$rb3/bak" "$rb3/dest"
+  )
+  if [ "$(sha256sum < "$rb3/dest")" != "$sha_nuevo" ]; then
+    printf '    mutacion restore-via-cp atrapada (R2 en rojo: DEST pisa con cp)\n'
+  else
+    malo "mutacion restore-via-cp SOBREVIVIO: DEST intacto con restore=cp"
+  fi
+fi
+rm -f "$lib_mut"
+
+caso "mutacion: cp sin -p pierde el modo => R1 la atrapa"
+lib_base="$repo/tools/lib/restaurar_desde_backup.sh"
+lib_mut="$tmp/restaurar-sin-p.sh"
+sed 's/cp -p "/cp "/' "$lib_base" > "$lib_mut"
+if cmp -s "$lib_base" "$lib_mut"; then
+  malo "mutacion cp-sin-p no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$lib_mut" 2>/dev/null; then
+  malo "mutacion cp-sin-p no parsea; asi no prueba nada"
+else
+  rb4="$tmp/restore-mut-modo"
+  mkdir -p "$rb4"
+  printf 'NUEVO-publicado\n' > "$rb4/dest"
+  printf 'VIEJO-backup\n' > "$rb4/bak"
+  chmod 755 "$rb4/bak"
+  chmod 644 "$rb4/dest"
+  modo_bak="$(modo_de "$rb4/bak")"
+  (
+    . "$lib_mut"
+    restaurar_desde_backup "$rb4/bak" "$rb4/dest"
+  )
+  modo_dest="$(modo_de "$rb4/dest")"
+  if [ "$modo_dest" != "$modo_bak" ]; then
+    printf '    mutacion cp-sin-p atrapada (R1 en rojo: dest modo=%s != bak %s)\n' \
+      "$modo_dest" "$modo_bak"
+  else
+    malo "mutacion cp-sin-p SOBREVIVIO: dest modo=$modo_dest igual al bak sin cp -p"
+  fi
+fi
+rm -f "$lib_mut"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_provenance: FAIL" >&2
