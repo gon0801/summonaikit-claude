@@ -7,6 +7,43 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #192 / Task 18.24 (el CI minimo nace rojo o verde-sin-correr) — deploy a las 4 copias; hook sin cambios
+
+- **SHA:** merge `69f5893`, head `aaec0b6`, CI 8/8 con `gate` verde (run 33992318298).
+- **Deploy:** el PR no toco `hooks/summonaikit-harness.sh`; el deploy corrio
+  junto con el del PR #191 (misma corrida, ver esa entrada): claude `YA AL
+  DIA`, grok/dsh/codex REPARADO con backup `…nuestro.20260905-142403.bak`.
+  `--check` sigue rojo por diseño (codex sin registro, límite declarado de la
+  18.15/18.21).
+- **Que se mergeo:** `saikit-ci-minimo.sh` fail-closed (exit 2 sin runner,
+  nada de `bash tests/run.sh` inventado), setup-python pinneado a sha +
+  `pip install` (y requirements Y pytest), verify/ solo-markdown omite el
+  paso y lo dice, job amarrado (ubuntu-24.04, timeout, concurrency),
+  yarn/pnpm detectados; veto de merge: casos `skipped`=rojo y solo-push
+  fijados, con decisión declarada. Cross-review adversary de grok: 6
+  hallazgos (1 ALTO: pnpm sin toolchain), 5 Act on cerrados en `aaec0b6`,
+  1 Dismissed; artefacto en `.saikit/findings/adversary-20260905T210102Z.json`.
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión kimi).
+
+## 2026-09-05 — PR #191 / Task 18.23 (el recibo se entrega un párrafo por etiqueta) — deploy REAL a las 4 copias
+
+- **SHA:** merge `3843b7a`, head `4863983`, CI 8/8 con `gate` verde (run 33990766492).
+- **Deploy:** claude `YA AL DIA` (glm habia sincronizado el vivo al regrabar
+  la golden, verificado por sha); grok, dsh y codex REPARADO — corrian el
+  hook pre-18.23 — backups `~/.grok/…nuestro.20260905-142403.bak`,
+  `~/.dsh/…142403.bak`, `~/.codex/…142403.bak`. `--check` rojo por diseño
+  (codex sin registro); `check-hook-registration.sh` exit 0, silencio.
+- **Que se mergeo:** `has_receipt_label` con ancla de linea (vineta -,*,+,
+  negrita o etiqueta pelada; `\n` literal de codex cuenta como frontera),
+  los 7 mensajes de falta nombran la regla, contrato en sus dos bloques,
+  golden regrabada con 227 pasos auditados sin flips. Ceremonia completa del
+  implementador (verifier + adversary + reviewer 2 rondas, veredicto
+  `clean`); review del lead con rojo reproducido y mutacion load-bearing
+  medida; un hallazgo BAJO (comentario stale) corregido en `4863983`.
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión kimi).
+
 ## 2026-09-05 — PR #185 / Task 18.8 (CI minimo cuando no hay) — deploy: skill actualizada, hook sin cambios
 
 - **SHA:** merge `4051e69`, head `32e3682`, CI 9/9 (run 33984924089).
