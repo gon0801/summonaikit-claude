@@ -295,5 +295,11 @@ bash "$GEN" --ofrecer --root "$ROOT" ${ci_minimo_flag:+--ci-minimo "$ci_minimo_f
 
 printf 'saikit-setup-autopilot: listo: %s\n' "$CFG"
 printf '  merge=%s despliega=%s rama=%s pr=%s\n' "$merge_json" "$despliega_json" "$rama_resp" "${pr_flag:-(sin pr)}"
-printf '  commitea y pushea a origin/%s: el merge lee la config de ahi, no de tu disco.\n' "$rama_resp"
+# Si el generador dejo el yml, el merge necesita ESE archivo en origin, no solo
+# el JSON (hallazgo interrogate: seguir el listo al pie dejaba el workflow
+# untracked y el veto sin checks seguia).
+if [ -f "$ROOT/.github/workflows/saikit-ci-minimo.yml" ]; then
+  printf '  incluye tambien .github/workflows/saikit-ci-minimo.yml en el commit.\n'
+fi
+printf '  commitea y pushea a origin/%s: el merge lee la config (y el CI) de ahi, no de tu disco.\n' "$rama_resp"
 exit 0

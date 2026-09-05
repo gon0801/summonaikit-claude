@@ -164,6 +164,7 @@ caso "acepta_escribe_workflow"
   if [ -f "$(yml_dest)" ]; then
     yaml_parsea "$(yml_dest)" || _mal "el YAML no parsea (check-yaml lo rechazaria)"
   fi
+  _contiene "listo nombra el workflow" "$OUT" ".github/workflows/saikit-ci-minimo.yml"
 }
 fin_caso "acepta_escribe_workflow"
 

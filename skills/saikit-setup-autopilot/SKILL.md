@@ -26,7 +26,9 @@ que sin CI el autopilot no mergea. Quien ya sabe que lo quiere pasa
 ## Lo que el operador tiene que saber
 
 - Sin commitear y pushear a `origin/<rama>`, el setup no existe: el merge lee
-  la config de ahí, nunca del disco. Dile que haga commit + push.
+  la config de ahí, nunca del disco. Si aceptó el CI mínimo, el commit tiene
+  que incluir también `.github/workflows/saikit-ci-minimo.yml`; sin eso Actions
+  no dispara y el merge sigue en `sin checks`.
 - `merge_despliega: unknown` (nadie contestó) NO mergea: es distinto de "no".
 - Un solo setup a la vez por repo (lock compartido entre worktrees). Si otro
   lo tiene, el comando lo reporta y sale con código 3 SIN esperar: el operador
