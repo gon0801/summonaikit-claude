@@ -109,7 +109,7 @@ inbox_correr() {  # $1=yml $2=log
         ;;
     esac
     rc=0
-    ( cd "$SB/work" && eval "$cmd" ) || rc=$?
+    ( cd "$SB/work" && eval "$cmd" ) >/dev/null 2>&1 || rc=$?
     printf '%s\t%s\n' "$rc" "$cmd" >> "$2"
   done < <(run_reales "$1")
 }
@@ -845,7 +845,7 @@ no_invoca_desde_setup	s|bash "\$GEN" --ofrecer --root "\$ROOT".*|true|	c_wiring	
 escribe_tag_no_sha	s/PIN_CHECKOUT_SHA=.*/PIN_CHECKOUT_SHA=v4.2.2/	c_uses_sha	gen
 mete_secrets	s/WORKFLOW_NAME='saikit-ci-minimo'/WORKFLOW_NAME='saikit-ci-minimo secrets.FOO'/	c_sin_secrets	gen
 run_solo_en_comentario	s|run: \$test_cmd|run: true  # $test_cmd|	c_run_reales	gen
-default_no_escribe_igual	s/printf 'DEFAULT_NO'/printf 'SI'/	c_default_no	gen
+default_no_escribe_igual	s/if \[ ! -t 0 \]; then/if false; then/;s/printf 'DEFAULT_NO'/printf 'SI'/	c_default_no	gen
 sin_permissions	s/^permissions:/#permissions:/	c_permisos	gen
 persist_credentials_on	s/persist-credentials: false/persist-credentials: true/	c_permisos	gen
 carrera_sin_guarda	s/if \[ -e "\$dest" \] || \[ "\$(workflows_en_disco "\$root")" = PRESENTE \]; then/if false; then/;s/mv -n/mv -f/;s/|| \[ -e "\$tmp" \]/|| false/	c_carrera	gen
