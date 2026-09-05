@@ -54,6 +54,25 @@
 # --------------------------------------------------------------- afirmaciones
 CASO_ROJO=0
 
+# 18.19 — canal de skip por caso (categoria aparte en el runner).
+_skip_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skip_caso.sh"
+[ -r "$_skip_lib" ] && . "$_skip_lib"
+unset _skip_lib
+
+# 18.19 — antedatado portable. 'touch -d 15 days ago' es GNU-only: el touch
+# de BSD responde 'illegal time specification' y la bateria cerraba en FAIL en
+# macOS por una dependencia que no estaba escrita en ningun lado. 'touch -t'
+# con fecha fija es portable (GNU, BSD, MSYS2) y 2020-01-01 esta siempre a mas
+# de los 14 dias del TTL del barrido. La costura SAIKIT_FINGIR_SIN=touch
+# SIMULA la ausencia de la herramienta: en ubuntu-latest (los 6 jobs del CI)
+# touch -d siempre funciona, asi que sin esta costura la rama 'sin la
+# herramienta' nunca se toma y una mutacion 'la ausencia pasa como verde'
+# sobrevive en verde — la trampa que costo una version de la DoD de esta fila.
+saikit_antedatar() {  # $1 = archivo, $2 = fecha touch -t (YYYYMMDDhhmm[.ss])
+  [ "${SAIKIT_FINGIR_SIN:-}" = touch ] && return 1
+  touch -t "$2" "$1" 2>/dev/null
+}
+
 _mal()      { printf '      FAIL: %s\n' "$1"; CASO_ROJO=1; }
 _igual()    { if [ "$2" != "$3" ]; then _mal "$1: esperaba [$3], dio [$2]"; fi; }
 _vacio()    { if [ -n "$2" ]; then _mal "$1: esperaba vacio, dio [$(printf '%s' "$2" | head -c 200)]"; fi; }
@@ -700,10 +719,18 @@ caso_g1_estado_no_se_acumula() {
   mkdir -p "$proyecto_dir/hermana-muerta" "$proyecto_dir/hermana-fresca"
   printf 'cycle=0\n' > "$proyecto_dir/hermana-muerta/harness-state.env"
   printf 'cycle=0\n' > "$proyecto_dir/hermana-fresca/harness-state.env"
-  # 15 dias: pasa el TTL de 14. `touch -d` se midio funcionando en MSYS2 antes
-  # de disenar esto, asi que no hace falta el TTL-por-env que preveia el plan.
-  touch -d '15 days ago' "$proyecto_dir/hermana-muerta/harness-state.env" 2>/dev/null \
-    || _mal "no se pudo antedatar la hermana muerta; el barrido no se puede medir"
+  # 2020-01-01: siempre a mas de los 14 dias del TTL (la version anterior usaba
+  # 'touch -d 15 days ago', GNU-only — 18.19). Sin el instrumento de antedatado
+  # el caso NO puede medir el barrido: se declara skip (categoria aparte) y se
+  # vuelve SIN correr las aserciones posteriores — una hermana muerta sin
+  # antedatar es una hermana fresca, y afirmar el barrido ahi seria verde en
+  # falso, no unknown. El viejo '|| _mal' publicaba FAIL por falta de la
+  # herramienta: confundia 'la proteccion se rompio' con 'no pude medirla'.
+  if ! saikit_antedatar "$proyecto_dir/hermana-muerta/harness-state.env" 202001010000; then
+    saikit_skip_caso 'caso_g1_estado_no_se_acumula' \
+      'sin touch -t portable no se puede antedatar la hermana muerta; el barrido no se puede medir'
+    return 0
+  fi
 
   lab_run prompt claude "$(lab_payload_prompt '-saikit segundo turno, dispara el barrido')"
 

@@ -30,6 +30,10 @@ set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/lib/hook_lab.sh"
+# 18.19 — los SKIP declarados usan el canal por caso: quedan contados en el
+# runner en categoria aparte (ni PASS, ni FAIL, ni unknown), no publicados
+# como verde silencioso.
+. "$here/lib/skip_caso.sh"
 
 if [ ! -r "$here/lib/hook_bajo_prueba.sh" ]; then
   echo "test_adversary_lock: unknown — falta tests/lib/hook_bajo_prueba.sh; no se pudo resolver que archivo probar." >&2
@@ -207,7 +211,7 @@ advlock_bloqueo_antes_de_escotillas; fin_caso "advlock_bloqueo_antes_de_escotill
 
 caso "advlock_secreto_sesion_actual_bloquea_y_anterior_no"
 advlock_secreto_sesion_actual_bloquea_y_anterior_no() {
-  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
   mkdir -p "$LAB/proyecto/.saikit/findings"
   printf 'repro output: token=sekret-alpha-123\n' > "$LAB/proyecto/.saikit/findings/adversary-viejo.json"
   touch -d '2020-01-01T00:00:00Z' "$LAB/proyecto/.saikit/findings/adversary-viejo.json"
@@ -229,7 +233,7 @@ advlock_secreto_sesion_actual_bloquea_y_anterior_no; fin_caso "advlock_secreto_s
 
 caso "advlock_armado_inicializa_estado_previo"
 advlock_armado_inicializa_estado_previo() {
-  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
   mkdir -p "$LAB/proyecto/.saikit/findings"
   printf 'repro output: token=sekret-previo-789\n' > "$LAB/proyecto/.saikit/findings/adversary-fantasma.json"
   # El artefacto fantasma es de una sesion ANTERIOR: su mtime queda claramente
@@ -263,7 +267,7 @@ advlock_armado_inicializa_estado_previo; fin_caso "advlock_armado_inicializa_est
 
 caso "advlock_mtime_igual_a_epoca_escanea"
 advlock_mtime_igual_a_epoca_escanea() {
-  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
   mkdir -p "$LAB/proyecto/.saikit/findings"
   adv_armar
   adv_despachar
@@ -281,7 +285,7 @@ advlock_mtime_igual_a_epoca_escanea; fin_caso "advlock_mtime_igual_a_epoca_escan
 
 caso "advlock_mtime_retrocedido_no_escanea"
 advlock_mtime_retrocedido_no_escanea() {
-  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
   mkdir -p "$LAB/proyecto/.saikit/findings"
   adv_armar
   adv_despachar
@@ -326,7 +330,7 @@ advlock_symlinks() {
     lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/eye.json')"
     _contiene "symlink en file_path es violacion" "$(lab_estado adv_violation_paths)" 'eye.json'
   else
-    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux los ejercita\n'
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux los ejercita'
   fi
   # (b) findings/ MISMO es un symlink (plantable por el hueco Bash): setup
   # violado, TODO lo que caiga ahi es violacion (claude #9).
@@ -339,7 +343,7 @@ advlock_symlinks() {
     lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/dentro-del-enlace.json')"
     _igual "findings symlink = violacion de setup" "$(lab_estado adv_violation)" "1"
   else
-    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux los ejercita\n'
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux los ejercita'
   fi
 }
 advlock_symlinks; fin_caso "advlock_symlinks"
@@ -442,7 +446,7 @@ advlock_symlink_subdir_y_saikit_enlazado() {
     lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/sub/escapa.json')"
     _igual "subdir symlink es violacion" "$(lab_estado adv_violation)" "1"
   else
-    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux lo ejercita\n'
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'
   fi
   # (b) .saikit MISMO es un symlink (codex #1a): el gitignore no debe crearse a
   # TRAVES del enlace (aterrizaria fuera del repo) y escribir a traves es
@@ -459,7 +463,7 @@ advlock_symlink_subdir_y_saikit_enlazado() {
     lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/findings/x.json')"
     _igual ".saikit symlink: escribir a traves es violacion" "$(lab_estado adv_violation)" "1"
   else
-    printf '    SKIP declarado: sin symlinks reales (MSYS copia); el CI de Linux lo ejercita\n'
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'
   fi
 }
 advlock_symlink_subdir_y_saikit_enlazado; fin_caso "advlock_symlink_subdir_y_saikit_enlazado"
@@ -471,7 +475,7 @@ advlock_artefacto_redactado_no_bloquea() {
   # como manda el perfil (token=[REDACTED], ://[REDACTED]@) bloqueaba el cierre
   # — la disciplina de la capa 1 disparaba la capa 2. El escaneo ahora descuenta
   # las formas redactadas y exige un valor real.
-  [ "$ADV_EPOCA_OK" = "1" ] || { printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'; return 0; }
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
   mkdir -p "$LAB/proyecto/.saikit/findings"
   adv_armar
   adv_despachar
@@ -662,7 +666,7 @@ advlock_mensaje_redacta_paths() {
     _no_contiene "el nombre no filtra su valor" "$LAB_ERR" 'fugafilename'
     _contiene "nombre redactado en el mensaje del escaneo" "$LAB_ERR" 'token=[REDACTED]'
   else
-    printf '    SKIP declarado: sin GNU date/touch no se puede fijar la epoca\n'
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'
   fi
 }
 advlock_mensaje_redacta_paths; fin_caso "advlock_mensaje_redacta_paths"
@@ -751,12 +755,12 @@ while IFS='|' read -r nombre caso_atrapa; do
   case "$nombre" in
     secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_rama_estricta_muerta|redactado_cola_ciega)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
-        printf '    SKIP declarado: la mutacion %s necesita GNU date/touch\n' "$nombre"
+        saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue
       fi ;;
     canon_logico)
       if [ "$ADV_SYMLINK_OK" != "1" ]; then
-        printf '    SKIP declarado: la mutacion %s necesita symlinks reales\n' "$nombre"
+        saikit_skip_caso "mutacion_$nombre" 'necesita symlinks reales'
         continue
       fi ;;
   esac

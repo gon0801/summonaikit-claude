@@ -845,7 +845,14 @@ nuevo_dsh_reg
 # Quitar las personas de verifier/reviewer/adversary (dejar solo implementer) —
 # el checker debe hablar porque cada rol exige su persona:
 #   `persona: |-` sobre el bloque entero dejaba pasar esto con 4 roles.
-sed -i '/- id: subagent_verifier/,+2d; /- id: subagent_reviewer/,+2d; /- id: subagent_adversary/,+2d' "$dsh_home/cordis.patch.yml"
+# 18.19: el sed original usaba direcciones relativas GNU (`,+2d`), que el sed
+# de BSD rechaza — en macOS el sed fallaba, el yml quedaba con los 4 roles y
+# el caso pasaba EN FALSO. awk borra cada linea `- id:` de esos roles mas las
+# 2 siguientes, identico en GNU/BSD.
+awk '/- id: subagent_(verifier|reviewer|adversary)/ {saltar=2; next}
+     saltar > 0 {saltar--; next} {print}' \
+  "$dsh_home/cordis.patch.yml" > "$dsh_home/cordis.patch.yml.saikit-new" \
+  && mv "$dsh_home/cordis.patch.yml.saikit-new" "$dsh_home/cordis.patch.yml"
 out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dsh con persona faltante: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con persona faltante deberia hablar: $out"
@@ -854,9 +861,15 @@ caso "dsh: rol duplicado => SI habla (M2/qwen r1)"
 nuevo_dsh_reg
 # Duplicar el bloque de implementer: el checker debe detectar >1 aparicion.
 sed -n '/- id: subagent_implementer/,/- id: subagent_verifier/p' "$dsh_home/cordis.patch.yml" > "$tmp/dsh-dup-$n_dsh_reg.txt"
-sed -i '/- id: subagent_verifier/{
-  r '"$tmp/dsh-dup-$n_dsh_reg.txt"'
-}' "$dsh_home/cordis.patch.yml"
+# 18.19: el sed original usaba `r` con `-i` sin sufijo (GNU-only); en BSD
+# fallaba y el caso daba rojo por el instrumento, no por el checker. awk
+# inserta el bloque copiado ANTES de la linea de verifier, identico en
+# GNU/BSD.
+awk -v dup="$tmp/dsh-dup-$n_dsh_reg.txt" \
+  '/- id: subagent_verifier/ {while ((getline l < dup) > 0) print l; close(dup)}
+   {print}' \
+  "$dsh_home/cordis.patch.yml" > "$dsh_home/cordis.patch.yml.saikit-new" \
+  && mv "$dsh_home/cordis.patch.yml.saikit-new" "$dsh_home/cordis.patch.yml"
 out="$(bash "$tool" --dsh-home "$dsh_home" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dsh con rol duplicado: esperaba exit 0, dio $rc"
 printf '%s' "$out" | grep -qi 'PATCH DE DSH' || malo "dsh con rol duplicado deberia hablar: $out"

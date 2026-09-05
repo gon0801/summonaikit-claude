@@ -122,6 +122,19 @@ if command -v cygpath >/dev/null 2>&1; then
   work_win="$(cygpath -m "$work" 2>/dev/null || printf '%s' "$work")"
 fi
 
+# Tercera y cuarta forma: la FISICA y la LOGICA CANONICA. En macOS `mktemp -d`
+# bajo TMPDIR devuelve la ruta LOGICA tal cual la recibio — que puede traer
+# barra doble si TMPDIR termina en '/' — mientras el hook bajo prueba emite su
+# cwd con `pwd` (logica canonicizada) y su proyecto con `cd+pwd -P` (fisica:
+# /private/var/... en vez de /var/...). La misma ruta del mismo sandbox
+# aparecia en formas que ninguna regla cubria y el registro dejaba de ser
+# reproducible entre corridas, cada una con su work propio. En Linux las tres
+# formas coinciden y estas reglas son no-op: la linea base grabada no cambia.
+work_real="$(cd "$work" 2>/dev/null && pwd -P)"
+[ -n "$work_real" ] || work_real="$work"
+work_log="$(cd "$work" 2>/dev/null && pwd)"
+[ -n "$work_log" ] || work_log="$work"
+
 normalizar() {
   # Task 5.3: el state-path ahora lleva HOST (state/<host>/<key>/<sess>/...).
   # La 1ra regex come host+key (host = [a-z]+: claude/zcode/other); la 2da
@@ -129,7 +142,10 @@ normalizar() {
   # no (claude|zcode|other) porque el delimitador `|` choca con la alternancia
   # en el sed de MSYS2/Git Bash (BRE \| y ERE | ambos se rompen).
   sed -e "s|$work_win|<SANDBOX>|g" \
+      -e "s|$work_real|<SANDBOX>|g" \
+      -e "s|$work_log|<SANDBOX>|g" \
       -e "s|$work|<SANDBOX>|g" \
+      -e 's|/private<SANDBOX>|<SANDBOX>|g' \
       -e 's|state/[a-z][a-z]*/[0-9][0-9]*|state/<PROJECT_KEY>|g' \
       -e 's|state/[0-9][0-9]*|state/<PROJECT_KEY>|g' \
       -e 's|[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z|<TS>|g'

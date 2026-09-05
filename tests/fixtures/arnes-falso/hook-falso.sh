@@ -41,6 +41,11 @@ mkdir -p "$DIR/state/$HOST/$KEY"
   printf 'grok_session=%s\n' "${GROK_SESSION_ID:-<sin-grok-sesion>}"
   printf 'ts=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'cwd=%s\n' "$(pwd)"
+  # 18.19: forma FISICA del mismo cwd. El hook real resuelve su proyecto con
+  # cd+pwd -P (ADV_PROJECT_CANON); sin esta linea el falso nunca emite la
+  # forma fisica y la normalizacion del arnes quedaria sin guarda en CI,
+  # donde /tmp no diverge solo.
+  printf 'cwd_fisico=%s\n' "$(cd "$(pwd)" && pwd -P)"
   printf 'bytes_entrada=%s\n' "${#INPUT}"
 } > "$DIR/state/$HOST/$KEY/$ESTADO_NOMBRE"
 

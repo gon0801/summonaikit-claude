@@ -7,6 +7,15 @@ repo="$(cd "$here/.." && pwd)"
 . "$here/lib/recetas_lint.sh"
 fail=0; caso() { printf '  caso: %s\n' "$1"; }; malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
+# 18.19 — sed in place PORTABLE: `sed -i 's/.../.../' f` sin sufijo es
+# GNU-only; el sed de BSD interpreta el script como SUFIJO de backup y el
+# caso ni siquiera edita el archivo (rojo medido en macOS). Escribir por
+# archivo temporal + mv es identico en GNU, BSD y MSYS2.
+sed_i() {  # $1 = script sed, $2 = archivo a editar en el lugar
+  sed "$1" "$2" > "$2.saikit-new" || { rm -f "$2.saikit-new"; return 1; }
+  mv "$2.saikit-new" "$2"
+}
+
 buena() {  # $1=ruta → escribe una receta valida minima (nombre: bug)
   mkdir -p "$(dirname "$1")"
   cat > "$1" <<'EOF'
@@ -84,11 +93,11 @@ printf -- '---\nsaikit_owned: summonaikit-claude\nnombre: bug\ntitulo: Arreglar 
 lint_receta "$SANDBOX/fsc.md" >/dev/null && malo "acepto frontmatter sin '---' de cierre"
 
 caso "titulo plegado o literal => 1"
-buena "$SANDBOX/pg/bug.md"; sed -i 's/^titulo: .*/titulo: >/' "$SANDBOX/pg/bug.md"
+buena "$SANDBOX/pg/bug.md"; sed_i 's/^titulo: .*/titulo: >/' "$SANDBOX/pg/bug.md"
 lint_receta "$SANDBOX/pg/bug.md" >/dev/null && malo "acepto titulo plegado (>)"
 
 caso "titulo plegado con chomping => 1"
-buena "$SANDBOX/pgc/bug.md"; sed -i 's/^titulo: .*/titulo: >-/' "$SANDBOX/pgc/bug.md"
+buena "$SANDBOX/pgc/bug.md"; sed_i 's/^titulo: .*/titulo: >-/' "$SANDBOX/pgc/bug.md"
 lint_receta "$SANDBOX/pgc/bug.md" >/dev/null && malo "acepto titulo plegado con chomping (>-)"
 
 caso "link relativo con espacios resuelve"
@@ -97,7 +106,7 @@ buena "$SANDBOX/ly/bug.md"; printf '[esto](sub/mi archivo.md)\n' >> "$SANDBOX/ly
 lint_receta "$SANDBOX/ly/bug.md" >/dev/null || malo "rechazo un link relativo con espacios que existe"
 
 caso "carril invalido => 1"
-buena "$SANDBOX/c/bug.md"; sed -i 's/^carril: full/carril: rapido/' "$SANDBOX/c/bug.md"
+buena "$SANDBOX/c/bug.md"; sed_i 's/^carril: full/carril: rapido/' "$SANDBOX/c/bug.md"
 lint_receta "$SANDBOX/c/bug.md" >/dev/null && malo "acepto carril: rapido"
 
 caso "mas de 80 lineas => 1"
@@ -120,11 +129,11 @@ lint_receta "$SANDBOX/otro.md" >/dev/null && malo "acepto nombre != archivo"
 buena "$SANDBOX/eq/bug.md"; lint_receta "$SANDBOX/eq/bug.md" >/dev/null || malo "rechazo bug.md con nombre: bug"
 
 caso "TAB en el titulo => 1"
-buena "$SANDBOX/t/bug.md"; sed -i "s/^titulo: .*/titulo: Con\ttab/" "$SANDBOX/t/bug.md"
+buena "$SANDBOX/t/bug.md"; sed_i "s/^titulo: .*/titulo: Con\ttab/" "$SANDBOX/t/bug.md"
 lint_receta "$SANDBOX/t/bug.md" >/dev/null && malo "acepto TAB en el titulo"
 
 caso "CRLF se tolera en lectura"
-buena "$SANDBOX/crlf/bug.md"; sed -i 's/$/\r/' "$SANDBOX/crlf/bug.md"
+buena "$SANDBOX/crlf/bug.md"; sed_i 's/$/\r/' "$SANDBOX/crlf/bug.md"
 lint_receta "$SANDBOX/crlf/bug.md" >/dev/null || malo "rechazo una receta CRLF"
 
 caso "manifest_linea: 5 campos TAB y el titulo de varias palabras entero"
@@ -134,7 +143,7 @@ linea="$(manifest_linea "$SANDBOX/m/bug.md")"
 [ "$(printf '%s' "$linea" | cut -f5)" = "Arreglar algo que no funciona" ] || malo "titulo partido: $linea"
 
 caso "manifest_linea hashea normalizado a LF (receta CRLF => hash == sha de los bytes LF)"
-buena "$SANDBOX/nl/bug.md"; sed -i 's/$/\r/' "$SANDBOX/nl/bug.md"
+buena "$SANDBOX/nl/bug.md"; sed_i 's/$/\r/' "$SANDBOX/nl/bug.md"
 sha_lf="$(tr -d '\r' < "$SANDBOX/nl/bug.md" | sha256sum | cut -c1-64)"
 sha_man="$(manifest_linea "$SANDBOX/nl/bug.md" | cut -f1)"
 [ "$sha_man" = "$sha_lf" ] || malo "manifest_linea no normaliza a LF (esperado $sha_lf, got $sha_man)"
@@ -158,7 +167,7 @@ caso "--check: manifiesto al dia => 0; stale => 1 (via --dir)"
 bash "$repo/tools/gen-recetas-manifest.sh" --dir "$gen_dir" >/dev/null || malo "generar el manifiesto del sandbox fallo"
 bash "$repo/tools/gen-recetas-manifest.sh" --dir "$gen_dir" --check >/dev/null; rc=$?
 [ "$rc" -eq 0 ] || malo "--check AL DIA devolvio $rc (esperado 0)"
-sed -i 's/^titulo: .*/titulo: Otro/' "$gen_dir/bug.md"
+sed_i 's/^titulo: .*/titulo: Otro/' "$gen_dir/bug.md"
 bash "$repo/tools/gen-recetas-manifest.sh" --dir "$gen_dir" --check >/dev/null; rc=$?
 [ "$rc" -eq 1 ] || malo "--check con manifiesto STALE devolvio $rc (esperado 1)"
 
