@@ -173,10 +173,14 @@ G3|adv_orden_sin_adversary|el chequeo de orden con adversary deja de correr y un
 G1|adv_contrato_criterio_roto|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
 G1|adv_contrato_despacho_roto|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
 G7|pretool_gh_pr_merge_apagado|el patron gh pr merge se apaga y el merge a pelo vuelve a pasar
+G7|pretool_gh_pr_merge_literal|el patron gh pr merge vuelve al literal -Fq y gh  pr  merge / mayusculas pasan
 G7|pretool_gh_api_merge_apagado|el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar
 G7|pretool_git_push_protegida_apagado|el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar
+G7|pretool_git_push_exige_inmediato|el regex de git push exige push pegado a git y git -C <dir> push a master|main pasa
+G7|pretool_git_push_token_en_cualquier_lado|el dest de git push vuelve a token-en-cualquier-lado y una URL con main niega un feature
 G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
 G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
+G7|pretool_hatch_sin_strip_comillas|el hatch deja de pelar comillas envolventes y un pin correcto entre comillas niega
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
 "
@@ -887,11 +891,19 @@ mut_adv_contrato_despacho_roto()  { sed 's/NAMING the artifact to adjudicate/NAM
 
 # 18.11 / D24 — una mutacion por guarda nueva. Cada sed apunta a UN ancla
 # (anti-patron 18.24: una mutacion que apaga varias guardas a la vez).
-mut_pretool_gh_pr_merge_apagado() { sed "s/grep -Fq 'gh pr merge'/grep -Fq 'gh pr MERGE-NUNCA'/"; }
+mut_pretool_gh_pr_merge_apagado() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:space:\]\]+merge'/grep -Eiq 'gh[[:space:]]+pr[[:space:]]+MERGE-NUNCA'/"; }
+# F1: restaura el match literal; atrapa caso_g7_niega_gh_pr_merge_espaciado.
+mut_pretool_gh_pr_merge_literal() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:space:\]\]+merge'/grep -Fq 'gh pr merge'/"; }
 mut_pretool_gh_api_merge_apagado() { sed 's/api\[\^\[:cntrl:\]\]\*\/merge/api[^[:cntrl:]]*\/mergeNUNCA/'; }
-mut_pretool_git_push_protegida_apagado() { sed 's/git\[\[:space:\]\]+push/git[[:space:]]+pushNUNCA/'; }
+mut_pretool_git_push_protegida_apagado() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+pushNUNCA'\''/'; }
+# F3: restaura git pegado a push; atrapa caso_g7_niega_git_dash_c_push.
+mut_pretool_git_push_exige_inmediato() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+push'\''/'; }
+# F4: restaura token master|main en cualquier lado; atrapa caso_g7_permite_git_push_url_main.
+mut_pretool_git_push_token_en_cualquier_lado() { sed 's/^  _pt_git_dest_re=.*/  _pt_git_dest_re='\''(^|[^[:alnum:]_-])(master|main)([^[:alnum:]_-]|$)'\''/'; }
 mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 0; }/'; }
 mut_pretool_hatch_nunca_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 1; }/'; }
+# F2: el strip de comillas se vuelve identidad; atrapa caso_g7_hatch_comillas_ok.
+mut_pretool_hatch_sin_strip_comillas() { sed 's/pretool_strip_comillas_hatch "/printf %s "/'; }
 mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;//'; }
 # Restaura el short-circuit hatch-primero: hash ok => allow aunque el
 # mismo comando tambien traiga gh pr merge / gh api /merge / git push.

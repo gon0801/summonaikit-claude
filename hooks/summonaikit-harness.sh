@@ -3300,15 +3300,32 @@ emit_pretool_deny() {
   exit 0
 }
 
-pretool_es_gh_pr_merge() { printf '%s' "$1" | grep -Fq 'gh pr merge'; }
-pretool_es_gh_api_merge() { printf '%s' "$1" | grep -Eq 'gh[[:space:]]+api[^[:cntrl:]]*/merge'; }
+# Quote-splitting `gh 'pr' merge` / `gh pr mer''ge` needs a lexer — residual.
+pretool_es_gh_pr_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+pr[[:space:]]+merge'; }
+pretool_es_gh_api_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+api[^[:cntrl:]]*/merge'; }
 pretool_es_git_push_protegida() {
-  printf '%s' "$1" | grep -Eq 'git[[:space:]]+push' || return 1
-  printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]_-])(master|main)([^[:alnum:]_-]|$)'
+  # optional -C <path> / -c k=v / lone -X before push (F3)
+  _pt_git_push_re='git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+-[a-zA-Z])*[[:space:]]+push'
+  printf '%s' "$1" | grep -Eq "$_pt_git_push_re" || return 1
+  # dest ref after push, not URL/path/comment substring (F4)
+  _pt_push="${1%%#*}"
+  _pt_git_dest_re='push[[:space:]].*([[:space:]]origin[[:space:]]+(master|main)|[[:space:]]HEAD:(master|main)|refs/heads/(master|main)|[A-Za-z0-9._/-]+:(master|main)|[[:space:]](master|main))([[:space:]]|$)'
+  printf '%s' "$_pt_push" | grep -Eq "$_pt_git_dest_re"
 }
 pretool_es_hatch() { printf '%s' "$1" | grep -q 'saikit-merge\.sh'; }
+# json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path.
+pretool_strip_comillas_hatch() {
+  _pt_q="$1"
+  _pt_q="${_pt_q#\\}"
+  _pt_q="${_pt_q#\"}"
+  _pt_q="${_pt_q#\'}"
+  _pt_q="${_pt_q%\\}"
+  _pt_q="${_pt_q%\"}"
+  _pt_q="${_pt_q%\'}"
+  printf '%s' "$_pt_q"
+}
 pretool_token_hatch() {
-  printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+saikit-merge\.sh' | head -n 1
+  pretool_strip_comillas_hatch "$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+saikit-merge\.sh' | head -n 1)"
 }
 pretool_pins_iguales() { [ "$1" = "$2" ]; }
 

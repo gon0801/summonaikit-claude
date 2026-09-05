@@ -3979,7 +3979,7 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 # $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
 # (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
 # (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_permite_git_push_feature caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
+CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
 
 _g7_plantar_hatch() {
   unset SAIKIT_KIT_MANIFEST
@@ -4018,6 +4018,18 @@ caso_g7_niega_gh_pr_merge() {
   _g7_assert_deny
 }
 
+# F1: espacios/tabs/mayusculas entre gh, pr, merge (no `gh merge pr`).
+# Rojo si el patron vuelve al literal -Fq 'gh pr merge'.
+caso_g7_niega_gh_pr_merge_espaciado() {
+  lab_run auto claude "$(lab_payload_pretool_bash 'gh  pr  merge --squash')"
+  _g7_assert_deny
+  lab_run auto claude "$(lab_payload_pretool_bash 'GH PR MERGE --squash')"
+  _g7_assert_deny
+  _g7_plantar_hatch match
+  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run || gh  pr  merge 1')"
+  _g7_assert_deny
+}
+
 caso_g7_niega_gh_api_merge() {
   lab_run auto claude "$(lab_payload_pretool_bash 'gh api repos/acme/app/pulls/12/merge')"
   _g7_assert_deny
@@ -4034,8 +4046,33 @@ caso_g7_niega_git_push_main() {
   _g7_assert_deny
 }
 
+caso_g7_niega_git_push_origin_main() {
+  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin main')"
+  _g7_assert_deny
+}
+
+# F3: git -C <dir> push origin master|main. Rojo si el primer regex
+# exige `git` pegado a `push`.
+caso_g7_niega_git_dash_c_push() {
+  lab_run auto claude "$(lab_payload_pretool_bash 'git -C /tmp/repo push origin master')"
+  _g7_assert_deny
+  lab_run auto claude "$(lab_payload_pretool_bash 'git -C ./app push origin main')"
+  _g7_assert_deny
+}
+
 caso_g7_permite_git_push_feature() {
   lab_run auto claude "$(lab_payload_pretool_bash 'git push origin feature-branch')"
+  _g7_assert_allow
+}
+
+# F4: main/master en URL/comentario/mainline no es dest ref.
+# Rojo si el segundo check vuelve al token-en-cualquier-lado.
+caso_g7_permite_git_push_url_main() {
+  lab_run auto claude "$(lab_payload_pretool_bash 'git push https://github.com/acme/main.git feature-x')"
+  _g7_assert_allow
+  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin feature # not main')"
+  _g7_assert_allow
+  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin mainline')"
   _g7_assert_allow
 }
 
@@ -4055,6 +4092,18 @@ caso_g7_hatch_basename_ok() {
   # Ruta instalada que termina en saikit-merge.sh (no solo tools/ relativa).
   _g7_plantar_hatch match
   lab_run auto claude "$(lab_payload_pretool_bash "$LAB/proyecto/tools/saikit-merge.sh --confirmado")"
+  _g7_assert_allow
+}
+
+# F2: comillas envolventes en el token del hatch (relativa, ./, absoluta).
+# Rojo si pretool_strip_comillas_hatch deja de pelar.
+caso_g7_hatch_comillas_ok() {
+  _g7_plantar_hatch match
+  lab_run auto claude "$(lab_payload_pretool_bash 'bash \"tools/saikit-merge.sh\" --confirmado')"
+  _g7_assert_allow
+  lab_run auto claude "$(lab_payload_pretool_bash "bash './tools/saikit-merge.sh' --confirmado")"
+  _g7_assert_allow
+  lab_run auto claude "$(lab_payload_pretool_bash "bash '$LAB/proyecto/tools/saikit-merge.sh' --confirmado")"
   _g7_assert_allow
 }
 
