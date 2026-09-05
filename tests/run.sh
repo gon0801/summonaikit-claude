@@ -32,6 +32,7 @@ unknown=0
 corridos=0
 pasaron=0
 sin_ejecutados=0
+skips=0
 # Mismo codigo que usan los tests para "no se pudo verificar" (ver
 # `tests/lib/hook_bajo_prueba.sh`). Se define aca tambien porque el runner no
 # carga esa lib: la cargan los tests, en sus propios procesos.
@@ -145,6 +146,12 @@ for t in "$repo_root"/tests/test_*.sh; do
 
   caja="$run_root/$nombre"
   mkdir -p "$caja/home/.claude/hooks/state" "$caja/tmp"
+  # 18.19 — canal de skip POR CASO: el archivo vive en la caja del test y la
+  # lib tests/lib/skip_caso.sh le appendea un marcador por caso declarado. Se
+  # cuenta aparte (ni PASS, ni FAIL, ni el unknown por exit 3) y JAMAS altera
+  # exit codes; los casos de test_runner_guards.sh candan este contrato.
+  skips_caja="$caja/skips"
+  : > "$skips_caja"
   if command -v cygpath >/dev/null 2>&1; then
     caja_userprofile="$(cygpath -w "$caja/home")"
   else
@@ -154,18 +161,25 @@ for t in "$repo_root"/tests/test_*.sh; do
   antes="$(manifiesto "$repo_root")"
   env HOME="$caja/home" USERPROFILE="$caja_userprofile" \
       TMPDIR="$caja/tmp" TMP="$caja/tmp" TEMP="$caja/tmp" \
-      SAIKIT_HOOK_VIVO="$hook_vivo" \
+      SAIKIT_HOOK_VIVO="$hook_vivo" SAIKIT_SKIPS="$skips_caja" \
       bash "$t"
   rc=$?
+  n_skips="$(grep -c '^SAIKIT_SKIP_CASO: ' "$skips_caja" 2>/dev/null)" || n_skips=0
+  skips=$((skips + n_skips))
+  nota_skip=''
+  if [ "$n_skips" -gt 0 ]; then
+    nota_skip=" con $n_skips skip"
+    [ "$n_skips" -eq 1 ] || nota_skip=" con $n_skips skips"
+  fi
   # Exit 3 = `unknown`: el test no fallo, pero tampoco verifico nada. Antes
   # esto salia 0 y se publicaba como PASS, asi que una maquina sin el archivo
   # bajo prueba quedaba ENTERA en verde sin haber probado una sola linea de
   # semantica (revision cruzada de la Phase 1, Task 1.5). Contarlo aparte es lo
   # que vuelve visible la diferencia entre verificado y no observado.
   case "$rc" in
-    0) echo "PASS: $nombre"; pasaron=$((pasaron + 1)) ;;
-    3) echo "UNKNOWN: $nombre — no se pudo verificar (no es PASS)"; unknown=$((unknown + 1)) ;;
-    *) echo "FAIL: $nombre" >&2; fail=1 ;;
+    0) echo "PASS$nota_skip: $nombre"; pasaron=$((pasaron + 1)) ;;
+    3) echo "UNKNOWN$nota_skip: $nombre — no se pudo verificar (no es PASS)"; unknown=$((unknown + 1)) ;;
+    *) echo "FAIL$nota_skip: $nombre" >&2; fail=1 ;;
   esac
   corridos=$((corridos + 1))
   despues="$(manifiesto "$repo_root")"
@@ -184,6 +198,19 @@ done
 # garantia declarada.
 if [ "$sin_ejecutados" -gt 0 ]; then
   echo "tests/run.sh: $sin_ejecutados SKIP (sin ejecutor) declarados — nadie los corre; cuentan como unknown (ver arriba)"
+fi
+
+# 18.19 — resumen del canal de skip POR CASO: imprime SIEMPRE que hubo skips,
+# antes de ramificar la salida (misma garantia que el resumen de sin-ejecutor).
+# Categoria APARTE: ni PASS, ni FAIL, ni unknown. Un skip no cambia ningun
+# exit code; lo que cambia es que ya no existe el verde silencioso de
+# 'printf SKIP...; return 0' publicado como PASS liso.
+if [ "$skips" -gt 0 ]; then
+  if [ "$skips" -eq 1 ]; then
+    echo "tests/run.sh: 1 caso en SKIP declarado — categoria aparte: ni PASS, ni FAIL, ni unknown (ver arriba)"
+  else
+    echo "tests/run.sh: $skips casos en SKIP declarado — categoria aparte: ni PASS, ni FAIL, ni unknown (ver arriba)"
+  fi
 fi
 
 # Una mitad que no corrio NINGUN test es un job verde que no probo nada: es la
