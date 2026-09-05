@@ -324,6 +324,105 @@ caso "idempotente_segunda_corrida"
 }
 fin_caso "idempotente_segunda_corrida"
 
+# --- lead #185: cuatro huecos verificados ---------------------------------
+
+caso "npm_real_no_mira_fuera_de_scripts"
+{
+  # package.json SIN scripts.test pero con "test" en otro objeto (jest).
+  # El awk viejo encendia s=1 en scripts y nunca apagaba: matcheaba jest.
+  rm -f tests/run.sh
+  cat > package.json <<'EOF'
+{
+  "name": "app",
+  "scripts": {
+    "build": "echo build"
+  },
+  "jest": {
+    "test": "node_modules/jest/bin/jest.js"
+  }
+}
+EOF
+  correr_gen --ci-minimo si
+  [ -f "$(yml_dest)" ] || _mal "debia escribir (fallback), dio: $OUT"
+  if grep -E '^[[:space:]]*run:[[:space:]]*npm test[[:space:]]*$' "$(yml_dest)" >/dev/null; then
+    _mal "emitio npm test por un test: fuera de scripts"
+  fi
+  if ! grep -E '^[[:space:]]*run:[[:space:]]*bash tests/run\.sh[[:space:]]*$' "$(yml_dest)" >/dev/null; then
+    _mal "esperaba fallback bash tests/run.sh: $(cat "$(yml_dest)")"
+  fi
+}
+fin_caso "npm_real_no_mira_fuera_de_scripts"
+
+caso "npm_instala_antes_en_checkout_fresco"
+{
+  # Sin tests/run.sh; scripts.test real + package-lock => npm ci antes de npm test.
+  rm -f tests/run.sh
+  cat > package.json <<'EOF'
+{
+  "name": "app",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "29.0.0"
+  }
+}
+EOF
+  printf '{ "name": "app", "lockfileVersion": 3 }\n' > package-lock.json
+  correr_gen --ci-minimo si
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm ci[[:space:]]*$'; then
+    _mal "checkout fresco con lockfile exige run: npm ci: $yml"
+  fi
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm test[[:space:]]*$'; then
+    _mal "falta run: npm test: $yml"
+  fi
+  # Orden: npm ci aparece antes que npm test en el archivo.
+  ci_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*npm ci' | head -1 | cut -d: -f1)"
+  test_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*npm test' | head -1 | cut -d: -f1)"
+  [ -n "$ci_line" ] && [ -n "$test_line" ] && [ "$ci_line" -lt "$test_line" ] \
+    || _mal "npm ci debe ir antes de npm test (ci=$ci_line test=$test_line)"
+}
+fin_caso "npm_instala_antes_en_checkout_fresco"
+
+caso "permisos_minimos_y_sin_persist_credentials"
+{
+  correr_gen --ci-minimo si
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  if ! printf '%s\n' "$yml" | grep -Eq '^permissions:'; then
+    _mal "falta permissions: de tope"
+  fi
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*contents:[[:space:]]*read[[:space:]]*$'; then
+    _mal "falta permissions.contents: read"
+  fi
+  if ! printf '%s\n' "$yml" | grep -Eq 'persist-credentials:[[:space:]]*false'; then
+    _mal "checkout debe llevar persist-credentials: false"
+  fi
+}
+fin_caso "permisos_minimos_y_sin_persist_credentials"
+
+caso "carrera_no_pisa_workflow_aparecido"
+{
+  # Gancho de test: entre el consentimiento y el publish, aparece el destino.
+  # Sin rechequeo + mv -n, el generador lo pisa (bug lead #185).
+  export SAIKIT_CI_BEFORE_WRITE='mkdir -p .github/workflows; printf "name: competidor\n" > .github/workflows/saikit-ci-minimo.yml'
+  correr_gen --ci-minimo si
+  unset SAIKIT_CI_BEFORE_WRITE
+  [ -f "$(yml_dest)" ] || _mal "el destino debia existir (el competidor): $OUT"
+  if grep -Fq 'name: saikit-ci-minimo' "$(yml_dest)"; then
+    _mal "piso el workflow que aparecio durante la oferta"
+  fi
+  if ! grep -Fq 'name: competidor' "$(yml_dest)"; then
+    _mal "no preservo el competidor: $(cat "$(yml_dest)")"
+  fi
+  if ! printf '%s' "$OUT" | grep -Eqi 'carrera|no se pisa|ya hay|aparecio'; then
+    _mal "debia reportar la carrera: $OUT"
+  fi
+}
+fin_caso "carrera_no_pisa_workflow_aparecido"
+
 caso "merge_sin_checks_tras_declinar"
 {
   # Camino de producto: declinar el offer y el veto de merge sigue en pie.
