@@ -1349,7 +1349,7 @@ User-facing surface baseline (language/framework/platform agnostic):
 - Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.
 - Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.
 
-Receipt line shape (this is what the gate checks, not the numbered stage list above): each receipt label opens its own paragraph (blank line between paragraphs); never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. What matters within the line is that each label is followed by a COLON. A bullet or markdown bold around the label is fine -- "- **Understand**: ..." counts. What does NOT count is replacing the colon with a dash or any other separator: the numbered stage list above is written "1. Understand - ...", and copying that dash into the receipt fails every label at once. Bare, the six lines are:
+Receipt line shape (this is what the gate checks, not the numbered stage list above): each receipt label opens its own paragraph (blank line between paragraphs); never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. What matters within the line is that each label is followed by a COLON. A hyphen '-', asterisk '*' or plus '+' bullet, or markdown bold around the label is fine -- "- **Understand**: ..." counts; a blockquote ('>'), a nested bullet and a bullet without a space ('-Label:') do not. What does NOT count is replacing the colon with a dash or any other separator: the numbered stage list above is written "1. Understand - ...", and copying that dash into the receipt fails every label at once. Bare, the six lines are:
 Understand: ...
 Implement: ...
 Verify: ...
@@ -2601,7 +2601,21 @@ has_receipt_label() {
   # la linea en blanco entre parrafos NO se parsea (los hosts colapsan los
   # espacios en blanco de forma distinta; exigirla seria fragil) — la regla
   # de parrafos se AFIRMA en el contrato y en el caso de forma, no se verifica.
-  printf '%s' "$text" | grep -Eiq "^[[:space:]]*(-[[:space:]]+)?(\*\*|__)?($label|$alt)(\*\*|__)?[[:space:]]*:"
+  # 18.23 r1 (hallazgo ALTO del adversary, fixture 31, codex-cli 0.147.0): el
+  # \n LITERAL (backslash + n, dos caracteres) tambien es frontera de linea,
+  # porque es la forma de transporte real de codex — \\n doble en el JSON
+  # crudo, y el decodificador de una capa lo deja plano. Sin esta alternancia
+  # el recibo honesto de codex quedaba sin NINGUNA etiqueta a inicio de linea
+  # y se bloqueaba entero. Alternancia en el matcher, NO pre-procesamiento:
+  # el decodificador compartido queda intacto (lo exigio la review; ademas
+  # esquiva el problema BSD/GNU de reemplazos con sed/awk). El recibo pegado
+  # con ESPACIOS sigue bloqueando: no hay \n literal delante de las
+  # etiquetas. RESIDUAL DECLARADO: un recibo citado con \n literales es
+  # indistinguible de esa forma (misma postura advisory de la cita del
+  # template). La vineta se ensancha a [-*+] (hallazgo MEDIO): asterisco y
+  # plus cuentan igual que el guion; blockquote ('>'), vineta anidada y
+  # vineta sin espacio ('-Label:') quedan fuera.
+  printf '%s' "$text" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
 build_gate_feedback() {
@@ -2624,7 +2638,7 @@ Revision loop on failure:
 - Budget: 2 cycles max.
 - Do not blindly retry.
 
-Required receipt shape (each receipt label opens its own paragraph, with a blank line between paragraphs; never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. Each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
+Required receipt shape (each receipt label opens its own paragraph, with a blank line between paragraphs; never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. Each gate is one line whose label is followed by a COLON, inside the receipt block; a hyphen '-', asterisk '*' or plus '+' bullet, or markdown bold around the label is fine; a blockquote ('>'), a nested bullet and a bullet without a space ('-Label:') do not count, and replacing the colon with a dash is not; write them in plain language):
 SUMMONAIKIT HARNESS RECEIPT
 Understand: ...
 Implement: ...
