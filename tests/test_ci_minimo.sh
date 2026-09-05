@@ -473,7 +473,7 @@ caso "pytest_toolchain_en_yaml"
   [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
   [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
   yml="$(cat "$(yml_dest)")"
-  if ! printf '%s\n' "$yml" | grep -Eq 'uses:[[:space:]]*actions/setup-python@[0-9a-f]{40}'; then
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*- uses:[[:space:]]*actions/setup-python@[0-9a-f]{40}'; then
     _mal "falta setup-python@40hex: $yml"
   fi
   printf '%s\n' "$yml" | grep -Fq "python-version: '3.12'" || _mal "falta python-version 3.12: $yml"
@@ -837,6 +837,57 @@ c_carrera() {
   grep -Fq 'name: competidor' "$(yml_dest)" || _mal "no preservo competidor"
 }
 
+c_pytest() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  printf '[pytest]\n' > pytest.ini
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Eq '^[[:space:]]*- uses:[[:space:]]*actions/setup-python@[0-9a-f]{40}' "$(yml_dest)" \
+    || _mal "falta setup-python@40hex"
+}
+
+c_verify_leeme() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p verify
+  printf '# mapa\n' > verify/LEEME.md
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  if grep -Fq 'find verify' "$(yml_dest)"; then
+    _mal "YAML tiene find verify"
+  fi
+  printf '%s' "$OUT" | grep -Fq 'verify/ solo markdown' \
+    || _mal "no omitio SOLO_MD"
+}
+
+c_sin_runner() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc=$RC esperaba 2: $OUT"
+  [ ! -e "$(yml_dest)" ] || _mal "escribio YAML sin runner"
+}
+
+c_job() {
+  CASO_ROJO=0; sb_reset
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Eq 'runs-on:[[:space:]]*ubuntu-24\.04' "$(yml_dest)" || _mal "no ubuntu-24.04"
+  if grep -Fq 'ubuntu-latest' "$(yml_dest)"; then _mal "ubuntu-latest"; fi
+}
+
+c_yarn() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf '# yarn lockfile v1\n' > yarn.lock
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Eq '^[[:space:]]*run:[[:space:]]*yarn test' "$(yml_dest)" || _mal "no yarn test"
+  if grep -Eq '^[[:space:]]*run:[[:space:]]*npm ' "$(yml_dest)"; then _mal "emitio npm"; fi
+}
+
 while IFS=$'\t' read -r nombre expr fun sobre; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun" "$sobre"
@@ -849,6 +900,11 @@ default_no_escribe_igual	s/if \[ ! -t 0 \]; then/if false; then/;s/printf 'DEFAU
 sin_permissions	s/^permissions:/#permissions:/	c_permisos	gen
 persist_credentials_on	s/persist-credentials: false/persist-credentials: true/	c_permisos	gen
 carrera_sin_guarda	s/if \[ -e "\$dest" \] || \[ "\$(workflows_en_disco "\$root")" = PRESENTE \]; then/if false; then/;s/mv -n/mv -f/;s/|| \[ -e "\$tmp" \]/|| false/	c_carrera	gen
+sin_setup_python	s/uses: \$PIN_SETUP_PYTHON_OWNER@\$PIN_SETUP_PYTHON_SHA/# uses: $PIN_SETUP_PYTHON_OWNER@$PIN_SETUP_PYTHON_SHA/	c_pytest	gen
+verify_vuelve_a_find	s/printf 'SOLO_MD'/printf 'TIENE'/;s@bash tests/run.sh verify/@find verify -type f -print -quit | grep -q .@	c_verify_leeme	gen
+fallback_eterno	s/return 2/printf 'bash tests\/run.sh'; return 0/	c_sin_runner	gen
+ubuntu_latest	s/ubuntu-24.04/ubuntu-latest/	c_job	gen
+yarn_emite_npm	s/printf 'yarn test'/printf 'npm test'/	c_yarn	gen
 MUTS
 
 if [ "$fail" -ne 0 ]; then
