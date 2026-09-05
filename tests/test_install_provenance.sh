@@ -508,6 +508,33 @@ case "$out" in
   *) malo "C15 no imprimio edad: [$out]" ;;
 esac
 
+# R1/R2: restaurar_desde_backup. Costura SAIKIT_TEST_RESTAURAR_* evita el
+# flujo de install. R2 aborta a mitad (despues de cmp, antes de mv): DEST
+# queda el anterior, no vacio ni el backup.
+caso "R1: restore exitoso deja DEST = backup"
+rb="$tmp/restore-r1"
+mkdir -p "$rb"
+printf 'NUEVO-publicado\n' > "$rb/dest"
+printf 'VIEJO-backup\n' > "$rb/bak"
+sha_bak="$(sha256sum < "$rb/bak")"
+out="$(SAIKIT_TEST_RESTAURAR_BAK="$rb/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb/dest" bash "$tool" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "R1 salio $rc: $out"
+[ "$(sha256sum < "$rb/dest")" = "$sha_bak" ] || malo "R1 DEST no igualo al backup"
+_rbtmp="$(find "$rb" -name '.saikit-restore-*' 2>/dev/null)"
+[ -z "$_rbtmp" ] || malo "R1 dejo un tmp de restore: $_rbtmp"
+
+caso "R2: abort a mitad deja DEST intacto (no truncado)"
+rb2="$tmp/restore-r2"
+mkdir -p "$rb2"
+printf 'NUEVO-publicado\n' > "$rb2/dest"
+printf 'VIEJO-backup\n' > "$rb2/bak"
+sha_nuevo="$(sha256sum < "$rb2/dest")"
+out="$(SAIKIT_RESTORE_ABORT=1 SAIKIT_TEST_RESTAURAR_BAK="$rb2/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb2/dest" bash "$tool" 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "R2 debio fallar el restore, salio 0"
+[ "$(sha256sum < "$rb2/dest")" = "$sha_nuevo" ] \
+  || malo "R2 DEST no quedo intacto: $(cat "$rb2/dest")"
+[ -s "$rb2/dest" ] || malo "R2 DEST quedo vacio (truncado)"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
 # exacto: otro rc es mutante invalido, no kill). Guarda anti-sed-obsoleto,
@@ -636,6 +663,24 @@ if mut_preparar "$rmut14" 's/PROC_EDAD_S" -gt/PROC_EDAD_S" -lt/' "edad-sin-umbra
     malo "mutacion edad-sin-umbral SOBREVIVIO: C14 dio fallo sin el -gt"
   else
     malo "mutacion edad-sin-umbral invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: restore via cp => R2 la atrapa"
+rmutr="$(repo_sandbox repo-mut-rb)"
+if mut_preparar "$rmutr" 's/# restore: tmp+cmp+mv (no truncar dest)/cp "$1" "$2"; return 0;/' "restore-via-cp"; then
+  rb3="$tmp/restore-mut"
+  mkdir -p "$rb3"
+  printf 'NUEVO-publicado\n' > "$rb3/dest"
+  printf 'VIEJO-backup\n' > "$rb3/bak"
+  sha_nuevo="$(sha256sum < "$rb3/dest")"
+  out="$(SAIKIT_RESTORE_ABORT=1 SAIKIT_TEST_RESTAURAR_BAK="$rb3/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb3/dest" bash "$mutado" 2>&1)"; rc=$?
+  if [ "$(sha256sum < "$rb3/dest")" != "$sha_nuevo" ]; then
+    printf '    mutacion restore-via-cp atrapada (R2 en rojo: DEST pisa con cp)\n'
+  elif [ "$rc" -eq 0 ]; then
+    printf '    mutacion restore-via-cp atrapada (R2 en rojo: cp ignora abort)\n'
+  else
+    malo "mutacion restore-via-cp SOBREVIVIO: DEST intacto con restore=cp"
   fi
 fi
 

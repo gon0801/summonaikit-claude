@@ -292,6 +292,31 @@ fi
 
 decir() { printf '%s\n' "$*"; }
 
+# Rollback del hook DEST: tmp en el mismo dir + cmp + mv -f.
+# El dest nunca se trunca: o queda el anterior o el backup entero.
+# Costura de test: SAIKIT_RESTORE_ABORT=1 aborta despues del cmp, antes del mv.
+restaurar_desde_backup() {  # $1=bak $2=dest
+  local bak="$1" dest="$2" dir tmp
+  # restore: tmp+cmp+mv (no truncar dest)
+  dir="$(dirname "$dest")"
+  [ -f "$bak" ] && [ -n "$dest" ] || return 1
+  mkdir -p "$dir" 2>/dev/null || return 1
+  tmp="$(mktemp "$dir/.saikit-restore-XXXXXX")" || return 1
+  if ! cp "$bak" "$tmp" || ! cmp -s "$bak" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ -n "${SAIKIT_RESTORE_ABORT:-}" ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
+}
+if [ -n "${SAIKIT_TEST_RESTAURAR_BAK:-}" ]; then
+  restaurar_desde_backup "$SAIKIT_TEST_RESTAURAR_BAK" "${SAIKIT_TEST_RESTAURAR_DEST:?}"
+  exit $?
+fi
+
 # El aviso del REGISTRO (Task 0.3) es el otro requisito del spec para instalar:
 # el archivo puede quedar perfecto y el gate no existir si `settings.json` dejo
 # de nombrarlo. Es ADVISORY — ese verificador es fail-open y su resultado no
@@ -412,7 +437,7 @@ codex_exige_wrapper() {
     decir "[summonaikit] instalador: no se pudo plantar el wrap POSIX de codex ($wrap)."
     # Si el hook se publico en ESTA corrida, no dejar la cadena a medias.
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      cp "$backup" "$DEST" 2>/dev/null && decir "              hook restaurado desde $backup" \
+      restaurar_desde_backup "$backup" "$DEST" && decir "              hook restaurado desde $backup" \
         || decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST"
     elif [ "${estado:-}" = 'AUSENTE' ]; then
       rm -f "$DEST" 2>/dev/null && decir "              hook retirado (esta corrida lo habia creado)" \
@@ -1368,7 +1393,7 @@ grok_rollback() {
   fi
   if [ "$GROK_HOOK_PUBLICADO" -eq 1 ]; then
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      if cp "$backup" "$DEST" 2>/dev/null; then
+      if restaurar_desde_backup "$backup" "$DEST"; then
         decir "              hook restaurado desde $backup"
       else
         fallo=1
@@ -3348,7 +3373,7 @@ if [ "$HOST" = "dsh" ]; then
     # Revertir lo publicado (patch + archivos de plugin) antes de tocar el hook.
     dsh_rollback_publicar
     if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-      if cp "$backup" "$DEST" 2>/dev/null; then
+      if restaurar_desde_backup "$backup" "$DEST"; then
         decir "              hook restaurado desde $backup"
       else
         decir "              ROLLBACK INCOMPLETO: no se pudo restaurar $DEST desde $backup"
