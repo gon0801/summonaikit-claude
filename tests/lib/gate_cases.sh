@@ -3218,12 +3218,13 @@ caso_g4_campo_presente_sin_recibo_sigue_bloqueando() {
   if ! lab_hay_estado; then _mal "el turno sigue abierto: ausencia observada no es unknown"; fi
 }
 
-# Repone el atrapador de mut_etiqueta_sin_frontera que el caso A8 invertido le
-# quito. La palabra `misunderstand` termina en `understand:` — con la frontera
-# sana `(^|[^[:alpha:]])` la `s` alfabetica que precede impide el match y la
-# etiqueta falta; con la mutacion `(^|.)` cuenta y "Missing Understand" desaparece
-# del motivo. Afirma SOLO sobre Understand para no robarle la declaracion a
-# mut_retro_no_se_exige.
+# Repone el atrapador de mut_ancla_de_linea_quitada (que reemplazo a
+# mut_etiqueta_sin_frontera, 18.23) que el caso A8 invertido le quito. La
+# palabra `misunderstand` termina en `understand:` — con el ancla sana
+# `(^|\n literal)[[:space:]]*...` la etiqueta a mitad de renglon no empieza
+# su linea y falta; con la mutacion `(^|.)` cuenta y "Missing Understand"
+# desaparece del motivo. Afirma SOLO sobre Understand para no robarle la
+# declaracion a mut_retro_no_se_exige.
 caso_g4_etiqueta_pegada_no_cuenta() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop 'hubo un misunderstand: aclarar con el usuario.')"
