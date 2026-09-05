@@ -45,6 +45,7 @@
 #   bash tools/install-hook.sh --host dsh [--dry-run] [--quitar-dsh]
 #   bash tools/install-hook.sh --host claude --refrescar-manifiesto
 #   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
+#   bash tools/install-hook.sh --check [--host <claude|grok|dsh|codex>]
 #
 # Exit codes (cualquier != 0 significa que el destino quedo INTACTO):
 #   0  instalado / reparado / restaurado / ya estaba al dia
@@ -55,6 +56,14 @@
 #   6  se MIRO y no hay backup del vendor para restaurar (solo --restore-vendor).
 #      Es un hecho observado, y por eso no comparte codigo con el 4: confundirlos
 #      dejaria al operador sin saber si buscar el archivo o arreglar permisos.
+# 18.20 --check (no escribe NADA, ni siquiera crea directorios):
+#   0  todas las copias esperadas al dia Y procedencia conocida Y la fuente es
+#      byte a byte el hook de origin/master
+#   1  alguna copia difiere/falta/no observable, procedencia no conocida, o la
+#      fuente no es el hook de origin/master. Es FALLO, no unknown: no poder
+#      verificar "vivo == master" cierra en falso, jamas en silencio.
+#   2  uso invalido (el conjunto autoritativo no se achica: sin --dest, sin
+#      flujos de escritura, y --host solo con copia propia)
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,6 +73,9 @@ DEST="${HOME:-}/.claude/hooks/summonaikit-harness.sh"
 SOURCE="$repo/hooks/summonaikit-harness.sh"
 MANIFEST="$repo/hooks/vendor-manifest.sha256"
 DRY_RUN=0
+# 18.20: --check verifica sin escribir. CHECK_REGISTRO es otro animal (el aviso
+# advisory del registro) y no se toca.
+CHECK=0
 CHECK_REGISTRO=1
 RESTORE=0
 # Task 5.4: --host zcode es append-only al user-config de zcode (no toca DEST).
@@ -88,6 +100,9 @@ QUITAR_RECETAS=0
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
 VIO_DEST=0
+# 18.20: si el operador apunto la fuente a mano, la procedencia lo dice
+# (fuente=explicita) en vez de callarlo.
+VIO_SOURCE=0
 # Task 12.6: --host claude instala implementer/verifier/reviewer en
 # ~/.claude/agents (adversary desde la 13.8) con la via de adopcion del
 # CUARTO estado (VENDOR_CONOCIDO por hash en agents/vendor-manifest.sha256).
@@ -106,13 +121,24 @@ MARCADOR_RE='^# SAIKIT-CLAUDE-OWNED summonaikit-claude [^[:space:]]+$'
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dest)     DEST="${2:-}"; VIO_DEST=1; shift 2 ;;
-    --source)   SOURCE="${2:-}"; shift 2 ;;
-    --manifest) MANIFEST="${2:-}"; shift 2 ;;
+    # Clase Task 0.4: `shift 2` con un solo argumento no consume nada y el
+    # while gira para siempre. Cada flag con valor exige su $2 o sale 2.
+    --dest)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --dest exige un valor.\n' >&2; exit 2; }
+      DEST="${2:-}"; VIO_DEST=1; shift 2 ;;
+    --source)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --source exige un valor.\n' >&2; exit 2; }
+      SOURCE="${2:-}"; VIO_SOURCE=1; shift 2 ;;
+    --manifest)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --manifest exige un valor.\n' >&2; exit 2; }
+      MANIFEST="${2:-}"; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
+    --check)    CHECK=1; shift ;;
     --restore-vendor) RESTORE=1; shift ;;
     --no-registration-check) CHECK_REGISTRO=0; shift ;;
-    --host)     HOST="${2:-}"; shift 2 ;;
+    --host)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --host exige un valor.\n' >&2; exit 2; }
+      HOST="${2:-}"; shift 2 ;;
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
     --quitar-grok) QUITAR_GROK=1; shift ;;
     --quitar-dsh) QUITAR_DSH=1; shift ;;
@@ -241,6 +267,27 @@ if [ "$HOST" != "dsh" ]; then
       exit 2
       ;;
   esac
+fi
+
+# 18.20: --check recorre el conjunto AUTORITATIVO de copias y no se deja
+# achicar. Aceptar --dest seria chequear una sola ruta a pedido, que es
+# conforme a la letra e inutil: la deriva del 2026-09-04 estaba en las copias
+# que nadie miraba. kimi no declara copia y zcode reusa la de claude, asi que
+# tampoco valen como --host de --check (el check de zcode ES el de claude).
+if [ "$CHECK" -eq 1 ]; then
+  if [ "$VIO_DEST" -eq 1 ]; then
+    printf '[summonaikit] instalador: --check no acepta --dest: recorre las copias cableadas, no una ruta a pedido.\n' >&2
+    exit 2
+  fi
+  if [ "$RESTORE" -eq 1 ] || [ "$QUITAR_ZCODE" -eq 1 ] || [ "$QUITAR_GROK" -eq 1 ] \
+     || [ "$QUITAR_DSH" -eq 1 ] || [ "$QUITAR_RECETAS" -eq 1 ] || [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
+    printf '[summonaikit] instalador: --check no se combina con flujos de escritura ni de quite.\n' >&2
+    exit 2
+  fi
+  if [ "$HOST" = "kimi" ] || [ "$HOST" = "zcode" ]; then
+    printf '[summonaikit] instalador: --check --host solo acepta claude, grok, dsh o codex (kimi no declara copia; zcode reusa la de claude).\n' >&2
+    exit 2
+  fi
 fi
 
 decir() { printf '%s\n' "$*"; }
@@ -1822,6 +1869,8 @@ sha_bin=''
 for c in sha256sum shasum; do
   if command -v "$c" >/dev/null 2>&1; then sha_bin="$c"; break; fi
 done
+# sha_de vive ACA (antes de la procedencia) porque bash resuelve funciones al
+# LLAMARLAS: la procedencia la usa, asi que no puede seguir definida mas abajo.
 sha_de() {
   case "$sha_bin" in
     sha256sum) sha256sum < "$1" | cut -d' ' -f1 ;;
@@ -1830,6 +1879,201 @@ sha_de() {
   esac
 }
 
+# ------------------------------------------------- 18.20: procedencia git
+# "YA AL DIA" significaba "igual a lo que tenga el checkout que me corrio", no
+# "igual a master": el instalador jamas consultaba git. La salida es DECLARAR,
+# no negar — una guarda habria bloqueado el arreglo correctivo del 2026-09-04,
+# que se corrio desde una rama y era lo correcto.
+#
+# Que es un "perfil real": NADA distingue por ruta un perfil real de su espejo
+# de sandbox (los tests aislan por HOME y el layout es el mismo). Por eso NO
+# hay criterio de ruta: la procedencia se imprime en TODA corrida que pasa
+# validacion, escriba o no (install, YA AL DIA, dry-run, quite, restore,
+# --check). Reportar nunca mueve el exit code: con git roto igual se instala,
+# se desinstala y se repara.
+#
+# Sin git o fuera de un repo: "procedencia: desconocida" con su motivo, nunca
+# silencio. "Coincide con origin/master" se juzga contra el ref LOCAL, sin
+# fetch implicito: el instalador no hace red (seguro offline, no muta refs
+# ajenos, testeable). El ref puede estar viejo y se declara en la salida.
+# Costura de test: SAIKIT_GIT_BIN (por defecto "git").
+GIT_BIN="${SAIKIT_GIT_BIN:-git}"
+_proc_es_sha() {  # $1=candidato -> 0 si son 40 hex
+  [ "${#1}" -eq 40 ] || return 1
+  case "$1" in *[!0-9a-f]*|'') return 1 ;; *) return 0 ;; esac
+}
+PROC_CONOCIDA=0
+PROC_RAMA=''; PROC_SHA=''; PROC_SUCIO='no'; PROC_SIN_SEG=0
+# coincide lleva la RAZON como token, no el estado: sin ref remoto es sin-ref
+# (la linea siguiente ya dice por que). Ni "unknown" ni "desconocida" jamas:
+# la primera la prohibe test_restore_vendor ("sin backups NO es unknown",
+# Core Rule 2 al reves) y la segunda es el tercer estado (caso 12.9 #2). Solo
+# la linea de procedencia-sin-git dice "desconocida", que es el literal que
+# la DoD exige.
+PROC_COINCIDE='sin-ref'; PROC_MOTIVO=''
+if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
+  PROC_MOTIVO='git-no-disponible'
+elif ! "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+  PROC_MOTIVO='no-es-repo-git'
+else
+  _st="$("$GIT_BIN" -C "$repo" status --porcelain=v1 -b 2>/dev/null)" || _st=''
+  # HEAD y origin/master en DOS llamadas SEPARADAS a proposito: en una sola
+  # (`rev-parse HEAD origin/master`), si el ref no existe git imprime el sha
+  # de HEAD, luego el literal, y devuelve 128 — el || vaciaba AMBOS y caia en
+  # un "sin-commits" falso. El checkout de CI es shallow y no trae ese ref
+  # (igual que un clone --depth 1): sin ref remoto, rama y sha igual se
+  # conocen y lo unico unknown es el coincide.
+  _head="$("$GIT_BIN" -C "$repo" rev-parse HEAD 2>/dev/null)" || _head=''
+  _master="$("$GIT_BIN" -C "$repo" rev-parse origin/master 2>/dev/null)" || _master=''
+  if ! _proc_es_sha "$_head"; then
+    PROC_MOTIVO='sin-commits'
+  else
+    PROC_CONOCIDA=1
+    PROC_SHA="$_head"
+    _primera=1
+    while IFS= read -r _lin; do
+      if [ "$_primera" -eq 1 ]; then
+        _primera=0
+        case "$_lin" in
+          '## '*)
+            _r="${_lin#### }"
+            _r="${_r%%...*}"
+            case "$_r" in
+              HEAD|HEAD' (no branch)') PROC_RAMA='HEAD' ;;
+              'No commits yet on '*) PROC_RAMA='?' ;;
+              *) PROC_RAMA="$_r" ;;
+            esac
+            ;;
+        esac
+        continue
+      fi
+      case "$_lin" in
+        '??'*) PROC_SIN_SEG=$((PROC_SIN_SEG + 1)) ;;
+        ?*) PROC_SUCIO='si' ;;
+      esac
+    done <<_PROC_EOF
+$_st
+_PROC_EOF
+    [ -n "$PROC_RAMA" ] || PROC_RAMA='?'
+    # "Sucio" = cambios tracked (staged o no); los untracked se cuentan aparte
+    # porque no pueden cambiar los bytes instalados... pero se dicen igual.
+    if _proc_es_sha "$_master"; then
+      if [ "$_head" = "$_master" ]; then PROC_COINCIDE='si'; else PROC_COINCIDE='no'; fi
+    fi
+  fi
+fi
+if [ "$PROC_CONOCIDA" -eq 1 ]; then
+  # "no-calculable" y NO "desconocida" a proposito: DESCONOCIDO es el tercer
+  # estado del instalador (un destino que SE MIRO y no es nuestro), y un sha
+  # que no se pudo calcular es no-observable (Core Rule 2, caso 12.9 #2).
+  _fsh='no-calculable'
+  if [ -n "$sha_bin" ] && [ -f "$SOURCE" ] && [ -r "$SOURCE" ]; then
+    _fsh="$(sha_de "$SOURCE" 2>/dev/null)" || _fsh=''
+    [ -n "$_fsh" ] || _fsh='no-calculable'
+  fi
+  _ff='por-defecto'
+  [ "$VIO_SOURCE" -eq 1 ] && _ff='explicita'
+  decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE fuente=$_ff fuente_sha256=$_fsh"
+  if [ "$PROC_COINCIDE" != 'sin-ref' ]; then
+    decir "[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo)."
+  else
+    decir "[summonaikit] procedencia: sin ref-local origin/master; un 'git fetch' permite juzgar coincide_origin_master."
+  fi
+else
+  decir "[summonaikit] procedencia: desconocida ($PROC_MOTIVO)."
+fi
+
+# ------------------------------------------------- 18.20: --check multi-host
+# El protocolo desplegaba UNA copia y produccion tiene VARIAS: grok y dsh
+# corrieron cinco filas atrasadas sin que nadie se enterara. --check recorre
+# el conjunto AUTORITATIVO — claude (siempre exigida: es el ancla que impide
+# el veredicto vacuo), grok, dsh y codex cuando el host exista (dir o copia
+# presente) — y emite UNA fila por host. No escribe nada: ni copias, ni dirs,
+# ni backups. El exito exige las tres cosas: copias al dia, procedencia
+# conocida, y fuente byte a byte igual al hook de origin/master (asi un
+# deploy desde rama con el MISMO hook pasa, y uno con hook distinto no).
+if [ "$CHECK" -eq 1 ]; then
+  check_dest_de() {  # $1=host -> stdout; MISMA resolucion que el install
+    case "$1" in
+      claude) printf '%s/.claude/hooks/summonaikit-harness.sh' "${HOME:-}" ;;
+      grok)   printf '%s/summonaikit-harness.sh' "${SAIKIT_GROK_HOOKS_DIR:-${HOME:-}/.grok/hooks}" ;;
+      dsh)    printf '%s/hooks/summonaikit-harness.sh' "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}" ;;
+      codex)  printf '%s/.codex/hooks/summonaikit-harness.sh' "${HOME:-}" ;;
+    esac
+  }
+  check_host_presente() {  # $1=host $2=dest -> 0 si esta configurado
+    # "Configurado" = el dir del host a nivel home existe O la copia existe.
+    # A nivel home a proposito (no el dir de hooks): si el operador usa grok
+    # pero nunca instalo la copia, eso es deriva por instalar, no "no-aplica".
+    local _gd
+    case "$1" in
+      claude) return 0 ;;
+      grok)   _gd="${SAIKIT_GROK_HOOKS_DIR:-${HOME:-}/.grok/hooks}"
+              [ -e "${_gd%/*}" ] || [ -e "$2" ] ;;
+      dsh)    [ -e "${SAIKIT_DSH_HOME:-${HOME:-}/.dsh}" ] || [ -e "$2" ] ;;
+      codex)  [ -e "${HOME:-}/.codex" ] || [ -e "$2" ] ;;
+    esac
+  }
+  # Juicio de bytes contra master: la fuente instalada son los bytes de
+  # origin/master, o no. .gitattributes fuerza eol=lf en *.sh, asi que el blob
+  # y el worktree son comparables tal cual. Sin git, sin ref o sin blob: no se
+  # puede juzgar y eso es FALLO (fail-closed), no unknown.
+  _master_juicio='no-observable'
+  if [ "$PROC_CONOCIDA" -eq 1 ]; then
+    _mtmp=''
+    _mtmp="$(mktemp "${TMPDIR:-/tmp}/saikit-master-XXXXXX" 2>/dev/null)" || _mtmp=''
+    if [ -n "$_mtmp" ]; then
+      if "$GIT_BIN" -C "$repo" show "origin/master:hooks/summonaikit-harness.sh" >"$_mtmp" 2>/dev/null \
+         && [ -s "$_mtmp" ] && [ -f "$SOURCE" ] && [ -r "$SOURCE" ]; then
+        if cmp -s "$_mtmp" "$SOURCE"; then _master_juicio='ok'; else _master_juicio='difiere'; fi
+      fi
+      rm -f "$_mtmp"
+    fi
+  fi
+  if [ -n "$HOST" ]; then _hosts="$HOST"; else _hosts='claude grok dsh codex'; fi
+  _fallo=0
+  _causas=''
+  for _h in $_hosts; do
+    _d="$(check_dest_de "$_h")"
+    _res=''; _det=''
+    if ! check_host_presente "$_h" "$_d"; then
+      _res='no-aplica'; _det='host ausente'
+    elif [ ! -e "$_d" ]; then
+      _res='falta'; _det='copia ausente'
+    elif [ ! -f "$_d" ] || [ ! -r "$_d" ]; then
+      _res='no-observable'; _det='no es archivo legible'
+    elif cmp -s "$_d" "$SOURCE"; then
+      _res='al-dia'
+    else
+      _res='difiere'; _det='bytes distintos de la fuente'
+    fi
+    if [ -n "$_det" ]; then
+      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res ($_det)"
+    else
+      decir "[summonaikit] check: host=$_h dest=$_d resultado=$_res"
+    fi
+    case "$_res" in
+      al-dia|no-aplica) ;;
+      *) _fallo=1; _causas="$_causas copia-$_h-$_res" ;;
+    esac
+  done
+  if [ "$PROC_CONOCIDA" -eq 0 ]; then
+    _fallo=1; _causas="$_causas procedencia-desconocida"
+  elif [ "$_master_juicio" = 'difiere' ]; then
+    _fallo=1; _causas="$_causas fuente-difiere-de-origin/master"
+  elif [ "$_master_juicio" = 'no-observable' ]; then
+    _fallo=1; _causas="$_causas juicio-master-no-observable"
+  fi
+  if [ "$_fallo" -eq 0 ]; then
+    decir "[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)"
+    exit 0
+  else
+    decir "[summonaikit] check: veredicto=fallo Causas:${_causas}"
+    exit 1
+  fi
+fi
+
+# (sha_de esta definida arriba, antes de la procedencia 18.20, porque esa la usa.)
 # La consulta al manifiesto, en UN solo lugar, porque la usan las dos
 # direcciones: clasificar el destino antes de instalar, y decidir si el backup
 # que se va a restaurar es algo que alguien miro alguna vez.

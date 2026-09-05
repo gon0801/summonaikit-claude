@@ -43,7 +43,9 @@
 #   bash tools/golden-harness.sh --check     # compara contra la linea base
 #
 # Opciones:
-#   --hook PATH        archivo a ejercitar (def: $HOME/.claude/hooks/summonaikit-harness.sh)
+#   --hook PATH        archivo a ejercitar (def: $SAIKIT_HOOK_VIVO, si esta; si
+#                      no, en --record la FUENTE del repo, en --print/--check el
+#                      vivo $HOME/.claude/hooks/summonaikit-harness.sh)
 #   --scenarios DIR    escenarios          (def: <repo>/tests/fixtures/escenarios)
 #   --baseline PATH    linea base          (def: <repo>/tests/golden/baseline.txt)
 #
@@ -61,10 +63,11 @@ HOOK="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
 ESCENARIOS="$repo/tests/fixtures/escenarios"
 BASELINE="$repo/tests/golden/baseline.txt"
 MODO=""
+VIO_HOOK=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --hook)      HOOK="${2:-}"; shift 2 ;;
+    --hook)      HOOK="${2:-}"; VIO_HOOK=1; shift 2 ;;
     --scenarios) ESCENARIOS="${2:-}"; shift 2 ;;
     --baseline)  BASELINE="${2:-}"; shift 2 ;;
     --print)     MODO="print"; shift ;;
@@ -78,6 +81,17 @@ done
 if [ -z "$MODO" ]; then
   printf 'golden-harness: falta el modo (--print | --record | --check)\n' >&2
   exit 2
+fi
+
+# 18.20: --record graba la FUENTE del repo por defecto, no el vivo. Grabar el
+# vivo exigia que el vivo YA fuera el hook nuevo, y la via mas corta era
+# desplegar la rama al perfil real — que el protocolo de entrega prohibe. El
+# --hook explicito y SAIKIT_HOOK_VIVO siguen ganando (precedencia: flag, env,
+# default). --print y --check conservan el default al vivo: su trabajo es
+# ejercitar lo que corre, no lo que esta en el repo. No-op para el --check de
+# CI porque test_golden_baseline.sh pasa --hook explicito.
+if [ "$MODO" = "record" ] && [ "$VIO_HOOK" -eq 0 ] && [ -z "${SAIKIT_HOOK_VIVO:-}" ]; then
+  HOOK="$repo/hooks/summonaikit-harness.sh"
 fi
 
 # --------------------------------------------------------------- utilleria
