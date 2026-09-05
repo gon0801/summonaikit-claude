@@ -1894,11 +1894,13 @@ _proc_es_sha() {  # $1=candidato -> 0 si son 40 hex
 }
 PROC_CONOCIDA=0
 PROC_RAMA=''; PROC_SHA=''; PROC_SUCIO='no'; PROC_SIN_SEG=0
-# coincide=unknown (jamas "desconocida"): DESCONOCIDO es el tercer estado del
-# instalador y un juicio que no se pudo hacer es no-observable (Core Rule 2,
-# caso 12.9 #2). Solo la linea de procedencia-sin-git dice "desconocida", que
-# es el literal que la DoD exige.
-PROC_COINCIDE='unknown'; PROC_MOTIVO=''
+# coincide lleva la RAZON como token, no el estado: sin ref remoto es sin-ref
+# (la linea siguiente ya dice por que). Ni "unknown" ni "desconocida" jamas:
+# la primera la prohibe test_restore_vendor ("sin backups NO es unknown",
+# Core Rule 2 al reves) y la segunda es el tercer estado (caso 12.9 #2). Solo
+# la linea de procedencia-sin-git dice "desconocida", que es el literal que
+# la DoD exige.
+PROC_COINCIDE='sin-ref'; PROC_MOTIVO=''
 if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
   PROC_MOTIVO='git-no-disponible'
 elif ! "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
@@ -1962,7 +1964,7 @@ if [ "$PROC_CONOCIDA" -eq 1 ]; then
   _ff='por-defecto'
   [ "$VIO_SOURCE" -eq 1 ] && _ff='explicita'
   decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE fuente=$_ff fuente_sha256=$_fsh"
-  if [ "$PROC_COINCIDE" != 'unknown' ]; then
+  if [ "$PROC_COINCIDE" != 'sin-ref' ]; then
     decir "[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo)."
   else
     decir "[summonaikit] procedencia: sin ref-local origin/master; un 'git fetch' permite juzgar coincide_origin_master."
