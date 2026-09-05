@@ -57,15 +57,21 @@ fixture_hook() {
 # hooks/summonaikit-harness.sh, origin/master apuntando a HEAD, y una COPIA del
 # instalador en tools/. Imprime la raiz. Es la unica forma hermetica de juzgar
 # valores de procedencia (el checkout real va en rama y sucio durante el dev).
-# $1 = nombre del sandbox.
+# $1 = nombre del sandbox. $2 opcional = GIT_COMMITTER_DATE (hermetico para edad).
 repo_sandbox() {
   local r="$tmp/$1"
+  local fecha="${2:-}"
   mkdir -p "$r/tools" "$r/hooks"
   fixture_hook "$r/hooks/summonaikit-harness.sh"
   cp "$tool" "$r/tools/install-hook.sh"
   ( cd "$r" && git init -q \
     && git -c user.email=t@t -c user.name=t add hooks/summonaikit-harness.sh \
-    && git -c user.email=t@t -c user.name=t commit -qm fixture \
+    && if [ -n "$fecha" ]; then
+         GIT_COMMITTER_DATE="$fecha" GIT_AUTHOR_DATE="$fecha" \
+           git -c user.email=t@t -c user.name=t commit -qm fixture
+       else
+         git -c user.email=t@t -c user.name=t commit -qm fixture
+       fi \
     && git update-ref refs/remotes/origin/master HEAD ) >/dev/null 2>&1
   printf '%s' "$r"
 }
@@ -99,7 +105,7 @@ caso "P1: install por defecto imprime procedencia (rama, sha, sucio, coincide)"
 out="$(bash "$tool" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "install por defecto salio $rc: $out"
 case "$out" in
-  *'procedencia: rama='*' sha='*' sucio='*'coincide_origin_master='*) ;;
+  *'procedencia: rama='*' sha='*' sucio='*'coincide_origin_master='*'edad_s='*'origen='*) ;;
   *) malo "falta la linea de procedencia: [$out]" ;;
 esac
 
@@ -470,6 +476,38 @@ case "$out" in
   *) malo "C13 no marco dest symlink como no-observable: [$out]" ;;
 esac
 
+# C14: sin FETCH_HEAD el reloj es %ct. Fecha vieja + umbral chico (env)
+# => fallo ref-excede-edad. Stubs para no fallar por registro.
+caso "C14: ref mas viejo que el umbral => fallo ref-excede-edad"
+r14="$(repo_sandbox repo-c14 2020-01-01T00:00:00)"
+[ ! -e "$r14/.git/FETCH_HEAD" ] || malo "C14 no debio tener FETCH_HEAD"
+export HOME="$tmp/casa-c14"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r14/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C14 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'edad_s='*'origen=committerdate'*) ;;
+  *) malo "C14 no imprimio edad_s/origen=committerdate: [$out]" ;;
+esac
+case "$out" in
+  *'ref-excede-edad'*) ;;
+  *) malo "C14 no nombro ref-excede-edad: [$out]" ;;
+esac
+case "$out" in *'veredicto=fallo'*) ;; *) malo "C14 no cerro en fallo: [$out]" ;; esac
+
+# C15: la edad se IMPRIME en install/dry-run pero no mueve el rc.
+caso "C15: dry-run con ref viejo imprime edad y sale 0"
+export HOME="$tmp/casa-c15"
+mkdir -p "$HOME"
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run C15 salio $rc: $out"
+case "$out" in
+  *'edad_s='*'origen=committerdate'*) ;;
+  *) malo "C15 no imprimio edad: [$out]" ;;
+esac
+
 # ------------------------------------------------------- bloque de mutaciones
 # Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
 # exacto: otro rc es mutante invalido, no kill). Guarda anti-sed-obsoleto,
@@ -581,6 +619,23 @@ if mut_preparar "$rmut13" 's/\[ -L /[ ! -L /' "sin-guarda-L"; then
     malo "mutacion sin-guarda-L SOBREVIVIO: C13 dio fallo sin [ -L ]"
   else
     malo "mutacion sin-guarda-L invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: sin comparar umbral de edad => C14 la atrapa"
+rmut14="$(repo_sandbox repo-mut14 2020-01-01T00:00:00)"
+if mut_preparar "$rmut14" 's/PROC_EDAD_S" -gt/PROC_EDAD_S" -lt/' "edad-sin-umbral"; then
+  export HOME="$tmp/casa-mut14"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut14/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion edad-sin-umbral atrapada (C14 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion edad-sin-umbral SOBREVIVIO: C14 dio fallo sin el -gt"
+  else
+    malo "mutacion edad-sin-umbral invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 

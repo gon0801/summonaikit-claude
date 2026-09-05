@@ -1898,6 +1898,58 @@ sha_de() {
 # ajenos, testeable). El ref puede estar viejo y se declara en la salida.
 # Costura de test: SAIKIT_GIT_BIN (por defecto "git").
 GIT_BIN="${SAIKIT_GIT_BIN:-git}"
+# Umbral: --check afirma vivo == origin/master local; esa afirmacion
+# solo es tan fresca como el ultimo fetch. Un dia = misma sesion de
+# deploy. Override de test: SAIKIT_REF_EDAD_MAX_S.
+: "${SAIKIT_REF_EDAD_MAX_S:=86400}"
+# Reloj: mtime de FETCH_HEAD si existe; si no, %ct de origin/master.
+# Edad = now - clock, en segundos de pared. Nunca la palabra unknown.
+PROC_EDAD_S='no-calculable'
+PROC_EDAD_ORIGEN=''
+mtime_de() {  # $1=archivo -> epoch stdout; GNU stat, si no BSD
+  local _m
+  _m="$(stat -c %Y "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  _m="$(stat -f %m "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  return 1
+}
+edad_del_ref() {
+  PROC_EDAD_S='no-calculable'
+  PROC_EDAD_ORIGEN=''
+  [ "$PROC_CONOCIDA" -eq 1 ] || return 0
+  local _gd _now _clock
+  _now="$(date +%s)" || return 0
+  case "$_now" in *[!0-9]*) return 0 ;; esac
+  _gd="$("$GIT_BIN" -C "$repo" rev-parse --git-dir 2>/dev/null)" || return 0
+  [ -n "$_gd" ] || return 0
+  case "$_gd" in
+    /*) ;;
+    *) _gd="$repo/$_gd" ;;
+  esac
+  if [ -f "$_gd/FETCH_HEAD" ]; then
+    _clock="$(mtime_de "$_gd/FETCH_HEAD")" || return 0
+    PROC_EDAD_ORIGEN='FETCH_HEAD'
+  elif _proc_es_sha "${_master:-}"; then
+    _clock="$("$GIT_BIN" -C "$repo" log -1 --format=%ct origin/master 2>/dev/null)" || _clock=
+    case "$_clock" in
+      ''|*[!0-9]*) return 0 ;;
+    esac
+    PROC_EDAD_ORIGEN='committerdate'
+  else
+    PROC_EDAD_S='sin-ref'
+    return 0
+  fi
+  case "$_clock" in *[!0-9]*) return 0 ;; esac
+  PROC_EDAD_S=$((_now - _clock))
+  [ "$PROC_EDAD_S" -lt 0 ] && PROC_EDAD_S=0
+}
+check_edad_excede() {
+  case "${PROC_EDAD_S:-}" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  [ "$PROC_EDAD_S" -gt "${SAIKIT_REF_EDAD_MAX_S:-86400}" ] || return 0
+  _fallo=1
+  _causas="$_causas ref-excede-edad"
+}
 _proc_es_sha() {  # $1=candidato -> 0 si son 40 hex
   [ "${#1}" -eq 40 ] || return 1
   case "$1" in *[!0-9a-f]*|'') return 1 ;; *) return 0 ;; esac
@@ -1962,6 +2014,7 @@ _PROC_EOF
     fi
   fi
 fi
+edad_del_ref
 if [ "$PROC_CONOCIDA" -eq 1 ]; then
   # "no-calculable" y NO "desconocida" a proposito: DESCONOCIDO es el tercer
   # estado del instalador (un destino que SE MIRO y no es nuestro), y un sha
@@ -1973,7 +2026,7 @@ if [ "$PROC_CONOCIDA" -eq 1 ]; then
   fi
   _ff='por-defecto'
   [ "$VIO_SOURCE" -eq 1 ] && _ff='explicita'
-  decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE fuente=$_ff fuente_sha256=$_fsh"
+  decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE edad_s=$PROC_EDAD_S origen=$PROC_EDAD_ORIGEN fuente=$_ff fuente_sha256=$_fsh"
   if [ "$PROC_COINCIDE" != 'sin-ref' ]; then
     decir "[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo)."
   else
@@ -2131,6 +2184,7 @@ if [ "$CHECK" -eq 1 ]; then
   elif [ "$_master_juicio" = 'no-observable' ]; then
     _fallo=1; _causas="$_causas juicio-master-no-observable"
   fi
+  check_edad_excede
   if [ "$_fallo" -eq 0 ]; then
     decir "[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)"
     exit 0
