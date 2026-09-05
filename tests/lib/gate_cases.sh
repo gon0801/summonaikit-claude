@@ -106,6 +106,13 @@ _RECIBO_VINETAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar
 
 _RECIBO_CORRIDO='SUMMONAIKIT HARNESS RECEIPT\nUnderstand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.'
 
+# 18.23 — las seis etiquetas presentes pero pegadas en UN solo parrafo: la
+# entrada "Recibo del turno:" garantea que NINGUNA etiqueta empieza su linea,
+# asi la posicion es la UNICA causa de bloqueo (requisito de la fila para que
+# mut_ancla_de_linea_quitada tenga poder discriminante). Con la regex vieja,
+# sin ancla de linea, este recibo cerraba el turno.
+_RECIBO_UN_PARRAFO='SUMMONAIKIT HARNESS RECEIPT\nRecibo del turno: Understand: pediste poder listar las sesiones abiertas. Implement: se agrego el endpoint y su ruta. Verify: se corrio la bateria completa, 12 en verde. Review: sin hallazgos. Close: entregado; no se toco codigo despues de la revision. Retro: none.'
+
 _RECIBO_SIN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
 
 # Igual al anterior pero declarando que la verificacion no se corrio. El gate
@@ -549,8 +556,12 @@ caso_g1_contrato_muestra_forma_recibo() {
   # has_receipt_label acepta vineta y negrita desde la Task 8.3. Lo que de
   # verdad rompe el recibo es reemplazar los dos puntos por un guion, que es
   # justo lo que modela la lista numerada del propio contrato.
+  # 18.23: el contrato afirma ademas la regla de parrafos (cada etiqueta abre
+  # el suyo; las tres lineas opcionales, mismo trato).
   _contiene "stdout" "$LAB_OUT" 'followed by a COLON'
   _contiene "stdout" "$LAB_OUT" 'copying that dash into the receipt'
+  _contiene "stdout" "$LAB_OUT" 'opens its own paragraph'
+  _contiene "stdout" "$LAB_OUT" 'same treatment'
   _contiene "stdout" "$LAB_OUT" 'Understand: ...'
   _contiene "stdout" "$LAB_OUT" 'Implement: ...'
   _contiene "stdout" "$LAB_OUT" 'Verify: ...'
@@ -2964,7 +2975,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -3204,6 +3215,19 @@ caso_g4_etiqueta_pegada_no_cuenta() {
   lab_run stop claude "$(lab_payload_stop 'hubo un misunderstand: aclarar con el usuario.')"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
+}
+
+# 18.23 — el recibo en un solo parrafo: las seis etiquetas estan, pero ninguna
+# empieza su linea (la entrada "Recibo del turno:" lo garantea), asi la
+# posicion es la unica causa del bloqueo. Con la regex sin ancla este recibo
+# cerraba el turno. El mensaje de falta tiene que NOMBRAR la regla del
+# operador, la misma frase canonica que el contrato inyecta en sus dos bloques.
+caso_g4_recibo_en_un_parrafo_bloquea() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop "$_RECIBO_UN_PARRAFO")"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
+  _contiene "motivo" "$LAB_OUT" 'opens its own paragraph'
 }
 
 # DEFECTO A8, INVERTIDO por la Task 3.2. Antes este recibo escrito en texto
