@@ -187,6 +187,35 @@ caso "T11: log inexistente => 2"
 out="$(bash "$tool" --log "$tmp/no-existe.md" 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "log inexistente dio $rc, se esperaba 2: $out"
 
+# ------------------------------------------------------- bloque de mutaciones
+# Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
+# cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
+caso "mutacion: unicidad anulada => T5 la atrapa"
+mut_base="$tmp/mut-base-dl.sh"; mutado="$tmp/mut-mutado-dl.sh"
+cp "$tool" "$mut_base"
+sed 's/mal "duplicado:/: "duplicado:/' "$mut_base" > "$mutado"
+if cmp -s "$mut_base" "$mutado"; then
+  malo "mutacion unicidad-anulada no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mutado" 2>/dev/null; then
+  malo "mutacion unicidad-anulada no parsea; asi no prueba nada"
+else
+  cat > "$tmp/tmut.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-06 — PR #203 / Task X — deploy NO-OP
+cuerpo
+## 2026-09-05 — PR #203 / Task X (reintento) — deploy REAL
+cuerpo
+EOF
+  out="$(bash "$mutado" --log "$tmp/tmut.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion unicidad-anulada atrapada (T5 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion unicidad-anulada SOBREVIVIO: T5 dio verde sin la guarda"
+  else
+    malo "mutacion unicidad-anulada invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_deploy_log: FAIL" >&2
   exit 1

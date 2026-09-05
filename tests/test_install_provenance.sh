@@ -70,7 +70,8 @@ repo_sandbox() {
   printf '%s' "$r"
 }
 
-# P1: instalar por defecto declara procedencia con los cuatro campos.
+# P1: instalar por defecto declara procedencia con los cuatro campos. Acepta la
+# forma shallow (rama+sha conocidos, coincide unknown): en CI no hay ref remoto.
 caso "P1: install por defecto imprime procedencia (rama, sha, sucio, coincide)"
 out="$(bash "$tool" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "install por defecto salio $rc: $out"
@@ -158,6 +159,33 @@ case "$out" in
   *) malo "el sha no-calculable no se nombro como tal: [$out]" ;;
 esac
 printf '%s' "$out" | grep -qi 'desconocid' && malo "con sha roto se colgo DESCONOCIDO: [$out]"
+
+# P9: repo SIN ref origin/master (checkout shallow de CI, clone --depth 1):
+# rama y sha se conocen igual; lo unico unknown es el coincide. Antes caia en
+# un "sin-commits" falso (el rev-parse en par vaciaba HEAD tambien). La segunda
+# corrida suma sha roto: la forma exacta de 12.9 #2 en CI — ni una gota de
+# "desconocid" (Core Rule 2).
+caso "P9: sin ref remoto => rama+sha conocidos, coincide unknown, exit 0"
+r9noref="$(repo_sandbox repo-p9)"
+git -C "$r9noref" update-ref -d refs/remotes/origin/master
+export HOME="$tmp/casa-p9"
+mkdir -p "$HOME"
+out="$(bash "$r9noref/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run sin ref salio $rc: $out"
+case "$out" in
+  *'procedencia: rama='*' sha='*'coincide_origin_master=unknown'*) ;;
+  *) malo "sin ref no dio rama+sha conocidos con coincide unknown: [$out]" ;;
+esac
+sha40="$(printf '%s' "$out" | grep -oE 'sha=[0-9a-f]*' | head -n1 | cut -c5-)"
+[ "${#sha40}" -eq 40 ] || malo "sin ref: sha no es 40 hex: [$sha40]"
+printf '%s' "$out" | grep -qi 'desconocid' && malo "sin ref emitio la palabra: [$out]"
+out="$(PATH="$fake_sha:$PATH" bash "$r9noref/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run sin ref y sha roto salio $rc: $out"
+case "$out" in
+  *'coincide_origin_master=unknown'*'fuente_sha256=no-calculable'*) ;;
+  *) malo "sin ref + sha roto no dio unknown/no-calculable: [$out]" ;;
+esac
+printf '%s' "$out" | grep -qi 'desconocid' && malo "sin ref + sha roto colgo DESCONOCIDO: [$out]"
 
 # P7: error de validacion (fuente mala) => exit 2 y SIN procedencia: no hay
 # nada instalado que declarar, y el error queda limpio.
@@ -331,6 +359,64 @@ out="$(bash "$r10/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "--check en vacio (c10) salio $rc: $out"
 restos="$(find "$HOME" -mindepth 1 2>/dev/null | head -5)"
 [ -z "$restos" ] || malo "--check escribio bajo HOME: [$restos]"
+
+# ------------------------------------------------------- bloque de mutaciones
+# Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
+# exacto: otro rc es mutante invalido, no kill). Guarda anti-sed-obsoleto,
+# patron de test_autopilot_config.sh: si el sed no cambia bytes o el mutante
+# no parsea, FAIL (ya no prueba nada). BASE es la copia pristina DENTRO del
+# repo sandbox: ahi resuelven los defaults del tool.
+mut_base=""; mutado=""
+mut_preparar() { # $1=repo-sandbox $2=sed-expr $3=nombre -> 0 listo / 1 FAIL
+  mut_base="$1/tools/install-hook.sh"
+  mutado="$1/tools/install-mutado.sh"
+  sed "$2" "$mut_base" > "$mutado"
+  if cmp -s "$mut_base" "$mutado"; then
+    malo "mutacion $3 no cambio nada — el sed quedo obsoleto"
+    return 1
+  fi
+  if ! bash -n "$mutado" 2>/dev/null; then
+    malo "mutacion $3 no parsea; asi no prueba nada"
+    return 1
+  fi
+  return 0
+}
+
+caso "mutacion: copia ausente tratada como no-aplica => C4 la atrapa"
+rmut3="$(repo_sandbox repo-mut3)"
+if mut_preparar "$rmut3" "s/_res='falta'/_res='no-aplica'/" "falta->no-aplica"; then
+  export HOME="$tmp/casa-mut3"
+  mkdir -p "$HOME/.claude/hooks" "$HOME/.grok" "$HOME/.dsh/hooks"
+  cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  cp "$rmut3/hooks/summonaikit-harness.sh" "$HOME/.dsh/hooks/summonaikit-harness.sh"
+  out="$(bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion falta->no-aplica atrapada (C4 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion falta->no-aplica SOBREVIVIO: C4 dio verde con la guarda rota"
+  else
+    malo "mutacion falta->no-aplica invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# El mutante vive en un repo git, asi que la procedencia desconocida se induce
+# por SAIKIT_GIT_BIN (git-missing) en vez de checkout no-git: ambas caen en la
+# misma rama del veredicto, que es lo que este sed toca.
+caso "mutacion: veredicto sin fallo por procedencia desconocida => C5 la atrapa"
+rmut4="$(repo_sandbox repo-mut4)"
+if mut_preparar "$rmut4" 's/_fallo=1\(; _causas="[^"]*procedencia-desconocida"\)/_fallo=0\1/' "veredicto-sin-fallo"; then
+  export HOME="$tmp/casa-mut4"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut4/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  out="$(SAIKIT_GIT_BIN="$tmp/no-hay-git" bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion veredicto-sin-fallo atrapada (C5 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion veredicto-sin-fallo SOBREVIVIO"
+  else
+    malo "mutacion veredicto-sin-fallo invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_provenance: FAIL" >&2

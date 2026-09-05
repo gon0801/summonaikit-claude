@@ -75,6 +75,29 @@ caso "G4: SAIKIT_HOOK_VIVO inexistente => 2 (el env gana al default)"
 out="$(SAIKIT_HOOK_VIVO="$tmp/no-existe.sh" HOME="$tmp/casa-g4" bash "$arnes" --scenarios "$esc_falsos" --baseline "$tmp/base-g4.txt" --record 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "--record con env malo salio $rc, se esperaba 2: $out"
 
+# ------------------------------------------------------- bloque de mutaciones
+# Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
+# cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
+caso "mutacion: --record al vivo => G1 la atrapa"
+mut_base="$tmp/mut-base-golden.sh"; mutado="$tmp/mut-mutado-golden.sh"
+cp "$arnes" "$mut_base"
+sed 's|HOOK="[$]repo/hooks/summonaikit-harness.sh"|HOOK="[$]HOME/.claude/hooks/summonaikit-harness.sh"|' "$mut_base" > "$mutado"
+if cmp -s "$mut_base" "$mutado"; then
+  malo "mutacion record-al-vivo no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mutado" 2>/dev/null; then
+  malo "mutacion record-al-vivo no parsea; asi no prueba nada"
+else
+  casa="$tmp/casa-mut8"; mkdir -p "$casa"
+  out="$(env -u SAIKIT_HOOK_VIVO HOME="$casa" bash "$mutado" --scenarios "$esc_falsos" --baseline "$tmp/base-mut8.txt" --record 2>&1)"; rc=$?
+  if [ "$rc" -eq 2 ]; then
+    printf '    mutacion record-al-vivo atrapada (G1 en rojo)\n'
+  elif [ "$rc" -eq 0 ]; then
+    malo "mutacion record-al-vivo SOBREVIVIO: G1 dio verde con el default al vivo"
+  else
+    malo "mutacion record-al-vivo invalida (rc=$rc, se esperaba el flip 0->2)"
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_provenance: FAIL" >&2
   exit 1
