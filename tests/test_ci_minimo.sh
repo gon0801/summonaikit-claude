@@ -96,13 +96,36 @@ run_reales() {  # $1=yaml → stdout con el valor util de cada run:
   done < <(grep -E '^[[:space:]]*run:' "$1" || true)
 }
 
-# 0 si hay un run de test del repo (linea exacta) y otro que invoca verify/.
-# El bash -c de verify contiene la palabra npm test: no puede satisfacer el test.
+# Ejecuta run: del YAML en $SB/work. uses: no se corre. Install (red) = SKIP.
+inbox_correr() {  # $1=yml $2=log
+  local cmd rc
+  : > "$2"
+  [ -f "$1" ] || return 1
+  while IFS= read -r cmd; do
+    case "$cmd" in
+      *'npm ci'*|*'npm install'*|*'yarn install'*|*'pnpm install'*|*'pip install'*)
+        printf 'SKIP\t%s\n' "$cmd" >> "$2"
+        continue
+        ;;
+    esac
+    rc=0
+    ( cd "$SB/work" && eval "$cmd" ) || rc=$?
+    printf '%s\t%s\n' "$rc" "$cmd" >> "$2"
+  done < <(run_reales "$1")
+}
+
+# Test del repo = linea exacta (incl. yarn/pnpm). find verify ya no es verde.
+# SOLO_MD puede omitir el paso verify/; si hay linea, tiene que ser el mapa o ausente.
 afirma_run_reales() {  # $1=yaml
   local lineas
   lineas="$(run_reales "$1")"
-  printf '%s\n' "$lineas" | grep -Exq 'bash tests/run\.sh|npm test|python -m pytest' || return 1
-  printf '%s\n' "$lineas" | grep -Eq 'npm test -- verify/|python -m pytest verify/|find verify' || return 1
+  printf '%s\n' "$lineas" | grep -Exq 'bash tests/run\.sh|npm test|yarn test|pnpm test|python -m pytest' || return 1
+  if printf '%s\n' "$lineas" | grep -Fq 'find verify'; then
+    return 1
+  fi
+  if printf '%s\n' "$lineas" | grep -Eq 'verify/'; then
+    printf '%s\n' "$lineas" | grep -Eq 'npm test -- verify/|yarn test -- verify/|pnpm test -- verify/|python -m pytest verify/|bash tests/run\.sh verify/|verify/ ausente' || return 1
+  fi
   return 0
 }
 
@@ -225,7 +248,7 @@ jobs:
       - name: test
         run: bash tests/run.sh
       - name: verify/
-        run: bash -c 'if [ -d verify ]; then find verify -type f | head -n 5; else echo saikit: verify/ ausente; fi'
+        run: bash tests/run.sh verify/
 EOF
   afirma_sin_secrets "$SB/tag.yml" || _mal "tag.yml no tiene secrets; sin_secrets no debia fallar"
   afirma_run_reales "$SB/tag.yml" || _mal "tag.yml tiene run: reales; run_reales no debia fallar"
@@ -242,7 +265,7 @@ jobs:
       - name: test
         run: bash tests/run.sh
       - name: verify/
-        run: bash -c 'if [ -d verify ]; then find verify -type f | head -n 5; else echo saikit: verify/ ausente; fi'
+        run: bash tests/run.sh verify/
       - name: leak
         run: echo ${{ secrets.FOO }}
 EOF
@@ -326,10 +349,10 @@ fin_caso "idempotente_segunda_corrida"
 
 # --- lead #185: cuatro huecos verificados ---------------------------------
 
+# Invertido #185: sin scripts.test real el fallback inventaba bash tests/run.sh
+# (medido 2026-09-05, rc=0, YAML con run: bash tests/run.sh). Ahora exit 2.
 caso "npm_real_no_mira_fuera_de_scripts"
 {
-  # package.json SIN scripts.test pero con "test" en otro objeto (jest).
-  # El awk viejo encendia s=1 en scripts y nunca apagaba: matcheaba jest.
   rm -f tests/run.sh
   cat > package.json <<'EOF'
 {
@@ -343,13 +366,13 @@ caso "npm_real_no_mira_fuera_de_scripts"
 }
 EOF
   correr_gen --ci-minimo si
-  [ -f "$(yml_dest)" ] || _mal "debia escribir (fallback), dio: $OUT"
-  if grep -E '^[[:space:]]*run:[[:space:]]*npm test[[:space:]]*$' "$(yml_dest)" >/dev/null; then
+  [ "$RC" -eq 2 ] || _mal "sin runner real rc=$RC (esperaba 2): $OUT"
+  [ ! -e "$(yml_dest)" ] || _mal "no debia escribir YAML: $(cat "$(yml_dest)")"
+  if printf '%s' "$OUT" | grep -Fq 'npm test'; then
     _mal "emitio npm test por un test: fuera de scripts"
   fi
-  if ! grep -E '^[[:space:]]*run:[[:space:]]*bash tests/run\.sh[[:space:]]*$' "$(yml_dest)" >/dev/null; then
-    _mal "esperaba fallback bash tests/run.sh: $(cat "$(yml_dest)")"
-  fi
+  printf '%s' "$OUT" | grep -Fq 'tests/run.sh' || _mal "el mensaje no nombra tests/run.sh: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'scripts.test' || _mal "el mensaje no nombra scripts.test: $OUT"
 }
 fin_caso "npm_real_no_mira_fuera_de_scripts"
 
@@ -438,6 +461,166 @@ caso "carrera_no_pisa_workflow_aparecido"
   fi
 }
 fin_caso "carrera_no_pisa_workflow_aparecido"
+
+# (a) medido 2026-09-05 pytest.ini solo: rc=0, YAML con
+#   run: python -m pytest
+# y SIN uses: actions/setup-python@<40hex> ni pip install. Nace rojo en Actions.
+caso "pytest_toolchain_en_yaml"
+{
+  rm -f tests/run.sh
+  printf '[pytest]\n' > pytest.ini
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  if ! printf '%s\n' "$yml" | grep -Eq 'uses:[[:space:]]*actions/setup-python@[0-9a-f]{40}'; then
+    _mal "falta setup-python@40hex: $yml"
+  fi
+  printf '%s\n' "$yml" | grep -Fq "python-version: '3.12'" || _mal "falta python-version 3.12: $yml"
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pip install( pytest| -r requirements\.txt)[[:space:]]*$'; then
+    _mal "falta pip install: $yml"
+  fi
+  pip_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pip install' | head -1 | cut -d: -f1)"
+  pytest_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*python -m pytest' | head -1 | cut -d: -f1)"
+  [ -n "$pip_line" ] && [ -n "$pytest_line" ] && [ "$pip_line" -lt "$pytest_line" ] \
+    || _mal "pip debe ir antes de pytest (pip=$pip_line pytest=$pytest_line)"
+  inbox_correr "$(yml_dest)" "$SB/inbox.log"
+  grep -Eq '^SKIP[[:space:]]+pip install' "$SB/inbox.log" || _mal "pip debia skipearse (sin red): $(cat "$SB/inbox.log")"
+  if grep -Eq 'setup-python' "$SB/inbox.log"; then
+    _mal "uses: no se ejecuta; el log no debe nombrar setup-python: $(cat "$SB/inbox.log")"
+  fi
+}
+fin_caso "pytest_toolchain_en_yaml"
+
+# (b) medido 2026-09-05 run.sh + verify/LEEME.md: rc=0 y VERIFY_CMD con
+#   find verify -type f -print -quit | grep -q .
+# LEEME.md basta para rc=0. Trampa: el test del repo ya es verde.
+caso "verify_leeme_no_enciende_verde"
+{
+  mkdir -p verify
+  printf '# mapa de la skill saikit-verificar-app\n' > verify/LEEME.md
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  if printf '%s\n' "$yml" | grep -Fq 'find verify'; then
+    _mal "YAML no debe tener find verify: $yml"
+  fi
+  omitio=0
+  printf '%s' "$OUT" | grep -Fq 'verify/ solo markdown' && omitio=1
+  if [ "$omitio" -eq 1 ]; then
+    if printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*- name: verify/'; then
+      _mal "SOLO_MD no debe emitir paso verify/: $yml"
+    fi
+  fi
+  inbox_correr "$(yml_dest)" "$SB/inbox.log"
+  grep -Eq '^0[[:space:]]+bash tests/run\.sh$' "$SB/inbox.log" \
+    || _mal "test del repo debia ser rc=0: $(cat "$SB/inbox.log")"
+  if [ "$omitio" -eq 0 ]; then
+    if ! grep -Eq '^[1-9][0-9]*[[:space:]].*verify/' "$SB/inbox.log"; then
+      _mal "sin omitir, verify debia ser rc!=0: $(cat "$SB/inbox.log")"
+    fi
+  fi
+}
+fin_caso "verify_leeme_no_enciende_verde"
+
+# (c) medido 2026-09-05 vacio/Makefile/Cargo/package.json-sin-test:
+#   rc=0, YAML con run: bash tests/run.sh (fallback inventado).
+caso "sin_runner_exit_2"
+{
+  _sin_runner() {
+    local etiqueta="$1"
+    correr_gen --ci-minimo si
+    [ "$RC" -eq 2 ] || _mal "$etiqueta rc=$RC (esperaba 2): $OUT"
+    [ ! -e "$(yml_dest)" ] || _mal "$etiqueta escribio YAML"
+    printf '%s' "$OUT" | grep -Fq 'tests/run.sh' || _mal "$etiqueta no nombra tests/run.sh: $OUT"
+    printf '%s' "$OUT" | grep -Fq 'scripts.test' || _mal "$etiqueta no nombra scripts.test: $OUT"
+    printf '%s' "$OUT" | grep -Fq 'pytest' || _mal "$etiqueta no nombra pytest: $OUT"
+  }
+  rm -f tests/run.sh
+  _sin_runner vacio
+
+  sb_reset
+  rm -f tests/run.sh
+  printf 'all:\n\techo hi\n' > Makefile
+  _sin_runner makefile
+
+  sb_reset
+  rm -f tests/run.sh
+  printf '[package]\nname = "x"\nversion = "0.1.0"\n' > Cargo.toml
+  _sin_runner cargo
+
+  sb_reset
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "build": "echo build" } }' > package.json
+  _sin_runner pkg
+}
+fin_caso "sin_runner_exit_2"
+
+caso "job_amarrado"
+{
+  correr_gen --ci-minimo si
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*runs-on:[[:space:]]*ubuntu-24\.04[[:space:]]*$' \
+    || _mal "runs-on debe ser ubuntu-24.04: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*timeout-minutes:[[:space:]]*15[[:space:]]*$' \
+    || _mal "falta timeout-minutes: 15: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*concurrency:' \
+    || _mal "falta concurrency: $yml"
+  printf '%s\n' "$yml" | grep -Eq 'cancel-in-progress:[[:space:]]*true' \
+    || _mal "falta cancel-in-progress: true: $yml"
+  if printf '%s\n' "$yml" | grep -Fq 'ubuntu-latest'; then
+    _mal "ubuntu-latest no amarra: $yml"
+  fi
+}
+fin_caso "job_amarrado"
+
+caso "yarn_lock_emite_yarn"
+{
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf '# yarn lockfile v1\n' > yarn.lock
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*yarn test[[:space:]]*$' \
+    || _mal "yarn.lock debia emitir yarn test: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*yarn install' \
+    || _mal "falta yarn install: $yml"
+  if printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm '; then
+    _mal "yarn.lock no debe emitir npm: $yml"
+  fi
+}
+fin_caso "yarn_lock_emite_yarn"
+
+caso "pnpm_lock_emite_pnpm"
+{
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pnpm test[[:space:]]*$' \
+    || _mal "pnpm-lock.yaml debia emitir pnpm test: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pnpm install' \
+    || _mal "falta pnpm install: $yml"
+  if printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm '; then
+    _mal "pnpm-lock.yaml no debe emitir npm: $yml"
+  fi
+}
+fin_caso "pnpm_lock_emite_pnpm"
+
+caso "escrito_cita_el_comando"
+{
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  _contiene "cita el comando que corre" "$OUT" "(corre: bash tests/run.sh)"
+}
+fin_caso "escrito_cita_el_comando"
 
 caso "merge_sin_checks_tras_declinar"
 {

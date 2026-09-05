@@ -240,6 +240,35 @@ caso "ci_rojo_no_merguea"
 }
 fin_caso "ci_rojo_no_merguea"
 
+c_ci_skipped() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"skipped","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
+  _contiene "nombra skipped" "$OUT" "skipped"
+  if merge_disparado; then _mal "mergeo con CI skipped"; fi
+}
+
+c_solo_push() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
+caso "ci_skipped_es_rojo"
+{
+  c_ci_skipped
+}
+fin_caso "ci_skipped_es_rojo"
+
+caso "solo_push_success_es_verde"
+{
+  c_solo_push
+}
+fin_caso "solo_push_success_es_verde"
+
 caso "sin_checks_no_merguea"
 {
   c_sin_checks
