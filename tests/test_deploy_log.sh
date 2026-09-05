@@ -187,6 +187,17 @@ caso "T11: log inexistente => 2"
 out="$(bash "$tool" --log "$tmp/no-existe.md" 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "log inexistente dio $rc, se esperaba 2: $out"
 
+# Clase Task 0.4 (`shift 2` con un solo argumento gira para siempre), like
+# flag_sin_valor_sale_2_no_gira: 124 es bucle, 2 es fix. Discrimina porque el
+# cuelgue es el comportamiento real pre-fix (medido: 124).
+caso "T14: --log sin valor sale 2, no gira"
+out="$(timeout 5 bash "$tool" --log 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--log sin valor dio $rc, se esperaba 2 (124=cuelgue)"
+case "$out" in
+  *'exige un valor'*) ;;
+  *) malo "--log sin valor no nombro la falta: [$out]" ;;
+esac
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).

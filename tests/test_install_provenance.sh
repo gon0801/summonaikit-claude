@@ -199,6 +199,20 @@ case "$out" in
   *'procedencia: '*) malo "el error de validacion declaro procedencia: [$out]" ;;
 esac
 
+# Clase Task 0.4 (`shift 2` con un solo argumento gira para siempre): cada
+# flag con valor exige su $2 o sale 2. Acotado con timeout like
+# flag_sin_valor_sale_2_no_gira: 124 es bucle, 2 es fix. Discrimina porque el
+# cuelgue es el comportamiento real pre-fix (medido: 124 en los cuatro).
+caso "P10: flag sin valor sale 2, no gira"
+for _f in --dest --source --manifest --host; do
+  out="$(timeout 5 bash "$tool" "$_f" 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "$_f sin valor dio $rc, se esperaba 2 (124=cuelgue)"
+  case "$out" in
+    *'exige un valor'*) ;;
+    *) malo "$_f sin valor no nombro la falta: [$out]" ;;
+  esac
+done
+
 # C1: sandbox vacio — claude FALTA (es el ancla: siempre exigida), los demas
 # hosts no aplican (ni dir ni copia), veredicto fallo. Nada de silencio.
 caso "C1: --check en vacio => fallo, claude falta, resto no-aplica"
@@ -362,6 +376,29 @@ out="$(bash "$r10/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "--check en vacio (c10) salio $rc: $out"
 restos="$(find "$HOME" -mindepth 1 2>/dev/null | head -5)"
 [ -z "$restos" ] || malo "--check escribio bajo HOME: [$restos]"
+
+# C11: --check sin ref remoto — las filas siguen al-dia (las copias SE miran),
+# pero el juicio contra master no se puede hacer y eso es FALLO con causa
+# nombrada. La causa lleva vocabulario no-observable (el del manifiesto):
+# ni unknown (restore_vendor) ni desconocid (12.9 #2) en la salida.
+caso "C11: --check sin ref => fallo nombrado, sin unknown ni desconocid"
+r11="$(repo_sandbox repo-c11)"
+git -C "$r11" update-ref -d refs/remotes/origin/master
+export HOME="$tmp/casa-c11"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r11/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+out="$(bash "$r11/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check sin ref salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'host=claude'*'resultado=al-dia'*) ;;
+  *) malo "la fila debio seguir al-dia: [$out]" ;;
+esac
+case "$out" in
+  *'juicio-master-no-observable'*) ;;
+  *) malo "el veredicto no nombro la causa: [$out]" ;;
+esac
+printf '%s' "$out" | grep -qi 'unknown' && malo "--check sin ref colgo UNKNOWN: [$out]"
+printf '%s' "$out" | grep -qi 'desconocid' && malo "--check sin ref colgo DESCONOCIDO: [$out]"
 
 # ------------------------------------------------------- bloque de mutaciones
 # Cada mutante rompe UNA guarda; su caso rojo tiene que atraparlo (flip de rc
