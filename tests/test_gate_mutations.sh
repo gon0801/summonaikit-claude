@@ -124,7 +124,7 @@ G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_inp
 G3|agent_type_no_se_lee|el rol de los eventos internos (agent_type) deja de leerse
 G3|target_sin_claudecode|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
 G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
-G4|etiqueta_sin_frontera|la etiqueta se acepta con cualquier caracter delante
+G4|ancla_de_linea_quitada|el ancla de linea se quita y la etiqueta vuelve a aceptarse en cualquier posicion: un recibo pegado en un parrafo cierra (18.23)
 G4|etiqueta_sin_bold|la alternativa markdown bold se quita y un recibo **Label**: vuelve a bloquear
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
@@ -153,7 +153,6 @@ G3|fast_no_exime_ceremonia|lane=fast deja de eximir la secuencia (el carril no s
 G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
 G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
-G4|frontera_acepta_comillas|la frontera izquierda vuelve a aceptar comillas y citar el feedback del gate satisface etiquetas
 G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
 G1|host_dsh_no_reconocido|la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)
@@ -708,16 +707,25 @@ mut_stop_sin_filtro_end_turn() { sed 's/\[ "$stop_reason" != "end_turn" \]/[ "$s
 mut_grok_setness_por_valor() { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]/if [ -n "\${GROK_HOOK_EVENT:-}" ]/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
-# Task 9.3 movio la frontera de has_receipt_label a (^|[^[:alpha:]'"]): el sed
-# de esta mutacion se actualiza al literal nuevo (mismo efecto de siempre:
-# cualquier caracter delante cuenta). Sin actualizarlo, la guardia 2 de la
-# bateria ("la mutacion no cambio nada") reventaba.
-mut_etiqueta_sin_frontera(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|.)/"; }
-# Task 9.3 (C11): revierte SOLO la mitad de las comillas (vuelve a la frontera
-# pre-9.3). Citar el feedback con 'Understand:' etc. vuelve a satisfacer las
-# seis etiquetas — lo atrapa caso_g4_cita_del_feedback_no_satisface (ningun
-# otro caso de CASOS_G4 escribe etiquetas entre comillas).
-mut_frontera_acepta_comillas(){ sed "s/(^|\[^\[:alpha:\]'\\\\\"\])/(^|[^[:alpha:]])/"; }
+# 18.23: el prefijo anclado (^|\n-literal)[[:space:]]*([-*+][[:space:]]+)?
+# (\*\*|__)? de has_receipt_label reemplazo a la frontera izquierda de las
+# Tasks 8.3/9.3 — frontera y ancla colapsaron en UN solo concepto, y las dos
+# mutaciones viejas (etiqueta_sin_frontera, frontera_acepta_comillas) sedian
+# un literal que dejo de existir (la guardia 2, "la mutacion no cambio nada",
+# las reventaba). Esta mutacion sola cubre todas las caras: sin el prefijo, la
+# etiqueta vuelve a aceptarse pegada a mitad de palabra, citada entre comillas
+# en el feedback y transportada como llega a codex (\n literal incluido, que
+# `.` tambien traga). Lo atrapan: caso_g4_recibo_en_un_parrafo_bloquea (las
+# seis etiquetas en un solo parrafo vuelven a cerrar el turno),
+# caso_g4_recibo_codex_escape_doble_cierra, caso_g4_recibo_vineta_asterisco_pasa,
+# caso_g4_cita_del_feedback_no_satisface y caso_g4_etiqueta_pegada_no_cuenta
+# (el driver nombra solo el primero que reacciona). Escaping BRE: `\^` es el
+# circunflejo LITERAL (pelado al inicio del patron seria ancla), los cuatro
+# backslashes del \n literales del hook son `\\\\\\\\` (ocho: dos por cada
+# backslash literal), el `+` va PELADO (literal en BRE; `\+` es cuantificador
+# en GNU sed) y `(\\\*\\\*|__)?` sigue la forma de mut_etiqueta_sin_bold. El
+# hook mutado queda `(^|.)(...)`: cualquier posicion con un caracter delante.
+mut_ancla_de_linea_quitada(){ sed 's/(\^|\\\\\\\\n)\[\[:space:\]\]\*(\[-\*+\]\[\[:space:\]\]+)?(\\\*\\\*|__)?/(^|.)/'; }
 # Task 9.8 (C14): devuelve el rm del aviso pendiente al elif de todo Stop —
 # la anotacion del flag se reemplaza por el rm directo, asi un Stop que
 # bloquea vuelve a llevarse el aviso ajeno. Lo atrapa
