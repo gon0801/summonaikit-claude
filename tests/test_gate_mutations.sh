@@ -707,22 +707,25 @@ mut_stop_sin_filtro_end_turn() { sed 's/\[ "$stop_reason" != "end_turn" \]/[ "$s
 mut_grok_setness_por_valor() { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]/if [ -n "\${GROK_HOOK_EVENT:-}" ]/'; }
 
 mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
-# 18.23: el prefijo anclado ^[[:space:]]*(-[[:space:]]+)?(\*\*|__)? de
-# has_receipt_label reemplazo a la frontera izquierda de las Tasks 8.3/9.3 —
-# frontera y ancla colapsaron en UN solo concepto, y las dos mutaciones viejas
-# (etiqueta_sin_frontera, frontera_acepta_comillas) sedian un literal que dejo
-# de existir (la guardia 2, "la mutacion no cambio nada", las reventaba). Esta
-# mutacion sola cubre ambas caras: sin el ancla, la etiqueta vuelve a aceptarse
-# pegada a mitad de palabra y citada entre comillas en el feedback. Lo atrapan:
-# caso_g4_recibo_en_un_parrafo_bloquea (las seis etiquetas en un solo parrafo
-# vuelven a cerrar el turno), caso_g4_cita_del_feedback_no_satisface y
-# caso_g4_etiqueta_pegada_no_cuenta (ningun otro caso de CASOS_G4 pone
-# etiquetas fuera de posicion, asi que ningun otro reacciona). Escaping BRE:
-# `\^` es el circunflejo LITERAL (pelado al inicio del patron seria ancla),
-# el `+` va PELADO (literal en BRE; `\+` es cuantificador en GNU sed) y
-# `(\\\*\\\*|__)?` sigue la forma de mut_etiqueta_sin_bold. El hook mutado
-# queda `(^|.)(...)`: cualquier posicion con un caracter delante.
-mut_ancla_de_linea_quitada(){ sed 's/\^\[\[:space:\]\]\*(-\[\[:space:\]\]+)?(\\\*\\\*|__)?/(^|.)/'; }
+# 18.23: el prefijo anclado (^|\n-literal)[[:space:]]*([-*+][[:space:]]+)?
+# (\*\*|__)? de has_receipt_label reemplazo a la frontera izquierda de las
+# Tasks 8.3/9.3 — frontera y ancla colapsaron en UN solo concepto, y las dos
+# mutaciones viejas (etiqueta_sin_frontera, frontera_acepta_comillas) sedian
+# un literal que dejo de existir (la guardia 2, "la mutacion no cambio nada",
+# las reventaba). Esta mutacion sola cubre todas las caras: sin el prefijo, la
+# etiqueta vuelve a aceptarse pegada a mitad de palabra, citada entre comillas
+# en el feedback y transportada como llega a codex (\n literal incluido, que
+# `.` tambien traga). Lo atrapan: caso_g4_recibo_en_un_parrafo_bloquea (las
+# seis etiquetas en un solo parrafo vuelven a cerrar el turno),
+# caso_g4_recibo_codex_escape_doble_cierra, caso_g4_recibo_vineta_asterisco_pasa,
+# caso_g4_cita_del_feedback_no_satisface y caso_g4_etiqueta_pegada_no_cuenta
+# (el driver nombra solo el primero que reacciona). Escaping BRE: `\^` es el
+# circunflejo LITERAL (pelado al inicio del patron seria ancla), los cuatro
+# backslashes del \n literales del hook son `\\\\\\\\` (ocho: dos por cada
+# backslash literal), el `+` va PELADO (literal en BRE; `\+` es cuantificador
+# en GNU sed) y `(\\\*\\\*|__)?` sigue la forma de mut_etiqueta_sin_bold. El
+# hook mutado queda `(^|.)(...)`: cualquier posicion con un caracter delante.
+mut_ancla_de_linea_quitada(){ sed 's/(\^|\\\\\\\\n)\[\[:space:\]\]\*(\[-\*+\]\[\[:space:\]\]+)?(\\\*\\\*|__)?/(^|.)/'; }
 # Task 9.8 (C14): devuelve el rm del aviso pendiente al elif de todo Stop —
 # la anotacion del flag se reemplaza por el rm directo, asi un Stop que
 # bloquea vuelve a llevarse el aviso ajeno. Lo atrapa
