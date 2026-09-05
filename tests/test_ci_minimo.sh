@@ -353,6 +353,22 @@ EOF
 }
 fin_caso "npm_real_no_mira_fuera_de_scripts"
 
+caso "npm_real_scripts_compacto_en_una_linea"
+{
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" }, "devDependencies": { "jest": "29.0.0" } }' > package.json
+  printf '{ "name": "app", "lockfileVersion": 3 }\n' > package-lock.json
+  correr_gen --ci-minimo si
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  if ! grep -E '^[[:space:]]*run:[[:space:]]*npm test[[:space:]]*$' "$(yml_dest)" >/dev/null; then
+    _mal "scripts.test compacto debia emitir npm test: $(cat "$(yml_dest)")"
+  fi
+  if ! grep -E '^[[:space:]]*run:[[:space:]]*npm ci[[:space:]]*$' "$(yml_dest)" >/dev/null; then
+    _mal "debia emitir npm ci: $(cat "$(yml_dest)")"
+  fi
+}
+fin_caso "npm_real_scripts_compacto_en_una_linea"
+
 caso "npm_instala_antes_en_checkout_fresco"
 {
   # Sin tests/run.sh; scripts.test real + package-lock => npm ci antes de npm test.

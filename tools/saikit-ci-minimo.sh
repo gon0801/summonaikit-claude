@@ -57,10 +57,12 @@ workflows_en_disco() {  # $1=root → AUSENTE|PRESENTE
 
 test_npm_real() {  # $1=package.json → 0 si scripts.test parece runner real
   # Alcance cerrado al objeto scripts (contar llaves). Un "test" en jest/config
-  # fuera de scripts NO cuenta (bug lead #185).
+  # fuera de scripts NO cuenta (bug lead #185). Se mira "test" ANTES de
+  # procesar } en la misma linea (forma compacta "scripts": { "test": "jest" }).
   awk '
     /"scripts"[[:space:]]*:/ { in_scripts=1 }
     in_scripts {
+      if (/"test"[[:space:]]*:/) { print; exit }
       for (i = 1; i <= length($0); i++) {
         c = substr($0, i, 1)
         if (c == "{") depth++
@@ -69,7 +71,6 @@ test_npm_real() {  # $1=package.json → 0 si scripts.test parece runner real
           if (depth <= 0) { in_scripts=0; depth=0; break }
         }
       }
-      if (in_scripts && /"test"[[:space:]]*:/) { print; exit }
     }
   ' "$1" | grep -Eq 'node --test|vitest|jest|mocha|npm test'
 }
