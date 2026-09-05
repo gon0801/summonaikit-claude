@@ -248,11 +248,23 @@ EOF
 
 # --- estado del mapa ----------------------------------------------------------
 # fecha a epoch PORTABLE: `date -d` es GNU-only; el date de BSD (macOS) usa
-# `-j -f`. Probar GNU primero y caer a BSD es identico en ambos (rojo medido en
-# macOS: sin el fallback, todo sello databa `unknown` aun estando al dia).
+# `-j -f`. Probar GNU primero y caer a BSD da el mismo resultado para fechas
+# VALIDAS (rojo medido en macOS: sin el fallback, todo sello databa `unknown`
+# aun estando al dia). PERO NO para invalidas (adversary 2026-09-05, medido):
+# BSD DESBORDA (`2026-09-31` → 1 de octubre) donde GNU rechaza. Por eso el
+# round-trip: parsear y exigir que el formateo vuelva a ser la entrada exacta;
+# y la guarda de formato, que ademas corta los relativos de GNU (`tomorrow`).
 fecha_epoch() {  # $1=YYYY-MM-DD → epoch por stdout, o nada si no se interpreta
-  date -d "$1" +%s 2>/dev/null && return 0
-  date -j -f %Y-%m-%d "$1" +%s 2>/dev/null
+  printf '%s' "$1" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || return 1
+  local ep back
+  if ep="$(date -d "$1" +%s 2>/dev/null)"; then
+    back="$(date -d "@$ep" +%Y-%m-%d 2>/dev/null)"
+  else
+    ep="$(date -j -f %Y-%m-%d "$1" +%s 2>/dev/null)" || return 1
+    back="$(date -r "$ep" +%Y-%m-%d 2>/dev/null)"
+  fi
+  [ "$back" = "$1" ] || return 1
+  printf '%s' "$ep"
 }
 
 estado_mapa() {
