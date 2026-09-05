@@ -1,0 +1,15 @@
+Registro de la ultima corrida del Drive. Pega aca la salida real del comando.
+
+2026-09-05 — corrida inicial (comando: python -m pytest verify/ -c /dev/null -p no:cacheprovider,
+con pytest 8.4.2 pinneado en un venv aislado /tmp/saikit-drive-venv; el -c /dev/null
+esquiva un pytest.ini roto que quedo en la raiz como residuo de una medicion vieja):
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /dev
+configfile: null
+collected 4 items
+
+../../../../dev/test_drive.py ....                                       [100%]
+
+============================== 4 passed in 0.54s ===============================
