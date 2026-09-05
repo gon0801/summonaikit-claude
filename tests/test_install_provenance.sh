@@ -76,6 +76,19 @@ repo_sandbox() {
   printf '%s' "$r"
 }
 
+# Envejece el ref loose origin/master. El reloj de --check es ese mtime,
+# no FETCH_HEAD ni %ct. $1 = raiz del sandbox.
+envejecer_ref_master() {
+  local p
+  p="$(git -C "$1" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || return 1
+  case "$p" in
+    /*) ;;
+    *) p="$1/$p" ;;
+  esac
+  [ -f "$p" ] || return 1
+  touch -t 202001010000 "$p"
+}
+
 # Stub minimo parseable. --check exige el archivo (ausente = falta-registro);
 # no afirma que nombre al hook. No crear dirs de hosts ajenos: eso los mete
 # al conjunto.
@@ -476,10 +489,11 @@ case "$out" in
   *) malo "C13 no marco dest symlink como no-observable: [$out]" ;;
 esac
 
-# C14: sin FETCH_HEAD el reloj es %ct. Fecha vieja + umbral chico (env)
+# C14: el reloj es mtime del ref loose. touch viejo + umbral chico (env)
 # => fallo ref-excede-edad. Stubs para no fallar por registro.
 caso "C14: ref mas viejo que el umbral => fallo ref-excede-edad"
-r14="$(repo_sandbox repo-c14 2020-01-01T00:00:00)"
+r14="$(repo_sandbox repo-c14)"
+envejecer_ref_master "$r14" || malo "C14 no pudo envejecer el ref loose"
 [ ! -e "$r14/.git/FETCH_HEAD" ] || malo "C14 no debio tener FETCH_HEAD"
 export HOME="$tmp/casa-c14"
 mkdir -p "$HOME/.claude/hooks"
@@ -488,8 +502,8 @@ plantar_registro claude
 out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --check 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "--check C14 salio $rc, se esperaba 1: $out"
 case "$out" in
-  *'edad_s='*'origen=committerdate'*) ;;
-  *) malo "C14 no imprimio edad_s/origen=committerdate: [$out]" ;;
+  *'edad_s='*'origen=ref-mtime'*) ;;
+  *) malo "C14 no imprimio edad_s/origen=ref-mtime: [$out]" ;;
 esac
 case "$out" in
   *'ref-excede-edad'*) ;;
@@ -504,8 +518,44 @@ mkdir -p "$HOME"
 out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r14/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run C15 salio $rc: $out"
 case "$out" in
-  *'edad_s='*'origen=committerdate'*) ;;
+  *'edad_s='*'origen=ref-mtime'*) ;;
   *) malo "C15 no imprimio edad: [$out]" ;;
+esac
+
+# C16: FETCH_HEAD fresco no es el reloj. Ref viejo + FETCH_HEAD nuevo
+# sigue fallando (prueba que FETCH_HEAD se ignora).
+caso "C16: FETCH_HEAD fresco no tapa un ref viejo"
+r16="$(repo_sandbox repo-c16)"
+envejecer_ref_master "$r16" || malo "C16 no pudo envejecer el ref loose"
+: > "$r16/.git/FETCH_HEAD"
+export HOME="$tmp/casa-c16"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r16/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$r16/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C16 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'origen=FETCH_HEAD'*) malo "C16 uso FETCH_HEAD como reloj: [$out]" ;;
+  *'edad_s='*'origen=ref-mtime'*) ;;
+  *) malo "C16 no imprimio origen=ref-mtime: [$out]" ;;
+esac
+case "$out" in
+  *'ref-excede-edad'*) ;;
+  *) malo "C16 no nombro ref-excede-edad: [$out]" ;;
+esac
+
+# C17: umbral no numerico => fail-closed edad-no-observable.
+caso "C17: umbral no numerico => fallo edad-no-observable"
+r17="$(repo_sandbox repo-c17)"
+export HOME="$tmp/casa-c17"
+mkdir -p "$HOME/.claude/hooks"
+cp "$r17/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+plantar_registro claude
+out="$(SAIKIT_REF_EDAD_MAX_S=no bash "$r17/tools/install-hook.sh" --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "--check C17 salio $rc, se esperaba 1: $out"
+case "$out" in
+  *'edad-no-observable'*) ;;
+  *) malo "C17 no nombro edad-no-observable: [$out]" ;;
 esac
 
 # R1/R2: restaurar_desde_backup. Costura SAIKIT_TEST_RESTAURAR_* evita el
@@ -650,7 +700,8 @@ if mut_preparar "$rmut13" 's/\[ -L /[ ! -L /' "sin-guarda-L"; then
 fi
 
 caso "mutacion: sin comparar umbral de edad => C14 la atrapa"
-rmut14="$(repo_sandbox repo-mut14 2020-01-01T00:00:00)"
+rmut14="$(repo_sandbox repo-mut14)"
+envejecer_ref_master "$rmut14" || malo "mut14 no pudo envejecer el ref loose"
 if mut_preparar "$rmut14" 's/PROC_EDAD_S" -gt/PROC_EDAD_S" -lt/' "edad-sin-umbral"; then
   export HOME="$tmp/casa-mut14"
   mkdir -p "$HOME/.claude/hooks"
@@ -663,6 +714,42 @@ if mut_preparar "$rmut14" 's/PROC_EDAD_S" -gt/PROC_EDAD_S" -lt/' "edad-sin-umbra
     malo "mutacion edad-sin-umbral SOBREVIVIO: C14 dio fallo sin el -gt"
   else
     malo "mutacion edad-sin-umbral invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: preferir FETCH_HEAD => C16 la atrapa"
+rmut16="$(repo_sandbox repo-mut16)"
+envejecer_ref_master "$rmut16" || malo "mut16 no pudo envejecer el ref loose"
+: > "$rmut16/.git/FETCH_HEAD"
+if mut_preparar "$rmut16" 's/_clock_file="\$_refpath"/_clock_file="$_gd\/FETCH_HEAD"/; s/PROC_EDAD_ORIGEN='\''ref-mtime'\''/PROC_EDAD_ORIGEN='\''FETCH_HEAD'\''/' "preferir-FETCH_HEAD"; then
+  export HOME="$tmp/casa-mut16"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut16/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=1 bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion preferir-FETCH_HEAD atrapada (C16 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion preferir-FETCH_HEAD SOBREVIVIO: C16 dio fallo con FETCH_HEAD preferido"
+  else
+    malo "mutacion preferir-FETCH_HEAD invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: umbral no numerico no cierra => C17 la atrapa"
+rmut17="$(repo_sandbox repo-mut17)"
+if mut_preparar "$rmut17" 's/# umbral: solo digitos; si no, edad-no-observable/return 0 #/' "umbral-no-cierra"; then
+  export HOME="$tmp/casa-mut17"
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$rmut17/hooks/summonaikit-harness.sh" "$HOME/.claude/hooks/summonaikit-harness.sh"
+  plantar_registro claude
+  out="$(SAIKIT_REF_EDAD_MAX_S=no bash "$mutado" --check 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion umbral-no-cierra atrapada (C17 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion umbral-no-cierra SOBREVIVIO: C17 dio fallo sin validar el umbral"
+  else
+    malo "mutacion umbral-no-cierra invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 
