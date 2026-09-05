@@ -240,6 +240,35 @@ caso "ci_rojo_no_merguea"
 }
 fin_caso "ci_rojo_no_merguea"
 
+c_ci_skipped() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"skipped","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
+  _contiene "nombra skipped" "$OUT" "skipped"
+  if merge_disparado; then _mal "mergeo con CI skipped"; fi
+}
+
+c_solo_push() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
+caso "ci_skipped_es_rojo"
+{
+  c_ci_skipped
+}
+fin_caso "ci_skipped_es_rojo"
+
+caso "solo_push_success_es_verde"
+{
+  c_solo_push
+}
+fin_caso "solo_push_success_es_verde"
+
 caso "sin_checks_no_merguea"
 {
   c_sin_checks
@@ -856,6 +885,8 @@ sin_match_head_commit	s/ --match-head-commit "\$SHA"//	c_confirmado
 sin_checks_n_opcional	s/\[ "\$n" -gt 0 \]/true/	c_sin_checks
 ci_pendiente_es_verde	s/\[ "\$st" != completed \]/false/	c_ci_pendiente
 ci_rojo_es_verde	s/\[ "\$conc" != success \]/false/	c_ci_rojo
+skipped_es_verde	s/\[ "\$conc" != success \]/[ "$conc" != success ] \&\& [ "$conc" != skipped ]/	c_ci_skipped
+solo_push_exige_pr	s/\[ "\$n" -gt 0 \] || no_merge "sin checks/[ "$hay_pr" = 0 ] \&\& no_merge "exige pull_request"; [ "$n" -gt 0 ] || no_merge "sin checks/	c_solo_push
 base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avanzada
 sello_no_se_compara	s|\[ "\$SELLO" = "\$hash_actual" \]|true|	c_reescrito
 verify_na_flojo	s|\[ "\$CFG_SIN_VERIFY_APP" != "true" \]|false|	c_verify_na

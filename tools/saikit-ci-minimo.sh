@@ -25,13 +25,22 @@ PIN_CHECKOUT_SHA='11bd71901bbe5b1630ceea73d27597364c9af683'
 PIN_CHECKOUT_TAG='v4.2.2'
 
 DESTINO_REL='.github/workflows/saikit-ci-minimo.yml'
-RUNNER='ubuntu-latest'
+RUNNER='ubuntu-24.04'
+TIMEOUT_MINUTES=15
 WORKFLOW_NAME='saikit-ci-minimo'
+# ${{ }} no se escribe crudo en <<EOF: bash lo come.
+CONCURRENCY_GROUP='${{ github.workflow }}-${{ github.ref }}'
 
-# Si verify/ existe, se invoca un runner sobre esa ruta (no un echo).
-# Si no existe, sale 0: el scaffold no exige verify en repos que aun no lo tienen.
-# Sin comillas dobles internas: el YAML envuelve todo el run: en ".
-VERIFY_CMD='bash -c '\''if [ ! -d verify ]; then echo saikit: verify/ ausente; exit 0; fi; if [ -f package.json ]; then npm test -- verify/; elif [ -f pytest.ini ] || { [ -f pyproject.toml ] && grep -Fq pytest pyproject.toml; } || { [ -f requirements.txt ] && grep -Fq pytest requirements.txt; }; then python -m pytest verify/; else find verify -type f -print -quit | grep -q .; fi'\'''
+PIN_SETUP_PYTHON_OWNER='actions/setup-python'
+PIN_SETUP_PYTHON_SHA='a26af69be951a213d495a4c3e4e4022e16d87065'  # v5.6.0
+
+PIN_SETUP_NODE_OWNER='actions/setup-node'
+PIN_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'  # v4.4.0
+
+# DEUDA 18.24: PIN_*_SHA no se refresca. El tag en comentario no mueve el sha.
+# Camino: tools/bump-ci-pins.sh (tag → sha por API, PR) o dependabot sobre
+# checkout / setup-python / setup-node. Fuera de la fila. quality.yml de ESTE
+# repo sigue en tags.
 
 uso() { sed -n '2,20p' "$0"; }
 
@@ -83,21 +92,55 @@ rastros_pytest() {  # $1=root → 0 si pytest aparece
   return 1
 }
 
-detectar_test_cmd() {  # $1=root → comando (nunca vacio)
+detectar_test_cmd() {  # $1=root → comando o return 2 (vacio es ilegal)
   local root="$1"
   if [ -f "$root/tests/run.sh" ]; then
     printf 'bash tests/run.sh'
-    return
+    return 0
   fi
   if [ -f "$root/package.json" ] && test_npm_real "$root/package.json"; then
-    printf 'npm test'
-    return
+    if [ -f "$root/yarn.lock" ]; then
+      printf 'yarn test'
+    elif [ -f "$root/pnpm-lock.yaml" ]; then
+      printf 'pnpm test'
+    else
+      printf 'npm test'
+    fi
+    return 0
   fi
   if rastros_pytest "$root"; then
     printf 'python -m pytest'
+    return 0
+  fi
+  return 2
+}
+
+# Pura: solo el test_cmd congelado. Nunca re-detecta ni emite find.
+verify_cmd_from() {  # $1=test_cmd → invocacion o die
+  case "$1" in
+    'bash tests/run.sh') printf 'bash tests/run.sh verify/' ;;
+    'npm test')          printf 'npm test -- verify/' ;;
+    'yarn test')         printf 'yarn test -- verify/' ;;
+    'pnpm test')         printf 'pnpm test -- verify/' ;;
+    'python -m pytest')  printf 'python -m pytest verify/' ;;
+    *) die "no se puede mapear verify desde: $1" ;;
+  esac
+}
+
+# AUSENTE = no hay dir (scaffold echo). SOLO_MD = solo md o vacio: omitir.
+# -iname: LEEME.MD (mayusculas) sigue siendo markdown, no TIENE.
+clasif_verify() {  # $1=root → AUSENTE|SOLO_MD|TIENE
+  local root="$1"
+  [ -d "$root/verify" ] || { printf 'AUSENTE'; return; }
+  if find "$root/verify" -type f ! -iname '*.md' 2>/dev/null | grep -q .; then
+    printf 'TIENE'
     return
   fi
-  printf 'bash tests/run.sh'
+  printf 'SOLO_MD'
+}
+
+texto_oferta() {  # $1=test_cmd
+  printf 'No hay workflows de GitHub Actions. Sin CI el autopilot no mergea (sin checks no es verde). Dejo un workflow minimo que corre «%s» y verify/?' "$1"
 }
 
 preguntar() {  # $1=texto $2=default — copia de setup; no sourcear setup
@@ -112,15 +155,15 @@ preguntar() {  # $1=texto $2=default — copia de setup; no sourcear setup
   fi
 }
 
-resolver_voluntad() {  # $1=flag o "" → SI|NO|DEFAULT_NO
-  local flag="${1:-}"
+resolver_voluntad() {  # $1=flag $2=test_cmd → SI|NO|DEFAULT_NO
+  local flag="${1:-}" test_cmd="${2:-}"
   case "$flag" in
     si|SI|Si|s|S) printf 'SI' ;;
     no|NO|No|n|N) printf 'NO' ;;
     "")
       if [ -t 0 ]; then
         local r
-        r="$(preguntar 'No hay workflows de GitHub Actions. Sin CI el autopilot no mergea (sin checks no es verde). Dejo un workflow minimo que corre el test del repo y verify/?' 'no')"
+        r="$(preguntar "$(texto_oferta "$test_cmd")" 'no')"
         case "$r" in
           si|SI|Si|s|S) printf 'SI' ;;
           *) printf 'DEFAULT_NO' ;;
@@ -145,19 +188,63 @@ pin_valido() {  # $1=sha → 0 si ^[0-9a-f]{40}$
   printf '%s' "$1" | grep -Eq '^[0-9a-f]{40}$'
 }
 
-receta_emitir_yaml() {  # $1=root $2=test_cmd → YAML por stdout
-  local root="$1" test_cmd="$2"
-  local install_step=""
-  pin_valido "$PIN_CHECKOUT_SHA" || die "pin checkout no es sha de 40"
+install_step() {  # $1=root $2=test_cmd → pasos YAML o vacio
+  local root="$1" test_cmd="$2" pip_cmd
   case "$test_cmd" in
     'npm test')
       if [ -f "$root/package-lock.json" ]; then
-        install_step='npm ci'
+        cat <<EOF
+      - name: Install deps
+        run: npm ci
+EOF
       else
-        install_step='npm install'
+        cat <<EOF
+      - name: Install deps
+        run: npm install
+EOF
       fi
       ;;
+    'yarn test')
+      cat <<EOF
+      - name: Install deps
+        run: yarn install --frozen-lockfile
+EOF
+      ;;
+    'pnpm test')
+      # ubuntu-24.04 trae npm/yarn, no pnpm. Sin setup-node + corepack nace rojo.
+      pin_valido "$PIN_SETUP_NODE_SHA" || die "pin setup-node no es sha de 40"
+      cat <<EOF
+      - uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA  # v4.4.0
+        with:
+          node-version: '20'
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+EOF
+      ;;
+    'python -m pytest')
+      pin_valido "$PIN_SETUP_PYTHON_SHA" || die "pin setup-python no es sha de 40"
+      # requirements.txt puede no listar pytest; instalar ambos cierra el hueco.
+      if [ -f "$root/requirements.txt" ]; then
+        pip_cmd='pip install -r requirements.txt && pip install pytest'
+      else
+        pip_cmd='pip install pytest'
+      fi
+      cat <<EOF
+      - uses: $PIN_SETUP_PYTHON_OWNER@$PIN_SETUP_PYTHON_SHA  # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: $pip_cmd
+EOF
+      ;;
   esac
+}
+
+receta_emitir_yaml() {  # $1=root $2=test_cmd $3=clasif → YAML por stdout
+  local root="$1" test_cmd="$2" clasif="$3" vcmd
+  pin_valido "$PIN_CHECKOUT_SHA" || die "pin checkout no es sha de 40"
   cat <<EOF
 name: $WORKFLOW_NAME
 permissions:
@@ -168,23 +255,38 @@ on:
 jobs:
   ci:
     runs-on: $RUNNER
+    timeout-minutes: $TIMEOUT_MINUTES
+    concurrency:
+      group: $CONCURRENCY_GROUP
+      cancel-in-progress: true
     steps:
       - uses: $PIN_CHECKOUT_OWNER@$PIN_CHECKOUT_SHA  # $PIN_CHECKOUT_TAG
         with:
           persist-credentials: false
 EOF
-  if [ -n "$install_step" ]; then
-    cat <<EOF
-      - name: Install deps
-        run: $install_step
-EOF
-  fi
+  install_step "$root" "$test_cmd"
   cat <<EOF
       - name: Test del repo
         run: $test_cmd
-      - name: verify/
-        run: "$VERIFY_CMD"
 EOF
+  case "$clasif" in
+    AUSENTE)
+      cat <<EOF
+      - name: verify/
+        run: "echo saikit: verify/ ausente; exit 0"
+EOF
+      ;;
+    SOLO_MD)
+      ;;
+    TIENE)
+      vcmd="$(verify_cmd_from "$test_cmd")"
+      cat <<EOF
+      - name: verify/
+        run: "$vcmd"
+EOF
+      ;;
+    *) die "clasif_verify desconocida: $clasif" ;;
+  esac
 }
 
 yaml_seguro() {  # $1=yaml → 0 o die
@@ -241,7 +343,7 @@ escribir_atomico() {  # $1=root $2=yaml
 # ---------------------------------------------------------------------------
 
 ofrecer() {
-  local root disco voluntad test_cmd yaml
+  local root disco voluntad test_cmd yaml clasif
   root="${root_flag:-$(pwd)}"
   [ -d "$root" ] || die "--root no es un directorio: $root"
   disco="$(workflows_en_disco "$root")" || exit 2
@@ -249,13 +351,31 @@ ofrecer() {
     printf 'saikit-ci-minimo: ya hay workflows, no se ofrece\n'
     return 0
   fi
-  voluntad="$(resolver_voluntad "$ci_minimo_flag")" || exit 2
+  # Flag no / sin TTY: no detectar. El aviso no cita un comando inventado.
+  case "$ci_minimo_flag" in
+    no|NO|No|n|N)
+      aviso_sin_ci_no_mergea
+      return 0
+      ;;
+    "")
+      if [ ! -t 0 ]; then
+        aviso_sin_ci_no_mergea
+        return 0
+      fi
+      ;;
+  esac
+  test_cmd="$(detectar_test_cmd "$root")" \
+    || die "sin runner: no tests/run.sh, no scripts.test real, no rastros pytest"
+  voluntad="$(resolver_voluntad "$ci_minimo_flag" "$test_cmd")" || exit 2
   case "$voluntad" in
     SI)
-      test_cmd="$(detectar_test_cmd "$root")"
-      yaml="$(receta_emitir_yaml "$root" "$test_cmd")" || exit 2
+      clasif="$(clasif_verify "$root")"
+      yaml="$(receta_emitir_yaml "$root" "$test_cmd" "$clasif")" || exit 2
       escribir_atomico "$root" "$yaml"
-      printf 'saikit-ci-minimo: escrito %s\n' "$DESTINO_REL"
+      printf 'saikit-ci-minimo: escrito %s (corre: %s)\n' "$DESTINO_REL" "$test_cmd"
+      if [ "$clasif" = SOLO_MD ]; then
+        printf 'saikit-ci-minimo: verify/ solo markdown; no se emite el paso verify/\n'
+      fi
       ;;
     NO|DEFAULT_NO)
       aviso_sin_ci_no_mergea

@@ -168,6 +168,10 @@ ORIGEN="origin/$RAMA"
 # "sin checks" NO es verde: se mira `gh run list --commit` (gh pr checks
 # agrega bots de terceros; medido 18.1 §2.1), y del run del evento
 # pull_request si existe (el mismo head dispara push + pull_request).
+# Decision 18.24: skipped = CI rojo (mismo balde que cancelled/neutral;
+# n>0, no es «sin checks», no slogan nuevo). solo-push completed+success
+# = verde: hay_pr=0 juzga todos los runs. Exigir pull_request seria
+# politica nueva. Ver .saikit/decisiones/18.24.tsv.
 ci_chequear() {
   local raw flat i n hay_pr ev st conc
   raw="$(gh run list --commit "$SHA" --json event,status,conclusion 2>/dev/null)" \

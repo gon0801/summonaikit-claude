@@ -1,0 +1,65 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "package.json malformado; scripts.test con inyeccion; nombres verify/ con espacios/comillas",
+    "pytest.ini vs pyproject.toml vs setup.cfg vs tox.ini; pyproject.toml con 'pytest' solo en comentario",
+    "yarn.lock + package-lock.json; yarn.lock + pnpm-lock.yaml; bun.lockb",
+    "pnpm-lock.yaml emitido contra ubuntu-24.04 (Npm+Yarn, sin pnpm)",
+    "pytest.ini + requirements.txt sin pytest",
+    "clasif_verify con LEEME.MD (case) y verify/ vacio",
+    "discriminacion: test_ci_minimo.sh y test_saikit_merge.sh; mutacion TIENE omitida; suite merge contra origin/master merge.sh",
+    "callers: saikit-setup-autopilot.sh con --ci-minimo si y sin runner",
+    "falla parcial: kill -9 entre tmp y mv; dos generadores concurrentes",
+    "trust boundary: scripts.test y nombres de archivo hacia el YAML"
+  ],
+  "findings": [
+    {
+      "severity": "high",
+      "location": "tools/saikit-ci-minimo.sh:208",
+      "claim": "Un repo pnpm genera CI nacido rojo: emite pnpm install/test sin instalar pnpm, y ubuntu-24.04 no lo trae (mismo hueco que 18.24(a) con pytest).",
+      "trigger": "package.json con scripts.test=jest + pnpm-lock.yaml; --ofrecer --ci-minimo si. El caso pnpm_lock_emite_pnpm solo afirma que no salio npm.",
+      "evidence": "generador rc=0 YAML: 'run: pnpm install --frozen-lockfile' y 'run: pnpm test'; cero uses: setup-node o pnpm/action-setup. Ubuntu2404-Readme Package Management lista Npm 10.9.8 y Yarn 1.22.22; no pnpm ni corepack. tests/test_ci_minimo.sh caso pnpm_lock_emite_pnpm: ok (no exige toolchain).",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/saikit-ci-minimo.sh:216",
+      "claim": "Si hay pytest.ini y un requirements.txt sin pytest, el YAML instala ese requirements y corre python -m pytest: el job nace rojo otra vez.",
+      "trigger": "pytest.ini + requirements.txt con flask==3.0.0 (sin pytest); --ci-minimo si. pytest_toolchain_en_yaml usa pytest.ini solo y acepta pip install pytest O -r requirements.txt.",
+      "evidence": "rc=0; YAML tiene 'run: pip install -r requirements.txt' luego 'run: python -m pytest' (setup-python si esta). No hay 'pip install pytest'. Caso pytest_toolchain_en_yaml: ok sobre pytest.ini sin requirements.txt.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tests/test_ci_minimo.sh:126",
+      "claim": "Omitting the TIENE verify/ step (real non-md files) leaves test_ci_minimo.sh green: afirma_run_reales treats a missing verify/ line as success.",
+      "trigger": "Clone HEAD; replace the TIENE branch of receta_emitir_yaml with a no-op; bash tests/test_ci_minimo.sh. No product case creates verify/app.sh.",
+      "evidence": "mutated TIENE to omit; todos los casos ok, mutaciones siguen atrapadas; 'test_ci_minimo: OK' TIENE_OMIT_SUITE_RC=0. Un verify/app.sh real en el generador intacto si emite 'run: \"bash tests/run.sh verify/\"' (repro B5), pero ningun caso de la suite lo exige.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/saikit-setup-autopilot.sh:294",
+      "claim": "El unico caller propaga el exit 2 nuevo despues de escribir autopilot.json: setup falla a mitad y deja config persistida sin YAML.",
+      "trigger": "git repo vacio (sin tests/run.sh ni rastros); bash tools/saikit-setup-autopilot.sh --merge no --despliega no --sin-verify-app no --telegram no --ci-minimo si",
+      "evidence": "SETUP_RC=2; OUT='saikit-ci-minimo: sin runner: no tests/run.sh, no scripts.test real, no rastros pytest'; .saikit/autopilot.json YES (merge=false,...); yml exists? NO. No hay caso de test_ci_minimo que corra setup --ci-minimo si sobre sin_runner.",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": "tools/saikit-ci-minimo.sh:130",
+      "claim": "clasif_verify trata LEEME.MD (extension mayuscula) como TIENE y emite el paso verify/, asi que un mapa solo-markdown no se omite.",
+      "trigger": "tests/run.sh + verify/LEEME.MD; --ci-minimo si. verify_leeme_no_enciende_verde solo usa LEEME.md minusculas.",
+      "evidence": "YAML: 'run: \"bash tests/run.sh verify/\"' (no omitio). find ! -name '*.md' lista LEEME.MD; find -name '*.md' vacio; find -iname '*.md' lista LEEME.MD. Caso verify_leeme_no_enciende_verde: ok.",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": "tests/test_saikit_merge.sh:260",
+      "claim": "ci_skipped_es_rojo y solo_push_success_es_verde pasan contra origin/master: el diff 18.24 de saikit-merge.sh es solo comentarios.",
+      "trigger": "git clone HEAD; git show origin/master:tools/saikit-merge.sh > tools/saikit-merge.sh; bash tests/test_saikit_merge.sh",
+      "evidence": "git diff origin/master...HEAD -- tools/saikit-merge.sh: 4 lineas, todas comentarios (Decision 18.24). OLD_MERGE_SUITE_RC=0; casos ci_skipped_es_rojo y solo_push_success_es_verde: ok. Las mutaciones skipped_es_verde/solo_push_exige_pr si se atrapan, pero no discriminan este PR.",
+      "confirmed": true
+    }
+  ]
+}
