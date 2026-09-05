@@ -221,4 +221,19 @@ chmod +x "$bsd_bin/date"
 es_bsd="$(PATH="$bsd_bin:$PATH" SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$py_repo")"
 [ "$es_bsd" = "al_dia" ] || malo "con date BSD (sin -d) el estado debe ser al_dia, da $es_bsd"
 
+# ---------------------- dia de calendario invalido => unknown en GNU y BSD -------
+# Adversary 2026-09-05 (medido): BSD DESBORDA `2026-09-31` al 1 de octubre y
+# `estado` daba al_dia; GNU lo rechaza. El round-trip de fecha_epoch nivela:
+# una fecha que no existe es un sello que no se pudo datar => unknown.
+caso "sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD"
+cal_repo="$SANDBOX/app-maldia"; mkdir -p "$cal_repo"
+printf '# App\n' > "$cal_repo/README.md"
+cal_sha="$(hacer_repo "$cal_repo")" || malo "no pudo crear el repo de dia invalido"
+mkdir -p "$cal_repo/verify"
+printf 'generado: 2026-09-31 · %s\n' "$cal_sha" > "$cal_repo/verify/LEEME.md"
+es_cal="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$cal_repo")"
+[ "$es_cal" = "unknown" ] || malo "dia inexistente debe ser 'unknown' con date real, da $es_cal"
+es_cal_bsd="$(PATH="$bsd_bin:$PATH" SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$cal_repo")"
+[ "$es_cal_bsd" = "unknown" ] || malo "dia inexistente debe ser 'unknown' con shim BSD, da $es_cal_bsd"
+
 [ "$fail" -eq 0 ] && echo "test_verificar_app: OK" || { echo "test_verificar_app: FAIL" >&2; exit 1; }
