@@ -17,6 +17,12 @@ Hace 5 preguntas en español, una por una, y escribe `.saikit/autopilot.json`
 y `telegram` que nacen en falso, `rama` y `revert_si_rojo` con default).
 También toma el lock del repo y asegura el `.gitignore` de `veredictos/`.
 
+Si el repo no tiene workflows de Actions, **después** de las 5 (no es una
+pregunta 6/6 del JSON) ofrece un workflow mínimo (`saikit-ci-minimo.yml`)
+que corre el test del repo y `verify/`. Sin terminal asume `no` y avisa
+que sin CI el autopilot no mergea. Quien ya sabe que lo quiere pasa
+`--ci-minimo si`.
+
 ## Lo que el operador tiene que saber
 
 - Sin commitear y pushear a `origin/<rama>`, el setup no existe: el merge lee
@@ -27,4 +33,5 @@ También toma el lock del repo y asegura el `.gitignore` de `veredictos/`.
   libera con `--liberar-lock` o reintenta cuando el otro termine.
 - Cada respuesta también llega por flag (`--merge si`, `--despliega no`,
   `--salud-url -`, `--sin-verify-app no`, `--telegram no`, `--rama master`,
-  `--pr 7`); con todas por flag no pregunta nada.
+  `--pr 7`, `--ci-minimo si|no`); con las 5 de config por flag no pregunta
+  esas. El offer de CI es aparte: `--ci-minimo` no entra al JSON.
