@@ -138,11 +138,18 @@ EOF
 }
 fin_caso "setup_invoca_generador"
 
+yaml_parsea() {  # $1=yaml — 0 si un parser real lo acepta (DoD check-yaml)
+  ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$1" 2>/dev/null
+}
+
 caso "acepta_escribe_workflow"
 {
   correr_setup --ci-minimo si < /dev/null
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
   [ -f "$(yml_dest)" ] || _mal "no escribio $(yml_dest): $OUT"
+  if [ -f "$(yml_dest)" ]; then
+    yaml_parsea "$(yml_dest)" || _mal "el YAML no parsea (check-yaml lo rechazaria)"
+  fi
 }
 fin_caso "acepta_escribe_workflow"
 
