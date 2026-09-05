@@ -161,11 +161,12 @@ esac
 printf '%s' "$out" | grep -qi 'desconocid' && malo "con sha roto se colgo DESCONOCIDO: [$out]"
 
 # P9: repo SIN ref origin/master (checkout shallow de CI, clone --depth 1):
-# rama y sha se conocen igual; lo unico unknown es el coincide. Antes caia en
-# un "sin-commits" falso (el rev-parse en par vaciaba HEAD tambien). La segunda
-# corrida suma sha roto: la forma exacta de 12.9 #2 en CI — ni una gota de
-# "desconocid" (Core Rule 2).
-caso "P9: sin ref remoto => rama+sha conocidos, coincide unknown, exit 0"
+# rama y sha se conocen igual; el coincide lleva la razon (sin-ref), no el
+# estado. Antes caia en un "sin-commits" falso (el rev-parse en par vaciaba
+# HEAD tambien). La segunda corrida suma sha roto: la forma exacta de 12.9 #2
+# en CI. Ninguna de las dos puede contener ni unknown (restore_vendor:
+# Core Rule 2 al reves) ni desconocid (12.9 #2).
+caso "P9: sin ref remoto => rama+sha conocidos, coincide sin-ref, exit 0"
 r9noref="$(repo_sandbox repo-p9)"
 git -C "$r9noref" update-ref -d refs/remotes/origin/master
 export HOME="$tmp/casa-p9"
@@ -173,19 +174,21 @@ mkdir -p "$HOME"
 out="$(bash "$r9noref/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run sin ref salio $rc: $out"
 case "$out" in
-  *'procedencia: rama='*' sha='*'coincide_origin_master=unknown'*) ;;
-  *) malo "sin ref no dio rama+sha conocidos con coincide unknown: [$out]" ;;
+  *'procedencia: rama='*' sha='*'coincide_origin_master=sin-ref'*) ;;
+  *) malo "sin ref no dio rama+sha conocidos con coincide sin-ref: [$out]" ;;
 esac
 sha40="$(printf '%s' "$out" | grep -oE 'sha=[0-9a-f]*' | head -n1 | cut -c5-)"
 [ "${#sha40}" -eq 40 ] || malo "sin ref: sha no es 40 hex: [$sha40]"
 printf '%s' "$out" | grep -qi 'desconocid' && malo "sin ref emitio la palabra: [$out]"
+printf '%s' "$out" | grep -qi 'unknown' && malo "sin ref emitio unknown: [$out]"
 out="$(PATH="$fake_sha:$PATH" bash "$r9noref/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run sin ref y sha roto salio $rc: $out"
 case "$out" in
-  *'coincide_origin_master=unknown'*'fuente_sha256=no-calculable'*) ;;
-  *) malo "sin ref + sha roto no dio unknown/no-calculable: [$out]" ;;
+  *'coincide_origin_master=sin-ref'*'fuente_sha256=no-calculable'*) ;;
+  *) malo "sin ref + sha roto no dio sin-ref/no-calculable: [$out]" ;;
 esac
 printf '%s' "$out" | grep -qi 'desconocid' && malo "sin ref + sha roto colgo DESCONOCIDO: [$out]"
+printf '%s' "$out" | grep -qi 'unknown' && malo "sin ref + sha roto colgo UNKNOWN: [$out]"
 
 # P7: error de validacion (fuente mala) => exit 2 y SIN procedencia: no hay
 # nada instalado que declarar, y el error queda limpio.
@@ -415,6 +418,22 @@ if mut_preparar "$rmut4" 's/_fallo=1\(; _causas="[^"]*procedencia-desconocida"\)
     malo "mutacion veredicto-sin-fallo SOBREVIVIO"
   else
     malo "mutacion veredicto-sin-fallo invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: coincide con estado unknown => P9 la atrapa"
+rmut9="$(repo_sandbox repo-mut9)"
+git -C "$rmut9" update-ref -d refs/remotes/origin/master
+if mut_preparar "$rmut9" "s/PROC_COINCIDE='sin-ref'/PROC_COINCIDE='unknown'/" "coincide-unknown"; then
+  export HOME="$tmp/casa-mut9"
+  mkdir -p "$HOME"
+  out="$(bash "$mutado" --dry-run 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    malo "mutacion coincide-unknown invalida (rc=$rc, el dry-run debio salir 0)"
+  elif printf '%s' "$out" | grep -qi 'unknown'; then
+    printf '    mutacion coincide-unknown atrapada (P9 en rojo)\n'
+  else
+    malo "mutacion coincide-unknown SOBREVIVIO: P9 no vio el unknown"
   fi
 fi
 
