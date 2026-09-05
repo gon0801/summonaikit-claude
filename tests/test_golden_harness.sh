@@ -304,6 +304,18 @@ correr "$SANDBOX/rec3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --base
 correr "$SANDBOX/chk3.txt" --hook "$hook_falso" --scenarios "$esc_falsos" --baseline "$base3" --check
 [ "$rc" -eq 0 ] || malo "--check (5 esc) debio salir 0, dio $rc: $(cat "$SANDBOX/chk3.txt")"
 
+# Clase Task 0.4 (`shift 2` con un solo argumento gira para siempre).
+# Medido pre-fix: timeout 5 => rc=124 en --hook/--scenarios/--baseline.
+caso "P10: flag con valor sin valor sale 2, no gira"
+for _f in --hook --scenarios --baseline; do
+  out="$(timeout 5 bash "$arnes" "$_f" 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "$_f sin valor dio $rc, se esperaba 2 (124=cuelgue)"
+  case "$out" in
+    *'exige un valor'*) ;;
+    *) malo "$_f sin valor no nombro la falta: [$out]" ;;
+  esac
+done
+
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2
   exit 1

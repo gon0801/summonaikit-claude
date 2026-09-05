@@ -67,9 +67,15 @@ VIO_HOOK=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --hook)      HOOK="${2:-}"; VIO_HOOK=1; shift 2 ;;
-    --scenarios) ESCENARIOS="${2:-}"; shift 2 ;;
-    --baseline)  BASELINE="${2:-}"; shift 2 ;;
+    --hook)
+      [ $# -ge 2 ] || { printf 'golden-harness: --hook exige un valor\n' >&2; exit 2; }
+      HOOK="${2:-}"; VIO_HOOK=1; shift 2 ;;
+    --scenarios)
+      [ $# -ge 2 ] || { printf 'golden-harness: --scenarios exige un valor\n' >&2; exit 2; }
+      ESCENARIOS="${2:-}"; shift 2 ;;
+    --baseline)
+      [ $# -ge 2 ] || { printf 'golden-harness: --baseline exige un valor\n' >&2; exit 2; }
+      BASELINE="${2:-}"; shift 2 ;;
     --print)     MODO="print"; shift ;;
     --record)    MODO="record"; shift ;;
     --check)     MODO="check"; shift ;;
