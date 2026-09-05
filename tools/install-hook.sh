@@ -1927,7 +1927,7 @@ GIT_BIN="${SAIKIT_GIT_BIN:-git}"
 # solo es tan fresca como el ultimo fetch. Un dia = misma sesion de
 # deploy. Override de test: SAIKIT_REF_EDAD_MAX_S.
 : "${SAIKIT_REF_EDAD_MAX_S:=86400}"
-# Reloj: mtime de FETCH_HEAD si existe; si no, %ct de origin/master.
+# Reloj: mtime del ref loose origin/master; si no, %ct. Nunca FETCH_HEAD.
 # Edad = now - clock, en segundos de pared. Nunca la palabra unknown.
 PROC_EDAD_S='no-calculable'
 PROC_EDAD_ORIGEN=''
@@ -1941,7 +1941,7 @@ edad_del_ref() {
   PROC_EDAD_S='no-calculable'
   PROC_EDAD_ORIGEN=''
   [ "$PROC_CONOCIDA" -eq 1 ] || return 0
-  local _gd _now _clock
+  local _gd _now _clock _refpath _clock_file
   _now="$(date +%s)" || return 0
   case "$_now" in *[!0-9]*) return 0 ;; esac
   _gd="$("$GIT_BIN" -C "$repo" rev-parse --git-dir 2>/dev/null)" || return 0
@@ -1950,28 +1950,57 @@ edad_del_ref() {
     /*) ;;
     *) _gd="$repo/$_gd" ;;
   esac
-  if [ -f "$_gd/FETCH_HEAD" ]; then
-    _clock="$(mtime_de "$_gd/FETCH_HEAD")" || return 0
-    PROC_EDAD_ORIGEN='FETCH_HEAD'
-  elif _proc_es_sha "${_master:-}"; then
+  _refpath="$("$GIT_BIN" -C "$repo" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || _refpath=
+  case "$_refpath" in
+    '') ;;
+    /*) ;;
+    *) _refpath="$repo/$_refpath" ;;
+  esac
+  _clock_file="$_refpath"
+  if [ -f "$_clock_file" ]; then
+    _clock="$(mtime_de "$_clock_file")" || _clock=
+    case "$_clock" in
+      ''|*[!0-9]*) ;;
+      *) PROC_EDAD_ORIGEN='ref-mtime' ;;
+    esac
+  fi
+  if [ -z "$PROC_EDAD_ORIGEN" ] && _proc_es_sha "${_master:-}"; then
     _clock="$("$GIT_BIN" -C "$repo" log -1 --format=%ct origin/master 2>/dev/null)" || _clock=
     case "$_clock" in
-      ''|*[!0-9]*) return 0 ;;
+      ''|*[!0-9]*) ;;
+      *) PROC_EDAD_ORIGEN='committerdate' ;;
     esac
-    PROC_EDAD_ORIGEN='committerdate'
-  else
-    PROC_EDAD_S='sin-ref'
+  fi
+  if [ -z "$PROC_EDAD_ORIGEN" ]; then
+    if _proc_es_sha "${_master:-}"; then
+      PROC_EDAD_S='no-calculable'
+    else
+      PROC_EDAD_S='sin-ref'
+    fi
     return 0
   fi
-  case "$_clock" in *[!0-9]*) return 0 ;; esac
+  case "$_clock" in *[!0-9]*) PROC_EDAD_S='no-calculable'; return 0 ;; esac
   PROC_EDAD_S=$((_now - _clock))
   [ "$PROC_EDAD_S" -lt 0 ] && PROC_EDAD_S=0
 }
 check_edad_excede() {
+  [ "$PROC_CONOCIDA" -eq 1 ] || return 0
   case "${PROC_EDAD_S:-}" in
-    ''|*[!0-9]*) return 0 ;;
+    ''|*[!0-9]*)
+      _fallo=1
+      _causas="$_causas edad-no-observable"
+      return 0
+      ;;
   esac
-  [ "$PROC_EDAD_S" -gt "${SAIKIT_REF_EDAD_MAX_S:-86400}" ] || return 0
+  # umbral: solo digitos; si no, edad-no-observable
+  case "${SAIKIT_REF_EDAD_MAX_S:-}" in
+    ''|*[!0-9]*)
+      _fallo=1
+      _causas="$_causas edad-no-observable"
+      return 0
+      ;;
+  esac
+  [ "$PROC_EDAD_S" -gt "$SAIKIT_REF_EDAD_MAX_S" ] || return 0
   _fallo=1
   _causas="$_causas ref-excede-edad"
 }
