@@ -316,6 +316,25 @@ for _f in --hook --scenarios --baseline; do
   esac
 done
 
+# Quitar las guardas [ $# -ge 2 ] restaura el shift 2 desnudo: un --hook
+# sin valor no consume el flag y el while gira. timeout 5 => 124.
+caso "mutacion: sin guarda [ \$# -ge 2 ] => P10 cuelga"
+mutado="$SANDBOX/golden-ge2-mutado.sh"
+sed '/\[ \$# -ge 2 \]/d' "$arnes" > "$mutado"
+if cmp -s "$arnes" "$mutado"; then
+  malo "mutacion sin-guarda-ge2 no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mutado" 2>/dev/null; then
+  malo "mutacion sin-guarda-ge2 no parsea; asi no prueba nada"
+else
+  out="$(timeout 5 bash "$mutado" --hook 2>&1)"; rc=$?
+  if [ "$rc" -eq 124 ]; then
+    printf '    mutacion sin-guarda-ge2 atrapada (P10 en rojo: cuelgue)\n'
+  else
+    malo "mutacion sin-guarda-ge2 SOBREVIVIO: rc=$rc, se esperaba 124"
+  fi
+fi
+rm -f "$mutado"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_golden_harness: FAIL" >&2
   exit 1
