@@ -163,6 +163,14 @@ correr() {  # corre el script bajo prueba desde el work del sandbox
 
 merge_disparado() { grep -q '^gh pr merge' "$SAIKIT_GH_LOG" 2>/dev/null; }
 
+c_sin_checks() {
+  CASO_ROJO=0; sb_reset master
+  printf '[]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon sin checks" "$OUT" "NO-MERGE: sin checks"
+  if merge_disparado; then _mal "mergeo sin checks (no es verde)"; fi
+}
+
 # avanza la rama base del sandbox (para "base avanzada")
 avanzar_base() {
   git checkout -q master
@@ -234,10 +242,7 @@ fin_caso "ci_rojo_no_merguea"
 
 caso "sin_checks_no_merguea"
 {
-  printf '[]' > "$SB/ghfix/runs.json"
-  correr --confirmado
-  _contiene "razon sin checks" "$OUT" "NO-MERGE: sin checks"
-  if merge_disparado; then _mal "mergeo sin checks (no es verde)"; fi
+  c_sin_checks
 }
 fin_caso "sin_checks_no_merguea"
 
@@ -848,6 +853,7 @@ while IFS=$'\t' read -r nombre expr fun; do
 done <<'MUTS'
 confirmado_default_si	s/^CONFIRMADO=0$/CONFIRMADO=1/	c_feliz
 sin_match_head_commit	s/ --match-head-commit "\$SHA"//	c_confirmado
+sin_checks_n_opcional	s/\[ "\$n" -gt 0 \]/true/	c_sin_checks
 ci_pendiente_es_verde	s/\[ "\$st" != completed \]/false/	c_ci_pendiente
 ci_rojo_es_verde	s/\[ "\$conc" != success \]/false/	c_ci_rojo
 base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avanzada

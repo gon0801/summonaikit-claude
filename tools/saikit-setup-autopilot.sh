@@ -36,7 +36,10 @@
 # USO:
 #   tools/saikit-setup-autopilot.sh [--merge si|no] [--despliega publica|no|no-se]
 #     [--salud-url <url|->] [--sin-verify-app si|no] [--telegram si|no]
-#     [--rama <nombre>] [--pr <n>] [--liberar-lock]
+#     [--rama <nombre>] [--pr <n>] [--ci-minimo si|no] [--liberar-lock]
+#
+# Tras escribir el JSON, si no hay workflows, ofrece un CI minimo
+# (tools/saikit-ci-minimo.sh --ofrecer). No es la pregunta 6/6 del JSON.
 #
 # Exit: 0 ok; 2 uso o validacion; 3 lock ajeno (reporta y bloquea).
 set -u
@@ -50,17 +53,17 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOSTENER="${SAIKIT_SETUP_SOSTENER_SEG:-0}"
 
 merge_flag=""; despliega_flag=""; salud_flag="__sin_dato__"; sve_flag=""
-telegram_flag=""; rama_flag=""; pr_flag=""; liberar=0
+telegram_flag=""; rama_flag=""; pr_flag=""; ci_minimo_flag=""; liberar=0
 
 # Defaults seguros cuando no hay terminal que pregunte.
 merge_default="no"; despliega_default="no-se"; rama_default="master"
 sve_default="no"; telegram_default="no"
 
-uso() { sed -n '2,40p' "$0"; }
+uso() { sed -n '2,44p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --merge|--despliega|--salud-url|--sin-verify-app|--telegram|--rama|--pr)
+    --merge|--despliega|--salud-url|--sin-verify-app|--telegram|--rama|--pr|--ci-minimo)
       # El bug de la Task 0.4, que este repo ya pago dos veces (decision.sh y
       # el cross-review de esta fila): `shift 2` con un solo argumento no
       # consume nada y el while gira para siempre (rc=124 por timeout). Un
@@ -76,6 +79,7 @@ while [ $# -gt 0 ]; do
         --telegram)       telegram_flag="$2" ;;
         --rama)           rama_flag="$2" ;;
         --pr)             pr_flag="$2" ;;
+        --ci-minimo)      ci_minimo_flag="$2" ;;
       esac
       shift 2 ;;
     --liberar-lock)   liberar=1; shift ;;
@@ -286,7 +290,16 @@ if ! grep -q -x -F '*' "$SAIKIT_DIR/veredictos/.gitignore" 2>/dev/null; then
     || { printf 'saikit-setup-autopilot: no se pudo asegurar el .gitignore de veredictos\n' >&2; exit 2; }
 fi
 
+GEN="${SAIKIT_CI_MINIMO:-$HERE/saikit-ci-minimo.sh}"
+bash "$GEN" --ofrecer --root "$ROOT" ${ci_minimo_flag:+--ci-minimo "$ci_minimo_flag"} || exit 2
+
 printf 'saikit-setup-autopilot: listo: %s\n' "$CFG"
 printf '  merge=%s despliega=%s rama=%s pr=%s\n' "$merge_json" "$despliega_json" "$rama_resp" "${pr_flag:-(sin pr)}"
-printf '  commitea y pushea a origin/%s: el merge lee la config de ahi, no de tu disco.\n' "$rama_resp"
+# Si el generador dejo el yml, el merge necesita ESE archivo en origin, no solo
+# el JSON (hallazgo interrogate: seguir el listo al pie dejaba el workflow
+# untracked y el veto sin checks seguia).
+if [ -f "$ROOT/.github/workflows/saikit-ci-minimo.yml" ]; then
+  printf '  incluye tambien .github/workflows/saikit-ci-minimo.yml en el commit.\n'
+fi
+printf '  commitea y pushea a origin/%s: el merge lee la config (y el CI) de ahi, no de tu disco.\n' "$rama_resp"
 exit 0
