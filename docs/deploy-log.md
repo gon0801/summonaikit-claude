@@ -7,6 +7,23 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #194 (verificar-app: fecha del sello portable + verify/ del kit) — deploy: skill replantada, hook sin cambios
+
+- **SHA:** merge `7b19796`, head `0cc5aa9`, CI 8/8 con `gate` verde (run 33995017989).
+- **Deploy:** hook `YA AL DIA` (el PR no lo toco); la skill viva
+  `~/.claude/skills/saikit-verificar-app/verificar.sh` quedo byte a byte con
+  master tras `install-hook.sh` (diff verificado). `--check` no se re-corrio:
+  su rojo por diseño (codex sin registro) no cambio.
+- **Que se mergeo:** `fecha_epoch` portable (GNU `-d` / BSD `-j -f`) — el
+  `estado` del mapa ya no da `unknown` en macOS (rojo medido, discriminado
+  viejo/nuevo contra el mapa real: unknown → al_dia); `sed -i` → `sed_i` en el
+  test (era uno de los rojos de macOS de la 18.22, que sigue abierta con el
+  resto); el `verify/` del propio kit (mapa 5 funciones + Drive 4/4 PASS).
+- **Nota:** `.gitignore` quedo modificado en el working tree (entrada
+  `.cursor/skills/verify-summonaikit/.run/`) — trabajo en curso de Cursor, no
+  de esta sesión; no se tocó.
+- **Operador:** Gon (sesión kimi).
+
 ## 2026-09-05 — PR #192 / Task 18.24 (el CI minimo nace rojo o verde-sin-correr) — deploy a las 4 copias; hook sin cambios
 
 - **SHA:** merge `69f5893`, head `aaec0b6`, CI 8/8 con `gate` verde (run 33992318298).
