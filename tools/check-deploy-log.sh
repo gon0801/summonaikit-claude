@@ -32,7 +32,11 @@ CORTE='2026-09-04'
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --log) LOG="${2:-}"; shift 2 ;;
+    # Clase Task 0.4: `shift 2` con un solo argumento no consume nada y el
+    # while gira para siempre. El flag con valor exige su $2 o sale 2.
+    --log)
+      [ $# -ge 2 ] || { printf '[deploy-log] ERROR: --log exige un valor.\n' >&2; exit 2; }
+      LOG="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) printf '[deploy-log] uso: %s [--log PATH]\n' "$0" >&2; exit 2 ;;
   esac

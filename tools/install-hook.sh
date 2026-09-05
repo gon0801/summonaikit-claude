@@ -121,14 +121,24 @@ MARCADOR_RE='^# SAIKIT-CLAUDE-OWNED summonaikit-claude [^[:space:]]+$'
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dest)     DEST="${2:-}"; VIO_DEST=1; shift 2 ;;
-    --source)   SOURCE="${2:-}"; VIO_SOURCE=1; shift 2 ;;
-    --manifest) MANIFEST="${2:-}"; shift 2 ;;
+    # Clase Task 0.4: `shift 2` con un solo argumento no consume nada y el
+    # while gira para siempre. Cada flag con valor exige su $2 o sale 2.
+    --dest)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --dest exige un valor.\n' >&2; exit 2; }
+      DEST="${2:-}"; VIO_DEST=1; shift 2 ;;
+    --source)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --source exige un valor.\n' >&2; exit 2; }
+      SOURCE="${2:-}"; VIO_SOURCE=1; shift 2 ;;
+    --manifest)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --manifest exige un valor.\n' >&2; exit 2; }
+      MANIFEST="${2:-}"; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
     --check)    CHECK=1; shift ;;
     --restore-vendor) RESTORE=1; shift ;;
     --no-registration-check) CHECK_REGISTRO=0; shift ;;
-    --host)     HOST="${2:-}"; shift 2 ;;
+    --host)
+      [ $# -ge 2 ] || { printf '[summonaikit] instalador: --host exige un valor.\n' >&2; exit 2; }
+      HOST="${2:-}"; shift 2 ;;
     --quitar-zcode) QUITAR_ZCODE=1; shift ;;
     --quitar-grok) QUITAR_GROK=1; shift ;;
     --quitar-dsh) QUITAR_DSH=1; shift ;;
@@ -2008,7 +2018,7 @@ if [ "$CHECK" -eq 1 ]; then
   # origin/master, o no. .gitattributes fuerza eol=lf en *.sh, asi que el blob
   # y el worktree son comparables tal cual. Sin git, sin ref o sin blob: no se
   # puede juzgar y eso es FALLO (fail-closed), no unknown.
-  _master_juicio='unknown'
+  _master_juicio='no-observable'
   if [ "$PROC_CONOCIDA" -eq 1 ]; then
     _mtmp=''
     _mtmp="$(mktemp "${TMPDIR:-/tmp}/saikit-master-XXXXXX" 2>/dev/null)" || _mtmp=''
@@ -2051,8 +2061,8 @@ if [ "$CHECK" -eq 1 ]; then
     _fallo=1; _causas="$_causas procedencia-desconocida"
   elif [ "$_master_juicio" = 'difiere' ]; then
     _fallo=1; _causas="$_causas fuente-difiere-de-origin/master"
-  elif [ "$_master_juicio" = 'unknown' ]; then
-    _fallo=1; _causas="$_causas juicio-master-unknown"
+  elif [ "$_master_juicio" = 'no-observable' ]; then
+    _fallo=1; _causas="$_causas juicio-master-no-observable"
   fi
   if [ "$_fallo" -eq 0 ]; then
     decir "[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)"
