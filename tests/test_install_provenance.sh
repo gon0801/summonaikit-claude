@@ -61,9 +61,12 @@ fixture_hook() {
 repo_sandbox() {
   local r="$tmp/$1"
   local fecha="${2:-}"
-  mkdir -p "$r/tools" "$r/hooks"
+  mkdir -p "$r/tools/lib" "$r/hooks"
   fixture_hook "$r/hooks/summonaikit-harness.sh"
   cp "$tool" "$r/tools/install-hook.sh"
+  if [ -d "$(dirname "$tool")/lib" ]; then
+    cp -R "$(dirname "$tool")/lib/." "$r/tools/lib/"
+  fi
   ( cd "$r" && git init -q \
     && git -c user.email=t@t -c user.name=t add hooks/summonaikit-harness.sh \
     && if [ -n "$fecha" ]; then
@@ -558,17 +561,18 @@ case "$out" in
   *) malo "C17 no nombro edad-no-observable: [$out]" ;;
 esac
 
-# R1/R2: restaurar_desde_backup. Costura SAIKIT_TEST_RESTAURAR_* evita el
-# flujo de install. R2 aborta a mitad (despues de cmp, antes de mv): DEST
-# queda el anterior, no vacio ni el backup.
+# R1/R2: restaurar_desde_backup se sourcea y se llama. No hay env que
+# desvie el main del instalador. R2 aborta a mitad (despues de cmp,
+# antes de mv): DEST queda el anterior, no vacio ni el backup.
+. "$repo/tools/lib/restaurar_desde_backup.sh"
 caso "R1: restore exitoso deja DEST = backup"
 rb="$tmp/restore-r1"
 mkdir -p "$rb"
 printf 'NUEVO-publicado\n' > "$rb/dest"
 printf 'VIEJO-backup\n' > "$rb/bak"
 sha_bak="$(sha256sum < "$rb/bak")"
-out="$(SAIKIT_TEST_RESTAURAR_BAK="$rb/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb/dest" bash "$tool" 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] || malo "R1 salio $rc: $out"
+restaurar_desde_backup "$rb/bak" "$rb/dest"; rc=$?
+[ "$rc" -eq 0 ] || malo "R1 salio $rc"
 [ "$(sha256sum < "$rb/dest")" = "$sha_bak" ] || malo "R1 DEST no igualo al backup"
 _rbtmp="$(find "$rb" -name '.saikit-restore-*' 2>/dev/null)"
 [ -z "$_rbtmp" ] || malo "R1 dejo un tmp de restore: $_rbtmp"
@@ -579,7 +583,7 @@ mkdir -p "$rb2"
 printf 'NUEVO-publicado\n' > "$rb2/dest"
 printf 'VIEJO-backup\n' > "$rb2/bak"
 sha_nuevo="$(sha256sum < "$rb2/dest")"
-out="$(SAIKIT_RESTORE_ABORT=1 SAIKIT_TEST_RESTAURAR_BAK="$rb2/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb2/dest" bash "$tool" 2>&1)"; rc=$?
+SAIKIT_RESTORE_ABORT=1 restaurar_desde_backup "$rb2/bak" "$rb2/dest"; rc=$?
 [ "$rc" -ne 0 ] || malo "R2 debio fallar el restore, salio 0"
 [ "$(sha256sum < "$rb2/dest")" = "$sha_nuevo" ] \
   || malo "R2 DEST no quedo intacto: $(cat "$rb2/dest")"
@@ -754,22 +758,30 @@ if mut_preparar "$rmut17" 's/# umbral: solo digitos; si no, edad-no-observable/r
 fi
 
 caso "mutacion: restore via cp => R2 la atrapa"
-rmutr="$(repo_sandbox repo-mut-rb)"
-if mut_preparar "$rmutr" 's/# restore: tmp+cmp+mv (no truncar dest)/cp "$1" "$2"; return 0;/' "restore-via-cp"; then
+lib_base="$repo/tools/lib/restaurar_desde_backup.sh"
+lib_mut="$tmp/restaurar-mutado.sh"
+sed 's/# restore: tmp+cmp+mv (no truncar dest)/cp "$1" "$2"; return 0;/' "$lib_base" > "$lib_mut"
+if cmp -s "$lib_base" "$lib_mut"; then
+  malo "mutacion restore-via-cp no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$lib_mut" 2>/dev/null; then
+  malo "mutacion restore-via-cp no parsea; asi no prueba nada"
+else
   rb3="$tmp/restore-mut"
   mkdir -p "$rb3"
   printf 'NUEVO-publicado\n' > "$rb3/dest"
   printf 'VIEJO-backup\n' > "$rb3/bak"
   sha_nuevo="$(sha256sum < "$rb3/dest")"
-  out="$(SAIKIT_RESTORE_ABORT=1 SAIKIT_TEST_RESTAURAR_BAK="$rb3/bak" SAIKIT_TEST_RESTAURAR_DEST="$rb3/dest" bash "$mutado" 2>&1)"; rc=$?
+  (
+    . "$lib_mut"
+    SAIKIT_RESTORE_ABORT=1 restaurar_desde_backup "$rb3/bak" "$rb3/dest"
+  )
   if [ "$(sha256sum < "$rb3/dest")" != "$sha_nuevo" ]; then
     printf '    mutacion restore-via-cp atrapada (R2 en rojo: DEST pisa con cp)\n'
-  elif [ "$rc" -eq 0 ]; then
-    printf '    mutacion restore-via-cp atrapada (R2 en rojo: cp ignora abort)\n'
   else
     malo "mutacion restore-via-cp SOBREVIVIO: DEST intacto con restore=cp"
   fi
 fi
+rm -f "$lib_mut"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_provenance: FAIL" >&2
