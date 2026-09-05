@@ -68,6 +68,7 @@ set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
+. "$here/lib/restaurar_desde_backup.sh"
 
 DEST="${HOME:-}/.claude/hooks/summonaikit-harness.sh"
 SOURCE="$repo/hooks/summonaikit-harness.sh"
@@ -291,31 +292,6 @@ if [ "$CHECK" -eq 1 ]; then
 fi
 
 decir() { printf '%s\n' "$*"; }
-
-# Rollback del hook DEST: tmp en el mismo dir + cmp + mv -f.
-# El dest nunca se trunca: o queda el anterior o el backup entero.
-# Costura de test: SAIKIT_RESTORE_ABORT=1 aborta despues del cmp, antes del mv.
-restaurar_desde_backup() {  # $1=bak $2=dest
-  local bak="$1" dest="$2" dir tmp
-  # restore: tmp+cmp+mv (no truncar dest)
-  dir="$(dirname "$dest")"
-  [ -f "$bak" ] && [ -n "$dest" ] || return 1
-  mkdir -p "$dir" 2>/dev/null || return 1
-  tmp="$(mktemp "$dir/.saikit-restore-XXXXXX")" || return 1
-  if ! cp "$bak" "$tmp" || ! cmp -s "$bak" "$tmp"; then
-    rm -f "$tmp"
-    return 1
-  fi
-  if [ -n "${SAIKIT_RESTORE_ABORT:-}" ]; then
-    rm -f "$tmp"
-    return 1
-  fi
-  mv -f "$tmp" "$dest"
-}
-if [ -n "${SAIKIT_TEST_RESTAURAR_BAK:-}" ]; then
-  restaurar_desde_backup "$SAIKIT_TEST_RESTAURAR_BAK" "${SAIKIT_TEST_RESTAURAR_DEST:?}"
-  exit $?
-fi
 
 # El aviso del REGISTRO (Task 0.3) es el otro requisito del spec para instalar:
 # el archivo puede quedar perfecto y el gate no existir si `settings.json` dejo
