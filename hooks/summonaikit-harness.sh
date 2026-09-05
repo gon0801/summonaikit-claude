@@ -1233,15 +1233,19 @@ AUTOPILOT_P
 
 # Task 10.12 -- el bloque de arriba (numerado 1-6, "1. Understand - ...")
 # describe las ETAPAS en prosa con guion, no la FORMA del recibo que el Stop
-# gate realmente lee (has_receipt_label exige que cada linea EMPIECE con la
-# etiqueta seguida de dos puntos, sin importar el guion). Medido en vivo
+# gate realmente lee (has_receipt_label exige que cada etiqueta EMPIECE su
+# linea, seguida de dos puntos, sin importar el guion). Medido en vivo
 # (2026-08-15): un recibo con las seis compuertas correctas pero decoradas
 # ("Understand -- ...") fue rechazado entero y costo un ciclo completo de
 # revision de los dos del presupuesto. El bloque "Receipt line shape" de mas
 # abajo muestra la forma minima ("Etiqueta: ...") para que el modelo no copie
-# el estilo con guion de la lista numerada al escribir el recibo real. NO se
-# toca el lector (has_receipt_label ya es correcto); esto solo agrega lo que
-# faltaba en el contrato. Atado por caso_g1_contrato_muestra_forma_recibo.
+# el estilo con guion de la lista numerada al escribir el recibo real. Sobre
+# el claim original de esta tarea ("has_receipt_label ya es correcto"
+# respecto del inicio de linea): era FALSO hasta 18.23 — la regex no tenia
+# ancla y una etiqueta a mitad de renglon contaba. 18.23 vuelve real ese
+# claim (el ancla ^) y el bloque de forma afirma ademas la regla de
+# parrafos: cada etiqueta del recibo abre su propio parrafo. Atado por
+# caso_g1_contrato_muestra_forma_recibo.
 harness_context() {
   # r2 (Greptile P1 / CR PR #28): el heredoc con delimitador entrecomillado NO
   # expande $TOOL_HINT — llegaba LITERAL al modelo ("delegate via $TOOL_HINT").
@@ -1345,7 +1349,7 @@ User-facing surface baseline (language/framework/platform agnostic):
 - Meet an accessibility baseline: semantic structure (a labelled region/heading, and a list or table for repeated/tabular data rather than nested generic containers), an accessible name for every control and icon-only action, visible keyboard focus, and a working keyboard path.
 - Keep it responsive for long or overflowing content, and match the repo's existing component/section style instead of a generic template. Reuse the installed UI library's already-accessible primitives rather than re-implementing them.
 
-Receipt line shape (this is what the gate checks, not the numbered stage list above): what matters is that each label is followed by a COLON. A bullet or markdown bold around the label is fine -- "- **Understand**: ..." counts. What does NOT count is replacing the colon with a dash or any other separator: the numbered stage list above is written "1. Understand - ...", and copying that dash into the receipt fails every label at once. Bare, the six lines are:
+Receipt line shape (this is what the gate checks, not the numbered stage list above): each receipt label opens its own paragraph (blank line between paragraphs); never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. What matters within the line is that each label is followed by a COLON. A bullet or markdown bold around the label is fine -- "- **Understand**: ..." counts. What does NOT count is replacing the colon with a dash or any other separator: the numbered stage list above is written "1. Understand - ...", and copying that dash into the receipt fails every label at once. Bare, the six lines are:
 Understand: ...
 Implement: ...
 Verify: ...
@@ -2587,7 +2591,17 @@ has_receipt_label() {
   # y citar el TEMPLATE completo con sus saltos reales sigue contando, porque
   # es indistinguible de un recibo (advisory por diseno). A8 (prosa corrida)
   # intacto: el \n decodificado no es comilla.
-  printf '%s' "$text" | grep -Eiq "(^|[^[:alpha:]'\"])($label|$alt)(\*\*|__)?[[:space:]]*:"
+  # 18.23: el ancla ^ de linea vuelve real lo que el contrato siempre afirmo:
+  # la etiqueta tiene que EMPEZAR su linea (con vineta o negrita permitidas,
+  # como antes). Hasta aca la frontera izquierda era el unico filtro y una
+  # etiqueta pegada a mitad de parrafo contaba igual — un recibo entero en un
+  # solo bloque daba por cumplidas las seis. La cita en prosa (C11,
+  # 'Understand:' entre comillas) queda estructuralmente afuera sin la
+  # frontera de comillas: una cita nunca empieza la linea. LIMITE DECLARADO:
+  # la linea en blanco entre parrafos NO se parsea (los hosts colapsan los
+  # espacios en blanco de forma distinta; exigirla seria fragil) — la regla
+  # de parrafos se AFIRMA en el contrato y en el caso de forma, no se verifica.
+  printf '%s' "$text" | grep -Eiq "^[[:space:]]*(-[[:space:]]+)?(\*\*|__)?($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
 build_gate_feedback() {
@@ -2610,7 +2624,7 @@ Revision loop on failure:
 - Budget: 2 cycles max.
 - Do not blindly retry.
 
-Required receipt shape (each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
+Required receipt shape (each receipt label opens its own paragraph, with a blank line between paragraphs; never glue several labels into one block. ADVERSARY:, ROLE FALLBACK: and VERIFIED BY SUBAGENT: get the same treatment. Each gate is one line whose label is followed by a COLON, inside the receipt block; a bullet or markdown bold around the label is fine, replacing the colon with a dash is not; write them in plain language):
 SUMMONAIKIT HARNESS RECEIPT
 Understand: ...
 Implement: ...
@@ -3017,22 +3031,22 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     missing="$missing- Missing SUMMONAIKIT HARNESS RECEIPT.\n"
   fi
   if ! has_receipt_label "Understand" "Capito" "$text"; then
-    missing="$missing- Missing Understand gate summary (add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n"
+    missing="$missing- Missing Understand gate summary (each receipt label opens its own paragraph: add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n"
   fi
   if ! has_receipt_label "Implement" "Implementazione" "$text"; then
-    missing="$missing- Missing Implement gate summary (add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
+    missing="$missing- Missing Implement gate summary (each receipt label opens its own paragraph: add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
   if ! has_receipt_label "Verify" "Verifica" "$text"; then
-    missing="$missing- Missing Verify gate summary (add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
+    missing="$missing- Missing Verify gate summary (each receipt label opens its own paragraph: add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
   if ! has_receipt_label "Review" "Revisione" "$text"; then
-    missing="$missing- Missing Review gate summary (add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
+    missing="$missing- Missing Review gate summary (each receipt label opens its own paragraph: add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
   if ! has_receipt_label "Close" "Chiusura" "$text"; then
-    missing="$missing- Missing Close gate summary (add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
+    missing="$missing- Missing Close gate summary (each receipt label opens its own paragraph: add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
   if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
-    missing="$missing- Missing Retro gate summary (add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
+    missing="$missing- Missing Retro gate summary (each receipt label opens its own paragraph: add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
   fi
   # Task 13.5 (D4/B1): la linea ADVERSARY del recibo se exige cuando ESTE turno
   # corrio un adversary (,adversary, en agents_seen), en CUALQUIER lane — los
@@ -3047,7 +3061,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     *,adversary,*)
       if ! has_receipt_label "ADVERSARY" "ADVERSARIO" "$text" \
          && ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *ADVERSARY'; then
-        missing="$missing- Missing ADVERSARY line (this turn ran an adversary subagent: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n"
+        missing="$missing- Missing ADVERSARY line (this turn ran an adversary subagent: each receipt label opens its own paragraph: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n"
       fi
       ;;
   esac
