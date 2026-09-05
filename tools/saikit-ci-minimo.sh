@@ -34,9 +34,13 @@ CONCURRENCY_GROUP='${{ github.workflow }}-${{ github.ref }}'
 PIN_SETUP_PYTHON_OWNER='actions/setup-python'
 PIN_SETUP_PYTHON_SHA='a26af69be951a213d495a4c3e4e4022e16d87065'  # v5.6.0
 
+PIN_SETUP_NODE_OWNER='actions/setup-node'
+PIN_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'  # v4.4.0
+
 # DEUDA 18.24: PIN_*_SHA no se refresca. El tag en comentario no mueve el sha.
 # Camino: tools/bump-ci-pins.sh (tag → sha por API, PR) o dependabot sobre
-# estos dos uses:. Fuera de la fila. quality.yml de ESTE repo sigue en tags.
+# checkout / setup-python / setup-node. Fuera de la fila. quality.yml de ESTE
+# repo sigue en tags.
 
 uso() { sed -n '2,20p' "$0"; }
 
@@ -124,10 +128,11 @@ verify_cmd_from() {  # $1=test_cmd → invocacion o die
 }
 
 # AUSENTE = no hay dir (scaffold echo). SOLO_MD = solo md o vacio: omitir.
+# -iname: LEEME.MD (mayusculas) sigue siendo markdown, no TIENE.
 clasif_verify() {  # $1=root → AUSENTE|SOLO_MD|TIENE
   local root="$1"
   [ -d "$root/verify" ] || { printf 'AUSENTE'; return; }
-  if find "$root/verify" -type f ! -name '*.md' 2>/dev/null | grep -q .; then
+  if find "$root/verify" -type f ! -iname '*.md' 2>/dev/null | grep -q .; then
     printf 'TIENE'
     return
   fi
@@ -206,15 +211,23 @@ EOF
 EOF
       ;;
     'pnpm test')
+      # ubuntu-24.04 trae npm/yarn, no pnpm. Sin setup-node + corepack nace rojo.
+      pin_valido "$PIN_SETUP_NODE_SHA" || die "pin setup-node no es sha de 40"
       cat <<EOF
+      - uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA  # v4.4.0
+        with:
+          node-version: '20'
+      - name: Enable pnpm
+        run: corepack enable
       - name: Install deps
         run: pnpm install --frozen-lockfile
 EOF
       ;;
     'python -m pytest')
       pin_valido "$PIN_SETUP_PYTHON_SHA" || die "pin setup-python no es sha de 40"
+      # requirements.txt puede no listar pytest; instalar ambos cierra el hueco.
       if [ -f "$root/requirements.txt" ]; then
-        pip_cmd='pip install -r requirements.txt'
+        pip_cmd='pip install -r requirements.txt && pip install pytest'
       else
         pip_cmd='pip install pytest'
       fi

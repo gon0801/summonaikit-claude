@@ -291,7 +291,11 @@ if ! grep -q -x -F '*' "$SAIKIT_DIR/veredictos/.gitignore" 2>/dev/null; then
 fi
 
 GEN="${SAIKIT_CI_MINIMO:-$HERE/saikit-ci-minimo.sh}"
-bash "$GEN" --ofrecer --root "$ROOT" ${ci_minimo_flag:+--ci-minimo "$ci_minimo_flag"} || exit 2
+# Exit 2 del generador (sin runner, validacion) no tumba el setup: el JSON ya
+# esta escrito. Sin degradar, --ci-minimo si + repo vacio deja config sin YAML.
+if ! bash "$GEN" --ofrecer --root "$ROOT" ${ci_minimo_flag:+--ci-minimo "$ci_minimo_flag"}; then
+  printf 'saikit-setup-autopilot: ci-minimo no se pudo ofrecer o escribir; el setup sigue (config ya persistida)\n'
+fi
 
 printf 'saikit-setup-autopilot: listo: %s\n' "$CFG"
 printf '  merge=%s despliega=%s rama=%s pr=%s\n' "$merge_json" "$despliega_json" "$rama_resp" "${pr_flag:-(sin pr)}"

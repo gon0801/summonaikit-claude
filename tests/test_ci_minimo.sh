@@ -103,7 +103,7 @@ inbox_correr() {  # $1=yml $2=log
   [ -f "$1" ] || return 1
   while IFS= read -r cmd; do
     case "$cmd" in
-      *'npm ci'*|*'npm install'*|*'yarn install'*|*'pnpm install'*|*'pip install'*)
+      *'npm ci'*|*'npm install'*|*'yarn install'*|*'pnpm install'*|*'pip install'*|*'corepack '*)
         printf 'SKIP\t%s\n' "$cmd" >> "$2"
         continue
         ;;
@@ -477,9 +477,17 @@ caso "pytest_toolchain_en_yaml"
     _mal "falta setup-python@40hex: $yml"
   fi
   printf '%s\n' "$yml" | grep -Fq "python-version: '3.12'" || _mal "falta python-version 3.12: $yml"
-  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pip install( pytest| -r requirements\.txt)[[:space:]]*$'; then
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pip install'; then
     _mal "falta pip install: $yml"
   fi
+  # Con requirements.txt + pytest.ini: debe instalar requirements Y pytest.
+  printf 'flask==3.0.0\n' > requirements.txt
+  rm -rf .github
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "con requirements rc=$RC: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Fq 'pip install -r requirements.txt && pip install pytest' \
+    || _mal "requirements sin pytest debe instalar ambos: $yml"
   pip_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pip install' | head -1 | cut -d: -f1)"
   pytest_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*python -m pytest' | head -1 | cut -d: -f1)"
   [ -n "$pip_line" ] && [ -n "$pytest_line" ] && [ "$pip_line" -lt "$pytest_line" ] \
@@ -523,6 +531,44 @@ caso "verify_leeme_no_enciende_verde"
   fi
 }
 fin_caso "verify_leeme_no_enciende_verde"
+
+caso "verify_leeme_md_mayusculas_omite"
+{
+  mkdir -p verify
+  printf '# mapa\n' > verify/LEEME.MD
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'verify/ solo markdown' \
+    || _mal "LEEME.MD debia omitir como SOLO_MD: $OUT"
+  if printf '%s\n' "$(cat "$(yml_dest)")" | grep -Eq '^[[:space:]]*- name: verify/'; then
+    _mal "LEEME.MD no debe emitir paso verify/"
+  fi
+}
+fin_caso "verify_leeme_md_mayusculas_omite"
+
+caso "verify_tiene_emite_mapa"
+{
+  mkdir -p verify
+  printf '#!/usr/bin/env bash\nexit 0\n' > verify/app.sh
+  chmod +x verify/app.sh
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*- name: verify/' \
+    || _mal "TIENE debe emitir paso verify/: $yml"
+  printf '%s\n' "$yml" | grep -Fq 'bash tests/run.sh verify/' \
+    || _mal "verify debe mapear test_cmd: $yml"
+  if printf '%s\n' "$yml" | grep -Fq 'find verify'; then
+    _mal "TIENE no usa find: $yml"
+  fi
+  inbox_correr "$(yml_dest)" "$SB/inbox.log"
+  grep -Eq '^0[[:space:]]+bash tests/run\.sh$' "$SB/inbox.log" \
+    || _mal "test del repo debia ser rc=0: $(cat "$SB/inbox.log")"
+  grep -Eq '^0[[:space:]]+bash tests/run\.sh verify/' "$SB/inbox.log" \
+    || _mal "verify mapeado debia correr: $(cat "$SB/inbox.log")"
+}
+fin_caso "verify_tiene_emite_mapa"
 
 # (c) medido 2026-09-05 vacio/Makefile/Cargo/package.json-sin-test:
 #   rc=0, YAML con run: bash tests/run.sh (fallback inventado).
@@ -606,13 +652,40 @@ caso "pnpm_lock_emite_pnpm"
   yml="$(cat "$(yml_dest)")"
   printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pnpm test[[:space:]]*$' \
     || _mal "pnpm-lock.yaml debia emitir pnpm test: $yml"
+  if ! printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*- uses:[[:space:]]*actions/setup-node@[0-9a-f]{40}'; then
+    _mal "pnpm exige setup-node@40hex (ubuntu no trae pnpm): $yml"
+  fi
+  printf '%s\n' "$yml" | grep -Fq "node-version: '20'" || _mal "falta node-version 20: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*corepack enable[[:space:]]*$' \
+    || _mal "falta corepack enable: $yml"
   printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pnpm install' \
     || _mal "falta pnpm install: $yml"
+  node_line="$(printf '%s\n' "$yml" | grep -n 'uses:[[:space:]]*actions/setup-node' | head -1 | cut -d: -f1)"
+  core_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*corepack enable' | head -1 | cut -d: -f1)"
+  pnpm_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pnpm install' | head -1 | cut -d: -f1)"
+  test_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pnpm test' | head -1 | cut -d: -f1)"
+  [ -n "$node_line" ] && [ -n "$core_line" ] && [ -n "$pnpm_line" ] && [ -n "$test_line" ] \
+    && [ "$node_line" -lt "$core_line" ] && [ "$core_line" -lt "$pnpm_line" ] \
+    && [ "$pnpm_line" -lt "$test_line" ] \
+    || _mal "orden toolchain: setup-node < corepack < install < test ($node_line $core_line $pnpm_line $test_line)"
   if printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm '; then
     _mal "pnpm-lock.yaml no debe emitir npm: $yml"
   fi
 }
 fin_caso "pnpm_lock_emite_pnpm"
+
+caso "setup_sin_runner_degrada"
+{
+  rm -f tests/run.sh
+  correr_setup --ci-minimo si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "setup debia salir 0 tras degradar, dio $RC: $OUT"
+  [ -f .saikit/autopilot.json ] || _mal "config debia persistir: $OUT"
+  [ ! -e "$(yml_dest)" ] || _mal "sin runner no debe haber YAML"
+  printf '%s' "$OUT" | grep -Eq 'ci-minimo no se pudo ofrecer|sin runner' \
+    || _mal "debia avisar la degradacion: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'listo:' || _mal "debia llegar al listo: $OUT"
+}
+fin_caso "setup_sin_runner_degrada"
 
 caso "escrito_cita_el_comando"
 {
@@ -888,11 +961,62 @@ c_yarn() {
   if grep -Eq '^[[:space:]]*run:[[:space:]]*npm ' "$(yml_dest)"; then _mal "emitio npm"; fi
 }
 
+c_pnpm() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Eq '^[[:space:]]*- uses:[[:space:]]*actions/setup-node@[0-9a-f]{40}' "$(yml_dest)" \
+    || _mal "falta setup-node@40hex"
+  grep -Eq 'corepack enable' "$(yml_dest)" || _mal "falta corepack enable"
+}
+
+c_pytest_req() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  printf '[pytest]\n' > pytest.ini
+  printf 'flask==3.0.0\n' > requirements.txt
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Fq 'pip install -r requirements.txt && pip install pytest' "$(yml_dest)" \
+    || _mal "falta pip doble"
+}
+
+c_verify_tiene() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p verify
+  printf 'ok\n' > verify/app.sh
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  grep -Eq '^[[:space:]]*- name: verify/' "$(yml_dest)" || _mal "falta paso verify"
+  grep -Fq 'bash tests/run.sh verify/' "$(yml_dest)" || _mal "falta mapa test_cmd"
+}
+
+c_setup_degrada() {
+  CASO_ROJO=0; sb_reset
+  rm -f tests/run.sh
+  OUT="$(bash "$SETUP" --merge no --despliega no --sin-verify-app no --telegram no --ci-minimo si < /dev/null 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "setup rc=$RC"
+  [ -f .saikit/autopilot.json ] || _mal "sin autopilot.json"
+  [ ! -e "$(yml_dest)" ] || _mal "escribio YAML"
+}
+
+c_leeme_mayus() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p verify
+  printf '# mapa\n' > verify/LEEME.MD
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  printf '%s' "$OUT" | grep -Fq 'verify/ solo markdown' || _mal "no omitio LEEME.MD"
+}
+
 while IFS=$'\t' read -r nombre expr fun sobre; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun" "$sobre"
 done <<'MUTS'
-no_invoca_desde_setup	s|bash "\$GEN" --ofrecer --root "\$ROOT".*|true|	c_wiring	setup
+no_invoca_desde_setup	s|if ! bash "\$GEN" --ofrecer --root "\$ROOT".*|if ! true; then|	c_wiring	setup
 escribe_tag_no_sha	s/PIN_CHECKOUT_SHA=.*/PIN_CHECKOUT_SHA=v4.2.2/	c_uses_sha	gen
 mete_secrets	s/WORKFLOW_NAME='saikit-ci-minimo'/WORKFLOW_NAME='saikit-ci-minimo secrets.FOO'/	c_sin_secrets	gen
 run_solo_en_comentario	s|run: \$test_cmd|run: true  # $test_cmd|	c_run_reales	gen
@@ -905,6 +1029,11 @@ verify_vuelve_a_find	s/printf 'SOLO_MD'/printf 'TIENE'/;s@bash tests/run.sh veri
 fallback_eterno	s/return 2/printf 'bash tests\/run.sh'; return 0/	c_sin_runner	gen
 ubuntu_latest	s/ubuntu-24.04/ubuntu-latest/	c_job	gen
 yarn_emite_npm	s/printf 'yarn test'/printf 'npm test'/	c_yarn	gen
+sin_setup_node_pnpm	s/uses: \$PIN_SETUP_NODE_OWNER@\$PIN_SETUP_NODE_SHA/# uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA/	c_pnpm	gen
+pip_sin_pytest_extra	s/pip install -r requirements.txt \&\& pip install pytest/pip install -r requirements.txt/	c_pytest_req	gen
+tiene_omite_verify	s/printf 'TIENE'/printf 'SOLO_MD'/	c_verify_tiene	gen
+setup_propaga_exit2	s|if ! bash "\$GEN" --ofrecer --root "\$ROOT".*|bash "$GEN" --ofrecer --root "$ROOT" \${ci_minimo_flag:+--ci-minimo "\$ci_minimo_flag"} \|\| exit 2\nif false; then|	c_setup_degrada	setup
+leeme_md_case_sensitive	s/-iname '\*\.md'/-name '*.md'/	c_leeme_mayus	gen
 MUTS
 
 if [ "$fail" -ne 0 ]; then
