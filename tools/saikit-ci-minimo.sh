@@ -56,9 +56,21 @@ workflows_en_disco() {  # $1=root → AUSENTE|PRESENTE
 }
 
 test_npm_real() {  # $1=package.json → 0 si scripts.test parece runner real
+  # Alcance cerrado al objeto scripts (contar llaves). Un "test" en jest/config
+  # fuera de scripts NO cuenta (bug lead #185).
   awk '
-    /"scripts"[[:space:]]*:/ { s=1 }
-    s && /"test"[[:space:]]*:/ { print; exit }
+    /"scripts"[[:space:]]*:/ { in_scripts=1 }
+    in_scripts {
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (c == "{") depth++
+        if (c == "}") {
+          depth--
+          if (depth <= 0) { in_scripts=0; depth=0; break }
+        }
+      }
+      if (in_scripts && /"test"[[:space:]]*:/) { print; exit }
+    }
   ' "$1" | grep -Eq 'node --test|vitest|jest|mocha|npm test'
 }
 
@@ -132,11 +144,23 @@ pin_valido() {  # $1=sha → 0 si ^[0-9a-f]{40}$
   printf '%s' "$1" | grep -Eq '^[0-9a-f]{40}$'
 }
 
-receta_emitir_yaml() {  # $1=test_cmd → YAML por stdout
-  local test_cmd="$1"
+receta_emitir_yaml() {  # $1=root $2=test_cmd → YAML por stdout
+  local root="$1" test_cmd="$2"
+  local install_step=""
   pin_valido "$PIN_CHECKOUT_SHA" || die "pin checkout no es sha de 40"
+  case "$test_cmd" in
+    'npm test')
+      if [ -f "$root/package-lock.json" ]; then
+        install_step='npm ci'
+      else
+        install_step='npm install'
+      fi
+      ;;
+  esac
   cat <<EOF
 name: $WORKFLOW_NAME
+permissions:
+  contents: read
 on:
   push:
   pull_request:
@@ -145,6 +169,16 @@ jobs:
     runs-on: $RUNNER
     steps:
       - uses: $PIN_CHECKOUT_OWNER@$PIN_CHECKOUT_SHA  # $PIN_CHECKOUT_TAG
+        with:
+          persist-credentials: false
+EOF
+  if [ -n "$install_step" ]; then
+    cat <<EOF
+      - name: Install deps
+        run: $install_step
+EOF
+  fi
+  cat <<EOF
       - name: Test del repo
         run: $test_cmd
       - name: verify/
@@ -184,7 +218,21 @@ escribir_atomico() {  # $1=root $2=yaml
     die "no se pudo escribir $dest"
   fi
   yaml_seguro "$(cat "$tmp")" || { rm -f "$tmp"; exit 2; }
-  mv -f "$tmp" "$dest" || { rm -f "$tmp"; die "no se pudo escribir $dest"; }
+  # Gancho SOLO de test: simula que el destino aparece entre consentimiento y publish.
+  if [ -n "${SAIKIT_CI_BEFORE_WRITE:-}" ]; then
+    ( cd "$root" && eval "$SAIKIT_CI_BEFORE_WRITE" ) || true
+  fi
+  # Rechequeo de carrera: algo pudo crear workflows mientras la oferta pendia.
+  if [ -e "$dest" ] || [ "$(workflows_en_disco "$root")" = PRESENTE ]; then
+    rm -f "$tmp"
+    die "carrera: ya hay workflow; no se pisa"
+  fi
+  # mv -n no reemplaza; si el destino aparece entre el rechequeo y el mv,
+  # el temporal sigue ahi y lo tratamos como carrera.
+  if ! mv -n "$tmp" "$dest" 2>/dev/null || [ -e "$tmp" ]; then
+    rm -f "$tmp"
+    die "carrera: el destino aparecio al publicar; no se pisa"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -204,7 +252,7 @@ ofrecer() {
   case "$voluntad" in
     SI)
       test_cmd="$(detectar_test_cmd "$root")"
-      yaml="$(receta_emitir_yaml "$test_cmd")" || exit 2
+      yaml="$(receta_emitir_yaml "$root" "$test_cmd")" || exit 2
       escribir_atomico "$root" "$yaml"
       printf 'saikit-ci-minimo: escrito %s\n' "$DESTINO_REL"
       ;;

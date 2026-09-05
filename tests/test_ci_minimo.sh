@@ -612,6 +612,32 @@ c_default_no() {
   fi
 }
 
+c_permisos() {
+  CASO_ROJO=0; sb_reset
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  RC=$?
+  [ -f "$(yml_dest)" ] || { _mal "no escribio el workflow: $OUT"; return; }
+  yml="$(cat "$(yml_dest)")"
+  printf '%s\n' "$yml" | grep -Eq '^permissions:' || _mal "falta permissions:"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*contents:[[:space:]]*read[[:space:]]*$' \
+    || _mal "falta contents: read"
+  printf '%s\n' "$yml" | grep -Eq 'persist-credentials:[[:space:]]*false' \
+    || _mal "falta persist-credentials: false"
+}
+
+c_carrera() {
+  CASO_ROJO=0; sb_reset
+  export SAIKIT_CI_BEFORE_WRITE='mkdir -p .github/workflows; printf "name: competidor\n" > .github/workflows/saikit-ci-minimo.yml'
+  OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  RC=$?
+  unset SAIKIT_CI_BEFORE_WRITE
+  [ -f "$(yml_dest)" ] || { _mal "falta el destino: $OUT"; return; }
+  if grep -Fq 'name: saikit-ci-minimo' "$(yml_dest)"; then
+    _mal "piso el workflow de la carrera"
+  fi
+  grep -Fq 'name: competidor' "$(yml_dest)" || _mal "no preservo competidor"
+}
+
 while IFS=$'\t' read -r nombre expr fun sobre; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun" "$sobre"
@@ -621,6 +647,9 @@ escribe_tag_no_sha	s/PIN_CHECKOUT_SHA=.*/PIN_CHECKOUT_SHA=v4.2.2/	c_uses_sha	gen
 mete_secrets	s/WORKFLOW_NAME='saikit-ci-minimo'/WORKFLOW_NAME='saikit-ci-minimo secrets.FOO'/	c_sin_secrets	gen
 run_solo_en_comentario	s|run: \$test_cmd|run: true  # $test_cmd|	c_run_reales	gen
 default_no_escribe_igual	s/printf 'DEFAULT_NO'/printf 'SI'/	c_default_no	gen
+sin_permissions	s/^permissions:/#permissions:/	c_permisos	gen
+persist_credentials_on	s/persist-credentials: false/persist-credentials: true/	c_permisos	gen
+carrera_sin_guarda	s/if \[ -e "\$dest" \] || \[ "\$(workflows_en_disco "\$root")" = PRESENTE \]; then/if false; then/;s/mv -n/mv -f/;s/|| \[ -e "\$tmp" \]/|| false/	c_carrera	gen
 MUTS
 
 if [ "$fail" -ne 0 ]; then
