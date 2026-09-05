@@ -200,8 +200,9 @@ es_bad="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$bad_repo")"
 # ---------------------- date BSD (sin -d): el sello se interpreta igual ----------
 # Rojo medido 2026-09-05 en macOS: `date -d` es GNU-only y sin el fallback
 # `-j -f` TODO sello databa `unknown` aun estando al dia. El shim simula BSD:
-# rechaza -d; en -j delega al date real BSD si lo entiende (macOS) o lo emula
-# con -d si el real es GNU (CI Linux), para que el caso corra en ambos.
+# rechaza -d; en -j/-r delega al date real BSD si lo entiende (macOS) o lo
+# emula con -d si el real es GNU (CI Linux: ojo, en GNU `-r` es mtime de
+# archivo, NO epoch — sin la emulacion el round-trip de fecha_epoch falla).
 caso "date sin -d (BSD): el sello databa y estado == al_dia"
 bsd_bin="$SANDBOX/bin-bsd"; mkdir -p "$bsd_bin"
 date_real="$(command -v date)"
@@ -214,6 +215,10 @@ if [ "\$1" = "-j" ]; then
   "$date_real" -j -f "\$3" "\$4" "\$5" 2>/dev/null && exit 0
   [ "\$3" = "%Y-%m-%d" ] && [ "\$5" = "+%s" ] || exit 1
   exec "$date_real" -d "\$4" "+%s"
+fi
+if [ "\$1" = "-r" ]; then
+  "$date_real" -r "\$2" "\$3" 2>/dev/null && exit 0
+  exec "$date_real" -d "@\$2" "\$3"
 fi
 exec "$date_real" "\$@"
 EOF
