@@ -7,6 +7,19 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #185 / Task 18.8 (CI minimo cuando no hay) — deploy: skill actualizada, hook sin cambios
+
+- **SHA:** merge `4051e69`, head `32e3682`, CI 9/9 (run 33984924089).
+- **Deploy:** `install-hook.sh` replanta la skill `saikit-setup-autopilot` (su
+  `SKILL.md` cambio: ahora ofrece el CI minimo). Hook `YA AL DIA`. `--check`
+  sigue rojo por diseno (codex sin registro).
+- **Que se mergeo:** generador de workflow pinneado a sha, con minimo
+  privilegio y sin secretos; cableado al setup; veto en el camino de merge.
+- **Cuatro hallazgos de CodeRabbit verificados y cerrados** (alcance del awk,
+  instalacion de deps, minimo privilegio, carrera de publicacion).
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesion claude).
+
 ## 2026-09-05 — PR #186 / Task 18.19 (portabilidad macOS de la bateria + canal de skip) — deploy NO-OP
 
 - **SHA:** merge `02fa21b`, head `b9b6a41`, CI 9/9 (run 33952631797). Hook sin cambios:
