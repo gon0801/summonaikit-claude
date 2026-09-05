@@ -3979,7 +3979,7 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 # $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
 # (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
 # (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_permite_git_push_feature caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
+CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_permite_git_push_feature caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
 
 _g7_plantar_hatch() {
   unset SAIKIT_KIT_MANIFEST
@@ -4056,6 +4056,27 @@ caso_g7_hatch_basename_ok() {
   _g7_plantar_hatch match
   lab_run auto claude "$(lab_payload_pretool_bash "$LAB/proyecto/tools/saikit-merge.sh --confirmado")"
   _g7_assert_allow
+}
+
+# Hatch + hash ok NO es permiso para encadenar un merge a pelo en el
+# mismo comando (; / && / orden invertido). D24: nunca allow si el
+# patron a pelo matchea, aunque el hatch este pinneado.
+caso_g7_niega_cadena_hatch_gh_pr() {
+  _g7_plantar_hatch match
+  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run; gh pr merge 1')"
+  _g7_assert_deny
+}
+
+caso_g7_niega_cadena_hatch_and_gh_pr() {
+  _g7_plantar_hatch match
+  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run && gh pr merge 1')"
+  _g7_assert_deny
+}
+
+caso_g7_niega_cadena_gh_pr_hatch() {
+  _g7_plantar_hatch match
+  lab_run auto claude "$(lab_payload_pretool_bash 'gh pr merge 1; bash tools/saikit-merge.sh --dry-run')"
+  _g7_assert_deny
 }
 
 caso_g7_no_bash_permite() {

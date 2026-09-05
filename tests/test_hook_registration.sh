@@ -299,7 +299,7 @@ printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "debe reportar que el m
 
 caso "matcher '*' cubre Agent y calla"
 cat > "$tmp/star.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -307,7 +307,7 @@ out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 
 caso "un matcher cubierto entre varios grupos => calla"
 cat > "$tmp/mix.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -315,7 +315,7 @@ out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 
 caso "base sin Agent + local con Agent => calla"
 cat > "$tmp/base-noagent.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 cat > "$tmp/local-agent.json" <<'JSON'
 { "hooks": { "PostToolUse": [{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }

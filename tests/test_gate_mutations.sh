@@ -178,6 +178,7 @@ G7|pretool_git_push_protegida_apagado|el patron git push a master|main se apaga 
 G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
 G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
+G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -892,6 +893,9 @@ mut_pretool_git_push_protegida_apagado() { sed 's/git\[\[:space:\]\]+push/git[[:
 mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 0; }/'; }
 mut_pretool_hatch_nunca_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 1; }/'; }
 mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;//'; }
+# Restaura el short-circuit hatch-primero: hash ok => allow aunque el
+# mismo comando tambien traiga gh pr merge / gh api /merge / git push.
+mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd"; then/if pretool_es_hatch "$_pt_cmd"; then if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then emit_allow; fi; emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"; fi; if pretool_es_gh_pr_merge "$_pt_cmd"; then/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

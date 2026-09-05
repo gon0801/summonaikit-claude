@@ -3283,15 +3283,16 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
 #
 # Tabla de decision (inputs: tool_name, command_text, cwd):
 #   no-Bash                         → pass (emit_allow, stdout vacio)
-#   token saikit-merge.sh           → hatch: hash == pin o deny (fail-closed)
-#   texto 'gh pr merge'             → deny
+#   texto 'gh pr merge'             → deny  (siempre; tambien encadenado a hatch)
 #   texto gh api … /merge           → deny
 #   git push + dest master|main     → deny  (conjunto minimo D24)
+#   token saikit-merge.sh           → hatch: hash == pin o deny (fail-closed)
 #   resto                           → pass
-# Infra de un comando que NO es merge: fail-open. Un 'gh pr merge' claro
-# nunca se deja pasar porque fallo el hash. Pin: tools/MANIFEST.sha256
-# (hermano del script resuelto) o SAIKIT_KIT_MANIFEST (solo ruta, no flag).
-# Escapes del command quedan crudos (mismo limite que el Bash del adversary).
+# Los patrones a pelo van PRIMERO: un hatch pinneado no es permiso para
+# `…; gh pr merge` / `&&` / orden invertido en el mismo command. Pin:
+# tools/MANIFEST.sha256 (hermano del script resuelto) o SAIKIT_KIT_MANIFEST
+# (solo ruta, no flag). Escapes del command quedan crudos (mismo limite
+# que el Bash del adversary). Infra de un comando que NO es merge: fail-open.
 
 emit_pretool_deny() {
   escaped="$(json_escape "$1")"
@@ -3351,12 +3352,6 @@ pretool_merge_guard() {
   _pt_cmd="$(json_tool_input_string command)"
   [ -n "$_pt_cmd" ] || _pt_cmd="$(json_tool_input_string command toolInput)"
   _pt_cwd="$(json_top_level_string cwd)"
-  if pretool_es_hatch "$_pt_cmd"; then
-    if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
-      emit_allow
-    fi
-    emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"
-  fi
   if pretool_es_gh_pr_merge "$_pt_cmd"; then
     emit_pretool_deny "merge denied: use tools/saikit-merge.sh (not gh pr merge)"
   fi
@@ -3365,6 +3360,12 @@ pretool_merge_guard() {
   fi
   if pretool_es_git_push_protegida "$_pt_cmd"; then
     emit_pretool_deny "merge denied: git push to master/main is blocked; use tools/saikit-merge.sh"
+  fi
+  if pretool_es_hatch "$_pt_cmd"; then
+    if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
+      emit_allow
+    fi
+    emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"
   fi
   emit_allow
 }
