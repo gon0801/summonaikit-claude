@@ -59,7 +59,7 @@
 # 18.20 --check (no escribe NADA, ni siquiera crea directorios):
 #   0  todas las copias esperadas al dia Y procedencia conocida Y la fuente es
 #      byte a byte el hook de origin/master
-#   1  alguna copia difiere/falta/no observable, procedencia desconocida, o la
+#   1  alguna copia difiere/falta/no observable, procedencia no conocida, o la
 #      fuente no es el hook de origin/master. Es FALLO, no unknown: no poder
 #      verificar "vivo == master" cierra en falso, jamas en silencio.
 #   2  uso invalido (el conjunto autoritativo no se achica: sin --dest, sin
@@ -1894,18 +1894,25 @@ _proc_es_sha() {  # $1=candidato -> 0 si son 40 hex
 }
 PROC_CONOCIDA=0
 PROC_RAMA=''; PROC_SHA=''; PROC_SUCIO='no'; PROC_SIN_SEG=0
-PROC_COINCIDE='desconocida'; PROC_MOTIVO=''
+# coincide=unknown (jamas "desconocida"): DESCONOCIDO es el tercer estado del
+# instalador y un juicio que no se pudo hacer es no-observable (Core Rule 2,
+# caso 12.9 #2). Solo la linea de procedencia-sin-git dice "desconocida", que
+# es el literal que la DoD exige.
+PROC_COINCIDE='unknown'; PROC_MOTIVO=''
 if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
   PROC_MOTIVO='git-no-disponible'
 elif ! "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
   PROC_MOTIVO='no-es-repo-git'
 else
   _st="$("$GIT_BIN" -C "$repo" status --porcelain=v1 -b 2>/dev/null)" || _st=''
-  _rp="$("$GIT_BIN" -C "$repo" rev-parse HEAD origin/master 2>/dev/null)" || _rp=''
-  _head=''; _master=''
-  { IFS= read -r _head; IFS= read -r _master; } <<_PROC_EOF
-$_rp
-_PROC_EOF
+  # HEAD y origin/master en DOS llamadas SEPARADAS a proposito: en una sola
+  # (`rev-parse HEAD origin/master`), si el ref no existe git imprime el sha
+  # de HEAD, luego el literal, y devuelve 128 — el || vaciaba AMBOS y caia en
+  # un "sin-commits" falso. El checkout de CI es shallow y no trae ese ref
+  # (igual que un clone --depth 1): sin ref remoto, rama y sha igual se
+  # conocen y lo unico unknown es el coincide.
+  _head="$("$GIT_BIN" -C "$repo" rev-parse HEAD 2>/dev/null)" || _head=''
+  _master="$("$GIT_BIN" -C "$repo" rev-parse origin/master 2>/dev/null)" || _master=''
   if ! _proc_es_sha "$_head"; then
     PROC_MOTIVO='sin-commits'
   else
@@ -1955,7 +1962,7 @@ if [ "$PROC_CONOCIDA" -eq 1 ]; then
   _ff='por-defecto'
   [ "$VIO_SOURCE" -eq 1 ] && _ff='explicita'
   decir "[summonaikit] procedencia: rama=$PROC_RAMA sha=$PROC_SHA sucio=$PROC_SUCIO sin_seguimiento=$PROC_SIN_SEG coincide_origin_master=$PROC_COINCIDE fuente=$_ff fuente_sha256=$_fsh"
-  if [ "$PROC_COINCIDE" != 'desconocida' ]; then
+  if [ "$PROC_COINCIDE" != 'unknown' ]; then
     decir "[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo)."
   else
     decir "[summonaikit] procedencia: sin ref-local origin/master; un 'git fetch' permite juzgar coincide_origin_master."
@@ -1999,7 +2006,7 @@ if [ "$CHECK" -eq 1 ]; then
   # origin/master, o no. .gitattributes fuerza eol=lf en *.sh, asi que el blob
   # y el worktree son comparables tal cual. Sin git, sin ref o sin blob: no se
   # puede juzgar y eso es FALLO (fail-closed), no unknown.
-  _master_juicio='desconocido'
+  _master_juicio='unknown'
   if [ "$PROC_CONOCIDA" -eq 1 ]; then
     _mtmp=''
     _mtmp="$(mktemp "${TMPDIR:-/tmp}/saikit-master-XXXXXX" 2>/dev/null)" || _mtmp=''
@@ -2042,8 +2049,8 @@ if [ "$CHECK" -eq 1 ]; then
     _fallo=1; _causas="$_causas procedencia-desconocida"
   elif [ "$_master_juicio" = 'difiere' ]; then
     _fallo=1; _causas="$_causas fuente-difiere-de-origin/master"
-  elif [ "$_master_juicio" = 'desconocido' ]; then
-    _fallo=1; _causas="$_causas juicio-master-desconocido"
+  elif [ "$_master_juicio" = 'unknown' ]; then
+    _fallo=1; _causas="$_causas juicio-master-unknown"
   fi
   if [ "$_fallo" -eq 0 ]; then
     decir "[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)"
