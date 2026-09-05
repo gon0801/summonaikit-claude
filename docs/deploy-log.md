@@ -7,6 +7,22 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #186 / Task 18.19 (portabilidad macOS de la bateria + canal de skip) — deploy NO-OP
+
+- **SHA:** merge `02fa21b`, head `b9b6a41`, CI 9/9 (run 33952631797). Hook sin cambios:
+  `install-hook.sh` YA AL DIA; `--check` sigue rojo por diseño (codex sin
+  registro).
+- **Medido en la Mac del operador, partición rápida SIN GNU coreutils:**
+  `test_gate_behavior` pasa de FAIL (master) a PASS (rama); golden_harness,
+  restore_vendor, recetas, runner_guards, install_hook, install_provenance
+  PASS; 12 casos contados como skip en categoría aparte. **Cero regresiones**:
+  los diez tests que siguen rojos fallan idénticos en master.
+- **Declaración incompleta, corregida:** qwen nombró 2 de esos 10; los otros 8
+  van a la fila 18.22 con su primera aserción medida. El runner todavía cierra
+  FAIL en macOS — por causas fuera de esta fila, ahora nombradas.
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-05 — PR #182 / Task 18.21 (registro, edad del ref y rollback) — deploy a las 4 copias; `--check` ROJO por diseño
 
 - **SHA:** merge `f9cf872`, head `94d2f7f`, CI 9/9 (run 33948364332). Hook sin cambios.
