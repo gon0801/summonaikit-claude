@@ -7,6 +7,19 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #196 (verificar-app: fecha_epoch valida calendario por round-trip) — deploy: skill replantada, hook sin cambios
+
+- **SHA:** merge `f546b3e`, head `ce791dc`, CI 8/8 con `gate` verde (run 33997623419).
+- **Deploy:** hook `YA AL DIA`; la skill viva `verificar.sh` quedo byte a byte
+  con master (diff verificado tras `install-hook.sh`).
+- **Que se mergeo:** follow-up del adversary de grok sobre el PR #194 (1 Act on
+  MEDIUM, 2 Dismissed medidos): BSD desbordaba dias inexistentes
+  (`2026-09-31` → `al_dia`); ahora guarda de formato + round-trip ⇒ `unknown`.
+  Un CI rojo en el camino: el shim BSD del test no emulaba `-r` (en GNU es
+  mtime de archivo, no epoch) — corregido en `ce791dc`.
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión kimi).
+
 ## 2026-09-05 — PR #194 (verificar-app: fecha del sello portable + verify/ del kit) — deploy: skill replantada, hook sin cambios
 
 - **SHA:** merge `7b19796`, head `0cc5aa9`, CI 8/8 con `gate` verde (run 33995017989).
