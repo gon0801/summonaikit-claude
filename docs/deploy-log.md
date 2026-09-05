@@ -7,6 +7,29 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #179 / Task 18.20 (el instalador declara procedencia y `--check` recorre todas las copias) — deploy a las 4 copias
+
+- **SHA:** merge `914dc4a`, head `a9bf51e`, CI 9/9 (run 33934855275). Hook sin cambios.
+- **Deploy por copia, como manda el `AGENTS.md` nuevo:** claude `YA AL DIA`,
+  grok `YA AL DIA`, dsh `YA AL DIA`, codex **instalado por primera vez** (la copia
+  no existía en esta Mac).
+- **Primer `--check` real — la razón de ser de la fila:** ROJO al primer intento,
+  `codex: falta (copia ausente) ⇒ veredicto=fallo`. Cierre en fallo, no en
+  silencio: codex nunca se había cableado y nada lo decía. Tras cablearlo,
+  `veredicto=ok (copias al dia; fuente = bytes de origin/master)`, rc=0.
+- **Procedencia declarada en cada corrida:** `rama=master sha=914dc4a… sucio=no
+  coincide_origin_master=si`, juicio contra el ref local sin fetch, y lo dice.
+- **Registro:** `check-hook-registration.sh` exit 0 en claude. Para codex el
+  propio instalador reporta el registro como `unknown` («no se pudo mirar»);
+  no se afirma cableado. Residual declarado.
+- **`check-deploy-log.sh`:** OK sobre este log (2 entradas juzgadas desde el
+  corte, ordenadas, sin PR duplicado). `audita-ledger` OK.
+- **Cuatro rondas de review**, tres de ellas con CI rojo por colisiones de la
+  línea nueva de procedencia con guardianes viejos (`desconocid`, `unknown`);
+  la salida fue de diseño: el campo lleva la razón, no un estado. Detalle en
+  el PR y en la fila.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-04 — Deploy correctivo fuera de PR: grok y dsh estaban CINCO filas atras
 
 - **Qué pasó:** el cross-review de grok sobre el protocolo de deploy destapó que
