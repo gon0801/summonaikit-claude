@@ -247,6 +247,14 @@ EOF
 }
 
 # --- estado del mapa ----------------------------------------------------------
+# fecha a epoch PORTABLE: `date -d` es GNU-only; el date de BSD (macOS) usa
+# `-j -f`. Probar GNU primero y caer a BSD es identico en ambos (rojo medido en
+# macOS: sin el fallback, todo sello databa `unknown` aun estando al dia).
+fecha_epoch() {  # $1=YYYY-MM-DD → epoch por stdout, o nada si no se interpreta
+  date -d "$1" +%s 2>/dev/null && return 0
+  date -j -f %Y-%m-%d "$1" +%s 2>/dev/null
+}
+
 estado_mapa() {
   local repo="$1" leeme="$1/verify/LEEME.md"
   [ -f "$leeme" ] || { printf 'sin_mapa'; return 0; }
@@ -265,10 +273,11 @@ estado_mapa() {
   # se puede datar y NO se afirma "al dia". Un sello con fecha ilegible es un
   # sello roto — reportarlo al dia seria el "aprobado sin medir" que el sello
   # existe para impedir: mediria la deriva justo cuando mas hace falta.
-  if [ -z "$fecha" ] || ! date -d "$fecha" >/dev/null 2>&1; then
-    printf 'unknown'; return 0
-  fi
-  dias=$(( ( $(date +%s) - $(date -d "$fecha" +%s) ) / 86400 ))
+  if [ -z "$fecha" ]; then printf 'unknown'; return 0; fi
+  local ep
+  ep="$(fecha_epoch "$fecha")"
+  [ -n "$ep" ] || { printf 'unknown'; return 0; }
+  dias=$(( ( $(date +%s) - ep ) / 86400 ))
   if [ "$dias" -gt 30 ]; then printf 'viejo'; return 0; fi
   printf 'al_dia'
 }

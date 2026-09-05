@@ -23,6 +23,13 @@ caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 necesita() { printf '%s' "$1" | grep -q "$2" || malo "$3"; }
 
+# 18.19 — sed in place PORTABLE (mismo patron de test_recetas.sh): `sed -i`
+# sin sufijo es GNU-only; temporal + mv es identico en GNU, BSD y MSYS2.
+sed_i() {  # $1 = script sed, $2 = archivo a editar en el lugar
+  sed "$1" "$2" > "$2.saikit-new" || { rm -f "$2.saikit-new"; return 1; }
+  mv "$2.saikit-new" "$2"
+}
+
 # La fuente del hook que define TEST_RUNNER_RE (leccion de la Task 3.5: medir
 # la fuente, no el instalado).
 hook_vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
@@ -139,7 +146,7 @@ necesita "$(cat "$none_repo/verify/LEEME.md")" "verify_app: n/a" "sin framework 
 caso "sello ausente => verifier declara unknown, nunca 'al dia'"
 # estado lee SIEMPRE verify/LEEME.md; para probar el caso, quitamos el sello del
 # que estado va a leer y comprobamos que diga unknown (y jamas al_dia).
-sed -i '/^generado:/d' "$node_repo/verify/LEEME.md"
+sed_i '/^generado:/d' "$node_repo/verify/LEEME.md"
 estado="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$node_repo")"
 [ "$estado" = "unknown" ] || malo "sin sello el estado debe ser 'unknown', da $estado"
 [ "$estado" != "al_dia" ] || malo "sin sello NUNCA puede decir 'al dia'"
@@ -189,5 +196,29 @@ printf 'generado: fecha-invalida · %s\n' "$bad_sha" > "$bad_repo/verify/LEEME.m
 es_bad="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$bad_repo")"
 [ "$es_bad" = "unknown" ] || malo "fecha rota debe ser 'unknown', da $es_bad"
 [ "$es_bad" != "al_dia" ] || malo "fecha rota NUNCA puede decir 'al dia' (el sello no se pudo datar)"
+
+# ---------------------- date BSD (sin -d): el sello se interpreta igual ----------
+# Rojo medido 2026-09-05 en macOS: `date -d` es GNU-only y sin el fallback
+# `-j -f` TODO sello databa `unknown` aun estando al dia. El shim simula BSD:
+# rechaza -d; en -j delega al date real BSD si lo entiende (macOS) o lo emula
+# con -d si el real es GNU (CI Linux), para que el caso corra en ambos.
+caso "date sin -d (BSD): el sello databa y estado == al_dia"
+bsd_bin="$SANDBOX/bin-bsd"; mkdir -p "$bsd_bin"
+date_real="$(command -v date)"
+cat > "$bsd_bin/date" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+  if [ "\$a" = "-d" ]; then echo "date: illegal option -- d" >&2; exit 1; fi
+done
+if [ "\$1" = "-j" ]; then
+  "$date_real" -j -f "\$3" "\$4" "\$5" 2>/dev/null && exit 0
+  [ "\$3" = "%Y-%m-%d" ] && [ "\$5" = "+%s" ] || exit 1
+  exec "$date_real" -d "\$4" "+%s"
+fi
+exec "$date_real" "\$@"
+EOF
+chmod +x "$bsd_bin/date"
+es_bsd="$(PATH="$bsd_bin:$PATH" SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$py_repo")"
+[ "$es_bsd" = "al_dia" ] || malo "con date BSD (sin -d) el estado debe ser al_dia, da $es_bsd"
 
 [ "$fail" -eq 0 ] && echo "test_verificar_app: OK" || { echo "test_verificar_app: FAIL" >&2; exit 1; }
