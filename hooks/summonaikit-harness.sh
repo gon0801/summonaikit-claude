@@ -3266,6 +3266,110 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   emit_gate_failure "$feedback"
 }
 
+# >>> SAIKIT-PRETOOL-MERGE v1 (Task 18.11 / D24) >>>
+# Medicion citada: https://code.claude.com/docs/en/hooks
+# PreToolUse niega con stdout JSON y exit 0 (exit != 0 = crash, puede
+# fail-open). NO reusar {"decision":"block"} del Stop.
+#
+# Snippet para settings.json del operador (Claude; operator-owned —
+# install-hook.sh NO escribe settings.json, igual que SessionStart / 10.6):
+#   "PreToolUse": [
+#     { "matcher": "Bash",
+#       "hooks": [{ "type": "command",
+#         "command": "SUMMONAIKIT_HOOK_TARGET=claude bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" }] }
+#   ]
+# NO fijar SUMMONAIKIT_HOOK_PHASE=tool: el env pisa el payload y este brazo
+# no corre. PHASE unset (hook_event_name → pretool) o =pretool.
+#
+# Tabla de decision (inputs: tool_name, command_text, cwd):
+#   no-Bash                         → pass (emit_allow, stdout vacio)
+#   token saikit-merge.sh           → hatch: hash == pin o deny (fail-closed)
+#   texto 'gh pr merge'             → deny
+#   texto gh api … /merge           → deny
+#   git push + dest master|main     → deny  (conjunto minimo D24)
+#   resto                           → pass
+# Infra de un comando que NO es merge: fail-open. Un 'gh pr merge' claro
+# nunca se deja pasar porque fallo el hash. Pin: tools/MANIFEST.sha256
+# (hermano del script resuelto) o SAIKIT_KIT_MANIFEST (solo ruta, no flag).
+# Escapes del command quedan crudos (mismo limite que el Bash del adversary).
+
+emit_pretool_deny() {
+  escaped="$(json_escape "$1")"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$escaped"
+  exit 0
+}
+
+pretool_es_gh_pr_merge() { printf '%s' "$1" | grep -Fq 'gh pr merge'; }
+pretool_es_gh_api_merge() { printf '%s' "$1" | grep -Eq 'gh[[:space:]]+api[^[:cntrl:]]*/merge'; }
+pretool_es_git_push_protegida() {
+  printf '%s' "$1" | grep -Eq 'git[[:space:]]+push' || return 1
+  printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]_-])(master|main)([^[:alnum:]_-]|$)'
+}
+pretool_es_hatch() { printf '%s' "$1" | grep -q 'saikit-merge\.sh'; }
+pretool_token_hatch() {
+  printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+saikit-merge\.sh' | head -n 1
+}
+pretool_pins_iguales() { [ "$1" = "$2" ]; }
+
+pretool_hatch_verifica() {
+  _pt_cmd="$1"
+  _pt_cwd="$2"
+  _pt_tok="$(pretool_token_hatch "$_pt_cmd")"
+  [ -n "$_pt_tok" ] || return 1
+  case "$_pt_tok" in
+    /*|[A-Za-z]:*) _pt_path="$_pt_tok" ;;
+    *)
+      if [ -n "$_pt_cwd" ]; then
+        _pt_path="$_pt_cwd/$_pt_tok"
+      else
+        _pt_path="$_pt_tok"
+      fi
+      ;;
+  esac
+  [ -f "$_pt_path" ] || return 1
+  _pt_dir="$(cd "$(dirname "$_pt_path")" 2>/dev/null && pwd)" || return 1
+  _pt_path="$_pt_dir/$(basename "$_pt_path")"
+  if [ -n "${SAIKIT_KIT_MANIFEST:-}" ]; then
+    _pt_pin="$SAIKIT_KIT_MANIFEST"
+  else
+    _pt_pin="$_pt_dir/MANIFEST.sha256"
+  fi
+  [ -f "$_pt_pin" ] || return 1
+  _pt_esp="$(awk -F '\t' '/^#/ {next} $2=="saikit-merge.sh" {print $1; exit}' "$_pt_pin")"
+  [ -n "$_pt_esp" ] || return 1
+  _pt_real="$(sha256sum "$_pt_path" 2>/dev/null | cut -c1-64)"
+  [ -n "$_pt_real" ] || return 1
+  pretool_pins_iguales "$_pt_real" "$_pt_esp"
+}
+
+pretool_merge_guard() {
+  _pt_tool="$(json_top_level_string tool_name)"
+  [ -n "$_pt_tool" ] || _pt_tool="$(json_top_level_string toolName)"
+  if [ "$_pt_tool" != "Bash" ]; then
+    emit_allow
+  fi
+  _pt_cmd="$(json_tool_input_string command)"
+  [ -n "$_pt_cmd" ] || _pt_cmd="$(json_tool_input_string command toolInput)"
+  _pt_cwd="$(json_top_level_string cwd)"
+  if pretool_es_hatch "$_pt_cmd"; then
+    if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
+      emit_allow
+    fi
+    emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"
+  fi
+  if pretool_es_gh_pr_merge "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: use tools/saikit-merge.sh (not gh pr merge)"
+  fi
+  if pretool_es_gh_api_merge "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: use tools/saikit-merge.sh (not gh api /merge)"
+  fi
+  if pretool_es_git_push_protegida "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: git push to master/main is blocked; use tools/saikit-merge.sh"
+  fi
+  emit_allow
+}
+# <<< SAIKIT-PRETOOL-MERGE v1 <<<
+
 if [ -z "$PHASE" ]; then
   # 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no
   # hook_event_name (5.1 midio ambos; 5.2 midio camel-only). Sin leer camel,
@@ -3278,10 +3382,13 @@ if [ -z "$PHASE" ]; then
   # PHASE=tool y NUNCA armaria — es el defecto que esta task cierra aunque la
   # ceremonia (7.4) no se prenda. post_tool_use/subagent_start ya caen a tool,
   # que es lo que se quiere: record_tool_evidence anota roles y runners.
+  # 18.11: PreToolUse NUNCA cae a tool — record_tool_evidence acreditaria el
+  # comando como si ya hubiera corrido y despues emit_allow.
   case "$event" in
     UserPromptSubmit|beforeSubmitPrompt|user_prompt_submit) PHASE="prompt" ;;
     SessionStart|sessionStart|session_start) PHASE="session" ;;
     Stop|stop) PHASE="stop" ;;
+    PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;
     *) PHASE="tool" ;;
   esac
 fi
@@ -3290,5 +3397,6 @@ case "$PHASE" in
   prompt|session) start_harness ;;
   tool) record_tool_evidence ;;
   stop|verify) stop_gate ;;
+  pretool) pretool_merge_guard ;;
   *) emit_allow ;;
 esac

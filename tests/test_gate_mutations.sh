@@ -172,6 +172,12 @@ G3|adv_fallback_sin_adversary|la sustitucion ROLE FALLBACK: ADVERSARY deja de ac
 G3|adv_orden_sin_adversary|el chequeo de orden con adversary deja de correr y un adversary fuera de posicion cierra igual (D4, Task 13.5)
 G1|adv_contrato_criterio_roto|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
 G1|adv_contrato_despacho_roto|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
+G7|pretool_gh_pr_merge_apagado|el patron gh pr merge se apaga y el merge a pelo vuelve a pasar
+G7|pretool_gh_api_merge_apagado|el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar
+G7|pretool_git_push_protegida_apagado|el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar
+G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
+G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
+G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -877,6 +883,15 @@ mut_adv_orden_sin_adversary()     { sed 's/grep -q adversary \&\& printf/grep -q
 # caso_g1_contrato_nombra_adversary (grepea el stdout del armado).
 mut_adv_contrato_criterio_roto()  { sed 's/OPTIONAL fourth role/OPTIONAL third role/'; }
 mut_adv_contrato_despacho_roto()  { sed 's/NAMING the artifact to adjudicate/NAMING the artifact to discard/'; }
+
+# 18.11 / D24 — una mutacion por guarda nueva. Cada sed apunta a UN ancla
+# (anti-patron 18.24: una mutacion que apaga varias guardas a la vez).
+mut_pretool_gh_pr_merge_apagado() { sed "s/grep -Fq 'gh pr merge'/grep -Fq 'gh pr MERGE-NUNCA'/"; }
+mut_pretool_gh_api_merge_apagado() { sed 's/api\[\^\[:cntrl:\]\]\*\/merge/api[^[:cntrl:]]*\/mergeNUNCA/'; }
+mut_pretool_git_push_protegida_apagado() { sed 's/git\[\[:space:\]\]+push/git[[:space:]]+pushNUNCA/'; }
+mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 0; }/'; }
+mut_pretool_hatch_nunca_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 1; }/'; }
+mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;//'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
