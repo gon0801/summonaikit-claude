@@ -282,6 +282,68 @@ out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_nadie' SAIKIT_PARTICION=rapidos bash "$ru
 printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que no corrio nada: $out"
 printf '%s' "$out" | grep -q 'SKIP (sin ejecutor): test_nadie' || malo "el skip se sigue listando: $out"
 
+# ============================ 18.19: canal de skip POR CASO (categoria aparte)
+# CONTRATO EJECUTABLE del canal (fila 18.19):
+#   - Marcador: linea `SAIKIT_SKIP_CASO: <caso> -- <razon>`. El caso lo emite
+#     via la lib tests/lib/skip_caso.sh, que lo APENDE al archivo cuya ruta
+#     llego en $SAIKIT_SKIPS (el runner crea uno vacio por test) y ademas lo
+#     ecoa a stdout para que corriendo el archivo suelto tambien se vea.
+#   - Quien lo emite: un caso cuyo INSTRUMENTO de medicion no esta disponible
+#     (pej `touch -t` para antedatar). NO es "verde": el caso declara que no
+#     pudo medir, el archivo SIGUE corriendo los casos restantes, y el exit
+#     del archivo refleja solo las aserciones reales.
+#   - Agregacion: el runner cuenta los marcadores de cada test, anota la linea
+#     de resultado (`PASS con N skip`, `FAIL con N skip`) y suma un contador
+#     global en categoria APARTE — ni PASS, ni FAIL, ni el unknown por exit 3.
+#     El skip JAMAS altera el exit code del runner.
+# El verde silencioso que esto cierra: `printf SKIP...; return 0` publicaba el
+# archivo como PASS liso y el conteo no existia (test_adversary_lock lo hacia).
+caso "skip por caso seguido de un fallo real => el fallo sale a la luz"
+mkdir -p "$SANDBOX/skip-y-rojo/tests"
+cat > "$SANDBOX/skip-y-rojo/tests/test_mixto.sh" <<'SH'
+#!/usr/bin/env bash
+. "$(dirname "$0")/lib/skip_caso.sh"
+saikit_skip_caso 'caso_sin_instrumento' 'sin touch -t portable'
+echo '    FAIL: una asercion real posterior' >&2
+exit 1
+SH
+mkdir -p "$SANDBOX/skip-y-rojo/tests/lib"
+cp "$here/lib/skip_caso.sh" "$SANDBOX/skip-y-rojo/tests/lib/skip_caso.sh"
+out="$(bash "$run_sh" "$SANDBOX/skip-y-rojo" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "el fallo real detras del skip debe romper la corrida, dio $rc: $out"
+printf '%s' "$out" | grep -q 'FAIL con 1 skip: test_mixto' || malo "no nombra el test que fallo (con su skip): $out"
+printf '%s' "$out" | grep -q 'FAIL con 1 skip: test_mixto' \
+  || malo "el FAIL debe quedar anotado con su skip (ni FAIL liso ni skip tapado): $out"
+printf '%s' "$out" | grep -q '1 caso en SKIP declarado' \
+  || malo "el skip debe contarse en categoria aparte en el resumen: $out"
+
+caso "skip sin ejecutor del caso => cuenta como skip, NO como PASS liso"
+mkdir -p "$SANDBOX/solo-skip/tests" "$SANDBOX/solo-skip/tests/lib"
+cat > "$SANDBOX/solo-skip/tests/test_sin_medir.sh" <<'SH'
+#!/usr/bin/env bash
+. "$(dirname "$0")/lib/skip_caso.sh"
+saikit_skip_caso 'caso_a' 'sin instrumento'
+saikit_skip_caso 'caso_b' 'sin instrumento'
+exit 0
+SH
+cp "$here/lib/skip_caso.sh" "$SANDBOX/solo-skip/tests/lib/skip_caso.sh"
+out="$(bash "$run_sh" "$SANDBOX/solo-skip" 2>&1)"; rc=$?
+printf '%s' "$out" | grep -q 'PASS: test_sin_medir' \
+  && malo "un archivo que solo declaro skips NO puede publicarse como PASS liso: $out"
+printf '%s' "$out" | grep -q 'PASS con 2 skips: test_sin_medir' \
+  || malo "la linea debe declarar los 2 skips: $out"
+printf '%s' "$out" | grep -q '2 casos en SKIP declarado' \
+  || malo "el resumen debe contar 2 skips: $out"
+[ "$rc" -eq 0 ] || malo "el skip del caso no altera el exit del runner: dio $rc: $out"
+
+caso "sin marcadores => cero ruido de skip en el resumen"
+mkdir -p "$SANDBOX/sin-skip/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/sin-skip/tests/test_liso.sh"
+out="$(bash "$run_sh" "$SANDBOX/sin-skip" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "corrida limpia debe cerrar 0, dio $rc: $out"
+printf '%s' "$out" | grep -q 'SKIP declarado' && malo "sin skips no hay resumen de skips: $out"
+printf '%s' "$out" | grep -q 'PASS: test_liso' || malo "sin skips la linea sigue siendo PASS liso: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2
   exit 1

@@ -58,6 +58,34 @@ if ! cmp -s "$SANDBOX/p1.txt" "$SANDBOX/p2.txt"; then
   diff -u "$SANDBOX/p1.txt" "$SANDBOX/p2.txt" | head -20 >&2
 fi
 
+# 18.19 — divergencia logica/fisica del tmp (rojo medido en macOS): `mktemp
+# -d` devuelve la ruta LOGICA (/var/folders/...) y el hook bajo prueba
+# resuelve su proyecto con `cd+pwd -P` (/private/var/folders/...); la forma
+# fisica quedaba SIN normalizar y el registro era irreproducible entre
+# corridas, cada una con su work propio. El caso sintetiza esa divergencia
+# con un symlink (TMPDIR logico que resuelve a otra ruta fisica) para que la
+# guarda corra TAMBIEN en el CI de Linux, donde /tmp no diverge solo — sin
+# esto, quitar la normalizacion sobrevive en verde en CI.
+caso "reproducible con TMPDIR logico que resuelve a otra ruta fisica (symlink)"
+tmp_real="$SANDBOX/tmp-real"
+tmp_link="$SANDBOX/tmp-link"
+mkdir -p "$tmp_real"
+if ! ln -s "$tmp_real" "$tmp_link" 2>/dev/null; then
+  # Core Rule 2: sin symlinks reales el caso no se puede medir en este host.
+  printf '    unknown: este host no crea symlinks reales; divergencia logica/fisica no medible aca\n'
+else
+  TMPDIR="$tmp_link" bash "$arnes" --hook "$hook_falso" --scenarios "$esc_falsos" --print > "$SANDBOX/p1l.txt" 2>&1
+  rc_l1=$?
+  TMPDIR="$tmp_link" bash "$arnes" --hook "$hook_falso" --scenarios "$esc_falsos" --print > "$SANDBOX/p2l.txt" 2>&1
+  rc_l2=$?
+  [ "$rc_l1" -eq 0 ] || malo "--print con TMPDIR logico debio salir 0, dio $rc_l1: $(cat "$SANDBOX/p1l.txt")"
+  [ "$rc_l2" -eq 0 ] || malo "--print con TMPDIR logico debio salir 0, dio $rc_l2: $(cat "$SANDBOX/p2l.txt")"
+  if ! cmp -s "$SANDBOX/p1l.txt" "$SANDBOX/p2l.txt"; then
+    malo "el registro NO es reproducible cuando la ruta logica del tmp diverge de la fisica"
+    diff -u "$SANDBOX/p1l.txt" "$SANDBOX/p2l.txt" | head -20 >&2
+  fi
+fi
+
 # --------------------------------------------- 2) el registro tiene contenido
 caso "el registro nombra cada escenario y trae exit code y stdout de cada paso"
 for e in 01-verde 02-bloqueo; do

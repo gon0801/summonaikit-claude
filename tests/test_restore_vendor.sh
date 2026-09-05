@@ -59,7 +59,19 @@ nuevo_destino() {
   backups="$d/saikit-backups"
 }
 
-mtime_de() { stat -c '%y' "$1" 2>/dev/null; }
+# mtime con la mejor resolucion del host (forma de la 18.16 en
+# test_install_hook.sh, fila 18.19): `stat -c` es GNU-only y en macOS devuelve
+# cadena VACIA con 2>/dev/null — las comparaciones quedaban "" == "" y las
+# aserciones pasaban EN FALSO. Cae a `stat -f` (BSD) y, si tampoco mide,
+# grita y sale != 0: nunca se sigue callado.
+mtime_de() {
+  local m=''
+  m="$(stat -c '%y' "$1" 2>/dev/null)" || m=''
+  [ -n "$m" ] || m="$(stat -f '%m' "$1" 2>/dev/null)" || m=''
+  if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
+  echo "mtime_de: medicion VACIA de [$1] — ni stat GNU (-c) ni BSD (-f) pudieron medir (¿archivo ausente?)" >&2
+  return 1
+}
 
 # El manifiesto que ven los casos: los backups sinteticos se registran en el a
 # medida que se crean. No es comodidad del test — es el contrato que la revision
@@ -67,6 +79,17 @@ mtime_de() { stat -c '%y' "$1" 2>/dev/null; }
 # en la ruta que gatea cada turno, asi que se le exige lo MISMO que a instalar —
 # que su contenido este en la lista de lo ya mirado. Un backup legitimo siempre
 # lo cumple: solo se etiqueta `vendor` lo que el instalador ya clasifico asi.
+# 18.19 — el caso que candan la exigencia de medicion no vacia (calca el de
+# la 18.16): el fix ingenuo (`stat -f` portable sin verificar) pasaria igual
+# con un archivo inexistente; este caso lo pone rojo.
+caso "mtime_de: medicion vacia (archivo inexistente) => grito y exit != 0"
+grito_mtime="$(mtime_de "$tmp/no-existe-para-mtime" 2>&1 >/dev/null)"; rc_mtime=$?
+[ "$rc_mtime" -ne 0 ] || malo "mtime_de salio 0 con medicion vacia — seguiria comparando '' == '' en falso"
+case "$grito_mtime" in
+  *VACIA*) ;;
+  *) malo "mtime_de no explico la medicion vacia: [$grito_mtime]" ;;
+esac
+
 mani_backups="$tmp/manifiesto-backups.sha256"
 : > "$mani_backups"
 manifestar() {

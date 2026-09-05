@@ -74,6 +74,26 @@ for gate in $GATES; do
   done
 done
 
+# 18.19 — costura SAIKIT_FINGIR_SIN=touch: simula la ausencia del touch
+# portable para antedatar. Los 6 jobs del CI son ubuntu-latest, donde touch
+# siempre funciona, asi que la rama 'sin la herramienta' nunca se toma sola:
+# sin esta costura, una mutacion 'la ausencia pasa como verde' sobrevive en
+# verde en CI. Con la costura, el caso G1 del barrido tiene que declararse
+# skip (marcador SAIKIT_SKIP_CASO, categoria aparte) y seguir en verde — NO
+# hacer _mal, que es el defecto (b) de la fila: FAIL por instrumento ausente.
+_seam_skips="$(mktemp)"
+if SAIKIT_SKIPS="$_seam_skips" SAIKIT_FINGIR_SIN=touch correr_caso caso_g1_estado_no_se_acumula; then
+  : # el caso vuelve verde declarando el skip
+else
+  printf '    FAIL: sin touch portable el caso hace _mal (FAIL), no skip — defecto (b) de 18.19\n' >&2
+  fail=1
+fi
+if ! grep -q '^SAIKIT_SKIP_CASO: caso_g1_estado_no_se_acumula' "$_seam_skips"; then
+  printf '    FAIL: la costura no produjo el marcador de skip — la ausencia pasaria como verde\n' >&2
+  fail=1
+fi
+rm -f "$_seam_skips"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_gate_behavior: FAIL" >&2
   exit 1
