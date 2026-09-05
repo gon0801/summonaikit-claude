@@ -565,15 +565,28 @@ esac
 # desvie el main del instalador. R2 aborta a mitad (despues de cmp,
 # antes de mv): DEST queda el anterior, no vacio ni el backup.
 . "$repo/tools/lib/restaurar_desde_backup.sh"
-caso "R1: restore exitoso deja DEST = backup"
+# modo_de: portable GNU/BSD. R1 afirma modo ademas de bytes: sin eso,
+# quitar el cp -p sobrevive (mktemp 0600 + cp contenido => dest no ejecutable).
+modo_de() {
+  local _m
+  _m="$(stat -c %a "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  _m="$(stat -f %OLp "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+  return 1
+}
+caso "R1: restore exitoso deja DEST = backup (bytes y modo)"
 rb="$tmp/restore-r1"
 mkdir -p "$rb"
 printf 'NUEVO-publicado\n' > "$rb/dest"
 printf 'VIEJO-backup\n' > "$rb/bak"
+chmod 755 "$rb/bak"
+chmod 644 "$rb/dest"
 sha_bak="$(sha256sum < "$rb/bak")"
+modo_bak="$(modo_de "$rb/bak")" || malo "R1 no pudo leer modo del backup"
 restaurar_desde_backup "$rb/bak" "$rb/dest"; rc=$?
 [ "$rc" -eq 0 ] || malo "R1 salio $rc"
 [ "$(sha256sum < "$rb/dest")" = "$sha_bak" ] || malo "R1 DEST no igualo al backup"
+[ "$(modo_de "$rb/dest")" = "$modo_bak" ] \
+  || malo "R1 DEST modo=$(modo_de "$rb/dest") != backup $modo_bak (0755 esperado)"
 _rbtmp="$(find "$rb" -name '.saikit-restore-*' 2>/dev/null)"
 [ -z "$_rbtmp" ] || malo "R1 dejo un tmp de restore: $_rbtmp"
 
@@ -760,7 +773,7 @@ fi
 caso "mutacion: restore via cp => R2 la atrapa"
 lib_base="$repo/tools/lib/restaurar_desde_backup.sh"
 lib_mut="$tmp/restaurar-mutado.sh"
-sed 's/# restore: tmp+cmp+mv (no truncar dest)/cp "$1" "$2"; return 0;/' "$lib_base" > "$lib_mut"
+sed 's/# restore: tmp+cmp+mv (no truncar dest); cp -p preserva modo/cp "$1" "$2"; return 0;/' "$lib_base" > "$lib_mut"
 if cmp -s "$lib_base" "$lib_mut"; then
   malo "mutacion restore-via-cp no cambio nada — el sed quedo obsoleto"
 elif ! bash -n "$lib_mut" 2>/dev/null; then
@@ -779,6 +792,36 @@ else
     printf '    mutacion restore-via-cp atrapada (R2 en rojo: DEST pisa con cp)\n'
   else
     malo "mutacion restore-via-cp SOBREVIVIO: DEST intacto con restore=cp"
+  fi
+fi
+rm -f "$lib_mut"
+
+caso "mutacion: cp sin -p pierde el modo => R1 la atrapa"
+lib_base="$repo/tools/lib/restaurar_desde_backup.sh"
+lib_mut="$tmp/restaurar-sin-p.sh"
+sed 's/cp -p "/cp "/' "$lib_base" > "$lib_mut"
+if cmp -s "$lib_base" "$lib_mut"; then
+  malo "mutacion cp-sin-p no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$lib_mut" 2>/dev/null; then
+  malo "mutacion cp-sin-p no parsea; asi no prueba nada"
+else
+  rb4="$tmp/restore-mut-modo"
+  mkdir -p "$rb4"
+  printf 'NUEVO-publicado\n' > "$rb4/dest"
+  printf 'VIEJO-backup\n' > "$rb4/bak"
+  chmod 755 "$rb4/bak"
+  chmod 644 "$rb4/dest"
+  modo_bak="$(modo_de "$rb4/bak")"
+  (
+    . "$lib_mut"
+    restaurar_desde_backup "$rb4/bak" "$rb4/dest"
+  )
+  modo_dest="$(modo_de "$rb4/dest")"
+  if [ "$modo_dest" != "$modo_bak" ]; then
+    printf '    mutacion cp-sin-p atrapada (R1 en rojo: dest modo=%s != bak %s)\n' \
+      "$modo_dest" "$modo_bak"
+  else
+    malo "mutacion cp-sin-p SOBREVIVIO: dest modo=$modo_dest igual al bak sin cp -p"
   fi
 fi
 rm -f "$lib_mut"

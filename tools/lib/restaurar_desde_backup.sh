@@ -4,17 +4,21 @@
 # tmp en el mismo dir + cmp + mv -f. El dest nunca se trunca: o queda
 # el anterior o el backup entero. Si mv falla, se borra el tmp.
 #
+# El modo del backup se copia al temporal (cp -p): mktemp crea 0600 y un
+# cp sin -p dejaria el hook no ejecutable tras un rollback "exitoso".
+# chmod --reference no es portable en BSD.
+#
 # SAIKIT_RESTORE_ABORT=1 es costura de test (R2): aborta despues del
 # cmp, antes del mv. No es un flag de produccion.
 
 restaurar_desde_backup() {  # $1=bak $2=dest
   local bak="$1" dest="$2" dir tmp
-  # restore: tmp+cmp+mv (no truncar dest)
+  # restore: tmp+cmp+mv (no truncar dest); cp -p preserva modo
   dir="$(dirname "$dest")"
   [ -f "$bak" ] && [ -n "$dest" ] || return 1
   mkdir -p "$dir" 2>/dev/null || return 1
   tmp="$(mktemp "$dir/.saikit-restore-XXXXXX")" || return 1
-  if ! cp "$bak" "$tmp" || ! cmp -s "$bak" "$tmp"; then
+  if ! cp -p "$bak" "$tmp" || ! cmp -s "$bak" "$tmp"; then
     rm -f "$tmp"
     return 1
   fi
