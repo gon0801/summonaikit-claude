@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #182 / Task 18.21 (registro, edad del ref y rollback) — deploy a las 4 copias; `--check` ROJO por diseño
+
+- **SHA:** merge `f9cf872`, head `94d2f7f`, CI 9/9 (run 33948364332). Hook sin cambios.
+- **Deploy por copia:** claude `YA AL DIA`; grok, dsh y codex verificados al día
+  por `--check` (bytes iguales a la fuente).
+- **`--check` post-merge: `veredicto=fallo`, rc=1 — y es lo correcto.** Con el
+  registro ahora inspeccionado por host: claude/grok/dsh `registro=ok`, **codex
+  `registro=falta-registro`** (`~/.codex/hooks.json` no existe). El gate de codex
+  está apagado desde que se cableó su copia; hasta hoy `--check` decía `ok`.
+  Queda rojo hasta que codex se registre — límite declarado de la 18.15.
+- **Edad del ref:** `edad_s=0` (origin/master recién actualizado), juicio contra
+  el ref local, umbral 1 día.
+- **Hallazgo del lead en review, verificado:** el rollback nuevo dejaba el hook
+  restaurado en modo 0600 (no ejecutable) — un rollback correcto en bytes que
+  apagaba el gate. Arreglado en `94d2f7f`; R1 afirma el modo.
+- **Nota de entorno:** `test_golden_harness` falla en macOS bajo el runner por
+  `TMPDIR` (`/var` vs `/private/var`); entorno, no regresión — va en la 18.19.
+- `check-hook-registration.sh` claude exit 0; `audita-ledger` OK;
+  `check-deploy-log` OK.
+- **Operador:** Gon (sesión claude).
+
 ## 2026-09-05 — PR #179 / Task 18.20 (el instalador declara procedencia y `--check` recorre todas las copias) — deploy a las 4 copias
 
 - **SHA:** merge `914dc4a`, head `a9bf51e`, CI 9/9 (run 33934855275). Hook sin cambios.
