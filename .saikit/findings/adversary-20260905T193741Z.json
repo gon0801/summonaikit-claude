@@ -1,0 +1,38 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "bypass: recibos pegados que la regex anclada aun acepte (un_parrafo, CR/NBSP como separadores, join de canales last_message+tail, cita del template, recibo viejo del tail)",
+    "falso bloqueo: matriz de 24 formas de recibo contra hook nuevo (db08b51) vs hook viejo (43a5541^) — decoraciones de linea, bold, indentacion, mayusculas, tab, escape simple vs doble",
+    "host codex: fixture 31 con \\\\n dobles en last_assistant_message, estado sembrado bajo el project-key de codex (la primera corrida con siembra claude fue gate inerte, descartada)",
+    "semantica del contrato: bloque harness_context (:1352) vs build_gate_feedback (:2627), y los 7 mensajes de falta vs lo que el codigo hace",
+    "poder discriminante: sed de mut_ancla_de_linea_quitada verificado byte a byte + bash -n, TODOS los CASOS_G4 contra el mutante, mut_etiqueta_sin_bold, y bateria oficial acotada (SAIKIT_MUTACIONES)",
+    "golden: 227 exit codes y decisiones por escenario, viejo vs nuevo, mas estado final por escenario",
+    "sabor grep: regex nueva bajo BSD grep (/usr/bin/grep) con inputs adversariales (linea de 400k, NBSP, CR, 60k antes de etiqueta); GNU grep no instalado localmente — no verificado para GNU"
+  ],
+  "findings": [
+    {
+      "severity": "high",
+      "location": "hooks/summonaikit-harness.sh:2604",
+      "claim": "El ancla ^ de linea hace que el recibo de un turno codex honesto cuya forma capturada del host lleva los saltos DOBLEMENTE escapados (last_assistant_message con \\n literal: el decodificador A8 de una sola capa los deja planos) falle las SEIS etiquetas a la vez y bloquee el cierre dejando el estado vivo; la golden regrabada registra ese flip como nuevo comportamiento esperado sin que el exit code lo delate (codex bloquea con exit 0) y contradice el README del propio escenario.",
+      "trigger": "Stop con target=codex y last_assistant_message en la forma del fixture tests/fixtures/escenarios/31-codex-turno-completo/05.stop.codex.json (recibo EN VINETAS con \\\\n dobles, capturado del binario real codex-cli 0.147.0 segun el commit eb57765). En la golden, escenario 31 paso 05.",
+      "evidence": "Repro en vivo (lab, estado sembrado bajo el project-key de codex): 'codex simple rc=0 faltan=0 [estado-limpio]' vs 'codex doble rc=0 faltan=6 {\"decision\":\"block\",\"reason\":\"SUMMONAIKIT HAR... [estado-vivo]'. Golden vieja (43a5541) escenario 31 paso 05: 'exit 0 / stdout <vacio> / stderr <vacio> / (sin estado)'; golden nueva: 'exit 0' + decision:block con los 6 'Missing ... gate summary' + estado vivo. Diff de decisiones por escenario (todas las golden, viejo vs nuevo): '1 31-codex-turno-completo SIN_ESTADO' -> '1 31-codex-turno-completo BLOCK' es la UNICA que cambia; los 227 exit codes son identicos. El README del escenario 31 sigue diciendo 'Stop allow: exit 0 en silencio y el estado se va. Par de \"pasa\" contra el 30' — ahora 30 Y 31 bloquean: codex queda sin ningun escenario de cierre limpio con recibo, y gate_cases.sh no tiene ningun caso de recibo codex (solo G1 de session/host), asi que nada fuera de la golden regrabada vigila este flip.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "hooks/summonaikit-harness.sh:2604 (texto del contrato en :1352 y :2627)",
+      "claim": "Formas de recibo que la regex vieja aceptaba y que el contrato introducido por esta misma fila sigue bendiciendo ('a bullet or markdown bold around the label is fine') ahora bloquean: vineta asterisco '* **Label**:', vineta '+ **Label**:', vineta anidada '- - Label:', blockquote '> Label:' y '> **Label**:', y '-Label:' sin espacio — el mensaje promete bullet generico pero la regex solo acepta vineta con guion, la misma clase mensaje-vs-codigo que esta fila venia a cerrar.",
+      "trigger": "Cualquier Stop con el recibo completo escrito con esas decoraciones (antes pasaban; el modelo que copia 'a bullet is fine' del contrato y usa vineta '*' se bloquea).",
+      "evidence": "Matriz en vivo (mismo recibo, solo cambia el prefijo de linea), filas 'viejo rc / nuevo rc': vineta_asterisco '0 / 2', vineta_mas '0 / 2', vineta_anidada '0 / 2', blockquote '0 / 2', blockquote_bold '0 / 2', guion_sin_espacio '-Label:' '0 / 2', asterisco_bullet_bold '* **Label**:' '0 / 2', mas_bullet_bold '+ **Label**:' '0 / 2', parentesis '1) Label:' '0 / 2'; control: vineta_guion '0 / 0', guion_bullet_bold '0 / 0', bold_doble '0 / 0', indent_8 '0 / 0', lineas_consecutivas '0 / 0' (limite declarado), numerada '1. Label:' bloquea (declarado como forma-trampa). En todas las bloqueadas faltan las 6 etiquetas (verificado a nivel regex con /usr/bin/grep: 'no vineta asterisco / no blockquote / MATCH vineta hyphen').",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": "tests/lib/gate_cases.sh:2975 (CASOS_G4)",
+      "claim": "El limite declarado de la fila — etiquetas cada una al inicio de SU linea pero SIN linea en blanco entre ellas siguen pasando — no tiene ningun caso que lo fije: un cambio futuro que exija la linea en blanco dejaria la suite entera en verde y el limite declarado pasaria a ser una regla verificada sin que nadie lo decidiera.",
+      "trigger": "grep de 'consecutiv|en blanco|blank' en tests/lib/gate_cases.sh: solo aparecen el comentario del fixture (:109) y el caso de texto del contrato (:559); ningun caso del CASOS_G4 corre un recibo en lineas consecutivas.",
+      "evidence": "Corrida en vivo del recibo en lineas consecutivas contra el hook nuevo: 'lineas_consecutivas rc=0 faltan=0' (pasa, como declara la fila); /usr/bin/grep -n sobre gate_cases.sh no devuelve ningun caso que lo afirme.",
+      "confirmed": true
+    }
+  ]
+}
