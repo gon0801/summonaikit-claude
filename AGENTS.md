@@ -81,16 +81,24 @@ locales serializadas por el candado.
 
 ## Deploy tras merge
 
-El artefacto de produccion de este repo es el **gate hook** instalado en el
-perfil vivo (`~/.claude/hooks/summonaikit-harness.sh`), no una app. Tras cada
-merge a `master` (cierre de task o PR), **siempre**:
+El artefacto de produccion de este repo son las **copias del gate hook**
+instaladas en los perfiles vivos, no una app: `~/.claude/hooks/` (claude;
+zcode reusa esta copia), `~/.grok/hooks/`, `~/.dsh/hooks/` y `~/.codex/hooks/`.
+Desde 7.5, Phase 15 y 18.15 cada host tiene la suya — grok ya NO apunta a la de
+claude. Tras cada merge a `master` (cierre de task o PR), **siempre**:
 
 1. Sincronizar master local: `git checkout master && git pull --ff-only`.
-2. **Deployar:** `bash tools/install-hook.sh` (garantiza vivo == master; tres
-   estados, no pisa nada ajeno) y `bash tools/check-hook-registration.sh`
-   (verifica registro en las 3 fases; fail-open, reporta por texto).
+2. **Deployar cada copia:** `bash tools/install-hook.sh` (claude) mas
+   `--host grok`, `--host dsh` y `--host codex` (tres estados, no pisa nada
+   ajeno). El instalador DECLARA la procedencia git de lo que instala (rama,
+   sha, sucio, coincide con origin/master juzgado contra el ref LOCAL — el
+   `git fetch` del paso 1 lo deja al dia); **verificar** con
+   `bash tools/install-hook.sh --check` (todas al dia + procedencia conocida,
+   o FALLO) y `bash tools/check-hook-registration.sh` (registro en las 3
+   fases; fail-open, reporta por texto).
 3. **Apuntarlo:** agregar entrada a `docs/deploy-log.md` (fecha, que se mergeo,
-   resultado del deploy, si el hook cambio o fue no-op).
+   resultado del deploy, si el hook cambio o fue no-op). El log se audita con
+   `bash tools/check-deploy-log.sh` (norma, orden, un registro por PR).
 4. **Auditar el ledger:** `bash tools/audita-ledger.sh` — lista las filas que
    siguen en `cc:TODO` con su trabajo ya mergeado en `origin/master`. Nacio
    porque la fila 16.3 estuvo cerrada en master y abierta en el ledger un dia
@@ -101,8 +109,8 @@ merge a `master` (cierre de task o PR), **siempre**:
    `tests/test_audita_ledger.sh`.
 
 Si el merge NO toco `hooks/summonaikit-harness.sh`, el deploy es no-op ("YA AL
-DIA") — igual se corre y se registra, para no perder la costumbre y detectar
-deriva del vivo respecto a master.
+DIA" en cada copia) — igual se corre y se registra, para no perder la costumbre
+y detectar deriva de los vivos respecto a master.
 
 ## Protocolo de entrega (implementadores delegados)
 
