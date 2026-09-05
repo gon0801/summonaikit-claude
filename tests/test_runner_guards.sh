@@ -311,7 +311,6 @@ mkdir -p "$SANDBOX/skip-y-rojo/tests/lib"
 cp "$here/lib/skip_caso.sh" "$SANDBOX/skip-y-rojo/tests/lib/skip_caso.sh"
 out="$(bash "$run_sh" "$SANDBOX/skip-y-rojo" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "el fallo real detras del skip debe romper la corrida, dio $rc: $out"
-printf '%s' "$out" | grep -q 'FAIL con 1 skip: test_mixto' || malo "no nombra el test que fallo (con su skip): $out"
 printf '%s' "$out" | grep -q 'FAIL con 1 skip: test_mixto' \
   || malo "el FAIL debe quedar anotado con su skip (ni FAIL liso ni skip tapado): $out"
 printf '%s' "$out" | grep -q '1 caso en SKIP declarado' \
