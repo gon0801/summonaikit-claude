@@ -229,13 +229,13 @@ _RECIBO_VERIF_SUBAGENTE_SIN_FALLOS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: p
 # fallo declarado (descuento por forma de ruta/archivo) — ACREDITA. "zero
 # failed" es negacion de la lista — ACREDITA. Y la puntuacion PEGADA
 # ("0 failed,error") no deja al segundo token sin frontera — BLOQUEA.
-_RECIBO_VERIF_SUBAGENTE_CMD_CON_ERROR='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest error.py tests/errors.py -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_CMD_CON_ERROR='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest error.py tests/errors.py -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: fixture de verificacion'
 _RECIBO_VERIF_SUBAGENTE_ZERO_FAILED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, zero failed tests.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 _RECIBO_VERIF_SUBAGENTE_FALLO_PEGADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, ok, 0 failed,error\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
 
 # (b-ter) label en MINUSCULAS — el detector es case-insensitive (-Eiq) y el span
 # (grok r1 #2) tambien: la forma 'Verified by subagent:' debe acreditar igual.
-_RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: Verified by subagent: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: Verified by subagent: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: fixture de verificacion'
 
 # (grok r1 #3) RESULTADO NEGADO — "no en verde" NO es un resultado de exito (el
 # bare "en verde" era subcadena negable y se quito del RESULT_RE).
@@ -3006,7 +3006,11 @@ CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa
 # que es donde vive la condicion que se esta probando.
 caso_g4_fuga_top_level_no_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"           "$(lab_transcript_fuga_top_level "$_RECIBO_SIN_RETRO" 'Retro: none.')"
+  # Sin mensaje primario, el ultimo texto assistant del transcript es la
+  # fuente del skip. El unico gate roto debe ser Retro, para que la mutacion
+  # de fuga top-level siga discriminando y no quede tapada por trail.
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)" \
+    "$(lab_transcript_fuga_top_level "${_RECIBO_SIN_RETRO}\\nTRAIL SKIP: fixture de fuga top-level" 'Retro: none.')"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Retro'
 }
@@ -3293,7 +3297,9 @@ caso_g4_recibo_corrido_pasa_a8() {
 # content item. Sin este caso, revertir ese salto pasaria inadvertido.
 caso_g4_recibo_dos_bloques_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_dos_bloques_recibo)"
+  # El recibo sigue SOLO en transcript; el skip del rastro es del mensaje
+  # actual, no prestado del tail (G8 exige esa frontera desde 18.12).
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_dos_bloques_recibo)"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -3332,7 +3338,7 @@ caso_g4_recibo_en_vinetas_pasa() {
 # sin cubrir. Verifica que el walker del transcript decodifica los `\n`.
 caso_g4_recibo_corrido_solo_en_transcript_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -3349,7 +3355,7 @@ caso_g4_recibo_corrido_solo_en_transcript_pasa() {
 # graba; este caso ata la mitad legitima.
 caso_g4_recibo_solo_en_transcript_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi

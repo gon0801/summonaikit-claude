@@ -39,7 +39,7 @@ _afirma_cierre() {
   _vacio "$1 stdout" "$LAB_OUT"
 }
 
-full_sin_cita_sin_skip_bloquea() {
+caso_g8_full_sin_cita_sin_skip_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_TRAIL")"
@@ -56,7 +56,7 @@ full_sin_cita_sin_skip_bloquea() {
   _afirma_cierre "flip: TRAIL SKIP con razon y sin archivos"
 }
 
-full_cita_ambas_cierra() {
+caso_g8_full_cita_ambas_cierra() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail x
@@ -64,7 +64,7 @@ full_cita_ambas_cierra() {
   _afirma_cierre "cita ambas"
 }
 
-full_archivos_sin_cita_bloquea() {
+caso_g8_full_archivos_sin_cita_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail x
@@ -72,7 +72,7 @@ full_archivos_sin_cita_bloquea() {
   _afirma_bloqueo_trail "archivos en disco sin cita"
 }
 
-full_cita_glob_bloquea() {
+caso_g8_full_cita_glob_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail x
@@ -80,14 +80,14 @@ full_cita_glob_bloquea() {
   _afirma_bloqueo_trail "cita glob"
 }
 
-full_cita_inexistente_bloquea() {
+caso_g8_full_cita_inexistente_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$(_recibo_close 'trail at .saikit/decisiones/18.12.tsv ; blast at .saikit/findings/blast-18.12.json')")"
   _afirma_bloqueo_trail "cita inventada"
 }
 
-full_cita_solo_tsv_bloquea() {
+caso_g8_full_cita_solo_tsv_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   mkdir -p "$LAB/proyecto/.saikit/decisiones"
@@ -96,7 +96,7 @@ full_cita_solo_tsv_bloquea() {
   _afirma_bloqueo_trail "solo tsv"
 }
 
-full_cita_solo_blast_bloquea() {
+caso_g8_full_cita_solo_blast_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   mkdir -p "$LAB/proyecto/.saikit/findings"
@@ -105,7 +105,7 @@ full_cita_solo_blast_bloquea() {
   _afirma_bloqueo_trail "solo blast"
 }
 
-full_cita_fuera_de_close_bloquea() {
+caso_g8_full_cita_fuera_de_close_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail x
@@ -113,28 +113,28 @@ full_cita_fuera_de_close_bloquea() {
   _afirma_bloqueo_trail "cita fuera de Close"
 }
 
-full_skip_con_razon_cierra() {
+caso_g8_full_skip_con_razon_cierra() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$(_recibo_skip_linea 'TRAIL SKIP: docs-only')")"
   _afirma_cierre "skip con razon"
 }
 
-full_skip_sin_razon_bloquea() {
+caso_g8_full_skip_sin_razon_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$(_recibo_skip_linea 'TRAIL SKIP:')")"
   _afirma_bloqueo_trail "skip sin razon"
 }
 
-full_skip_en_prosa_bloquea() {
+caso_g8_full_skip_en_prosa_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$(_recibo_close "el feedback pedia 'TRAIL SKIP: x' y no lo declare")")"
   _afirma_bloqueo_trail "skip citado en prosa"
 }
 
-full_skip_en_tail_no_cuenta() {
+caso_g8_full_skip_en_tail_no_cuenta() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_TRAIL")" \
@@ -142,7 +142,7 @@ full_skip_en_tail_no_cuenta() {
   _afirma_bloqueo_trail "skip solo en tail"
 }
 
-full_cita_en_tail_no_cuenta() {
+caso_g8_full_cita_en_tail_no_cuenta() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail x
@@ -151,7 +151,7 @@ full_cita_en_tail_no_cuenta() {
   _afirma_bloqueo_trail "cita solo en tail"
 }
 
-fast_sin_cita_sin_skip_cierra() {
+caso_g8_fast_sin_cita_sin_skip_cierra() {
   limpiar_saikit
   lab_run prompt claude "$(lab_payload_prompt '-saikit:fast corrige el typo')"
   lab_run tool claude "$(lab_payload_edit '/proyecto/src/header.ts')"
@@ -160,7 +160,7 @@ fast_sin_cita_sin_skip_cierra() {
   _afirma_cierre "fast exento"
 }
 
-full_residual_citado_cierra() {
+caso_g8_full_residual_citado_cierra() {
   limpiar_saikit
   _sembrar_turno_completo
   plantar_trail old
@@ -168,14 +168,14 @@ full_residual_citado_cierra() {
   _afirma_cierre "residual citado a proposito"
 }
 
-paused_sin_cita_permite() {
+caso_g8_paused_sin_cita_permite() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_PAUSA")"
   _afirma_cierre "PAUSED sin trail"
 }
 
-full_cita_directorio_externo_bloquea() {
+caso_g8_full_cita_directorio_externo_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   mkdir -p "$LAB/trail-externo" "$LAB/proyecto/.saikit/findings"
@@ -186,7 +186,7 @@ full_cita_directorio_externo_bloquea() {
   _afirma_bloqueo_trail "directorio enlazado afuera"
 }
 
-full_cita_archivo_externo_bloquea() {
+caso_g8_full_cita_archivo_externo_bloquea() {
   limpiar_saikit
   _sembrar_turno_completo
   mkdir -p "$LAB/trail-externo" "$LAB/proyecto/.saikit/decisiones" "$LAB/proyecto/.saikit/findings"
@@ -197,7 +197,7 @@ full_cita_archivo_externo_bloquea() {
   _afirma_bloqueo_trail "archivo enlazado afuera"
 }
 
-full_cita_directorio_interno_cierra() {
+caso_g8_full_cita_directorio_interno_cierra() {
   limpiar_saikit
   _sembrar_turno_completo
   mkdir -p "$LAB/proyecto/trail-interno" "$LAB/proyecto/.saikit/findings"
@@ -208,7 +208,7 @@ full_cita_directorio_interno_cierra() {
   _afirma_cierre "directorio fisicamente dentro del proyecto"
 }
 
-full_otro_gate_recuerda_trail() {
+caso_g8_full_otro_gate_recuerda_trail() {
   limpiar_saikit
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "${_RECIBO_SIN_RETRO}\\nTRAIL SKIP: golden fixture")"
@@ -216,4 +216,4 @@ full_otro_gate_recuerda_trail() {
   _contiene "otro gate sigue nombrando TRAIL SKIP:" "$LAB_OUT" 'TRAIL SKIP:'
 }
 
-CASOS_G8="full_sin_cita_sin_skip_bloquea full_archivos_sin_cita_bloquea full_cita_glob_bloquea full_cita_inexistente_bloquea full_cita_solo_tsv_bloquea full_cita_solo_blast_bloquea full_cita_fuera_de_close_bloquea full_skip_en_prosa_bloquea full_skip_sin_razon_bloquea full_skip_en_tail_no_cuenta full_cita_en_tail_no_cuenta full_cita_ambas_cierra full_skip_con_razon_cierra fast_sin_cita_sin_skip_cierra full_residual_citado_cierra paused_sin_cita_permite full_otro_gate_recuerda_trail full_cita_directorio_externo_bloquea full_cita_archivo_externo_bloquea full_cita_directorio_interno_cierra"
+CASOS_G8="caso_g8_full_sin_cita_sin_skip_bloquea caso_g8_full_archivos_sin_cita_bloquea caso_g8_full_cita_glob_bloquea caso_g8_full_cita_inexistente_bloquea caso_g8_full_cita_solo_tsv_bloquea caso_g8_full_cita_solo_blast_bloquea caso_g8_full_cita_fuera_de_close_bloquea caso_g8_full_skip_en_prosa_bloquea caso_g8_full_skip_sin_razon_bloquea caso_g8_full_skip_en_tail_no_cuenta caso_g8_full_cita_en_tail_no_cuenta caso_g8_full_cita_ambas_cierra caso_g8_full_skip_con_razon_cierra caso_g8_fast_sin_cita_sin_skip_cierra caso_g8_full_residual_citado_cierra caso_g8_paused_sin_cita_permite caso_g8_full_otro_gate_recuerda_trail caso_g8_full_cita_directorio_externo_bloquea caso_g8_full_cita_archivo_externo_bloquea caso_g8_full_cita_directorio_interno_cierra"

@@ -113,3 +113,36 @@ Verde posterior al fix: `test_trail_install: OK` (exit 0) y
 ```text
 ATRAPADA omitir_clasificacion: codex: acepto tool enlace saikit-decision.sh
 ```
+
+## Integracion: primer CI rojo y fixtures corregidos
+
+Run medido: https://github.com/gon0801/summonaikit-claude/actions/runs/34007591007
+`suite` y `gate` fallaron; quality, node-adapter, secrets y los tres shards
+suite-lentos pasaron. El rojo revelo seis fixtures anteriores sin el nuevo
+TRAIL SKIP y veinte nombres G8 sin el prefijo `caso_` requerido por el indice.
+Se corrigieron los fixtures y el registro; no se relajo el gate de produccion.
+Los recibos que prueban el canal transcript siguen exclusivamente en ese canal.
+
+La corrida acotada tambien midio una mutacion `walker_sin_resets` sobreviviente:
+el fixture negativo de fuga top-level necesitaba satisfacer trail para aislar
+su fallo de Retro. Corregido ese fixture, la mutacion vuelve a ser atrapada
+por `caso_g4_fuga_top_level_no_cierra`, no por un positivo roto ajeno.
+
+Comandos y resultados posteriores, todos exit 0:
+
+```bash
+SAIKIT_HOOK_VIVO="$PWD/hooks/summonaikit-harness.sh" bash tests/test_gate_behavior.sh
+SAIKIT_HOOK_VIVO="$PWD/hooks/summonaikit-harness.sh" \
+  SAIKIT_MUTACIONES="$(rg '^G[48]\||^G2\|verif_fallo_ruta_no_descontada' tests/test_gate_mutations.sh)" \
+  bash tests/test_gate_mutations.sh
+SAIKIT_HOOK_VIVO="$PWD/hooks/summonaikit-harness.sh" bash tests/test_adversary_lock.sh
+```
+
+`test_gate_behavior: OK`; `test_gate_mutations: OK` (35 atrapadas);
+`test_adversary_lock: OK`. Limitacion macOS declarada por los drivers: un caso
+de antedatado en behavior y seis casos mas seis mutaciones de adversary sin
+date/touch GNU quedan SKIP, no PASS. Una prueba adicional con GNU en PATH
+fallo en cinco casos de adversary; la misma prueba sobre origin/master sin
+estos cambios fallo en exactamente los mismos cinco. No se atribuye una
+causa no diagnosticada ni se cuenta esa prueba como verde. CI Linux es el
+ejecutor de esos casos; el gate agregado sigue pendiente del nuevo push.

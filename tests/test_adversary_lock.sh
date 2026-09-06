@@ -91,7 +91,7 @@ adv_payload_edit_interno() {
 # Recibo del turno con adversary: desde 13.5 el gate exige la linea ADVERSARY
 # cuando el turno corrio un adversary (label-only), asi que el recibo verde la
 # lleva — igual que _RECIBO_ADV del gate_cases.
-_ADV_RECIBO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
+_ADV_RECIBO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.\nTRAIL SKIP: fixture del write-lock adversary'
 
 _TEXTO_PAUSA='Espere: SUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
