@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "merge-happy-path",
+  "card": "merge-happy-path.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/merge-happy-path.sh"
+  },
+  "execution_mode": "live",
+  "surfaces": ["tools/saikit-merge.sh"],
+  "requirements": [
+    "gh:live",
+    "live_authorization"
+  ],
+  "cases": [
+    {
+      "id": "live-blocked-no-auth",
+      "required_assertions": ["blocked_unknown", "no_external_call"]
+    },
+    {
+      "id": "live-current-reasons",
+      "required_assertions": ["reason_auth_dest", "reason_gh"]
+    },
+    {
+      "id": "live-manual-procedure",
+      "required_assertions": ["procedure_defined", "procedure_not_run"]
+    },
+    {
+      "id": "live-no-sim-credit",
+      "required_assertions": ["sim_not_live", "live_merge"]
+    },
+    {
+      "id": "live-no-seal-transfer",
+      "required_assertions": [
+        "parent_seal_untouched",
+        "no_mtime_transfer",
+        "no_verified_transfer"
+      ]
+    }
+  ]
+}

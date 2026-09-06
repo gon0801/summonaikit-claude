@@ -158,7 +158,7 @@ for fid, want in (
     ("decision-blast", "active"),
     ("verify-app", "active"),
     ("stage-override", "active"),
-    ("merge-happy-path", "pending"),
+    ("merge-happy-path", "blocked"),
     ("install-guardian", "active"),
     ("routing-recipes", "active"),
 ):
