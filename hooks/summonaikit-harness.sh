@@ -1236,7 +1236,7 @@ AUTOPILOT_P
 
 trail_parrafo() {
   cat <<'TRAIL_P'
-Full lane (-saikit): Close must cite concrete existing paths under the project root (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), written with bash "$HOME/.claude/saikit-tools/saikit-decision.sh" --append ... and bash "$HOME/.claude/saikit-tools/saikit-blast.sh" --write ...; a leftover file you did not cite does not count. Name TRAIL SKIP: <reason> as its own receipt line when there is no trail this turn. Fast lane (-saikit:fast) is exempt.
+Full lane (-saikit): Close must cite concrete existing paths under the project root (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), written with bash "$HOME/.claude/saikit-tools/saikit-decision.sh" --append ... and bash "$HOME/.claude/saikit-tools/saikit-blast.sh" --write ...; a leftover file you did not cite does not count. Name TRAIL SKIP: <reason> as its own receipt line when there is no trail this turn. Commit the code AND the trail before dispatching the reviewer so `git rev-parse HEAD` is the sha of the tree under review. Fast lane (-saikit:fast) is exempt.
 TRAIL_P
 }
 
