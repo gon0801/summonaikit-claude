@@ -359,7 +359,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent"
+CASOS_G1="caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -2989,7 +2989,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_con_bg_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -3723,6 +3723,97 @@ caso_g1_grok_stop_shutdown_no_toca_estado() {
   _contiene "control D6: el Stop end_turn corre el gate" "$LAB_OUT" '"decision":"block"'
 }
 
+# 18.27 (D-A) — gemelo grok de caso_g1_notificacion_tarea_no_desarma. Medido
+# en vivo (docs/evidence/18.27-grok-headless/): al completarse un subagente en
+# background, la sesion padre recibe un UserPromptSubmit cuyo prompt es el
+# sobre <system-reminder>Background subagent ... completed successfully. Con el
+# detector que solo conocia la forma claude, ese wake caia en el desarme A4-c2
+# y BORRABA la ceremonia a mitad de turno — el mecanismo del hallazgo E del
+# smoke 18.9 (esc2), reproducido en m2-r2/m1-r3/m1-r4.
+caso_g1_grok_autowake_no_desarma() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega y espera al hijo')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "estado grok armado" "$_gk"
+
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_autowake '01a0c0de-0040-7abc-8def-222222222240' implementer 'crear nota.txt')"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "exit del auto-wake" "$LAB_RC" "0"
+  [ -f "$_gk" ] || _mal "el auto-wake de subagente grok NO debe desarmar el turno armado — 18.27"
+  _igual "cycle conservado tras el auto-wake" "$(grep '^cycle=' "$_gk" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "0"
+}
+
+# 18.27 (D-A), mitad estricta — gemelo grok de caso_g1_notificacion_con_
+# sentinel_no_rearma. La descripcion del subagente la escribe el agente padre
+# y en este repo puede llevar `-saikit`; sin el skip estricto ANTES del gate
+# del sentinel, el wake re-armaba (write_state resetea cycle/implemented/
+# verified y pisa el log). El estado se construye por eventos reales: armar,
+# quemar un ciclo con un Stop sin recibo (cycle pasa a 1) y recien ahi el
+# wake con sentinel adentro.
+caso_g1_grok_autowake_con_sentinel_no_rearma() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con sentinel en la descripcion')"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'todavia sin recibo' end_turn)"
+  _contiene "el Stop sin recibo bloquea y quema un ciclo" "$LAB_OUT" '"decision":"block"'
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_autowake '01a0c0de-0040-7abc-8def-333333333340' implementer '-saikit crear nota.txt')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "un auto-wake con sentinel adentro no debe borrar el estado — 18.27" "$_gk"
+  _igual "cycle conservado (un re-armado lo resetearia a 0)" "$(grep '^cycle=' "$_gk" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "1"
+}
+
+# 18.27 (D-A), contracara review r2 (R27-1): una pregunta HUMANA que mencione
+# AMBAS cadenas del wake ("Background subagent" y "<system-reminder>") sin
+# sentinel debe desarmar igual (A4). Con la via laxa que existio hasta la
+# ronda 1, esta pregunta heredaba el estado del turno anterior y su Stop le
+# exigiia recibo a un turno que nadie armo (repro del lider: master 0 archivos
+# de estado, PR 1 y block). El prompt humano de grok llega wrappado en
+# <user_query>, asi que su primera linea nunca es la etiqueta del sobre y el
+# skip estricto no puede disparar.
+caso_g1_grok_mencion_humana_del_wake_si_desarma() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit tarea previa armada')"
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "estado grok armado" "$_gk"
+
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '¿Qué significa Background subagent dentro de <system-reminder>?')"
+  LAB_GROK_HOOK_EVENT=""
+  if [ -f "$_gk" ]; then
+    _mal "una pregunta humana con AMBAS marcas y sin sentinel debe desarmar (A4) — review r2 R27-1"
+  fi
+
+  # Y el sintoma completo: el Stop de ese turno humano tampoco debe bloquear
+  # exigiendo un recibo heredado.
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'una respuesta normal' end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  if printf '%s' "$LAB_OUT" | grep -q '"decision":"block"'; then
+    _mal "el Stop de un turno sin sentinel ni estado no debe bloquear — gate heredado (R27-1)"
+  fi
+}
+
+# 18.27 (D-A) review r2: el skip reconoce al wake por su forma ESPECIFICA —
+# un sobre de sistema cuya primera linea es la etiqueta pero cuyo contenido NO
+# es el wake de subagente es OTRO evento y se procesa normal: con sentinel
+# adentro, ARMA (contrato emitido). Es el catch de la condicion de contenido
+# del skip (mut_grok_wake_strict_sin_contenido): sin ella, cualquier sobre de
+# sistema saltaria el gate.
+caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma() {
+  lab_limpiar_estado
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"user_prompt_submit","prompt":"<system-reminder>\nSession compacted; continue with -saikit cierra la tarea pendiente.\n</system-reminder>"}'
+  LAB_GROK_HOOK_EVENT=""
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "un sobre de OTRO evento con sentinel adentro debe armar normal" "$_gk"
+  _contiene "contrato emitido al armar" "$LAB_OUT" 'SUMMONAIKIT HARNESS REQUIRED'
+}
+
 # D5 — el credito de verificacion con las formas camel completas: command bajo
 # toolInput, exit_code 0.
 caso_g2_grok_runner_marca_verificado() {
@@ -3868,6 +3959,64 @@ caso_g4_grok_stop_sin_recibo_bloquea() {
   lab_run auto grok "$(lab_payload_grok_stop 'listo, entrega' end_turn)"
   LAB_GROK_HOOK_EVENT=""
   _contiene "Stop grok end_turn sin recibo bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
+}
+
+# 18.27 (D-B) — la escotilla DELEGATED en grok exige trabajo en vuelo. Medido
+# en vivo (docs/evidence/18.27-grok-headless/, m1-r1/m1-r2): con spawn sync el
+# hijo ya reporto y el Stop llega con backgroundTasks VACIO; la escotilla de
+# solo-texto dejaba salir el proceso headless sin recibo y sin wake que
+# reabra la sesion (RC=0, 0/6 etiquetas, estado huerfano). Con la guardia, ese
+# Stop cae al gate normal y BLOQUEA — bloqueo que el host sostiene (m1b-r1
+# cerro 6/6 tras el bloqueo).
+caso_g4_grok_delegado_sin_bg_bloquea() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega sync y corta')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop 'SUMMONAIKIT HARNESS DELEGATED - awaiting implementer.' end_turn)"
+  LAB_GROK_HOOK_EVENT=""
+  _contiene "Stop grok delegado SIN trabajo en vuelo bloquea (18.27)" "$LAB_OUT" '"decision":"block"'
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "el turno sigue abierto tras el bloqueo" "$_gk"
+}
+
+# 18.27 (D-B) review r2 (R27-3): las formas DEGENERADAS de "sin trabajo" —
+# array vacío con espacio interno ([ ]), espacios alrededor y null — no deben
+# habilitar la escotilla. Con el patron negativo de la ronda 1 ("si no veo el
+# vacío compacto, hay trabajo"), las tres PERMITÍAN un Stop con línea
+# DELEGATED y sin nada en vuelo (repro del lider). El patron actual es
+# positivo: solo el contenido visible dentro del array cuenta como trabajo.
+caso_g4_grok_delegado_bg_degenerado_bloquea() {
+  for _v in '"backgroundTasks":[ ]' '"backgroundTasks":   [  ]' '"backgroundTasks":null' '"backgroundTasks": null'; do
+    lab_limpiar_estado
+    LAB_GROK_HOOK_EVENT=user_prompt_submit
+    lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega y corta sin nada en vuelo')"
+    LAB_GROK_HOOK_EVENT=post_tool_use
+    lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+    LAB_GROK_HOOK_EVENT=stop
+    lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-deg",%s,"sessionCrons":[]}' "$_v")"
+    LAB_GROK_HOOK_EVENT=""
+    _contiene "Stop grok con backgroundTasks degenerado ($_v) bloquea (R27-3)" "$LAB_OUT" '"decision":"block"'
+  done
+}
+
+# 18.27 (D-B), contracara: con el subagente genuinamente en vuelo
+# (backgroundTasks ocupado, la forma medida del Stop que espera), la escotilla
+# sigue permitiendo — cerrar eso romperia la espera legitima (C4) y quemaria
+# ciclos de mas. El estado sobrevive: el wake reabre la ceremonia.
+caso_g4_grok_delegado_con_bg_permite() {
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega async y espera')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok "$(lab_payload_grok_stop_bg 'Delegue al implementer y espero su reporte.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
+  LAB_GROK_HOOK_EVENT=""
+  _igual "exit del Stop delegado con bg en vuelo" "$LAB_RC" "0"
+  _vacio "stdout del allow grok" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "la delegacion con trabajo en vuelo no cierra el turno: el estado sigue" "$_gk"
 }
 
 # Precedencia snake del walker: AMBOS mensajes en el payload; el snake (sin

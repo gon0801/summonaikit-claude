@@ -183,8 +183,12 @@ Límites medidos (detalle en el spec § Límites MEDIDOS de la Phase 18 y en
 observado en vivo; en el recorrido medido de Grok el merge es manual (el
 sello queda en la sesión emisora, 18.26); la guardia `PreToolUse` contra el
 merge a pelo nace inerte hasta que el operador la registra; el cierre
-headless sin recibo sigue en medición (18.27, pendiente). La versión para
-quien no lee código — qué hace solo, qué NUNCA hace y cómo deshacerlo —
+headless quedó corregido con límites (18.27): el auto-wake conserva el
+estado y la espera delegada exige trabajo en vuelo. Se observaron 9/9
+bloqueos sostenidos; el teardown de la ronda del wake y el presupuesto de
+ciclos todavía permiten salidas sin recibo. Evidencia y alcance en
+[la medición de 18.27](docs/evidence/18.27-grok-headless/cadena-bloqueo-continuacion.md).
+La versión para quien no lee código — qué hace solo, qué NUNCA hace y cómo deshacerlo —
 está en `docs/guia-usuario.html`, no acá.
 
 ## Staging por override

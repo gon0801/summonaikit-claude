@@ -21,6 +21,13 @@ if ! find "$root" -name '*.sh' \
   exit 1
 fi
 
+# Phase 19.1: el controlador de la skill no tiene extensión .sh; incluirlo
+# explícitamente cuando exista en el checkout.
+ctrl="$root/.cursor/skills/verify-summonaikit/scripts/control-summonaikit"
+if [ -f "$ctrl" ]; then
+  printf '%s\n' "$ctrl" >> "$list"
+fi
+
 while IFS= read -r f; do
   if ! bash -n "$f"; then
     echo "SYNTAX FAIL: $f" >&2

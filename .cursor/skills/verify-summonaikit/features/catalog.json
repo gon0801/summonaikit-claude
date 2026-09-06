@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "roots": [
+    {"path": "tools", "kind": "tools_exec"},
+    {"path": "hooks", "kind": "dir"},
+    {"path": "hosts", "kind": "dir"},
+    {"path": "skills", "kind": "dir"},
+    {"path": "agents", "kind": "dir"},
+    {"path": "recetas", "kind": "dir"}
+  ],
+  "helpers": {
+    "scripts/lint-feature-map.py": {
+      "kind": "internal",
+      "reason": "candado del mapa; no es ejecutor de feature"
+    }
+  },
+  "exclusions": {
+    "tools/lib/redactar.sh": {
+      "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
+    },
+    "tools/lib/veredicto_contract.sh": {
+      "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
+    },
+    "tools/lib/restaurar_desde_backup.sh": {
+      "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
+    },
+    "tools/check_context_docs.py": {
+      "reason": "infraestructura de calidad ajena al recorrido del producto; conserva su propio gate"
+    },
+    "tools/probe-zcode-output.sh": {
+      "reason": "diagnóstico especializado histórico, público pero fuera de esta ampliación"
+    },
+    "tools/hook-acl.ps1": {
+      "reason": "herramienta pública Windows/ACL; cobertura no acreditada aquí; requiere otro entorno"
+    }
+  },
+  "surfaces": {
+    "tools/install-hook.sh": {"feature": "install-guardian", "also": ["install-hosts"]},
+    "tools/golden-harness.sh": {"feature": "gate-turn"},
+    "tools/audita-ledger.sh": {"feature": "audit-ledger"},
+    "tools/check-deploy-log.sh": {"feature": "check-deploy-log"},
+    "tools/saikit-merge.sh": {"feature": "saikit-merge"},
+    "tools/saikit-postmerge.sh": {"feature": "saikit-postmerge"},
+    "tools/saikit-setup-autopilot.sh": {"feature": "setup-autopilot"},
+    "tools/saikit-ci-minimo.sh": {"feature": "ci-minimo"},
+    "tools/check-hook-registration.sh": {"feature": "install-hosts"},
+    "tools/model-routing.sh": {"feature": "routing-recipes"},
+    "tools/gen-recetas-manifest.sh": {"feature": "routing-recipes"},
+    "tools/check-secrets.sh": {"feature": "check-secrets"},
+    "tools/capture-payloads.sh": {"feature": "capture-payloads"},
+    "tools/saikit-decision.sh": {"feature": "decision-blast"},
+    "tools/saikit-blast.sh": {"feature": "decision-blast"},
+    "tools/stage-override.sh": {"feature": "stage-override"},
+    "tools/MANIFEST.sha256": {"feature": "routing-recipes", "kind": "asset", "consumer": "gen-recetas-manifest"},
+    "hooks/summonaikit-harness.sh": {"feature": "gate-turn", "also": ["autopilot-contract"]},
+    "hooks/vendor-manifest.sha256": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "hosts/dsh/README.md": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/index.js": {"feature": "install-hosts"},
+    "hosts/dsh/package.json": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/spawn-hook.js": {"feature": "install-hosts"},
+    "hosts/dsh/translate.js": {"feature": "install-hosts"},
+    "hosts/dsh/spy/index.js": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/spy/package.json": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/test/fake-hook.sh": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/test/plugin.test.js": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/test/spawn-hook.test.js": {"feature": "install-hosts", "kind": "asset"},
+    "hosts/dsh/test/translate.test.js": {"feature": "install-hosts", "kind": "asset"},
+    "agents/adversary.md": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "agents/implementer.md": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "agents/reviewer.md": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "agents/verifier.md": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "agents/vendor-manifest.sha256": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"},
+    "recetas/00-lider.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/MANIFEST.sha256": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/boceto.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/bug.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/cuidar-pr.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/funcion.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/investigar.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/lento.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/refactor.md": {"feature": "routing-recipes", "kind": "asset"},
+    "recetas/pendientes/.gitkeep": {"feature": "routing-recipes", "kind": "asset"},
+    "skills/saikit-setup-autopilot/SKILL.md": {"feature": "setup-autopilot", "kind": "asset"},
+    "skills/saikit-verificar-app/SKILL.md": {"feature": "verify-app", "kind": "asset"},
+    "skills/saikit-verificar-app/verificar.sh": {"feature": "verify-app"},
+    "skills/sencillo/SKILL.md": {"feature": "install-hosts", "kind": "asset", "consumer": "install-hook"}
+  },
+  "features": {
+    "install-guardian": {
+      "status": "active",
+      "card": "features/install-guardian.md"
+    },
+    "gate-turn": {
+      "status": "active",
+      "card": "features/gate-turn.md"
+    },
+    "audit-ledger": {
+      "status": "active",
+      "card": "features/audit-ledger.md"
+    },
+    "check-deploy-log": {
+      "status": "active",
+      "card": "features/check-deploy-log.md"
+    },
+    "saikit-merge": {
+      "status": "pending",
+      "owner_task": "19.6",
+      "card": null
+    },
+    "saikit-postmerge": {
+      "status": "pending",
+      "owner_task": "19.7",
+      "card": null
+    },
+    "setup-autopilot": {
+      "status": "pending",
+      "owner_task": "19.8",
+      "card": null
+    },
+    "ci-minimo": {
+      "status": "pending",
+      "owner_task": "19.9",
+      "card": null
+    },
+    "autopilot-contract": {
+      "status": "pending",
+      "owner_task": "19.10",
+      "card": null
+    },
+    "install-hosts": {
+      "status": "pending",
+      "owner_task": "19.11",
+      "card": null
+    },
+    "routing-recipes": {
+      "status": "pending",
+      "owner_task": "19.11",
+      "card": null
+    },
+    "check-secrets": {
+      "status": "pending",
+      "owner_task": "19.12",
+      "card": null
+    },
+    "capture-payloads": {
+      "status": "pending",
+      "owner_task": "19.12",
+      "card": null
+    },
+    "decision-blast": {
+      "status": "pending",
+      "owner_task": "19.13",
+      "card": null
+    },
+    "verify-app": {
+      "status": "pending",
+      "owner_task": "19.14",
+      "card": null
+    },
+    "stage-override": {
+      "status": "pending",
+      "owner_task": "19.15",
+      "card": null
+    },
+    "merge-happy-path": {
+      "status": "pending",
+      "owner_task": "19.16",
+      "card": null
+    }
+  }
+}

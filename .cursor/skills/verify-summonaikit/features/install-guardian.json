@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "install-guardian",
+  "card": "install-guardian.md",
+  "executor": {
+    "kind": "legacy",
+    "command": "drive-install-dry-run",
+    "function": "cmd_drive_install_dry_run"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/install-hook.sh"],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "install-dry-run",
+      "required_assertions": ["exit_0", "dry_run_line", "home_isolated"]
+    },
+    {
+      "id": "install-ownership",
+      "required_assertions": ["ownership_marker", "dest_matches_source"]
+    }
+  ]
+}

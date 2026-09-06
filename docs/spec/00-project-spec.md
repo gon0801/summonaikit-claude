@@ -2380,10 +2380,18 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
   el cruce de D18: **en el recorrido medido de Grok el merge queda manual, a
   cargo del operador**. No se afirma happy path automático ni imposibilidad
   general del host (`unknown` hasta medir otro canal).
-- **18.27 (PENDIENTE, reservado):** grok headless cerró sin recibo en esc2
-  (0/6 etiquetas, RC=0, estado limpiado) y con recibo 6/6 en esc1 — no
-  determinista. La decisión (límite escrito o mecanismo que lo sostenga) la
-  trae esa fila; este spec no adelanta su conclusión.
+- **18.27: mecanismo corregido y límites medidos.** Once corridas headless
+  con Grok 1.0.13 acreditan 9/9 bloqueos sostenidos (6 pre-fix y 3 post-fix):
+  el host continúa tras el bloqueo. El auto-wake se reconoce por su forma
+  estricta y conserva el estado; una pregunta humana que mencione sus marcas
+  desarma si no lleva sentinel. DELEGATED exige contenido en
+  `backgroundTasks`: `[]`, `[ ]`, `null` y clave ausente no habilitan la
+  escotilla. Residuales: el teardown puede omitir el Stop de la ronda del
+  wake (2/2 recorridos post-fix observados), y el presupuesto sigue en dos
+  ciclos. No se garantiza recibo en toda salida headless ni se cambia el
+  gate de merge. La revisión r2 tiene tests y cuatro mutaciones, sin nueva
+  medición viva; evidencia correlacionada y hashes por fase en
+  `docs/evidence/18.27-grok-headless/cadena-bloqueo-continuacion.md`.
 - **cuidar-pr: implementada, n=0 en vivo.** En el manifiesto y ofrecida por
   el hook (18.2); ningún turno vivo midió que se elija ni que se siga.
 - **setup-autopilot: implementado y ejercitado.** Su config movió el gate en
@@ -2412,20 +2420,33 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
   entrega en `docs/retro-phase-18.md`: topic + marcador verificados, borrado
   manual a criterio del operador (D23, recomendado).
 
+## Mapa de verificación del repositorio — Phase 19 (plan, 2026-09-06)
+
+El contrato de la ampliación está en [feature-map.md](feature-map.md): inventario
+de superficies, dispatch por ID, evidencia por intento, aislamiento obligatorio,
+doctor por feature y límites de simulación/medición viva. Las tareas están en
+`Plans.md`, Phase 19, con detalle en `docs/phase-19-feature-map-plan.md`.
+Es comportamiento planificado, no cobertura ya acreditada. La skill local y
+`verify/` se conservan como recorridos complementarios.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
 - **Phases 16–18 (2026-08-28): no se importan piezas de pstack "por si
   acaso"** (las 10 NO y las 10 DESPUÉS del Apéndice A del diseño quedan fuera
-  con su razón o su disparador); **no hay PRs en paralelo** (choque medido de
-  worktree compartido), **no Graphite/stacks**, **no modo pegajoso**
+  con su razón o su disparador); **no hay PRs en paralelo sobre checkout
+  compartido** (choque medido). Phase 19 permite trabajos/PRs independientes
+  en worktrees separados e integración serial por el líder; no modifica el
+  lock de un PR autopilot por repo. **No Graphite/stacks**, **no modo pegajoso**
   (contradice Core Rule 3), **no paneles de 4 modelos** (tope de 1 ronda: un
   panel = adversary + 1 cross-review de otro vendor).
 - **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
   explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
   y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y
   `.agents` (kimi) — ver *Ampliación de propiedad — Phase 12* arriba. Ninguna
-  de esas ampliaciones autoriza a tocar `.cursor`, que sigue fuera.
+  de esas ampliaciones autoriza a tocar `.cursor`. Phase 19 abre únicamente
+  el versionado selectivo de la fuente en `.cursor/skills/verify-summonaikit/`;
+  los perfiles, configuración del host y artefactos de ejecución siguen fuera.
 - **No se persigue que el gate sea un control de seguridad.** Es advisory: aun
   corregidos A1 y A2, quien controla el texto del turno puede influirlo. Se
   documenta; no se promete lo contrario.

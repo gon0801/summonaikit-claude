@@ -81,22 +81,33 @@ huérfano que nadie llama con un autopilot que mergea igual. El verde se
 audita por poder discriminante (mutación que sobrevive = hueco), no por
 conteo de casos.
 
-## Pendientes declarados (la fase no se finge terminada)
+## Resultado de 18.27 y límites que permanecen
 
-- **18.27 (grok headless sin recibo):** reservado. Medido que esc2 cerró 0/6
-  con RC=0 y esc1 6/6 en los dos turnos (no determinista); la decisión —
-  límite escrito o mecanismo— la trae esa fila. Este cierre no adelanta su
-  conclusión; tras integrarla se re-verifica coherencia de guía, README y
-  spec.
-- **Deploy post-merge + entrada en `docs/deploy-log.md`:** del líder tras el
-  merge, con el SHA y el resultado reales. Este PR no inventa esa entrada.
-- **Borrado del descartable:** del operador, a mano (siguiente sección).
+El PR #212 corrigió el auto-wake que borraba el estado y la espera DELEGATED
+sin trabajo en vuelo. La revisión encontró además que una pregunta humana
+podía heredar el gate y que `[ ]`/`null` contaban como trabajo: ambos casos
+quedaron protegidos por regresiones. Las cuatro mutaciones pertinentes fueron
+atrapadas. Las capturas de once corridas muestran 9/9 bloqueos sostenidos;
+la tabla distingue los seis anteriores al fix de los tres posteriores.
+
+El teardown de la ronda del wake sigue pudiendo omitir su Stop (2/2
+recorridos post-fix observados); el presupuesto sigue limitado a dos ciclos.
+El recibo no se garantiza en toda salida headless. El merge mantiene sus
+protecciones independientes y el límite de sello de 18.26. La evidencia está
+en `docs/evidence/18.27-grok-headless/cadena-bloqueo-continuacion.md`; no hubo
+medición viva nueva para las correcciones r2.
+
+Guía, README y spec incorporan esta conclusión. El cierre documental conserva
+como límites el happy path de merge no observado y `cuidar-pr` sin medición
+viva; no los convierte en éxitos. El despliegue de cada merge y su SHA se
+registran en `docs/deploy-log.md`. El descartable queda entregado al operador.
 
 ## Entrega del descartable al operador (no se borra en este cierre)
 
 La DoD permite borrarlo (topic + marcador verificados) o entregarlo al
 operador. Se elige lo segundo: D23 recomienda el borrado a mano y este cierre
-es documental — ningún merge ni deploy corre acá.
+es documental. El líder integra los PR y despliega las copias del hook;
+la entrega del descartable no ejecuta su borrado.
 
 Estado observado el 2026-09-06 (API REST; GraphQL dio timeout):
 
