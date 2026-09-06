@@ -58,4 +58,8 @@ Preconditions:
 - `--revert-de` does not authorize other branches: only the current tip of
   the configured base, and only with the `Saikit-Merge:` trailer.
 - A live `gh` in PATH is not evidence of this feature. Mode `live` belongs
-  to `merge-happy-path`, which stays blocked without a new authorization.
+  to `merge-happy-path`, which stays blocked without a new authorization
+  (inventariado; no observado).
+- 18.26: a child-session seal does not credit the parent. In the measured
+  Grok path the merge stays manual; this simulated drive does not close that
+  live gap.

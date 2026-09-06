@@ -38,5 +38,6 @@ Preconditions:
 
 - The generator runs once. An existing `verify/LEEME.md` is a reject, not a refresh.
 - `estado` without a readable `generado:` seal is `unknown`, never `al_dia`.
-- Do not refresh the checkout `verify/` seal here. That needs a real Drive at close (Lead / 19.17).
+- Do not refresh the checkout `verify/` seal here. 19.17 runs `pytest verify/`
+  isolated and records that result; a skill PASS is not the product seal.
 - Passing this feature does not mean the product Spanish map is current.

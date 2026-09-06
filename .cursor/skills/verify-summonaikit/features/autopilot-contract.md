@@ -39,3 +39,5 @@ Preconditions:
 - The sentinel is per-turn and exact (`-saikit:autopilot` with the same word boundary as `:fast`). A substring or typo is not inheritance.
 - This drive observes the current hook. If the source is wrong, open a product defect; do not patch hook or golden to make the card green.
 - Fixture 02 (`-saikit` without suffix) is the control that full-without-flag stays byte-shaped: the `autopilot=` line is absent.
+- 18.26 keeps the seal on the emitting session; 18.10 closed the phase without
+  a live green⇒merge. This card does not claim that path.

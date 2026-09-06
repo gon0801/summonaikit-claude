@@ -15,8 +15,9 @@ hook in production; this skill never drives the operator's live profile.
 
 Secondary surfaces now driven in isolation: host install/registration
 (`install-hosts`) and model routing / recipe manifest (`routing-recipes`).
-Still out of scope for default drives: the Spanish `verify/` map from
-`saikit-verificar-app`, and any live model turn.
+The Spanish `verify/` map is a complementary Drive: run `pytest verify/`
+isolated and record that result. A skill PASS is not the product `verify/`
+seal. Live merge (`merge-happy-path`) stays inventariado; no observado.
 
 ## Launch
 
@@ -76,7 +77,8 @@ marker), and fixture scenario directory names — not coordinates.
 ```
 
 `list-features` prints `id`, `card`, `mode` and declared `scope` for every catalog
-entry (including pending) and does **not** launch. `drive <id>` runs every
+entry (active or blocked; leftover pending is a lint FAIL) and does **not**
+launch. `drive <id>` runs every
 required case of that feature and writes evidence v1 under
 `artifacts/<run_id>/<feature_id>/<attempt_id>/`. The four `drive-*` aliases
 do the same wrap; `drive-gate-scenario` declares **partial** scope (one
@@ -168,4 +170,6 @@ Executable helper (invocation above):
 
 Read `features/README.md` before driving. Cover every entry point listed for
 the feature under test; one convenient path is incomplete when the map lists
-others.
+others. Phase 18 limits (18.26 seal isolation, 18.27 headless receipt,
+18.10 closeout) live on the cards. Live coverage stays inventariado; no
+observado.
