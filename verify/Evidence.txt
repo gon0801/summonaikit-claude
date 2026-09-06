@@ -340,7 +340,7 @@ Toda ejecucion del gate/instalador fue en sandbox; no se tocaron perfiles vivos.
 /tmp/saikit-drive-venv/bin/pytest verify/
 ============================= test session starts ==============================
 platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
-rootdir: /Users/dn/dev/summonaikit-claude
+rootdir: <PROJECT_ROOT>
 collected 5 items
 
 verify/test_drive.py .....                                               [100%]
@@ -353,7 +353,7 @@ git rev-parse HEAD && /tmp/saikit-drive-venv/bin/pytest verify/
 e647b890356152cd022f9d18a78a8099ea61be07
 ============================= test session starts ==============================
 platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
-rootdir: /Users/dn/dev/summonaikit-claude
+rootdir: <PROJECT_ROOT>
 collected 5 items
 
 verify/test_drive.py .....                                               [100%]
@@ -380,7 +380,7 @@ f4916a9c93cef687058e837726bcb35fd0fbdeea
 2026-09-05
 ============================= test session starts ==============================
 platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
-rootdir: /Users/dn/dev/summonaikit-claude
+rootdir: <PROJECT_ROOT>
 collected 5 items
 
 verify/test_drive.py .....                                               [100%]
@@ -388,3 +388,34 @@ verify/test_drive.py .....                                               [100%]
 ============================== 5 passed in 0.79s ===============================
 Exit: 0
 No hubo deploy ni edicion de Plans.md. Gate final: pendiente del nuevo CI.
+
+18.12 — CIERRE DE COMENTARIOS DEL PR Y HANDOFF DE CURSOR
+Normalizacion de privacidad: las lineas rootdir de pytest de este archivo
+usan <PROJECT_ROOT> en lugar de la ruta local. Resultados y duraciones reales.
+Rojos, fixes y limitaciones: docs/review-18.12-fixes.md.
+test_trail_gate: OK; exit 0 (22 casos).
+test_gate_mutations G8: OK; exit 0 (17 mutaciones atrapadas).
+test_trail_install: OK; exit 0.
+test_trail_install_mutations: OK (7 mutaciones); exit 0.
+test_install_hook: OK; exit 0.
+test_gate_behavior: OK; exit 0 (un SKIP declarado por touch no portable).
+test_adversary_lock: OK; exit 0 (seis casos y seis mutaciones SKIP declarados).
+golden-harness --check: OK, 57 escenarios; exit 0.
+golden-harness --record: 57 escenarios; exit 0. Diff: solo tres lineas de identidad.
+pre-commit run --all-files: todos Passed; exit 0.
+CI del head anterior c01b6ad: ocho jobs success, incluido gate.
+https://github.com/gon0801/summonaikit-claude/actions/runs/34008244026
+Ese CI no acredita los cambios posteriores; se exige otro run del head final.
+
+git rev-parse HEAD && /tmp/saikit-drive-venv/bin/pytest verify/
+c645c662dd5f2ca259b5dd3cf2ca900b0109435b
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.77s ===============================
+Exit: 0
+No deploy, no edicion de Plans.md. Cambios de Cursor preservados en b2fcb38/c645c66.
