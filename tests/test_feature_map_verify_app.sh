@@ -161,7 +161,7 @@ for c in desc.get("cases") or []:
 for fid, want in (
     ("check-secrets", "active"),
     ("capture-payloads", "active"),
-    ("decision-blast", "pending"),
+    ("decision-blast", "active"),
     ("stage-override", "pending"),
     ("merge-happy-path", "pending"),
     ("install-guardian", "active"),
