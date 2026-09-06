@@ -2321,20 +2321,33 @@ python tecleados por el operador):
   `LEEME.md`, o el lector se quedaría con ESE bloque), con su caso de
   regresión.
 
+## Mapa de verificación del repositorio — Phase 19 (plan, 2026-09-06)
+
+El contrato de la ampliación está en [feature-map.md](feature-map.md): inventario
+de superficies, dispatch por ID, evidencia por intento, aislamiento obligatorio,
+doctor por feature y límites de simulación/medición viva. Las tareas están en
+`Plans.md`, Phase 19, con detalle en `docs/phase-19-feature-map-plan.md`.
+Es comportamiento planificado, no cobertura ya acreditada. La skill local y
+`verify/` se conservan como recorridos complementarios.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
 - **Phases 16–18 (2026-08-28): no se importan piezas de pstack "por si
   acaso"** (las 10 NO y las 10 DESPUÉS del Apéndice A del diseño quedan fuera
-  con su razón o su disparador); **no hay PRs en paralelo** (choque medido de
-  worktree compartido), **no Graphite/stacks**, **no modo pegajoso**
+  con su razón o su disparador); **no hay PRs en paralelo sobre checkout
+  compartido** (choque medido). Phase 19 permite trabajos/PRs independientes
+  en worktrees separados e integración serial por el líder; no modifica el
+  lock de un PR autopilot por repo. **No Graphite/stacks**, **no modo pegajoso**
   (contradice Core Rule 3), **no paneles de 4 modelos** (tope de 1 ronda: un
   panel = adversary + 1 cross-review de otro vendor).
 - **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
   explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
   y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y
   `.agents` (kimi) — ver *Ampliación de propiedad — Phase 12* arriba. Ninguna
-  de esas ampliaciones autoriza a tocar `.cursor`, que sigue fuera.
+  de esas ampliaciones autoriza a tocar `.cursor`. Phase 19 abre únicamente
+  el versionado selectivo de la fuente en `.cursor/skills/verify-summonaikit/`;
+  los perfiles, configuración del host y artefactos de ejecución siguen fuera.
 - **No se persigue que el gate sea un control de seguridad.** Es advisory: aun
   corregidos A1 y A2, quien controla el texto del turno puede influirlo. Se
   documenta; no se promete lo contrario.
