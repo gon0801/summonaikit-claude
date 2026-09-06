@@ -3979,7 +3979,7 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 # $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
 # (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
 # (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
+CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita"
 
 _g7_plantar_hatch() {
   unset SAIKIT_KIT_MANIFEST
@@ -4125,6 +4125,16 @@ caso_g7_hatch_comillas_ok() {
   _g7_assert_allow
   lab_run auto claude "$(lab_payload_pretool_bash "bash '$LAB/proyecto/tools/saikit-merge.sh' --confirmado")"
   _g7_assert_allow
+}
+
+# Lead PR #198: `…/saikit-merge.sh.bak` no puede truncar al `.sh`, hashear
+# el script real del pin y ALLOW mientras bash corre el .bak.
+caso_g7_niega_hatch_sufijo_bak() {
+  _g7_plantar_hatch match
+  cp "$LAB/proyecto/tools/saikit-merge.sh" "$LAB/proyecto/tools/saikit-merge.sh.bak"
+  printf '%s\n' '#!/bin/sh' 'echo TROJAN' > "$LAB/proyecto/tools/saikit-merge.sh.bak"
+  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh.bak --pr 198')"
+  _g7_assert_deny
 }
 
 # Hatch + hash ok NO es permiso para encadenar un merge a pelo en el

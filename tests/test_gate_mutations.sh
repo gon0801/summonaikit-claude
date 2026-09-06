@@ -182,6 +182,7 @@ G7|pretool_git_push_token_en_cualquier_lado|el dest de git push vuelve a token-e
 G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
 G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
 G7|pretool_hatch_sin_strip_comillas|el hatch deja de pelar comillas envolventes y un pin correcto entre comillas niega
+G7|pretool_hatch_token_trunca_sufijo|el token del hatch vuelve a truncar en .sh y un saikit-merge.sh.bak con pin del real pasa
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
 "
@@ -908,6 +909,14 @@ mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" 
 mut_pretool_hatch_nunca_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 1; }/'; }
 # F2: el strip de comillas se vuelve identidad; atrapa caso_g7_hatch_comillas_ok.
 mut_pretool_hatch_sin_strip_comillas() { sed 's/pretool_strip_comillas_hatch "/printf %s "/'; }
+# Lead PR #198: restaura token truncador + es_hatch substring + spoof off.
+# Atrapada por caso_g7_niega_hatch_sufijo_bak (.bak ALLOW otra vez).
+mut_pretool_hatch_token_trunca_sufijo() {
+  sed \
+    -e 's/^pretool_es_hatch_spoof() {$/pretool_es_hatch_spoof() { return 1; }\npretool_es_hatch_spoof_OFF() {/' \
+    -e 's/^pretool_es_hatch() {$/pretool_es_hatch() { printf "%s" "$1" | grep -q '\''saikit-merge\.sh'\''; }\npretool_es_hatch_NEW() {/' \
+    -e 's/^pretool_token_hatch() {$/pretool_token_hatch() { pretool_strip_comillas_hatch "$(printf "%s" "$1" | grep -Eo '\''[^[:space:];|&<>]+saikit-merge\.sh'\'' | head -n 1)"; }\npretool_token_hatch_NEW() {/'
+}
 mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;//'; }
 # Restaura el short-circuit hatch-primero: hash ok => allow aunque el
 # mismo comando tambien traiga gh pr merge / gh api /merge / git push.

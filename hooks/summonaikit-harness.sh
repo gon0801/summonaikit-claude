@@ -3313,7 +3313,13 @@ pretool_es_git_push_protegida() {
   _pt_git_dest_re='push[[:space:]].*([[:space:]]origin[[:space:]]+[+:]?(master|main)|[[:space:]]HEAD:(master|main)|refs/heads/(master|main)|[A-Za-z0-9._/-]+:(master|main)|[[:space:]][+:]?(master|main))([[:space:]]|$)'
   printf '%s' "$_pt_push" | grep -Eq "$_pt_git_dest_re"
 }
-pretool_es_hatch() { printf '%s' "$1" | grep -q 'saikit-merge\.sh'; }
+# Hatch solo si hay un path token cuyo basename es EXACTAMENTE saikit-merge.sh.
+# Sin borde al final, `…/saikit-merge.sh.bak` matcheaba el prefijo `.sh`,
+# hasheaba el script real del pin y dejaba pasar mientras bash corria el .bak
+# (lead review PR #198).
+pretool_es_hatch() {
+  printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]._-])saikit-merge\.sh([^[:alnum:]._-]|$)'
+}
 # json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path.
 pretool_strip_comillas_hatch() {
   _pt_q="$1"
@@ -3326,7 +3332,37 @@ pretool_strip_comillas_hatch() {
   printf '%s' "$_pt_q"
 }
 pretool_token_hatch() {
-  pretool_strip_comillas_hatch "$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+saikit-merge\.sh' | head -n 1)"
+  # Token = path cuyo basename es exactamente saikit-merge.sh (no .sh.bak).
+  _pt_tok=""
+  while IFS= read -r _pt_cand || [ -n "$_pt_cand" ]; do
+    _pt_cand="$(pretool_strip_comillas_hatch "$_pt_cand")"
+    [ -n "$_pt_cand" ] || continue
+    case "$_pt_cand" in
+      */saikit-merge.sh|saikit-merge.sh)
+        _pt_tok="$_pt_cand"
+        break
+        ;;
+    esac
+  done <<EOF
+$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+' || true)
+EOF
+  printf '%s' "$_pt_tok"
+}
+# Basename that starts with saikit-merge.sh but continues (e.g. .bak): spoof.
+# Without this, bordered hatch would ignore .bak (ALLOW silencio) and the
+# truncating token would ALLOW by hashing the real pin — same observation.
+pretool_es_hatch_spoof() {
+  while IFS= read -r _pt_cand || [ -n "$_pt_cand" ]; do
+    _pt_cand="$(pretool_strip_comillas_hatch "$_pt_cand")"
+    _pt_base="${_pt_cand##*/}"
+    case "$_pt_base" in
+      saikit-merge.sh) ;;
+      saikit-merge.sh*) return 0 ;;
+    esac
+  done <<EOF
+$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+' || true)
+EOF
+  return 1
 }
 pretool_pins_iguales() { [ "$1" = "$2" ]; }
 
@@ -3378,6 +3414,9 @@ pretool_merge_guard() {
   fi
   if pretool_es_git_push_protegida "$_pt_cmd"; then
     emit_pretool_deny "merge denied: git push to master/main is blocked; use tools/saikit-merge.sh"
+  fi
+  if pretool_es_hatch_spoof "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: saikit-merge.sh path must end exactly at .sh"
   fi
   if pretool_es_hatch "$_pt_cmd"; then
     if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
