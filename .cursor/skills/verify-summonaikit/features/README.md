@@ -54,3 +54,4 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Merge a sealed PR (simulated)](./saikit-merge.md) covers `tools/saikit-merge.sh`
   with local Git/origin and a strict fake `gh`.
 - [Post-merge health warning](./saikit-postmerge.md) covers `tools/saikit-postmerge.sh` in simulated mode.
+- [Confirm before an autopilot merge](./autopilot-contract.md) covers the per-turn `-saikit:autopilot` sentinel, state flag, and confirmation paragraph.

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "autopilot-contract",
+  "card": "autopilot-contract.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/autopilot-contract.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["hooks/summonaikit-harness.sh"],
+  "requirements": ["doctor", "fixtures/escenarios"],
+  "cases": [
+    {
+      "id": "autopilot-sentinel",
+      "required_assertions": ["sentinel_exact", "lane_full", "autopilot_1"]
+    },
+    {
+      "id": "autopilot-no-inherit",
+      "required_assertions": ["plain_no_flag", "typo_no_flag", "followup_no_inherit"]
+    },
+    {
+      "id": "autopilot-paragraph",
+      "required_assertions": ["paragraph_present", "asks_confirm", "no_unattended"]
+    },
+    {
+      "id": "autopilot-persist",
+      "required_assertions": ["flag_after_tool"]
+    }
+  ]
+}
