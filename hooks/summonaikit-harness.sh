@@ -1158,7 +1158,7 @@ rn_take_pending() {
   rm -f "$RN_PENDING_PATH" 2>/dev/null || true
 }
 # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-# Task 10.1: write_state persiste tambien el carril (lane = full | fast). Un
+# Task 10.1: write_state persiste tambien el carril (lane = full | fast | seal_boot). Un
 # estado sin el campo (sembrado por el banco, o escrito por un hook previo a la
 # 10.1) lee lane="" — y "" != "fast", o sea que el default ausente es el lado
 # SEGURO: ceremonia completa. Ningun call site inventa un lane.
@@ -2037,7 +2037,7 @@ verdict_boot_and_seal() {
   # ilegible para el merge (elige este estado por mtime y falla el cruce).
   verdict_ensure_gitignore
   if [ ! -f "$STATE_PATH" ]; then
-    write_state "unknown" "0" "0" "0" "reviewer" "" "" "" "" "" "" ""
+    write_state "unknown" "0" "0" "0" "reviewer" "seal_boot" "" "" "" "" "" ""
     printf 'agent: reviewer\n' >> "$LOG_PATH" 2>/dev/null || true
   fi
   vd_sha="$(printf '%s' "$1" | verdict_unescape | sha256sum | cut -c1-64)"
@@ -2469,6 +2469,10 @@ record_tool_evidence() {
   # subagentType medido y no trae -saikit.
   if [ ! -f "$STATE_PATH" ]; then
     if verdict_try_seal_unarmed; then emit_allow; fi
+    emit_allow
+  fi
+  if [ "$(read_state_value lane)" = "seal_boot" ]; then
+    verdict_try_seal_unarmed
     emit_allow
   fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
@@ -3020,6 +3024,9 @@ RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'
 
 stop_gate() {
   if [ ! -f "$STATE_PATH" ]; then
+    emit_allow
+  fi
+  if [ "$(read_state_value lane)" = "seal_boot" ]; then
     emit_allow
   fi
 

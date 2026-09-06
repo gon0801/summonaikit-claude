@@ -796,6 +796,47 @@ caso "verdict_armed_implementer_no_sella"
 verdict_armed_implementer_no_sella
 fin_caso "verdict_armed_implementer_no_sella"
 
+# Stop con prosa (sin recibo) sobre estado seal_boot: ALLOW y el sello vive.
+# Sin el early-exit, el Stop trata task_hash=unknown como armado, exige recibo
+# y en unknown-honesto / presupuesto / close limpio borra el estado.
+verdict_unarmed_stop_prosa_conserva_sello() {
+  verdict_unarmed_grok_reviewer_write_sella
+  sello="$(lab_estado veredicto_sha256)"
+  _no_vacio "sello previo al Stop" "$sello"
+  _igual "lane del boot unarmed" "$(lab_estado lane)" "seal_boot"
+  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean. El veredicto esta sellado.' end_turn)"
+  _igual "Stop seal_boot no bloquea" "$LAB_RC" "0"
+  if printf '%s' "$LAB_OUT" | grep -Fq '"decision":"block"'; then
+    _mal "Stop seal_boot exigio recibo"
+  fi
+  if ! lab_hay_estado; then
+    _mal "Stop no debe borrar STATE_PATH del sello"
+  fi
+  _igual "sello sobrevive Stop" "$(lab_estado veredicto_sha256)" "$sello"
+  _contiene "agents_seen sigue reviewer" "$(lab_estado agents_seen)" "reviewer"
+}
+
+caso "verdict_unarmed_stop_prosa_conserva_sello"
+verdict_unarmed_stop_prosa_conserva_sello
+fin_caso "verdict_unarmed_stop_prosa_conserva_sello"
+
+# Write de codigo en la misma sesion unarmed: no cae a mark_evidence.
+verdict_unarmed_write_codigo_no_implementa() {
+  verdict_unarmed_grok_reviewer_write_sella
+  sello="$(lab_estado veredicto_sha256)"
+  _no_vacio "sello previo al Write" "$sello"
+  lab_run tool claude "$(verdict_payload_grok_write "" "src/foo.py" "print(1)")"
+  _igual "write de codigo no marca implemented" "$(lab_estado implemented)" "0"
+  _igual "sello sobrevive write de codigo" "$(lab_estado veredicto_sha256)" "$sello"
+  if ! lab_hay_estado; then
+    _mal "write de codigo no debe borrar el estado del sello"
+  fi
+}
+
+caso "verdict_unarmed_write_codigo_no_implementa"
+verdict_unarmed_write_codigo_no_implementa
+fin_caso "verdict_unarmed_write_codigo_no_implementa"
+
 # ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
 # agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
 # despacharte, asi que git rev-parse HEAD es el sha del arbol que estas
@@ -856,13 +897,15 @@ mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the re
 # veredicto sellado — la atrapa contrato_close_cita_sha_y_ruta_del_veredicto_sellado.
 mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
 mut_veredicto_sello_unarmed_apagado() { sed 's/^verdict_try_seal_unarmed() {$/verdict_try_seal_unarmed() {\n  return 1/'; }
+mut_veredicto_seal_boot_stop_apagado() { sed 's/read_state_value lane)" = "seal_boot"/read_state_value lane)" = ""/'; }
 
 MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
 rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
 implemented_sin_guardia|verdict_write_no_acredita_implemented
 lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
 close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
-sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella"
+sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella
+seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
