@@ -40,6 +40,14 @@ mk_min_skill() {  # $1=dir
   cp "$CTRL" "$d/scripts/control-summonaikit"
   chmod +x "$d/scripts/control-summonaikit"
   cp "$LINT" "$d/scripts/lint-feature-map.py"
+  if [ -d "$SKILL/scripts/lib" ]; then
+    mkdir -p "$d/scripts/lib"
+    for f in "$SKILL/scripts/lib"/*; do
+      [ -f "$f" ] || continue
+      case "$f" in *.pyc) continue ;; esac
+      cp "$f" "$d/scripts/lib/"
+    done
+  fi
   cp "$SKILL/features/README.md" "$d/features/README.md"
   # copy four cards + descriptors + catalog from real as base
   for f in install-guardian gate-turn audit-ledger check-deploy-log; do

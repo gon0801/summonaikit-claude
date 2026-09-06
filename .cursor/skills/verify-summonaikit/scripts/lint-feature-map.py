@@ -65,6 +65,8 @@ def skill_rel_allowed(
     """
     if rel.startswith("artifacts/") or rel.startswith(".run/"):
         return False
+    if Path(rel).name == ".DS_Store":
+        return True
     if "__pycache__" in rel.split("/") or rel.endswith(".pyc"):
         return False
     if rel == "SKILL.md":
@@ -125,16 +127,16 @@ def discover_from_roots(repo: Path, roots: list[dict[str, Any]] | None) -> set[s
             for p in base.iterdir():
                 if p.name == "lib" and p.is_dir():
                     for lib in p.iterdir():
-                        if lib.is_file():
+                        if lib.is_file() and lib.name != ".DS_Store":
                             found.add(lib.relative_to(repo).as_posix())
                     continue
-                if p.is_file():
+                if p.is_file() and p.name != ".DS_Store":
                     found.add(p.relative_to(repo).as_posix())
         elif kind == "dir":
             if not base.is_dir():
                 continue
             for p in base.rglob("*"):
-                if p.is_file() and ".git" not in p.parts:
+                if p.is_file() and ".git" not in p.parts and p.name != ".DS_Store":
                     found.add(p.relative_to(repo).as_posix())
         else:
             raise LintError(f"root.kind desconocido: {kind} ({rel})")
@@ -245,7 +247,7 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
 
     # skill checkout allowlist: only permitted sources (no artifacts/.run/pyc)
     for p in sorted(skill.rglob("*")):
-        if not p.is_file():
+        if not p.is_file() or p.name == ".DS_Store":
             continue
         rel = p.relative_to(skill).as_posix()
         if not skill_rel_allowed(
