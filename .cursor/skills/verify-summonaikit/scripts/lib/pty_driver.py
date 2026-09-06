@@ -4,7 +4,7 @@
 Usage:
   python3 pty_driver.py --probe
   python3 pty_driver.py --timeout SEC --cwd DIR --out FILE
-                       [--answer TEXT ...] -- CMD [ARG ...]
+                       [--prompt-contains TEXT] [--answer TEXT ...] -- CMD [ARG ...]
 
 --probe exits 0 if a real PTY can be opened, else 3.
 SAIKIT_VERIFY_PTY=missing forces unavailable (exit 3). A pipe is never
@@ -106,7 +106,36 @@ def kill_group(pid: int, sig: int) -> None:
             pass
 
 
-def run(cmd: list[str], cwd: str, timeout: float, answers: list[str]) -> dict[str, Any]:
+def answer_ready(transcript: str, sent: int, prompt_contains: str) -> bool:
+    """True when the next --answer can be written.
+
+    Default: wait for the setup-style ``N/5`` marker (19.8).
+    ``--prompt-contains`` waits for that substring instead (CI offer, etc.).
+    """
+    if prompt_contains:
+        start = 0
+        idx = -1
+        for _ in range(sent + 1):
+            idx = transcript.find(prompt_contains, start)
+            if idx < 0:
+                return False
+            start = idx + len(prompt_contains)
+        tail = transcript[idx:]
+        return "]: " in tail or ": " in tail or tail.rstrip().endswith(":")
+    marker = f"{sent + 1}/5"
+    if marker not in transcript:
+        return False
+    tail = transcript.split(marker, 1)[-1]
+    return "]: " in tail or ":" in tail
+
+
+def run(
+    cmd: list[str],
+    cwd: str,
+    timeout: float,
+    answers: list[str],
+    prompt_contains: str = "",
+) -> dict[str, Any]:
     if not pty_available():
         return {
             "pty": False,
@@ -165,11 +194,7 @@ def run(cmd: list[str], cwd: str, timeout: float, answers: list[str]) -> dict[st
                     break
                 transcript += chunk.decode("utf-8", "replace")
                 while sent < len(answers):
-                    marker = f"{sent + 1}/5"
-                    if marker not in transcript:
-                        break
-                    tail = transcript.split(marker, 1)[-1]
-                    if "]: " not in tail and ":" not in tail:
+                    if not answer_ready(transcript, sent, prompt_contains):
                         break
                     try:
                         os.write(master, (answers[sent] + "\n").encode("utf-8"))
@@ -244,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cwd", default=".")
     ap.add_argument("--out", default="")
     ap.add_argument("--answer", action="append", default=[])
+    ap.add_argument(
+        "--prompt-contains",
+        default="",
+        help="Wait for this substring before each --answer (default: N/5)",
+    )
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
 
@@ -257,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         write_out(args.out or None, {"pty": False, "exit": 2, "reason": "falta comando"})
         return 2
 
-    payload = run(cmd, args.cwd, args.timeout, list(args.answer))
+    payload = run(cmd, args.cwd, args.timeout, list(args.answer), args.prompt_contains)
     write_out(args.out or None, payload)
     if not payload.get("pty"):
         return 3

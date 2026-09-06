@@ -54,3 +54,5 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Merge a sealed PR (simulated)](./saikit-merge.md) covers `tools/saikit-merge.sh`
   with local Git/origin and a strict fake `gh`.
 - [Post-merge health warning](./saikit-postmerge.md) covers `tools/saikit-postmerge.sh` in simulated mode.
+- [Prepare the autopilot of a repo](./setup-autopilot.md) covers the five setup questions, flags, and lock.
+- [Offer a minimum CI workflow](./ci-minimo.md) covers accept/reject of a pinned workflow without claiming a live Actions run.
