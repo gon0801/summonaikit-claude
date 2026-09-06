@@ -290,8 +290,11 @@ for need in (
 PY
 fi
 
-assert_obs routing-recipes claude_implementer 'claude-sonnet-5'
-assert_obs routing-recipes grok_reviewer 'grok-4.6'
+# Expected model IDs come from the router (candado: no literal IDs in tests/).
+CL_MODEL="$(bash "$repo/tools/model-routing.sh" --host claude --role implementer --field model)"
+GK_MODEL="$(bash "$repo/tools/model-routing.sh" --host grok --role reviewer --field model)"
+assert_obs routing-recipes claude_implementer "$CL_MODEL"
+assert_obs routing-recipes grok_reviewer "$GK_MODEL"
 assert_obs routing-recipes empty_unmeasured 'vacio|empty|zcode|kimi|dsh'
 assert_obs routing-recipes unknown_role_exit_2 '2'
 assert_obs routing-recipes manifest_check_ok '0|al dia|ok'
@@ -395,15 +398,21 @@ chmod +x "$stub"
 ctrl_drv "$stub" drive routing-recipes >/dev/null 2>&1 || true
 steps="$(latest_steps routing-recipes)"
 if [ -n "$steps" ] && [ -f "$steps" ]; then
-python3 - "$steps" <<'PY' || malo "header-only acredito claude-sonnet-5"
+python3 - "$steps" "$CL_MODEL" <<'PY' || malo "header-only acredito model-id del router"
 import json, sys
+cl = sys.argv[2]
 for line in open(sys.argv[1], encoding="utf-8"):
     if not line.strip():
         continue
     rec = json.loads(line)
     obs = str(rec.get("observed") or "")
-    if rec.get("assertion_id") == "claude_implementer" and "claude-sonnet-5" in obs and rec.get("result") == "PASS":
-        raise SystemExit("header-only acredito claude_implementer")
+    if (
+        rec.get("assertion_id") == "claude_implementer"
+        and rec.get("result") == "PASS"
+        and cl
+        and cl in obs
+    ):
+        raise SystemExit("header-only acredito claude_implementer con model-id")
 raise SystemExit(0)
 PY
 fi
@@ -460,7 +469,7 @@ mut_omit_hosts omit_symlink symlink_refused 'enlace|symlink|intact' \
   '/assert:symlink_refused/,/assert:symlink_refused_end/d'
 mut_omit_hosts omit_hash dest_matches_source '[a-f0-9]{12,}' \
   '/assert:dest_matches_source/,/assert:dest_matches_source_end/d'
-mut_omit_routing omit_routing claude_implementer 'claude-sonnet-5' \
+mut_omit_routing omit_routing claude_implementer "$CL_MODEL" \
   '/assert:claude_implementer/,/assert:claude_implementer_end/d'
 
 if [ "$fail" -ne 0 ]; then

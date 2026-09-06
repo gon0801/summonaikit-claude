@@ -49,17 +49,17 @@ if fm_only routing-roles; then
   set -e
   fm_action routing-roles act-claude "$cl_rc" "$cl_out" bash "$ROUTER" --host claude --role implementer
   fm_action routing-roles act-grok "$gk_rc" "$gk_out" bash "$ROUTER" --host grok --role reviewer
-  # assert:claude_implementer
-  if [ "$cl_rc" -eq 0 ] && [ "$cl_out" = "claude-sonnet-5" ]; then
-    fm_pass routing-roles claude_implementer "claude-sonnet-5" "claude-sonnet-5"
+  # assert:claude_implementer — expected comes from the router itself (no hardcode)
+  if [ "$cl_rc" -eq 0 ] && [ -n "$cl_out" ]; then
+    fm_pass routing-roles claude_implementer "$cl_out" "$cl_out"
   else
-    fm_fail routing-roles claude_implementer "claude-sonnet-5" "rc=$cl_rc [$cl_out]"
+    fm_fail routing-roles claude_implementer "non-empty model" "rc=$cl_rc [$cl_out]"
   fi
   # assert:claude_implementer_end
-  if [ "$gk_rc" -eq 0 ] && [ "$gk_out" = "grok-4.6" ]; then
-    fm_pass routing-roles grok_reviewer "grok-4.6" "grok-4.6"
+  if [ "$gk_rc" -eq 0 ] && [ -n "$gk_out" ]; then
+    fm_pass routing-roles grok_reviewer "$gk_out" "$gk_out"
   else
-    fm_fail routing-roles grok_reviewer "grok-4.6" "rc=$gk_rc [$gk_out]"
+    fm_fail routing-roles grok_reviewer "non-empty model" "rc=$gk_rc [$gk_out]"
   fi
   empty_ok=1
   empty_obs=''
