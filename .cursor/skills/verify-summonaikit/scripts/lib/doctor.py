@@ -28,7 +28,9 @@ from typing import Any
 SCHEMA_VERSION = 1
 RANK = {"PASS": 0, "unknown": 1, "FAIL": 2}
 EXIT_FOR = {"PASS": 0, "FAIL": 1, "unknown": 3}
-ACTIVE_STATUSES = frozenset({"active", "blocked"})
+# Catalog `blocked` is inventoried (listed in `blocked`) but does not fail
+# the local doctor aggregate. Live merge stays Optional (19.16).
+ACTIVE_STATUSES = frozenset({"active"})
 
 def mutate_of(explicit: str | None) -> str:
     return (explicit or os.environ.get("SAIKIT_VERIFY_MUTATE") or "").strip()
@@ -412,11 +414,20 @@ def eval_pty() -> dict[str, Any]:
 
 
 def eval_live_auth() -> dict[str, Any]:
+    dest = (os.environ.get("SAIKIT_LIVE_DEST") or "").strip()
+    auth = (os.environ.get("SAIKIT_LIVE_AUTH") or "").strip()
+    parts: list[str] = []
+    if not auth:
+        parts.append("sin autorización viva")
+    if not dest:
+        parts.append("sin destino concreto")
+    if auth and dest:
+        parts.append("autorización/destino presentes no ejecutan merge vivo")
     return req_result(
         kind="live_authorization",
         result="unknown",
         availability="BLOCKED",
-        reason="sin autorización viva (19.16)",
+        reason="; ".join(parts) + " (19.16)",
     )
 
 

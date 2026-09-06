@@ -163,7 +163,7 @@ for fid, want in (
     ("capture-payloads", "active"),
     ("decision-blast", "active"),
     ("stage-override", "pending"),
-    ("merge-happy-path", "pending"),
+    ("merge-happy-path", "blocked"),
     ("install-guardian", "active"),
     ("routing-recipes", "active"),
     ("verify-app", "active"),

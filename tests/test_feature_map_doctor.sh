@@ -441,7 +441,7 @@ PY
 
 caso "mut-blocked-as-pass: blocked_as_pass presenta BLOCKED como PASS"
 reset_io
-# live_authorization es BLOCKED aun con gh oficial (no se implementa 19.16).
+# live_authorization es BLOCKED aun con gh oficial (19.16: precondiciones, no vivo).
 out_base="$(doctor_py --feature-id merge-happy-path 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] && malo "baseline blocked-no-es-pass no debe PASS/0: $out_base"
 python3 - <<PY || malo "baseline merge-happy-path no esta BLOCKED/unknown"
@@ -580,7 +580,7 @@ for fid in ("install-guardian","gate-turn","audit-ledger","check-deploy-log"):
     f=d["features"][fid]
     assert f["result"]=="PASS" and f["availability"]=="ready", (fid, f)
     assert fid in d["ready"]
-# pending live no se acredita
+# blocked live no se acredita
 mh=d["features"]["merge-happy-path"]
 assert mh["result"]!="PASS", mh
 assert mh["availability"] in ("MISSING","BLOCKED")
