@@ -113,6 +113,20 @@ print(skill / path)
 PY
 }
 
+_feature_mode() {
+  python3 - "$skill_root/features/$1.json" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if not p.is_file():
+    print("sandbox")
+    raise SystemExit(0)
+d = json.loads(p.read_text(encoding="utf-8"))
+mode = d.get("execution_mode") or "sandbox"
+print(mode if mode in ("sandbox", "simulated", "live") else "sandbox")
+PY
+}
+
 _dispatch_driver() {
   local fid="$1" scope="$2" only="${3:-}"
   local meta cases reqs
