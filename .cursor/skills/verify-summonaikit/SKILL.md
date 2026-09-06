@@ -62,13 +62,22 @@ feature map under `features/`. Stable handles are CLI flags, stdout markers
 marker), and fixture scenario directory names — not coordinates.
 
 ```bash
+"$CTRL" list-features
 "$CTRL" doctor
+"$CTRL" drive install-guardian
 "$CTRL" drive-install-dry-run
 "$CTRL" drive-gate-scenario 01-sin-armar
 "$CTRL" drive-gate-scenario 02-armado-contrato
 "$CTRL" drive-audit-ledger
 "$CTRL" drive-deploy-log
 ```
+
+`list-features` prints `id`, `card`, `mode` and declared `scope` for every catalog
+entry (including pending) and does **not** launch. `drive <id>` runs every
+required case of that feature and writes evidence v1 under
+`artifacts/<run_id>/<feature_id>/<attempt_id>/`. The four `drive-*` aliases
+do the same wrap; `drive-gate-scenario` declares **partial** scope (one
+scenario, not all of `gate-turn`).
 
 Ad-hoc under the isolated home, **only catalog public entries** (not an
 arbitrary shell or command — a deliberate restriction vs the old CLI):
@@ -93,7 +102,10 @@ that to the operator.
 ## Evidence
 
 Proof artifacts live in `.cursor/skills/verify-summonaikit/artifacts/` and
-**survive** cleanup.
+**survive** cleanup. Each drive attempt uses an exclusive directory
+`artifacts/<run_id>/<feature_id>/<attempt_id>/` with `steps.jsonl`,
+`summary.json` and redacted logs. Retry and cleanup keep prior attempt
+dirs. `PASS` exits 0, `FAIL` exits 1, `unknown` exits 3.
 
 Proof standards:
 
@@ -142,8 +154,10 @@ Executable helper (invocation above):
 | `doctor` | Read-only instance health |
 | `cleanup` | Tear down instance; keep evidence |
 | `cli -- …` | Run a **catalog public** entry with isolated env (not an arbitrary shell) |
+| `list-features` | Enumerate id/card/mode/scope without launch |
+| `drive <id>` | Run all required cases for that feature (evidence v1) |
 | `drive-install-dry-run` | Installer dry-run proof |
-| `drive-gate-scenario [name]` | One golden-harness scenario |
+| `drive-gate-scenario [name]` | One golden-harness scenario (partial scope) |
 | `drive-audit-ledger` | Ledger audit proof |
 | `drive-deploy-log` | Deploy-log check proof |
 

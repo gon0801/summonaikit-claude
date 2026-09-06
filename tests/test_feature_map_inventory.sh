@@ -55,6 +55,10 @@ mk_min_skill() {  # $1=dir
     cp "$SKILL/features/$f.json" "$d/features/$f.json"
   done
   cp "$SKILL/features/catalog.json" "$d/features/catalog.json"
+  if [ -d "$SKILL/schemas" ]; then
+    mkdir -p "$d/schemas"
+    cp "$SKILL/schemas/"*.json "$d/schemas/" 2>/dev/null || true
+  fi
 }
 
 mk_min_repo() {  # $1=dir — árbol descubrible mínimo alineado al catálogo

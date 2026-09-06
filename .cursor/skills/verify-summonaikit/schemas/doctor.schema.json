@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "feature-map doctor v1 stub",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "features": {"type": "object"},
+    "ready": {"type": "array"},
+    "blocked": {"type": "array"},
+    "failed": {"type": "array"}
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "feature-map step v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "type",
+    "run_id",
+    "attempt_id",
+    "feature_id",
+    "case_id",
+    "step_id",
+    "time",
+    "mode"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "type": {"enum": ["action", "assertion", "diagnostic"]},
+    "run_id": {"type": "string"},
+    "attempt_id": {"type": "string"},
+    "feature_id": {"type": "string"},
+    "case_id": {"type": "string"},
+    "step_id": {"type": "string"},
+    "time": {"type": "string"},
+    "mode": {"enum": ["sandbox", "simulated", "live"]},
+    "command": {
+      "type": ["array", "null"],
+      "items": {"type": "string"}
+    },
+    "tool_exit": {"type": ["integer", "null"]},
+    "observation": {},
+    "log_ref": {"type": ["string", "null"]},
+    "assertion_id": {"type": "string"},
+    "expected": {},
+    "observed": {},
+    "result": {"enum": ["PASS", "FAIL", "unknown"]}
+  }
+}
