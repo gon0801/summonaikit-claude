@@ -55,3 +55,5 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
   with local Git/origin and a strict fake `gh`.
 - [Post-merge health warning](./saikit-postmerge.md) covers `tools/saikit-postmerge.sh` in simulated mode.
 - [Confirm before an autopilot merge](./autopilot-contract.md) covers the per-turn `-saikit:autopilot` sentinel, state flag, and confirmation paragraph.
+- [Prepare the autopilot of a repo](./setup-autopilot.md) covers the five setup questions, flags, and lock.
+- [Offer a minimum CI workflow](./ci-minimo.md) covers accept/reject of a pinned workflow without claiming a live Actions run.
