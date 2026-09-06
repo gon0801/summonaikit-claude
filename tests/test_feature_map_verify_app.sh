@@ -157,14 +157,16 @@ for need in (
 for c in desc.get("cases") or []:
     assert c.get("required_assertions"), c
 # resto: no tocar otras features
+# Otras features: no exigir pending de filas ya mergeadas/activadas en serie.
 for fid, want in (
-    ("check-secrets", "pending"),
-    ("capture-payloads", "pending"),
+    ("check-secrets", "active"),
+    ("capture-payloads", "active"),
     ("decision-blast", "pending"),
     ("stage-override", "pending"),
     ("merge-happy-path", "pending"),
     ("install-guardian", "active"),
     ("routing-recipes", "active"),
+    ("verify-app", "active"),
 ):
     st = (feats.get(fid) or {}).get("status")
     assert st == want, (fid, st, want)

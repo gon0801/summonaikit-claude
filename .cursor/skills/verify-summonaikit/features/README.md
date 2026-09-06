@@ -60,3 +60,5 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Install hosts and register them](./install-hosts.md) covers the four hook copies, zcode reuse, kimi profiles, and registration text.
 - [Route models and lock the recipe book](./routing-recipes.md) covers `tools/model-routing.sh` and `tools/gen-recetas-manifest.sh`.
 - [Generate the Spanish app map](./verify-app.md) covers generate/estado of `skills/saikit-verificar-app/verificar.sh` on a disposable fixture; it does not refresh the checkout `verify/` seal.
+- [Check committed secrets](./check-secrets.md) covers `tools/check-secrets.sh`.
+- [Capture synthetic payloads](./capture-payloads.md) covers `tools/capture-payloads.sh`.
