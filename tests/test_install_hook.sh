@@ -2929,7 +2929,7 @@ grep -Fq 'saikit-tools/saikit-decision.sh' "$lider" \
 
 caso "18.12: --host grok tambien planta ~/.claude/saikit-tools (el verifier lo enseña)"
 nuevo_home_grok
-out="$(host_grok 2>&1)" || true
+out="$(host_grok 2>&1)"
 rc=$?
 [ "$rc" -eq 0 ] || malo "--host grok salio $rc: $out"
 for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do

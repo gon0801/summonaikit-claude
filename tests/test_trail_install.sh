@@ -12,11 +12,14 @@ install_host() {
   HOME="$host_home" USERPROFILE="$host_home" bash "$tool" --host "$host" --no-registration-check "$@"
 }
 check_tools() {
-  local rel
+  local rel help_out
   for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
     cmp -s "$host_home/.claude/saikit-tools/$rel" "$repo/tools/$rel" \
       || mal "$host: falta o difiere $rel"
   done
+  help_out="$(HOME="$host_home" bash "$host_home/.claude/saikit-tools/saikit-decision.sh" --help 2>&1)"
+  [ "$?" -eq 0 ] || mal "$host: decision --help fallo"
+  if printf '%s' "$help_out" | grep -Fq SAIKIT_MARCA; then mal "$host: ayuda expone marca de ownership"; fi
   HOME="$host_home" USERPROFILE="$host_home" bash "$host_home/.claude/saikit-tools/saikit-decision.sh" \
     --append --task t --etapa verify --decision d --por-que p --evidencia e --resultado ok \
     --dir "$host_home/project/.saikit/decisiones" >/dev/null 2>&1 || mal "$host: decision no corre"
@@ -72,6 +75,30 @@ for host in codex dsh; do
     done
   done
 done
+
+printf 'caso: fallo de copia de lib conserva el paquete anterior entero\n'
+host=codex
+host_home="$SANDBOX/fallo-publicacion"
+tools_dest="$host_home/.claude/saikit-tools"
+mkdir -p "$tools_dest/lib"
+for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  cp "$repo/tools/$rel" "$tools_dest/$rel"
+  printf '\n# version anterior para exigir actualizacion\n' >> "$tools_dest/$rel"
+done
+cp -R "$tools_dest" "$host_home/previo"
+export TRAIL_FAIL_SOURCE="$(cd "$(dirname "$tool")" && pwd)/lib/redactar.sh"
+cp() {
+  local arg
+  for arg in "$@"; do [ "$arg" != "$TRAIL_FAIL_SOURCE" ] || return 73; done
+  command cp "$@"
+}
+export -f cp
+if install_host > "$host_home/fallo.log" 2>&1; then mal "publicacion parcial declaro exito"; fi
+unset -f cp
+unset TRAIL_FAIL_SOURCE
+diff -r "$host_home/previo" "$tools_dest" >/dev/null 2>&1 \
+  || mal "fallo de lib modifico el paquete anterior"
+[ ! -e "$host_home/.codex/hooks/summonaikit-harness.sh" ] || mal "fallo de lib publico hook"
 
 printf 'caso: quitar no atraviesa el symlink padre de lib\n'
 remove_home="$SANDBOX/quitar"

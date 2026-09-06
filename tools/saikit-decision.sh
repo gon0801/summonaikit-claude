@@ -85,7 +85,7 @@ CUANDO=""; DIR=""; MODO=""; candado_propio=0
 lock_nonce=""; lock_dir=""
 
 uso() {
-  sed -n '2,80p' "$0"
+  sed -n '/^# saikit-decision.sh/,/^set -u/{ /^#/p; }' "$0"
 }
 
 while [ $# -gt 0 ]; do

@@ -146,3 +146,50 @@ fallo en cinco casos de adversary; la misma prueba sobre origin/master sin
 estos cambios fallo en exactamente los mismos cinco. No se atribuye una
 causa no diagnosticada ni se cuenta esa prueba como verde. CI Linux es el
 ejecutor de esos casos; el gate agregado sigue pendiente del nuevo push.
+
+## Comentarios automaticos del PR: medicion y cierre
+
+El CI del head `c01b6ad` termino con los ocho jobs en success, incluido `gate`:
+https://github.com/gon0801/summonaikit-claude/actions/runs/34008244026
+La revision automatica sobre `7947124` llego mientras corria ese CI. No se
+solicito otra ronda. Sus seis comentarios se contrastaron con el codigo:
+
+- Preambulo: dos casos nuevos midieron cierre indebido con skip/citas antes
+  de la cabecera del recibo. Se extrae desde la ultima cabecera explicita;
+  se conserva el formato legacy sin cabecera y el canal parcial actual.
+- Publicacion parcial: forzar el fallo de `cp` de redactar.sh devolvia fallo
+  pero ya habia reemplazado los comandos. Ahora los tres archivos se preparan
+  en un arbol hermano y se publica el paquete completo. El test compara el
+  paquete anterior entero tras el fallo; el hook tampoco se publica.
+- La ayuda del decision tool mostraba SAIKIT_MARCA: ahora imprime solo su
+  bloque de comentarios de uso. Regresion sobre el comando instalado real.
+- Se quita `|| true` de la captura del exit de host_grok en el test, para
+  que la asercion vea el fallo real.
+- Cursor actualizo su blast y TSV en `b2fcb38` con sus corridas nuevas de
+  adversary_lock/gate_behavior; ya no afirma que los conteos del head antiguo
+  acrediten el final. Ese commit concurrente se preservo sin mezclar staging.
+- Los rootdir de pytest en Evidence.txt se redactan como <PROJECT_ROOT>;
+  se declara esa normalizacion, conservando resultados y duraciones medidos.
+
+Rojo propio previo a los cambios de produccion, extractos literales:
+
+```text
+FAIL: skip antes del recibo exit: esperaba [2], dio [0]
+FAIL: cita antes del recibo exit: esperaba [2], dio [0]
+test_trail_gate: FAIL
+FAIL: codex: ayuda expone marca de ownership
+FAIL: dsh: ayuda expone marca de ownership
+FAIL: fallo de lib modifico el paquete anterior
+test_trail_install: FAIL
+```
+
+Ambos drivers exit 1. Despues: los mismos comandos exit 0,
+`test_trail_gate: OK` (22 casos), `test_trail_install: OK`.
+G8: 17 mutaciones atrapadas, incluidas las dos fronteras nuevas.
+Instalador: siete mutaciones atrapadas, incluidas publicacion_parcial y
+ayuda_con_marca. Golden --check: 57 escenarios sin cambio de comportamiento.
+Este follow-up cambia codigo despues de ambas revisiones; no se afirma una
+revision nueva del codigo final. El nuevo CI debe acreditar el head final.
+`test_install_hook: OK` y `test_gate_behavior: OK` posteriores al fix (exit 0;
+behavior declara el mismo SKIP de touch en macOS). La regrabacion golden
+cambia solo sha256, bytes y lineas del hook; los 57 escenarios no cambian.

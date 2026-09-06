@@ -2670,13 +2670,34 @@ has_receipt_label() {
   printf '%s' "$text" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
+trail_receipt_block() {
+  # Si hay cabecera explicita, su preambulo no acredita el recibo. Sin ella
+  # se conserva el formato legacy por etiquetas y el canal parcial actual.
+  # Decodificar tambien el salto literal usado por el transporte de Codex.
+  printf '%s' "$1" | awk '
+    {
+      gsub(/\\n/, "\n")
+      n = split($0, lines, "\n")
+      for (i = 1; i <= n; i++) {
+        if (toupper(lines[i]) ~ /^[[:space:]]*(\*\*|__)?SUMMONAIKIT HARNESS RECEIPT/) out = ""
+        out = out lines[i] "\n"
+      }
+    }
+    END { printf "%s", out }
+  '
+}
+
 has_trail_skip() {
-  has_receipt_label "$TRAIL_SKIP_LABEL" "$TRAIL_SKIP_LABEL" "$1" || return 1
-  printf '%s' "$1" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?TRAIL SKIP(\*\*|__)?[[:space:]]*:[[:space:]]*[^[:space:]]"
+  local trail_receipt
+  trail_receipt="$(trail_receipt_block "$1")"
+  has_receipt_label "$TRAIL_SKIP_LABEL" "$TRAIL_SKIP_LABEL" "$trail_receipt" || return 1
+  printf '%s' "$trail_receipt" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?TRAIL SKIP(\*\*|__)?[[:space:]]*:[[:space:]]*[^[:space:]]"
 }
 
 close_span() {
-  printf '%s' "$1" | awk '
+  local trail_receipt
+  trail_receipt="$(trail_receipt_block "$1")"
+  printf '%s' "$trail_receipt" | awk '
     function strip_pfx(s,    t) {
       t = s
       sub(/^[[:space:]]*/, "", t)

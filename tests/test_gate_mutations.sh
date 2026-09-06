@@ -200,6 +200,8 @@ G8|trail_tambien_en_fast|el guard lane!=fast se apaga y fast sin cita bloquea
 G8|trail_parrafo_solo_hc|build_gate_feedback deja de adosar trail_parrafo
 G8|trail_sin_limite_fisico|una carpeta de evidencia enlazada afuera se acredita
 G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acredita
+G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
+G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -934,6 +936,8 @@ mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pre
 mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd"; then/if pretool_es_hatch "$_pt_cmd"; then if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then emit_allow; fi; emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"; fi; if pretool_es_gh_pr_merge "$_pt_cmd"; then/'; }
 
 mut_trail_sin_limite_fisico() { sed 's/"$ADV_PROJECT_CANON"|"$ADV_PROJECT_CANON"\/\*) return 0 ;;/\*) return 0 ;;/'; }
+mut_trail_skip_preambulo() { sed '/^has_trail_skip()/,/^}/s/trail_receipt="$(trail_receipt_block "$1")"/trail_receipt="$1"/'; }
+mut_trail_close_preambulo() { sed '/^close_span()/,/^}/s/trail_receipt="$(trail_receipt_block "$1")"/trail_receipt="$1"/'; }
 mut_trail_acepta_archivo_enlazado() { sed '/\[ ! -L "\$_joined" \] || return 1/d'; }
 mut_trail_check_eliminado() { sed 's/if ! has_trail_skip "\$text_hatch"; then/if false; then/'; }
 mut_trail_vuelve_a_glob() {

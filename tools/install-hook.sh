@@ -2742,7 +2742,7 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
 # claude publican el mismo verifier plantilla con esa ruta. Sin este plant, un
 # --host grok enseña el comando y el archivo no existe (hallazgo adversary 18.12).
 publicar_saikit_tools() {
-  local f rc_tools rc_lib rel tools_estado
+  local f rel tools_estado tools_cambios=0 tools_dest tools_nuevo tools_publicar tools_old
   for f in "$repo/tools/saikit-decision.sh" \
            "$repo/tools/saikit-blast.sh" \
            "$repo/tools/lib/redactar.sh"; do
@@ -2764,19 +2764,41 @@ publicar_saikit_tools() {
       DESCONOCIDO|NO_OBSERVABLE)
         decir "[summonaikit] saikit-tools: $tools_estado, intacto: $f; no se publica nada"
         return 5 ;;
+      NUESTRO_IDENTICO) ;;
+      *) tools_cambios=1 ;;
     esac
   done
-  recetas_publicar_dir "$HOME/.claude/saikit-tools" \
-    "$repo/tools/saikit-decision.sh" \
-    "$repo/tools/saikit-blast.sh" || {
-    rc_tools=$?
-    decir "[summonaikit] saikit-tools: no se publico ($HOME/.claude/saikit-tools)"
-    return "$rc_tools"; }
-  recetas_publicar_dir "$HOME/.claude/saikit-tools/lib" \
-    "$repo/tools/lib/redactar.sh" || {
-    rc_lib=$?
-    decir "[summonaikit] saikit-tools: lib no se publico, pero saikit-tools SI quedo publicado"
-    return "$rc_lib"; }
+  [ "$tools_cambios" -eq 1 ] || return 0
+  tools_dest="$HOME/.claude/saikit-tools"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    recetas_publicar_dir "$tools_dest" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" || return $?
+    recetas_publicar_dir "$tools_dest/lib" "$repo/tools/lib/redactar.sh"
+    return $?
+  fi
+  # Los comandos y su dependencia se preparan JUNTOS fuera del destino.
+  # Un fallo de lib no puede dejar comandos nuevos con una lib vieja/ausente.
+  mkdir -p "$HOME/.claude" || return 5
+  tools_nuevo="$(mktemp -d "$HOME/.claude/.saikit-tools-XXXXXX")" || return 5
+  if [ -d "$tools_dest" ]; then
+    cp -p -R "$tools_dest"/. "$tools_nuevo"/ || { rm -rf "$tools_nuevo"; return 5; }
+  fi
+  tools_publicar="$tools_nuevo"
+  if ! recetas_publicar_dir "$tools_publicar" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" \
+    || ! recetas_publicar_dir "$tools_publicar/lib" "$repo/tools/lib/redactar.sh"; then
+    rm -rf "$tools_nuevo"
+    decir "[summonaikit] saikit-tools: no se publico; paquete anterior intacto"
+    return 5
+  fi
+  tools_old="$tools_nuevo.anterior"
+  if [ -d "$tools_dest" ]; then
+    mv "$tools_dest" "$tools_old" || { rm -rf "$tools_nuevo"; return 5; }
+  fi
+  mv "$tools_nuevo" "$tools_dest" || {
+    [ ! -d "$tools_old" ] || mv "$tools_old" "$tools_dest"
+    rm -rf "$tools_nuevo"
+    return 5
+  }
+  [ ! -d "$tools_old" ] || rm -rf "$tools_old"
   return 0
 }
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
