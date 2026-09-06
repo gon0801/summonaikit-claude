@@ -315,59 +315,20 @@ PY
 }
 
 cmd_doctor() {
-  need_cmd bash
   need_cmd python3
-  [ -f "$HOOK_SRC" ] || die "hook source missing: $HOOK_SRC"
-  [ -f "$INSTALLER" ] || die "installer missing: $INSTALLER"
-  [ -f "$repo/tools/audita-ledger.sh" ] || die "audita-ledger.sh missing"
-  [ -f "$repo/tools/check-deploy-log.sh" ] || die "check-deploy-log.sh missing"
-  [ -f "$repo/tools/golden-harness.sh" ] || die "golden-harness.sh missing"
-
-  load_state doctor
-
-  fail=0
-  printf 'doctor: VERIFY_HOME=%s\n' "$VERIFY_HOME"
-  printf 'doctor: DEST=%s\n' "$VERIFY_DEST"
-
-  if [ ! -f "$VERIFY_DEST" ]; then
-    printf 'doctor: FAIL — hook not installed at DEST\n'
-    fail=1
-  else
-    if head -n 2 "$VERIFY_DEST" | grep -q 'SAIKIT-CLAUDE-OWNED'; then
-      printf 'doctor: OK — ownership marker present\n'
-    else
-      printf 'doctor: FAIL — ownership marker missing\n'
-      fail=1
-    fi
-    if bash -n "$VERIFY_DEST" 2>/dev/null; then
-      printf 'doctor: OK — bash -n clean\n'
-    else
-      printf 'doctor: FAIL — bash -n failed\n'
-      fail=1
-    fi
-    src_sha="$(sha256sum < "$HOOK_SRC" | cut -d' ' -f1)"
-    dst_sha="$(sha256sum < "$VERIFY_DEST" | cut -d' ' -f1)"
-    if [ "$src_sha" = "$dst_sha" ]; then
-      printf 'doctor: OK — DEST matches repo source (%s)\n' "${src_sha:0:12}"
-    else
-      printf 'doctor: FAIL — DEST sha %s != source %s\n' "${dst_sha:0:12}" "${src_sha:0:12}"
-      fail=1
-    fi
+  local docpy="$skill_root/scripts/lib/doctor.py"
+  [ -f "$docpy" ] || die "missing $docpy"
+  local extra=()
+  if [ -n "${1:-}" ]; then
+    extra+=(--feature-id "$1")
   fi
-
-  case "$VERIFY_DEST" in
-    "$VERIFY_HOME"/*) printf 'doctor: OK — DEST is under VERIFY_HOME\n' ;;
-    *)
-      printf 'doctor: FAIL — DEST is not under VERIFY_HOME\n'
-      fail=1
-      ;;
-  esac
-
-  if [ "$fail" -ne 0 ]; then
-    printf 'doctor: FAIL\n'
-    exit 1
-  fi
-  printf 'doctor: PASS\n'
+  PYTHONDONTWRITEBYTECODE=1 python3 "$docpy" \
+    --skill "$skill_root" \
+    --repo "$repo" \
+    --state-dir "$STATE_DIR" \
+    --artifacts "$ARTIFACTS" \
+    --mutate "$(runtime_mutate)" \
+    "${extra[@]}"
 }
 
 cmd_cleanup() {
@@ -722,7 +683,7 @@ usage: control-summonaikit <command> [args]
 
 commands:
   launch                         create isolated HOME and install the hook there
-  doctor                         read-only health check of the active instance
+  doctor [id]                    granular requirements + doctor.json (v1)
   cleanup                        remove owned temps; keep artifacts/
   cli -- <catalog-entry...>      run a catalog public entry under the run env
                                  (not an arbitrary shell/command; deliberate

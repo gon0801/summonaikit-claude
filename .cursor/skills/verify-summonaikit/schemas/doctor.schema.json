@@ -1,13 +1,49 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "feature-map doctor v1 stub",
+  "title": "feature-map doctor v1",
   "type": "object",
-  "required": ["schema_version"],
+  "required": [
+    "schema_version",
+    "isolation",
+    "features",
+    "ready",
+    "blocked",
+    "failed",
+    "result",
+    "exit_code"
+  ],
   "properties": {
     "schema_version": {"const": 1},
-    "features": {"type": "object"},
-    "ready": {"type": "array"},
-    "blocked": {"type": "array"},
-    "failed": {"type": "array"}
+    "isolation": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": {"enum": ["PASS", "FAIL"]},
+        "reason": {"type": "string"}
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "result", "availability"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string"},
+          "result": {"enum": ["PASS", "FAIL", "unknown"]},
+          "availability": {"enum": ["ready", "MISSING", "BLOCKED", "failed"]},
+          "reason": {"type": "string"},
+          "mode": {"type": "string"},
+          "requirements": {"type": "array"},
+          "cases": {"type": "object"}
+        }
+      }
+    },
+    "ready": {"type": "array", "items": {"type": "string"}},
+    "blocked": {"type": "array", "items": {"type": "string"}},
+    "failed": {"type": "array", "items": {"type": "string"}},
+    "result": {"enum": ["PASS", "FAIL", "unknown"]},
+    "exit_code": {"enum": [0, 1, 3]},
+    "scope": {"type": "string"}
   }
 }
