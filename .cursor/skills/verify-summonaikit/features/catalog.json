@@ -33,6 +33,10 @@
       "kind": "internal",
       "reason": "doctor granular v1; no es ejecutor de feature"
     },
+    "scripts/lib/pty_driver.py": {
+      "kind": "internal",
+      "reason": "PTY stdlib acotado; no es ejecutor de feature"
+    },
     "schemas/step.schema.json": {
       "kind": "internal",
       "reason": "esquema de paso v1; no es ejecutor de feature"
@@ -149,12 +153,11 @@
       "card": null
     },
     "setup-autopilot": {
-      "status": "pending",
-      "owner_task": "19.8",
-      "card": null,
+      "status": "active",
+      "card": "features/setup-autopilot.md",
       "execution_mode": "sandbox",
       "requirements": [
-        {"kind": "pty", "affects_cases": ["setup-interactive"]}
+        {"kind": "pty", "affects_cases": ["setup-interactive", "setup-invalid", "setup-timeout"]}
       ],
       "cases": [
         {"id": "setup-interactive", "requires": ["pty"]},

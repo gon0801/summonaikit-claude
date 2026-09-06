@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "id": "setup-autopilot",
+  "card": "setup-autopilot.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/setup-autopilot.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/saikit-setup-autopilot.sh"],
+  "requirements": [
+    {
+      "kind": "pty",
+      "affects_cases": ["setup-interactive", "setup-invalid", "setup-timeout"]
+    }
+  ],
+  "cases": [
+    {
+      "id": "setup-interactive",
+      "required_assertions": [
+        "questions_order",
+        "map_merge",
+        "map_despliega",
+        "map_salud",
+        "map_sve",
+        "map_telegram"
+      ]
+    },
+    {
+      "id": "setup-invalid",
+      "required_assertions": ["invalid_no_write", "invalid_no_lock"]
+    },
+    {
+      "id": "setup-timeout",
+      "required_assertions": [
+        "timeout_no_write",
+        "timeout_no_lock",
+        "timeout_reaped"
+      ]
+    },
+    {
+      "id": "setup-flags",
+      "required_assertions": ["flags_merge", "flags_salud"]
+    },
+    {
+      "id": "setup-defaults",
+      "required_assertions": ["defaults_despliega", "defaults_merge"]
+    },
+    {
+      "id": "setup-pipe-not-pty",
+      "required_assertions": ["pipe_not_pty"]
+    },
+    {
+      "id": "setup-lock",
+      "required_assertions": ["lock_blocks", "lock_no_write"]
+    },
+    {
+      "id": "setup-with-ci",
+      "required_assertions": ["with_ci_no_offer"]
+    },
+    {
+      "id": "setup-without-ci",
+      "required_assertions": ["without_ci_aviso", "ci_not_q6"]
+    }
+  ]
+}
