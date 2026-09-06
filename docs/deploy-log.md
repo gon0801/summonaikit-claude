@@ -7,6 +7,24 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #207 (ayuda completa de blast) — tools actualizados, hooks NO-OP
+
+- **Merge:** `58f1b54b54f322ac1f34c65fdf4b9e4306882f87`, head
+  `b7df9b079898b933c2ea6a11b71fefeb21f78352`. CI 8/8 success, incluido
+  `gate`, en el [run 34010058081](https://github.com/gon0801/summonaikit-claude/actions/runs/34010058081).
+- **Deploy (21:06 PDT):** desde `master` sincronizado, `sucio=no`,
+  `coincide_origin_master=si`. `install-hook.sh` y `--host grok`, `dsh`,
+  `codex`: exit 0. Las cuatro copias del hook dijeron `YA AL DIA` (NO-OP).
+  El paquete compartido `~/.claude/saikit-tools` actualizo `saikit-blast.sh`;
+  backup `saikit-backups/saikit-blast.sh.nuestro.20260905-210620.bak`.
+  El wrapper POSIX de Codex se replanto por el flujo normal del instalador.
+- **Verificacion:** `install-hook.sh --check` exit 0, cuatro filas
+  `resultado=al-dia registro=ok`; `check-hook-registration.sh` exit 0.
+  El blast instalado coincide byte a byte con master; `--help` muestra
+  la postura de falla completa sin SAIKIT_MARCA. Drive: 5 passed in 0.68s;
+  sello `al_dia`; `audita-ledger.sh` OK. No se modifico `Plans.md`.
+- **Operador:** Gon, merge y deploy autorizados expresamente a Codex.
+
 ## 2026-09-05 — PR #204 (18.12: hecho único exigido + tools del rastro plantados) — deploy REAL de las 4 copias
 
 - **Merge:** `70f3a94e8e003ff0dff079f15eaddd93e3f2bb29`, head
