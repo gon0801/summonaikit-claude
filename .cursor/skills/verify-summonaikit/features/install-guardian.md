@@ -7,9 +7,10 @@ install or report without writing.
 ## Sub-features
 
 - `install-dry-run` reports what would happen without writing.
-- `install-isolated` installs the repo hook into a disposable HOME.
 - `install-ownership` leaves the `# SAIKIT-CLAUDE-OWNED` marker on a successful install.
-- `install-refuse-live` never targets the operator's live `~/.claude` from this skill.
+- `install-noop` reprints `YA AL DIA` when the destination already matches the source.
+- `install-foreign` leaves a neighbor file that is not the destination untouched.
+- `install-restore` restores a known vendor fixture over the destination.
 
 ## How to get to it (user POV)
 
@@ -26,14 +27,18 @@ Preconditions:
 - `control-summonaikit doctor` reports `doctor: PASS`.
 - No second instance is active (`.run/env` already consumed by launch).
 
-- Case `install-ownership`: action Confirm ownership after launch; command `control-summonaikit doctor`; observable `ownership marker present` and `DEST matches repo source`.
-- Case `install-dry-run`: action Drive dry-run classification; command `control-summonaikit drive-install-dry-run`; observable exit `0` with dry-run / `YA AL DIA` line and `HOME=` equal to `VERIFY_HOME`.
+- Case `install-dry-run`: action Drive dry-run without writes; command `control-summonaikit drive-install-dry-run`; observable exit `0`, `procedencia: rama=`, and dest absent or unchanged.
+- Case `install-ownership`: action Confirm ownership after launch; command `control-summonaikit drive install-guardian`; observable `SAIKIT-CLAUDE-OWNED` and DEST sha matches source.
+- Case `install-noop`: action Reinstall over matching dest; command `control-summonaikit drive install-guardian`; observable `YA AL DIA` and dest bytes unchanged.
+- Case `install-foreign`: action Install beside a neighbor file; command `control-summonaikit drive install-guardian`; observable neighbor checksum intact.
+- Case `install-restore`: action Restore known vendor fixture; command `control-summonaikit drive install-guardian`; observable dest bytes match the vendor backup.
 
 - **Isolated install (already done by launch).** Confirm the launch log.
   Inspect `.cursor/skills/verify-summonaikit/artifacts/launch-*.txt`. It must
   show `INSTALADO` (or equivalent success) and `DEST` under the disposable HOME.
-- **Proof.** Keep both `launch-*.txt` and `install-dry-run-*.txt`. Confirm
-  `VERIFY_DEST` still exists and matches the source sha (doctor).
+- **Proof.** Keep both `launch-*.txt` and the drive attempt under
+  `artifacts/<run>/install-guardian/<attempt>/`. Confirm `VERIFY_DEST` still
+  exists and matches the source sha (doctor).
 
 ## Gotchas
 

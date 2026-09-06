@@ -193,11 +193,22 @@ def parse_card(path: Path) -> dict[str, Any]:
     return {"cases": cases, "h2": h2}
 
 
+def validate_driver_executor(
+    skill: Path, feature_id: str, executor: dict[str, Any]
+) -> None:
+    path = executor.get("path") or f"scripts/drivers/{feature_id}.sh"
+    if not path or not isinstance(path, str):
+        raise LintError(f"{feature_id}: driver exige path")
+    full = skill / path
+    if not full.is_file():
+        raise LintError(f"{feature_id}: driver ausente ({path})")
+
+
 def validate_legacy_executor(
     skill: Path, feature_id: str, executor: dict[str, Any], mutate: str | None
 ) -> None:
     if executor.get("kind") != "legacy":
-        raise LintError(f"{feature_id}: executor.kind debe ser legacy en 19.1")
+        raise LintError(f"{feature_id}: executor.kind debe ser legacy o driver")
     if feature_id not in LEGACY_ALLOWED:
         raise LintError(f"{feature_id}: legacy solo permitido para {sorted(LEGACY_ALLOWED)}")
     command = executor.get("command")
@@ -372,8 +383,14 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         if not executor:
             problems.append(f"{fid}: ficha/descriptor sin ejecutor")
         else:
+            kind = executor.get("kind")
             try:
-                validate_legacy_executor(skill, fid, executor, mutate)
+                if kind == "driver":
+                    validate_driver_executor(skill, fid, executor)
+                elif kind == "legacy":
+                    validate_legacy_executor(skill, fid, executor, mutate)
+                else:
+                    problems.append(f"{fid}: executor.kind desconocido: {kind!r}")
             except LintError as e:
                 problems.append(str(e))
 

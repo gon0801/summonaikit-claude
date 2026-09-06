@@ -25,6 +25,10 @@
       "kind": "internal",
       "reason": "evidencia v1 por intento; no es ejecutor de feature"
     },
+    "scripts/lib/driver.sh": {
+      "kind": "internal",
+      "reason": "helpers de drivers; no es ejecutor de feature"
+    },
     "schemas/step.schema.json": {
       "kind": "internal",
       "reason": "esquema de paso v1; no es ejecutor de feature"

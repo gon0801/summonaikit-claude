@@ -8,7 +8,7 @@ must not create session state or block the turn.
 
 - `gate-unarmed` leaves no state for a prompt without `-saikit`.
 - `gate-armed` injects the harness contract on a prompt with `-saikit`.
-- `gate-stop-unarmed` allows Stop with exit 0 and no gate pressure when never armed.
+- `gate-stop-no-receipt` rejects an armed Stop that has no receipt (fixture 07).
 - `gate-via-golden` drives real captured payloads through `tools/golden-harness.sh`.
 
 ## How to get to it (user POV)
@@ -24,12 +24,14 @@ Preconditions:
 - `control-summonaikit doctor` reports `doctor: PASS`.
 - Fixture directories exist under `tests/fixtures/escenarios/`.
 
-- Case `gate-unarmed`: action Drive unarmed golden scenario; command `control-summonaikit drive-gate-scenario 01-sin-armar`; observable exit `0`, `=== escenario 01-sin-armar`, and `(sin estado)` / no harness-state after prompt.
-- Case `gate-armed`: action Drive armed golden scenario; command `control-summonaikit drive-gate-scenario 02-armado-contrato`; observable exit `0`, contract / `SUMMONAIKIT HARNESS`, and state under `hooks/state/`.
+- Case `gate-unarmed`: action Drive unarmed golden scenario; command `control-summonaikit drive-gate-scenario 01-sin-armar`; observable hook sha, steps `01 02 03`, `(sin estado)`, and no harness contract.
+- Case `gate-armed`: action Drive armed golden scenario; command `control-summonaikit drive-gate-scenario 02-armado-contrato`; observable hook sha, `SUMMONAIKIT HARNESS REQUIRED`, `harness-state.env`, and `task_hash`.
+- Case `gate-stop-no-receipt`: action Drive armed Stop without receipt; command `control-summonaikit drive-gate-scenario 07-evidencia-incompleta`; observable rejection (exit 2 / gate text) on fixture 07, not on 01/02.
 
-- **Proof.** Keep both `artifacts/gate-01-sin-armar-*.txt` and
-  `artifacts/gate-02-armado-contrato-*.txt`. The unarmed log must not show a
-  `harness-state.env`; the armed log must.
+- **Proof.** Keep the attempt under `artifacts/<run>/gate-turn/<attempt>/`.
+  The unarmed log must show `(sin estado)` and no contract; the armed log must
+  show contract JSON plus `harness-state.env`. Stop without receipt is a
+  separate case — do not treat 01/02 as that rejection.
 
 ## Gotchas
 

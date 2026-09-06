@@ -3,17 +3,24 @@
   "id": "check-deploy-log",
   "card": "check-deploy-log.md",
   "executor": {
-    "kind": "legacy",
-    "command": "drive-deploy-log",
-    "function": "cmd_drive_deploy_log"
+    "kind": "driver",
+    "path": "scripts/drivers/check-deploy-log.sh"
   },
   "execution_mode": "sandbox",
   "surfaces": ["tools/check-deploy-log.sh"],
   "requirements": ["doctor", "docs/deploy-log.md"],
   "cases": [
     {
-      "id": "deploy-log-run",
+      "id": "deploy-log-ok",
       "required_assertions": ["exit_0", "deploy_log_ok_line"]
+    },
+    {
+      "id": "deploy-log-order",
+      "required_assertions": ["exit_nonzero", "reason_orden"]
+    },
+    {
+      "id": "deploy-log-dup",
+      "required_assertions": ["exit_nonzero", "reason_dup_pr"]
     }
   ]
 }

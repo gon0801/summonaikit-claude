@@ -59,6 +59,10 @@ mk_min_skill() {  # $1=dir
     mkdir -p "$d/schemas"
     cp "$SKILL/schemas/"*.json "$d/schemas/" 2>/dev/null || true
   fi
+  if [ -d "$SKILL/scripts/drivers" ]; then
+    mkdir -p "$d/scripts/drivers"
+    cp "$SKILL/scripts/drivers/"*.sh "$d/scripts/drivers/" 2>/dev/null || true
+  fi
 }
 
 mk_min_repo() {  # $1=dir — árbol descubrible mínimo alineado al catálogo
@@ -290,6 +294,9 @@ printf '%s' "$out" | grep -qi 'no existe\|legacy' || malo "sin queja legacy bajo
 caso "mutacion skip_legacy_validate: function inventada deja de atrapar"
 R="$SANDBOX/mut-leg"; S="$SANDBOX/mut-leg-skill"
 mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+# Este caso cambia gate-turn a legacy: su driver copiado quedaria huerfano
+# y taparia el flip de skip_legacy_validate.
+rm -f "$S/scripts/drivers/gate-turn.sh"
 python3 - <<PY
 import json
 from pathlib import Path
