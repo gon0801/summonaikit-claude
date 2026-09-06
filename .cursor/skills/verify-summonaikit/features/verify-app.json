@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "verify-app",
+  "card": "verify-app.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/verify-app.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": [
+    "skills/saikit-verificar-app/verificar.sh"
+  ],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "verify-generate",
+      "required_assertions": ["files_present", "seal_real_sha"]
+    },
+    {
+      "id": "verify-reject-existing",
+      "required_assertions": ["reject_existing", "files_intact"]
+    },
+    {
+      "id": "verify-estado",
+      "required_assertions": ["estado_al_dia", "estado_desactualizado"]
+    },
+    {
+      "id": "verify-drive-cmd",
+      "required_assertions": ["drive_cmd_verify", "drive_cmd_runner"]
+    },
+    {
+      "id": "verify-no-product-pass",
+      "required_assertions": ["no_product_verify_pass", "checkout_verify_intact"]
+    }
+  ]
+}
