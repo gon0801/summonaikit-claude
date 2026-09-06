@@ -121,6 +121,11 @@ A textual `/tmp` prefix is not enough. Does **not** kill processes by name,
 does **not** touch live profiles, and does **not** delete `artifacts/`.
 Repeating cleanup is a no-op.
 
+If `state.json` is truncated/invalid, `VERIFY_HOME` is already gone, or ownership
+cannot be proven, cleanup **soft-clears** only `state.json` / `.active` (HOME
+untouched) and prints a re-lanzar instruction — so launch is never deadlocked
+behind an impossible cleanup.
+
 If a drive fails mid-run, still run cleanup so the next launch is not blocked.
 A leftover `.run/env` is rejected (re-lanzar); cleanup will not delete its
 purported HOME.

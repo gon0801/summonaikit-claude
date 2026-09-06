@@ -189,12 +189,22 @@ printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
 expect_fail "json-truncado-doctor" 'JSON|truncad|mal formado|inválid|invalid' \
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
   bash "$CTRL" doctor
+# reponer truncado (doctor no lo borra)
+printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
 expect_fail "json-truncado-cli" 'JSON|truncad|mal formado|inválid|invalid' \
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
   bash "$CTRL" cli -- tools/check-deploy-log.sh
-expect_fail "json-truncado-cleanup" 'JSON|truncad|mal formado|inválid|invalid' \
+# cleanup soft-clear: exit 0, motivo visible, desbloquea launch (no deadlock)
+printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
+out="$(
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-  bash "$CTRL" cleanup
+    bash "$CTRL" cleanup 2>&1
+)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "json-truncado-cleanup: debio salir 0 (soft-clear): $out"
+[ "$rc" -eq 3 ] && malo "json-truncado-cleanup: unknown (3) — aislamiento observado es FAIL"
+printf '%s' "$out" | grep -Eq 'JSON|truncad|mal formado|inválid|invalid|no recuperable' \
+  || malo "json-truncado-cleanup: sin motivo: $out"
+[ ! -f "$STATE/state.json" ] || malo "json-truncado-cleanup: debio borrar state.json"
 
 # ---------------------------------------------------------------------------
 # Symlink escape
@@ -451,11 +461,48 @@ p.write_text(json.dumps({
   "token": "not-this-run",
 }), encoding="utf-8")
 PY
-expect_fail "cleanup-ajeno" 'propio|ownership|perten|ajeno|token|marker' \
-  env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-  bash "$CTRL" cleanup
+# Soft-clear: exit 0, state gone, foreign HOME untouched, launch unblocked.
+out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-ajeno: debio salir 0 (recuperacion): $out"
+printf '%s' "$out" | grep -Eq 'propio|ownership|perten|ajeno|token|marker|no recuperable|HOME no tocado' \
+  || malo "cleanup-ajeno: sin motivo de ownership/recuperacion: $out"
 [ -f "$foreign/important.txt" ] || malo "cleanup borro temporal ajeno"
 [ -d "$foreign" ] || malo "cleanup elimino el dir ajeno"
+[ ! -f "$STATE/state.json" ] || malo "cleanup-ajeno: debio borrar state.json"
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-ajeno: launch tras soft-clear debio pasar: $out"
+ctrl cleanup >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------------------
+# Recuperacion: cleanup inocuo desbloquea launch (review major)
+# ---------------------------------------------------------------------------
+caso "cleanup recupera JSON truncado y desbloquea launch"
+reset_state
+printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
+out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-truncado: debio salir 0: $out"
+printf '%s' "$out" | grep -Eq 'no recuperable|re-lanzar|HOME no tocado|truncad|mal formado' \
+  || malo "cleanup-truncado: sin mensaje de recuperacion: $out"
+[ ! -f "$STATE/state.json" ] || malo "cleanup-truncado: debio borrar state.json"
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-truncado: launch debio pasar tras soft-clear: $out"
+ctrl cleanup >/dev/null 2>&1 || true
+
+caso "cleanup recupera VERIFY_HOME borrado y desbloquea launch"
+reset_state
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-wipe: launch inicial fallo: $out"
+vh="$(printf '%s\n' "$out" | sed -n 's/.*VERIFY_HOME=\([^ ]*\).*/\1/p' | head -1)"
+[ -n "$vh" ] && [ -d "$vh" ] || malo "cleanup-wipe: no se obtuvo VERIFY_HOME"
+rm -rf "$vh"
+out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-wipe: debio salir 0: $out"
+printf '%s' "$out" | grep -Eq 'no recuperable|re-lanzar|HOME no tocado|propio|token|marker|already gone' \
+  || malo "cleanup-wipe: sin mensaje de recuperacion: $out"
+[ ! -f "$STATE/state.json" ] || malo "cleanup-wipe: debio borrar state.json"
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-wipe: launch debio pasar tras soft-clear: $out"
+ctrl cleanup >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
 # Segundo launch concurrente / duplicado
@@ -619,7 +666,8 @@ caso "mutacion skip_cleanup_ownership: temporal ajeno deja de atraparse"
 reset_state
 foreign_mut="$(mktemp -d "${TMPDIR:-/tmp}/saikit-foreign-mut-XXXXXX")"
 printf 'keep-mut\n' > "$foreign_mut/important.txt"
-python3 - <<PY
+plant_foreign_state() {
+  python3 - <<PY
 import json
 from pathlib import Path
 p=Path("$STATE")/"state.json"
@@ -638,11 +686,15 @@ p.write_text(json.dumps({
   "token": "not-this-run",
 }), encoding="utf-8")
 PY
-expect_fail "mut-clean-baseline" 'propio|ownership|perten|ajeno|token|marker' \
-  env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-  bash "$CTRL" cleanup
+}
+plant_foreign_state
+out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "mut-clean-baseline: soft-clear debio salir 0: $out"
 [ -f "$foreign_mut/important.txt" ] || malo "baseline cleanup borro ajeno"
-# reponer estado (cleanup fallo y dejo state.json)
+[ ! -f "$STATE/state.json" ] || malo "mut-clean-baseline: debio borrar state.json"
+# Reponer estado para la mitad mutada (cleanup pudo rmdir STATE)
+mkdir -p "$STATE" "$ART"
+plant_foreign_state
 if SAIKIT_VERIFY_MUTATE=skip_cleanup_ownership \
    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
    bash "$CTRL" cleanup >/dev/null 2>&1; then

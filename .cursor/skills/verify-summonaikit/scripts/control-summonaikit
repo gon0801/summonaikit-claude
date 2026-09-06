@@ -16,6 +16,9 @@ INSTALLER="$repo/tools/install-hook.sh"
 STATEPY="$skill_root/scripts/lib/state.py"
 CATALOG="$skill_root/features/catalog.json"
 
+# Avoid writing __pycache__ under the versioned skill tree (inventory lint).
+export PYTHONDONTWRITEBYTECODE=1
+
 # shellcheck source=lib/runtime.sh
 . "$skill_root/scripts/lib/runtime.sh"
 
@@ -192,10 +195,35 @@ cmd_cleanup() {
     printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
     exit 0
   fi
-  load_state cleanup
-  runtime_cleanup_home "$VERIFY_HOME"
+  # Load must not trap the operator: invalid JSON, missing VERIFY_HOME, or
+  # foreign ownership ⇒ soft-clear state/.active only (never rm an unverified HOME).
+  # Spec: repeating cleanup is inocuous; recovery mirrors legacy .run/env.
+  err="$(mktemp "${TMPDIR:-/tmp}/saikit-cleanup-err-XXXXXX")"
+  if _STATE_JSON="$(
+    python3 "$STATEPY" load \
+      --state-dir "$STATE_DIR" \
+      --artifacts "$ARTIFACTS" \
+      --repo "$repo" \
+      --mode cleanup \
+      --mutate "$(runtime_mutate)" 2>"$err"
+  )"; then
+    rm -f "$err"
+    VERIFY_HOME="$(runtime_json_get verify_home)"
+    runtime_cleanup_home "$VERIFY_HOME"
+    runtime_clear_state_files
+    printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
+    exit 0
+  fi
+  reason="$(cat "$err" 2>/dev/null || true)"
+  rm -f "$err"
   runtime_clear_state_files
+  printf 'cleanup: estado no recuperable — state.json/.active borrados; HOME no tocado\n'
+  if [ -n "$reason" ]; then
+    printf 'cleanup: motivo: %s\n' "$reason"
+  fi
+  printf 'cleanup: re-lanzar con launch (nunca borres un HOME a ciegas)\n'
   printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
+  exit 0
 }
 
 cmd_cli() {
