@@ -51,3 +51,4 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
   scenarios via golden-harness.
 - [Audit the task ledger](./audit-ledger.md) covers `tools/audita-ledger.sh`.
 - [Check the deploy log](./check-deploy-log.md) covers `tools/check-deploy-log.sh`.
+- [Post-merge health warning](./saikit-postmerge.md) covers `tools/saikit-postmerge.sh` in simulated mode.
