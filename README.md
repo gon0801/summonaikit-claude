@@ -130,18 +130,20 @@ cambia el exit code del instalador.
 `quality-kit` ya **no** parchea `.claude` (Task 4.1). Los parches del sentinel
 y del aviso de revisión van adentro de la fuente de este repo.
 
-### Recetario y skills (Phases 16-17)
+### Recetario y skills (Phases 16-18)
 
-`--host claude` (y el flujo por defecto) planta además el recetario y dos
-skills de usuario, cada una con la **misma máquina de estados por archivo** que
-los perfiles — nuestro idéntico no se reescribe, nuestro distinto se repara con
-backup, ajeno no se toca:
+`--host claude` (y el flujo por defecto) planta además el recetario, tres
+skills de usuario y los tools del rastro, cada uno con la **misma máquina de
+estados por archivo** que los perfiles — nuestro idéntico no se reescribe,
+nuestro distinto se repara con backup, ajeno no se toca:
 
 | Qué | Dónde |
 |---|---|
 | `recetas/*.md` + `MANIFEST.sha256` | `<hookdir>/recetas/` |
 | skill `/sencillo` | `~/.claude/skills/sencillo/` |
 | skill `saikit-verificar-app` | `~/.claude/skills/saikit-verificar-app/` |
+| skill `saikit-setup-autopilot` | `~/.claude/skills/saikit-setup-autopilot/` |
+| tools del rastro (`saikit-decision.sh`, `saikit-blast.sh`, `lib/redactar.sh`) | `~/.claude/saikit-tools/` |
 
 `saikit-verificar-app` son DOS archivos (`SKILL.md` y el generador
 `verificar.sh`). El generador lleva la marca de propiedad en un bloque no-op al
@@ -153,6 +155,37 @@ El todo-o-nada es **por directorio**, no entre los tres: si falla el tercero,
 los dos anteriores ya quedaron publicados y el mensaje lo dice en vez de
 afirmar que no se tocó nada. `--quitar-recetas` borra solo lo que lleva la
 marca.
+
+### Autopilot (Phase 18)
+
+El autopilot **prepara y para** (decisión del operador del 2026-08-30, que
+manda sobre el diseño original): `-saikit:autopilot` arma el carril full con
+el flag en el estado, el contrato pide preparar todo — código, verificación,
+revisión, PR — y **parar a preguntar antes de publicar**. No hay permiso
+permanente: el sentinel es por turno y cada merge exige el sí explícito.
+
+```bash
+bash tools/saikit-setup-autopilot.sh        # 5 preguntas => .saikit/autopilot.json (se commitea a origin/<rama>)
+bash tools/saikit-merge.sh                  # gate completo; en verde reporta LISTO y termina, NO mergea
+bash tools/saikit-merge.sh --confirmado     # el sí: repite el gate y recién entonces mergea
+bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>   # VERDE/ROJO/UNKNOWN; ROJO trae PARA REVERTIR
+bash tools/saikit-merge.sh --revert-de <sha> --confirmado           # merge del PR de revert (modo sin estado)
+```
+
+Qué NUNCA hace: mergear sin el sí, sin CI verde del head exacto, sin
+veredicto sellado (`veredicto_sha256` del estado == sha256 del archivo), ni
+leyendo la config de otro lado que `origin/<rama>`; revertir solo (el
+postmerge avisa con el comando listo y no ejecuta nada); `--admin`, force, ni
+`--delete-branch` (el borrado remoto es paso aparte).
+
+Límites medidos (detalle en el spec § Límites MEDIDOS de la Phase 18 y en
+`docs/smoke-autopilot-2026-09-05.md`): el camino verde completo no se ha
+observado en vivo; en el recorrido medido de Grok el merge es manual (el
+sello queda en la sesión emisora, 18.26); la guardia `PreToolUse` contra el
+merge a pelo nace inerte hasta que el operador la registra; el cierre
+headless sin recibo sigue en medición (18.27, pendiente). La versión para
+quien no lee código — qué hace solo, qué NUNCA hace y cómo deshacerlo —
+está en `docs/guia-usuario.html`, no acá.
 
 ## Staging por override
 
