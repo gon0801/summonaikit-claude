@@ -190,14 +190,14 @@
       "execution_mode": "sandbox"
     },
     "check-secrets": {
-      "status": "pending",
-      "owner_task": "19.12",
-      "card": null
+      "status": "active",
+      "card": "features/check-secrets.md",
+      "execution_mode": "sandbox"
     },
     "capture-payloads": {
-      "status": "pending",
-      "owner_task": "19.12",
-      "card": null
+      "status": "active",
+      "card": "features/capture-payloads.md",
+      "execution_mode": "sandbox"
     },
     "decision-blast": {
       "status": "pending",
