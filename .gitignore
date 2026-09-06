@@ -7,3 +7,6 @@ out/
 node_modules/
 hooks/state/
 .cursor/skills/verify-summonaikit/.run/
+.cursor/skills/verify-summonaikit/artifacts/
+.cursor/skills/verify-summonaikit/**/__pycache__/
+.cursor/skills/verify-summonaikit/**/*.pyc
