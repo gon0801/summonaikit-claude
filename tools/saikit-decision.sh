@@ -277,6 +277,17 @@ liberar_candado() {
 adquirir_candado() {
   lock_dir="$DIR/.saikit-decision-$TASK.lock"
   local intentos=0 pid_guardado vivo dueno
+  # 18.22: mtime del dir de candado portable — `stat -c %Y` es GNU y en BSD
+  # devuelve vacio, que por el fallback anterior significaba edad 0: el huerfano
+  # sin pid JAMAS se reclamaba en macOS (medido: test_saikit_decision). Mismo
+  # molde que mtime_de de tools/install-hook.sh. Vacio = no medible: el caller
+  # conserva el fail-safe declarado (edad 0 => esperar, nunca reclamar a ciegas).
+  _edad_dir() {  # $1 = ruta -> epoch mtime por stdout, o vacio
+    local _m
+    _m="$(stat -c %Y "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+    _m="$(stat -f %m "$1" 2>/dev/null)" && { printf '%s' "$_m"; return 0; }
+    return 1
+  }
   while [ "$intentos" -lt 60 ]; do
     if mkdir "$lock_dir" 2>/dev/null; then
       # Somos el dueno. Se escribe el token y se VERIFICA que llego (hallazgo c:
@@ -297,10 +308,11 @@ adquirir_candado() {
     # escrito y muerto => huerfano candidato. Sin pid: o un writer a mitad del
     # mkdir+pid (microsegundos) o un huerfano muerto ANTES de escribir el pid;
     # se distingue por la EDAD del dir (un writer vivo escribe el pid en
-    # microsegundos). Portabilidad (hallazgo d): `stat -c %Y` es GNU (MSYS/Linux
-    # del repo); donde no exista el fallback deja edad 0, que es "nunca
-    # reclamar" — fail-safe declarado: en un sistema sin stat GNU no se reclama
-    # un huerfano a ciegas, se espera (mejor bloquear 3s que partir una fila).
+    # microsegundos). Portabilidad (hallazgo d + 18.22): el mtime sale de
+    # _edad_dir (GNU stat, si no BSD); donde NINGUNO pueda medir, el fallback
+    # deja edad 0, que es "nunca reclamar" — fail-safe declarado: en un sistema
+    # sin stat medible no se reclama un huerfano a ciegas, se espera (mejor
+    # bloquear 3s que partir una fila).
     vivo=0
     dueno="$(cat "$lock_dir/pid" 2>/dev/null || true)"
     if [ -n "$dueno" ]; then
@@ -309,7 +321,8 @@ adquirir_candado() {
         vivo=1
       fi
     else
-      dir_m="$(stat -c %Y "$lock_dir" 2>/dev/null || echo "$(date +%s)")"
+      dir_m="$(_edad_dir "$lock_dir")"
+      [ -n "$dir_m" ] || dir_m="$(date +%s)"
       if [ $(( $(date +%s) - dir_m )) -le 2 ]; then
         vivo=1
       fi

@@ -52,13 +52,19 @@ printf '# vease el literal ://user:pass@ y el ejemplo postgresql://admin:pass@ho
 # Forzado del motor fallback: `PATH=/usr/bin` a secas ASUME que gitleaks no
 # esta ahi (hallazgo CodeRabbit del PR #24). Se VERIFICA en vez de asumirlo;
 # si existiera, los casos fallback se declaran skip — no se simula con un stub
-# truene-lo-que-truene: un gitleaks presente ES motor para el script.
-if [ -x /usr/bin/gitleaks ]; then
+# truene-lo-que-truene: un gitleaks presente ES motor para el script. 18.22:
+# /bin entra al guard (y al PATH de fb) porque en macOS el bash vive ahi.
+if [ -x /usr/bin/gitleaks ] || [ -x /bin/gitleaks ]; then
   fb_ok=0
 else
   fb_ok=1
 fi
-fb() { PATH="/usr/bin" env -u SAIKIT_GITLEAKS bash "$tool" "$@"; }
+# 18.22: /usr/bin a secas no tiene bash en macOS (vive en /bin) — el fallback
+# ni corria (env: bash: No such file or directory, rc 127) y el caso leia
+# «dejo pasar» algo que nunca se escaneo. Se resuelve el interprete con el
+# PATH completo y se acota DESPUES solo lo que esconde a gitleaks.
+fb_bash="$(command -v bash)"
+fb() { PATH="/usr/bin:/bin" env -u SAIKIT_GITLEAKS "$fb_bash" "$tool" "$@"; }
 
 # --- motor disponible (el que el script elija) ----------------------------
 caso "trampa ghp_ detectada con el motor disponible"
@@ -208,21 +214,22 @@ exit 0
 EOF
 chmod +x "$tmp/fake-gitleaks" 2>/dev/null || true
 if [ -x "$tmp/fake-gitleaks" ]; then
-  # Cada invocacion sale con PATH=/usr/bin a secas (como fb()): si en la maquina
+  # Cada invocacion sale con PATH=/usr/bin:/bin (como fb()): si en la maquina
   # hay un gitleaks real en el PATH, `command -v gitleaks` lo ganaria y el stub
   # de $SAIKIT_GITLEAKS seria ignorado — el caso mediria la version real, no la
-  # del stub, y fallaria s puriamente segun la maquina. Con PATH=/usr/bin el
-  # stub de $SAIKIT_GITLEAKS manda siempre (determinista).
+  # del stub, y fallaria s puriamente segun la maquina. Con ese PATH acotado el
+  # stub de $SAIKIT_GITLEAKS manda siempre (determinista). 18.22: /bin entra
+  # porque en macOS el bash vive ahi — sin el, esta invocacion ni arrancaba.
   #
   # (a) version con contexto que matchea el pin (v-prefix + build-id): NO falso aviso
-  out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  out="$(FAKE_GL_VERSION="v8.30.1 (build abcd1234)" PATH="/usr/bin:/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" "$fb_bash" "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "con version que matchea el pin el chequeo fallo (rc=$rc): $out"
   case "$out" in
     *"AVISO — gitleaks local es"*) malo "falso AVISO de version con contexto que matchea el pin: $out" ;;
   esac
 
   # (b) mismatch real (9.9.9): SI avisa (y el escaneo no se bloquea)
-  out="$(FAKE_GL_VERSION="9.9.9" PATH="/usr/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" bash "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
+  out="$(FAKE_GL_VERSION="9.9.9" PATH="/usr/bin:/bin" SAIKIT_GITLEAKS="$tmp/fake-gitleaks" "$fb_bash" "$tool" "$tmp/limpio.sh" 2>&1)"; rc=$?
   [ "$rc" -eq 0 ] || malo "con version distinta el escaneo no debio fallar (rc=$rc): $out"
   case "$out" in
     *"AVISO — gitleaks local es 9.9.9"*) ;;

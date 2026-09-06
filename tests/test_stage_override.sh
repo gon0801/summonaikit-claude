@@ -48,8 +48,18 @@ CMD_CON_OVERRIDE='SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=prompt b
 # El mismo registro sin la mitad que hace posible el staging.
 CMD_SIN_OVERRIDE='SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=prompt bash "$HOME/.claude/hooks/summonaikit-harness.sh"'
 
+# 18.22: `python` a secas no existe en un macOS pelado (solo python3) — el
+# heredoc fallaba, el settings quedaba vacio y el caso daba «unknown» (rc 4).
+# Mismo orden que el tool bajo prueba: costura SAIKIT_PYTHON, python3, python.
+py_bin="${SAIKIT_PYTHON:-}"
+if [ -z "$py_bin" ] || ! command -v "$py_bin" >/dev/null 2>&1; then
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1; then py_bin="$c"; break; fi
+  done
+fi
+
 settings_con() {
-  python - "$1" "$2" <<'PY'
+  "$py_bin" - "$1" "$2" <<'PY'
 import json, sys
 json.dump({"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": sys.argv[2]}]}]}},
           open(sys.argv[1], "w", encoding="utf-8"))
@@ -234,7 +244,7 @@ fi
 if [ -z "$settings_real" ] || [ ! -r "$settings_real" ]; then
   nota "unknown — no hay settings real legible ($settings_real): no se afirma nada sobre esta maquina"
 else
-  real_cmd="$(python - "$settings_real" <<'PY'
+  real_cmd="$("$py_bin" - "$settings_real" <<'PY'
 import json, sys
 try:
     data = json.load(open(sys.argv[1], encoding='utf-8'))

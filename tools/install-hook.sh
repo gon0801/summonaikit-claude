@@ -2676,7 +2676,7 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   # NO es nuestro — nunca lo plantamos asi — y no se toca. `recetas_clasificar`
   # mira el ARCHIVO ($dest), no al directorio que lo contiene; y aca un $destdir
   # symlink haria que `[ -d "$destdir" ]` lo SIGA (lineas de abajo), que el
-  # `cp -p -r "$destdir"/.` copiara el contenido ajeno al staging y que el swap
+  # `cp -p -R "$destdir"/.` copiara el contenido ajeno al staging y que el swap
   # dejara un DIRECTORIO REAL en lugar del enlace — importando contenido cuya
   # propiedad nunca se clasifico. Se rechaza ANTES de leer el manifiesto,
   # expandir el glob, copiar o hacer el swap.
@@ -2706,7 +2706,10 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   #    la skill sin publicar en la instalacion nueva — el caso de uso principal.
   mkdir -p "$(dirname "$destdir")" 2>/dev/null || return 5
   nuevo="$(mktemp -d "$(dirname "$destdir")/.saikit-recetas-XXXXXX")" || return 5
-  if [ -d "$destdir" ]; then cp -p -r "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
+  # 18.22: -R (no -r): el cp de BSD SIGUE symlinks con -r (medido:
+  # materializaba el archivo externo en el staging y el swap reemplazaba el
+  # enlace); -R los replica. En GNU son sinonimos.
+  if [ -d "$destdir" ]; then cp -p -R "$destdir"/. "$nuevo"/ 2>/dev/null || { rm -rf "$nuevo"; return 5; }; fi
   sello="$(date +%Y%m%d-%H%M%S)"
   for f in "$@"; do
     dest="$destdir/$(basename "$f")"
@@ -2716,7 +2719,7 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
           mkdir -p "$nuevo/saikit-backups" && cp -p "$dest" "$nuevo/saikit-backups/$(basename "$dest").nuestro.$sello.bak" || { rm -rf "$nuevo"; return 5; }
         fi
         # defensa en profundidad (hilo symlink): borrar la ruta en el staging
-        # antes de copiar, para que `cp` no pueda seguir nada. El `cp -r` inicial
+        # antes de copiar, para que `cp` no pueda seguir nada. El `cp -R` inicial
         # replico cualquier symlink del destino ASI como llego; seguirlo en el
         # `cp` de aca escribiria encima del archivo que el symlink apunta (fuera
         # de recetas/).

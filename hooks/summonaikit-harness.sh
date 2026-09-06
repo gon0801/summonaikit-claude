@@ -2082,6 +2082,24 @@ adv_canon_path() {
       fi
       ;;
   esac
+  # 18.22: el colapso lexico conservaba el prefijo LOGICO de PROJECT_ROOT,
+  # mientras ADV_FINDINGS_DIR/VERDICTOS_DIR anclan al FISICO (pwd -P). En
+  # Darwin /var -> /private/var los diverge, pero solo cuando el dir del
+  # blanco no existe todavia (un Write que crea su directorio): el `cd` de
+  # arriba falla y cae aca — y el hook dejaba de sellar veredictos o inventaba
+  # violaciones (medido, escenarios 47/56 y advlock_falla_infra_fail_open).
+  # Se ancla el ancestro existente mas profundo en su forma fisica; el resto
+  # se colapsa lexico igual que antes. En GNU sin symlinks en el tmp fisico ==
+  # logico: mismo string, mismo comportamiento (la golden no se regraba).
+  advc_anc="$advc_p"
+  advc_resto=''
+  while [ ! -d "$advc_anc" ] && [ "$advc_anc" != "/" ] && [ -n "$advc_anc" ]; do
+    advc_resto="/$(basename "$advc_anc")$advc_resto"
+    advc_anc="$(dirname "$advc_anc")"
+  done
+  if advc_fis="$(cd "$advc_anc" 2>/dev/null && pwd -P)" && [ -n "$advc_fis" ]; then
+    advc_p="${advc_fis%/}$advc_resto"
+  fi
   printf '%s' "$advc_p" | awk '
     $0 !~ /^\// { print ""; exit }
     {
@@ -2200,13 +2218,35 @@ EOF
 # con touch escapa: instancia del hueco Bash declarado (CodeRabbit #64-a) —
 # este escaneo persigue persistencia ACCIDENTAL, no evasores deliberados.
 # Imprime el motivo de bloqueo, o vacio si no hay match.
+# 18.22: epoca del armado a epoch, portable. El estado la escribe con
+# `date -u +%Y-%m-%dT%H:%M:%SZ` (adv_armar), portable; el PARSE era solo GNU
+# (`date -u -d`) y en BSD dejaba el escaneo por mtime afuera con un warning
+# por turno (medido: divergencia dorada en 6 escenarios). GNU primero, si no
+# BSD (`date -j -u -f`), y en ambos el round-trip al formato origen — misma
+# disciplina que fecha_epoch de la skill verificar (PR #196): un parse que
+# aceptara de mas cambiaria el alcance del escaneo sin decirlo. Vacio =
+# ilegible: el caller mantiene el fail-open declarado.
+adv_epoca_a_epoch() {  # $1 = sello %Y-%m-%dT%H:%M:%SZ -> epoch por stdout
+  local ts ep back
+  ts="$1"
+  [ -n "$ts" ] || return 1
+  if ep="$(date -u -d "$ts" +%s 2>/dev/null)"; then
+    back="$(date -u -d "@$ep" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"
+  else
+    ep="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$ts" +%s 2>/dev/null)" || return 1
+    back="$(date -r "$ep" -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"
+  fi
+  [ "$back" = "$ts" ] || return 1
+  printf '%s' "$ep"
+}
 adv_chequear_secretos() {
   advs_candidatos="$(read_state_value adv_paths | tr '|' '\n')"
-  advs_epoca="$(date -u -d "$(read_state_value adv_epoch)" +%s 2>/dev/null || true)"
+  advs_epoca="$(adv_epoca_a_epoch "$(read_state_value adv_epoch)" || true)"
   # qwen #3 (r2 PR #65): D3 exige fail-open + DIAGNOSTICO en fallas de infra;
-  # sin GNU date (BSD/macOS) la rama de mtime se salta y hay que decirlo.
+  # sin date que parsee el sello (BSD/macOS) la rama de mtime se salta y hay
+  # que decirlo.
   if [ -z "$advs_epoca" ]; then
-    printf 'summonaikit-harness: adversary: epoca de armado ilegible (GNU date -d ausente?); escaneo por mtime omitido — fail-open declarado\n' >&2
+    printf 'summonaikit-harness: adversary: epoca de armado ilegible (date no parseo el sello por round-trip); escaneo por mtime omitido — fail-open declarado\n' >&2
   fi
   if [ -n "$advs_epoca" ] && [ -d "$ADV_FINDINGS_DIR" ]; then
     advs_candidatos="$advs_candidatos

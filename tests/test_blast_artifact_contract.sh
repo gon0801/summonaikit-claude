@@ -93,7 +93,9 @@ grep -Fq 'superficie real' "$verifier" || malo "17.4: el perfil no documenta el 
 
 # ------------------------------------------------ (c) reviewer adjudica el blast
 caso "el reviewer adjudica el blast: juzga el hecho, no lo re-corre"
-grep -Eiq 'juzga el hecho|no (lo |)repite|no re-corre' "$reviewer" || malo "el reviewer no juzga el hecho sin re-correrlo"
+# 18.22: la rama vacia `(lo |)` la rechaza el grep de BSD («empty (sub)expression»,
+# exit 2, medido); sin ella el patron es identico en GNU y BSD.
+grep -Eiq 'juzga el hecho|no lo repite|no repite|no re-corre' "$reviewer" || malo "el reviewer no juzga el hecho sin re-correrlo"
 grep -Fq 'blast malformado' "$reviewer" || malo "el reviewer no declara blast malformado"
 grep -Fq 'nivel ≥ 4' "$reviewer" || malo "el reviewer no documenta la regla nivel ≥ 4 sin comando"
 grep -Fq 'comando' "$reviewer" || malo "el reviewer no nombra el comando como campo del blast"
