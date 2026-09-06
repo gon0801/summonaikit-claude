@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "decision-blast",
+  "card": "decision-blast.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/decision-blast.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/saikit-decision.sh", "tools/saikit-blast.sh"],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "decision-valid",
+      "required_assertions": ["trail_written", "header_ok", "check_ok"]
+    },
+    {
+      "id": "decision-reject",
+      "required_assertions": ["reject_exit_2", "reject_reason", "file_untouched"]
+    },
+    {
+      "id": "blast-valid",
+      "required_assertions": ["blast_written", "schema_keys", "nivel_4"]
+    },
+    {
+      "id": "blast-reject",
+      "required_assertions": [
+        "level_exit_2",
+        "level_no_file",
+        "command_exit_2",
+        "command_untouched"
+      ]
+    },
+    {
+      "id": "redact",
+      "required_assertions": [
+        "decision_redacted",
+        "decision_no_secret",
+        "blast_redacted",
+        "blast_no_secret"
+      ]
+    },
+    {
+      "id": "output-location",
+      "required_assertions": [
+        "decision_in_fixture",
+        "blast_in_fixture",
+        "not_on_checkout"
+      ]
+    }
+  ]
+}

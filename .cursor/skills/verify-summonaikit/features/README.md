@@ -62,3 +62,4 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Generate the Spanish app map](./verify-app.md) covers generate/estado of `skills/saikit-verificar-app/verificar.sh` on a disposable fixture; it does not refresh the checkout `verify/` seal.
 - [Check committed secrets](./check-secrets.md) covers `tools/check-secrets.sh`.
 - [Capture synthetic payloads](./capture-payloads.md) covers `tools/capture-payloads.sh`.
+- [Record a decision and a blast](./decision-blast.md) covers `tools/saikit-decision.sh` and `tools/saikit-blast.sh` on a private fixture. Agents do not write these artifacts automatically.
