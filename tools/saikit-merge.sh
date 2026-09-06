@@ -57,6 +57,16 @@
 # (default 3; los tests lo ponen en 0).
 set -u
 
+# 18.25: la forma de la salida de gh no es estable — depende del entorno del
+# agente que lo corre. Medido (gh 2.98.0, 2026-09-05): con CLICOLOR_FORCE=1
+# heredado (harnesses de agentes) gh colorea y prety-imprime su --json incluso
+# a un pipe (la captura de $(...)), y CLICOLOR_FORCE LE GANA a NO_COLOR; el
+# parser estricto muere con el primer ESC (control char). Se neutraliza el
+# color de TODAS las llamadas gh del script en un punto; si la salida aun asi
+# no parsea, el gate sigue fallando cerrado igual que hoy.
+export NO_COLOR=1 CLICOLOR=0
+unset CLICOLOR_FORCE
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/veredicto_contract.sh"   # esquema del veredicto + parser JSON (sin jq)
 
@@ -108,7 +118,7 @@ REPO_LOCAL="${REPO_LOCAL%.git}"
 REPO_GH_RAW="$(gh repo view --json nameWithOwner 2>/dev/null)" \
   || no_merge "gh repo view no respondio en este cwd"
 REPO_GH="$(saikit_json_get "$REPO_GH_RAW" nameWithOwner)" \
-  || no_merge "gh repo view devolvio algo inesperado: $REPO_GH_RAW"
+  || no_merge "gh repo view devolvio algo inesperado (¿color forzado del terminal? nunca deberia verse con el entorno neutralizado): $REPO_GH_RAW"
 [ "$REPO_GH" = "$REPO_LOCAL" ] || no_merge "repo distinto: origin apunta a $REPO_LOCAL y gh a $REPO_GH"
 
 # PR de la rama actual.
