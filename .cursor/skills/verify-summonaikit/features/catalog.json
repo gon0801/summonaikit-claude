@@ -205,9 +205,9 @@
       "card": null
     },
     "verify-app": {
-      "status": "pending",
-      "owner_task": "19.14",
-      "card": null
+      "status": "active",
+      "card": "features/verify-app.md",
+      "execution_mode": "sandbox"
     },
     "stage-override": {
       "status": "pending",
