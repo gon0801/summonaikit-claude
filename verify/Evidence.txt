@@ -1,3 +1,22 @@
+2026-09-06 UTC — Fix 18.26: aislamiento del sello entre sesiones.
+Fuente: 28cd19f9a0be5081d4f65e2231e7e513c73f7250.
+Comando desde /private/tmp/saikit-fix1826-A5k8LJ/worktree:
+env HOME=/private/tmp/saikit-fix1826-A5k8LJ/home USERPROFILE=/private/tmp/saikit-fix1826-A5k8LJ/home TMPDIR=/private/tmp/saikit-fix1826-A5k8LJ/tmp /tmp/saikit-drive-venv/bin/pytest verify/
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-fix1826-A5k8LJ/worktree
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.75s ===============================
+Exit: 0.
+El Drive no acredita merge automatico de Grok. El rojo/verde y la mutacion
+del cruce de sesiones estan en docs/evidence/18.26-grok-reviewer-write/session-isolation.md.
+generar no regraba un mapa existente (exit 2); se actualiza solo el sello
+al commit medido, preservando el mapa y los pasos del operador.
+
 2026-09-05 — Drive del gate, macOS; pytest 8.4.2 en venv desechable.
 Worktree: /tmp/saikit-verify-gate-p9Ox4q
 Base medida: ef6cc8b81c78acb90e1c410de8596a0f9dd1ad10

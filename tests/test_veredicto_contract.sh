@@ -725,6 +725,195 @@ caso "verdict_turno_solo_revision_sin_falso_aviso"
 verdict_turno_solo_revision_sin_falso_aviso
 fin_caso "verdict_turno_solo_revision_sin_falso_aviso"
 
+# ---------------------- Task 18.26: sello unarmed (hijo Grok)
+# Forma medida en docs/evidence/18.26-grok-reviewer-write/write.post_tool_use.json:
+# hookEventName=post_tool_use, toolName=write, toolInput.file_path+content,
+# subagentType top-level. Sin agent_type. Sesion sin -saikit (sin STATE_PATH).
+verdict_payload_grok_write() {
+  _vd_role_json=""
+  if [ -n "$1" ]; then
+    _vd_role_json="$(printf ',"subagentType":"%s"' "$1")"
+  fi
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"auto","hookEventName":"post_tool_use","toolName":"write","toolInput":{"file_path":"%s","content":"%s"},"toolResult":{"type":"SearchReplace"},"isBackgrounded":false%s}' "$2" "$(verdict_esc "$3")" "$_vd_role_json"
+}
+
+verdict_unarmed_grok_reviewer_write_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  _vacio "sesion sin armar (sin STATE_PATH)" "$(lab_estado task_hash)"
+  lab_run tool claude "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "hash unarmed grok-shaped" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+  _igual "hash unarmed contra el archivo" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
+  _contiene "agents_seen lleva reviewer (cruce del merge)" "$(lab_estado agents_seen)" "reviewer"
+}
+
+caso "verdict_unarmed_grok_reviewer_write_sella"
+verdict_unarmed_grok_reviewer_write_sella
+fin_caso "verdict_unarmed_grok_reviewer_write_sella"
+
+verdict_unarmed_write_sin_rol_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="reviewer-only-from-path"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write "" ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "sin rol medido no hay sello" "$(lab_estado veredicto_sha256)"
+  if lab_hay_estado; then
+    _mal "write sin atribucion no debe crear estado"
+  fi
+}
+
+caso "verdict_unarmed_write_sin_rol_no_sella"
+verdict_unarmed_write_sin_rol_no_sella
+fin_caso "verdict_unarmed_write_sin_rol_no_sella"
+
+verdict_unarmed_implementer_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="impl000impl000impl000"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write implementer ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "implementer unarmed no sella" "$(lab_estado veredicto_sha256)"
+}
+
+caso "verdict_unarmed_implementer_no_sella"
+verdict_unarmed_implementer_no_sella
+fin_caso "verdict_unarmed_implementer_no_sella"
+
+# Unarmed: role from toolInput is agent-controlled, not a measured host channel.
+verdict_payload_grok_write_rol_en_toolinput() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"auto","hookEventName":"post_tool_use","toolName":"write","toolInput":{"file_path":"%s","content":"%s","subagent_type":"reviewer"},"toolResult":{"type":"SearchReplace"},"isBackgrounded":false}' "$1" "$(verdict_esc "$2")"
+}
+
+verdict_unarmed_rol_en_toolinput_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="toolinput-role-only"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write_rol_en_toolinput ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "rol solo en toolInput no sella" "$(lab_estado veredicto_sha256)"
+  if lab_hay_estado; then
+    _mal "rol solo en toolInput no debe crear estado"
+  fi
+}
+
+caso "verdict_unarmed_rol_en_toolinput_no_sella"
+verdict_unarmed_rol_en_toolinput_no_sella
+fin_caso "verdict_unarmed_rol_en_toolinput_no_sella"
+
+# The measured payload identifies the reviewer, NOT its parent session.
+# Reintroducing sibling selection (with or without verified:) must fail here.
+verdict_unarmed_aislamiento() {
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  LAB_SESSION_ID=unrelated-session-A
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+  lab_run prompt grok "$(lab_payload_prompt '-saikit trabajo A independiente')"
+  if [ "$1" = verified ]; then
+    lab_run tool grok "$(lab_payload_bash 'npm test -- verify/')"
+  fi
+  ruta_A="$(find "$LAB/hooks/state/grok" -path '*/unrelated-session-A/harness-state.env')"
+  if [ ! -f "$ruta_A" ]; then
+    _mal "no se pudo observar la sesion Grok A"
+    LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
+    return
+  fi
+  log_A="$(dirname "$ruta_A")/harness-evidence.log"
+  cp "$ruta_A" "$tmp/state-A.before"
+  cp "$log_A" "$tmp/log-A.before"
+  if [ "$1" = verified ]; then
+    _contiene "A tiene evidencia real del runner" "$(cat "$log_A")" "verified: "
+  fi
+
+  LAB_SESSION_ID=independent-reviewer-B
+  lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "Write Grok permite" "$LAB_RC" "0"
+  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/independent-reviewer-B/harness-state.env')"
+  if [ -f "$ruta_B" ]; then
+    _igual "sello solo en B" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+    _igual "B no se arma" "$(sed -n 's/^lane=//p' "$ruta_B")" "seal_boot"
+  else
+    _mal "falta sello local en la sesion B"
+  fi
+  cmp -s "$ruta_A" "$tmp/state-A.before" || _mal "Write B altero estado de A sin vinculo padre-hijo"
+  cmp -s "$log_A" "$tmp/log-A.before" || _mal "Write B acredito reviewer en log de A sin vinculo"
+  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean.' end_turn)"
+  _igual "Stop Grok permite" "$LAB_RC" "0"
+  cmp -s "$ruta_A" "$tmp/state-A.before" || _mal "Stop B altero estado de A"
+  cmp -s "$log_A" "$tmp/log-A.before" || _mal "Stop B altero log de A"
+  LAB_SESSION_ID=""
+  LAB_GROK_HOOK_EVENT=""
+}
+
+verdict_unarmed_no_toca_sesion_verificada() { verdict_unarmed_aislamiento verified; }
+verdict_unarmed_no_toca_sesion_armada() { verdict_unarmed_aislamiento armed; }
+caso "verdict_unarmed_no_toca_sesion_verificada"
+verdict_unarmed_no_toca_sesion_verificada
+fin_caso "verdict_unarmed_no_toca_sesion_verificada"
+caso "verdict_unarmed_no_toca_sesion_armada"
+verdict_unarmed_no_toca_sesion_armada
+fin_caso "verdict_unarmed_no_toca_sesion_armada"
+
+verdict_armed_implementer_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="implarm0implarm0"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_grok_write implementer ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "implementer armed no sella" "$(lab_estado veredicto_sha256)"
+}
+
+caso "verdict_armed_implementer_no_sella"
+verdict_armed_implementer_no_sella
+fin_caso "verdict_armed_implementer_no_sella"
+
+# Stop con prosa (sin recibo) sobre estado seal_boot: ALLOW y el sello vive.
+# Sin el early-exit, el Stop trata task_hash=unknown como armado, exige recibo
+# y en unknown-honesto / presupuesto / close limpio borra el estado.
+verdict_unarmed_stop_prosa_conserva_sello() {
+  verdict_unarmed_grok_reviewer_write_sella
+  sello="$(lab_estado veredicto_sha256)"
+  _no_vacio "sello previo al Stop" "$sello"
+  _igual "lane del boot unarmed" "$(lab_estado lane)" "seal_boot"
+  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean. El veredicto esta sellado.' end_turn)"
+  _igual "Stop seal_boot no bloquea" "$LAB_RC" "0"
+  if printf '%s' "$LAB_OUT" | grep -Fq '"decision":"block"'; then
+    _mal "Stop seal_boot exigio recibo"
+  fi
+  if ! lab_hay_estado; then
+    _mal "Stop no debe borrar STATE_PATH del sello"
+  fi
+  _igual "sello sobrevive Stop" "$(lab_estado veredicto_sha256)" "$sello"
+  _contiene "agents_seen sigue reviewer" "$(lab_estado agents_seen)" "reviewer"
+}
+
+caso "verdict_unarmed_stop_prosa_conserva_sello"
+verdict_unarmed_stop_prosa_conserva_sello
+fin_caso "verdict_unarmed_stop_prosa_conserva_sello"
+
+# Write de codigo en la misma sesion unarmed: no cae a mark_evidence.
+verdict_unarmed_write_codigo_no_implementa() {
+  verdict_unarmed_grok_reviewer_write_sella
+  sello="$(lab_estado veredicto_sha256)"
+  _no_vacio "sello previo al Write" "$sello"
+  lab_run tool claude "$(verdict_payload_grok_write "" "src/foo.py" "print(1)")"
+  _igual "write de codigo no marca implemented" "$(lab_estado implemented)" "0"
+  _igual "sello sobrevive write de codigo" "$(lab_estado veredicto_sha256)" "$sello"
+  if ! lab_hay_estado; then
+    _mal "write de codigo no debe borrar el estado del sello"
+  fi
+}
+
+caso "verdict_unarmed_write_codigo_no_implementa"
+verdict_unarmed_write_codigo_no_implementa
+fin_caso "verdict_unarmed_write_codigo_no_implementa"
+
 # ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
 # agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
 # despacharte, asi que git rev-parse HEAD es el sha del arbol que estas
@@ -784,12 +973,34 @@ mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the re
 # Task 18.13 (a): el Close: pierde la clausula que cita el sha y la ruta del
 # veredicto sellado — la atrapa contrato_close_cita_sha_y_ruta_del_veredicto_sellado.
 mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
+mut_veredicto_sello_unarmed_apagado() { sed 's/^verdict_try_seal_unarmed() {$/verdict_try_seal_unarmed() {\n  return 1/'; }
+mut_veredicto_seal_boot_stop_apagado() { sed 's/read_state_value lane)" = "seal_boot"/read_state_value lane)" = ""/'; }
+# Simulate the removed cross-session write, without requiring dead production
+# helpers to survive solely for mutation tests. The target is a real sibling.
+mut_veredicto_sello_cruza_sesion() {
+  awk '
+    { print }
+    /^verdict_boot_and_seal\(\) \{$/ {
+      print "  for vd_other in \"$PROJECT_DIR\"/*/harness-state.env; do"
+      print "    [ -f \"$vd_other\" ] || continue"
+      print "    [ \"$vd_other\" = \"$STATE_PATH\" ] && continue"
+      print "    STATE_PATH=\"$vd_other\""
+      print "    STATE_DIR=\"$(dirname \"$STATE_PATH\")\""
+      print "    LOG_PATH=\"$STATE_DIR/harness-evidence.log\""
+      print "    break"
+      print "  done"
+    }
+  '
+}
 
 MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
 rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
 implemented_sin_guardia|verdict_write_no_acredita_implemented
 lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
-close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado"
+close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
+sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella
+seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello
+sello_cruza_sesion|verdict_unarmed_no_toca_sesion_verificada"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

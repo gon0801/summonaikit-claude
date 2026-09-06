@@ -390,6 +390,17 @@ la habilita gratis, pero es una decisión del operador sobre visibilidad, no de
 este plan. El script es la **vía sancionada** (ver Invariantes: no es "la
 protección"); `protected_branch_push: deny` sigue.
 
+**Límite medido en Grok (18.26).** El write del reviewer hijo trae
+`subagentType=reviewer`, pero la captura no identifica la sesión padre
+(`docs/evidence/18.26-grok-reviewer-write/`). El hook sella solo la sesión
+emisora; no transfiere el sello ni `agents_seen` a otra sesión por mtime o
+porque su log contenga `verified:`. Esos datos no prueban parentesco.
+El sello aislado del hijo no basta para satisfacer el cruce de D18 con el
+blast de otra sesión: **en este recorrido de Grok el merge queda manual,
+a cargo del operador**, sin relajar el gate ni habilitar al agente a
+saltárselo. La viabilidad de un vínculo por otro canal permanece `unknown`
+hasta medirlo; esta entrega no afirma que Grok sea incapaz de proporcionarlo.
+
 **D19 — `tools/saikit-postmerge.sh`.** Corre en un turno **desarmado** (el
 turno autopilot cierra con recibo citando el sha; un Monitor de fondo
 despierta al modelo cuando el CI de la rama termina — el script no necesita
