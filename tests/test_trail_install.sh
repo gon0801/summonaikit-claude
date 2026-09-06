@@ -49,6 +49,28 @@ for host in codex dsh; do
   ln -s "$host_home/externo" "$host_home/.claude/saikit-tools"
   if install_host >/dev/null 2>&1; then mal "$host: declaro exito sin poder plantar tools"; fi
   [ ! -e "$host_home/.$host/hooks/summonaikit-harness.sh" ] || mal "$host: publico hook con tools fallidos"
+  for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+    for kind in enlace ajeno; do
+      host_home="$SANDBOX/$host-$kind-${rel//\//-}"
+      dest="$host_home/.claude/saikit-tools/$rel"
+      mkdir -p "$(dirname "$dest")"
+      if [ "$kind" = enlace ]; then
+        ln -s "$host_home/no-existe" "$dest"
+      else
+        printf '# archivo del operador, no del kit\n' > "$dest"
+        cp "$dest" "$host_home/original"
+      fi
+      if install_host >/dev/null 2>&1; then mal "$host: acepto tool $kind $rel"; fi
+      [ ! -e "$host_home/.$host/hooks/summonaikit-harness.sh" ] \
+        || mal "$host: publico hook con tool $kind $rel"
+      if [ "$kind" = enlace ]; then
+        [ -L "$dest" ] && [ "$(readlink "$dest")" = "$host_home/no-existe" ] \
+          || mal "$host: altero tool enlazado $rel"
+      else
+        cmp -s "$dest" "$host_home/original" || mal "$host: altero tool ajeno $rel"
+      fi
+    done
+  done
 done
 
 printf 'caso: quitar no atraviesa el symlink padre de lib\n'

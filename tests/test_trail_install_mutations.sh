@@ -14,7 +14,7 @@ mutant="$SANDBOX/repo/tools/install-hook.sh"
 run_driver() { SAIKIT_INSTALL_TOOL="$mutant" bash "$here/test_trail_install.sh"; }
 run_driver > "$SANDBOX/control.log" 2>&1 || { cat "$SANDBOX/control.log"; exit 1; }
 fail=0
-for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error; do
+for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error omitir_clasificacion; do
   case "$mutation" in
     quitar_padre)
       sed 's/\[ "$tools_enlace" -eq 0 \] \&\& \[ "$lib_enlace" -eq 0 \]/[ "$lib_enlace" -eq 0 ]/' "$source_tool" > "$mutant"
@@ -28,6 +28,9 @@ for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error; do
     ignorar_error)
       sed 's/codex|dsh) publicar_saikit_tools || exit \$?/codex|dsh) publicar_saikit_tools || true/' "$source_tool" > "$mutant"
       expected='codex: declaro exito sin poder plantar tools' ;;
+    omitir_clasificacion)
+      sed '/^publicar_saikit_tools()/,/^}/s/DESCONOCIDO|NO_OBSERVABLE)/__nunca__)/' "$source_tool" > "$mutant"
+      expected='codex: acepto tool enlace saikit-decision.sh' ;;
   esac
   if cmp -s "$source_tool" "$mutant" || ! bash -n "$mutant"; then
     printf 'FAIL: mutacion %s no aplico o no parsea\n' "$mutation"; fail=1; continue
@@ -41,4 +44,4 @@ for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error; do
   fi
 done
 [ "$fail" -eq 0 ] || exit 1
-printf 'test_trail_install_mutations: OK (4 mutaciones)\n'
+printf 'test_trail_install_mutations: OK (5 mutaciones)\n'

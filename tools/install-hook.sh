@@ -2742,7 +2742,7 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
 # claude publican el mismo verifier plantilla con esa ruta. Sin este plant, un
 # --host grok enseña el comando y el archivo no existe (hallazgo adversary 18.12).
 publicar_saikit_tools() {
-  local f rc_tools rc_lib
+  local f rc_tools rc_lib rel tools_estado
   for f in "$repo/tools/saikit-decision.sh" \
            "$repo/tools/saikit-blast.sh" \
            "$repo/tools/lib/redactar.sh"; do
@@ -2753,6 +2753,18 @@ publicar_saikit_tools() {
       decir "[summonaikit] saikit-tools: enlace, no se publica nada: $f"
       return 5
     fi
+  done
+  # Estos comandos son requeridos, no recetas opcionales: conservar uno
+  # ajeno/enlazado y salir 0 dejaria el contrato apuntando a un tool inutil.
+  # Clasificar los TRES antes de publicar; cualquier conflicto queda intacto.
+  for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+    f="$HOME/.claude/saikit-tools/$rel"
+    tools_estado="$(recetas_clasificar "$f" "$repo/tools/$rel")"
+    case "$tools_estado" in
+      DESCONOCIDO|NO_OBSERVABLE)
+        decir "[summonaikit] saikit-tools: $tools_estado, intacto: $f; no se publica nada"
+        return 5 ;;
+    esac
   done
   recetas_publicar_dir "$HOME/.claude/saikit-tools" \
     "$repo/tools/saikit-decision.sh" \

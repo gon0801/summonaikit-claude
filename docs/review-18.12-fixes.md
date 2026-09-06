@@ -81,3 +81,35 @@ Drive: `5 passed in 0.90s` en macOS, pytest 8.4.2 / Python 3.14.7.
 lineas de identidad del hook, no el comportamiento grabado.
 El gate agregado del CI sigue siendo la condicion de entrega del PR;
 estas corridas locales no lo sustituyen.
+
+## Revision independiente acotada
+
+Una ronda sobre `50ec183..da88cb9`. Un hallazgo P2: el publisher generico
+conservaba un tool individual `DESCONOCIDO` y devolvia 0. Medido por el reviewer:
+symlink roto en decision -> install 0 / comando 127; en redactor -> install 0 /
+comando 2. Sin otros hallazgos en el alcance revisado.
+
+Se agregaron casos para cada uno de los tres destinos, con symlink roto y
+archivo ajeno, tanto en Codex como en dsh. Rojo propio previo al fix (extracto):
+
+```text
+FAIL: codex: acepto tool enlace saikit-decision.sh
+FAIL: codex: publico hook con tool enlace saikit-decision.sh
+FAIL: codex: acepto tool ajeno saikit-decision.sh
+FAIL: dsh: acepto tool enlace lib/redactar.sh
+FAIL: dsh: publico hook con tool enlace lib/redactar.sh
+test_trail_install: FAIL
+```
+
+Exit 1. El preflight compartido ahora rechaza `DESCONOCIDO`/`NO_OBSERVABLE`
+antes de publicar cualquiera de los tres tools, preservando el conflicto.
+Se agrega la mutacion `omitir_clasificacion` para exigir este rechazo.
+Hubo cambio de codigo despues de la revision para cerrar ese hallazgo;
+no se despacho otra ronda.
+
+Verde posterior al fix: `test_trail_install: OK` (exit 0) y
+`test_trail_install_mutations: OK (5 mutaciones)` (exit 0), incluida:
+
+```text
+ATRAPADA omitir_clasificacion: codex: acepto tool enlace saikit-decision.sh
+```
