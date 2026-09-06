@@ -2031,16 +2031,92 @@ verdict_sealable_unarmed() {
   return 0
 }
 
+# Newest sibling merge would pick: verified: in its log first, else a real
+# task_hash. Skip this session and any lane=seal_boot (those shadow the parent).
+verdict_merge_target_sibling() {
+  [ -d "$PROJECT_DIR" ] || return 1
+  _vd_best_v=""
+  _vd_best_v_m=-1
+  _vd_best_t=""
+  _vd_best_t_m=-1
+  for _vd_f in "$PROJECT_DIR"/*/harness-state.env; do
+    [ -f "$_vd_f" ] || continue
+    [ "$_vd_f" = "$STATE_PATH" ] && continue
+    _vd_lane="$(grep '^lane=' "$_vd_f" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    [ "$_vd_lane" = "seal_boot" ] && continue
+    _vd_m="$(stat -c %Y "$_vd_f" 2>/dev/null || stat -f %m "$_vd_f" 2>/dev/null || printf '0')"
+    case "$_vd_m" in
+      ''|*[!0-9]*) _vd_m=0 ;;
+    esac
+    _vd_log="$(dirname "$_vd_f")/harness-evidence.log"
+    if [ -f "$_vd_log" ] && grep -q '^verified: ' "$_vd_log"; then
+      if [ "$_vd_m" -gt "$_vd_best_v_m" ]; then
+        _vd_best_v_m="$_vd_m"
+        _vd_best_v="$_vd_f"
+      fi
+    else
+      _vd_th="$(grep '^task_hash=' "$_vd_f" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+      if [ -n "$_vd_th" ] && [ "$_vd_th" != "unknown" ]; then
+        if [ "$_vd_m" -gt "$_vd_best_t_m" ]; then
+          _vd_best_t_m="$_vd_m"
+          _vd_best_t="$_vd_f"
+        fi
+      fi
+    fi
+  done
+  if [ -n "$_vd_best_v" ]; then
+    printf '%s\n' "$_vd_best_v"
+    return 0
+  fi
+  if [ -n "$_vd_best_t" ]; then
+    printf '%s\n' "$_vd_best_t"
+    return 0
+  fi
+  return 1
+}
+
+verdict_sello_sobre_hermano() {
+  (
+    STATE_DIR="$(dirname "$1")"
+    STATE_PATH="$1"
+    LOG_PATH="$STATE_DIR/harness-evidence.log"
+    vd_agents="$(read_state_value agents_seen)"
+    case ",$vd_agents," in
+      *,reviewer,*) ;;
+      *)
+        if [ -z "$vd_agents" ]; then vd_agents="reviewer"
+        else vd_agents="$vd_agents,reviewer"
+        fi
+        write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+          "$(read_state_value implemented)" "$(read_state_value verified)" \
+          "$vd_agents" "$(read_state_value lane)" \
+          "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+          "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+          "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
+        ;;
+    esac
+    printf 'agent: reviewer\n' >> "$LOG_PATH" 2>/dev/null || true
+    verdict_registrar_sello "$2"
+  )
+}
+
 verdict_boot_and_seal() {
-  # saikit-merge.sh exige agents_seen con reviewer en el mismo harness-state.env
-  # que lleva veredicto_sha256. Sin sembrarlo, el sello del hijo unarmed queda
-  # ilegible para el merge (elige este estado por mtime y falla el cruce).
+  # saikit-merge.sh picks the newest harness-state.env with veredicto_sha256,
+  # then demands `verified: ` + blast.comando on THAT session's log. A local
+  # seal_boot would win by mtime and fail the log check. Prefer an armed
+  # sibling. Without one, local seal_boot is the single-session fallback
+  # (D18 residual: merge still needs evidence on that same session).
   verdict_ensure_gitignore
+  vd_sha="$(printf '%s' "$1" | verdict_unescape | sha256sum | cut -c1-64)"
   if [ ! -f "$STATE_PATH" ]; then
+    vd_sib="$(verdict_merge_target_sibling || true)"
+    if [ -n "$vd_sib" ]; then
+      verdict_sello_sobre_hermano "$vd_sib" "$vd_sha"
+      return 0
+    fi
     write_state "unknown" "0" "0" "0" "reviewer" "seal_boot" "" "" "" "" "" ""
     printf 'agent: reviewer\n' >> "$LOG_PATH" 2>/dev/null || true
   fi
-  vd_sha="$(printf '%s' "$1" | verdict_unescape | sha256sum | cut -c1-64)"
   verdict_registrar_sello "$vd_sha"
 }
 
@@ -2050,10 +2126,8 @@ verdict_try_seal_unarmed() {
   [ -n "$vd_tool_name" ] || vd_tool_name="$(json_top_level_string toolName)"
   vd_file_path="$(json_tool_input_string file_path)"
   [ -n "$vd_file_path" ] || vd_file_path="$(json_tool_input_string file_path toolInput)"
-  vd_subagent="$(json_tool_input_string subagent_type)"
-  [ -n "$vd_subagent" ] || vd_subagent="$(json_tool_input_string subagent_type toolInput)"
-  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_top_level_string subagentType)"; fi
-  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_tool_input_string subagentType)"; fi
+  # Unarmed: measured host channels only. toolInput is agent-controlled.
+  vd_subagent="$(json_top_level_string subagentType)"
   if [ -z "$vd_subagent" ]; then vd_subagent="$(json_top_level_string agent_type)"; fi
   vd_content="$(json_tool_input_string content)"
   [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"

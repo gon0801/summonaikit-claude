@@ -637,7 +637,9 @@ mut_falla_frontera_aflojada() { sed 's/\[1-9\]/[0-9]/g'; }
 # ocurrencias de `rror:` en el hook son las 6 excepciones; `error TS[0-9]` lleva
 # espacio despues de `error` y `Traceback (...)` no tiene `rror:`.
 mut_falla_excepciones_sin_dospuntos() { sed 's/rror:/rror/g'; }
-mut_estado_sin_turno_armado(){ sed 's/if \[ ! -f "\$STATE_PATH" \]; then emit_allow; fi/if false; then emit_allow; fi/'; }
+# El early-exit ya no es el one-liner. Ancla: SealableWrite. emit_allow -> true
+# deja caer al mark_evidence y caso_g2_sin_armar_no_crea_estado se pone rojo.
+mut_estado_sin_turno_armado(){ sed '/SealableWrite igual sella/,/^  fi$/ s/emit_allow/true/g'; }
 
 mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
 mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'/'implementer|verifier|reviewer'/"; }

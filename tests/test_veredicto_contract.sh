@@ -782,6 +782,60 @@ caso "verdict_unarmed_implementer_no_sella"
 verdict_unarmed_implementer_no_sella
 fin_caso "verdict_unarmed_implementer_no_sella"
 
+# Unarmed: role from toolInput is agent-controlled, not a measured host channel.
+verdict_payload_grok_write_rol_en_toolinput() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"auto","hookEventName":"post_tool_use","toolName":"write","toolInput":{"file_path":"%s","content":"%s","subagent_type":"reviewer"},"toolResult":{"type":"SearchReplace"},"isBackgrounded":false}' "$1" "$(verdict_esc "$2")"
+}
+
+verdict_unarmed_rol_en_toolinput_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="toolinput-role-only"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write_rol_en_toolinput ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "rol solo en toolInput no sella" "$(lab_estado veredicto_sha256)"
+  if lab_hay_estado; then
+    _mal "rol solo en toolInput no debe crear estado"
+  fi
+}
+
+caso "verdict_unarmed_rol_en_toolinput_no_sella"
+verdict_unarmed_rol_en_toolinput_no_sella
+fin_caso "verdict_unarmed_rol_en_toolinput_no_sella"
+
+# Child seal must land on the armed parent (verified: in its log). Local
+# seal_boot would shadow that parent and merge would still fail D18.
+verdict_unarmed_sella_hermano_con_verified() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+
+  verdict_armar
+  ruta_A="$LAB_ESTADO_PATH"
+  _no_vacio "A tiene estado" "$ruta_A"
+  lab_run tool claude "$(lab_payload_bash 'npm test -- verify/')"
+  _contiene "A anoto verified:" "$(lab_log)" "verified: "
+  _contiene "A anoto el blast" "$(lab_log)" "npm test -- verify/"
+  _vacio "A aun no tiene sello" "$(lab_estado veredicto_sha256)"
+
+  LAB_SESSION_ID="b2b20000-2222-4333-8444-555566667777"
+  lab_run tool claude "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  LAB_SESSION_ID=""
+
+  extra="$(find "$LAB/hooks/state" -type f -name harness-state.env ! -path "$ruta_A" 2>/dev/null || true)"
+  _vacio "B no creo estado local" "$extra"
+  [ -f "$ruta_A" ] || _mal "el estado de A desaparecio"
+  _igual "sello en A" "$(lab_estado veredicto_sha256)" "$want"
+  _contiene "A agents_seen reviewer" "$(lab_estado agents_seen)" "reviewer"
+  _contiene "A conserva verified:" "$(lab_log)" "verified: "
+}
+
+caso "verdict_unarmed_sella_hermano_con_verified"
+verdict_unarmed_sella_hermano_con_verified
+fin_caso "verdict_unarmed_sella_hermano_con_verified"
+
 verdict_armed_implementer_no_sella() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="implarm0implarm0"
