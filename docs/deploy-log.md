@@ -7,6 +7,27 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #200 / Task 18.22 (rojos de macOS: canon fisico + epoca portable) — deploy REAL a las 4 copias
+
+- **SHA:** merge `229887a`, head `f2d1f89`, CI 8/8 con `gate` verde (run 34003475153).
+- **El hook cambio** (H1 `adv_canon_path` ancla fisico el ancestro existente;
+  H2 `adv_epoca_a_epoch` GNU→BSD con round-trip). En GNU comportamiento
+  identico: golden regrabada SOLO identidad (diff = 3 lineas).
+- **Deploy:** claude REPARADO (backup `…nuestro.20260905-184932.bak`), grok y
+  dsh REPARADO (backups `…-184933.bak`), codex `YA AL DIA` + wrap POSIX
+  plantado. `check-hook-registration.sh` exit 0.
+- **Review del lead (sesion kimi):** diff auditado; DoD re-medida en la Mac
+  del operador sin gnubin — `SAIKIT_PARTICION=rapidos` ⇒ `tests/run.sh: OK
+  (37 tests)`, 13 skips contados aparte. Las mutaciones de H1/H2 quedaron al
+  rojo MEDIDAS ahi mismo (una corrida sin `SAIKIT_HOOK_VIVO` midio el hook
+  viejo y fallo exactamente donde la fila decia — la trampa de la regla 1 de
+  AGENTS.md, declarada en la fila).
+- **Mismo deploy cubre el PR #201** (`verify/` del kit, merge `0e711c5`): no
+  toca el hook — sus cambios son del sandbox de verificacion. Mergeado por el
+  operador sin review del lead; declarado.
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión kimi).
+
 ## 2026-09-05 — PR #198 / Task 18.11 (PreToolUse niega el merge a pelo) — deploy REAL a las 4 copias
 
 - **SHA:** merge `7009b74`, head `cf7f4a0`, CI 8/8 con `gate` verde (run 34001332338).
