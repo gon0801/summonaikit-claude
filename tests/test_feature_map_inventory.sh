@@ -50,7 +50,7 @@ mk_min_skill() {  # $1=dir
   fi
   cp "$SKILL/features/README.md" "$d/features/README.md"
   # copy four cards + descriptors + catalog from real as base
-  for f in install-guardian gate-turn audit-ledger check-deploy-log; do
+  for f in install-guardian gate-turn audit-ledger check-deploy-log saikit-merge; do
     cp "$SKILL/features/$f.md" "$d/features/$f.md"
     cp "$SKILL/features/$f.json" "$d/features/$f.json"
   done

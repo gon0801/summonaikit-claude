@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "saikit-merge",
+  "card": "saikit-merge.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/saikit-merge.sh"
+  },
+  "execution_mode": "simulated",
+  "surfaces": ["tools/saikit-merge.sh"],
+  "requirements": ["gh:simulated"],
+  "cases": [
+    {
+      "id": "merge-listo",
+      "required_assertions": ["listo_line", "no_merge_on_listo"]
+    },
+    {
+      "id": "merge-confirmado",
+      "required_assertions": [
+        "merge_ok",
+        "match_head",
+        "no_admin",
+        "no_delete_branch",
+        "ci_revalidated",
+        "sello_intact"
+      ]
+    },
+    {
+      "id": "merge-ci-rojo",
+      "required_assertions": ["reject_ci_rojo", "no_merge_on_ci_rojo"]
+    },
+    {
+      "id": "merge-base-movida",
+      "required_assertions": ["reject_base_avanzada", "no_merge_on_base"]
+    },
+    {
+      "id": "merge-sello-ajeno",
+      "required_assertions": ["reject_sello_ajeno", "no_merge_on_sello"]
+    },
+    {
+      "id": "merge-head-cambiado",
+      "required_assertions": ["reject_head_cambiado", "no_merge_on_head"]
+    },
+    {
+      "id": "revert-ok",
+      "required_assertions": ["revert_merge_ok", "revert_match_head"]
+    },
+    {
+      "id": "revert-sin-trailer",
+      "required_assertions": ["reject_sin_trailer", "no_merge_on_trailer"]
+    },
+    {
+      "id": "revert-no-punta",
+      "required_assertions": ["reject_no_punta", "no_merge_on_punta"]
+    }
+  ]
+}

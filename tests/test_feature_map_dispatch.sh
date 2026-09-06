@@ -55,9 +55,9 @@ printf '%s' "$out" | grep -q 'audit-ledger' || malo "falta audit-ledger"
 printf '%s' "$out" | grep -q 'check-deploy-log' || malo "falta check-deploy-log"
 
 caso "list-features incluye pending sin fingir ejecutor"
-printf '%s' "$out" | grep -q 'saikit-merge' || malo "falta pending saikit-merge"
-printf '%s' "$out" | grep -E 'saikit-merge' | grep -Eq 'pending|status=pending' \
-  || malo "saikit-merge no declara pending: $out"
+printf '%s' "$out" | grep -q 'saikit-postmerge' || malo "falta pending saikit-postmerge"
+printf '%s' "$out" | grep -E 'saikit-postmerge' | grep -Eq 'pending|status=pending' \
+  || malo "saikit-postmerge no declara pending: $out"
 
 # ---------------------------------------------------------------------------
 # drive <id> sintetico: PASS/0 FAIL/1 unknown/3 + evidencia
@@ -144,7 +144,7 @@ fi
 # ---------------------------------------------------------------------------
 caso "drive pending (sin ejecutor) no es PASS"
 reset_art
-out="$(ctrl drive saikit-merge 2>&1)" && rc=0 || rc=$?
+out="$(ctrl drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
 [ "$rc" -ne 0 ] || malo "drive pending no debe PASS/0: $out"
 [ "$rc" -eq 3 ] || [ "$rc" -eq 1 ] \
   || malo "drive pending exit $rc (se espera unknown/3 o FAIL/1): $out"

@@ -135,13 +135,9 @@
       "card": "features/check-deploy-log.md"
     },
     "saikit-merge": {
-      "status": "pending",
-      "owner_task": "19.6",
-      "card": null,
-      "execution_mode": "simulated",
-      "requirements": [
-        {"kind": "binary", "name": "gh", "access": "simulated"}
-      ]
+      "status": "active",
+      "card": "features/saikit-merge.md",
+      "execution_mode": "simulated"
     },
     "saikit-postmerge": {
       "status": "pending",

@@ -74,6 +74,26 @@ print("REQS=" + " ".join(reqs))
 PY
 }
 
+_feature_mode() {
+  python3 - "$skill_root/features/$1.json" "$CATALOG" "$1" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+cat = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+fid = sys.argv[3]
+mode = ""
+if p.is_file():
+    d = json.loads(p.read_text(encoding="utf-8"))
+    mode = d.get("execution_mode") or ""
+if not mode:
+    meta = (cat.get("features") or {}).get(fid) or {}
+    mode = meta.get("execution_mode") or ""
+if mode not in ("sandbox", "simulated", "live"):
+    mode = "sandbox"
+print(mode)
+PY
+}
+
 _driver_script() {
   if [ -n "${SAIKIT_FM_DRIVER:-}" ] && [ -f "${SAIKIT_FM_DRIVER}" ]; then
     printf '%s' "$SAIKIT_FM_DRIVER"
@@ -159,7 +179,7 @@ begin_attempt() {
     --run-id "$(_evidence_run_id)" \
     --feature-id "$fid" \
     --repo "$repo" \
-    --mode sandbox \
+    --mode "$(_feature_mode "$fid")" \
     --cases "$cases" \
     --required-assertions "$reqs" \
     $extra
