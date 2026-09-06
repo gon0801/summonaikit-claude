@@ -128,6 +128,38 @@ run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto artifact versionado"
 out="$(run_lint "$R" "$S" 2>&1 || true)"
 printf '%s' "$out" | grep -q 'no permitida' || malo "sin motivo allowlist: $out"
 
+caso "scripts/lib no inventariado en helpers => 1"
+R="$SANDBOX/libjunk"; S="$SANDBOX/libjunk-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+mkdir -p "$S/scripts/lib"
+printf '#!/bin/sh\necho junk\n' > "$S/scripts/lib/junk.sh"
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto scripts/lib basura"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'no permitida' || malo "sin motivo lib junk: $out"
+
+caso "features JSON huerfano (fuera del catalogo) => 1"
+R="$SANDBOX/fant"; S="$SANDBOX/fant-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+printf '{"schema_version":1,"id":"fantasma"}\n' > "$S/features/fantasma.json"
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto JSON huerfano"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'no permitida' || malo "sin motivo JSON huerfano: $out"
+
+caso "legacy function inventada => 1"
+R="$SANDBOX/leg"; S="$SANDBOX/leg-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/gate-turn.json")
+d=json.loads(p.read_text())
+d["executor"]={"kind":"legacy","command":"drive-gate-scenario","function":"cmd_no_existe"}
+p.write_text(json.dumps(d), encoding="utf-8")
+PY
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto function legacy inventada"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -qi 'no existe\|legacy' || malo "sin motivo legacy: $out"
+
 caso "H2 fuera de orden => 1"
 R="$SANDBOX/h2"; S="$SANDBOX/h2-skill"
 mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
@@ -224,6 +256,39 @@ printf '#!/bin/bash\n' > "$S/scripts/drivers/x.sh"
 run_lint "$R" "$S" >/dev/null 2>&1 && malo "baseline huerfano debio fallar"
 run_lint "$R" "$S" --mutate accept_orphan >/dev/null 2>&1 \
   || malo "mutacion accept_orphan debio pasar en falso"
+
+caso "mutacion accept_orphan NO silencia legacy invalido"
+R="$SANDBOX/mut-orp-leg"; S="$SANDBOX/mut-orp-leg-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+mkdir -p "$S/scripts/drivers"
+printf '#!/bin/bash\n' > "$S/scripts/drivers/x.sh"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/gate-turn.json")
+d=json.loads(p.read_text())
+d["executor"]={"kind":"legacy","command":"drive-gate-scenario","function":"cmd_no_existe"}
+p.write_text(json.dumps(d), encoding="utf-8")
+PY
+run_lint "$R" "$S" --mutate accept_orphan >/dev/null 2>&1 \
+  && malo "accept_orphan no debe ocultar legacy invalido"
+out="$(run_lint "$R" "$S" --mutate accept_orphan 2>&1 || true)"
+printf '%s' "$out" | grep -qi 'no existe\|legacy' || malo "sin queja legacy bajo accept_orphan: $out"
+
+caso "mutacion skip_legacy_validate: function inventada deja de atrapar"
+R="$SANDBOX/mut-leg"; S="$SANDBOX/mut-leg-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/gate-turn.json")
+d=json.loads(p.read_text())
+d["executor"]={"kind":"legacy","command":"drive-gate-scenario","function":"cmd_no_existe"}
+p.write_text(json.dumps(d), encoding="utf-8")
+PY
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "baseline legacy debio fallar"
+run_lint "$R" "$S" --mutate skip_legacy_validate >/dev/null 2>&1 \
+  || malo "mutacion skip_legacy_validate debio pasar en falso"
 
 caso "mutacion skip_h2_order: H2 roto deja de atrapar"
 R="$SANDBOX/mut-h2"; S="$SANDBOX/mut-h2-skill"

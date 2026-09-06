@@ -52,8 +52,17 @@ def load_json(path: Path, *, accept_bad: bool = False) -> Any:
         raise LintError(f"no se pudo leer {path}: {e}") from e
 
 
-def skill_rel_allowed(rel: str) -> bool:
-    """Files that may exist under the versioned skill tree."""
+def skill_rel_allowed(
+    rel: str,
+    *,
+    features_meta: dict[str, Any],
+    helpers: dict[str, Any],
+) -> bool:
+    """Files that may exist under the versioned skill tree.
+
+    Prefijos abiertos (lib/**, features/*.json) no bastan: cada archivo debe
+    estar inventariado en helpers / features del catálogo.
+    """
     if rel.startswith("artifacts/") or rel.startswith(".run/"):
         return False
     if "__pycache__" in rel.split("/") or rel.endswith(".pyc"):
@@ -64,14 +73,33 @@ def skill_rel_allowed(rel: str) -> bool:
         return True
     if rel == "scripts/lint-feature-map.py":
         return True
-    if rel.startswith("scripts/lib/") or rel.startswith("scripts/drivers/"):
+    if rel in helpers:
         return True
-    if rel.startswith("features/") and (
-        rel.endswith(".md") or rel.endswith(".json")
-    ):
+    if rel.startswith("scripts/lib/"):
+        # solo helpers clasificados (arriba); basura bajo lib/ no pasa
+        return False
+    if rel.startswith("scripts/drivers/") and rel.endswith(".sh"):
+        # presencia permitida; huérfanos se juzgan aparte contra executors
         return True
+    if rel == "features/README.md" or rel == "features/catalog.json":
+        return True
+    if rel.startswith("features/") and rel.endswith(".md"):
+        stem = Path(rel).stem
+        meta = features_meta.get(stem)
+        if not meta:
+            return False
+        card = meta.get("card")
+        if not card:
+            return False
+        return Path(card).name == Path(rel).name or card == rel
+    if rel.startswith("features/") and rel.endswith(".json"):
+        stem = Path(rel).stem
+        meta = features_meta.get(stem)
+        if not meta:
+            return False
+        # pending no finge descriptor versionado
+        return meta.get("status", "active") in {"active", "blocked"}
     return False
-
 
 
 def skill_dir_from_args(repo: Path, skill: Path | None) -> Path:
@@ -80,27 +108,52 @@ def skill_dir_from_args(repo: Path, skill: Path | None) -> Path:
     return repo / ".cursor" / "skills" / "verify-summonaikit"
 
 
-def discover_tools_and_trees(repo: Path) -> set[str]:
-    """Default discovery matching the Phase 19 root contract."""
+def discover_from_roots(repo: Path, roots: list[dict[str, Any]] | None) -> set[str]:
+    """Discover public surfaces from catalog.roots (fallback to built-in)."""
+    if not roots:
+        return discover_tools_and_trees(repo)
     found: set[str] = set()
-    tools = repo / "tools"
-    if tools.is_dir():
-        for p in tools.iterdir():
-            if p.name == "lib" and p.is_dir():
-                for lib in p.iterdir():
-                    if lib.is_file():
-                        found.add(lib.relative_to(repo).as_posix())
-                continue
-            if p.is_file():
-                found.add(p.relative_to(repo).as_posix())
-    for dname in ("hooks", "hosts", "skills", "agents", "recetas"):
-        base = repo / dname
-        if not base.is_dir():
+    for root in roots:
+        rel = root.get("path", "")
+        kind = root.get("kind", "dir")
+        base = repo / rel
+        if not base.exists():
             continue
-        for p in base.rglob("*"):
-            if p.is_file() and ".git" not in p.parts:
-                found.add(p.relative_to(repo).as_posix())
+        if kind == "tools_exec":
+            if not base.is_dir():
+                continue
+            for p in base.iterdir():
+                if p.name == "lib" and p.is_dir():
+                    for lib in p.iterdir():
+                        if lib.is_file():
+                            found.add(lib.relative_to(repo).as_posix())
+                    continue
+                if p.is_file():
+                    found.add(p.relative_to(repo).as_posix())
+        elif kind == "dir":
+            if not base.is_dir():
+                continue
+            for p in base.rglob("*"):
+                if p.is_file() and ".git" not in p.parts:
+                    found.add(p.relative_to(repo).as_posix())
+        else:
+            raise LintError(f"root.kind desconocido: {kind} ({rel})")
     return found
+
+
+def discover_tools_and_trees(repo: Path) -> set[str]:
+    """Fallback discovery matching the Phase 19 root contract."""
+    return discover_from_roots(
+        repo,
+        [
+            {"path": "tools", "kind": "tools_exec"},
+            {"path": "hooks", "kind": "dir"},
+            {"path": "hosts", "kind": "dir"},
+            {"path": "skills", "kind": "dir"},
+            {"path": "agents", "kind": "dir"},
+            {"path": "recetas", "kind": "dir"},
+        ],
+    )
 
 
 def parse_card(path: Path) -> dict[str, Any]:
@@ -195,7 +248,9 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         if not p.is_file():
             continue
         rel = p.relative_to(skill).as_posix()
-        if not skill_rel_allowed(rel):
+        if not skill_rel_allowed(
+            rel, features_meta=features_meta, helpers=helpers
+        ):
             problems.append(f"fuente de skill no permitida: {rel}")
 
     # exclusions need reasons
@@ -206,7 +261,7 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
 
     discovered = set()
     if mutate != "omit_discovery":
-        discovered = discover_tools_and_trees(repo)
+        discovered = discover_from_roots(repo, catalog.get("roots"))
 
     classified_paths = set(classifications) | set(exclusions)
     for hpath in helpers:
@@ -314,8 +369,6 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         executor = desc.get("executor")
         if not executor:
             problems.append(f"{fid}: ficha/descriptor sin ejecutor")
-        elif mutate == "accept_orphan":
-            pass
         else:
             try:
                 validate_legacy_executor(skill, fid, executor, mutate)
