@@ -185,6 +185,19 @@ G7|pretool_hatch_sin_strip_comillas|el hatch deja de pelar comillas envolventes 
 G7|pretool_hatch_spoof_apagado|el spoof de sufijo (.bak) se apaga y saikit-merge.sh.bak con pin del real deja de negar
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
+G8|trail_check_eliminado|el chequeo trail/blast del Stop se apaga y un full sin cita cierra
+G8|trail_vuelve_a_glob|cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra
+G8|trail_acepta_glob_token|el token glob en Close cuenta como cita
+G8|trail_sin_existir|una cita sin archivo en disco cierra
+G8|trail_solo_tsv|se deja de exigir la familia blast
+G8|trail_solo_blast|se deja de exigir la familia tsv
+G8|trail_lee_recibo_entero|las citas se leen del recibo entero, no del span Close
+G8|trail_skip_vacio|has_trail_skip acepta cualquier texto
+G8|trail_skip_sin_razon|TRAIL SKIP: vacio cuenta
+G8|trail_skip_substring|el skip se busca como subcadena sin ancla
+G8|trail_lee_text_entero|skip/cita se leen de \$text (tail) no de text_hatch
+G8|trail_tambien_en_fast|el guard lane!=fast se apaga y fast sin cita bloquea
+G8|trail_parrafo_solo_hc|build_gate_feedback deja de adosar trail_parrafo
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -917,6 +930,77 @@ mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pre
 # Restaura el short-circuit hatch-primero: hash ok => allow aunque el
 # mismo comando tambien traiga gh pr merge / gh api /merge / git push.
 mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd"; then/if pretool_es_hatch "$_pt_cmd"; then if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then emit_allow; fi; emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"; fi; if pretool_es_gh_pr_merge "$_pt_cmd"; then/'; }
+
+mut_trail_check_eliminado() { sed 's/if ! has_trail_skip "\$text_hatch"; then/if false; then/'; }
+mut_trail_vuelve_a_glob() {
+  awk '
+    /^trail_cited_and_present\(\) \{$/ {
+      print "trail_cited_and_present() { [ -n \"$(find \"$PROJECT_ROOT/.saikit/decisiones\" -name \"*.tsv\" 2>/dev/null | head -n1)\" ] && [ -n \"$(find \"$PROJECT_ROOT/.saikit/findings\" -name \"blast-*.json\" 2>/dev/null | head -n1)\" ]; return; }"
+      print "trail_cited_and_present_OFF() {"
+      next
+    }
+    { print }
+  '
+}
+mut_trail_acepta_glob_token() {
+  awk '
+    /^TRAIL_TSV_CITE_RE=/ { print "TRAIL_TSV_CITE_RE='"'"'(\\./)?\\.saikit/decisiones/[^[:space:]]+\\.tsv'"'"'"; next }
+    /^TRAIL_BLAST_CITE_RE=/ { print "TRAIL_BLAST_CITE_RE='"'"'(\\./)?\\.saikit/findings/blast-[^[:space:]]+\\.json'"'"'"; next }
+    /\*'\''\*'\''\*/ { next }
+    /^path_present_under_root\(\) \{$/ {
+      print
+      print "  case \"$1\" in *\"*\"*) _m=$(find \"$PROJECT_ROOT/$(dirname -- \"$1\")\" -name \"$(basename -- \"$1\")\" 2>/dev/null | head -n1); [ -n \"$_m\" ]; return; esac"
+      next
+    }
+    { print }
+  '
+}
+mut_trail_sin_existir() {
+  awk '
+    /^path_present_under_root\(\) \{$/ {
+      print "path_present_under_root() { return 0; }"
+      print "path_present_under_root_OFF() {"
+      next
+    }
+    { print }
+  '
+}
+mut_trail_solo_tsv() { sed 's/\[ "\$_tsv" -eq 0 \] \&\& \[ "\$_blast" -eq 0 \]/[ "$_tsv" -eq 0 ]/'; }
+mut_trail_solo_blast() { sed 's/\[ "\$_tsv" -eq 0 \] \&\& \[ "\$_blast" -eq 0 \]/[ "$_blast" -eq 0 ]/'; }
+mut_trail_lee_recibo_entero() { sed 's/close_span "\$text_hatch"/printf "%s" "$text_hatch"/'; }
+mut_trail_skip_vacio() {
+  awk '
+    /^has_trail_skip\(\) \{$/ {
+      print "has_trail_skip() { return 0; }"
+      print "has_trail_skip_OFF() {"
+      next
+    }
+    { print }
+  '
+}
+mut_trail_skip_sin_razon() { sed '/TRAIL SKIP.*\[\^\[:space:]]/d'; }
+mut_trail_skip_substring() {
+  awk '
+    /^has_trail_skip\(\) \{$/ {
+      print "has_trail_skip() { printf \"%s\" \"$1\" | grep -Fq \"TRAIL SKIP:\"; }"
+      print "has_trail_skip_OFF() {"
+      next
+    }
+    { print }
+  '
+}
+mut_trail_lee_text_entero() { sed 's/has_trail_skip "\$text_hatch"/has_trail_skip "$text"/; s/close_span "\$text_hatch"/close_span "$text"/'; }
+mut_trail_tambien_en_fast() {
+  awk '
+    /has_trail_skip "\$text_hatch"/ {
+      if (prev ~ /read_state_value lane/) sub(/!= "fast"/, "!= \"__never__\"", prev)
+    }
+    NR>1 { print prev }
+    { prev=$0 }
+    END { print prev }
+  '
+}
+mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "\$(trail_parrafo)")"/_gf="$_gf"/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
