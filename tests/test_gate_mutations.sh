@@ -53,6 +53,8 @@ G1|reglas_sin_base_de_rama_limpia|el bullet de higiene de base de rama desaparec
 G1|laxa_sin_cierre|la forma laxa deja de exigir la marca de cierre y una mencion humana casual suprime el desarme
 G2|despacho_bg_acredita|el guard del despacho en background se neutraliza y un job recien lanzado vuelve a acreditar verificacion sin resultado
 G1|notificacion_no_se_reconoce|el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
+G1|grok_wake_strict_apagado|el skip estricto del auto-wake grok se neutraliza y un wake con sentinel en la descripcion del subagente vuelve a re-armar (18.27)
+G1|grok_wake_laxa_sin_contenido|la laxa grok vuelve a vetar el desarme con la etiqueta sola y una mencion humana suprime el desarme (18.27)
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
@@ -129,6 +131,7 @@ G4|etiqueta_sin_bold|la alternativa markdown bold se quita y un recibo **Label**
 G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
 G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
+G4|delegado_grok_sin_bg|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -263,6 +266,19 @@ mut_laxa_sin_cierre() { sed 's|grep -Eq "$SAIKIT_TASK_NOTIFICATION_CIERRE_RE"|tr
 # caso_g2_runner_en_background_no_acredita.
 mut_despacho_bg_acredita() { sed 's|grep -Eiq "$SAIKIT_DESPACHO_BG_RE"|false|'; }
 mut_notificacion_no_se_reconoce() { sed 's/"\$SAIKIT_TASK_NOTIFICATION_RE"/"NUNCA_MATCHEA_ESTO_10_14"/'; }
+# 18.27 (D-A): gemelos grok de las dos de arriba. El strict apagado deja pasar
+# el auto-wake al gate del sentinel y un wake con `-saikit` en la descripcion
+# del subagente re-arma (reset de cycle). Lo atrapa
+# caso_g1_grok_autowake_con_sentinel_no_rearma.
+mut_grok_wake_strict_apagado() { sed 's/"\$SAIKIT_GROK_WAKE_STRICT_RE"/"NUNCA_MATCHEA_ESTO_18_27"/'; }
+# La laxa grok sin la marca de contenido vuelve a vetar el desarme con la
+# etiqueta sola (<system-reminder>, el sobre GENERICO del host): una mencion
+# humana suprime el desarme. Lo atrapa caso_g1_grok_mencion_humana_del_wake_
+# si_desarma. El ancla incluye "\$1" a proposito: la marca de contenido TAMBIEN
+# la usa el skip estricto de start_harness (con \$prompt_text) y un ancla sin
+# el argumento mutaba los DOS sitios a la vez, conflando dos protecciones
+# distintas en un solo mutante.
+mut_grok_wake_laxa_sin_contenido() { sed 's,"\$1" | grep -Eq "\$SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE","$1" | true,'; }
 # session_id_greedy es el gemelo de mut_subagent_type_greedy para session_id:
 # volver al lector greedy del payload crudo tomaba la ULTIMA ocurrencia de la
 # clave (un session_id anidado en session_crons) y re-llaveaba la ruta a mitad
@@ -793,6 +809,13 @@ mut_delegado_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED/
 # caso_g4_delegado_incidental_en_recibo_roto_bloquea (el recibo roto con la
 # frase incidental vuelve a cerrar en silencio, exit 0 en vez de 2).
 mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT_NUNCA'/"; }
+# 18.27 (D-B): la guardia de backgroundTasks de la escotilla grok se
+# neutraliza (siempre "en vuelo") y un Stop con la linea DELEGATED y el array
+# VACIO vuelve a permitir — la salida headless sin recibo del hallazgo E. El
+# ancla es la INICIALIZACION grok_bg_en_vuelo=0 (unica ocurrencia del =0; la
+# otra asignacion es =1 dentro del case). Lo atrapa
+# caso_g4_grok_delegado_sin_bg_bloquea.
+mut_delegado_grok_sin_bg() { sed 's/grok_bg_en_vuelo=0/grok_bg_en_vuelo=1/'; }
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
 # !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
 # continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
