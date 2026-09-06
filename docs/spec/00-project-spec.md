@@ -2363,7 +2363,7 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
   vez. Sin estado del hook y sin confiar en ningún JSON local.
 - **Costo medido, no estimado:** ~120-230k tokens y 8-18 min de pared por PR.
 - **18.25:** el gate de merge neutraliza el color de `gh` (`NO_COLOR=1`,
-  `CLICOLOR=0`, `CLICOLOR_FORCE` desseteado) antes de cada llamada; residual
+  `CLICOLOR=0` y `CLICOLOR_FORCE` sin setear) antes de cada llamada; residual
   declarado: el parser de `saikit-postmerge.sh` no recibe esta
   neutralización.
 - **18.26 (límite, no fix):** el write del reviewer hijo trae
