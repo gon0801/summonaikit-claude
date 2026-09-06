@@ -7,6 +7,20 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #213 (19.1: feature-map inventory y lint) — hooks NO-OP
+
+- **Merge:** `230bd96059d3384db5349d68b4a6c69c2115e66c`, head
+  `7c5a9bd61c7a3af710e0682f6d3db4390db197f8`; CI del PR con `gate` verde
+  en el [run 34021716592](https://github.com/gon0801/summonaikit-claude/actions/runs/34021716592).
+  Post-merge en master: run [34022223146](https://github.com/gon0801/summonaikit-claude/actions/runs/34022223146).
+- **Deploy (01:35 PDT):** desde `master` sincronizado, `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  las cuatro copias dijeron `YA AL DIA` (hook sin cambios).
+- **Verificacion:** `install-hook.sh --check` exit 0, cuatro filas
+  `resultado=al-dia registro=ok`; `check-hook-registration.sh` exit 0.
+- **Operador:** Gon; merge y cierre de ledger autorizados en sesion Cursor.
+  Fila 19.1 cerrada por el lead tras el merge.
+
 ## 2026-09-05 — PR #208 (18.26: sello local del reviewer Grok) — deploy REAL de las 4 copias
 
 - **Merge:** `d45b564ebcab6ad50343a76f900faa45a419ef4c`. Antes del merge se
