@@ -7,6 +7,38 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #204 (18.12: hecho único exigido + tools del rastro plantados) — deploy REAL de las 4 copias
+
+- **Merge:** `70f3a94e8e003ff0dff079f15eaddd93e3f2bb29`, head
+  `1881f87`. Todos los jobs, incluido `gate`, verdes en el
+  [run 34008635230](https://github.com/gon0801/summonaikit-claude/actions/runs/34008635230)
+  (CodeRabbit rate-limited, no bloquea).
+- **Deploy (20:26 PDT):** desde `master` limpio en `70f3a94`
+  (`sucio=no`, `coincide_origin_master=si`); los cuatro instaladores
+  exit 0, las cuatro copias `REPARADO` con backup nombrado — el hook SÍ
+  cambió en este PR (gate de rastro/blast en carril full). Claude recibió
+  además los 3 tools del trail en `~/.claude/saikit-tools`
+  (`saikit-decision.sh`, `saikit-blast.sh`, `lib/redactar.sh`, plantados
+  con swap atómico) y el recetario `00-lider.md` + `MANIFEST.sha256`
+  actualizados. Grok: `agents/verifier.md` reparado. Codex: wrapper POSIX
+  replantado; `hooks.json` sigue sin escribirse por diseño (declarado en
+  la salida del instalador).
+- **Registro:** `check-hook-registration.sh` exit 0.
+- **Operador:** Gon (sesión kimi), merge autorizado tras 2 rondas de
+  revisión del lead sobre el trabajo de Cursor.
+
+## 2026-09-05 — PR #205 (cierre 18.9: smoke autopilot + filas 18.25-27) — deploy NO-OP
+
+- **Merge:** `b3e27bca3a3b4b701db771bb1d71822b75d90c7a`, head
+  `a710e25`. CI verde con `gate` en el
+  [run 34007676096](https://github.com/gon0801/summonaikit-claude/actions/runs/34007676096).
+- **Alcance:** solo docs — `docs/smoke-autopilot-2026-09-05.md`, cierre
+  de la fila 18.9 en `Plans.md` y apertura de las filas 18.25, 18.26 y
+  18.27 (huecos medidos en la medición viva). El hook no cambió.
+- **Deploy:** `install-hook.sh` corrido tras el merge por costumbre del
+  ritual: `YA AL DIA` en las 4 copias (no-op, sin backups). Entrada
+  registrada a destiempo junto con la del PR #204.
+
 ## 2026-09-05 — PR #203 (sello persistente y cierre del registro Codex) — skill actualizada, hooks NO-OP
 
 - **Merge:** `ae877a5f229dec5e50af338f60a41afabb25cc49`, head
