@@ -13,9 +13,10 @@ Primary surface: **CLI** (bash tools under `tools/` plus the gate hook
 `hooks/summonaikit-harness.sh`). There is no web UI. Claude Code hosts the
 hook in production; this skill never drives the operator's live profile.
 
-Secondary surfaces (out of scope for default drives): dsh/cordis plugin,
-zcode/codex/grok host installers, the Spanish `verify/` map from
-`saikit-verificar-app`.
+Secondary surfaces now driven in isolation: host install/registration
+(`install-hosts`) and model routing / recipe manifest (`routing-recipes`).
+Still out of scope for default drives: the Spanish `verify/` map from
+`saikit-verificar-app`, and any live model turn.
 
 ## Launch
 
@@ -65,6 +66,8 @@ marker), and fixture scenario directory names — not coordinates.
 "$CTRL" list-features
 "$CTRL" doctor
 "$CTRL" drive install-guardian
+"$CTRL" drive install-hosts
+"$CTRL" drive routing-recipes
 "$CTRL" drive-install-dry-run
 "$CTRL" drive-gate-scenario 01-sin-armar
 "$CTRL" drive-gate-scenario 02-armado-contrato

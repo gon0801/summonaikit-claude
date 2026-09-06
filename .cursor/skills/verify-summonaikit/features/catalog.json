@@ -180,14 +180,14 @@
       "execution_mode": "sandbox"
     },
     "install-hosts": {
-      "status": "pending",
-      "owner_task": "19.11",
-      "card": null
+      "status": "active",
+      "card": "features/install-hosts.md",
+      "execution_mode": "sandbox"
     },
     "routing-recipes": {
-      "status": "pending",
-      "owner_task": "19.11",
-      "card": null
+      "status": "active",
+      "card": "features/routing-recipes.md",
+      "execution_mode": "sandbox"
     },
     "check-secrets": {
       "status": "pending",
