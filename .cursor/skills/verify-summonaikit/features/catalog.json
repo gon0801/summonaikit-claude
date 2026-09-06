@@ -161,15 +161,15 @@
       ]
     },
     "ci-minimo": {
-      "status": "pending",
-      "owner_task": "19.9",
-      "card": null,
+      "status": "active",
+      "card": "features/ci-minimo.md",
       "execution_mode": "sandbox",
       "requirements": [
-        {"kind": "pty", "affects_cases": ["ci-interactive"]}
+        {"kind": "pty", "affects_cases": ["ci-interactive", "ci-reject"]}
       ],
       "cases": [
         {"id": "ci-interactive", "requires": ["pty"]},
+        {"id": "ci-reject", "requires": ["pty"]},
         {"id": "ci-flags"},
         {"id": "ci-defaults"}
       ]
