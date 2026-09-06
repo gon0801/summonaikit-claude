@@ -140,9 +140,8 @@
       "execution_mode": "simulated"
     },
     "saikit-postmerge": {
-      "status": "pending",
-      "owner_task": "19.7",
-      "card": null
+      "status": "active",
+      "card": "features/saikit-postmerge.md"
     },
     "setup-autopilot": {
       "status": "pending",

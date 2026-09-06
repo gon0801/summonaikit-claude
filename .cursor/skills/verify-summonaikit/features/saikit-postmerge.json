@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "saikit-postmerge",
+  "card": "saikit-postmerge.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/saikit-postmerge.sh"
+  },
+  "execution_mode": "simulated",
+  "surfaces": ["tools/saikit-postmerge.sh"],
+  "requirements": ["doctor", "gh:simulated"],
+  "cases": [
+    {
+      "id": "postmerge-green",
+      "required_assertions": ["tool_exit_0", "verdict_verde", "no_revert_offered"]
+    },
+    {
+      "id": "postmerge-red",
+      "required_assertions": ["tool_exit_1", "verdict_rojo", "revert_cmd", "tree_intact"]
+    },
+    {
+      "id": "postmerge-pending",
+      "required_assertions": ["tool_exit_3", "verdict_unknown", "unknown_pendiente"]
+    },
+    {
+      "id": "postmerge-no-run",
+      "required_assertions": ["tool_exit_3", "verdict_unknown", "unknown_sin_run"]
+    },
+    {
+      "id": "postmerge-redacted",
+      "required_assertions": ["secret_redacted", "raw_secret_absent"]
+    },
+    {
+      "id": "postmerge-transport",
+      "required_assertions": [
+        "unexpected_gh_fails",
+        "unexpected_curl_fails",
+        "unexpected_tg_fails",
+        "only_expected_calls"
+      ]
+    }
+  ]
+}
