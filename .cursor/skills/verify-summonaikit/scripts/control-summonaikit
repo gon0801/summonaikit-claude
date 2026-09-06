@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # control-summonaikit — helpers for the verify-summonaikit skill.
-# Isolates every write behind VERIFY_HOME. Never points at the operator's
-# live ~/.claude / ~/.grok / ~/.dsh / ~/.codex profiles.
+# Isolates every write behind a disposable run. State is .run/state.json
+# (validated data). Never sources .run/env. Never evals state.
 set -euo pipefail
 
 skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,60 +13,115 @@ ARTIFACTS="${SAIKIT_VERIFY_ARTIFACTS:-$skill_root/artifacts}"
 HOOK_SRC="$repo/hooks/summonaikit-harness.sh"
 MANIFEST="$repo/hooks/vendor-manifest.sha256"
 INSTALLER="$repo/tools/install-hook.sh"
+STATEPY="$skill_root/scripts/lib/state.py"
+CATALOG="$skill_root/features/catalog.json"
 
-# Capture the operator's real home before any command mutates HOME.
-HOME_REAL="${HOME_REAL:-$HOME}"
+# Avoid writing __pycache__ under the versioned skill tree (inventory lint).
+export PYTHONDONTWRITEBYTECODE=1
+
+# shellcheck source=lib/runtime.sh
+. "$skill_root/scripts/lib/runtime.sh"
 
 die() { printf 'control-summonaikit: %s\n' "$*" >&2; exit 2; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
 
 load_state() {
-  [ -f "$STATE_DIR/env" ] || die "no active instance — run: control-summonaikit launch"
-  # shellcheck disable=SC1090
-  . "$STATE_DIR/env"
-  [ -n "${VERIFY_HOME:-}" ] || die "VERIFY_HOME missing from $STATE_DIR/env"
-  [ -d "$VERIFY_HOME" ] || die "VERIFY_HOME does not exist: $VERIFY_HOME"
-  export HOME="$VERIFY_HOME"
-  export USERPROFILE="$VERIFY_HOME"
+  local mode="${1:-drive}"
+  [ -f "$STATEPY" ] || die "missing $STATEPY"
+  runtime_load "$mode"
 }
 
 cmd_launch() {
   need_cmd bash
   need_cmd mktemp
+  need_cmd python3
   [ -f "$HOOK_SRC" ] || die "hook source missing: $HOOK_SRC"
   [ -f "$INSTALLER" ] || die "installer missing: $INSTALLER"
+  [ -f "$STATEPY" ] || die "missing $STATEPY"
 
-  if [ -f "$STATE_DIR/env" ]; then
-    die "instance already active at $STATE_DIR — run cleanup first"
+  runtime_preflight_launch
+  umask 077
+  mkdir -p "$STATE_DIR" "$ARTIFACTS"
+  if ! mkdir "$STATE_DIR/.active" 2>/dev/null; then
+    iso_fail "run activo — run cleanup first"
   fi
 
   run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  token="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
   verify_home="$(mktemp -d "${TMPDIR:-/tmp}/saikit-verify-${run_id}-XXXXXX")"
-  mkdir -p "$verify_home/.claude/hooks" "$verify_home/.claude/skills" "$STATE_DIR" "$ARTIFACTS"
-
-  export HOME="$verify_home"
-  export USERPROFILE="$verify_home"
+  run_tmp="$verify_home/tmp"
+  mkdir -p "$verify_home/.claude/hooks" \
+    "$verify_home/.grok/hooks" \
+    "$verify_home/.dsh/hooks" \
+    "$verify_home/.codex/hooks" \
+    "$verify_home/git" \
+    "$run_tmp"
+  runtime_write_marker "$verify_home" "$run_id" "$token"
 
   dest="$verify_home/.claude/hooks/summonaikit-harness.sh"
+  disposable=""
+  git_common=""
+  if command -v git >/dev/null 2>&1; then
+    if (
+      VERIFY_HOME="$verify_home"
+      VERIFY_TMPDIR="$run_tmp"
+      runtime_exec "$verify_home" git init --bare "$verify_home/git/origin.git" >/dev/null \
+        && runtime_exec "$verify_home" git init "$verify_home/git/work" >/dev/null
+    ); then
+      disposable="$verify_home/git/work"
+      git_common="$verify_home/git/work/.git"
+    fi
+  fi
+
+  VERIFY_HOME="$verify_home"
+  VERIFY_TMPDIR="$run_tmp"
   out="$ARTIFACTS/launch-${run_id}.txt"
-  {
-    printf 'run_id=%s\nVERIFY_HOME=%s\nDEST=%s\n' "$run_id" "$verify_home" "$dest"
-    bash "$INSTALLER" --dest "$dest" --source "$HOOK_SRC" --manifest "$MANIFEST"
-  } >"$out" 2>&1
+  mkdir -p "$ARTIFACTS"
+  set +e
+  runtime_exec "$verify_home" bash "$INSTALLER" \
+    --dest "$dest" --source "$HOOK_SRC" --manifest "$MANIFEST" \
+    >"$out" 2>&1
   rc=$?
+  set -e
   if [ "$rc" -ne 0 ]; then
     cat "$out" >&2
     rm -rf "$verify_home"
-    die "install failed (exit $rc); see $out"
+    runtime_clear_state_files
+    iso_fail "install failed (exit $rc); see $out"
   fi
 
-  cat >"$STATE_DIR/env" <<EOF
-VERIFY_HOME=$verify_home
-VERIFY_DEST=$dest
-VERIFY_RUN_ID=$run_id
-VERIFY_REPO=$repo
-VERIFY_LAUNCHED_AT=$(date -u +%Y%m%dT%H%M%SZ)
-EOF
+  payload="$(mktemp "${TMPDIR:-/tmp}/saikit-state-XXXXXX.json")"
+  python3 - "$payload" <<PY
+import json, sys
+from datetime import datetime, timezone
+path = sys.argv[1]
+data = {
+    "schema_version": 1,
+    "run_id": "$run_id",
+    "launched_at": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+    "repo": "$repo",
+    "verify_home": "$verify_home",
+    "dest": "$dest",
+    "state_dir": "$STATE_DIR",
+    "artifacts_dir": "$ARTIFACTS",
+    "tmpdir": "$run_tmp",
+    "owned_temps": ["$verify_home", "$run_tmp"],
+    "host_dests": {
+        "claude": "$dest",
+        "grok": "$verify_home/.grok/hooks/summonaikit-harness.sh",
+        "dsh": "$verify_home/.dsh/hooks/summonaikit-harness.sh",
+        "codex": "$verify_home/.codex/hooks/summonaikit-harness.sh",
+    },
+    "git_common_dir": "$git_common",
+    "disposable_repo": "$disposable",
+    "token": "$token",
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f)
+    f.write("\n")
+PY
+  runtime_save_state "$payload"
+  rm -f "$payload"
 
   printf 'launched run_id=%s\nVERIFY_HOME=%s\nDEST=%s\nlog=%s\n' \
     "$run_id" "$verify_home" "$dest" "$out"
@@ -74,28 +129,18 @@ EOF
 
 cmd_doctor() {
   need_cmd bash
+  need_cmd python3
   [ -f "$HOOK_SRC" ] || die "hook source missing: $HOOK_SRC"
   [ -f "$INSTALLER" ] || die "installer missing: $INSTALLER"
   [ -f "$repo/tools/audita-ledger.sh" ] || die "audita-ledger.sh missing"
   [ -f "$repo/tools/check-deploy-log.sh" ] || die "check-deploy-log.sh missing"
   [ -f "$repo/tools/golden-harness.sh" ] || die "golden-harness.sh missing"
 
-  if [ ! -f "$STATE_DIR/env" ]; then
-    printf 'doctor: FAIL — no active instance (run launch first)\n'
-    exit 1
-  fi
-  load_state
+  load_state doctor
 
   fail=0
   printf 'doctor: VERIFY_HOME=%s\n' "$VERIFY_HOME"
   printf 'doctor: DEST=%s\n' "$VERIFY_DEST"
-
-  case "$VERIFY_HOME" in
-    "$HOME_REAL"|"$HOME_REAL"/*)
-      printf 'doctor: FAIL — VERIFY_HOME is under the real user home (%s)\n' "$HOME_REAL"
-      fail=1
-      ;;
-  esac
 
   if [ ! -f "$VERIFY_DEST" ]; then
     printf 'doctor: FAIL — hook not installed at DEST\n'
@@ -123,13 +168,13 @@ cmd_doctor() {
     fi
   fi
 
-  live="$HOME_REAL/.claude/hooks/summonaikit-harness.sh"
-  if [ -f "$live" ] && [ "$VERIFY_DEST" -ef "$live" ]; then
-    printf 'doctor: FAIL — DEST is the live profile hook\n'
-    fail=1
-  else
-    printf 'doctor: OK — DEST is not the live profile hook\n'
-  fi
+  case "$VERIFY_DEST" in
+    "$VERIFY_HOME"/*) printf 'doctor: OK — DEST is under VERIFY_HOME\n' ;;
+    *)
+      printf 'doctor: FAIL — DEST is not under VERIFY_HOME\n'
+      fail=1
+      ;;
+  esac
 
   if [ "$fail" -ne 0 ]; then
     printf 'doctor: FAIL\n'
@@ -139,101 +184,125 @@ cmd_doctor() {
 }
 
 cmd_cleanup() {
-  if [ ! -f "$STATE_DIR/env" ]; then
+  need_cmd python3
+  [ -f "$STATEPY" ] || die "missing $STATEPY"
+  if [ -f "$STATE_DIR/env" ]; then
+    iso_fail "legacy .run/env — re-lanzar: borrar solo el archivo env (nunca su HOME) y correr launch"
+  fi
+  if [ ! -f "$STATE_DIR/state.json" ]; then
     printf 'cleanup: nothing to do (no active instance)\n'
+    runtime_clear_state_files
+    printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
     exit 0
   fi
-  # shellcheck disable=SC1090
-  . "$STATE_DIR/env"
-  if [ -n "${VERIFY_HOME:-}" ] && [ -d "$VERIFY_HOME" ]; then
-    case "$VERIFY_HOME" in
-      /tmp/*|"${TMPDIR:-/tmp}"/*)
-        rm -rf "$VERIFY_HOME"
-        printf 'cleanup: removed VERIFY_HOME=%s\n' "$VERIFY_HOME"
-        ;;
-      *)
-        die "refusing to rm VERIFY_HOME outside tmp: $VERIFY_HOME"
-        ;;
-    esac
+  # Load must not trap the operator: invalid JSON, missing VERIFY_HOME, or
+  # foreign ownership ⇒ soft-clear state/.active only (never rm an unverified HOME).
+  # Spec: repeating cleanup is inocuous; recovery mirrors legacy .run/env.
+  err="$(mktemp "${TMPDIR:-/tmp}/saikit-cleanup-err-XXXXXX")"
+  if _STATE_JSON="$(
+    python3 "$STATEPY" load \
+      --state-dir "$STATE_DIR" \
+      --artifacts "$ARTIFACTS" \
+      --repo "$repo" \
+      --mode cleanup \
+      --mutate "$(runtime_mutate)" 2>"$err"
+  )"; then
+    rm -f "$err"
+    VERIFY_HOME="$(runtime_json_get verify_home)"
+    runtime_cleanup_home "$VERIFY_HOME"
+    runtime_clear_state_files
+    printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
+    exit 0
   fi
-  rm -f "$STATE_DIR/env"
-  rmdir "$STATE_DIR" 2>/dev/null || true
+  reason="$(cat "$err" 2>/dev/null || true)"
+  rm -f "$err"
+  runtime_clear_state_files
+  printf 'cleanup: estado no recuperable — state.json/.active borrados; HOME no tocado\n'
+  if [ -n "$reason" ]; then
+    printf 'cleanup: motivo: %s\n' "$reason"
+  fi
+  printf 'cleanup: re-lanzar con launch (nunca borres un HOME a ciegas)\n'
   printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
+  exit 0
 }
 
 cmd_cli() {
-  load_state
-  [ "$#" -ge 1 ] || die "usage: control-summonaikit cli -- <command...>"
+  need_cmd python3
+  load_state cli
+  [ "$#" -ge 1 ] || die "usage: control-summonaikit cli -- <catalog-entry...>"
   if [ "$1" = "--" ]; then shift; fi
-  [ "$#" -ge 1 ] || die "usage: control-summonaikit cli -- <command...>"
-  case "$1" in
-    tools/*|./tools/*)
-      bash "$@"
-      ;;
-    *)
-      "$@"
-      ;;
-  esac
+  [ "$#" -ge 1 ] || die "usage: control-summonaikit cli -- <catalog-entry...>"
+  tool="$(runtime_cli_ok "$@")" || exit 1
+  shift
+  runtime_exec "$VERIFY_HOME" bash "$VERIFY_REPO/$tool" "$@"
 }
 
 cmd_drive_install_dry_run() {
-  load_state
+  load_state drive
   out="$ARTIFACTS/install-dry-run-${VERIFY_RUN_ID}.txt"
+  set +e
   {
-    printf 'HOME=%s\n' "$HOME"
-    bash "$INSTALLER" --dry-run
+    printf 'HOME=%s\n' "$VERIFY_HOME"
+    runtime_exec "$VERIFY_HOME" bash "$INSTALLER" --dry-run
   } >"$out" 2>&1
   rc=$?
+  set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit "$rc"; }
+  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
   grep -Eq 'dry-run|YA AL DIA|se instalaria|INSTALADO|destino' "$out" \
-    || die "dry-run produced no recognizable status (see $out)"
+    || iso_fail "dry-run produced no recognizable status (see $out)"
   printf 'proof: dry-run exit 0; log at %s\n' "$out"
 }
 
 cmd_drive_gate_scenario() {
-  load_state
+  load_state drive
   scenario="${1:-01-sin-armar}"
-  src="$repo/tests/fixtures/escenarios/$scenario"
-  [ -d "$src" ] || die "unknown scenario: $scenario"
+  src="$VERIFY_REPO/tests/fixtures/escenarios/$scenario"
+  [ -d "$src" ] || iso_fail "unknown scenario: $scenario"
 
-  sc_dir="$(mktemp -d "${TMPDIR:-/tmp}/saikit-verify-sc-XXXXXX")"
+  sc_dir="$(mktemp -d "$VERIFY_TMPDIR/sc-XXXXXX")"
   cp -R "$src" "$sc_dir/"
   out="$ARTIFACTS/gate-${scenario}-${VERIFY_RUN_ID}.txt"
+  set +e
   {
     printf 'hook=%s\nscenario=%s\n' "$VERIFY_DEST" "$scenario"
-    bash "$repo/tools/golden-harness.sh" \
+    runtime_exec "$VERIFY_HOME" bash "$VERIFY_REPO/tools/golden-harness.sh" \
       --print \
       --hook "$VERIFY_DEST" \
       --scenarios "$sc_dir"
   } >"$out" 2>&1
   rc=$?
+  set -e
   rm -rf "$sc_dir"
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit "$rc"; }
-  grep -q "=== escenario $scenario" "$out" || die "scenario header missing in $out"
+  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
+  grep -q "=== escenario $scenario" "$out" || iso_fail "scenario header missing in $out"
   printf 'proof: scenario %s exercised; log at %s\n' "$scenario" "$out"
 }
 
 cmd_drive_audit_ledger() {
-  load_state
+  load_state drive
   out="$ARTIFACTS/audita-ledger-${VERIFY_RUN_ID}.txt"
-  bash "$repo/tools/audita-ledger.sh" >"$out" 2>&1
+  set +e
+  runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/audita-ledger.sh" >"$out" 2>&1
   rc=$?
+  set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit "$rc"; }
-  grep -q 'AUDITORIA DEL LEDGER' "$out" || die "expected ledger header in $out"
+  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
+  grep -q 'AUDITORIA DEL LEDGER' "$out" || iso_fail "expected ledger header in $out"
   printf 'proof: audita-ledger OK; log at %s\n' "$out"
 }
 
 cmd_drive_deploy_log() {
-  load_state
+  load_state drive
   out="$ARTIFACTS/check-deploy-log-${VERIFY_RUN_ID}.txt"
-  bash "$repo/tools/check-deploy-log.sh" >"$out" 2>&1
+  set +e
+  runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/check-deploy-log.sh" >"$out" 2>&1
   rc=$?
+  set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit "$rc"; }
-  grep -q '\[deploy-log\] OK' "$out" || die "expected deploy-log OK in $out"
+  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
+  grep -q '\[deploy-log\] OK' "$out" || iso_fail "expected deploy-log OK in $out"
   printf 'proof: check-deploy-log OK; log at %s\n' "$out"
 }
 
@@ -244,18 +313,24 @@ usage: control-summonaikit <command> [args]
 commands:
   launch                         create isolated HOME and install the hook there
   doctor                         read-only health check of the active instance
-  cleanup                        remove the isolated HOME; keep artifacts/
-  cli -- <cmd...>                run a command with HOME=VERIFY_HOME
+  cleanup                        remove owned temps; keep artifacts/
+  cli -- <catalog-entry...>      run a catalog public entry under the run env
+                                 (not an arbitrary shell/command; deliberate
+                                 restriction vs the old CLI)
   drive-install-dry-run          exercise installer --dry-run under VERIFY_HOME
   drive-gate-scenario [name]     run golden-harness --print for one scenario
                                  (default: 01-sin-armar)
   drive-audit-ledger             run tools/audita-ledger.sh
   drive-deploy-log               run tools/check-deploy-log.sh
 
+state:
+  .run/state.json                validated data (never sourced)
+  leftover .run/env              rejected — delete the env file only and re-launch;
+                                 never source it; never rm -rf its purported HOME
+
 env:
   SAIKIT_VERIFY_STATE            override state dir (default: <skill>/.run)
   SAIKIT_VERIFY_ARTIFACTS        override artifacts dir (default: <skill>/artifacts)
-  HOME_REAL                      operator home used by doctor safety checks
 EOF
 }
 

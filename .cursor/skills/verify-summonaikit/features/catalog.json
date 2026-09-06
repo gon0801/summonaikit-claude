@@ -12,6 +12,14 @@
     "scripts/lint-feature-map.py": {
       "kind": "internal",
       "reason": "candado del mapa; no es ejecutor de feature"
+    },
+    "scripts/lib/runtime.sh": {
+      "kind": "internal",
+      "reason": "runtime de aislamiento; no es ejecutor de feature"
+    },
+    "scripts/lib/state.py": {
+      "kind": "internal",
+      "reason": "estado declarativo validado; no es ejecutor de feature"
     }
   },
   "exclusions": {

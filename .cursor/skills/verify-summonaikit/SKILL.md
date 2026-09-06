@@ -20,7 +20,8 @@ zcode/codex/grok host installers, the Spanish `verify/` map from
 ## Launch
 
 No long-lived server. Launch means: create a disposable `HOME`, install the
-repo hook into it, and record the instance under `.cursor/skills/verify-summonaikit/.run/`.
+repo hook into it, and record validated state in
+`.cursor/skills/verify-summonaikit/.run/state.json` (never a sourced env file).
 
 ```bash
 CTRL=.cursor/skills/verify-summonaikit/scripts/control-summonaikit
@@ -69,16 +70,25 @@ marker), and fixture scenario directory names — not coordinates.
 "$CTRL" drive-deploy-log
 ```
 
-Ad-hoc under the isolated home:
+Ad-hoc under the isolated home, **only catalog public entries** (not an
+arbitrary shell or command — a deliberate restriction vs the old CLI):
 
 ```bash
 "$CTRL" cli -- tools/install-hook.sh --dry-run
 ```
 
+`cli --` rejects `bash`, `/bin/sh`, and any path that is not a catalog
+surface. Setup/merge/postmerge are refused on the working checkout; they
+need a disposable repo owned by the run.
+
 **Hard rule:** never run `tools/install-hook.sh` (without `--dry-run`) or
 `--check` against the operator profile from this skill. Writes go only through
 `launch` / isolated `HOME`. `--check` without isolation reads live hosts; leave
 that to the operator.
+
+**Legacy `.run/env`:** if that file exists, do not source it and do not
+`rm -rf` its purported `VERIFY_HOME`. Delete only the `env` file and
+**re-lanzar** (`"$CTRL" launch`). New runs use `state.json` only.
 
 ## Evidence
 
@@ -106,11 +116,19 @@ Name artifacts with the run id from launch (`*-${VERIFY_RUN_ID}.txt`).
 "$CTRL" cleanup
 ```
 
-Removes only the disposable `VERIFY_HOME` recorded in `.run/env` (must be under
-`/tmp` or `$TMPDIR`). Does **not** kill processes by name, does **not** touch
-live profiles, and does **not** delete `artifacts/`.
+Removes only temps **owned by this run** (marker + token in `state.json`).
+A textual `/tmp` prefix is not enough. Does **not** kill processes by name,
+does **not** touch live profiles, and does **not** delete `artifacts/`.
+Repeating cleanup is a no-op.
+
+If `state.json` is truncated/invalid, `VERIFY_HOME` is already gone, or ownership
+cannot be proven, cleanup **soft-clears** only `state.json` / `.active` (HOME
+untouched) and prints a re-lanzar instruction — so launch is never deadlocked
+behind an impossible cleanup.
 
 If a drive fails mid-run, still run cleanup so the next launch is not blocked.
+A leftover `.run/env` is rejected (re-lanzar); cleanup will not delete its
+purported HOME.
 
 ## Helpers
 
@@ -123,7 +141,7 @@ Executable helper (invocation above):
 | `launch` | Isolated HOME + install hook |
 | `doctor` | Read-only instance health |
 | `cleanup` | Tear down instance; keep evidence |
-| `cli -- …` | Run a command with `HOME=VERIFY_HOME` |
+| `cli -- …` | Run a **catalog public** entry with isolated env (not an arbitrary shell) |
 | `drive-install-dry-run` | Installer dry-run proof |
 | `drive-gate-scenario [name]` | One golden-harness scenario |
 | `drive-audit-ledger` | Ledger audit proof |
