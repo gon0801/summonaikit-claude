@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# tests/test_feature_map_verify_app.sh — 19.14: generación/estado verify-app.
+# tests/test_feature_map_staging.sh — 19.15: staging por override.
 #
-# DoD: generar verify/ solo en fixture nuevo; regenerar rechaza y deja
-# archivos previos intactos; estado distingue sello vigente vs deriva;
-# mutantes rechazo / comparación de sello / comando Drive; verify/ del
-# checkout preservado. PASS de la skill no acredita verify/ del producto.
+# DoD: override en fixture; hook ejecutado por su hash; estado en el lab;
+# perfil externo sintetico intacto; cleanup acotado; mutantes de destino
+# hook/estado y guard de propiedad rojos; sin sesion viva del operador.
+# Base: tests/test_stage_override.sh (no se duplica su bateria).
 #
 # Mutaciones (copia del driver; SAIKIT_FM_DRIVER):
-#   omit_reject_existing  — quita reject_existing
-#   omit_seal_compare     — quita estado_desactualizado
-#   omit_drive_cmd        — quita drive_cmd_runner
+#   omit_dest_state   — quita state_in_lab
+#   omit_ownership    — quita ownership_refused
+#   omit_cleanup      — quita cleanup_scoped
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -20,16 +20,10 @@ malo() { printf '    FAIL: %s\n' "$1" >&2; fail=$((fail + 1)); }
 
 SKILL="$repo/.cursor/skills/verify-summonaikit"
 CTRL="$SKILL/scripts/control-summonaikit"
-DRV="$SKILL/scripts/drivers/verify-app.sh"
+DRV="$SKILL/scripts/drivers/stage-override.sh"
 STATE="$SANDBOX/verify-state"
 ART="$SANDBOX/verify-artifacts"
 mkdir -p "$STATE" "$ART"
-
-CHECKOUT_LEEME="$repo/verify/LEEME.md"
-CHECKOUT_HASH_BEFORE=""
-if [ -f "$CHECKOUT_LEEME" ]; then
-  CHECKOUT_HASH_BEFORE="$(cksum "$CHECKOUT_LEEME")"
-fi
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
@@ -131,64 +125,66 @@ sed_must_change() {
 # ---------------------------------------------------------------------------
 # Inventario: pending→active, resto intacto, README
 # ---------------------------------------------------------------------------
-caso "catalogo activa verify-app y conserva las demas"
-python3 - "$SKILL" <<'PY' || malo "catalogo/descriptor verify-app incompleto"
+caso "catalogo activa stage-override y conserva las demas"
+python3 - "$SKILL" <<'PY' || malo "catalogo/descriptor stage-override incompleto"
 import json, sys
 from pathlib import Path
 skill = Path(sys.argv[1])
 cat = json.loads((skill / "features/catalog.json").read_text())
 feats = cat.get("features") or {}
-meta = feats.get("verify-app") or {}
+meta = feats.get("stage-override") or {}
 assert meta.get("status") == "active", meta
 assert meta.get("card"), meta
 assert not meta.get("owner_task"), ("pending leftover", meta)
-desc = json.loads((skill / "features/verify-app.json").read_text())
+desc = json.loads((skill / "features/stage-override.json").read_text())
 ex = desc.get("executor") or {}
 assert ex.get("kind") == "driver", ex
-path = ex.get("path") or "scripts/drivers/verify-app.sh"
+path = ex.get("path") or "scripts/drivers/stage-override.sh"
 assert (skill / path).is_file(), path
-assert (skill / "features/verify-app.md").is_file()
+assert (skill / "features/stage-override.md").is_file()
 ids = [c.get("id") for c in (desc.get("cases") or [])]
 for need in (
-    "verify-generate", "verify-reject-existing", "verify-estado",
-    "verify-drive-cmd", "verify-no-product-pass",
+    "stage-prepare", "stage-hook-hash", "stage-state-lab",
+    "stage-profile-intact", "stage-ownership", "stage-cleanup",
+    "stage-no-live",
 ):
     assert need in ids, (need, ids)
 for c in desc.get("cases") or []:
     assert c.get("required_assertions"), c
-# resto: no tocar otras features
 # Otras features: no exigir pending de filas ya mergeadas/activadas en serie.
 for fid, want in (
     ("check-secrets", "active"),
     ("capture-payloads", "active"),
     ("decision-blast", "active"),
+    ("verify-app", "active"),
     ("stage-override", "active"),
     ("merge-happy-path", "pending"),
     ("install-guardian", "active"),
     ("routing-recipes", "active"),
-    ("verify-app", "active"),
 ):
     st = (feats.get(fid) or {}).get("status")
     assert st == want, (fid, st, want)
 readme = (skill / "features/README.md").read_text(encoding="utf-8")
-assert "verify-app.md" in readme, "README sin linea de verify-app"
+assert "stage-override.md" in readme, "README sin linea de stage-override"
+surfaces = cat.get("surfaces") or {}
+assert (surfaces.get("tools/stage-override.sh") or {}).get("feature") == "stage-override"
 PY
-[ -f "$DRV" ] || malo "falta drivers/verify-app.sh"
-[ -f "$SKILL/features/verify-app.md" ] || malo "falta ficha verify-app.md"
+[ -f "$DRV" ] || malo "falta drivers/stage-override.sh"
+[ -f "$SKILL/features/stage-override.md" ] || malo "falta ficha stage-override.md"
 if [ -f "$DRV" ]; then
-  bash -n "$DRV" || malo "bash -n fallo en verify-app.sh"
+  bash -n "$DRV" || malo "bash -n fallo en stage-override.sh"
 fi
 
-caso "list-features declara verify-app active sandbox"
+caso "list-features declara stage-override active sandbox"
 out="$(ctrl list-features 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "list-features fallo: $out"
-printf '%s' "$out" | grep -E 'id=verify-app' | grep -q 'status=active' \
-  || malo "list-features no activa verify-app: $out"
+printf '%s' "$out" | grep -E 'id=stage-override' | grep -q 'status=active' \
+  || malo "list-features no activa stage-override: $out"
 
 # ---------------------------------------------------------------------------
 # Launch aislado
 # ---------------------------------------------------------------------------
-caso "launch aislado para drive verify-app"
+caso "launch aislado para drive stage-override"
 if ! out="$(ctrl launch 2>&1)"; then
   malo "launch fallo: $out"
   echo "FAIL: $fail aserciones (sin launch no hay drives)" >&2
@@ -199,58 +195,46 @@ printf '%s' "$out" | grep -q 'launched run_id=' || malo "launch sin run_id: $out
 # ---------------------------------------------------------------------------
 # Drive real
 # ---------------------------------------------------------------------------
-caso "drive verify-app: generar, rechazo, estado, Drive, no product PASS"
+caso "drive stage-override: hash, estado en lab, perfil intacto, cleanup"
 reset_art
-out="$(ctrl drive verify-app 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "drive verify-app rc=$rc: $out"
+out="$(ctrl drive stage-override 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "drive stage-override rc=$rc: $out"
 
-sum="$(latest_summary verify-app)"
-[ -n "$sum" ] && [ -f "$sum" ] || malo "verify-app sin summary"
+sum="$(latest_summary stage-override)"
+[ -n "$sum" ] && [ -f "$sum" ] || malo "stage-override sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
-python3 - "$sum" <<'PY' || malo "verify-app summary incompleto"
+python3 - "$sum" <<'PY' || malo "stage-override summary incompleto"
 import json, sys
 s = json.loads(open(sys.argv[1], encoding="utf-8").read())
 assert s.get("result") == "PASS" and s.get("exit_code") == 0, s
 cases = s.get("cases") or s.get("cases_requested") or []
 text = " ".join(cases) if not isinstance(cases, str) else cases
 for need in (
-    "verify-generate", "verify-reject-existing", "verify-estado",
-    "verify-drive-cmd", "verify-no-product-pass",
+    "stage-prepare", "stage-hook-hash", "stage-state-lab",
+    "stage-profile-intact", "stage-ownership", "stage-cleanup",
+    "stage-no-live",
 ):
     assert need in text, (need, cases)
 PY
 fi
 
-assert_obs verify-app files_present 'LEEME.md'
-assert_obs verify-app seal_real_sha 'seal-sha='
-assert_obs verify-app reject_existing 'reject-existing'
-assert_obs verify-app files_intact 'files-intact'
-assert_obs verify-app estado_al_dia 'al_dia'
-assert_obs verify-app estado_desactualizado 'desactualizado'
-assert_obs verify-app drive_cmd_verify 'verify/'
-assert_obs verify-app drive_cmd_runner 'runner-re'
-assert_obs verify-app no_product_verify_pass 'skill-pass-not-product-verify'
-assert_obs verify-app checkout_verify_intact 'checkout-verify-intact'
+assert_obs stage-override override_installed 'override-installed|MEDIDO'
+assert_obs stage-override dest_matches_source 'dest-sha='
+assert_obs stage-override hook_ran_hash 'hook-hash='
+assert_obs stage-override state_in_lab 'state-in-lab'
+assert_obs stage-override state_not_in_profile 'state-not-in-profile'
+assert_obs stage-override profile_intact 'profile-intact'
+assert_obs stage-override ownership_refused 'ownership-refused'
+assert_obs stage-override foreign_intact 'foreign-intact'
+assert_obs stage-override cleanup_scoped 'cleanup-scoped'
+assert_obs stage-override no_live_session 'no-live-session'
 
 # ---------------------------------------------------------------------------
-# verify/ del checkout intacto (no se refresco el sello)
+# Encabezado falso + rc 0 no acredita destino/propiedad/cleanup
 # ---------------------------------------------------------------------------
-caso "verify/ del checkout no se toco"
-if [ -n "$CHECKOUT_HASH_BEFORE" ]; then
-  after="$(cksum "$CHECKOUT_LEEME")"
-  [ "$after" = "$CHECKOUT_HASH_BEFORE" ] \
-    || malo "el drive refresco verify/LEEME.md del checkout"
-fi
-if ! git -C "$repo" diff --quiet -- verify/; then
-  malo "git diff detecto cambios en verify/ del checkout"
-fi
-
-# ---------------------------------------------------------------------------
-# Encabezado falso + rc 0 no acredita rechazo/sello/Drive
-# ---------------------------------------------------------------------------
-caso "encabezado falso con rc 0 no acredita rechazo ni sello ni Drive"
+caso "encabezado falso con rc 0 no acredita destino ni propiedad ni cleanup"
 reset_art
-stub="$SANDBOX/header-only-verify-app.sh"
+stub="$SANDBOX/header-only-stage-override.sh"
 cat > "$stub" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -261,24 +245,24 @@ assert() {
     --case-id "$1" --step-id "s-$2" --assertion-id "$2" \
     --expected "$2" --observed "$3" --result PASS
 }
-assert verify-generate files_present "ok"
-assert verify-generate seal_real_sha "ok"
-assert verify-reject-existing reject_existing "ok"
-assert verify-reject-existing files_intact "ok"
-assert verify-estado estado_al_dia "ok"
-assert verify-estado estado_desactualizado "ok"
-assert verify-drive-cmd drive_cmd_verify "ok"
-assert verify-drive-cmd drive_cmd_runner "ok"
-assert verify-no-product-pass no_product_verify_pass "ok"
-assert verify-no-product-pass checkout_verify_intact "ok"
+assert stage-prepare override_installed "ok"
+assert stage-prepare dest_matches_source "ok"
+assert stage-hook-hash hook_ran_hash "ok"
+assert stage-state-lab state_in_lab "ok"
+assert stage-state-lab state_not_in_profile "ok"
+assert stage-profile-intact profile_intact "ok"
+assert stage-ownership ownership_refused "ok"
+assert stage-ownership foreign_intact "ok"
+assert stage-cleanup cleanup_scoped "ok"
+assert stage-no-live no_live_session "ok"
 exit 0
 EOF
 chmod +x "$stub"
-ctrl_drv "$stub" drive verify-app >/dev/null 2>&1 || true
-steps="$(latest_steps verify-app)"
+ctrl_drv "$stub" drive stage-override >/dev/null 2>&1 || true
+steps="$(latest_steps stage-override)"
 if [ -n "$steps" ] && [ -f "$steps" ]; then
-python3 - "$steps" <<'PY' || malo "header-only acredito reject/sello/Drive"
-import json, re, sys
+python3 - "$steps" <<'PY' || malo "header-only acredito destino/propiedad/cleanup"
+import json, sys
 for line in open(sys.argv[1], encoding="utf-8"):
     if not line.strip():
         continue
@@ -287,12 +271,12 @@ for line in open(sys.argv[1], encoding="utf-8"):
     obs = str(rec.get("observed") or "")
     if rec.get("result") != "PASS":
         continue
-    if asid == "reject_existing" and "reject-existing" in obs:
-        raise SystemExit("header-only acredito reject_existing")
-    if asid == "estado_desactualizado" and "desactualizado" in obs:
-        raise SystemExit("header-only acredito estado_desactualizado")
-    if asid == "drive_cmd_runner" and "runner-re" in obs:
-        raise SystemExit("header-only acredito drive_cmd_runner")
+    if asid == "state_in_lab" and "state-in-lab" in obs:
+        raise SystemExit("header-only acredito state_in_lab")
+    if asid == "ownership_refused" and "ownership-refused" in obs:
+        raise SystemExit("header-only acredito ownership_refused")
+    if asid == "cleanup_scoped" and "cleanup-scoped" in obs:
+        raise SystemExit("header-only acredito cleanup_scoped")
 raise SystemExit(0)
 PY
 fi
@@ -301,30 +285,30 @@ fi
 # Mutantes nombrados
 # ---------------------------------------------------------------------------
 if [ -f "$DRV" ]; then
-  copy_driver "$SANDBOX/va.src.sh"
+  copy_driver "$SANDBOX/so.src.sh"
 
   mut_omit() {
     local label="$1" asid="$2" signal="$3" expr="$4"
     caso "mutante $label: omitir $asid se pone rojo"
     reset_art
-    local mut="$SANDBOX/va-$label.sh"
-    if sed_must_change "$SANDBOX/va.src.sh" "$mut" "$expr" "$label"; then
-      out="$(ctrl_drv "$mut" drive verify-app 2>&1)" && rc=0 || rc=$?
-      assert_missing_or_fail verify-app "$asid" "$signal" "$rc"
+    local mut="$SANDBOX/so-$label.sh"
+    if sed_must_change "$SANDBOX/so.src.sh" "$mut" "$expr" "$label"; then
+      out="$(ctrl_drv "$mut" drive stage-override 2>&1)" && rc=0 || rc=$?
+      assert_missing_or_fail stage-override "$asid" "$signal" "$rc"
     fi
   }
 
-  mut_omit omit_reject_existing reject_existing 'reject-existing' \
-    '/assert:reject_existing/,/assert:reject_existing_end/d'
-  mut_omit omit_seal_compare estado_desactualizado 'desactualizado' \
-    '/assert:estado_desactualizado/,/assert:estado_desactualizado_end/d'
-  mut_omit omit_drive_cmd drive_cmd_runner 'runner-re' \
-    '/assert:drive_cmd_runner/,/assert:drive_cmd_runner_end/d'
+  mut_omit omit_dest_state state_in_lab 'state-in-lab' \
+    '/assert:state_in_lab/,/assert:state_in_lab_end/d'
+  mut_omit omit_ownership ownership_refused 'ownership-refused' \
+    '/assert:ownership_refused/,/assert:ownership_refused_end/d'
+  mut_omit omit_cleanup cleanup_scoped 'cleanup-scoped' \
+    '/assert:cleanup_scoped/,/assert:cleanup_scoped_end/d'
 fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2
   exit 1
 fi
-echo "OK: test_feature_map_verify_app"
+echo "OK: test_feature_map_staging"
 exit 0
