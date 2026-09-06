@@ -54,23 +54,34 @@ doctor_py_mut() {
 }
 
 reset_io() {
-  rm -rf "$STATE" "$ART"
-  mkdir -p "$STATE" "$ART"
   PATH="$ORIG_PATH"
   export PATH
+  rm -rf "$STATE" "$ART"
+  mkdir -p "$STATE" "$ART"
   unset SAIKIT_VERIFY_PTY SAIKIT_VERIFY_MUTATE || true
 }
 
-# PATH sin el binario $1 (deja el resto).
+# Oculta $1 sin descartar el directorio entero (en CI `gh` vive en /usr/bin
+# junto a rm/mkdir; quitar ese dir rompe el harness). Construye un PATH de
+# symlinks que omite solo el binario nombrado, para que which() → None.
 hide_from_path() {
-  local name="$1" d new=""
+  local name="$1"
+  local out="$SANDBOX/path-without-$name"
+  local d f base
+  rm -rf "$out"
+  mkdir -p "$out"
   local IFS=':'
-  for d in $PATH; do
-    [ -n "$d" ] || continue
-    [ -e "$d/$name" ] && continue
-    if [ -z "$new" ]; then new="$d"; else new="$new:$d"; fi
+  for d in $ORIG_PATH; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      [ -e "$f" ] || [ -L "$f" ] || continue
+      base="${f##*/}"
+      [ "$base" = "$name" ] && continue
+      [ -e "$out/$base" ] && continue
+      ln -s "$f" "$out/$base" 2>/dev/null || true
+    done
   done
-  printf '%s' "$new"
+  printf '%s' "$out"
 }
 
 install_fake_gh() {
