@@ -3,9 +3,8 @@
   "id": "gate-turn",
   "card": "gate-turn.md",
   "executor": {
-    "kind": "legacy",
-    "command": "drive-gate-scenario",
-    "function": "cmd_drive_gate_scenario"
+    "kind": "driver",
+    "path": "scripts/drivers/gate-turn.sh"
   },
   "execution_mode": "sandbox",
   "surfaces": ["hooks/summonaikit-harness.sh", "tools/golden-harness.sh"],
@@ -13,11 +12,15 @@
   "cases": [
     {
       "id": "gate-unarmed",
-      "required_assertions": ["exit_0", "scenario_header", "sin_estado"]
+      "required_assertions": ["hook_sha", "scenario_steps", "sin_estado", "sin_contrato"]
     },
     {
       "id": "gate-armed",
-      "required_assertions": ["exit_0", "scenario_header", "contract_or_state"]
+      "required_assertions": ["hook_sha", "scenario_steps", "contract_json", "harness_state"]
+    },
+    {
+      "id": "gate-stop-no-receipt",
+      "required_assertions": ["stop_rejected", "not_scenario_01_02"]
     }
   ]
 }

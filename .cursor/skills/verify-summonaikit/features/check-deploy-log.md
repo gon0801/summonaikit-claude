@@ -5,9 +5,9 @@ fields, and one record per PR/change after a merge deploy.
 
 ## Sub-features
 
-- `deploy-log-run` executes `tools/check-deploy-log.sh`.
 - `deploy-log-ok` exits 0 with an `[deploy-log] OK` line when the log is valid.
-- `deploy-log-fail` exits non-zero when order, format, or duplicates break the norm.
+- `deploy-log-order` exits non-zero and names `orden` when dates increase downward.
+- `deploy-log-dup` exits non-zero and names the duplicated PR.
 
 ## How to get to it (user POV)
 
@@ -19,12 +19,14 @@ fields, and one record per PR/change after a merge deploy.
 Preconditions:
 
 - `control-summonaikit doctor` reports `doctor: PASS`.
-- `docs/deploy-log.md` exists in the checkout.
+- The driver writes disposable fixtures; it does not rewrite the checkout log.
 
-- Case `deploy-log-run`: action Validate deploy log; command `control-summonaikit drive-deploy-log`; observable exit `0` and `[deploy-log] OK` in the artifact.
+- Case `deploy-log-ok`: action Validate a well-formed fixture; command `control-summonaikit drive-deploy-log`; observable exit `0` and `[deploy-log] OK`.
+- Case `deploy-log-order`: action Reject inverted dates; command `control-summonaikit drive check-deploy-log`; observable exit non-zero and reason `orden`.
+- Case `deploy-log-dup`: action Reject a repeated PR; command `control-summonaikit drive check-deploy-log`; observable exit non-zero naming `#203`.
 
-- **Proof.** Keep the artifact. On failure, record the tool's complaint lines
-  (order / norma / duplicate PR) instead of rewriting the log mid-drive.
+- **Proof.** Keep the attempt. A header or exit 0 on the real log is not
+  enough: each case records the concrete reason from its fixture.
 
 ## Gotchas
 

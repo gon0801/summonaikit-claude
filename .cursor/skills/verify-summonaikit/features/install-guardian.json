@@ -3,9 +3,8 @@
   "id": "install-guardian",
   "card": "install-guardian.md",
   "executor": {
-    "kind": "legacy",
-    "command": "drive-install-dry-run",
-    "function": "cmd_drive_install_dry_run"
+    "kind": "driver",
+    "path": "scripts/drivers/install-guardian.sh"
   },
   "execution_mode": "sandbox",
   "surfaces": ["tools/install-hook.sh"],
@@ -13,11 +12,23 @@
   "cases": [
     {
       "id": "install-dry-run",
-      "required_assertions": ["exit_0", "dry_run_line", "home_isolated"]
+      "required_assertions": ["exit_0", "dry_run_no_write", "source_identity"]
     },
     {
       "id": "install-ownership",
       "required_assertions": ["ownership_marker", "dest_matches_source"]
+    },
+    {
+      "id": "install-noop",
+      "required_assertions": ["ya_al_dia", "dest_unchanged"]
+    },
+    {
+      "id": "install-foreign",
+      "required_assertions": ["foreign_intact"]
+    },
+    {
+      "id": "install-restore",
+      "required_assertions": ["restore_vendor_bytes"]
     }
   ]
 }

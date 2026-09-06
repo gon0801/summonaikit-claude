@@ -3,17 +3,20 @@
   "id": "audit-ledger",
   "card": "audit-ledger.md",
   "executor": {
-    "kind": "legacy",
-    "command": "drive-audit-ledger",
-    "function": "cmd_drive_audit_ledger"
+    "kind": "driver",
+    "path": "scripts/drivers/audit-ledger.sh"
   },
   "execution_mode": "sandbox",
   "surfaces": ["tools/audita-ledger.sh"],
   "requirements": ["doctor"],
   "cases": [
     {
-      "id": "ledger-run",
-      "required_assertions": ["header_AUDITORIA", "exit_observed"]
+      "id": "ledger-ok",
+      "required_assertions": ["header_AUDITORIA", "ledger_ok_line", "exit_0"]
+    },
+    {
+      "id": "ledger-stale",
+      "required_assertions": ["stale_reason"]
     }
   ]
 }
