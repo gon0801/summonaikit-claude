@@ -51,3 +51,5 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
   scenarios via golden-harness.
 - [Audit the task ledger](./audit-ledger.md) covers `tools/audita-ledger.sh`.
 - [Check the deploy log](./check-deploy-log.md) covers `tools/check-deploy-log.sh`.
+- [Merge a sealed PR (simulated)](./saikit-merge.md) covers `tools/saikit-merge.sh`
+  with local Git/origin and a strict fake `gh`.
