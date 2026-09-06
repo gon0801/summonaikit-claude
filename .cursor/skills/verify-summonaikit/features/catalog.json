@@ -175,9 +175,9 @@
       ]
     },
     "autopilot-contract": {
-      "status": "pending",
-      "owner_task": "19.10",
-      "card": null
+      "status": "active",
+      "card": "features/autopilot-contract.md",
+      "execution_mode": "sandbox"
     },
     "install-hosts": {
       "status": "pending",
