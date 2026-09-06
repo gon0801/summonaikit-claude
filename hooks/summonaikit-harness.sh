@@ -2718,14 +2718,20 @@ cited_relpaths() {
 }
 
 path_present_under_root() {
+  local _joined _dir
   case "$1" in
     ''|/*|~*|*..*) return 1 ;;
   esac
   _joined="$PROJECT_ROOT/$1"
   [ -f "$_joined" ] || return 1
-  _dir="$(cd "$(dirname "$_joined")" 2>/dev/null && pwd)" || return 1
+  # Un enlace final no es el artefacto: no seguirlo fuera del proyecto.
+  [ ! -L "$_joined" ] || return 1
+  # Ambos lados FISICOS, igual que el guard adversary: /tmp en Darwin y
+  # C:/ en MSYS pueden nombrar al mismo proyecto que /private/tmp o /c/.
+  [ -n "$ADV_PROJECT_CANON" ] || return 1
+  _dir="$(cd "$(dirname "$_joined")" 2>/dev/null && pwd -P)" || return 1
   case "$_dir" in
-    "$PROJECT_ROOT"|"$PROJECT_ROOT"/*) return 0 ;;
+    "$ADV_PROJECT_CANON"|"$ADV_PROJECT_CANON"/*) return 0 ;;
   esac
   return 1
 }

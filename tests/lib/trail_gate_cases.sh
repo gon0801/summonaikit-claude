@@ -175,6 +175,39 @@ paused_sin_cita_permite() {
   _afirma_cierre "PAUSED sin trail"
 }
 
+full_cita_directorio_externo_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  mkdir -p "$LAB/trail-externo" "$LAB/proyecto/.saikit/findings"
+  : > "$LAB/trail-externo/x.tsv"
+  : > "$LAB/proyecto/.saikit/findings/blast-x.json"
+  ln -s "$LAB/trail-externo" "$LAB/proyecto/.saikit/decisiones"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_close '.saikit/decisiones/x.tsv ; .saikit/findings/blast-x.json')")"
+  _afirma_bloqueo_trail "directorio enlazado afuera"
+}
+
+full_cita_archivo_externo_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  mkdir -p "$LAB/trail-externo" "$LAB/proyecto/.saikit/decisiones" "$LAB/proyecto/.saikit/findings"
+  : > "$LAB/trail-externo/blast-x.json"
+  : > "$LAB/proyecto/.saikit/decisiones/x.tsv"
+  ln -s "$LAB/trail-externo/blast-x.json" "$LAB/proyecto/.saikit/findings/blast-x.json"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_close '.saikit/decisiones/x.tsv ; .saikit/findings/blast-x.json')")"
+  _afirma_bloqueo_trail "archivo enlazado afuera"
+}
+
+full_cita_directorio_interno_cierra() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  mkdir -p "$LAB/proyecto/trail-interno" "$LAB/proyecto/.saikit/findings"
+  : > "$LAB/proyecto/trail-interno/x.tsv"
+  : > "$LAB/proyecto/.saikit/findings/blast-x.json"
+  ln -s "$LAB/proyecto/trail-interno" "$LAB/proyecto/.saikit/decisiones"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_close '.saikit/decisiones/x.tsv ; .saikit/findings/blast-x.json')")"
+  _afirma_cierre "directorio fisicamente dentro del proyecto"
+}
+
 full_otro_gate_recuerda_trail() {
   limpiar_saikit
   _sembrar_turno_completo
@@ -183,4 +216,4 @@ full_otro_gate_recuerda_trail() {
   _contiene "otro gate sigue nombrando TRAIL SKIP:" "$LAB_OUT" 'TRAIL SKIP:'
 }
 
-CASOS_G8="full_sin_cita_sin_skip_bloquea full_archivos_sin_cita_bloquea full_cita_glob_bloquea full_cita_inexistente_bloquea full_cita_solo_tsv_bloquea full_cita_solo_blast_bloquea full_cita_fuera_de_close_bloquea full_skip_en_prosa_bloquea full_skip_sin_razon_bloquea full_skip_en_tail_no_cuenta full_cita_en_tail_no_cuenta full_cita_ambas_cierra full_skip_con_razon_cierra fast_sin_cita_sin_skip_cierra full_residual_citado_cierra paused_sin_cita_permite full_otro_gate_recuerda_trail"
+CASOS_G8="full_sin_cita_sin_skip_bloquea full_archivos_sin_cita_bloquea full_cita_glob_bloquea full_cita_inexistente_bloquea full_cita_solo_tsv_bloquea full_cita_solo_blast_bloquea full_cita_fuera_de_close_bloquea full_skip_en_prosa_bloquea full_skip_sin_razon_bloquea full_skip_en_tail_no_cuenta full_cita_en_tail_no_cuenta full_cita_ambas_cierra full_skip_con_razon_cierra fast_sin_cita_sin_skip_cierra full_residual_citado_cierra paused_sin_cita_permite full_otro_gate_recuerda_trail full_cita_directorio_externo_bloquea full_cita_archivo_externo_bloquea full_cita_directorio_interno_cierra"

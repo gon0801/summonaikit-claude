@@ -3013,7 +3013,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
       fi
     done
   fi
-  if [ "$lib_enlace" -eq 0 ]; then
+  if [ "$tools_enlace" -eq 0 ] && [ "$lib_enlace" -eq 0 ]; then
     for f in "$HOME/.claude/saikit-tools/lib/redactar.sh"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
@@ -3383,6 +3383,14 @@ case "$estado" in
     decir "              El instalador falla CERRADO: es la excepcion declarada al fail-open."
     exit 4
     ;;
+esac
+
+# El contrato full tambien exige estos tools en Codex y dsh. Publicarlos
+# antes del hook evita declarar una instalacion correcta sin el comando que
+# el contrato enseña. Cubre fresh/reparacion/no-op; publicar_saikit_tools
+# respeta DRY_RUN y rechaza enlaces antes de escribir.
+case "$HOST" in
+  codex|dsh) publicar_saikit_tools || exit $? ;;
 esac
 
 # ------------------------------------------------- el estado que no escribe nada
