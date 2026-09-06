@@ -1,5 +1,5 @@
 ---
-generado: 2026-09-05 · ef6cc8b81c78acb90e1c410de8596a0f9dd1ad10
+generado: 2026-09-05 · b422a51f568a885c6cb9273bc9e089e6b2ea417d
 verify_app: drive
 ---
 # Mapa de funciones de la app
@@ -24,5 +24,6 @@ Estas son las funciones principales y su comprobacion local en `verify/`.
    poder volver a comprobar que todo sigue andando.
 
 > Este mapa se sello el dia que se genero (fecha) y con el sha del commit. Si la
-> app cambia, el sello queda viejo y el verifier lo reporta. No confies en un
-> mapa que no coincide con el commit actual.
+> codigo, los tests o el contenido del mapa cambian, el verifier lo reporta.
+> Guardar solamente el sello, Evidence.txt o el log de deploy no invalida la
+> medicion: se compara el contenido versionado contra el SHA medido.

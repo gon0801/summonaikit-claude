@@ -241,4 +241,47 @@ es_cal="$(SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$cal_repo")"
 es_cal_bsd="$(PATH="$bsd_bin:$PATH" SAIKIT_HOOK_VIVO="$hook_vivo" bash "$script" estado "$cal_repo")"
 [ "$es_cal_bsd" = "unknown" ] || malo "dia inexistente debe ser 'unknown' con shim BSD, da $es_cal_bsd"
 
+# El commit del sello no puede invalidar por si mismo la medicion.
+caso "commitear sello, evidencia y deploy-log conserva al_dia"
+sello_repo="$SANDBOX/app-sello"; mkdir -p "$sello_repo/verify" "$sello_repo/docs"
+printf 'print("version medida")\n' > "$sello_repo/app.py"
+printf '# Mapa medido\n' > "$sello_repo/verify/LEEME.md"
+printf '# Drive medido\n' > "$sello_repo/verify/test_drive.py"
+sello_sha="$(hacer_repo "$sello_repo")"
+printf 'generado: %s · %s\n# Mapa medido\n' "$(date +%F)" "$sello_sha" > "$sello_repo/verify/LEEME.md"
+printf 'Drive PASS\n' > "$sello_repo/verify/Evidence.txt"
+printf 'Deploy comprobado\n' > "$sello_repo/docs/deploy-log.md"
+git -C "$sello_repo" add -A && git -C "$sello_repo" commit -qm "registrar medicion"
+[ "$(bash "$script" estado "$sello_repo")" = al_dia ] || malo "commitear la evidencia invalido el sello"
+
+caso "un sello de commit inexistente o de otra historia no acredita"
+for falso_sha in 0000000000000000000000000000000000000000 \
+  "$(git -C "$sello_repo" commit-tree 'HEAD^{tree}' -m 'historia ajena')"; do
+  sed_i "s/$sello_sha/$falso_sha/" "$sello_repo/verify/LEEME.md"
+  [ "$(bash "$script" estado "$sello_repo")" = desactualizado ] || malo "SHA ajeno/inexistente acredito"
+  sed_i "s/$falso_sha/$sello_sha/" "$sello_repo/verify/LEEME.md"
+done
+
+caso "cambiar el contenido del mapa no se confunde con renovar el sello"
+printf 'Funcion no medida\n' >> "$sello_repo/verify/LEEME.md"
+git -C "$sello_repo" add -A && git -C "$sello_repo" commit -qm "mapa distinto"
+[ "$(bash "$script" estado "$sello_repo")" = desactualizado ] || malo "mapa cambiado acredito"
+sed_i '/^Funcion no medida$/d' "$sello_repo/verify/LEEME.md"
+git -C "$sello_repo" add -A && git -C "$sello_repo" commit -qm "restaurar mapa medido"
+[ "$(bash "$script" estado "$sello_repo")" = al_dia ] || malo "contenido medido restaurado no acredito"
+
+caso "cambiar codigo o el Drive invalida la medicion"
+for cambiado in app.py verify/test_drive.py; do
+  cp "$sello_repo/$cambiado" "$SANDBOX/contenido-medido"
+  printf '# cambio no medido\n' >> "$sello_repo/$cambiado"
+  git -C "$sello_repo" add -A && git -C "$sello_repo" commit -qm "cambiar $cambiado"
+  [ "$(bash "$script" estado "$sello_repo")" = desactualizado ] || malo "$cambiado cambiado acredito"
+  cp "$SANDBOX/contenido-medido" "$sello_repo/$cambiado"
+  git -C "$sello_repo" add -A && git -C "$sello_repo" commit -qm "restaurar $cambiado"
+done
+
+caso "sello commiteado con fecha invalida sigue unknown"
+sed_i 's/^generado: [^ ]*/generado: 2026-09-31/' "$sello_repo/verify/LEEME.md"
+[ "$(bash "$script" estado "$sello_repo")" = unknown ] || malo "fecha invalida despues del commit no fue unknown"
+
 [ "$fail" -eq 0 ] && echo "test_verificar_app: OK" || { echo "test_verificar_app: FAIL" >&2; exit 1; }
