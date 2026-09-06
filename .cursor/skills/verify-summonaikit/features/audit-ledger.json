@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "audit-ledger",
+  "card": "audit-ledger.md",
+  "executor": {
+    "kind": "legacy",
+    "command": "drive-audit-ledger",
+    "function": "cmd_drive_audit_ledger"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/audita-ledger.sh"],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "ledger-run",
+      "required_assertions": ["header_AUDITORIA", "exit_observed"]
+    }
+  ]
+}

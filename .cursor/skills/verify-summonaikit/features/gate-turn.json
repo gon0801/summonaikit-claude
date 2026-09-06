@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "gate-turn",
+  "card": "gate-turn.md",
+  "executor": {
+    "kind": "legacy",
+    "command": "drive-gate-scenario",
+    "function": "cmd_drive_gate_scenario"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["hooks/summonaikit-harness.sh", "tools/golden-harness.sh"],
+  "requirements": ["doctor", "fixtures/escenarios"],
+  "cases": [
+    {
+      "id": "gate-unarmed",
+      "required_assertions": ["exit_0", "scenario_header", "sin_estado"]
+    },
+    {
+      "id": "gate-armed",
+      "required_assertions": ["exit_0", "scenario_header", "contract_or_state"]
+    }
+  ]
+}

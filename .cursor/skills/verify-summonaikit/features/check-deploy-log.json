@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "check-deploy-log",
+  "card": "check-deploy-log.md",
+  "executor": {
+    "kind": "legacy",
+    "command": "drive-deploy-log",
+    "function": "cmd_drive_deploy_log"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/check-deploy-log.sh"],
+  "requirements": ["doctor", "docs/deploy-log.md"],
+  "cases": [
+    {
+      "id": "deploy-log-run",
+      "required_assertions": ["exit_0", "deploy_log_ok_line"]
+    }
+  ]
+}
