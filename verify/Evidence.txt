@@ -329,3 +329,21 @@ hooks/list post-deploy: 4 enabled=true, trustStatus=trusted; warnings=[], errors
 bash tools/audita-ledger.sh
 [saikit] AUDITORIA DEL LEDGER: OK — ninguna fila en cc:TODO tiene trabajo ya mergeado en origin/master
 Exit: 0
+
+18.12 — FIXES TRAS REVIEW, MEDICION DE RAMA (NO DEPLOY)
+2026-09-05 PDT, fuente da88cb9cc2024ce60ffa409a2411abb5008ff6ee
+Rojos y mutaciones: docs/review-18.12-fixes.md.
+Gate: 20 casos PASS; G8: 15 mutaciones atrapadas; instalacion: 4 mutaciones
+atrapadas; test_install_hook: OK; golden --check: 57 escenarios OK.
+Toda ejecucion del gate/instalador fue en sandbox; no se tocaron perfiles vivos.
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/dn/dev/summonaikit-claude
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.78s ===============================
+Exit: 0
