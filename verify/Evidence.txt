@@ -292,3 +292,40 @@ Exit: 0; cuatro resultado=al-dia registro=ok, veredicto=ok.
 Checker Codex con --codex-wrapper apuntando al wrapper POSIX: exit 0, silencio.
 Backup del config previo y detalle de registro: docs/deploy-log.md, entrada PR #201.
 Documentacion oficial consultada: https://learn.chatgpt.com/docs/hooks
+
+CI Y DEPLOY POST-MERGE — 2026-09-05 19:27 PDT
+PR #203 mergeado: ae877a5f229dec5e50af338f60a41afabb25cc49
+CI gate: success; todos los jobs success.
+https://github.com/gon0801/summonaikit-claude/actions/runs/34006294938
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.71s ===============================
+Exit: 0
+
+bash tools/install-hook.sh --check
+[summonaikit] procedencia: rama=master sha=ae877a5f229dec5e50af338f60a41afabb25cc49 sucio=no sin_seguimiento=0 coincide_origin_master=si edad_s=17 origen=ref-mtime fuente=por-defecto fuente_sha256=153e8c21ec46221418d29803a9f6899506e2fc3eea1151a0640d28dbd1f130e7
+[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo).
+[summonaikit] check: host=claude dest=/Users/dn/.claude/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=grok dest=/Users/dn/.grok/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=dsh dest=/Users/dn/.dsh/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=codex dest=/Users/dn/.codex/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)
+Exit: 0
+
+bash skills/saikit-verificar-app/verificar.sh estado "$PWD"
+al_dia
+Exit: 0
+
+cmp skills/saikit-verificar-app/verificar.sh /Users/dn/.claude/skills/saikit-verificar-app/verificar.sh
+Exit: 0, sin salida; skill desplegada identica a master.
+hooks/list post-deploy: 4 enabled=true, trustStatus=trusted; warnings=[], errors=[].
+bash tools/audita-ledger.sh
+[saikit] AUDITORIA DEL LEDGER: OK — ninguna fila en cc:TODO tiene trabajo ya mergeado en origin/master
+Exit: 0

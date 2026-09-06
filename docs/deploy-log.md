@@ -7,6 +7,28 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #203 (sello persistente y cierre del registro Codex) — skill actualizada, hooks NO-OP
+
+- **Merge:** `ae877a5f229dec5e50af338f60a41afabb25cc49`, head
+  `10b25f15c08e1b4073d5f6d6fe2f1dde426374b2`. Todos los jobs, incluido
+  `gate`, verdes en el
+  [run 34006294938](https://github.com/gon0801/summonaikit-claude/actions/runs/34006294938).
+- **Deploy (19:27 PDT):** desde `master` limpio, sincronizado con
+  `origin/master`; los cuatro instaladores terminaron exit 0, hooks
+  `YA AL DIA`. Claude actualizo la skill `saikit-verificar-app/verificar.sh`;
+  `cmp` contra la fuente termino exit 0. Codex replanto su wrapper POSIX.
+- **Registro:** `install-hook.sh --check` exit 0, cuatro
+  `resultado=al-dia registro=ok`, `veredicto=ok`. El checker de registro con
+  `--codex-wrapper` POSIX termino exit 0 sin avisos. Despues del deploy,
+  `hooks/list` de Codex conserva las cuatro fases `enabled=true` y
+  `trustStatus=trusted`, sin errores ni advertencias. El disparo real de las
+  cuatro fases y el backup de configuracion constan en el cierre de PR #201.
+- **Verificacion:** Drive post-merge `5 passed in 0.71s`; sello `al_dia`;
+  `audita-ledger.sh` OK. El sello permanece valido al guardar este registro
+  y la evidencia, sin cambiar el contenido medido del mapa, codigo o tests.
+- **Operador:** Gon (sesion Codex), merge/deploy y registro autorizados.
+  Sin cambios en `Plans.md` ni en el checkout de trabajo paralelo.
+
 ## 2026-09-05 — PR #201 (Drive del gate con HOME desechable) — deploy NO-OP de las 4 copias
 
 - **Merge:** `0e711c564a616530ea2b3a0c1598950ef48ef07a`, head
