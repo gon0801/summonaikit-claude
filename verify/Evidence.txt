@@ -176,3 +176,156 @@ Exit: 0; Python 3.14.7, pytest 8.4.2, origin/master presente, shallow=false.
 Alcance: cinco tests, incluyendo los cuatro smoke originales. No se corrio
 la suite completa local (politica de AGENTS.md); el gate agregado corresponde
 al CI del PR. Esta evidencia no afirma ejecucion en Windows/MSYS.
+
+2026-09-05 — cierre del registro Codex y del sello versionable.
+Revision de codigo medida: 6182cef69dc181c6ddfadb2953b351447646c2e2
+
+Comando del driver focalizado para rojo, mutaciones y verde:
+SAIKIT_HOOK_VIVO="$PWD/hooks/summonaikit-harness.sh" bash tests/test_verificar_app.sh
+HOME/USERPROFILE/TMPDIR aislados por tests/lib/sandbox.sh.
+
+Rojo antes del fix; exit 1.
+  caso: repo node: genera verify/ con los archivos esperados
+  caso: repo node: Drive incluye verify/ y matchea TEST_RUNNER_RE (grep -o del hook)
+  caso: repo node: LEEME.md trae el sello con el sha REAL del fixture
+  caso: repo node: estado == al_dia
+  caso: repo node: regenerar un verify/ existente no lo pisa (corre UNA vez)
+  caso: repo python: genera verify/ con los archivos esperados
+  caso: repo python: Drive incluye verify/ y matchea TEST_RUNNER_RE (grep -o del hook)
+  caso: repo python: LEEME.md trae el sello con el sha REAL del fixture
+  caso: repo python: estado == al_dia
+  caso: repo sin framework: propone y espera el sí, NO instala
+  caso: sello ausente => verifier declara unknown, nunca 'al dia'
+  caso: repo con test falso (echo ok): NO publica COMANDO_DRIVE ni ESTADO_DRIVE: drive
+  caso: repo ESM (type: module): el Drive corre de verdad (drive.test.cjs)
+  caso: sello con fecha rota: el verifier declara unknown, jamas 'al dia'
+  caso: date sin -d (BSD): el sello databa y estado == al_dia
+  caso: sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD
+  caso: commitear sello, evidencia y deploy-log conserva al_dia
+    FAIL: commitear la evidencia invalido el sello
+  caso: un sello de commit inexistente o de otra historia no acredita
+  caso: cambiar el contenido del mapa no se confunde con renovar el sello
+    FAIL: contenido medido restaurado no acredito
+  caso: cambiar codigo o el Drive invalida la medicion
+  caso: sello commiteado con fecha invalida sigue unknown
+    FAIL: fecha invalida despues del commit no fue unknown
+test_verificar_app: FAIL
+
+Mutacion: quitar guarda de ancestro (extracto final real); exit 1.
+  caso: sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD
+  caso: commitear sello, evidencia y deploy-log conserva al_dia
+  caso: un sello de commit inexistente o de otra historia no acredita
+fatal: bad object 0000000000000000000000000000000000000000
+    FAIL: SHA ajeno/inexistente acredito
+  caso: cambiar el contenido del mapa no se confunde con renovar el sello
+  caso: cambiar codigo o el Drive invalida la medicion
+  caso: sello commiteado con fecha invalida sigue unknown
+test_verificar_app: FAIL
+
+Mutacion: quitar comparacion de codigo/tests (extracto final real); exit 1.
+  caso: sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD
+  caso: commitear sello, evidencia y deploy-log conserva al_dia
+  caso: un sello de commit inexistente o de otra historia no acredita
+  caso: cambiar el contenido del mapa no se confunde con renovar el sello
+  caso: cambiar codigo o el Drive invalida la medicion
+    FAIL: app.py cambiado acredito
+    FAIL: verify/test_drive.py cambiado acredito
+  caso: sello commiteado con fecha invalida sigue unknown
+test_verificar_app: FAIL
+
+Mutacion: quitar comparacion del contenido del mapa (extracto final real); exit 1.
+  caso: sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD
+  caso: commitear sello, evidencia y deploy-log conserva al_dia
+  caso: un sello de commit inexistente o de otra historia no acredita
+  caso: cambiar el contenido del mapa no se confunde con renovar el sello
+    FAIL: mapa cambiado acredito
+  caso: cambiar codigo o el Drive invalida la medicion
+  caso: sello commiteado con fecha invalida sigue unknown
+test_verificar_app: FAIL
+
+Verde: test_verificar_app.sh con los mutantes restaurados (extracto final real); exit 0.
+  caso: sello con dia inexistente (2026-09-31) => unknown con date real y con shim BSD
+  caso: commitear sello, evidencia y deploy-log conserva al_dia
+  caso: un sello de commit inexistente o de otra historia no acredita
+  caso: cambiar el contenido del mapa no se confunde con renovar el sello
+  caso: cambiar codigo o el Drive invalida la medicion
+  caso: sello commiteado con fecha invalida sigue unknown
+test_verificar_app: OK
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.75s ===============================
+[deploy-log] OK: 13 entradas juzgadas desde 2026-09-04, ordenadas, con norma y sin PR duplicado
+
+Drive y sello sobre el commit de codigo (antes de guardar solo metadatos):
+/tmp/saikit-drive-venv/bin/pytest verify/ && bash skills/saikit-verificar-app/verificar.sh estado "$PWD"
+Exit: 0
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.76s ===============================
+al_dia
+
+Registro Codex: hooks/list nativo de 0.153.4 paso de 0 hooks a cuatro
+untrusted tras crear hooks.json, y a cuatro enabled=true/trustStatus=trusted
+tras guardar sus currentHash individuales en config.toml (sin bypass).
+Comandos: python3 /tmp/saikit-codex-hooks-rGEcJC/rpc.py hooks/list '{"cwds":["/Users/dn/dev/summonaikit-claude"]}'
+          python3 /tmp/saikit-codex-hooks-rGEcJC/rpc.py smoke /tmp/saikit-codex-hooks-rGEcJC/project
+Smoke: thread=01a07481-c8c8-7ba3-9cb6-25625a019e56; cwd temporal,
+comando true, respuesta OK. hook/completed observo las cuatro fases:
+sessionStart status=completed durationMs=54
+userPromptSubmit status=completed durationMs=44
+postToolUse status=completed durationMs=38
+stop status=completed durationMs=38
+turn/completed: status=completed, error=null; exit del smoke: 0.
+
+bash tools/install-hook.sh --check
+Exit: 0; cuatro resultado=al-dia registro=ok, veredicto=ok.
+Checker Codex con --codex-wrapper apuntando al wrapper POSIX: exit 0, silencio.
+Backup del config previo y detalle de registro: docs/deploy-log.md, entrada PR #201.
+Documentacion oficial consultada: https://learn.chatgpt.com/docs/hooks
+
+CI Y DEPLOY POST-MERGE — 2026-09-05 19:27 PDT
+PR #203 mergeado: ae877a5f229dec5e50af338f60a41afabb25cc49
+CI gate: success; todos los jobs success.
+https://github.com/gon0801/summonaikit-claude/actions/runs/34006294938
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.71s ===============================
+Exit: 0
+
+bash tools/install-hook.sh --check
+[summonaikit] procedencia: rama=master sha=ae877a5f229dec5e50af338f60a41afabb25cc49 sucio=no sin_seguimiento=0 coincide_origin_master=si edad_s=17 origen=ref-mtime fuente=por-defecto fuente_sha256=153e8c21ec46221418d29803a9f6899506e2fc3eea1151a0640d28dbd1f130e7
+[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo).
+[summonaikit] check: host=claude dest=/Users/dn/.claude/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=grok dest=/Users/dn/.grok/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=dsh dest=/Users/dn/.dsh/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=codex dest=/Users/dn/.codex/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)
+Exit: 0
+
+bash skills/saikit-verificar-app/verificar.sh estado "$PWD"
+al_dia
+Exit: 0
+
+cmp skills/saikit-verificar-app/verificar.sh /Users/dn/.claude/skills/saikit-verificar-app/verificar.sh
+Exit: 0, sin salida; skill desplegada identica a master.
+hooks/list post-deploy: 4 enabled=true, trustStatus=trusted; warnings=[], errors=[].
+bash tools/audita-ledger.sh
+[saikit] AUDITORIA DEL LEDGER: OK — ninguna fila en cc:TODO tiene trabajo ya mergeado en origin/master
+Exit: 0
