@@ -25,15 +25,13 @@
       "kind": "internal",
       "reason": "evidencia v1 por intento; no es ejecutor de feature"
     },
-<<<<<<< HEAD
     "scripts/lib/driver.sh": {
       "kind": "internal",
       "reason": "helpers de drivers; no es ejecutor de feature"
-=======
+    },
     "scripts/lib/doctor.py": {
       "kind": "internal",
       "reason": "doctor granular v1; no es ejecutor de feature"
->>>>>>> 96f201b (feat(verify): replace stub doctor with granular per-feature report)
     },
     "schemas/step.schema.json": {
       "kind": "internal",
