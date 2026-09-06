@@ -94,9 +94,53 @@ print(mode)
 PY
 }
 
+_fm_driver_allowed() {
+  # $1 = candidate path. Allow only under skill_root or verify/sandbox roots.
+  python3 - "$1" "$skill_root" \
+    "${STATE_DIR:-}" "${ARTIFACTS:-}" "${TMPDIR:-}" \
+    "${VERIFY_TMPDIR:-}" "${VERIFY_HOME:-}" <<'PY'
+import sys
+from pathlib import Path
+
+def under(child: Path, root: str) -> bool:
+    if not root:
+        return False
+    try:
+        r = Path(root).resolve()
+    except OSError:
+        return False
+    if not r.exists():
+        return False
+    # Never treat filesystem root as an allow root.
+    if r == r.anchor or str(r) in ("/", "\\"):
+        return False
+    try:
+        child.resolve().relative_to(r)
+        return True
+    except ValueError:
+        return False
+
+cand = Path(sys.argv[1])
+if not cand.is_file():
+    raise SystemExit(1)
+skill = sys.argv[2]
+state, art, tmpdir, vtmp, vhome = sys.argv[3:8]
+roots = [skill, tmpdir, vtmp, vhome]
+# Mutant driver copies live next to verify-state (sandbox parent).
+for r in (state, art):
+    if r:
+        roots.append(r)
+        roots.append(str(Path(r).resolve().parent))
+ok = any(under(cand, r) for r in roots)
+raise SystemExit(0 if ok else 1)
+PY
+}
+
 _driver_script() {
-  if [ -n "${SAIKIT_FM_DRIVER:-}" ] && [ -f "${SAIKIT_FM_DRIVER}" ]; then
-    printf '%s' "$SAIKIT_FM_DRIVER"
+  if [ -n "${SAIKIT_FM_DRIVER:-}" ]; then
+    if [ -f "${SAIKIT_FM_DRIVER}" ] && _fm_driver_allowed "$SAIKIT_FM_DRIVER"; then
+      printf '%s' "$SAIKIT_FM_DRIVER"
+    fi
     return
   fi
   python3 - "$skill_root/features/$1.json" "$skill_root" <<'PY'
@@ -110,20 +154,6 @@ d = json.loads(p.read_text(encoding="utf-8"))
 ex = d.get("executor") or {}
 path = ex.get("path") or f"scripts/drivers/{d.get('id')}.sh"
 print(skill / path)
-PY
-}
-
-_feature_mode() {
-  python3 - "$skill_root/features/$1.json" <<'PY'
-import json, sys
-from pathlib import Path
-p = Path(sys.argv[1])
-if not p.is_file():
-    print("sandbox")
-    raise SystemExit(0)
-d = json.loads(p.read_text(encoding="utf-8"))
-mode = d.get("execution_mode") or "sandbox"
-print(mode if mode in ("sandbox", "simulated", "live") else "sandbox")
 PY
 }
 
@@ -141,6 +171,10 @@ _dispatch_driver() {
   created="$(begin_attempt "$fid" "$cases" "$reqs" "$scope")"
   adir="$(_parse_kv ATTEMPT_DIR "$created")"
   [ -d "$adir" ] || iso_fail "no se pudo crear intento de evidencia"
+  if [ -n "${SAIKIT_FM_DRIVER:-}" ] && [ -f "${SAIKIT_FM_DRIVER}" ] \
+    && ! _fm_driver_allowed "$SAIKIT_FM_DRIVER"; then
+    write_blocked_attempt "$fid" "SAIKIT_FM_DRIVER fuera de allowlist"
+  fi
   driver="$(_driver_script "$fid")"
   if [ ! -f "$driver" ]; then
     write_blocked_attempt "$fid" "sin driver"
@@ -152,11 +186,15 @@ _dispatch_driver() {
   SAIKIT_FM_ONLY_CASE="$only" \
   SAIKIT_FM_EVIDENCE="$EVIDPY" \
     bash "$driver"
+  local drv_ec=$?
   set -e
   set +e
   finish_attempt "$adir" "$reqs" "$scope"
   local ec=$?
   set -e
+  if [ "$drv_ec" -ne 0 ] && [ "$ec" -eq 0 ]; then
+    exit "$drv_ec"
+  fi
   exit "$ec"
 }
 
@@ -241,6 +279,10 @@ run_synthetic_drive() {
   local fid="$1" cases="$2" reqs="$3" scope="${4:-full}"
   local kind="${SAIKIT_VERIFY_SYNTHETIC_EXECUTOR:-}"
   [ -n "$kind" ] || return 0
+  if [ "${SAIKIT_VERIFY_ALLOW_SYNTHETIC:-}" != 1 ]; then
+    printf 'control-summonaikit: synthetic refused — set SAIKIT_VERIFY_ALLOW_SYNTHETIC=1\n' >&2
+    exit 3
+  fi
   mkdir -p "$ARTIFACTS"
   local created adir result_kind tool_exit note
   created="$(begin_attempt "$fid" "$cases" "$reqs" "$scope")" || return 1
@@ -363,30 +405,43 @@ cmd_launch() {
   fi
 
   payload="$(mktemp "${TMPDIR:-/tmp}/saikit-state-XXXXXX.json")"
-  python3 - "$payload" <<PY
-import json, sys
+  SAIKIT_LAUNCH_RUN_ID="$run_id" \
+  SAIKIT_LAUNCH_REPO="$repo" \
+  SAIKIT_LAUNCH_VERIFY_HOME="$verify_home" \
+  SAIKIT_LAUNCH_DEST="$dest" \
+  SAIKIT_LAUNCH_STATE_DIR="$STATE_DIR" \
+  SAIKIT_LAUNCH_ARTIFACTS="$ARTIFACTS" \
+  SAIKIT_LAUNCH_TMP="$run_tmp" \
+  SAIKIT_LAUNCH_GIT_COMMON="$git_common" \
+  SAIKIT_LAUNCH_DISPOSABLE="$disposable" \
+  SAIKIT_LAUNCH_TOKEN="$token" \
+  python3 - "$payload" <<'PY'
+import json, os, sys
 from datetime import datetime, timezone
 path = sys.argv[1]
+vh = os.environ["SAIKIT_LAUNCH_VERIFY_HOME"]
+dest = os.environ["SAIKIT_LAUNCH_DEST"]
+run_tmp = os.environ["SAIKIT_LAUNCH_TMP"]
 data = {
     "schema_version": 1,
-    "run_id": "$run_id",
+    "run_id": os.environ["SAIKIT_LAUNCH_RUN_ID"],
     "launched_at": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-    "repo": "$repo",
-    "verify_home": "$verify_home",
-    "dest": "$dest",
-    "state_dir": "$STATE_DIR",
-    "artifacts_dir": "$ARTIFACTS",
-    "tmpdir": "$run_tmp",
-    "owned_temps": ["$verify_home", "$run_tmp"],
+    "repo": os.environ["SAIKIT_LAUNCH_REPO"],
+    "verify_home": vh,
+    "dest": dest,
+    "state_dir": os.environ["SAIKIT_LAUNCH_STATE_DIR"],
+    "artifacts_dir": os.environ["SAIKIT_LAUNCH_ARTIFACTS"],
+    "tmpdir": run_tmp,
+    "owned_temps": [vh, run_tmp],
     "host_dests": {
-        "claude": "$dest",
-        "grok": "$verify_home/.grok/hooks/summonaikit-harness.sh",
-        "dsh": "$verify_home/.dsh/hooks/summonaikit-harness.sh",
-        "codex": "$verify_home/.codex/hooks/summonaikit-harness.sh",
+        "claude": dest,
+        "grok": f"{vh}/.grok/hooks/summonaikit-harness.sh",
+        "dsh": f"{vh}/.dsh/hooks/summonaikit-harness.sh",
+        "codex": f"{vh}/.codex/hooks/summonaikit-harness.sh",
     },
-    "git_common_dir": "$git_common",
-    "disposable_repo": "$disposable",
-    "token": "$token",
+    "git_common_dir": os.environ.get("SAIKIT_LAUNCH_GIT_COMMON") or "",
+    "disposable_repo": os.environ.get("SAIKIT_LAUNCH_DISPOSABLE") or "",
+    "token": os.environ["SAIKIT_LAUNCH_TOKEN"],
 }
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)

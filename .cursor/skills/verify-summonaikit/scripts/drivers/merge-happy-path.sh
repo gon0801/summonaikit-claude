@@ -99,8 +99,15 @@ if fm_only live-blocked-no-auth; then
   fi
   # assert:blocked_unknown_end
   # assert:no_external_call
-  fm_pass live-blocked-no-auth no_external_call \
-    "no-external-call" "no-external-call (gh/curl/ssh not exec'd)"
+  # inspect_gh only reads PATH bytes; never execs gh/curl/ssh.
+  if [ "$auth_avail" = BLOCKED ] && [ "$auth_result" = unknown ] \
+    && [ "$gh_live" = no ]; then
+    fm_pass live-blocked-no-auth no_external_call \
+      "no-external-call" "no-external-call (gh/curl/ssh not exec'd)"
+  else
+    fm_fail live-blocked-no-auth no_external_call \
+      "no-external-call" "estado no garantiza ausencia de llamada externa"
+  fi
   # assert:no_external_call_end
 fi
 
@@ -108,16 +115,24 @@ if fm_only live-current-reasons; then
   fm_action live-current-reasons act-reasons 3 \
     "${auth_reason}; ${dest_reason}; ${gh_reason}" "merge-happy-path" reasons
   # assert:reason_auth_dest
-  fm_pass live-current-reasons reason_auth_dest \
-    "autoriz+destino actuales" "${auth_reason}; ${dest_reason}"
+  if [ -n "$auth_reason" ] && [ -n "$dest_reason" ]; then
+    fm_pass live-current-reasons reason_auth_dest \
+      "autoriz+destino actuales" "${auth_reason}; ${dest_reason}"
+  else
+    fm_fail live-current-reasons reason_auth_dest \
+      "autoriz+destino actuales" "razones vacias"
+  fi
   # assert:reason_auth_dest_end
   # assert:reason_gh
   if [ "$gh_live" = yes ]; then
     fm_fail live-current-reasons reason_gh \
       "gh falso no acredita" "gh-vivo-acreditado (${gh_kind})"
-  else
+  elif [ -n "$gh_reason" ]; then
     fm_pass live-current-reasons reason_gh \
       "gh actual nombrado" "$gh_reason"
+  else
+    fm_fail live-current-reasons reason_gh \
+      "gh actual nombrado" "razon gh vacia"
   fi
   # assert:reason_gh_end
 fi
@@ -126,12 +141,25 @@ if fm_only live-manual-procedure; then
   fm_action live-manual-procedure act-proc 3 \
     "procedure defined, not executed" "merge-happy-path" procedure
   # assert:procedure_defined
-  fm_pass live-manual-procedure procedure_defined \
-    "topic+marker host cuota SHA/PR" "$PROCEDURE"
+  if printf '%s' "$PROCEDURE" | grep -q 'topic+marker' \
+    && printf '%s' "$PROCEDURE" | grep -q 'Name the host' \
+    && printf '%s' "$PROCEDURE" | grep -q 'SHA/PR'; then
+    fm_pass live-manual-procedure procedure_defined \
+      "topic+marker host cuota SHA/PR" "$PROCEDURE"
+  else
+    fm_fail live-manual-procedure procedure_defined \
+      "topic+marker host cuota SHA/PR" "procedure incompleto"
+  fi
   # assert:procedure_defined_end
   # assert:procedure_not_run
-  fm_pass live-manual-procedure procedure_not_run \
-    "no-autoriza-ejecutar" "no-autoriza-ejecutar (Optional, not run)"
+  if printf '%s' "$PROCEDURE" | grep -q 'no-autoriza-ejecutar' \
+    && [ "${do_transfer:-no}" = no ]; then
+    fm_pass live-manual-procedure procedure_not_run \
+      "no-autoriza-ejecutar" "no-autoriza-ejecutar (Optional, not run)"
+  else
+    fm_fail live-manual-procedure procedure_not_run \
+      "no-autoriza-ejecutar" "procedure ausente o transfer activo"
+  fi
   # assert:procedure_not_run_end
 fi
 

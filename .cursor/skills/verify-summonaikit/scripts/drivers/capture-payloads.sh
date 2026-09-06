@@ -193,6 +193,10 @@ if fm_only capture-lifecycle; then
 fi
 
 if fm_only capture-redaction; then
+  if [ -z "${inst_out:-}${quit_out:-}${for_out:-}" ]; then
+    fm_fail capture-redaction evidence_no_secret "cero coincidencias" \
+      "sin salidas de lifecycle para redactar"
+  else
   leak=0
   if contains_synth "${inst_out:-}${quit_out:-}${for_out:-}"; then
     leak=1
@@ -208,6 +212,7 @@ if fm_only capture-redaction; then
   else
     fm_fail capture-redaction evidence_no_secret "cero coincidencias" \
       "secreto en evidencia"
+  fi
   fi
   # assert:evidence_no_secret_end
 fi

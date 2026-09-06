@@ -6,6 +6,7 @@
 # El resto de knobs se cubre en test_feature_map_evidence.sh.
 #
 # SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=PASS|FAIL|unknown evita install real.
+# Requiere SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 (no es knob de produccion).
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -27,6 +28,7 @@ ctrl() {
 
 ctrl_synth() {
   local kind="$1"; shift
+  SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
   SAIKIT_VERIFY_SYNTHETIC_EXECUTOR="$kind" \
     SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
@@ -221,10 +223,12 @@ n="$(find "$ART" -name summary.json | wc -l | tr -d ' ')"
 
 caso "mutacion reuse_attempt_id en drive choca directorios"
 reset_art
-SAIKIT_VERIFY_MUTATE=reuse_attempt_id SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=PASS \
+SAIKIT_VERIFY_MUTATE=reuse_attempt_id SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
+  SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=PASS \
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
   bash "$CTRL" drive audit-ledger >/dev/null 2>&1 || true
-SAIKIT_VERIFY_MUTATE=reuse_attempt_id SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=FAIL \
+SAIKIT_VERIFY_MUTATE=reuse_attempt_id SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
+  SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=FAIL \
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
   bash "$CTRL" drive audit-ledger >/dev/null 2>&1 || true
 n="$(find "$ART" -name summary.json | wc -l | tr -d ' ')"

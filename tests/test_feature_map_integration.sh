@@ -39,6 +39,7 @@ ctrl() {
 
 ctrl_synth() {
   local kind="$1"; shift
+  SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
   SAIKIT_VERIFY_SYNTHETIC_EXECUTOR="$kind" \
     SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     SAIKIT_HOOK_VIVO="$repo/hooks/summonaikit-harness.sh" \
@@ -435,7 +436,8 @@ if [ -n "$PYTEST_BIN" ]; then
   # en el repo como LEAK.
   # shellcheck disable=SC2086
   env -u SAIKIT_VERIFY_STATE -u SAIKIT_VERIFY_ARTIFACTS \
-    -u SAIKIT_VERIFY_SYNTHETIC_EXECUTOR -u SAIKIT_VERIFY_MUTATE \
+    -u SAIKIT_VERIFY_SYNTHETIC_EXECUTOR -u SAIKIT_VERIFY_ALLOW_SYNTHETIC \
+    -u SAIKIT_VERIFY_MUTATE \
     PATH="$ORIG_PATH" \
     HOME="$SANDBOX/drive-home" \
     USERPROFILE="$SANDBOX/drive-home" \
