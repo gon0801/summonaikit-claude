@@ -3,9 +3,24 @@
 Registro de cada deploy (post-merge) del gate hook al perfil vivo. Ver
 `AGENTS.md` § "Deploy tras merge".
 
-El deploy de este repo = garantizar que el hook vivo
-(`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
-que siga registrado en las 3 fases de `~/.claude/settings.json`.
+El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
+(tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
+`~/.codex/hooks/`: bytes de `master` y registro de cada host.
+
+## 2026-09-05 — PR #209 (18.25: salida gh sin color forzado) — hooks NO-OP
+
+- **Merge:** `a2ec23868f48cee0bf0aabdc677d14e355790ebe`, head
+  `69f7223f7b43a947fd87792d950258ca661830ab`; CI 8/8, incluido `gate`,
+  en el [run 34013581161](https://github.com/gon0801/summonaikit-claude/actions/runs/34013581161).
+- **Deploy (22:54 PDT):** desde `master` sincronizado, `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  las cuatro copias dijeron `YA AL DIA` (hook sin cambios).
+- **Verificacion:** `install-hook.sh --check` exit 0, cuatro filas
+  `resultado=al-dia registro=ok`; `check-hook-registration.sh` exit 0.
+  El script `saikit-merge.sh` y su pin del hatch quedan actualizados en
+  el checkout. El cambio no habilita el merge automatico de Grok por si solo.
+- **Operador:** Gon; merges y deploys autorizados a Codex. Fila 18.25
+  cerrada por el lead despues del merge.
 
 ## 2026-09-05 — PR #207 (ayuda completa de blast) — tools actualizados, hooks NO-OP
 
