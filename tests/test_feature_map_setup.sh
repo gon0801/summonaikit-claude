@@ -1,0 +1,422 @@
+#!/usr/bin/env bash
+# tests/test_feature_map_setup.sh — 19.8: setup-autopilot por PTY real.
+#
+# DoD: transcript con cinco preguntas en orden y respuestas mapeadas a JSON;
+# invalido/timeout sin escritura parcial ni lock huerfano; pipe no acredita PTY;
+# mutar cada pregunta/mapeo, default, guard del lock y limpieza del timeout
+# pone rojo. PTY ausente => unknown en interactivos, nunca un PTY fingido.
+#
+# Mutaciones (copia del driver / pty_driver en sandbox; SAIKIT_FM_DRIVER,
+# SAIKIT_FM_PTY):
+#   omit_q1_merge omit_q2_despliega omit_q3_salud omit_q4_sve omit_q5_telegram
+#   omit_questions_order omit_defaults_unknown omit_lock_guard
+#   omit_timeout_cleanup accept_pipe_as_pty skip_killpg
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/.." && pwd)"
+. "$here/lib/sandbox.sh"; sandbox_init
+fail=0
+caso() { printf '  caso: %s\n' "$1"; }
+malo() { printf '    FAIL: %s\n' "$1" >&2; fail=$((fail + 1)); }
+
+SKILL="$repo/.cursor/skills/verify-summonaikit"
+CTRL="$SKILL/scripts/control-summonaikit"
+PTY="$SKILL/scripts/lib/pty_driver.py"
+DRV="$SKILL/scripts/drivers/setup-autopilot.sh"
+STATE="$SANDBOX/verify-state"
+ART="$SANDBOX/verify-artifacts"
+mkdir -p "$STATE" "$ART"
+
+ctrl() {
+  SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" "$@"
+}
+
+ctrl_drv() {
+  local drv="$1"; shift
+  SAIKIT_FM_DRIVER="$drv" \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" "$@"
+}
+
+ctrl_pty() {
+  local pty="$1"; shift
+  SAIKIT_FM_PTY="$pty" \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" "$@"
+}
+
+latest_summary() {
+  local fid="$1"
+  find "$ART" -path "*/*/${fid}/*/summary.json" -type f | tail -1
+}
+
+latest_steps() {
+  local sum
+  sum="$(latest_summary "$1")"
+  [ -n "$sum" ] || return 1
+  printf '%s' "$(dirname "$sum")/steps.jsonl"
+}
+
+assert_obs() {
+  local fid="$1" asid="$2" pat="$3"
+  local steps
+  steps="$(latest_steps "$fid")" || { malo "$fid: sin steps para $asid"; return; }
+  python3 - "$steps" "$asid" "$pat" <<'PY' || malo "$fid: $asid no observa [$pat]"
+import json, re, sys
+steps, asid, pat = sys.argv[1], sys.argv[2], sys.argv[3]
+found = None
+for line in open(steps, encoding="utf-8"):
+    if not line.strip():
+        continue
+    rec = json.loads(line)
+    if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
+        found = rec
+if found is None:
+    raise SystemExit(f"falta aserción {asid}")
+obs = str(found.get("observed") or "")
+if found.get("result") != "PASS":
+    raise SystemExit(f"{asid} result={found.get('result')} obs={obs!r}")
+if not re.search(pat, obs):
+    raise SystemExit(f"{asid} observed no coincide {pat!r}: {obs!r}")
+PY
+}
+
+assert_result() {
+  local fid="$1" asid="$2" want="$3"
+  local steps
+  steps="$(latest_steps "$fid")" || { malo "$fid: sin steps para $asid"; return; }
+  python3 - "$steps" "$asid" "$want" <<'PY' || malo "$fid: $asid no quedo $want"
+import json, sys
+steps, asid, want = sys.argv[1], sys.argv[2], sys.argv[3]
+found = None
+for line in open(steps, encoding="utf-8"):
+    if not line.strip():
+        continue
+    rec = json.loads(line)
+    if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
+        found = rec
+if found is None:
+    raise SystemExit(f"falta aserción {asid}")
+if found.get("result") != want:
+    raise SystemExit(f"{asid} result={found.get('result')} want={want}")
+PY
+}
+
+assert_missing_or_fail() {
+  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
+  local sum steps
+  sum="$(latest_summary "$fid")"
+  steps="$(latest_steps "$fid")"
+  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
+import json, re, sys
+sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
+summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
+found = None
+if steps_p:
+    for line in open(steps_p, encoding="utf-8"):
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
+            found = rec
+result = summary.get("result")
+if found is None:
+    if result == "PASS" or rc == "0":
+        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
+    raise SystemExit(0)
+obs = str(found.get("observed") or "")
+if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
+    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
+PY
+}
+
+reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
+
+copy_driver() {
+  cp "$DRV" "$1"
+  chmod +x "$1"
+}
+
+sed_must_change() {
+  local src="$1" dest="$2" expr="$3" label="$4"
+  sed "$expr" "$src" > "$dest"
+  chmod +x "$dest"
+  if cmp -s "$src" "$dest"; then
+    malo "$label: sed no cambio el archivo (patron obsoleto)"
+    return 1
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Inventario: helper clasificado, descriptor activo, no legacy
+# ---------------------------------------------------------------------------
+caso "catalogo clasifica pty_driver y activa setup-autopilot"
+python3 - "$SKILL" <<'PY' || malo "catalogo/descriptor setup-autopilot incompleto"
+import json, sys
+from pathlib import Path
+skill = Path(sys.argv[1])
+cat = json.loads((skill / "features/catalog.json").read_text())
+h = (cat.get("helpers") or {}).get("scripts/lib/pty_driver.py")
+assert h and h.get("kind") == "internal", h
+meta = (cat.get("features") or {}).get("setup-autopilot") or {}
+assert meta.get("status") == "active", meta
+assert meta.get("card"), meta
+d = json.loads((skill / "features/setup-autopilot.json").read_text())
+ex = d.get("executor") or {}
+assert ex.get("kind") == "driver", ex
+assert (skill / (ex.get("path") or "scripts/drivers/setup-autopilot.sh")).is_file()
+ids = [c.get("id") for c in (d.get("cases") or [])]
+for need in ("setup-interactive", "setup-flags", "setup-defaults"):
+    assert need in ids, (need, ids)
+PY
+[ -f "$PTY" ] || malo "falta scripts/lib/pty_driver.py"
+[ -f "$DRV" ] || malo "falta scripts/drivers/setup-autopilot.sh"
+[ -f "$SKILL/features/setup-autopilot.md" ] || malo "falta ficha setup-autopilot.md"
+if [ -f "$PTY" ]; then
+  PYTHONDONTWRITEBYTECODE=1 python3 -c \
+    "import ast,pathlib; ast.parse(pathlib.Path(r'$PTY').read_text(encoding='utf-8'))" \
+    || malo "pty_driver.py no parsea"
+  bash -n "$DRV" || malo "bash -n fallo en setup-autopilot.sh"
+fi
+
+# ---------------------------------------------------------------------------
+# Launch aislado
+# ---------------------------------------------------------------------------
+caso "launch aislado para drive setup-autopilot"
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "launch fallo: $out"
+  echo "FAIL: $fail aserciones (sin launch no hay drives)" >&2
+  exit 1
+fi
+printf '%s' "$out" | grep -q 'launched run_id=' || malo "launch sin run_id: $out"
+
+# ---------------------------------------------------------------------------
+# Drive real
+# ---------------------------------------------------------------------------
+caso "drive setup-autopilot: cinco preguntas, flags, defaults, lock, pipe"
+reset_art
+out="$(ctrl drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -eq 3 ]; then
+  printf '%s' "$out" | grep -Eqi 'PTY|pty|unknown|MISSING' \
+    || malo "drive unknown/3 sin motivo PTY: $out"
+  # Linux CI debe tener PTY; macOS/MSYS pueden declarar unknown solo si --probe
+  # lo dice. Si el probe dice que hay PTY, rc 3 es rojo.
+  if PYTHONDONTWRITEBYTECODE=1 python3 "$PTY" --probe >/dev/null 2>&1; then
+    malo "PTY disponible pero drive salio unknown/3: $out"
+  else
+    printf '    (PTY ausente: interactivos unknown; flags/defaults se juzgan abajo)\n'
+  fi
+else
+  [ "$rc" -eq 0 ] || malo "drive setup-autopilot rc=$rc: $out"
+fi
+
+sum="$(latest_summary setup-autopilot)"
+[ -n "$sum" ] && [ -f "$sum" ] || malo "setup-autopilot sin summary"
+if [ -n "$sum" ] && [ -f "$sum" ]; then
+python3 - "$sum" <<'PY' || malo "setup-autopilot summary incompleto"
+import json, sys
+s = json.loads(open(sys.argv[1], encoding="utf-8").read())
+cases = s.get("cases") or s.get("cases_requested") or []
+text = " ".join(cases) if not isinstance(cases, str) else cases
+for need in ("setup-interactive", "setup-flags", "setup-defaults"):
+    assert need in text, (need, cases)
+PY
+fi
+
+# Flags/defaults no dependen de PTY
+assert_obs setup-autopilot flags_merge 'false'
+assert_obs setup-autopilot flags_salud 'flags.example.test'
+assert_obs setup-autopilot defaults_despliega 'unknown'
+assert_obs setup-autopilot defaults_merge 'false'
+assert_obs setup-autopilot pipe_not_pty 'pipe|not.pty|no.pty|defaults'
+assert_obs setup-autopilot lock_blocks '3|LOCK|lock'
+assert_obs setup-autopilot lock_no_write 'ausente|intact|no.write|sin.escritura'
+assert_obs setup-autopilot with_ci_no_offer 'ya hay workflows|no se ofrece'
+assert_obs setup-autopilot without_ci_aviso 'sin CI|no mergea'
+assert_obs setup-autopilot ci_not_q6 'no 6/5|not 6/5|no.es.6'
+
+if [ "$rc" -eq 0 ]; then
+  assert_obs setup-autopilot questions_order '1/5'
+  assert_obs setup-autopilot questions_order '2/5'
+  assert_obs setup-autopilot questions_order '3/5'
+  assert_obs setup-autopilot questions_order '4/5'
+  assert_obs setup-autopilot questions_order '5/5'
+  assert_obs setup-autopilot map_merge 'true'
+  assert_obs setup-autopilot map_despliega 'publica'
+  assert_obs setup-autopilot map_salud 'pty.example.test'
+  assert_obs setup-autopilot map_sve 'false'
+  assert_obs setup-autopilot map_telegram 'true'
+  assert_obs setup-autopilot invalid_no_write 'ausente|intact|no.write|sin.escritura'
+  assert_obs setup-autopilot invalid_no_lock 'sin lock|no lock|ausente|liberado'
+  assert_obs setup-autopilot timeout_no_write 'ausente|intact|no.write|sin.escritura'
+  assert_obs setup-autopilot timeout_no_lock 'sin lock|no lock|ausente|liberado'
+  assert_obs setup-autopilot timeout_reaped 'reap|killed|timeout'
+fi
+
+# ---------------------------------------------------------------------------
+# PTY ausente: interactivos unknown; flags/defaults siguen; nunca fingir PTY
+# ---------------------------------------------------------------------------
+caso "PTY ausente: interactivos unknown, flags/defaults observables, sin fingir"
+reset_art
+out="$(SAIKIT_VERIFY_PTY=missing ctrl drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 3 ] || malo "drive sin PTY debio unknown/3 (got $rc): $out"
+assert_result setup-autopilot questions_order unknown
+assert_result setup-autopilot map_merge unknown
+assert_obs setup-autopilot flags_salud 'flags.example.test'
+assert_obs setup-autopilot defaults_despliega 'unknown'
+# Ninguna asercion interactiva puede pretender que hubo PTY
+steps="$(latest_steps setup-autopilot)"
+if [ -n "$steps" ] && [ -f "$steps" ]; then
+python3 - "$steps" <<'PY' || malo "sin PTY se presento simulacion como PTY"
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    if not line.strip():
+        continue
+    rec = json.loads(line)
+    if rec.get("type") != "assertion":
+        continue
+    if rec.get("assertion_id") not in (
+        "questions_order", "map_merge", "map_despliega", "map_salud",
+        "map_sve", "map_telegram", "invalid_no_write", "invalid_no_lock",
+        "timeout_no_write", "timeout_no_lock", "timeout_reaped",
+    ):
+        continue
+    if rec.get("result") == "PASS":
+        raise SystemExit(f"{rec.get('assertion_id')} PASS sin PTY")
+    blob = json.dumps(rec, ensure_ascii=False).lower()
+    if "fake-pty" in blob or "simulated-pty" in blob:
+        raise SystemExit(f"PTY fingido: {rec}")
+PY
+fi
+
+# ---------------------------------------------------------------------------
+# Encabezado falso + rc 0 no acredita las cinco preguntas
+# ---------------------------------------------------------------------------
+caso "encabezado falso con rc 0 no acredita preguntas/mapeo"
+reset_art
+stub="$SANDBOX/header-only-setup.sh"
+cat > "$stub" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EVID="${SAIKIT_FM_EVIDENCE:?}"
+adir="${SAIKIT_FM_ATTEMPT_DIR:?}"
+assert() {
+  python3 "$EVID" append-step --attempt-dir "$adir" --type assertion \
+    --case-id "$1" --step-id "s-$2" --assertion-id "$2" \
+    --expected "$2" --observed "$3" --result PASS
+}
+assert setup-interactive questions_order "setup ok"
+assert setup-interactive map_merge "setup ok"
+assert setup-interactive map_despliega "setup ok"
+assert setup-interactive map_salud "setup ok"
+assert setup-interactive map_sve "setup ok"
+assert setup-interactive map_telegram "setup ok"
+assert setup-invalid invalid_no_write "setup ok"
+assert setup-invalid invalid_no_lock "setup ok"
+assert setup-timeout timeout_no_write "setup ok"
+assert setup-timeout timeout_no_lock "setup ok"
+assert setup-timeout timeout_reaped "setup ok"
+assert setup-flags flags_merge "setup ok"
+assert setup-flags flags_salud "setup ok"
+assert setup-defaults defaults_despliega "setup ok"
+assert setup-defaults defaults_merge "setup ok"
+assert setup-pipe-not-pty pipe_not_pty "setup ok"
+assert setup-lock lock_blocks "setup ok"
+assert setup-lock lock_no_write "setup ok"
+assert setup-with-ci with_ci_no_offer "setup ok"
+assert setup-without-ci without_ci_aviso "setup ok"
+assert setup-without-ci ci_not_q6 "setup ok"
+exit 0
+EOF
+chmod +x "$stub"
+ctrl_drv "$stub" drive setup-autopilot >/dev/null 2>&1 || true
+steps="$(latest_steps setup-autopilot)"
+if [ -n "$steps" ] && [ -f "$steps" ]; then
+python3 - "$steps" <<'PY' || malo "header-only acredito 1/5 o mapeo real"
+import json, re, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    if not line.strip():
+        continue
+    rec = json.loads(line)
+    asid = rec.get("assertion_id")
+    obs = str(rec.get("observed") or "")
+    if asid == "questions_order" and re.search(r"1/5", obs) and rec.get("result") == "PASS":
+        raise SystemExit("header-only acredito questions_order")
+    if asid == "map_salud" and "pty.example.test" in obs and rec.get("result") == "PASS":
+        raise SystemExit("header-only acredito map_salud")
+raise SystemExit(0)
+PY
+fi
+
+# ---------------------------------------------------------------------------
+# Mutantes
+# ---------------------------------------------------------------------------
+copy_driver "$SANDBOX/setup.src.sh"
+
+mut_omit() {
+  local label="$1" asid="$2" signal="$3" expr="$4"
+  caso "mutante $label: omitir $asid se pone rojo"
+  reset_art
+  local mut="$SANDBOX/setup-$label.sh"
+  if sed_must_change "$SANDBOX/setup.src.sh" "$mut" "$expr" "$label"; then
+    bash -n "$mut" || { malo "$label: mutante no parsea"; return; }
+    out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail setup-autopilot "$asid" "$signal" "$rc"
+  fi
+}
+
+mut_omit omit_q1_merge map_merge 'true' \
+  '/assert:map_merge/,/assert:map_merge_end/d'
+mut_omit omit_q2_despliega map_despliega 'publica' \
+  '/assert:map_despliega/,/assert:map_despliega_end/d'
+mut_omit omit_q3_salud map_salud 'pty.example.test' \
+  '/assert:map_salud/,/assert:map_salud_end/d'
+mut_omit omit_q4_sve map_sve 'false' \
+  '/assert:map_sve/,/assert:map_sve_end/d'
+mut_omit omit_q5_telegram map_telegram 'true' \
+  '/assert:map_telegram/,/assert:map_telegram_end/d'
+mut_omit omit_questions_order questions_order '1/5' \
+  '/assert:questions_order/,/assert:questions_order_end/d'
+mut_omit omit_defaults_unknown defaults_despliega 'unknown' \
+  '/assert:defaults_despliega/,/assert:defaults_despliega_end/d'
+mut_omit omit_lock_guard lock_blocks '3|LOCK|lock' \
+  '/assert:lock_blocks/,/assert:lock_blocks_end/d'
+mut_omit omit_timeout_cleanup timeout_no_lock 'sin lock|no lock|ausente|liberado' \
+  '/assert:timeout_no_lock/,/assert:timeout_no_lock_end/d'
+
+caso "mutante accept_pipe_as_pty: tratar pipe como PTY se pone rojo"
+reset_art
+mut="$SANDBOX/setup-accept-pipe.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's/SAIKIT_FM_PIPE_IS_PTY=0/SAIKIT_FM_PIPE_IS_PTY=1/' \
+  "accept_pipe_as_pty"
+then
+  bash -n "$mut" || malo "accept_pipe_as_pty: mutante no parsea"
+  out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail setup-autopilot pipe_not_pty 'pipe|not.pty|no.pty|defaults' "$rc"
+fi
+
+caso "mutante skip_killpg: timeout sin kill/reap se pone rojo"
+reset_art
+if [ -f "$PTY" ]; then
+  mutp="$SANDBOX/pty-skip-kill.py"
+  if sed_must_change "$PTY" "$mutp" \
+    's/do_killpg = True/do_killpg = False/' \
+    "skip_killpg"
+  then
+    PYTHONDONTWRITEBYTECODE=1 python3 -c \
+      "import ast,pathlib; ast.parse(pathlib.Path(r'$mutp').read_text(encoding='utf-8'))" \
+      || malo "skip_killpg: mutante no parsea"
+    out="$(ctrl_pty "$mutp" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail setup-autopilot timeout_reaped 'reap|killed|timeout' "$rc"
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "FAIL: $fail aserciones" >&2
+  exit 1
+fi
+echo "OK: test_feature_map_setup"
+exit 0
