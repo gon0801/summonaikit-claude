@@ -307,6 +307,8 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         card = meta.get("card")
         desc_path = skill / "features" / f"{fid}.json"
         if status == "pending":
+            if mutate not in ("accept_pending",):
+                problems.append(f"{fid}: pending de implementación")
             owner = meta.get("owner_task")
             if not owner:
                 problems.append(f"{fid}: pending sin owner_task")
@@ -388,6 +390,10 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
                 if kind == "driver":
                     validate_driver_executor(skill, fid, executor)
                 elif kind == "legacy":
+                    # 19.17: leftover legacy is FAIL. skip_legacy_validate /
+                    # accept_legacy keep 19.1's discriminant and this one.
+                    if mutate not in ("skip_legacy_validate", "accept_legacy"):
+                        problems.append(f"{fid}: legacy restante")
                     validate_legacy_executor(skill, fid, executor, mutate)
                 else:
                     problems.append(f"{fid}: executor.kind desconocido: {kind!r}")
@@ -464,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
             "skip_triples",
             "accept_bad_json",
             "skip_legacy_validate",
+            "accept_pending",
+            "accept_legacy",
         ],
         help="test-only mutation hooks (discriminant)",
     )

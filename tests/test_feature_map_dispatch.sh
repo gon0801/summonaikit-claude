@@ -54,10 +54,14 @@ printf '%s' "$out" | grep -q 'gate-turn' || malo "falta gate-turn"
 printf '%s' "$out" | grep -q 'audit-ledger' || malo "falta audit-ledger"
 printf '%s' "$out" | grep -q 'check-deploy-log' || malo "falta check-deploy-log"
 
-caso "list-features incluye pending sin fingir ejecutor"
-printf '%s' "$out" | grep -q 'saikit-postmerge' || malo "falta pending saikit-postmerge"
-printf '%s' "$out" | grep -E 'saikit-postmerge' | grep -Eq 'pending|status=pending' \
-  || malo "saikit-postmerge no declara pending: $out"
+caso "list-features incluye blocked vivo y ninguna pending"
+printf '%s' "$out" | grep -q 'saikit-postmerge' || malo "falta saikit-postmerge"
+printf '%s' "$out" | grep -E 'id=saikit-postmerge' | grep -q 'status=active' \
+  || malo "saikit-postmerge no esta active: $out"
+printf '%s' "$out" | grep -q 'status=pending' \
+  && malo "list-features aun declara pending: $out"
+printf '%s' "$out" | grep -E 'id=merge-happy-path' | grep -q 'status=blocked' \
+  || malo "merge-happy-path no sale blocked: $out"
 
 # ---------------------------------------------------------------------------
 # drive <id> sintetico: PASS/0 FAIL/1 unknown/3 + evidencia
@@ -142,14 +146,14 @@ fi
 # ---------------------------------------------------------------------------
 # Precondicion bloqueada no es PASS
 # ---------------------------------------------------------------------------
-caso "drive pending (sin ejecutor) no es PASS"
+caso "drive blocked (merge-happy-path) no es PASS"
 reset_art
-out="$(ctrl drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
-[ "$rc" -ne 0 ] || malo "drive pending no debe PASS/0: $out"
+out="$(ctrl drive merge-happy-path 2>&1)" && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || malo "drive blocked no debe PASS/0: $out"
 [ "$rc" -eq 3 ] || [ "$rc" -eq 1 ] \
-  || malo "drive pending exit $rc (se espera unknown/3 o FAIL/1): $out"
-printf '%s' "$out" | grep -Eqi 'BLOCKED|pending|unknown|sin ejecutor|blocked' \
-  || malo "drive pending sin motivo: $out"
+  || malo "drive blocked exit $rc (se espera unknown/3 o FAIL/1): $out"
+printf '%s' "$out" | grep -Eqi 'BLOCKED|pending|unknown|sin ejecutor|blocked|instancia' \
+  || malo "drive blocked sin motivo: $out"
 [ "$rc" -eq 0 ] && malo "blocked no puede ser PASS"
 
 caso "drive activo sin instancia (doctor faltante) no es PASS"

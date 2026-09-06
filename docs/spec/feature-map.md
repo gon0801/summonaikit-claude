@@ -38,7 +38,8 @@ y sello propios. Los dos recorridos se complementan; ninguno acredita al otro.
   `scripts/lib/`. En 19.1–19.3 se admite `executor.kind: legacy` únicamente
   para las cuatro entradas actuales: el lint verifica su comando y función
   existentes en el controlador mediante una lista explícita. 19.4 las migra
-  a archivos de driver y 19.17 rechaza entradas legacy restantes. No se acepta
+  a archivos de driver y 19.17 rechaza entradas legacy restantes y cualquier
+  `status: pending` de implementación. No se acepta
   un nombre inventado como ejecutor. Ficha sin ejecutor y ejecutor público
   huérfano son FAIL.
 - Se conservan `drive-install-dry-run`, `drive-gate-scenario [name]`,

@@ -43,3 +43,7 @@ Preconditions:
   feature drive — use one scenario at a time here.
 - The sentinel is exactly `-saikit` with word boundaries; substrings inside
   other tokens must not arm (covered by other fixtures; do not invent prompts).
+- 18.27: Grok headless (`-p`) can exit without a receipt. The Stop hatch now
+  holds 9/9 measured blocks (strict wake form; DELEGATED needs in-flight
+  work), but teardown may skip the wake-round Stop and a receipt is not
+  promised on every headless exit. Merge stays fail-closed without it.

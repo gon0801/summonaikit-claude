@@ -64,4 +64,21 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Capture synthetic payloads](./capture-payloads.md) covers `tools/capture-payloads.sh`.
 - [Record a decision and a blast](./decision-blast.md) covers `tools/saikit-decision.sh` and `tools/saikit-blast.sh` on a private fixture. Agents do not write these artifacts automatically.
 - [Stage a hook by project override](./stage-override.md) covers `tools/stage-override.sh` on a disposable lab; source and state stay in the lab and the synthetic external profile stays intact.
-- [Live merge happy path (preconditions)](./merge-happy-path.md) inventories the live merge measurement; without a new authorization and a concrete disposable destination it stays unknown/BLOCKED and never calls GitHub.
+- [Live merge happy path (preconditions)](./merge-happy-path.md) inventories the live merge measurement; without a new authorization and a concrete disposable destination it stays unknown/BLOCKED and never calls GitHub. Inventariado; no observado.
+
+## Phase limits (18.27 / 18.26 / 18.10)
+
+These cards consume the measured Phase 18 closeout; they do not re-open those
+rows.
+
+- **18.26:** the verdict seal stays on the emitting session. A newer child
+  `verified:` or mtime does not credit the parent. In the measured Grok path
+  the merge stays manual.
+- **18.27:** the headless Stop hatch holds the measured blocks (strict wake
+  form; DELEGATED needs in-flight work). A receipt is not promised on every
+  headless exit; merge stays fail-closed without it.
+- **18.10:** guide/README/spec closed with those limits. Green⇒merge was
+  never observed live. Live merge remains inventariado; no observado.
+
+`verify/` is a separate product Drive. A skill PASS does not refresh that
+seal and does not mean the Spanish map is current.

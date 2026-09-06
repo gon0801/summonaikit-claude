@@ -4,6 +4,8 @@ Live merge happy path (preconditions) inventories the operator's live merge
 measurement. Without a new authorization and a concrete disposable destination
 it returns `unknown`/`BLOCKED` and makes no GitHub call. Preparing the manual
 procedure does not authorize running it. Live measurement stays Optional.
+Status: inventariado; no observado. Phase 18 closeout (18.10) keeps that
+honesty: green⇒merge was never seen live.
 
 ## Sub-features
 
@@ -53,6 +55,12 @@ Preconditions:
   `drive saikit-merge` as `merge-happy-path`.
 - Do not transfer a child reviewer seal, log, or `veredicto_sha256` onto the
   parent because the child file is newer or the parent already shows
-  `verified:` (18.26). There is no bypass.
+  `verified:` (18.26). There is no bypass. In the measured Grok path the
+  merge stays manual.
+- 18.27 fixed the headless Stop hatch (wake form + DELEGATED needs in-flight
+  work) and still does not guarantee a receipt on every headless exit. Merge
+  stay fail-closed without the receipt; ceremony closeout is best-effort.
+- 18.10 closed the phase docs/guide with those limits: inventariado; no
+  observado. A skill PASS here is not a live merge.
 - Do not run this against live `~/.claude`, `~/.grok`, `~/.dsh`, or
   `~/.codex`. Do not merge. Preparing the procedure is not permission.
