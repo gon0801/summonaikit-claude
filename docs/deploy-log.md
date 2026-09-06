@@ -7,6 +7,34 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #217 (19.3: evidencia v1 y dispatch) — hooks NO-OP
+
+- **Merge:** `eddb11cb4ff1255ba5a22081632cb50b15f8d034`, head
+  `8413152969253e50ef6075933876803c8e62b11b`; gate SUCCESS en el
+  [run 34049757072](https://github.com/gon0801/summonaikit-claude/actions/runs/34049757072).
+- **Deploy (10:55 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro hooks `YA AL DIA` (NO-OP), sha256 sin cambios:
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` exit 0, cuatro copias al día y
+  registro ok; `check-hook-registration.sh` y `audita-ledger.sh` exit 0.
+- **Cierre:** filas 19.1–19.3 en `cc:完了` en el mismo PR; skill verify
+  gana evidencia/dispatch. Siguiente: 19.4 aserciones reales. Operador Gon
+  (sesión Cursor).
+
+## 2026-09-06 — PR #215 (19.2: aislamiento obligatorio del feature map) — hooks NO-OP
+
+- **Merge:** `30d5521bfa2356d3aebfacb2dcd1be1c4dc0874f`, head
+  `191395663b57d1ddcbda9b16e7c6dbc84ed695be`; gate SUCCESS en el
+  [run 34047523198](https://github.com/gon0801/summonaikit-claude/actions/runs/34047523198).
+- **Deploy (10:55 PDT):** mismo ciclo post-#217; instaladores exit 0,
+  cuatro copias `YA AL DIA` (NO-OP), sha256
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` y
+  `check-hook-registration.sh` exit 0 (compartidos con #217).
+- **Cierre:** runtime `state.json` + guards de aislamiento en master.
+  Fila 19.2 cerrada por el lead tras el merge. Operador Gon (sesión Cursor).
+
 ## 2026-09-06 — PR #210 (18.10: cierre documental Phase 18) — hooks NO-OP
 
 - **Merge:** `171a3345f17d97c45fc045921eb33ae601057b85`, head
