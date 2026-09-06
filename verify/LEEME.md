@@ -1,15 +1,19 @@
 ---
-generado: 2026-09-05 · 7d506c5d38f040bc8be797c1137e40428a99d9c6
+generado: 2026-09-05 · ef6cc8b81c78acb90e1c410de8596a0f9dd1ad10
 verify_app: drive
 ---
 # Mapa de funciones de la app
 
-Describe aca las 3 a 5 funciones principales de la app, EN ESPANOL, para alguien
-que no lee codigo (p.ej. "entrar", "crear X", "ver la lista", "cerrar sesion").
+Estas son las funciones principales y su comprobacion local en `verify/`.
 
 1. **Vigilar el trabajo de la IA**: cada vez que una IA trabaja en la compu, el
    guardian revisa que cierre bien su turno (con un recibo legible) antes de
    soltarla; si falta, bloquea el cierre.
+   El Drive mide el armado: sin `-saikit`, tres pasos sin contrato ni estado;
+   con `-saikit`, contrato inyectado y estado persistido. Usa los escenarios
+   golden `01-sin-armar` y `02-armado-contrato` con copias y HOME desechables.
+   El rechazo de un cierre armado sin recibo queda en la bateria completa del
+   gate; estos dos escenarios no lo ejercitan.
 2. **Instalar o actualizar el guardian** en los perfiles de las IAs, de forma
    segura: nunca pisa un archivo que no reconoce y siempre deja respaldo.
 3. **Revisar que la libreta de tareas este al dia**: avisa si hay tareas
