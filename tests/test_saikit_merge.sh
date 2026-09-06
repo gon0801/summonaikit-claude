@@ -22,6 +22,13 @@
 #   - --revert-de: inverso exacto de la punta con trailer => mergea; arbol
 #     distinto (incl. solo-whitespace, que patch-id no ve) / commit extra /
 #     sin trailer / no es la punta => NO.
+#   - 18.25: el gate atraviesa la salida de gh bajo el terminal del agente:
+#     ANSI tty-modelado (SAIKIT_GH_ANSI=1) y CLICOLOR_FORCE=1 heredado del
+#     harness no cambian el veredicto — el script neutraliza el color en un
+#     punto y el falso COMPRUEBA esa condicion (no responde siempre limpio:
+#     sin el export o sin el unset, la mutacion correspondiente da rojo).
+#     gh pr merge queda fuera (su stdout no se parsea) y gh pr checks no
+#     existe en el script (se usa run list, hallazgo 18.1 §2.1).
 #
 # INFRAESTRUCTURA: git REAL en sandbox (origin bare local alcanzado via
 # url.<path>.insteadOf de la URL github que espera el script) y gh FALSO que
@@ -98,15 +105,136 @@ sb_reset() {
 # gh falso del banco de la 18.4: responde SOLO las formas que usa
 # tools/saikit-merge.sh, con el argv grabado para que los casos assertionen
 # sobre el comando exacto que se disparo.
+#
+# 18.25: ademas modela el CONTRATO MEDIDO del color de gh (2.98.0, 2026-09-05)
+# para ejercitar el entorno hostil del agente: con CLICOLOR_FORCE=1 heredado
+# gh colorea y pretty-imprime su --json incluso a un pipe y LE GANA a
+# NO_COLOR; con NO_COLOR=1 (o CLICOLOR=0) responde limpio; con stdout-tty
+# colorea. El falso COMPRUEBA esa condicion — NO responde siempre limpio,
+# sino no probaria el neutralizado del script.
 set -u
 [ -n "${SAIKIT_GH_LOG:-}" ] && printf 'gh %s\n' "$*" >> "$SAIKIT_GH_LOG"
 fix="${SAIKIT_GH_FIX:?}"
+
+# forma de ESTA llamada, para el knob de aislamiento SAIKIT_GH_ANSI_SOLO.
+forma=""
 case "$1 $2" in
-  "repo view") cat "$fix/repo.json"; exit 0 ;;
-  "api user")  cat "$fix/user.json"; exit 0 ;;
-  "run list")  cat "$fix/runs.json"; exit 0 ;;
+  "repo view") forma=repo ;;
+  "api user")  forma=user ;;
+  "run list")  forma=runs ;;
   "pr view")
-    case "$*" in *mergeCommit*) cat "$fix/pr-merge.json" ;; *) cat "$fix/pr.json" ;; esac
+    case "$*" in *mergeCommit*) forma=pr_merge ;; *) forma=pr ;; esac
+    ;;
+esac
+
+# gh_colorea: el contrato medido, EN ESTE ORDEN:
+#   1. CLICOLOR_FORCE=1 manda sobre todo (le gana a NO_COLOR; medido).
+#   2. NO_COLOR=1 o CLICOLOR=0 => limpio (el neutralizado del script).
+#   3. si no: color solo con stdout-tty — aqui lo modela SAIKIT_GH_ANSI=1
+#      (sin esa var, el pipe del $(...) del script recibe JSON limpio).
+# $1 = 0 desactiva la regla 3 (modo SAIKIT_GH_ANSI_SOLO): la forma pedida
+# colorea salvo que las reglas 1-2 lo impidan — el knob AISLA la llamada,
+# no re-modela el tty.
+gh_colorea() {
+  if [ "${CLICOLOR_FORCE:-0}" = 1 ]; then return 0; fi
+  if [ "${NO_COLOR:-0}" = 1 ] || [ "${CLICOLOR:-1}" = 0 ]; then return 1; fi
+  if [ "$1" = 1 ]; then [ "${SAIKIT_GH_ANSI:-0}" = 1 ]; return; fi
+  return 0
+}
+
+colorear=0
+if [ -n "${SAIKIT_GH_ANSI_SOLO:-}" ]; then
+  # knob de aislamiento: colorea SOLO la forma pedida y SIN la regla 3; las
+  # reglas 1-2 siguen mandando (con FORCE colorea igual, neutralizado no).
+  if [ "$SAIKIT_GH_ANSI_SOLO" = "$forma" ]; then
+    gh_colorea 0 && colorear=1
+  fi
+else
+  gh_colorea 1 && colorear=1
+fi
+
+emitir() {  # $1 = fixture: la forma coloreada medida o el crudo del fixture
+  if [ "$colorear" = 1 ]; then coloriza "$1"; else cat "$1"; fi
+}
+
+# coloriza: reproduce la forma EXACTA medida de gh con color: pretty con
+# indent 2 espacios por nivel; llaves/corchetes/comas/dospuntos en 1;37;
+# claves en 1;34; strings-valor en 32; numeros/true/false/null desnudos;
+# contenedor vacio en una linea. El ESC entra por -v (portable BWK awk y
+# gawk; \033 literal dentro del programa awk NO lo es).
+coloriza() {
+  awk -v esc="$(printf '\033')" '
+    function sangria(d,  k, s) { s = ""; for (k = 0; k < d; k++) s = s "  "; return s }
+    function pun(s) { return esc "[1;37m" s esc "[m" }
+    function cla(s) { return esc "[1;34m" s esc "[m" }
+    function val(s) { return esc "[32m" s esc "[m" }
+    {
+      n = length($0); i = 1; depth = 0; out = ""
+      while (i <= n) {
+        c = substr($0, i, 1)
+        if (c == "\"") {
+          j = i + 1; s = "\""
+          while (j <= n) {
+            ch = substr($0, j, 1)
+            if (ch == "\\") { s = s ch substr($0, j + 1, 1); j += 2; continue }
+            s = s ch
+            if (ch == "\"") break
+            j++
+          }
+          i = j + 1
+          # clave o valor: si el proximo char no-espacio es ":", es clave.
+          k = i
+          while (k <= n && substr($0, k, 1) == " ") k++
+          out = out ((substr($0, k, 1) == ":") ? cla(s) : val(s))
+        } else if (c == "{") {
+          if (substr($0, i + 1, 1) == "}") { out = out pun("{}"); i += 2; continue }
+          depth++
+          out = out pun("{") "\n" sangria(depth)
+          i++
+        } else if (c == "}") {
+          depth--
+          out = out "\n" sangria(depth) pun("}")
+          i++
+        } else if (c == "[") {
+          if (substr($0, i + 1, 1) == "]") { out = out pun("[]"); i += 2; continue }
+          depth++
+          out = out pun("[") "\n" sangria(depth)
+          i++
+        } else if (c == "]") {
+          depth--
+          out = out "\n" sangria(depth) pun("]")
+          i++
+        } else if (c == ",") {
+          out = out pun(",") "\n" sangria(depth)
+          i++
+        } else if (c == ":") {
+          out = out pun(":") " "
+          i++
+        } else if (c == " ") {
+          i++
+        } else {
+          # numero / true / false / null: desnudo hasta el delimitador.
+          j = i; s = ""
+          while (j <= n) {
+            ch = substr($0, j, 1)
+            if (ch == "," || ch == "}" || ch == "]" || ch == " ") break
+            s = s ch; j++
+          }
+          out = out s
+          i = j
+        }
+      }
+      printf "%s\n", out
+    }
+  ' "$1"
+}
+
+case "$1 $2" in
+  "repo view") emitir "$fix/repo.json"; exit 0 ;;
+  "api user")  emitir "$fix/user.json"; exit 0 ;;
+  "run list")  emitir "$fix/runs.json"; exit 0 ;;
+  "pr view")
+    case "$*" in *mergeCommit*) emitir "$fix/pr-merge.json" ;; *) emitir "$fix/pr.json" ;; esac
     exit 0 ;;
   "pr merge")
     if [ -f "$fix/merge-fail" ]; then cat "$fix/merge-fail"; exit 1; fi
@@ -125,6 +253,9 @@ GHEOF
   : > "$SAIKIT_ORDEN_LOG"
   export SAIKIT_MERGE_RETRY_SEG=0
   export PATH="$SB/bin:$PATH"
+  # 18.25: el banco no hereda el entorno de color del corredor (ni un knob
+  # del falso dejado por un caso anterior): cada caso arranca determinista.
+  unset NO_COLOR CLICOLOR CLICOLOR_FORCE SAIKIT_GH_ANSI SAIKIT_GH_ANSI_SOLO
 
   refix
 }
@@ -217,6 +348,38 @@ caso "feliz_rama_main_funciona_igual"
   if merge_disparado; then _mal "mergeo sin --confirmado (rama main)"; fi
 }
 fin_caso "feliz_rama_main_funciona_igual"
+
+caso "feliz_bajo_terminal_ansi_no_merguea_por_presentacion"
+{
+  # 18.25: el entorno del agente modela un stdout con terminal; el falso
+  # colorea su --json y el gate tiene que atravesarlo igual: el neutralizado
+  # del script (NO_COLOR/CLICOLOR) come el color ANTES de que el parser
+  # estricto vea un solo ESC.
+  export SAIKIT_GH_ANSI=1
+  correr --confirmado
+  unset SAIKIT_GH_ANSI
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  _contiene "registro del merge" "$(cat ".saikit/veredictos/$SHA.merge" 2>/dev/null)" "f000000000000000000000000000000000000000"
+  # el gate atraveso TODAS las llamadas gh del barrido bajo el entorno hostil
+  for f in "^gh repo view" "^gh pr view --json number" "^gh api user" "^gh run list" "^gh pr view 7 --json mergeCommit"; do
+    grep -Eq -- "$f" "$SAIKIT_GH_LOG" || _mal "el gh log no trajo la forma [$f]"
+  done
+}
+fin_caso "feliz_bajo_terminal_ansi_no_merguea_por_presentacion"
+
+caso "feliz_bajo_color_forzado_del_harness"
+{
+  # 18.25: el mecanismo EXACTO medido en vivo (grok headless): el harness
+  # hereda CLICOLOR_FORCE=1 y gh colorea incluso a un pipe (y le gana a
+  # NO_COLOR); el script lo unset-ea y el falso responde limpio.
+  export CLICOLOR_FORCE=1
+  correr --confirmado
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+fin_caso "feliz_bajo_color_forzado_del_harness"
 
 caso "confirmado_repite_el_gate_base_movio_no_merguea"
 {
@@ -842,6 +1005,28 @@ c_autor() {
   if merge_disparado; then _mal "mergeo un PR de otro autor"; fi
 }
 
+c_ansi() {
+  # 18.25: sin el export neutralizador, el falso colorea bajo el terminal
+  # modelado y el parser estricto rechaza por PRESENTACION.
+  CASO_ROJO=0; sb_reset master
+  export SAIKIT_GH_ANSI=1
+  correr --confirmado
+  unset SAIKIT_GH_ANSI
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
+c_ansi_force() {
+  # 18.25: sin el unset, CLICOLOR_FORCE heredado colorea aunque el script
+  # exporte NO_COLOR (FORCE le gana; medido).
+  CASO_ROJO=0; sb_reset master
+  export CLICOLOR_FORCE=1
+  correr --confirmado
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
 c_revert_trailer() {
   CASO_ROJO=0; monta_revert sin-trailer
   correr --revert-de "$MC" --confirmado
@@ -901,6 +1086,8 @@ revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer
 revert_arbol_por_patchid	s|\[ "\$T_REVERT" = "\$T_PREVIO" \]|true|	c_revert_arbol
 revert_punta_floja	s|\[ "\$PUNTA" = "\$REVERT_DE" \]|true|	c_revert_punta
 registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
+sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_ansi
+sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
 MUTS
 
 if [ "$fail" -ne 0 ]; then
