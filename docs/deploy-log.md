@@ -7,6 +7,21 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #253 (19.17: integración feature-map) — hooks NO-OP
+
+- **Merge:** `3d151b822dfdf9955f89d5417fe2656449feaca6`, head
+  `82e5e29cc3d0977db1598dd4e600b31d8baaf055`; gate SUCCESS en el
+  [run 34062153928](https://github.com/gon0801/summonaikit-claude/actions/runs/34062153928).
+- **Deploy (14:55 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro hooks `YA AL DIA` (NO-OP), sha256 sin cambios:
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` exit 0, cuatro copias al día y
+  registro ok; `check-hook-registration.sh` exit 0; `audita-ledger.sh` exit 0
+  (antes de cerrar 19.17 en Plans; el cierre va en el mismo ciclo).
+- **Cierre:** Phase 19 feature-map integrado; vivo inventariado y no
+  observado; sello `verify/` no renovado. Operador Gon (sesión Cursor).
+
 ## 2026-09-06 — PR #217 (19.3: evidencia v1 y dispatch) — hooks NO-OP
 
 - **Merge:** `eddb11cb4ff1255ba5a22081632cb50b15f8d034`, head
