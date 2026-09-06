@@ -162,8 +162,13 @@ for fid, want in (
     ("check-secrets", "active"),
     ("capture-payloads", "active"),
     ("decision-blast", "active"),
+<<<<<<< HEAD
     ("stage-override", "active"),
     ("merge-happy-path", "pending"),
+=======
+    ("stage-override", "pending"),
+    ("merge-happy-path", "blocked"),
+>>>>>>> a83d4ff (feat(verify): inventory live merge preconditions without running them)
     ("install-guardian", "active"),
     ("routing-recipes", "active"),
     ("verify-app", "active"),

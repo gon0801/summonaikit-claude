@@ -215,9 +215,8 @@
       "execution_mode": "sandbox"
     },
     "merge-happy-path": {
-      "status": "pending",
-      "owner_task": "19.16",
-      "card": null,
+      "status": "blocked",
+      "card": "features/merge-happy-path.md",
       "execution_mode": "live",
       "requirements": [
         {"kind": "binary", "name": "gh", "access": "live"},
