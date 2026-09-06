@@ -93,9 +93,13 @@ esac
 # archivo que se llamara `out` dejaria de vigilarse.
 manifiesto() {
   ( cd "$1" 2>/dev/null || return 0
+    # 18.22: .DS_Store es metadata de Finder en macOS: el host la reescribe al
+    # navegar el arbol mientras la suite corre (medido: LEAK falso apuntando a
+    # .cursor/skills/.../.DS_Store); misma razon que los directorios podados
+    # de arriba.
     find . -type d \( -name .git -o -name .claude -o -name .harness-mem -o -name out \
                       -o -name sandbox -o -name node_modules \) -prune -o \
-           -type f -print0 2>/dev/null \
+         -type f ! -name .DS_Store -print0 2>/dev/null \
       | sort -z | xargs -0 -r cksum 2>/dev/null )
 }
 

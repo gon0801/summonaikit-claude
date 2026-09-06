@@ -8,6 +8,7 @@ home_previo="$HOME"
 tmp_previo="${TMPDIR:-}"
 
 . "$here/lib/sandbox.sh"
+. "$here/lib/skip_caso.sh"
 sandbox_init
 
 fail=0
@@ -31,10 +32,25 @@ esac
 
 caso "el temporal del proceso tambien cae adentro del sandbox"
 [ "${TMPDIR:-}" != "$tmp_previo" ] || malo "TMPDIR no se redirigio"
+case "${TMPDIR:-}" in
+  "$SANDBOX"/*) ;;
+  *) malo "TMPDIR no quedo adentro del sandbox: ${TMPDIR:-vacio}" ;;
+esac
+t="$(mktemp -d "$TMPDIR/probe-XXXXXX")"
+case "$t" in
+  "$SANDBOX"/*) ;;
+  *) malo "mktemp CON template cayo fuera del sandbox: $t" ;;
+esac
 t="$(mktemp -d)"
 case "$t" in
   "$SANDBOX"/*) ;;
-  *) malo "mktemp -d cayo fuera del sandbox: $t" ;;
+  *)
+    # 18.22: el mktemp de BSD SIN template ignora el TMPDIR exportado (cae en
+    # el confstr de Darwin, /var/folders/...; medido) — el instrumento de esta
+    # sub-asercion no existe en esta plataforma. Skip declarado por el canal
+    # de la 18.19 con la herramienta nombrada; NO es un verde.
+    saikit_skip_caso sandbox-mktemp-bare 'GNU mktemp ausente: BSD mktemp sin template ignora TMPDIR (cae en /var/folders)'
+    ;;
 esac
 
 caso "un ~/.claude/hooks/... escrito por descuido no toca el perfil vivo"

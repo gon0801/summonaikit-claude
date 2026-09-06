@@ -135,6 +135,30 @@ out="$(bash "$run_sh" "$SANDBOX/churn" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "el churn de .claude/ y out/ no deberia romper la corrida: $out"
 printf '%s' "$out" | grep -q 'LEAK' && malo "reporto fuga por el tooling del host: $out"
 
+# ----------------------- 5-ter) el .DS_Store de Finder NO es fuga (18.22)
+# Medido en macOS durante la 18.22: el Finder reescribe .DS_Store en los
+# directorios que navega MIENTRAS la suite corre (el LEAK falso apuntaba a
+# .cursor/skills/.../.DS_Store), y el manifiesto lo veia como contenido del
+# repo modificado a mitad de corrida. Mismo trato que el churn de .claude/ y
+# out/ de arriba: metadata del host, no contenido versionado.
+caso "el .DS_Store que Finder reescribe NO se reporta como fuga"
+mkdir -p "$SANDBOX/dss/tests/subdir"
+printf 'antes\n' > "$SANDBOX/dss/.DS_Store"
+printf 'antes\n' > "$SANDBOX/dss/tests/subdir/.DS_Store"
+cat > "$SANDBOX/dss/tests/test_ds.sh" <<'SH'
+#!/usr/bin/env bash
+raiz="$(cd "$(dirname "$0")/.." && pwd)"
+# Reescrito y tambien CREADO: el manifiesto detecta las dos cosas; el find
+# tiene que ignorar ambas por nombre.
+printf 'despues\n' > "$raiz/.DS_Store"
+printf 'despues\n' > "$raiz/tests/subdir/.DS_Store"
+printf 'nuevo\n'   > "$raiz/tests/.DS_Store"
+exit 0
+SH
+out="$(bash "$run_sh" "$SANDBOX/dss" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "el churn de .DS_Store no deberia romper la corrida: $out"
+printf '%s' "$out" | grep -q 'LEAK' && malo "reporto fuga por el .DS_Store de Finder: $out"
+
 # ------------------------------------- 6) contencion del HOME (Core Rule 4)
 caso "test que escribe en \$HOME => queda contenido, no toca el HOME del invocador"
 mkdir -p "$SANDBOX/homeleak/tests" "$SANDBOX/senuelo-home"

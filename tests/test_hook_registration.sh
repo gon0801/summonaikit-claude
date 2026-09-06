@@ -34,6 +34,15 @@ fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
+# 18.22: `python` a secas no existe en un macOS pelado (solo python3) — los
+# heredocs fallaban, los fixtures derivados quedaban vacios y el checker leia
+# «unknown — ningun settings legible» (rc 4). Mismo orden que el tool bajo
+# prueba: python3 primero, python despues.
+py_bin=''
+for c in python3 python; do
+  if command -v "$c" >/dev/null 2>&1; then py_bin="$c"; break; fi
+done
+
 # Registro completo: las 3 fases que el hook necesita, con un matcher de
 # PostToolUse SANO (cubre Agent). Desde la Task 3.7 el verificador reporta si el
 # matcher no cubre Agent (CORRECCION 2/14); el fixture "completo/sano" tiene que
@@ -114,7 +123,7 @@ printf '%s' "$out" | grep -qi 'Stop'             || malo "no nombra la fase Stop
 
 # --------------------------------------------------------------- 3) parcial
 caso "registro PARCIAL (falta Stop) => nombra solo la que falta"
-python - "$tmp/completo.json" "$tmp/parcial.json" <<'PY'
+"$py_bin" - "$tmp/completo.json" "$tmp/parcial.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 del d['hooks']['Stop']
@@ -252,7 +261,7 @@ if out_p="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"; then rc_p=0; el
 
 # ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
 caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"
-python - "$tmp/completo.json" "$tmp/parcial2.json" <<'PY'
+"$py_bin" - "$tmp/completo.json" "$tmp/parcial2.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 del d['hooks']['Stop']
@@ -383,7 +392,7 @@ out="$(bash "$tool" --zcode-config "$tmp/zc-completo.json" 2>&1)"; rc=$?
 
 # -------------------------------- A3.2) parcial (falta Stop)
 caso "zcode: sin Stop => INCOMPLETO y nombra solo Stop"
-python - "$tmp/zc-completo.json" "$tmp/zc-sin-stop.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-sin-stop.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 del d['hooks']['events']['Stop']
@@ -396,7 +405,7 @@ printf '%s' "$out" | grep -qi 'UserPromptSubmit' && malo "reporta UPS que SI est
 
 # -------------------------------- A3.3) matcher en UPS/Stop => reporta fuerte
 caso "zcode: UPS con matcher => reporta fuerte (matcher ahi es el error de la DoD)"
-python - "$tmp/zc-completo.json" "$tmp/zc-ups-match.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-ups-match.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['events']['UserPromptSubmit'][0]['matcher'] = 'Task'
@@ -408,7 +417,7 @@ printf '%s' "$out" | grep -qi 'UserPromptSubmit' || malo "debe nombrar UserPromp
 printf '%s' "$out" | grep -qi 'matcher' || malo "debe mencionar el matcher indebido: $out"
 
 caso "zcode: Stop con matcher vacio (\"\") => reporta fuerte igual (r2.4)"
-python - "$tmp/zc-completo.json" "$tmp/zc-stop-empty.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-stop-empty.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['events']['Stop'][0]['matcher'] = ''
@@ -421,7 +430,7 @@ printf '%s' "$out" | grep -qi 'matcher' || malo "la clave matcher presente (aun 
 
 # -------------------------------- A3.4) alias Task<->Agent
 caso "zcode: PTU matcher 'Task' solo => SILENCIO (el alias cubre Agent)"
-python - "$tmp/zc-completo.json" "$tmp/zc-task-only.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-task-only.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['events']['PostToolUse'][0]['matcher'] = 'Task'
@@ -432,7 +441,7 @@ out="$(bash "$tool" --zcode-config "$tmp/zc-task-only.json" 2>&1)"; rc=$?
 [ -z "$out" ] || malo "Task cubre Agent via alias en zcode => silencio: $out"
 
 caso "zcode: PTU matcher 'Bash' solo => reporta (no cubre Task ni Agent)"
-python - "$tmp/zc-completo.json" "$tmp/zc-bash-only.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-bash-only.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['events']['PostToolUse'][0]['matcher'] = 'Bash'
@@ -451,7 +460,7 @@ printf '%s' "$out" | grep -qi 'unknown' || malo "ilegible => unknown"
 printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "ilegible no debe afirmarse como INCOMPLETO"
 
 caso "zcode: enabled=\"yes\" (string) => reporta fuerte (no es JSON true)"
-python - "$tmp/zc-completo.json" "$tmp/zc-yes.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-yes.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['enabled'] = 'yes'
@@ -462,7 +471,7 @@ out="$(bash "$tool" --zcode-config "$tmp/zc-yes.json" 2>&1)"; rc=$?
 printf '%s' "$out" | grep -qi 'enabled' || malo "debe avisar que enabled no es true: $out"
 
 caso "zcode: enabled=1 (numero) => reporta fuerte"
-python - "$tmp/zc-completo.json" "$tmp/zc-one.json" <<'PY'
+"$py_bin" - "$tmp/zc-completo.json" "$tmp/zc-one.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 d['hooks']['enabled'] = 1

@@ -44,7 +44,9 @@ if [ ! -s "$base" ]; then
   malo "no hay linea base guardada en tests/golden/baseline.txt"
 else
   n_base="$(grep -c '^=== escenario ' "$base" 2>/dev/null || echo 0)"
-  n_dir="$(find "$escenarios" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | wc -l)"
+  # 18.22: el wc -l de BSD padds con espacios y la comparacion de abajo es de
+  # strings («55» != «     55», medido) — se pela el padding antes de comparar.
+  n_dir="$(find "$escenarios" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | wc -l | tr -d ' ')"
   if [ "$n_base" -lt 1 ]; then
     malo "la linea base no registra ningun escenario"
   elif [ "$n_base" != "$n_dir" ]; then
