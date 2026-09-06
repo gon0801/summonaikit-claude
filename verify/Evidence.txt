@@ -1,3 +1,39 @@
+2026-09-06 UTC — Post-merge y deploy de PR #209 y PR #208.
+Fuente medida: 2d8136d2b630736f48d3ea6bc225a1b761cab05c (master).
+Merges: #209 a2ec23868f48cee0bf0aabdc677d14e355790ebe;
+#208 d45b564ebcab6ad50343a76f900faa45a419ef4c.
+El segundo PR se midio integrado con el primero: CI 34015171295,
+head 93aa689282c31569952357cb649afed703935979, 8/8 success incluido gate.
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/dn/dev/summonaikit-claude
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.67s ===============================
+Exit: 0. El fixture del Drive aisla HOME/USERPROFILE/TMPDIR y copia el hook.
+
+Deploy autorizado: install-hook.sh para claude y --host grok/dsh/codex,
+exit 0 en los ocho comandos (cuatro despues de cada merge).
+#209: cuatro YA AL DIA. #208: cuatro REPARADO con backup.
+Check posterior al segundo deploy (exit 0):
+[summonaikit] check: host=claude dest=/Users/dn/.claude/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=grok dest=/Users/dn/.grok/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=dsh dest=/Users/dn/.dsh/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=codex dest=/Users/dn/.codex/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)
+check-hook-registration.sh: exit 0, sin salida.
+bash tools/audita-ledger.sh
+[saikit] AUDITORIA DEL LEDGER: OK — ninguna fila en cc:TODO tiene trabajo ya mergeado en origin/master
+bash tools/check-deploy-log.sh
+[deploy-log] OK: 19 entradas juzgadas desde 2026-09-04, ordenadas, con norma y sin PR duplicado
+Ambos exit 0. El sello se actualiza al commit medido, sin regrabar el mapa.
+Limite de 18.26: sello local NO acredita merge automatico de Grok;
+el recorrido medido queda manual por falta de vinculo padre-hijo verificable.
+
 2026-09-06 UTC — Fix 18.26: aislamiento del sello entre sesiones.
 Fuente: 28cd19f9a0be5081d4f65e2231e7e513c73f7250.
 Comando desde /private/tmp/saikit-fix1826-A5k8LJ/worktree:
