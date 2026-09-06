@@ -7,6 +7,21 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #210 (18.10: cierre documental Phase 18) — hooks NO-OP
+
+- **Merge:** `171a3345f17d97c45fc045921eb33ae601057b85`, head
+  `81a7fb33e9561ccb3ffa99072f64515948a8da89`; gate SUCCESS en el
+  [run 34047038390](https://github.com/gon0801/summonaikit-claude/actions/runs/34047038390).
+- **Deploy (10:04 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro hooks `YA AL DIA` (NO-OP), sha256 sin cambios:
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` exit 0, cuatro copias al día y
+  registro ok; `check-hook-registration.sh` y `audita-ledger.sh` exit 0.
+- **Cierre:** fila 18.10 cerrada por el líder después del merge; documentos
+  integran 18.27 y mantienen los límites medidos. Descartable entregado al
+  operador, sin borrado. Gon autorizó terminar la entrega en esta sesión.
+
 ## 2026-09-06 — PR #212 (18.27: cierre Grok headless) — deploy REAL de las 4 copias
 
 - **Merge:** `1fe7afcb652bbc2f141a1dc9af13967a1d72efdb`, head
