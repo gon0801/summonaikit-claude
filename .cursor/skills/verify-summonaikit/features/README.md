@@ -59,3 +59,4 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Offer a minimum CI workflow](./ci-minimo.md) covers accept/reject of a pinned workflow without claiming a live Actions run.
 - [Install hosts and register them](./install-hosts.md) covers the four hook copies, zcode reuse, kimi profiles, and registration text.
 - [Route models and lock the recipe book](./routing-recipes.md) covers `tools/model-routing.sh` and `tools/gen-recetas-manifest.sh`.
+- [Record a decision and a blast](./decision-blast.md) covers `tools/saikit-decision.sh` and `tools/saikit-blast.sh` on a private fixture. Agents do not write these artifacts automatically.

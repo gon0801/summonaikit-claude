@@ -200,9 +200,9 @@
       "card": null
     },
     "decision-blast": {
-      "status": "pending",
-      "owner_task": "19.13",
-      "card": null
+      "status": "active",
+      "card": "features/decision-blast.md",
+      "execution_mode": "sandbox"
     },
     "verify-app": {
       "status": "pending",
