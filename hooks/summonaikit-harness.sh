@@ -295,6 +295,9 @@ TEST_RUNNER_WORD_RE='(^|[^A-Za-z0-9_.-])('"$TEST_RUNNER_RE"')([^A-Za-z0-9_.-]|\.
 # NO incluir "se corrio" suelto: el recibo que afirma que SI corrio la
 # bateria (_RECIBO_SIN_RETRO) debe seguir pidiendo evidencia.
 VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corrí|no se corrio|no se corrió|no se corrieron|no se ejecuto|no se ejecutó|no se ejecutaron|sin tests'
+TRAIL_SKIP_LABEL='TRAIL SKIP'
+TRAIL_TSV_CITE_RE='(\./)?\.saikit/decisiones/[A-Za-z0-9._-]+\.tsv'
+TRAIL_BLAST_CITE_RE='(\./)?\.saikit/findings/blast-[A-Za-z0-9._-]+\.json'
 
 # Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego). Via
 # ADICIONAL de credito de verificacion, SOLO en hosts donde el hook NO ve el
@@ -1231,6 +1234,12 @@ Autopilot lane (-saikit:autopilot):
 AUTOPILOT_P
 }
 
+trail_parrafo() {
+  cat <<'TRAIL_P'
+Full lane (-saikit): Close must cite concrete existing paths under the project root (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), written with bash "$HOME/.claude/saikit-tools/saikit-decision.sh" --append ... and bash "$HOME/.claude/saikit-tools/saikit-blast.sh" --write ...; a leftover file you did not cite does not count. Name TRAIL SKIP: <reason> as its own receipt line when there is no trail this turn. Fast lane (-saikit:fast) is exempt.
+TRAIL_P
+}
+
 # Task 10.12 -- el bloque de arriba (numerado 1-6, "1. Understand - ...")
 # describe las ETAPAS en prosa con guion, no la FORMA del recibo que el Stop
 # gate realmente lee (has_receipt_label exige que cada etiqueta EMPIECE su
@@ -1292,7 +1301,6 @@ Delegation rule:
   correctly-delegated turn still satisfies it.
 - You (the lead) handle the Understand step yourself and act as closer and retro: ask the user up front, then reconcile the subagents' evidence and write the final receipt in plain language.
 - The turn cannot end until an implementer-, verifier-, and reviewer-role subagent have each run, in that order.
-- Commit BEFORE dispatching the reviewer — the code AND the trail (.saikit/decisiones/<task>.tsv and the blast artifact) — so `git rev-parse HEAD` during the review is the sha of the tree under review: the sealed verdict cites that sha, and the merge cross-checks it against the PR head.
 - The adversary is an OPTIONAL fourth role, opt-in — a turn that does not dispatch it closes exactly as today. Delegate it between the verifier and the reviewer via $TOOL_HINT when the change touches auth, payments, migrations or pre-existing data, or this harness itself (the same bar that triggers a cross-review). It reports findings to an artifact under .saikit/findings/ and never repairs. When you ran an adversary this turn, dispatch the reviewer NAMING the artifact to adjudicate (e.g. "adjudica .saikit/findings/<file>.json"); if this turn did NOT run an adversary, the reviewer adjudicates nothing. Declared limit: an adversary whose invocation is never observed is indistinguishable from not invoked.
 - Subagent crash fallback: if a role subagent dispatch fails on infrastructure (usage limit / 429 / tool error), retry it ONCE. If it fails again, perform that role YOURSELF following its role definition, and declare it in the receipt with a line reading exactly "ROLE FALLBACK: <ROLE> (reason)" — the gate accepts that declaration in place of the dispatch. Never silently skip a role. A dispatch stuck for many minutes with no output counts as failed — abandon it and apply this same fallback.
 
@@ -1365,7 +1373,7 @@ Understand: in one or two plain sentences, what the user asked for, plus any que
 Implement: changed files and implementation summary; for any read/listing/reporting surface, state whether its data source already existed or is newly created and the assumption recorded in code; or why no code change was needed.
 Verify: exact commands/checks run and results, or an explicit skip that uses one of these phrases — not run, not executed, skipped, no corri, no se corrio, sin tests — plus a concrete reason. "No corri los candados" counts; "PASS" or od/wc alone does not.
 Review: findings, risks, or "no findings" with basis.
-Close: evidence summary and remaining gaps; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (.saikit/veredictos/<sha>.json). Say first what changes for the user, then how, then why; never invent a link, citation or command you did not produce or read this turn.
+Close: evidence summary and remaining gaps; cite the concrete trail and blast paths you wrote this turn (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json) or write TRAIL SKIP: <reason> as its own receipt line; state explicitly whether code was touched after the reviewer subagent last ran (yes/no); if you pushed a branch or opened a PR, state that git log origin/<default>..HEAD contains only this task's commits; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (.saikit/veredictos/<sha>.json). Say first what changes for the user, then how, then why; never invent a link, citation or command you did not produce or read this turn.
 Retro: harness/codebase-memory improvement, or "none".
 HARNESS_CONTEXT
 )"
@@ -1382,6 +1390,9 @@ HARNESS_CONTEXT
   # solo dejaria el gate afirmando cosas distintas segun la rama que emita.
   if [ "$(read_state_value autopilot)" = "1" ]; then
     _hc="$(printf '%s\n\n%s' "$_hc" "$(autopilot_parrafo)")"
+  fi
+  if [ "$(read_state_value lane)" != "fast" ]; then
+    _hc="$(printf '%s\n\n%s' "$_hc" "$(trail_parrafo)")"
   fi
   printf '%s' "$_hc"
 }
@@ -2658,6 +2669,88 @@ has_receipt_label() {
   printf '%s' "$text" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?($label|$alt)(\*\*|__)?[[:space:]]*:"
 }
 
+has_trail_skip() {
+  has_receipt_label "$TRAIL_SKIP_LABEL" "$TRAIL_SKIP_LABEL" "$1" || return 1
+  printf '%s' "$1" | grep -Eiq "(^|\\\\n)[[:space:]]*([-*+][[:space:]]+)?(\*\*|__)?TRAIL SKIP(\*\*|__)?[[:space:]]*:[[:space:]]*[^[:space:]]"
+}
+
+close_span() {
+  printf '%s' "$1" | awk '
+    function strip_pfx(s,    t) {
+      t = s
+      sub(/^[[:space:]]*/, "", t)
+      if (t ~ /^[-*+][[:space:]]/) sub(/^[-*+][[:space:]]+/, "", t)
+      sub(/^(\*\*|__)/, "", t)
+      return t
+    }
+    function is_receipt_label(s,    t) {
+      t = strip_pfx(s)
+      return (t ~ /^(Understand|Capito|Implement|Implementazione|Verify|Verifica|Review|Revisione|Close|Chiusura|Retro|Retrospettiva|TRAIL SKIP|ADVERSARY|ADVERSARIO|ROLE FALLBACK|VERIFIED BY SUBAGENT)(\*\*|__)?[[:space:]]*:/)
+    }
+    function is_close(s,    t) {
+      t = strip_pfx(s)
+      return (t ~ /^(Close|Chiusura)(\*\*|__)?[[:space:]]*:/)
+    }
+    function handle(s) {
+      if (!on && is_close(s)) { on = 1; print s; return }
+      if (on) {
+        if (is_receipt_label(s) && !is_close(s)) exit
+        print s
+      }
+    }
+    {
+      gsub(/\\n/, "\n")
+      n = split($0, a, "\n")
+      for (i = 1; i <= n; i++) handle(a[i])
+    }
+  '
+}
+
+cited_relpaths() {
+  printf '%s' "$1" | grep -Eo "$2" | while IFS= read -r _tok; do
+    case "$_tok" in
+      *'*'*|*'?'*|*'['*|*']'*|*..*) continue ;;
+    esac
+    _tok="${_tok#./}"
+    printf '%s\n' "$_tok"
+  done
+}
+
+path_present_under_root() {
+  case "$1" in
+    ''|/*|~*|*..*) return 1 ;;
+  esac
+  _joined="$PROJECT_ROOT/$1"
+  [ -f "$_joined" ] || return 1
+  _dir="$(cd "$(dirname "$_joined")" 2>/dev/null && pwd)" || return 1
+  case "$_dir" in
+    "$PROJECT_ROOT"|"$PROJECT_ROOT"/*) return 0 ;;
+  esac
+  return 1
+}
+
+trail_cited_and_present() {
+  _span="$(close_span "$text_hatch")"
+  [ -n "$_span" ] || return 1
+  _tsv=1
+  _blast=1
+  while IFS= read -r _p; do
+    [ -z "$_p" ] && continue
+    path_present_under_root "$_p" || continue
+    _tsv=0
+  done <<EOF
+$(cited_relpaths "$_span" "$TRAIL_TSV_CITE_RE")
+EOF
+  while IFS= read -r _p; do
+    [ -z "$_p" ] && continue
+    path_present_under_root "$_p" || continue
+    _blast=0
+  done <<EOF
+$(cited_relpaths "$_span" "$TRAIL_BLAST_CITE_RE")
+EOF
+  [ "$_tsv" -eq 0 ] && [ "$_blast" -eq 0 ]
+}
+
 build_gate_feedback() {
   missing="$1"
   next_cycle="$2"
@@ -2697,6 +2790,9 @@ EOF
   # claude). Atado por caso_g1_autopilot_parrafo_una_vez_en_grok.
   if [ "$TARGET" != "grok" ] && [ "$(read_state_value autopilot)" = "1" ]; then
     _gf="$(printf '%s\n\n%s' "$_gf" "$(autopilot_parrafo)")"
+  fi
+  if [ "$TARGET" != "grok" ] && [ "$(read_state_value lane)" != "fast" ]; then
+    _gf="$(printf '%s\n\n%s' "$_gf" "$(trail_parrafo)")"
   fi
   printf '%s\n' "$_gf"
 }
@@ -2756,6 +2852,11 @@ Stop now, report the failed gates, and ask the user before another retry."
     message="$message
 
 $(autopilot_parrafo)"
+  fi
+  if [ "${3:-$(read_state_value lane)}" != "fast" ]; then
+    message="$message
+
+$(trail_parrafo)"
   fi
 
   if [ "$TARGET" = "cursor" ]; then
@@ -2943,9 +3044,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     case "$adv_cycle" in ''|*[!0-9]*) adv_cycle=0 ;; esac
     if [ "$adv_cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
       _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
+      _lane_budget="$(read_state_value lane)"
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
       podar_dir_sesion
-      emit_budget_exhausted "$adv_early_missing" "$_ap_budget"
+      emit_budget_exhausted "$adv_early_missing" "$_ap_budget" "$_lane_budget"
     fi
     adv_reescribir_estado "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" "$((adv_cycle + 1))"
     feedback="$(build_gate_feedback "$adv_early_missing" "$((adv_cycle + 1))")"
@@ -3154,6 +3256,14 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     fi
   fi
 
+  if [ "$(read_state_value lane)" != "fast" ]; then
+    if ! has_trail_skip "$text_hatch"; then
+      if ! trail_cited_and_present; then
+        missing="$missing- Missing trail/blast: Close: must cite concrete paths that exist under PROJECT_ROOT (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), or declare TRAIL SKIP: <reason> as its own receipt line. A leftover file you did not cite does not count.\n"
+      fi
+    fi
+  fi
+
   # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude
   # Code primitive). The first three gates must each run as their own subagent,
   # in order. closer/retro stay receipt sections the lead writes.
@@ -3293,9 +3403,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
     # cobrando recibo despues de declararse agotado (A4).
     _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
+    _lane_budget="$(read_state_value lane)"
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
     podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
-    emit_budget_exhausted "$missing" "$_ap_budget"
+    emit_budget_exhausted "$missing" "$_ap_budget" "$_lane_budget"
   fi
 
   next_cycle=$((cycle + 1))
