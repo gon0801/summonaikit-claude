@@ -14,8 +14,9 @@ mutant="$SANDBOX/repo/tools/install-hook.sh"
 run_driver() { SAIKIT_INSTALL_TOOL="$mutant" bash "$here/test_trail_install.sh"; }
 run_driver > "$SANDBOX/control.log" 2>&1 || { cat "$SANDBOX/control.log"; exit 1; }
 fail=0
-for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error omitir_clasificacion publicacion_parcial ayuda_con_marca; do
+for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error omitir_clasificacion publicacion_parcial ayuda_con_marca blast_ayuda_con_marca blast_ayuda_truncada; do
   cp "$repo/tools/saikit-decision.sh" "$SANDBOX/repo/tools/saikit-decision.sh"
+  cp "$repo/tools/saikit-blast.sh" "$SANDBOX/repo/tools/saikit-blast.sh"
   case "$mutation" in
     quitar_padre)
       sed 's/\[ "$tools_enlace" -eq 0 \] \&\& \[ "$lib_enlace" -eq 0 \]/[ "$lib_enlace" -eq 0 ]/' "$source_tool" > "$mutant"
@@ -39,8 +40,16 @@ for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error omitir_clasif
       cp "$source_tool" "$mutant"
       sed '/^uso()/,/^}/s@sed -n .*@sed -n '\''2,80p'\'' "$0"@' "$repo/tools/saikit-decision.sh" > "$SANDBOX/repo/tools/saikit-decision.sh"
       expected='codex: ayuda expone marca de ownership' ;;
+    blast_ayuda_con_marca)
+      cp "$source_tool" "$mutant"
+      sed '/^uso()/,/^}/s@sed -n .*@sed -n '\''2,80p'\'' "$0"@' "$repo/tools/saikit-blast.sh" > "$SANDBOX/repo/tools/saikit-blast.sh"
+      expected='codex: blast ayuda expone marca de ownership' ;;
+    blast_ayuda_truncada)
+      cp "$source_tool" "$mutant"
+      sed '/^uso()/,/^}/s@sed -n .*@sed -n '\''7,37p'\'' "$0"@' "$repo/tools/saikit-blast.sh" > "$SANDBOX/repo/tools/saikit-blast.sh"
+      expected='codex: blast ayuda omite postura de falla' ;;
   esac
-  if { cmp -s "$source_tool" "$mutant" && cmp -s "$repo/tools/saikit-decision.sh" "$SANDBOX/repo/tools/saikit-decision.sh"; } || ! bash -n "$mutant"; then
+  if { cmp -s "$source_tool" "$mutant" && cmp -s "$repo/tools/saikit-decision.sh" "$SANDBOX/repo/tools/saikit-decision.sh" && cmp -s "$repo/tools/saikit-blast.sh" "$SANDBOX/repo/tools/saikit-blast.sh"; } || ! bash -n "$mutant"; then
     printf 'FAIL: mutacion %s no aplico o no parsea\n' "$mutation"; fail=1; continue
   fi
   run_driver > "$SANDBOX/mutant.log" 2>&1; rc=$?
@@ -52,4 +61,4 @@ for mutation in quitar_padre omitir_codex omitir_dsh ignorar_error omitir_clasif
   fi
 done
 [ "$fail" -eq 0 ] || exit 1
-printf 'test_trail_install_mutations: OK (7 mutaciones)\n'
+printf 'test_trail_install_mutations: OK (9 mutaciones)\n'

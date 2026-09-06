@@ -20,6 +20,12 @@ check_tools() {
   help_out="$(HOME="$host_home" bash "$host_home/.claude/saikit-tools/saikit-decision.sh" --help 2>&1)"
   [ "$?" -eq 0 ] || mal "$host: decision --help fallo"
   if printf '%s' "$help_out" | grep -Fq SAIKIT_MARCA; then mal "$host: ayuda expone marca de ownership"; fi
+  help_out="$(HOME="$host_home" bash "$host_home/.claude/saikit-tools/saikit-blast.sh" --help 2>&1)"
+  [ "$?" -eq 0 ] || mal "$host: blast --help fallo"
+  if printf '%s' "$help_out" | grep -Fq SAIKIT_MARCA; then mal "$host: blast ayuda expone marca de ownership"; fi
+  printf '%s' "$help_out" | grep -Fq -- '--write' || mal "$host: blast ayuda omite uso"
+  printf '%s' "$help_out" | grep -Fq 'POSTURA DE FALLA:' || mal "$host: blast ayuda omite postura de falla"
+  printf '%s' "$help_out" | grep -Fq 'aviso en stderr.' || mal "$host: blast ayuda recorta el final"
   HOME="$host_home" USERPROFILE="$host_home" bash "$host_home/.claude/saikit-tools/saikit-decision.sh" \
     --append --task t --etapa verify --decision d --por-que p --evidencia e --resultado ok \
     --dir "$host_home/project/.saikit/decisiones" >/dev/null 2>&1 || mal "$host: decision no corre"

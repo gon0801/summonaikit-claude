@@ -57,7 +57,7 @@ RECORTE=1000
 TASK=""; HECHO=""; COMANDO=""; SALIDA=""; NIVEL=""; DIR=""; MODO=""
 
 uso() {
-  sed -n '2,37p' "$0"
+  sed -n '/^# saikit-blast.sh/,/^set -u/{ /^#/p; }' "$0"
 }
 
 while [ $# -gt 0 ]; do

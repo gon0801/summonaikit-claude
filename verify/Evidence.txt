@@ -419,3 +419,44 @@ verify/test_drive.py .....                                               [100%]
 ============================== 5 passed in 0.77s ===============================
 Exit: 0
 No deploy, no edicion de Plans.md. Cambios de Cursor preservados en b2fcb38/c645c66.
+
+FOLLOW-UP GROK — AYUDA DE BLAST SIN MARCA Y COMPLETA
+Fuente d673269d776054be678f1992895b9a2dc35d3a3b; 2026-09-05 PDT.
+Regresion del PR #204: uso() imprimia lineas fijas pese al heredoc agregado.
+Se aplica el selector de comentarios que ya usa saikit-decision.sh.
+Sin cambios en el hook, instalador, Plans.md ni perfiles vivos.
+
+Rojo ANTES del fix: bash tests/test_trail_install.sh (extracto literal).
+FAIL: codex: blast ayuda expone marca de ownership
+FAIL: codex: blast ayuda omite postura de falla
+FAIL: codex: blast ayuda recorta el final
+FAIL: dsh: blast ayuda expone marca de ownership
+FAIL: dsh: blast ayuda omite postura de falla
+FAIL: dsh: blast ayuda recorta el final
+test_trail_install: FAIL
+Exit: 1
+
+Verde DESPUES, con HOME desechable del driver:
+bash tests/test_trail_install.sh
+test_trail_install: OK
+Exit: 0
+bash tests/test_trail_install_mutations.sh (extracto literal):
+ATRAPADA blast_ayuda_con_marca: codex: blast ayuda expone marca de ownership
+ATRAPADA blast_ayuda_truncada: codex: blast ayuda omite postura de falla
+test_trail_install_mutations: OK (9 mutaciones)
+Exit: 0
+bash tests/test_blast_artifact_contract.sh
+test_blast_artifact_contract: OK
+Exit: 0
+pre-commit run --all-files: todos Passed; exit 0.
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.66s ===============================
+Exit: 0. rootdir normalizado por privacidad, como las corridas anteriores.
