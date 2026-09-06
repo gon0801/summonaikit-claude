@@ -29,6 +29,10 @@
       "kind": "internal",
       "reason": "helpers de drivers; no es ejecutor de feature"
     },
+    "scripts/lib/doctor.py": {
+      "kind": "internal",
+      "reason": "doctor granular v1; no es ejecutor de feature"
+    },
     "schemas/step.schema.json": {
       "kind": "internal",
       "reason": "esquema de paso v1; no es ejecutor de feature"
@@ -39,7 +43,7 @@
     },
     "schemas/doctor.schema.json": {
       "kind": "internal",
-      "reason": "esquema doctor stub v1; no es ejecutor de feature"
+      "reason": "esquema doctor v1; no es ejecutor de feature"
     }
   },
   "exclusions": {
@@ -133,7 +137,11 @@
     "saikit-merge": {
       "status": "pending",
       "owner_task": "19.6",
-      "card": null
+      "card": null,
+      "execution_mode": "simulated",
+      "requirements": [
+        {"kind": "binary", "name": "gh", "access": "simulated"}
+      ]
     },
     "saikit-postmerge": {
       "status": "pending",
@@ -143,12 +151,30 @@
     "setup-autopilot": {
       "status": "pending",
       "owner_task": "19.8",
-      "card": null
+      "card": null,
+      "execution_mode": "sandbox",
+      "requirements": [
+        {"kind": "pty", "affects_cases": ["setup-interactive"]}
+      ],
+      "cases": [
+        {"id": "setup-interactive", "requires": ["pty"]},
+        {"id": "setup-flags"},
+        {"id": "setup-defaults"}
+      ]
     },
     "ci-minimo": {
       "status": "pending",
       "owner_task": "19.9",
-      "card": null
+      "card": null,
+      "execution_mode": "sandbox",
+      "requirements": [
+        {"kind": "pty", "affects_cases": ["ci-interactive"]}
+      ],
+      "cases": [
+        {"id": "ci-interactive", "requires": ["pty"]},
+        {"id": "ci-flags"},
+        {"id": "ci-defaults"}
+      ]
     },
     "autopilot-contract": {
       "status": "pending",
@@ -193,7 +219,12 @@
     "merge-happy-path": {
       "status": "pending",
       "owner_task": "19.16",
-      "card": null
+      "card": null,
+      "execution_mode": "live",
+      "requirements": [
+        {"kind": "binary", "name": "gh", "access": "live"},
+        {"kind": "live_authorization"}
+      ]
     }
   }
 }
