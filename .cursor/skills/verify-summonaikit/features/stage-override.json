@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "stage-override",
+  "card": "stage-override.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/stage-override.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/stage-override.sh"],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "stage-prepare",
+      "required_assertions": ["override_installed", "dest_matches_source"]
+    },
+    {
+      "id": "stage-hook-hash",
+      "required_assertions": ["hook_ran_hash"]
+    },
+    {
+      "id": "stage-state-lab",
+      "required_assertions": ["state_in_lab", "state_not_in_profile"]
+    },
+    {
+      "id": "stage-profile-intact",
+      "required_assertions": ["profile_intact"]
+    },
+    {
+      "id": "stage-ownership",
+      "required_assertions": ["ownership_refused", "foreign_intact"]
+    },
+    {
+      "id": "stage-cleanup",
+      "required_assertions": ["cleanup_scoped"]
+    },
+    {
+      "id": "stage-no-live",
+      "required_assertions": ["no_live_session"]
+    }
+  ]
+}

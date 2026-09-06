@@ -210,9 +210,9 @@
       "execution_mode": "sandbox"
     },
     "stage-override": {
-      "status": "pending",
-      "owner_task": "19.15",
-      "card": null
+      "status": "active",
+      "card": "features/stage-override.md",
+      "execution_mode": "sandbox"
     },
     "merge-happy-path": {
       "status": "pending",

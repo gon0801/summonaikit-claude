@@ -63,3 +63,4 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Check committed secrets](./check-secrets.md) covers `tools/check-secrets.sh`.
 - [Capture synthetic payloads](./capture-payloads.md) covers `tools/capture-payloads.sh`.
 - [Record a decision and a blast](./decision-blast.md) covers `tools/saikit-decision.sh` and `tools/saikit-blast.sh` on a private fixture. Agents do not write these artifacts automatically.
+- [Stage a hook by project override](./stage-override.md) covers `tools/stage-override.sh` on a disposable lab; source and state stay in the lab and the synthetic external profile stays intact.
