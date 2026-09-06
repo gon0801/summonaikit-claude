@@ -436,6 +436,26 @@ lab_payload_grok_stop() {
   printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"%s","stopHookActive":false,"lastAssistantMessage":"%s","promptId":"p-gk-1","backgroundTasks":[],"sessionCrons":[]}' "${2:-end_turn}" "$1"
 }
 
+# 18.27 — auto-wake GROK de subagente completado (medido en vivo, 3 wakes en
+# 8 turnos headless 1.0.13, docs/evidence/18.27-grok-headless/): al terminar un
+# subagente en background, la sesion padre recibe un UserPromptSubmit cuyo
+# `prompt` ES el sobre del sistema — sin <user_query>, sin sentinel. $1 = id
+# del subagente, $2 = rol, $3 = descripcion (llega citada en el sobre; un
+# agente de este repo puede escribir ahi `-saikit`, el caso del skip estricto).
+lab_payload_grok_autowake() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"user_prompt_submit","prompt":"<system-reminder>\\nBackground subagent \\"%s\\" (%s: \\"%s\\") completed successfully.\\nDuration: 22.0s | Tool calls: 3 | Turns: 1\\nUse get_task_output(\\"%s\\") to see the full output.\\n</system-reminder>"}' "$1" "$2" "$3" "$1"
+}
+
+# 18.27 — Stop Grok con backgroundTasks EXPLICITO: $1 = lastAssistantMessage,
+# $2 = reason, $3 = contenido crudo del array (default: un subagent en vuelo,
+# la forma medida del Stop que espera de verdad; para el array vacio alcanza
+# lab_payload_grok_stop, que ya lo trae).
+lab_payload_grok_stop_bg() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"%s","stopHookActive":false,"lastAssistantMessage":"%s","promptId":"p-gk-bg","backgroundTasks":[%s],"sessionCrons":[]}' \
+    "${2:-end_turn}" "$1" \
+    "${3:-{\"id\":\"01a0c0de-0040-7abc-8def-222222222240\",\"type\":\"subagent\",\"status\":\"running\",\"description\":\"Implementar el cambio\",\"agentType\":\"implementer\"}}"
+}
+
 # Task 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no
 # hook_event_name (5.1 midio ambos; 5.2 midio camel-only). Para probar que el
 # hook detecta PHASE=stop igual (sin caer a "tool" y perder el stop_gate).
