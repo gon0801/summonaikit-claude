@@ -7,6 +7,27 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-05 — PR #208 (18.26: sello local del reviewer Grok) — deploy REAL de las 4 copias
+
+- **Merge:** `d45b564ebcab6ad50343a76f900faa45a419ef4c`. Antes del merge se
+  integro el nuevo `master` (incluida 18.25) en el head `93aa689282c31569952357cb649afed703935979`;
+  CI 8/8, incluido `gate`, en el
+  [run 34015171295](https://github.com/gon0801/summonaikit-claude/actions/runs/34015171295).
+- **Deploy (23:01 PDT):** `master` sincronizado, `sucio=no`,
+  `coincide_origin_master=si`. Los cuatro instaladores exit 0,
+  `REPARADO`; hook instalado sha256
+  `f760fbbd33bb24dafb38697528ab22f0481590a036b6ede7e11e91b80465cc38`.
+  Backups bajo `hooks/saikit-backups/` de cada host: sufijo
+  `20260905-230153.bak` en claude y `20260905-230154.bak` en grok/dsh/codex.
+- **Verificacion:** `install-hook.sh --check` exit 0, cuatro filas
+  `resultado=al-dia registro=ok`; `check-hook-registration.sh` exit 0.
+- **Limite:** el sello queda exclusivamente en la sesion que lo emite.
+  No hay vinculacion padre-hijo acreditada por la captura disponible;
+  el recorrido medido de autopilot Grok conserva merge manual del operador.
+  No se transfiere reviewer/evidencia entre sesiones ni se relaja D18.
+- **Operador:** Gon; merge y deploy autorizados a Codex. Fila 18.26
+  cerrada por el lead con el limite explicito.
+
 ## 2026-09-05 — PR #209 (18.25: salida gh sin color forzado) — hooks NO-OP
 
 - **Merge:** `a2ec23868f48cee0bf0aabdc677d14e355790ebe`, head
