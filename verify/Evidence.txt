@@ -1,15 +1,178 @@
-Registro de la ultima corrida del Drive. Pega aca la salida real del comando.
+2026-09-05 — Drive del gate, macOS; pytest 8.4.2 en venv desechable.
+Worktree: /tmp/saikit-verify-gate-p9Ox4q
+Base medida: ef6cc8b81c78acb90e1c410de8596a0f9dd1ad10
 
-2026-09-05 — corrida inicial (comando: python -m pytest verify/ -c /dev/null -p no:cacheprovider,
-con pytest 8.4.2 pinneado en un venv aislado /tmp/saikit-drive-venv; el -c /dev/null
-esquiva un pytest.ini roto que quedo en la raiz como residuo de una medicion vieja):
+Todas las mediciones del gate corren con HOME/USERPROFILE/TMPDIR aislados.
+Los mutantes se aplicaron de a uno y se revirtieron antes del verde.
+Comprobacion de restauracion: git diff --exit-code -- hooks/summonaikit-harness.sh
+Salida vacia; exit 0. No se modifico ni ejecuto el hook del perfil vivo.
+Salidas reales a continuacion; solo se recortan espacios finales por pre-commit.
+
+Rojo: omitir 02-armado-contrato de la copia de escenarios.
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ -k test_el_gate_sin_armar_y_armado --tb=short
+Exit: 1
 
 ============================= test session starts ==============================
 platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
-rootdir: /dev
-configfile: null
-collected 4 items
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items / 4 deselected / 1 selected
 
-../../../../dev/test_drive.py ....                                       [100%]
+verify/test_drive.py F                                                   [100%]
 
-============================== 4 passed in 0.54s ===============================
+=================================== FAILURES ===================================
+_______________________ test_el_gate_sin_armar_y_armado ________________________
+verify/test_drive.py:73: in test_el_gate_sin_armar_y_armado
+    assert nombres == ['01-sin-armar', '02-armado-contrato'], nombres
+E   AssertionError: ['01-sin-armar']
+E   assert ['01-sin-armar'] == ['01-sin-arma...ado-contrato']
+E
+E     Right contains one more item: '02-armado-contrato'
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED verify/test_drive.py::test_el_gate_sin_armar_y_armado - AssertionError...
+======================= 1 failed, 4 deselected in 0.24s ========================
+
+Rojo: pasar /Users/dn/.claude/hooks/summonaikit-harness.sh en --hook.
+La guarda rechaza el argumento antes de subprocess.run; no se ejecuta el hook vivo.
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ -k test_el_gate_sin_armar_y_armado --tb=short
+Exit: 1
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items / 4 deselected / 1 selected
+
+verify/test_drive.py F                                                   [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_el_gate_sin_armar_y_armado ________________________
+verify/test_drive.py:65: in test_el_gate_sin_armar_y_armado
+    r = corre('tools/golden-harness.sh', '--print', '--hook',
+verify/test_drive.py:46: in corre
+    assert hook.is_relative_to(raiz), 'el hook debe estar en el sandbox'
+E   AssertionError: el hook debe estar en el sandbox
+E   assert False
+E    +  where False = is_relative_to(PosixPath('/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-drive-0pxn0mnc'))
+E    +    where is_relative_to = PosixPath('/Users/dn/.claude/hooks/summonaikit-harness.sh').is_relative_to
+=========================== short test summary info ============================
+FAILED verify/test_drive.py::test_el_gate_sin_armar_y_armado - AssertionError...
+======================= 1 failed, 4 deselected in 0.02s ========================
+
+Rojo: insertar mkdir -p "$STATE_DIR" y task_hash=1 en "$STATE_PATH"
+antes de emit_allow de la rama sin sentinel (hook del worktree aislado).
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ -k test_el_gate_sin_armar_y_armado --tb=short
+Exit: 1
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items / 4 deselected / 1 selected
+
+verify/test_drive.py F                                                   [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_el_gate_sin_armar_y_armado ________________________
+verify/test_drive.py:78: in test_el_gate_sin_armar_y_armado
+    assert '--- estado tras el paso 01\n(sin estado)' in pasos[0]
+E   AssertionError: assert '--- estado tras el paso 01\n(sin estado)' in '01  phase=prompt target=claude  payload=01.prompt.claude.json\nexit 0\nstdout <vacio>\nstderr <vacio>\n--- estado tras el paso 01\nhooks/state/<PROJECT_KEY>/026bb162-e553-42f2-84be-52b6582434f7/harness-state.env\n| task_hash=1\n'
+=========================== short test summary info ============================
+FAILED verify/test_drive.py::test_el_gate_sin_armar_y_armado - AssertionError...
+======================= 1 failed, 4 deselected in 0.59s ========================
+
+Rojo: reemplazar la emision JSON de UserPromptSubmit por un no-op
+(hook del worktree aislado, armed sigue dejando estado).
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ -k test_el_gate_sin_armar_y_armado --tb=short
+Exit: 1
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items / 4 deselected / 1 selected
+
+verify/test_drive.py F                                                   [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_el_gate_sin_armar_y_armado ________________________
+verify/test_drive.py:88: in test_el_gate_sin_armar_y_armado
+    assert '\nexit 0\nstdout (sha ' in paso, paso
+E   AssertionError: 01  phase=prompt target=claude  payload=01.prompt.claude.json
+E     exit 0
+E     stdout <vacio>
+E     stderr <vacio>
+E     --- estado tras el paso 01
+E     hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-evidence.log
+E     | prompt task started: 2415293084
+E     hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-state.env
+E     | task_hash=2415293084
+E     | cycle=0
+E     | implemented=0
+E     | verified=0
+E     | agents_seen=
+E     | lane=full
+E     | adv_epoch=<TS>
+E     | adv_paths=
+E     | adv_violation=
+E     | adv_violation_paths=
+E
+E   assert '\nexit 0\nstdout (sha ' in '01  phase=prompt target=claude  payload=01.prompt.claude.json\nexit 0\nstdout <vacio>\nstderr <vacio>\n--- estado tra...n| verified=0\n| agents_seen=\n| lane=full\n| adv_epoch=<TS>\n| adv_paths=\n| adv_violation=\n| adv_violation_paths=\n'
+=========================== short test summary info ============================
+FAILED verify/test_drive.py::test_el_gate_sin_armar_y_armado - AssertionError...
+======================= 1 failed, 4 deselected in 0.33s ========================
+
+Rojo: reemplazar write_state del armado por mkdir -p "$STATE_DIR"
+(hook del worktree aislado, armed sigue emitiendo el contrato).
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ -k test_el_gate_sin_armar_y_armado --tb=short
+Exit: 1
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items / 4 deselected / 1 selected
+
+verify/test_drive.py F                                                   [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_el_gate_sin_armar_y_armado ________________________
+verify/test_drive.py:95: in test_el_gate_sin_armar_y_armado
+    assert re.search(r'^hooks/state/<PROJECT_KEY>/[^/\n]+/harness-state\.env$',
+E   AssertionError: hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-evidence.log
+E     | prompt task started: 2415293084
+E
+E   assert None
+E    +  where None = <function search at 0x107a7b270>('^hooks/state/<PROJECT_KEY>/[^/\\n]+/harness-state\\.env$', 'hooks/state/<PROJECT_KEY>/8d40317f-fb46-4b57-8239-fdd5ea92b318/harness-evidence.log\n| prompt task started: 2415293084\n', re.MULTILINE)
+E    +    where <function search at 0x107a7b270> = re.search
+E    +    and   re.MULTILINE = re.MULTILINE
+=========================== short test summary info ============================
+FAILED verify/test_drive.py::test_el_gate_sin_armar_y_armado - AssertionError...
+======================= 1 failed, 4 deselected in 0.32s ========================
+
+Verde, con ambos escenarios y todas las mutaciones revertidas.
+Comando: /tmp/saikit-drive-venv/bin/pytest verify/ && bash skills/saikit-verificar-app/verificar.sh estado "$PWD"
+Exit: 0
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /private/tmp/saikit-verify-gate-p9Ox4q
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.78s ===============================
+al_dia
+
+Revision independiente: una ronda, Drive 5/5; dos hallazgos de documentacion
+corregidos (Launch limpia overrides heredados; Doctor revisa cada script con
+bash -n por separado). No hubo cambios en test_drive.py tras esa revision.
+
+Comprobacion del Launch corregido, con override externo deliberado:
+awk '/^```bash/ { codigo=1; next } /^```/ { codigo=0 } codigo' verify/Launch.md | env PATH="/tmp/saikit-drive-venv/bin:$PATH" SAIKIT_RECETAS_DIR="$PWD/recetas" bash
+Exit: 0. Salida observada: 5 passed in 0.82s y los dos escenarios.
+La grabacion golden resultante es identica a la corrida previa sin override.
+
+Doctor (primer bloque bash, herramientas y fixtures):
+awk '/^```bash/ { codigo=1; next } /^```/ && codigo { exit } codigo' verify/Doctor.md | env PATH="/tmp/saikit-drive-venv/bin:$PATH" bash -e
+Exit: 0; Python 3.14.7, pytest 8.4.2, origin/master presente, shallow=false.
+
+Alcance: cinco tests, incluyendo los cuatro smoke originales. No se corrio
+la suite completa local (politica de AGENTS.md); el gate agregado corresponde
+al CI del PR. Esta evidencia no afirma ejecucion en Windows/MSYS.
