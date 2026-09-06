@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "capture-payloads",
+  "card": "capture-payloads.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/capture-payloads.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": ["tools/capture-payloads.sh"],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "capture-lifecycle",
+      "required_assertions": [
+        "installed",
+        "synthetic_saved",
+        "perms_private",
+        "cwd_filtered",
+        "retirada_own",
+        "foreign_intact"
+      ]
+    },
+    {
+      "id": "capture-redaction",
+      "required_assertions": ["evidence_no_secret"]
+    }
+  ]
+}
