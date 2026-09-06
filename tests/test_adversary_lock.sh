@@ -90,8 +90,11 @@ adv_payload_edit_interno() {
 
 # Recibo del turno con adversary: desde 13.5 el gate exige la linea ADVERSARY
 # cuando el turno corrio un adversary (label-only), asi que el recibo verde la
-# lleva — igual que _RECIBO_ADV del gate_cases.
-_ADV_RECIBO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.\nTRAIL SKIP: fixture del write-lock adversary'
+# lleva — igual que _RECIBO_ADV del gate_cases. El cierre limpio cita trail
+# plantado (18.12). El caso de infra rota declara TRAIL SKIP porque .saikit es
+# un archivo y no hay namespace plantable.
+_ADV_RECIBO_CITA='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado; trail at .saikit/decisiones/advlock.tsv ; blast at .saikit/findings/blast-advlock.json.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
+_ADV_RECIBO_SKIP='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio y el artefacto de hallazgos quedaron escritos.\n- Verify: se corrio pytest.\n- Review: sin hallazgos.\n- Close: entregado.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.\nTRAIL SKIP: .saikit es archivo en este fixture de infra'
 
 _TEXTO_PAUSA='Espere: SUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
@@ -154,7 +157,9 @@ fi
 
 caso "advlock_permite_escribir_el_artefacto"
 advlock_permite_escribir_el_artefacto() {
-  mkdir -p "$LAB/proyecto/.saikit/findings"
+  mkdir -p "$LAB/proyecto/.saikit/decisiones" "$LAB/proyecto/.saikit/findings"
+  : > "$LAB/proyecto/.saikit/decisiones/advlock.tsv"
+  : > "$LAB/proyecto/.saikit/findings/blast-advlock.json"
   adv_armar
   lab_run tool claude "$(lab_payload_agent 'implementer')"
   lab_run tool claude "$(lab_payload_agent 'verifier')"
@@ -165,7 +170,7 @@ advlock_permite_escribir_el_artefacto() {
   _contiene "gitignore creado" "$(cat "$LAB/proyecto/.saikit/findings/.gitignore" 2>/dev/null)" '*'
   lab_run tool claude "$(lab_payload_agent 'reviewer')"
   lab_run tool claude "$(lab_payload_bash 'pytest -q')"
-  lab_run stop claude "$(lab_payload_stop "$_ADV_RECIBO")"
+  lab_run stop claude "$(lab_payload_stop "$_ADV_RECIBO_CITA")"
   _igual "exit code del cierre" "$LAB_RC" "0"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
 }
@@ -424,7 +429,7 @@ advlock_falla_infra_fail_open() {
   _contiene "ruta textual permitida registrada" "$(lab_estado adv_paths)" 'x.json'
   # El Stop no se cae por el namespace roto: sin dir no hay rama de mtime
   # (fail-open declarado) y el turno sigue su curso normal de gate.
-  lab_run stop claude "$(lab_payload_stop "$_ADV_RECIBO")"
+  lab_run stop claude "$(lab_payload_stop "$_ADV_RECIBO_SKIP")"
   if [ "$LAB_RC" -eq 2 ]; then
     _no_contiene "bloquea por gate normal, no por adversary" "$LAB_ERR" 'adversary wrote outside'
   else
