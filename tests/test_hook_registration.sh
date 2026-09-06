@@ -63,6 +63,10 @@ escribir_settings_completo() {
     ],
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude SUMMONAIKIT_HOOK_PHASE=session bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=claude bash -c 'bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"'" } ] }
     ]
   }
 }
@@ -196,7 +200,8 @@ cat > "$tmp/compuesto.json" <<'JSON'
     "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "echo armando && bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
     "PostToolUse":      [ { "hooks": [ { "type": "command", "command": "echo x; bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
     "Stop":             [ { "hooks": [ { "type": "command", "command": "true || bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
-    "SessionStart":     [ { "hooks": [ { "type": "command", "command": "bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ]
+    "SessionStart":     [ { "hooks": [ { "type": "command", "command": "bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ],
+    "PreToolUse":       [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" } ] } ]
   }
 }
 JSON
@@ -236,6 +241,23 @@ caso "con SessionStart registrada, el aviso de reglas permanentes NO aparece"
 if out_s="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"; then rc_s=0; else rc_s=$?; fi
 [ "$rc_s" -eq 0 ] || malo "registro completo debe terminar con exit 0, dio $rc_s: $out_s"
 [ -z "$out_s" ] || malo "registro completo (con SessionStart) debe quedar en SILENCIO: $out_s"
+
+# ------------------- 8-ter) Task 18.11: PreToolUse se afirma SEPARADA y advisory
+# Misma forma que SessionStart (10.6): la 4a fase se REPORTA, no entra en
+# ESPERADAS. Meterla ahi marcaria INCOMPLETO cada host sin PreToolUse.
+# El command del snippet NO fija SUMMONAIKIT_HOOK_PHASE=tool (pisa el payload).
+caso "3 fases sin PreToolUse => avisa de merge a pelo, NO de gate roto"
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'PreToolUse' || malo "sin PreToolUse debe nombrar la 4a fase: $out"
+printf '%s' "$out" | grep -qi 'INCOMPLETO' && malo "PreToolUse ausente NO vuelve incompleto al registro del gate"
+printf '%s' "$out" | grep -qi 'el gate NO corre' && malo "el gate corre igual sin PreToolUse"
+printf '%s' "$out" | grep -qi 'HOOK_PHASE=tool' \
+  || malo "el advisory debe advertir que el command no fije PHASE=tool: $out"
+
+caso "con PreToolUse registrada, el aviso de merge a pelo NO aparece"
+if out_p="$(bash "$tool" --settings "$tmp/completo.json" 2>&1)"; then rc_p=0; else rc_p=$?; fi
+[ "$rc_p" -eq 0 ] || malo "registro completo debe terminar con exit 0, dio $rc_p: $out_p"
+[ -z "$out_p" ] || malo "registro completo (con PreToolUse) debe quedar en SILENCIO: $out_p"
 
 # ------------------- 9) lo no observado no vuelve ausente a lo que si se observo
 caso "settings legible INCOMPLETO + local ILEGIBLE => unknown, no ausencia"
@@ -286,7 +308,7 @@ printf '%s' "$out" | grep -qi "no cubre 'Agent'" || malo "debe reportar que el m
 
 caso "matcher '*' cubre Agent y calla"
 cat > "$tmp/star.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"*","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -294,7 +316,7 @@ out="$(bash "$tool" --settings "$tmp/star.json" 2>&1)"; rc=$?
 
 caso "un matcher cubierto entre varios grupos => calla"
 cat > "$tmp/mix.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]},{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
@@ -302,7 +324,7 @@ out="$(bash "$tool" --settings "$tmp/mix.json" 2>&1)"; rc=$?
 
 caso "base sin Agent + local con Agent => calla"
 cat > "$tmp/base-noagent.json" <<'JSON'
-{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
+{ "hooks": { "UserPromptSubmit": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PostToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "Stop": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "SessionStart": [{"hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}], "PreToolUse": [{"matcher":"Bash","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }
 JSON
 cat > "$tmp/local-agent.json" <<'JSON'
 { "hooks": { "PostToolUse": [{"matcher":"Agent","hooks":[{"type":"command","command":"bash summonaikit-harness.sh"}]}] } }

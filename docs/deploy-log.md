@@ -7,6 +7,28 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #198 / Task 18.11 (PreToolUse niega el merge a pelo) — deploy REAL a las 4 copias
+
+- **SHA:** merge `7009b74`, head `cf7f4a0`, CI 8/8 con `gate` verde (run 34001332338).
+- **Deploy:** claude `YA AL DIA` (Cursor habia sincronizado el vivo al regrabar
+  la golden); grok, dsh y codex REPARADO con backups `…nuestro.20260905-174819.bak`.
+  `--check` rojo por diseño (codex sin registro); `check-hook-registration.sh`
+  exit 0.
+- **La guardia queda INERTE hasta registrarla** (operator-owned, fuera del PR):
+  el checker avisa «MERGE A PELO: PreToolUse no esta registrado» — hay que
+  agregar el hook en `PreToolUse` de `~/.claude/settings.json` con matcher
+  `Bash` y SIN fijar `SUMMONAIKIT_HOOK_PHASE` (el comment del hook trae el
+  snippet). Hasta entonces el veto a `gh pr merge` / `git push` a master|main
+  no dispara en claude; el resto del gate corre igual. El deny vivo queda
+  `unknown` declarado (residual del lead, en la TSV de la fila).
+- **Review en 2 rondas:** r1 hallo 1 HIGH (bypass del hatch por sufijo
+  `saikit-merge.sh.bak` — medido, pasaba con el pin legitimo); Cursor lo cerro
+  con basename exacto + guarda anti-spoof, mutacion `pretool_hatch_spoof_apagado`
+  atrapando solo su caso, driver 21/21. Noted: la TSV cita una mutacion con
+  nombre viejo (deriva documental).
+- `audita-ledger` OK; `check-deploy-log` OK.
+- **Operador:** Gon (sesión kimi).
+
 ## 2026-09-05 — PR #196 (verificar-app: fecha_epoch valida calendario por round-trip) — deploy: skill replantada, hook sin cambios
 
 - **SHA:** merge `f546b3e`, head `ce791dc`, CI 8/8 con `gate` verde (run 33997623419).

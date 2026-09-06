@@ -6,3 +6,4 @@ out/
 .harness-mem/
 node_modules/
 hooks/state/
+.cursor/skills/verify-summonaikit/.run/

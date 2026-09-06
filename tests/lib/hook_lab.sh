@@ -124,7 +124,9 @@ lab_run() {
 
   lab_entrada="$LAB/entrada/paso-$LAB_PASO.json"
   lab_sid="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
-  printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g; s|__SESSION_ID__|$lab_sid|g" > "$lab_entrada"
+  # __CWD__ = el proyecto del banco (18.11): el hatch de saikit-merge.sh
+  # resuelve rutas relativas contra el cwd del payload, no contra HOOK_DIR.
+  printf '%s' "$lab_payload" | sed "s|__TRANSCRIPT__|$lab_tr|g; s|__SESSION_ID__|$lab_sid|g; s|__CWD__|$LAB/proyecto|g" > "$lab_entrada"
 
   lab_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
            -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
@@ -291,6 +293,18 @@ lab_payload_agent_con_eco() {
 # caso_g2_runner_fallido_* usan stderrs con la forma real de cada runner.
 lab_payload_bash() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "$1" "${2:-}"
+}
+
+# 18.11 / D24 — PreToolUse ANTES de que Bash corra. hook_event_name dispara el
+# mapeo a PHASE=pretool (lab_run auto: sin SUMMONAIKIT_HOOK_PHASE, o el env
+# pisa el payload y el guardia no corre). cwd=__CWD__ para que el hatch
+# resuelva tools/saikit-merge.sh contra el proyecto del banco.
+lab_payload_pretool_bash() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"__CWD__","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"pretool"}}' "$1"
+}
+
+lab_payload_pretool_edit() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"__CWD__","hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"
 }
 
 # Task 10.13 — un runner lanzado EN BACKGROUND: el tool_response real de Bash
