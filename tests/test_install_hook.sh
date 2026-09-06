@@ -2927,6 +2927,21 @@ lider="$(dirname "$dest")/recetas/00-lider.md"
 grep -Fq 'saikit-tools/saikit-decision.sh' "$lider" \
   || malo "el 00-lider plantado no nombra saikit-tools/saikit-decision.sh"
 
+caso "18.12: --host grok tambien planta ~/.claude/saikit-tools (el verifier lo enseña)"
+nuevo_home_grok
+out="$(host_grok 2>&1)" || true
+rc=$?
+[ "$rc" -eq 0 ] || malo "--host grok salio $rc: $out"
+for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  [ -f "$home_gk/.claude/saikit-tools/$rel" ] \
+    || malo "--host grok no planto saikit-tools/$rel"
+done
+blast="$home_gk/.claude/saikit-tools/saikit-blast.sh"
+out_h="$(HOME="$home_gk" bash "$blast" --help 2>&1)"; rc_h=$?
+[ "$rc_h" -eq 0 ] || malo "blast plantado por grok --help dio $rc_h: $out_h"
+printf '%s' "$out_h" | grep -Fq -- '--write' \
+  || malo "blast plantado por grok --help no nombra --write"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

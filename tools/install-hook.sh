@@ -1395,6 +1395,9 @@ grok_rollback() {
 grok_publicar() {
   grok_publicar_json || { grok_rollback "el JSON de registro"; exit 5; }
   grok_publicar_agentes || { grok_rollback "los agentes de grok"; exit 5; }
+  # 18.12: el verifier de grok enseña ~/.claude/saikit-tools/...; sin este
+  # plant el comando no existe tras un --host grok solo (adversary 18.12).
+  publicar_saikit_tools || { grok_rollback "saikit-tools del perfil"; exit 5; }
 }
 
 # --quitar-grok (design D1): saca JSON nuestro + hook nuestro + agentes con
@@ -2734,8 +2737,38 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   rm -rf "$old"
   return 0
 }
+# Task 18.12: tools del rastro/blast viven en ~/.claude/saikit-tools (ruta que
+# enseña agents/verifier.md). El dest es del perfil Claude a proposito: grok y
+# claude publican el mismo verifier plantilla con esa ruta. Sin este plant, un
+# --host grok enseña el comando y el archivo no existe (hallazgo adversary 18.12).
+publicar_saikit_tools() {
+  local f rc_tools rc_lib
+  for f in "$repo/tools/saikit-decision.sh" \
+           "$repo/tools/saikit-blast.sh" \
+           "$repo/tools/lib/redactar.sh"; do
+    [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
+  done
+  for f in "$HOME/.claude/saikit-tools" "$HOME/.claude/saikit-tools/lib"; do
+    if [ -L "$f" ]; then
+      decir "[summonaikit] saikit-tools: enlace, no se publica nada: $f"
+      return 5
+    fi
+  done
+  recetas_publicar_dir "$HOME/.claude/saikit-tools" \
+    "$repo/tools/saikit-decision.sh" \
+    "$repo/tools/saikit-blast.sh" || {
+    rc_tools=$?
+    decir "[summonaikit] saikit-tools: no se publico ($HOME/.claude/saikit-tools)"
+    return "$rc_tools"; }
+  recetas_publicar_dir "$HOME/.claude/saikit-tools/lib" \
+    "$repo/tools/lib/redactar.sh" || {
+    rc_lib=$?
+    decir "[summonaikit] saikit-tools: lib no se publico, pero saikit-tools SI quedo publicado"
+    return "$rc_lib"; }
+  return 0
+}
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
-  local f rc_sencillo rc_verif rc_tools rc_lib
+  local f rc_sencillo rc_verif
   for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" \
            "$repo/skills/sencillo/SKILL.md" \
            "$repo/skills/saikit-verificar-app/SKILL.md" \
@@ -2786,17 +2819,10 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
     rc_setup=$?
     decir "[summonaikit] recetario: la skill saikit-setup-autopilot no se publico, pero $1/recetas, $2/sencillo y $2/saikit-verificar-app SI quedaron publicados (el todo-o-nada es por directorio)"
     return "$rc_setup"; }
-  recetas_publicar_dir "$HOME/.claude/saikit-tools" \
-    "$repo/tools/saikit-decision.sh" \
-    "$repo/tools/saikit-blast.sh" || {
-    rc_tools=$?
+  publicar_saikit_tools || {
+    local rc_tools=$?
     decir "[summonaikit] recetario: saikit-tools no se publico, pero recetas y skills SI quedaron publicados (el todo-o-nada es por directorio)"
     return "$rc_tools"; }
-  recetas_publicar_dir "$HOME/.claude/saikit-tools/lib" \
-    "$repo/tools/lib/redactar.sh" || {
-    rc_lib=$?
-    decir "[summonaikit] recetario: saikit-tools/lib no se publico, pero saikit-tools SI quedo publicado (el todo-o-nada es por directorio)"
-    return "$rc_lib"; }
   # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
   # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
   # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la

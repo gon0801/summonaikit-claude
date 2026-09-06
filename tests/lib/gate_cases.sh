@@ -336,11 +336,11 @@ _RECIBO_SIN_RETRO_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste
 # Task 13.5 (D4) — el recibo del turno con adversary lleva su linea label-only
 # (el gate jamas valida N contra el JSON del artefacto, limite declarado). La
 # evidencia de Verify nombra pytest para que la prosa cuente sola si hace falta.
-_RECIBO_ADV='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
+_RECIBO_ADV='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # D4/D6 — el adversary despachado que murio sin reportar: la declaracion
 # sustituye la linea ADVERSARY (misma disciplina substring de los otros tres).
-_RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado. ROLE FALLBACK: ADVERSARY (429).\n- Retro: none.'
+_RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado. ROLE FALLBACK: ADVERSARY (429).\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
