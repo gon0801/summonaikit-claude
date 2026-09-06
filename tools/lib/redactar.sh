@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # redactar.sh — fuente unica de la redaccion de secretos de las HERRAMIENTAS del
 # repo (Task 17.3 / D12, "rastro de decisiones").
 #

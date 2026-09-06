@@ -74,7 +74,7 @@ grep -Fq 'inconcluso o superficie equivocada no es PASS' "$verifier" || malo "17
 # ------------------------------------------------ (b) 17.4 — blast en el verifier
 caso "17.4: el verifier documenta el hecho unico y el comando del tool"
 grep -Fq 'hecho único' "$verifier" || malo "17.4: el perfil no documenta el hecho unico"
-grep -Fq 'bash tools/saikit-blast.sh --write' "$verifier" || malo "17.4: el perfil no ensena el comando del tool"
+grep -Fq 'bash "$HOME/.claude/saikit-tools/saikit-blast.sh" --write' "$verifier" || malo "17.4: el perfil no ensena el comando del tool"
 
 caso "17.4: el verifier documenta el esquema exacto del blast"
 for k in '"hecho"' '"comando"' '"salida"' '"nivel"'; do

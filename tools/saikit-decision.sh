@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # saikit-decision.sh — append seguro a una fila del rastro de decisiones
 # (Task 17.3 / D12).
 #
