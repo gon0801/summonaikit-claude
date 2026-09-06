@@ -20,6 +20,22 @@
     "scripts/lib/state.py": {
       "kind": "internal",
       "reason": "estado declarativo validado; no es ejecutor de feature"
+    },
+    "scripts/lib/evidence.py": {
+      "kind": "internal",
+      "reason": "evidencia v1 por intento; no es ejecutor de feature"
+    },
+    "schemas/step.schema.json": {
+      "kind": "internal",
+      "reason": "esquema de paso v1; no es ejecutor de feature"
+    },
+    "schemas/summary.schema.json": {
+      "kind": "internal",
+      "reason": "esquema de resumen v1; no es ejecutor de feature"
+    },
+    "schemas/doctor.schema.json": {
+      "kind": "internal",
+      "reason": "esquema doctor stub v1; no es ejecutor de feature"
     }
   },
   "exclusions": {

@@ -14,6 +14,7 @@ HOOK_SRC="$repo/hooks/summonaikit-harness.sh"
 MANIFEST="$repo/hooks/vendor-manifest.sha256"
 INSTALLER="$repo/tools/install-hook.sh"
 STATEPY="$skill_root/scripts/lib/state.py"
+EVIDPY="$skill_root/scripts/lib/evidence.py"
 CATALOG="$skill_root/features/catalog.json"
 
 # Avoid writing __pycache__ under the versioned skill tree (inventory lint).
@@ -24,6 +25,192 @@ export PYTHONDONTWRITEBYTECODE=1
 
 die() { printf 'control-summonaikit: %s\n' "$*" >&2; exit 2; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
+
+evidence() {
+  [ -f "$EVIDPY" ] || die "missing $EVIDPY"
+  PYTHONDONTWRITEBYTECODE=1 python3 "$EVIDPY" "$@"
+}
+
+_parse_kv() {
+  printf '%s\n' "$2" | sed -n "s/^${1}=//p" | head -1
+}
+
+_feature_status() {
+  python3 - "$CATALOG" "$1" <<'PY'
+import json, sys
+cat = json.loads(open(sys.argv[1], encoding="utf-8").read())
+fid = sys.argv[2]
+meta = (cat.get("features") or {}).get(fid)
+if not meta:
+    print("missing")
+else:
+    print(meta.get("status") or "active")
+PY
+}
+
+_cases_and_assertions() {
+  # stdout: CASES=... then REQS=... (space-separated)
+  python3 - "$skill_root/features/$1.json" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if not p.is_file():
+    print("CASES=")
+    print("REQS=")
+    raise SystemExit(0)
+d = json.loads(p.read_text(encoding="utf-8"))
+cases = [c.get("id") or "" for c in (d.get("cases") or [])]
+reqs = []
+for c in d.get("cases") or []:
+    reqs.extend(c.get("required_assertions") or [])
+print("CASES=" + " ".join(cases))
+print("REQS=" + " ".join(reqs))
+PY
+}
+
+_gate_case_for_scenario() {
+  case "$1" in
+    01-sin-armar) printf '%s' "gate-unarmed" ;;
+    02-armado-contrato) printf '%s' "gate-armed" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+_gate_reqs_for_case() {
+  case "$1" in
+    gate-unarmed) printf '%s' "exit_0 scenario_header sin_estado" ;;
+    gate-armed) printf '%s' "exit_0 scenario_header contract_or_state" ;;
+    *) printf '%s' "exit_0 scenario_header" ;;
+  esac
+}
+
+_evidence_run_id() {
+  if [ "${SAIKIT_VERIFY_MUTATE:-}" = reuse_attempt_id ]; then
+    printf 'reused-run'
+    return
+  fi
+  if [ -n "${VERIFY_RUN_ID:-}" ]; then
+    printf '%s' "$VERIFY_RUN_ID"
+    return
+  fi
+  printf 'synth-%s-%s' "$(date -u +%Y%m%dT%H%M%SZ)" "$$"
+}
+
+begin_attempt() {
+  local fid="$1" cases="$2" reqs="$3" scope="${4:-full}"
+  local extra=""
+  if [ "$scope" = partial ]; then
+    extra="--scope partial --scope-partial"
+  fi
+  # shellcheck disable=SC2086
+  evidence create-attempt \
+    --artifacts "$ARTIFACTS" \
+    --run-id "$(_evidence_run_id)" \
+    --feature-id "$fid" \
+    --repo "$repo" \
+    --mode sandbox \
+    --cases "$cases" \
+    --required-assertions "$reqs" \
+    $extra
+}
+
+append_action() {
+  local adir="$1" case_id="$2" step="$3" tool_exit="$4" observation="$5"
+  shift 5 || true
+  evidence append-step --attempt-dir "$adir" --type action \
+    --case-id "$case_id" --step-id "$step" \
+    --tool-exit "$tool_exit" --observation "$observation" \
+    --command "$*"
+}
+
+append_assertion() {
+  local adir="$1" case_id="$2" asid="$3" result="$4" expected="$5" observed="$6"
+  evidence append-step --attempt-dir "$adir" --type assertion \
+    --case-id "$case_id" --step-id "s-$asid" --assertion-id "$asid" \
+    --expected "$expected" --observed "$observed" --result "$result"
+}
+
+finish_attempt() {
+  local adir="$1" reqs="$2" scope="${3:-}"
+  local extra=""
+  if [ "$scope" = partial ]; then
+    extra="--scope partial --scope-partial"
+    printf 'alcance parcial (scope=partial)\n'
+  fi
+  # shellcheck disable=SC2086
+  evidence finalize --attempt-dir "$adir" --required-assertions "$reqs" $extra
+}
+
+record_case_assertions() {
+  # $1=adir $2=case $3=result $4=observed-note; rest=assertion ids
+  local adir="$1" case_id="$2" result="$3" note="$4"
+  shift 4
+  local a
+  for a in "$@"; do
+    [ -n "$a" ] || continue
+    append_assertion "$adir" "$case_id" "$a" "$result" "$a" "$note"
+  done
+}
+
+run_synthetic_drive() {
+  local fid="$1" cases="$2" reqs="$3" scope="${4:-full}"
+  local kind="${SAIKIT_VERIFY_SYNTHETIC_EXECUTOR:-}"
+  [ -n "$kind" ] || return 0
+  mkdir -p "$ARTIFACTS"
+  local created adir result_kind tool_exit note
+  created="$(begin_attempt "$fid" "$cases" "$reqs" "$scope")" || return 1
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
+  [ -d "$adir" ] || return 1
+  case "$kind" in
+    PASS|pass)
+      result_kind=PASS; tool_exit=0; note=synthetic-pass
+      ;;
+    FAIL|fail)
+      result_kind=FAIL; tool_exit=1; note=synthetic-fail
+      ;;
+    unknown|UNKNOWN)
+      result_kind=unknown; tool_exit=""; note=synthetic-unknown
+      ;;
+    *)
+      result_kind=unknown; tool_exit=""; note="synthetic-blocked"
+      ;;
+  esac
+  local first_case="${cases%% *}"
+  append_action "$adir" "$first_case" "act-synth" "$tool_exit" "$note" "synthetic" "$kind"
+  # shellcheck disable=SC2086
+  record_case_assertions "$adir" "$first_case" "$result_kind" "$note" $reqs
+  set +e
+  finish_attempt "$adir" "$reqs" "$scope"
+  local ec=$?
+  set -e
+  printf 'synthetic=%s feature=%s scope=%s\n' "$kind" "$fid" "$scope"
+  exit "$ec"
+}
+
+write_blocked_attempt() {
+  local fid="$1" reason="$2"
+  mkdir -p "$ARTIFACTS"
+  local created adir
+  created="$(begin_attempt "$fid" "" "" full)" || {
+    printf 'control-summonaikit: BLOCKED %s — %s\n' "$fid" "$reason"
+    exit 3
+  }
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
+  if [ -d "$adir" ]; then
+    evidence append-step --attempt-dir "$adir" --type diagnostic \
+      --case-id "" --step-id blocked --observation "$reason" --tool-exit "" \
+      >/dev/null || true
+    evidence append-step --attempt-dir "$adir" --type assertion \
+      --case-id "" --step-id s-blocked --assertion-id availability \
+      --expected runnable --observed "BLOCKED $reason" --result unknown \
+      >/dev/null || true
+    set +e
+    evidence finalize --attempt-dir "$adir" --required-assertions availability >/dev/null
+    set -e
+  fi
+  printf 'control-summonaikit: BLOCKED %s — %s (unknown)\n' "$fid" "$reason"
+  exit 3
+}
 
 load_state() {
   local mode="${1:-drive}"
@@ -237,8 +424,35 @@ cmd_cli() {
   runtime_exec "$VERIFY_HOME" bash "$VERIFY_REPO/$tool" "$@"
 }
 
+_close_alias() {
+  local adir="$1" case_id="$2" reqs="$3" rc="$4" out="$5" scope="$6" note="$7"
+  evidence redact-file --path "$out" 2>/dev/null || true
+  if [ -f "$out" ] && [ -d "$adir" ]; then
+    cp "$out" "$adir/log.txt"
+    evidence redact-file --path "$adir/log.txt" 2>/dev/null || true
+  fi
+  append_action "$adir" "$case_id" "act-1" "$rc" "$note" "legacy" "$case_id"
+  local result=FAIL
+  if [ "$rc" -eq 0 ] && [ "$note" = ok ]; then
+    result=PASS
+  fi
+  # shellcheck disable=SC2086
+  record_case_assertions "$adir" "$case_id" "$result" "$note" $reqs
+  set +e
+  finish_attempt "$adir" "$reqs" "$scope"
+  local ec=$?
+  set -e
+  return "$ec"
+}
+
 cmd_drive_install_dry_run() {
+  run_synthetic_drive install-guardian "install-dry-run" \
+    "exit_0 dry_run_line home_isolated" partial
   load_state drive
+  local created adir out rc note=ok
+  created="$(begin_attempt install-guardian "install-dry-run" \
+    "exit_0 dry_run_line home_isolated" partial)"
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
   out="$ARTIFACTS/install-dry-run-${VERIFY_RUN_ID}.txt"
   set +e
   {
@@ -248,18 +462,37 @@ cmd_drive_install_dry_run() {
   rc=$?
   set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
-  grep -Eq 'dry-run|YA AL DIA|se instalaria|INSTALADO|destino' "$out" \
-    || iso_fail "dry-run produced no recognizable status (see $out)"
-  printf 'proof: dry-run exit 0; log at %s\n' "$out"
+  if [ "$rc" -ne 0 ]; then
+    cat "$out" >&2
+    note=fail
+  elif ! grep -Eq 'dry-run|YA AL DIA|se instalaria|INSTALADO|destino' "$out"; then
+    printf 'control-summonaikit: dry-run produced no recognizable status (see %s)\n' "$out" >&2
+    note=fail
+    rc=1
+  else
+    printf 'proof: dry-run exit 0; log at %s\n' "$out"
+  fi
+  set +e
+  _close_alias "$adir" "install-dry-run" "exit_0 dry_run_line home_isolated" \
+    "$rc" "$out" partial "$note"
+  local ec=$?
+  set -e
+  exit "$ec"
 }
 
 cmd_drive_gate_scenario() {
+  local scenario="${1:-01-sin-armar}"
+  local case_id reqs
+  case_id="$(_gate_case_for_scenario "$scenario")"
+  reqs="$(_gate_reqs_for_case "$case_id")"
+  run_synthetic_drive gate-turn "$case_id" "$reqs" partial
   load_state drive
-  scenario="${1:-01-sin-armar}"
-  src="$VERIFY_REPO/tests/fixtures/escenarios/$scenario"
+  local src="$VERIFY_REPO/tests/fixtures/escenarios/$scenario"
   [ -d "$src" ] || iso_fail "unknown scenario: $scenario"
 
+  local created adir out rc note=ok sc_dir
+  created="$(begin_attempt gate-turn "$case_id" "$reqs" partial)"
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
   sc_dir="$(mktemp -d "$VERIFY_TMPDIR/sc-XXXXXX")"
   cp -R "$src" "$sc_dir/"
   out="$ARTIFACTS/gate-${scenario}-${VERIFY_RUN_ID}.txt"
@@ -275,35 +508,212 @@ cmd_drive_gate_scenario() {
   set -e
   rm -rf "$sc_dir"
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
-  grep -q "=== escenario $scenario" "$out" || iso_fail "scenario header missing in $out"
-  printf 'proof: scenario %s exercised; log at %s\n' "$scenario" "$out"
+  if [ "$rc" -ne 0 ]; then
+    cat "$out" >&2
+    note=fail
+  elif ! grep -q "=== escenario $scenario" "$out"; then
+    printf 'control-summonaikit: scenario header missing in %s\n' "$out" >&2
+    note=fail
+    rc=1
+  else
+    printf 'proof: scenario %s exercised; log at %s\n' "$scenario" "$out"
+  fi
+  printf 'alcance parcial: alias drive-gate-scenario acredita solo %s\n' "$case_id"
+  set +e
+  _close_alias "$adir" "$case_id" "$reqs" "$rc" "$out" partial "$note"
+  local ec=$?
+  set -e
+  exit "$ec"
 }
 
 cmd_drive_audit_ledger() {
+  run_synthetic_drive audit-ledger "ledger-run" "header_AUDITORIA exit_observed" full
   load_state drive
+  local created adir out rc note=ok
+  created="$(begin_attempt audit-ledger "ledger-run" "header_AUDITORIA exit_observed" full)"
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
   out="$ARTIFACTS/audita-ledger-${VERIFY_RUN_ID}.txt"
   set +e
   runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/audita-ledger.sh" >"$out" 2>&1
   rc=$?
   set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
-  grep -q 'AUDITORIA DEL LEDGER' "$out" || iso_fail "expected ledger header in $out"
-  printf 'proof: audita-ledger OK; log at %s\n' "$out"
+  if [ "$rc" -ne 0 ]; then
+    cat "$out" >&2
+    note=fail
+  elif ! grep -q 'AUDITORIA DEL LEDGER' "$out"; then
+    printf 'control-summonaikit: expected ledger header in %s\n' "$out" >&2
+    note=fail
+    rc=1
+  else
+    printf 'proof: audita-ledger OK; log at %s\n' "$out"
+  fi
+  set +e
+  _close_alias "$adir" "ledger-run" "header_AUDITORIA exit_observed" \
+    "$rc" "$out" full "$note"
+  local ec=$?
+  set -e
+  exit "$ec"
 }
 
 cmd_drive_deploy_log() {
+  run_synthetic_drive check-deploy-log "deploy-log-run" "exit_0 deploy_log_ok_line" full
   load_state drive
+  local created adir out rc note=ok
+  created="$(begin_attempt check-deploy-log "deploy-log-run" "exit_0 deploy_log_ok_line" full)"
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
   out="$ARTIFACTS/check-deploy-log-${VERIFY_RUN_ID}.txt"
   set +e
   runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/check-deploy-log.sh" >"$out" 2>&1
   rc=$?
   set -e
   printf 'exit=%s\nartifact=%s\n' "$rc" "$out"
-  [ "$rc" -eq 0 ] || { cat "$out" >&2; exit 1; }
-  grep -q '\[deploy-log\] OK' "$out" || iso_fail "expected deploy-log OK in $out"
-  printf 'proof: check-deploy-log OK; log at %s\n' "$out"
+  if [ "$rc" -ne 0 ]; then
+    cat "$out" >&2
+    note=fail
+  elif ! grep -q '\[deploy-log\] OK' "$out"; then
+    printf 'control-summonaikit: expected deploy-log OK in %s\n' "$out" >&2
+    note=fail
+    rc=1
+  else
+    printf 'proof: check-deploy-log OK; log at %s\n' "$out"
+  fi
+  set +e
+  _close_alias "$adir" "deploy-log-run" "exit_0 deploy_log_ok_line" \
+    "$rc" "$out" full "$note"
+  local ec=$?
+  set -e
+  exit "$ec"
+}
+
+cmd_list_features() {
+  python3 - "$CATALOG" "$skill_root" <<'PY'
+import json, sys
+from pathlib import Path
+
+cat = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+skill = Path(sys.argv[2])
+for fid, meta in (cat.get("features") or {}).items():
+    status = meta.get("status") or "active"
+    card = meta.get("card") or ""
+    mode = ""
+    scope = "none"
+    owner = meta.get("owner_task") or ""
+    desc = skill / "features" / f"{fid}.json"
+    if desc.is_file():
+        d = json.loads(desc.read_text(encoding="utf-8"))
+        mode = d.get("execution_mode") or ""
+        cases = [c.get("id") for c in (d.get("cases") or []) if c.get("id")]
+        scope = "full"
+        if cases:
+            scope = "full cases=" + ",".join(cases)
+    line = f"id={fid} card={card} mode={mode} scope={scope} status={status}"
+    if owner:
+        line += f" owner_task={owner}"
+    print(line)
+PY
+}
+
+cmd_drive() {
+  local fid="${1:-}"
+  [ -n "$fid" ] || die "usage: control-summonaikit drive <id>"
+  local status
+  status="$(_feature_status "$fid")"
+  if [ "$status" = missing ]; then
+    write_blocked_attempt "$fid" "feature desconocida"
+  fi
+  if [ "$status" = pending ]; then
+    write_blocked_attempt "$fid" "pending sin ejecutor"
+  fi
+  if [ ! -f "$skill_root/features/$fid.json" ]; then
+    write_blocked_attempt "$fid" "sin descriptor"
+  fi
+  local meta cases reqs
+  meta="$(_cases_and_assertions "$fid")"
+  cases="$(_parse_kv CASES "$meta")"
+  reqs="$(_parse_kv REQS "$meta")"
+  if [ -n "${SAIKIT_VERIFY_SYNTHETIC_EXECUTOR:-}" ]; then
+    run_synthetic_drive "$fid" "$cases" "$reqs" full
+  fi
+  if [ ! -f "$STATE_DIR/state.json" ]; then
+    write_blocked_attempt "$fid" "sin instancia — doctor/launch faltante"
+  fi
+  load_state drive
+  local created adir
+  created="$(begin_attempt "$fid" "$cases" "$reqs" full)"
+  adir="$(_parse_kv ATTEMPT_DIR "$created")"
+  [ -d "$adir" ] || iso_fail "no se pudo crear intento de evidencia"
+  local rc=0 note=ok out
+  case "$fid" in
+    install-guardian)
+      out="$ARTIFACTS/install-dry-run-${VERIFY_RUN_ID}.txt"
+      set +e
+      {
+        printf 'HOME=%s\n' "$VERIFY_HOME"
+        runtime_exec "$VERIFY_HOME" bash "$INSTALLER" --dry-run
+      } >"$out" 2>&1
+      rc=$?
+      set -e
+      ;;
+    gate-turn)
+      out="$ARTIFACTS/gate-turn-${VERIFY_RUN_ID}.txt"
+      : >"$out"
+      local sc scenario sc_dir
+      for scenario in 01-sin-armar 02-armado-contrato; do
+        sc="$VERIFY_REPO/tests/fixtures/escenarios/$scenario"
+        [ -d "$sc" ] || continue
+        sc_dir="$(mktemp -d "$VERIFY_TMPDIR/sc-XXXXXX")"
+        cp -R "$sc" "$sc_dir/"
+        set +e
+        {
+          printf 'hook=%s\nscenario=%s\n' "$VERIFY_DEST" "$scenario"
+          runtime_exec "$VERIFY_HOME" bash "$VERIFY_REPO/tools/golden-harness.sh" \
+            --print --hook "$VERIFY_DEST" --scenarios "$sc_dir"
+        } >>"$out" 2>&1
+        rc=$?
+        set -e
+        rm -rf "$sc_dir"
+        [ "$rc" -eq 0 ] || break
+      done
+      ;;
+    audit-ledger)
+      out="$ARTIFACTS/audita-ledger-${VERIFY_RUN_ID}.txt"
+      set +e
+      runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/audita-ledger.sh" >"$out" 2>&1
+      rc=$?
+      set -e
+      ;;
+    check-deploy-log)
+      out="$ARTIFACTS/check-deploy-log-${VERIFY_RUN_ID}.txt"
+      set +e
+      runtime_exec "$VERIFY_REPO" bash "$VERIFY_REPO/tools/check-deploy-log.sh" >"$out" 2>&1
+      rc=$?
+      set -e
+      ;;
+    *)
+      write_blocked_attempt "$fid" "sin adaptador legacy"
+      ;;
+  esac
+  if [ "$rc" -ne 0 ]; then
+    note=fail
+    [ -n "${out:-}" ] && [ -f "$out" ] && cat "$out" >&2
+  fi
+  evidence redact-file --path "${out:-/dev/null}" 2>/dev/null || true
+  if [ -n "${out:-}" ] && [ -f "$out" ]; then
+    cp "$out" "$adir/log.txt"
+    evidence redact-file --path "$adir/log.txt" 2>/dev/null || true
+  fi
+  append_action "$adir" "${cases%% *}" "act-1" "$rc" "$note" "drive" "$fid"
+  local result=FAIL
+  [ "$rc" -eq 0 ] && [ "$note" = ok ] && result=PASS
+  # 19.3: envelope only — real assertion semantics are 19.4.
+  # shellcheck disable=SC2086
+  record_case_assertions "$adir" "${cases%% *}" "$result" "$note" $reqs
+  set +e
+  finish_attempt "$adir" "$reqs" full
+  local ec=$?
+  set -e
+  exit "$ec"
 }
 
 usage() {
@@ -317,9 +727,11 @@ commands:
   cli -- <catalog-entry...>      run a catalog public entry under the run env
                                  (not an arbitrary shell/command; deliberate
                                  restriction vs the old CLI)
+  list-features                  enumerate id/card/mode/scope (no launch)
+  drive <id>                     run all required cases for that feature
   drive-install-dry-run          exercise installer --dry-run under VERIFY_HOME
   drive-gate-scenario [name]     run golden-harness --print for one scenario
-                                 (default: 01-sin-armar)
+                                 (default: 01-sin-armar; partial scope)
   drive-audit-ledger             run tools/audita-ledger.sh
   drive-deploy-log               run tools/check-deploy-log.sh
 
@@ -342,6 +754,8 @@ main() {
     doctor) cmd_doctor "$@" ;;
     cleanup) cmd_cleanup "$@" ;;
     cli) cmd_cli "$@" ;;
+    list-features) cmd_list_features "$@" ;;
+    drive) cmd_drive "$@" ;;
     drive-install-dry-run) cmd_drive_install_dry_run "$@" ;;
     drive-gate-scenario) cmd_drive_gate_scenario "$@" ;;
     drive-audit-ledger) cmd_drive_audit_ledger "$@" ;;
