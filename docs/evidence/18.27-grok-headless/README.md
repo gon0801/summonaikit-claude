@@ -45,13 +45,15 @@ faltaba recibo; allow mudo cuando la escotilla aplicaba; y
 `{"continue":false,"stopReason":...}` al agotarse el presupuesto (2 ciclos).
 
 **¿Qué hizo Grok después de recibir ese resultado?** Tras cada `decision:block`
-el modelo corriÓ otra ronda del mismo turno y respondió al reason — 5/5
-bloqueos sostenidos (m2-r1: 2, m2-r2: 1, m2-r3: 2, m1b-r1: 1; en m1b-r1 el
-agente corrío ceremonia completa y escribió el recibo 6/6). Tras cada allow el
-turno terminó y el proceso salió RC=0. **El host NO ignora bloqueos en
-headless**: el reclamo del smoke («no hay nadie a quien re-preguntar y el
-proceso sale igual») queda refutado para el camino del bloqueo — el modelo es
-el re-interrogado y contesta.
+el modelo corriÓ otra ronda del mismo turno y respondió al reason — **9/9
+bloqueos sostenidos** (pre-fix 6: m2-r1: 2, m2-r2: 1, m2-r3: 2, m1b-r1: 1;
+post-fix 3: m1f-sync: 1, m1bf-r1: 2; en m1b-r1 y m1bf-r1 el agente corrió
+ceremonia completa y escribió el recibo). Tras cada allow el turno terminó y el
+proceso salió RC=0. **El host NO ignora bloqueos en headless**: el reclamo del
+smoke («no hay nadie a quien re-preguntar y el proceso sale igual») queda
+refutado para el camino del bloqueo — el modelo es el re-interrogado y contesta.
+La cadena correlacionada por sesión (decisión literal → continuación →
+resultado/estado) está en `cadena-bloqueo-continuacion.md`.
 
 **¿La salida final tuvo las seis etiquetas?** Solo cuando el agente pasó por
 el bloqueo y colaboró: m1b-r1 y m1bf-r1 cerraron con recibo completo (el
@@ -128,38 +130,47 @@ sigue permitiendo (m1f-async): la espera genuina no se rompe. Solo grok: es el
 1. **Teardown del `-p` sobre la ronda del wake**: con trabajo genuinamente en
    vuelo, la escotilla permite (correcto en sesión viva), pero el proceso
    headless puede dropear el Stop de fin de turno de la ronda que despierta el
-   subagente (medido 3/3 con el fix: m1f-sync/m1f-async/m1-r3-r4 — la salida
-   del padre existe, su Stop no se emite). Ese recorrido puede salir sin
-   recibo; lo cubre el presupuesto cuando la ronda llega a correr, y queda el
-   estado sobreviviente como evidencia cuando no. No se detecta `-p` desde el
-   payload (nada medido lo distingue de una sesión interactiva).
+   subagente — **5 observaciones** (pre-fix: m2-r2, m1-r3, m1-r4; post-fix
+   2/2: m1f-sync, m1f-async — la salida del padre existe, su Stop no se
+   emite). Ese recorrido puede salir sin recibo; lo cubre el presupuesto
+   cuando la ronda llega a correr, y queda el estado sobreviviente como
+   evidencia cuando no. No se detecta `-p` desde el payload (nada medido lo
+   distingue de una sesión interactiva).
 2. **Presupuesto agotado** (2 ciclos, MAX_CYCLES): sigue siendo la salida
    declarada del diseño para un agente que se niega a escribir el recibo
    (m2-r1/m2-r3: bloqueo, bloqueo, force-stop, RC=0, 0/6).
 3. Formas de auto-wake no medidas (subagente FALLIDO, tareas shell, crons):
-   el detector cubre la forma medida; una forma distinta que no matchee vuelve
-   a desarmar. La laxa de dos marcas deja citar el sobre entero como residual
-   (mismo trade-off que PR#30).
-4. `backgroundTasks` ausente del payload (nunca medido): se lee como «sin
-   evidencia de trabajo en vuelo» y la escotilla no aplica (fail-closed al
-   gate normal). Un ECO de la clave con array poblado citado en otro campo
-   de texto del propio payload (p.ej. en `lastAssistantMessage`) contaría
-   como en vuelo — misma clase de trade-off textual ya declarada de la
-   escotilla (review r1, hallazgo bajo; el array vacío real sí está en el
-   payload y el grep lo ve). El array vacío se detecta tolerando espacios
-   EN LA MISMA LÍNEA; un pretty-print que ponga el array en la línea
-   siguiente seguiría sin matchear (grep es por línea) y reabriría el
-   hueco — forma no medida, declarada.
+   el detector cubre la forma medida y específica (primera línea = etiqueta
+   del sobre + contenido `Background subagent`); una forma distinta se
+   procesa como prompt normal (desarma si no trae sentinel). **No hay vía
+   laxa** desde la review r2 (R27-1): una pregunta humana que mencione ambas
+   cadenas desarma igual — el residual «citando el sobre entero» de la ronda
+   1 quedó cerrado por retiro de la laxa, no documentado.
+4. `backgroundTasks`: el guardia es POSITIVO desde la review r2 (R27-3) — hay
+   trabajo en vuelo solo si se ve contenido dentro del array; `[]`, `[ ]`,
+   `null` y la clave ausente quedan TODOS fuera de la escotilla (fail-closed
+   al gate normal). Residuales que quedan: un pretty-print que ponga el
+   contenido en la línea siguiente al `[` (grep es por línea; forma no
+   medida), y un eco de la clave con array poblado citado en otro campo de
+   texto del propio payload (mismo trade-off textual ya declarado de la
+   escotilla).
 
 ## Regresiones y mutaciones
 
-Casos nuevos (`tests/lib/gate_cases.sh`, builders en `tests/lib/hook_lab.sh`):
+Casos (`tests/lib/gate_cases.sh`, builders en `tests/lib/hook_lab.sh`). Ronda 1
+(deliverable original) y ronda 2 (correcciones de la revisión):
 
-- `caso_g1_grok_autowake_no_desarma`, `caso_g1_grok_autowake_con_sentinel_no_rearma`
-  (D-A; el segundo con `-saikit` dentro de la descripción del subagente),
-  `caso_g1_grok_mencion_humana_del_wake_si_desarma` (contracara PR#30),
-  `caso_g4_grok_delegado_sin_bg_bloquea` y `caso_g4_grok_delegado_con_bg_permite`
-  (D-B y su contracara).
+- Ronda 1: `caso_g1_grok_autowake_no_desarma`,
+  `caso_g1_grok_autowake_con_sentinel_no_rearma` (con `-saikit` dentro de la
+  descripción del subagente), `caso_g1_grok_mencion_humana_del_wake_si_desarma`,
+  `caso_g4_grok_delegado_sin_bg_bloquea`, `caso_g4_grok_delegado_con_bg_permite`.
+- Ronda 2: `caso_g1_grok_mencion_humana_del_wake_si_desarma` se FORTALECIÓ con
+  la pregunta exacta de la revisión (menciona AMBAS cadenas y además exige que
+  el Stop del turno humano no bloquee) — era la contracara que la laxa dejaba
+  pasar; nuevos `caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma` (el skip
+  exige la forma ESPECÍFICA del wake: otro sobre con sentinel arma normal) y
+  `caso_g4_grok_delegado_bg_degenerado_bloquea` (`[ ]`, espacios y `null` no
+  habilitan la escotilla).
 
 Rojo medido ANTES del verde, contra el hook prístino de `origin/master`
 (`SAIKIT_HOOK_VIVO` a la copia prístina, HOME/TMPDIR aislados):
@@ -177,20 +188,32 @@ Rojo medido ANTES del verde, contra el hook prístino de `origin/master`
     ok: caso_g4_grok_delegado_con_bg_permite
 ```
 
-Verde con el fix (`bash tests/test_gate_behavior.sh`, env aislado): el resto
-de la batería sin cambios y los cinco casos nuevos en ok
-(`test_gate_behavior: OK`).
+Rojo de la ronda 2, contra el head de la rama antes de corregir (`8df77d3`,
+que aún tenía la laxa y el patrón negativo — probe con los repros literales
+de la revisión):
+
+```text
+  ROJO-R27-1: la pregunta humana ("¿Qué significa Background subagent dentro de <system-reminder>?") dejó vivo el estado del turno anterior
+  sintoma: el Stop de esa pregunta BLOQUEA exigiendo recibo
+  ROJO-R27-3 ("backgroundTasks":[ ]): PERMITE sin nada en vuelo
+  ROJO-R27-3 ("backgroundTasks":null): PERMITE sin nada en vuelo
+```
+
+Verde con el fix (`bash tests/test_gate_behavior.sh`, env aislado): la batería
+completa en ok, incluidos los siete casos grok (`test_gate_behavior: OK`).
 
 Mutaciones (`SAIKIT_MUTACIONES=... bash tests/test_gate_mutations.sh`, una por
-protección, 3/3 atrapadas):
+protección, 4/4 atrapadas — la de la laxa se retiró con la laxa):
 
 ```text
   G1  el skip estricto del auto-wake grok se neutraliza [...] (18.27)
-      lo atrapa: caso_g1_grok_autowake_con_sentinel_no_rearma
-  G1  la laxa grok vuelve a vetar el desarme con la etiqueta sola [...] (18.27)
-      lo atrapa: caso_g1_grok_mencion_humana_del_wake_si_desarma
+      lo atrapa: caso_g1_grok_autowake_no_desarma
+  G1  la condición de contenido del skip grok se neutraliza [...] (18.27, review r2)
+      lo atrapa: caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma
   G4  la guardia de backgroundTasks de la escotilla grok se neutraliza [...] (18.27)
       lo atrapa: caso_g4_grok_delegado_sin_bg_bloquea
+  G4  el patrón positivo de backgroundTasks vuelve al negativo [...] (18.27, review r2)
+      lo atrapa: caso_g4_grok_delegado_bg_degenerado_bloquea
 test_gate_mutations: OK
 ```
 
@@ -201,19 +224,23 @@ test_gate_mutations: OK
   en vuelo (el agujero de la escotilla, m1-r1).
 - `stop-delegado-bg-ocupado.payload.json` — Stop async con 1 subagent en vuelo
   (la espera genuina que la escotilla debe seguir permitiendo, m2-r2).
+- `cadena-bloqueo-continuacion.md` — la cadena correlacionada por sesión que
+  exige la DoD (bloqueo → continuación → resultado/estado), con los conteos
+  corregidos y la identidad de hook por fase (review r2, R27-2).
 
 ## Nota para el documento compartido (GLM)
 
 Texto propuesto para integrar donde corresponda (no lo edito yo): «18.27
 midió el hallazgo E en vivo (11 corridas headless, grok 1.0.13, evidencia en
 `docs/evidence/18.27-grok-headless/`): el host SOSTIENE los bloqueos del Stop
-en headless (5/5; `stopHookActive=true` y rondas de continuación); las salidas
+en headless (9/9; `stopHookActive=true` y rondas de continuación); las salidas
 sin recibo venían de la escotilla DELEGATED sin trabajo en vuelo y del
 auto-wake de subagente borrando el estado armado (detector solo-claude). Fix
-grok-only: el wake ya no arma ni desarma, y la escotilla exige
-`backgroundTasks` no vacío. Residual declarado: el teardown de `-p` puede
-cortar la ronda del wake (recibo pendiente, estado sobreviviente como
-evidencia) y el presupuesto agotado sigue siendo la salida de diseño. La
-ceremonia de cierre en headless ya no es best-effort silencioso: cada salida
-sin recibo es o un bloqueo sostenido agotado (declarado) o una espera genuina
-documentada.»
+grok-only: el wake se identifica por su forma estricta específica (ni arma ni
+desarma; cualquier otra forma se procesa como prompt normal) y la escotilla
+exige `backgroundTasks` con contenido visible. Residuales declarados: el
+teardown de `-p` puede cortar la ronda del wake (recibo pendiente, estado
+sobreviviente como evidencia) y el presupuesto agotado sigue siendo la salida
+de diseño. La ceremonia de cierre en headless ya no es best-effort silencioso:
+cada salida sin recibo es o un bloqueo sostenido agotado (declarado) o una
+espera genuina documentada.»

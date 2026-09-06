@@ -1561,21 +1561,20 @@ SAIKIT_TASK_NOTIFICATION_CIERRE_RE='</task-notification>'
 # estado vacio y dejaba salir el proceso sin recibo — el mecanismo exacto del
 # hallazgo E del smoke 18.9 (esc2), reproducido y pegado en la evidencia.
 # Misma disciplina que 10.14: un evento del sistema no arma NI desarma.
-# Estricta: la PRIMERA LINEA del prompt ES la etiqueta del sobre (asi llega
-# medido: <system-reminder> sola en linea 1, contenido de la 2 en adelante).
-# Ojo con la forma de la regex: grep trabaja POR LINEA, y el par
+# Estricta y UNICA: la PRIMERA LINEA del prompt ES la etiqueta del sobre (asi
+# llega medido: <system-reminder> sola en linea 1, contenido de la 2 en
+# adelante) Y el contenido especifico del wake ("Background subagent") vive en
+# el texto. Ojo con la forma de la regex: grep trabaja POR LINEA, y el par
 # etiqueta+contenido vive en DOS lineas — "anclar y cruzar el \n" en un solo
-# RE no matchea nunca. Por eso el skip exige DOS marcas: primera linea =
-# etiqueta (esta RE, evaluada sobre head -n 1) Y el contenido del wake en el
-# texto (SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE, en cualquier linea).
+# RE no matchea nunca; por eso el skip exige DOS marcas evaluadas por separado.
+# Review r2 (R27-1): NO hay via laxa — una mera mencion de ambas cadenas en
+# medio de un prompt humano heredaba el estado armado del turno anterior y su
+# Stop le exigiia recibo a un turno que nadie armo (A4). El prompt humano de
+# grok llega WRAPPEADO en <user_query> (medido 7.1), asi que su primera linea
+# nunca es la etiqueta del sobre: la forma estricta es la unica senal que
+# separa el wake real de una cita humana.
 SAIKIT_GROK_WAKE_STRICT_RE='^[[:space:]]*<system-reminder>[[:space:]]*$'
-# Laxa (solo veta el desarme, NUNCA salta el armado): par apertura+contenido,
-# la misma disciplina de dos marcas del caso claude. La etiqueta sola no
-# alcanza — <system-reminder> es el sobre GENERICO del host y un humano la
-# cita seguido; el par completo solo aparece citando el sobre del wake entero
-# (residual declarado, mismo trade-off que PR #30).
-SAIKIT_GROK_WAKE_LAXA_APERTURA_RE='<system-reminder>'
-SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE='Background subagent'
+SAIKIT_GROK_WAKE_CONTENIDO_RE='Background subagent'
 
 # La forma laxa exige las DOS marcas, apertura y cierre. Motivo MEDIDO (PR #30,
 # hallazgo de greptile que quedo a medias hasta esta correccion): con solo la
@@ -1588,19 +1587,13 @@ SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE='Background subagent'
 # caso_g1_mencion_humana_sin_sentinel_si_desarma.
 parece_notificacion_laxa() {
   # Forma claude: par apertura+cierre (la discusion de arriba es de este par).
+  # Review r2 (R27-1): NO hay forma laxa para grok — la mera coexistencia de
+  # "Background subagent" y "<system-reminder>" en un prompt HUMANO sin
+  # sentinel debe desarmar como cualquier prompt sin sentinel; identificar el
+  # wake grok por menos que su forma estricta heredaba el gate al turno
+  # siguiente. La rama grok que vivia aca se retiro.
   if printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_LAXA_RE" \
      && printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_CIERRE_RE"; then
-    return 0
-  fi
-  # 18.27 (D-A): forma grok del auto-wake — el par apertura+contenido veto el
-  # desarme igual que la forma claude. Solo veta: el armado sigue exigiendo
-  # sentinel como siempre. Acotado a TARGET=grok porque el sobre es de ese
-  # host; en los demas la forma claude de arriba sigue sola. Va DESPUES del
-  # par claude y sin early-return propio de la rama de arriba: el || return 1
-  # original cortaba la funcion antes de evaluar esta forma.
-  if [ "$TARGET" = "grok" ] \
-     && printf '%s' "$1" | grep -Eq "$SAIKIT_GROK_WAKE_LAXA_APERTURA_RE" \
-     && printf '%s' "$1" | grep -Eq "$SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE"; then
     return 0
   fi
   return 1
@@ -1653,11 +1646,13 @@ start_harness() {
   # prompts a subagentes lo traen): el skip estricto tiene que vivir ANTES del
   # gate del sentinel para que el evento del sistema ni arme ni desarme — la
   # misma leccion de 10.14 para claude. Acotado a TARGET=grok: el sobre es de
-  # ese host. Las DOS marcas (ver el comentario de la constante): primera
-  # linea = etiqueta del sobre, contenido del wake en el texto.
+  # ese host. Las DOS marcas de la forma especifica (ver el comentario de la
+  # constante): primera linea = etiqueta del sobre, contenido del wake en el
+  # texto. Review r2 (R27-1): sin via laxa — cualquier otra forma cae al gate
+  # del sentinel como prompt normal.
   if [ "$PHASE" = "prompt" ] && [ "$TARGET" = "grok" ] \
      && printf '%s\n' "$prompt_text" | head -n 1 | grep -Eq "$SAIKIT_GROK_WAKE_STRICT_RE" \
-     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_GROK_WAKE_LAXA_CONTENIDO_RE"; then
+     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_GROK_WAKE_CONTENIDO_RE"; then
     emit_allow
   fi
 
@@ -3267,17 +3262,19 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # esta medido; la escotilla de los demas hosts queda byte-identica.
   # Fail-closed declarado: un Stop grok SIN la clave backgroundTasks (nunca
   # medido) trata "sin evidencia de trabajo en vuelo" y cae al gate normal.
-  # Residual del mismo tipo (review r1): un ECO de la clave con array poblado
-  # en otro campo de texto del payload (p.ej. citado en lastAssistantMessage)
-  # cuenta como en vuelo — misma clase de trade-off textual ya declarada de
-  # la escotilla. El array vacio se detecta tolerando espacios (review r1: lo
-  # medido es compacto, pero un pretty-print futuro no debe reabrir D-B).
+  # Review r2 (R27-3): el patron es POSITIVO — hay trabajo en vuelo solo si se
+  # VE contenido dentro del array (primer caracter no-blanco tras "[" que no
+  # sea "]"). Las formas degeneradas "no encontré el vacío compacto = hay
+  # trabajo" ([]) / ([ ]) / (null) / ausente quedan todas fuera de la escotilla
+  # y caen al gate normal. Multilinea (el contenido en la linea siguiente a
+  # "[") sigue sin matchear: forma no medida, residual declarado. Un ECO de la
+  # clave con array poblado citado en otro campo de texto del payload cuenta
+  # como en vuelo — misma clase de trade-off textual ya declarada de la
+  # escotilla (el array vacío real, en cambio, no matchea el patron positivo).
   grok_bg_en_vuelo=0
-  case "$INPUT" in
-    *'"backgroundTasks":'*)
-      printf '%s' "$INPUT" | grep -q '"backgroundTasks":[[:space:]]*\[\]' || grok_bg_en_vuelo=1
-      ;;
-  esac
+  if printf '%s' "$INPUT" | grep -Eq '"backgroundTasks":[[:space:]]*\[[[:space:]]*[^][:space:]]'; then
+    grok_bg_en_vuelo=1
+  fi
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE" \
      && { [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
