@@ -3320,15 +3320,21 @@ pretool_es_git_push_protegida() {
 pretool_es_hatch() {
   printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]._-])saikit-merge\.sh([^[:alnum:]._-]|$)'
 }
-# json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path.
+# json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path
+# or "path". Peel one wrapping layer (JSON-raw or plain).
 pretool_strip_comillas_hatch() {
   _pt_q="$1"
-  _pt_q="${_pt_q#\\}"
-  _pt_q="${_pt_q#\"}"
-  _pt_q="${_pt_q#\'}"
+  case "$_pt_q" in
+    \\\"*) _pt_q="${_pt_q#\\\"}" ;;
+    \"*)   _pt_q="${_pt_q#\"}" ;;
+    \'*)   _pt_q="${_pt_q#\'}" ;;
+  esac
+  case "$_pt_q" in
+    *\\\") _pt_q="${_pt_q%\\\"}" ;;
+    *\")   _pt_q="${_pt_q%\"}" ;;
+    *\')   _pt_q="${_pt_q%\'}" ;;
+  esac
   _pt_q="${_pt_q%\\}"
-  _pt_q="${_pt_q%\"}"
-  _pt_q="${_pt_q%\'}"
   printf '%s' "$_pt_q"
 }
 pretool_token_hatch() {
@@ -3354,7 +3360,7 @@ EOF
 pretool_es_hatch_spoof() {
   while IFS= read -r _pt_cand || [ -n "$_pt_cand" ]; do
     _pt_cand="$(pretool_strip_comillas_hatch "$_pt_cand")"
-    _pt_base="${_pt_cand##*/}"
+    _pt_base="$(pretool_strip_comillas_hatch "${_pt_cand##*/}")"
     case "$_pt_base" in
       saikit-merge.sh) ;;
       saikit-merge.sh*) return 0 ;;
