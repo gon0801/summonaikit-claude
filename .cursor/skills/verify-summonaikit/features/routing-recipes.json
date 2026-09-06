@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "routing-recipes",
+  "card": "routing-recipes.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/routing-recipes.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": [
+    "tools/model-routing.sh",
+    "tools/gen-recetas-manifest.sh"
+  ],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "routing-roles",
+      "required_assertions": [
+        "claude_implementer",
+        "grok_reviewer",
+        "empty_unmeasured"
+      ]
+    },
+    {
+      "id": "routing-unknown",
+      "required_assertions": ["unknown_role_exit_2"]
+    },
+    {
+      "id": "recipes-manifest-ok",
+      "required_assertions": ["manifest_check_ok"]
+    },
+    {
+      "id": "recipes-manifest-altered",
+      "required_assertions": ["manifest_check_stale"]
+    },
+    {
+      "id": "recipes-consume",
+      "required_assertions": ["recetario_consumido"]
+    },
+    {
+      "id": "routing-no-16.7",
+      "required_assertions": ["no_task_flag"]
+    },
+    {
+      "id": "routing-no-live",
+      "required_assertions": ["no_live_turn", "no_dsh_adapter_load"]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "id": "install-hosts",
+  "card": "install-hosts.md",
+  "executor": {
+    "kind": "driver",
+    "path": "scripts/drivers/install-hosts.sh"
+  },
+  "execution_mode": "sandbox",
+  "surfaces": [
+    "tools/install-hook.sh",
+    "tools/check-hook-registration.sh"
+  ],
+  "requirements": ["doctor"],
+  "cases": [
+    {
+      "id": "hosts-four-copies",
+      "required_assertions": [
+        "claude_hook",
+        "grok_hook",
+        "dsh_hook",
+        "codex_hook",
+        "zcode_no_hook_copy",
+        "kimi_no_hook_copy"
+      ]
+    },
+    {
+      "id": "hosts-zcode-reuses",
+      "required_assertions": ["zcode_reuses_claude", "zcode_dest_untouched"]
+    },
+    {
+      "id": "hosts-kimi-profiles",
+      "required_assertions": [
+        "kimi_profiles",
+        "kimi_no_model",
+        "kimi_dest_untouched"
+      ]
+    },
+    {
+      "id": "hosts-identity",
+      "required_assertions": [
+        "ownership_marker",
+        "dest_matches_source",
+        "procedencia"
+      ]
+    },
+    {
+      "id": "hosts-noop",
+      "required_assertions": ["ya_al_dia", "dest_unchanged"]
+    },
+    {
+      "id": "hosts-retirada",
+      "required_assertions": [
+        "retirada_preserva",
+        "neighbor_intact_after_retirada"
+      ]
+    },
+    {
+      "id": "hosts-foreign",
+      "required_assertions": ["foreign_intact"]
+    },
+    {
+      "id": "hosts-registration",
+      "required_assertions": [
+        "registro_por_texto",
+        "registro_no_solo_exit",
+        "fases_estructura"
+      ]
+    },
+    {
+      "id": "hosts-os-unavailable",
+      "required_assertions": [
+        "windows_wrap",
+        "posix_wrap",
+        "other_hosts_observed"
+      ]
+    },
+    {
+      "id": "hosts-symlink",
+      "required_assertions": ["symlink_refused"]
+    },
+    {
+      "id": "hosts-no-live",
+      "required_assertions": ["no_live_turn", "no_dsh_adapter_load"]
+    }
+  ]
+}
