@@ -54,4 +54,7 @@ user-visible behavior. It then uses exactly four H2 sections in this order:
 - [Merge a sealed PR (simulated)](./saikit-merge.md) covers `tools/saikit-merge.sh`
   with local Git/origin and a strict fake `gh`.
 - [Post-merge health warning](./saikit-postmerge.md) covers `tools/saikit-postmerge.sh` in simulated mode.
+- [Prepare the autopilot of a repo](./setup-autopilot.md) covers the five setup questions over a real PTY.
 - [Confirm before an autopilot merge](./autopilot-contract.md) covers the per-turn `-saikit:autopilot` sentinel, state flag, and confirmation paragraph.
+- [Install hosts and register them](./install-hosts.md) covers the four hook copies, zcode reuse, kimi profiles, and registration text.
+- [Route models and lock the recipe book](./routing-recipes.md) covers `tools/model-routing.sh` and `tools/gen-recetas-manifest.sh`.
