@@ -1,0 +1,6 @@
+# Kit pin (D24 / 18.11). Campos: sha256<TAB>basename
+# El hatch de PreToolUse hashea el archivo resuelto y compara contra esta fila.
+# Tests: plantan un pin match/mismatch junto a una copia temporal
+# ($LAB/proyecto/tools/MANIFEST.sha256). SAIKIT_KIT_MANIFEST overridea la
+# RUTA del pin (solo test); no es un flag que autorice el merge.
+11c97d7a6b725ab0a09dc7d6c1df2a61c4271451da6cbd5248084a8a466234b8	saikit-merge.sh

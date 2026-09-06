@@ -454,6 +454,7 @@ else:
 # alarma falsa que la Task 0.4 prohibe.
 print(json.dumps({
     "session_registrada": ("SessionStart" in registradas),
+    "pretool_registrada": ("PreToolUse" in registradas),
     "faltantes": faltantes,
     "leidos": leidos,
     "ilegibles": ilegibles,
@@ -480,6 +481,7 @@ matchers_obs="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; pr
 enabled_mal="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("enabled_mal",False))' 2>/dev/null)"
 fases_con_matcher="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fases_con_matcher",[])))' 2>/dev/null)"
 session_registrada="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("session_registrada",False))' 2>/dev/null)"
+pretool_registrada="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print(json.load(sys.stdin).get("pretool_registrada",False))' 2>/dev/null)"
 hook_paths="$(printf '%s' "$resultado" | "$python_bin" -c 'import json,sys; print("\n".join(json.load(sys.stdin).get("hook_paths",[])))' 2>/dev/null)"
 
 # Task 10.6 — afirmacion SEPARADA, y advisory: sin SessionStart el gate corre
@@ -493,6 +495,20 @@ reportar_session_rules() {
   reportar "              El gate NO depende de esto y sigue corriendo igual: lo que se pierde"
   reportar "              son las reglas que valen en toda sesion, arme o no el turno con -saikit."
   reportar "              Se arregla en settings.json: agregar el hook en SessionStart, sin matcher."
+}
+
+# Task 18.11 (D24): PreToolUse se afirma SEPARADO y NO entra en ESPERADAS.
+# Recommended: el gate corre sin ella; lo que se pierde es el veto al merge
+# a pelo. Meterla en ESPERADAS haria INCOMPLETO a todo install existente.
+reportar_pretool_merge() {
+  [ "$MODO" = "claude" ] || return 0
+  [ "$pretool_registrada" = "True" ] && return 0
+  reportar "[summonaikit] MERGE A PELO: PreToolUse no esta registrado."
+  reportar "              El gate NO depende de esto y sigue corriendo igual: lo que se pierde"
+  reportar "              es el veto a gh pr merge / git push a master|main antes de que corran."
+  reportar "              Se arregla en settings.json: agregar el hook en PreToolUse, matcher Bash."
+  reportar "              El command NO debe fijar SUMMONAIKIT_HOOK_PHASE=tool (pisa el payload"
+  reportar "              y salta el guardia). Deja PHASE sin setear, o SUMMONAIKIT_HOOK_PHASE=pretool."
 }
 
 # Task 16.5 (D1): advisory del recetario. El contrato del hook solo ofrece las
@@ -726,6 +742,7 @@ if [ -z "$faltantes" ]; then
   [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
   reportar_matcher
   reportar_session_rules
+  reportar_pretool_merge
   reportar_recetario
   reportar_wrapper_codex
   reportar_hook_grok
@@ -756,6 +773,7 @@ reportar "              revisar: $SETTINGS"
 [ "$enabled_mal" = "True" ] && reportar_enabled_zcode
 [ -n "$fases_con_matcher" ] && reportar_matcher_ups_stop
 reportar_session_rules
+reportar_pretool_merge
 reportar_recetario
 reportar_matcher
 reportar_wrapper_codex

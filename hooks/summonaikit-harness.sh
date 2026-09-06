@@ -3266,6 +3266,174 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   emit_gate_failure "$feedback"
 }
 
+# >>> SAIKIT-PRETOOL-MERGE v1 (Task 18.11 / D24) >>>
+# Medicion citada: https://code.claude.com/docs/en/hooks
+# PreToolUse niega con stdout JSON y exit 0 (exit != 0 = crash, puede
+# fail-open). NO reusar {"decision":"block"} del Stop.
+#
+# Snippet para settings.json del operador (Claude; operator-owned —
+# install-hook.sh NO escribe settings.json, igual que SessionStart / 10.6):
+#   "PreToolUse": [
+#     { "matcher": "Bash",
+#       "hooks": [{ "type": "command",
+#         "command": "SUMMONAIKIT_HOOK_TARGET=claude bash \"$HOME/.claude/hooks/summonaikit-harness.sh\"" }] }
+#   ]
+# NO fijar SUMMONAIKIT_HOOK_PHASE=tool: el env pisa el payload y este brazo
+# no corre. PHASE unset (hook_event_name → pretool) o =pretool.
+#
+# Tabla de decision (inputs: tool_name, command_text, cwd):
+#   no-Bash                         → pass (emit_allow, stdout vacio)
+#   texto 'gh pr merge'             → deny  (siempre; tambien encadenado a hatch)
+#   texto gh api … /merge           → deny
+#   git push + dest master|main     → deny  (conjunto minimo D24)
+#   token saikit-merge.sh           → hatch: hash == pin o deny (fail-closed)
+#   resto                           → pass
+# Los patrones a pelo van PRIMERO: un hatch pinneado no es permiso para
+# `…; gh pr merge` / `&&` / orden invertido en el mismo command. Pin:
+# tools/MANIFEST.sha256 (hermano del script resuelto) o SAIKIT_KIT_MANIFEST
+# (solo ruta, no flag). Escapes del command quedan crudos (mismo limite
+# que el Bash del adversary). Infra de un comando que NO es merge: fail-open.
+
+emit_pretool_deny() {
+  escaped="$(json_escape "$1")"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$escaped"
+  exit 0
+}
+
+# Quote-splitting `gh 'pr' merge` / `gh pr mer''ge` needs a lexer — residual.
+pretool_es_gh_pr_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+pr[[:space:]]+merge'; }
+pretool_es_gh_api_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+api[^[:cntrl:]]*/merge'; }
+pretool_es_git_push_protegida() {
+  # optional flags/args between git and push (F3); text-match, not a lexer
+  _pt_git_push_re='git([[:space:]]+(--?[^[:space:]]+|[[:alnum:]_.+/=-]+|=[^[:space:]]+))*[[:space:]]+push'
+  printf '%s' "$1" | grep -Eq "$_pt_git_push_re" || return 1
+  # dest ref after push, not URL/path/comment substring (F4).
+  # [+:]? cubre force (+master) y delete-ref (:main).
+  _pt_push="${1%%#*}"
+  _pt_git_dest_re='push[[:space:]].*([[:space:]]origin[[:space:]]+[+:]?(master|main)|[[:space:]]HEAD:(master|main)|refs/heads/(master|main)|[A-Za-z0-9._/-]+:(master|main)|[[:space:]][+:]?(master|main))([[:space:]]|$)'
+  printf '%s' "$_pt_push" | grep -Eq "$_pt_git_dest_re"
+}
+# Hatch solo si hay un path token cuyo basename es EXACTAMENTE saikit-merge.sh.
+# Sin borde al final, `…/saikit-merge.sh.bak` matcheaba el prefijo `.sh`,
+# hasheaba el script real del pin y dejaba pasar mientras bash corria el .bak
+# (lead review PR #198).
+pretool_es_hatch() {
+  printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]._-])saikit-merge\.sh([^[:alnum:]._-]|$)'
+}
+# json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path
+# or "path". Peel one wrapping layer (JSON-raw or plain).
+pretool_strip_comillas_hatch() {
+  _pt_q="$1"
+  case "$_pt_q" in
+    \\\"*) _pt_q="${_pt_q#\\\"}" ;;
+    \"*)   _pt_q="${_pt_q#\"}" ;;
+    \'*)   _pt_q="${_pt_q#\'}" ;;
+  esac
+  case "$_pt_q" in
+    *\\\") _pt_q="${_pt_q%\\\"}" ;;
+    *\")   _pt_q="${_pt_q%\"}" ;;
+    *\')   _pt_q="${_pt_q%\'}" ;;
+  esac
+  _pt_q="${_pt_q%\\}"
+  printf '%s' "$_pt_q"
+}
+pretool_token_hatch() {
+  # Token = path cuyo basename es exactamente saikit-merge.sh (no .sh.bak).
+  _pt_tok=""
+  while IFS= read -r _pt_cand || [ -n "$_pt_cand" ]; do
+    _pt_cand="$(pretool_strip_comillas_hatch "$_pt_cand")"
+    [ -n "$_pt_cand" ] || continue
+    case "$_pt_cand" in
+      */saikit-merge.sh|saikit-merge.sh)
+        _pt_tok="$_pt_cand"
+        break
+        ;;
+    esac
+  done <<EOF
+$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+' || true)
+EOF
+  printf '%s' "$_pt_tok"
+}
+# Basename that starts with saikit-merge.sh but continues (e.g. .bak): spoof.
+# Without this, bordered hatch would ignore .bak (ALLOW silencio) and the
+# truncating token would ALLOW by hashing the real pin — same observation.
+pretool_es_hatch_spoof() {
+  while IFS= read -r _pt_cand || [ -n "$_pt_cand" ]; do
+    _pt_cand="$(pretool_strip_comillas_hatch "$_pt_cand")"
+    _pt_base="$(pretool_strip_comillas_hatch "${_pt_cand##*/}")"
+    case "$_pt_base" in
+      saikit-merge.sh) ;;
+      saikit-merge.sh*) return 0 ;;
+    esac
+  done <<EOF
+$(printf '%s' "$1" | grep -Eo '[^[:space:];|&<>]+' || true)
+EOF
+  return 1
+}
+pretool_pins_iguales() { [ "$1" = "$2" ]; }
+
+pretool_hatch_verifica() {
+  _pt_cmd="$1"
+  _pt_cwd="$2"
+  _pt_tok="$(pretool_token_hatch "$_pt_cmd")"
+  [ -n "$_pt_tok" ] || return 1
+  case "$_pt_tok" in
+    /*|[A-Za-z]:*) _pt_path="$_pt_tok" ;;
+    *)
+      if [ -n "$_pt_cwd" ]; then
+        _pt_path="$_pt_cwd/$_pt_tok"
+      else
+        _pt_path="$_pt_tok"
+      fi
+      ;;
+  esac
+  [ -f "$_pt_path" ] || return 1
+  _pt_dir="$(cd "$(dirname "$_pt_path")" 2>/dev/null && pwd)" || return 1
+  _pt_path="$_pt_dir/$(basename "$_pt_path")"
+  if [ -n "${SAIKIT_KIT_MANIFEST:-}" ]; then
+    _pt_pin="$SAIKIT_KIT_MANIFEST"
+  else
+    _pt_pin="$_pt_dir/MANIFEST.sha256"
+  fi
+  [ -f "$_pt_pin" ] || return 1
+  _pt_esp="$(awk -F '\t' '/^#/ {next} $2=="saikit-merge.sh" {print $1; exit}' "$_pt_pin")"
+  [ -n "$_pt_esp" ] || return 1
+  _pt_real="$(sha256sum "$_pt_path" 2>/dev/null | cut -c1-64)"
+  [ -n "$_pt_real" ] || return 1
+  pretool_pins_iguales "$_pt_real" "$_pt_esp"
+}
+
+pretool_merge_guard() {
+  _pt_tool="$(json_top_level_string tool_name)"
+  [ -n "$_pt_tool" ] || _pt_tool="$(json_top_level_string toolName)"
+  if [ "$_pt_tool" != "Bash" ]; then
+    emit_allow
+  fi
+  _pt_cmd="$(json_tool_input_string command)"
+  [ -n "$_pt_cmd" ] || _pt_cmd="$(json_tool_input_string command toolInput)"
+  _pt_cwd="$(json_top_level_string cwd)"
+  if pretool_es_gh_pr_merge "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: use tools/saikit-merge.sh (not gh pr merge)"
+  fi
+  if pretool_es_gh_api_merge "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: use tools/saikit-merge.sh (not gh api /merge)"
+  fi
+  if pretool_es_git_push_protegida "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: git push to master/main is blocked; use tools/saikit-merge.sh"
+  fi
+  if pretool_es_hatch_spoof "$_pt_cmd"; then
+    emit_pretool_deny "merge denied: saikit-merge.sh path must end exactly at .sh"
+  fi
+  if pretool_es_hatch "$_pt_cmd"; then
+    if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
+      emit_allow
+    fi
+    emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"
+  fi
+  emit_allow
+}
+# <<< SAIKIT-PRETOOL-MERGE v1 <<<
+
 if [ -z "$PHASE" ]; then
   # 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no
   # hook_event_name (5.1 midio ambos; 5.2 midio camel-only). Sin leer camel,
@@ -3278,10 +3446,13 @@ if [ -z "$PHASE" ]; then
   # PHASE=tool y NUNCA armaria — es el defecto que esta task cierra aunque la
   # ceremonia (7.4) no se prenda. post_tool_use/subagent_start ya caen a tool,
   # que es lo que se quiere: record_tool_evidence anota roles y runners.
+  # 18.11: PreToolUse NUNCA cae a tool — record_tool_evidence acreditaria el
+  # comando como si ya hubiera corrido y despues emit_allow.
   case "$event" in
     UserPromptSubmit|beforeSubmitPrompt|user_prompt_submit) PHASE="prompt" ;;
     SessionStart|sessionStart|session_start) PHASE="session" ;;
     Stop|stop) PHASE="stop" ;;
+    PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;
     *) PHASE="tool" ;;
   esac
 fi
@@ -3290,5 +3461,6 @@ case "$PHASE" in
   prompt|session) start_harness ;;
   tool) record_tool_evidence ;;
   stop|verify) stop_gate ;;
+  pretool) pretool_merge_guard ;;
   *) emit_allow ;;
 esac
