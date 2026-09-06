@@ -119,7 +119,7 @@ resultado: RC=0, etiquetas del recibo 0 en el stdout final (la ronda del wake se
 
 - No afirma que el host ignore bloqueos: los nueve bloqueos tuvieron
   continuación correlacionada; las salidas sin recibo se explican por
-  presupuesto (2), escotilla genuina (5 corridas con allow bg≥0 sin recibo:
+  presupuesto (2), escotilla (incluye el defecto pre-fix con bg=0; 5 corridas sin recibo:
   m1-r1/r2/r3/r4, m1f-async), desarme pre-fix (3) y teardown del wake (5
   observaciones, ver conteos arriba; m2-r2 y m1f-sync acumulan ambas).
 - La fase post-fix se midió con la build `425581d8` (ronda 1). Los cambios de

@@ -101,7 +101,8 @@ forma grok con la misma disciplina de dos marcas de 10.14/PR#30: skip estricto
 (primera línea = `<system-reminder>` Y contenido `Background subagent` en el
 texto) ANTES del gate del sentinel — un evento del sistema no arma ni desarma
 (la descripción del subagente la escribe el agente padre y puede llevar
-`-saikit`); y veto laxo al desarme (etiqueta + contenido). Acotado a
+`-saikit`). La vía laxa se retiró en r2; cualquier otra forma se procesa
+como prompt normal. Acotado a
 `TARGET=grok`.
 
 **D-B — la escotilla DELEGATED en grok exige trabajo en vuelo.** El Stop con

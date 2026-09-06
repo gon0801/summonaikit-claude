@@ -7,6 +7,23 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #212 (18.27: cierre Grok headless) — deploy REAL de las 4 copias
+
+- **Merge:** `1fe7afcb652bbc2f141a1dc9af13967a1d72efdb`, head
+  `80e1da918062fecd6cf2e23545897497d6dd4338`; gate SUCCESS en el
+  [run 34022371166](https://github.com/gon0801/summonaikit-claude/actions/runs/34022371166).
+- **Deploy (09:54 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0,
+  cuatro copias `REPARADO`; sha256 del hook
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+  Backups del instalador: sufijo `20260906-095424.bak` en claude y
+  `20260906-095425.bak` en grok/dsh/codex.
+- **Verificación:** `install-hook.sh --check` exit 0, cuatro filas al día y
+  registro ok; `check-hook-registration.sh` y `audita-ledger.sh` exit 0.
+- **Cierre:** el líder integra la conclusión y cierra 18.27 en el PR de 18.10.
+  El teardown headless y el presupuesto mantienen los límites declarados.
+  Gon autorizó terminar la entrega en esta sesión.
+
 ## 2026-09-06 — PR #213 (19.1: feature-map inventory y lint) — hooks NO-OP
 
 - **Merge:** `230bd96059d3384db5349d68b4a6c69c2115e66c`, head
