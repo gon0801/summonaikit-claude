@@ -7,6 +7,52 @@ El deploy de este repo = garantizar que el hook vivo
 (`~/.claude/hooks/summonaikit-harness.sh`) coincide con `master`, y verificar
 que siga registrado en las 3 fases de `~/.claude/settings.json`.
 
+## 2026-09-05 — PR #201 (Drive del gate con HOME desechable) — deploy NO-OP de las 4 copias
+
+- **Merge:** `0e711c564a616530ea2b3a0c1598950ef48ef07a`, head
+  `4d3b8adc4c30b5f556315926307e55022717d7a0`, autorizado por el operador.
+  CI del PR: todos los jobs, incluido `gate`, verdes en el
+  [run 34003762052](https://github.com/gon0801/summonaikit-claude/actions/runs/34003762052).
+- **Fuente desplegada:** `master` sincronizado a `b422a51`, que ya incluye
+  tambien los merges de macOS y su cierre documental. Procedencia observada:
+  `rama=master`, `sucio=no`, `coincide_origin_master=si`; hook SHA-256
+  `153e8c21ec46221418d29803a9f6899506e2fc3eea1151a0640d28dbd1f130e7`.
+- **Deploy:** `install-hook.sh` y sus modos `--host grok`, `--host dsh`,
+  `--host codex` terminaron exit 0, los cuatro con `YA AL DIA`. El PR solo
+  cambia `verify/`; el hook no cambio en esta entrega. El instalador de
+  Codex tambien replanto `summonaikit-harness-codex-wrap.sh`.
+- **Chequeo final:** `install-hook.sh --check` exit 1:
+  claude/grok/dsh `resultado=al-dia registro=ok`; codex
+  `resultado=al-dia registro=falta-registro`. Las cuatro copias coinciden con
+  la fuente, pero no se afirma que Codex tenga el gate activo: falta
+  `~/.codex/hooks.json`. Su checker reporta `unknown` de registro y ausencia
+  del wrapper PowerShell por defecto; el wrapper POSIX si fue plantado.
+  No se habilito un registro nuevo en esta entrega.
+- **Validacion:** Drive sobre el master sincronizado: `5 passed in 0.73s`;
+  `check-hook-registration.sh` de claude/grok/dsh exit 0 sin avisos;
+  `audita-ledger.sh` OK, ninguna fila pendiente con trabajo ya mergeado.
+  Revision independiente previa: una ronda, dos ajustes documentales
+  corregidos y medidos; sin cambios posteriores en el test.
+- **Operador:** Gon (sesion Codex); deploy y comprobacion repetidos a las
+  19:06 PDT, despues del deploy compartido que registra la entrada siguiente.
+- **Cierre del pendiente de Codex (19:13–19:18 PDT):** por instruccion
+  expresa del operador se creo `~/.codex/hooks.json` para SessionStart,
+  UserPromptSubmit, PostToolUse y Stop, apuntando al wrapper POSIX instalado.
+  Se agrego en `config.toml` la confianza individual de las cuatro entradas,
+  con las huellas `currentHash` devueltas por Codex 0.153.4. Backup previo:
+  `~/.codex/hooks/saikit-backups/config.toml.before-hook-registration.20260905-1920.bak`.
+  El nombre del backup es un identificador, no la hora de la medicion.
+  `hooks/list`: cuatro `enabled=true`, `trustStatus=trusted`, sin errores ni
+  advertencias. `install-hook.sh --check`: exit 0, cuatro
+  `resultado=al-dia registro=ok`; checker Codex con `--codex-wrapper`
+  apuntando al wrapper POSIX: exit 0, sin avisos.
+- **Disparo real observado:** sesion efimera Codex
+  `01a07481-c8c8-7ba3-9cb6-25625a019e56`, cwd temporal, comando inocuo `true`.
+  La API del app-server emitio `hook/completed` para las cuatro fases, todas
+  `status=completed` (54, 44, 38 y 38 ms); turno `completed`, respuesta `OK`.
+  Se uso la confianza persistida, sin bypass. Esta prueba de registro fue
+  sin sentinel; los casos armed/unarmed del gate siguen en el Drive aislado.
+
 ## 2026-09-05 — PR #200 / Task 18.22 (rojos de macOS: canon fisico + epoca portable) — deploy REAL a las 4 copias
 
 - **SHA:** merge `229887a`, head `f2d1f89`, CI 8/8 con `gate` verde (run 34003475153).

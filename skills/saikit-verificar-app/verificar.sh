@@ -199,8 +199,9 @@ que no lee codigo (p.ej. "entrar", "crear X", "ver la lista", "cerrar sesion").
 3. _PENDIENTE_
 
 > Este mapa se sello el dia que se genero (fecha) y con el sha del commit. Si la
-> app cambia, el sello queda viejo y el verifier lo reporta. No confies en un
-> mapa que no coincide con el commit actual.
+> codigo, los tests o el contenido del mapa cambian, el verifier lo reporta.
+> Guardar solamente el sello, Evidence.txt o el log de deploy no invalida la
+> medicion: se compara el contenido versionado contra el SHA medido.
 EOF
 
   cat > "$repo/verify/Launch.md" <<'EOF'
@@ -267,6 +268,22 @@ fecha_epoch() {  # $1=YYYY-MM-DD → epoch por stdout, o nada si no se interpret
   printf '%s' "$ep"
 }
 
+# Un commit que solo guarda el sello/evidencia no cambia la app medida.
+# Comparar el arbol conserva el SHA REAL observado y evita pedir un SHA
+# autorreferente imposible. Codigo, tests y contenido del mapa siguen medidos.
+misma_revision_medida() {
+  local repo="$1" sha="$2" mapa_base mapa_actual
+  printf '%s' "$sha" | grep -Eq '^([0-9a-f]{40}|[0-9a-f]{64})$' || return 1
+  git -C "$repo" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || return 1
+  git -C "$repo" diff --quiet "$sha" HEAD -- . \
+    ':(exclude)verify/LEEME.md' ':(exclude)verify/Evidence.txt' \
+    ':(exclude)docs/deploy-log.md' || return 1
+  mapa_base="$(git -C "$repo" show "$sha:verify/LEEME.md" 2>/dev/null)" || return 1
+  mapa_actual="$(git -C "$repo" show HEAD:verify/LEEME.md 2>/dev/null)" || return 1
+  [ "$(printf '%s\n' "$mapa_base" | sed '/^generado:/d')" = \
+    "$(printf '%s\n' "$mapa_actual" | sed '/^generado:/d')" ]
+}
+
 estado_mapa() {
   local repo="$1" leeme="$1/verify/LEEME.md"
   [ -f "$leeme" ] || { printf 'sin_mapa'; return 0; }
@@ -280,7 +297,9 @@ estado_mapa() {
   [ -n "$sha" ] || { printf 'unknown'; return 0; }
   actual="$(sha_actual "$repo")"
   [ -n "$actual" ] || { printf 'unknown'; return 0; }
-  if [ "$sha" != "$actual" ]; then printf 'desactualizado'; return 0; fi
+  if [ "$sha" != "$actual" ] && ! misma_revision_medida "$repo" "$sha"; then
+    printf 'desactualizado'; return 0
+  fi
   # La fecha es parte del sello: si falta o no se puede interpretar, el mapa no
   # se puede datar y NO se afirma "al dia". Un sello con fecha ilegible es un
   # sello roto — reportarlo al dia seria el "aprobado sin medir" que el sello

@@ -25,5 +25,9 @@ bash skills/saikit-verificar-app/verificar.sh estado "$PWD"
 
 Debe responder `al_dia`. `verificar.sh generar` es para la primera generacion:
 rechaza un LEEME existente. No borrar `verify/` para forzar la regeneracion,
-porque se perderian estas guias y tests. Un nuevo commit cambia el SHA y vuelve
-a desactualizar el sello, incluso si el commit solo contiene evidencia.
+porque se perderian estas guias y tests. El sello conserva el SHA que se midio.
+Commitear solamente `generado:`, Evidence.txt o docs/deploy-log.md mantiene
+`al_dia` si ese SHA es un ancestro y el resto del contenido versionado coincide.
+Cambios en codigo, tests o contenido del mapa lo desactualizan; la fecha sigue
+siendo obligatoria y envejece a los 30 dias. Asi se puede guardar la evidencia
+sin dejar una modificacion local del sello despues de cada commit.
