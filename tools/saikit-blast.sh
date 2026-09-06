@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # saikit-blast.sh — escribe el artefacto del blast radius (Task 17.4 / D13).
 #
 # QUE HACE. Escribe `.saikit/findings/blast-<task>.json` con EL hecho unico por

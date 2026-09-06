@@ -54,7 +54,7 @@ Group your verification commands into a few shell invocations (one per checkpoin
 
 **Nivel.** Asigná `nivel`: 1 (afirmado) · 2 (leído en código) · 3 (test existente) · 4 (corrido a propósito: script o test nuevo) · 5 (corrido en la superficie real).
 
-**Escribí el blast.** `.saikit/findings/blast-<task>.json` con `{"hecho":"...","comando":"...","salida":"...","nivel":4}` mediante `bash tools/saikit-blast.sh --write ...`. La `salida` va **recortada** (aplanar CR/LF + truncar) y **redactada** con `tools/lib/redactar.sh` (la fuente única) ANTES de escribir — una salida cruda con `token=` dispara el escaneo de secretos por sesión (13.4) y da un GATE falso.
+**Escribí el blast.** `.saikit/findings/blast-<task>.json` con `{"hecho":"...","comando":"...","salida":"...","nivel":4}` mediante `bash "$HOME/.claude/saikit-tools/saikit-blast.sh" --write ...`. La `salida` va **recortada** (aplanar CR/LF + truncar) y **redactada** con `$HOME/.claude/saikit-tools/lib/redactar.sh` (la fuente única) ANTES de escribir — una salida cruda con `token=` dispara el escaneo de secretos por sesión (13.4) y da un GATE falso.
 
 **Candado del adversary.** El write-lock del adversary aplica SOLO a eventos con rol adversary, así que el verifier **puede** escribir en `.saikit/findings/` sin violación — esta nota **no aplica al verifier** (anotada para que nadie la re-diagnostique, D13).
 

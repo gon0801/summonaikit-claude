@@ -274,6 +274,9 @@ generar() {
 
     sb="$work/$nombre"
     mkdir -p "$sb/hooks" "$sb/proyecto" "$sb/home" "$sb/entrada"
+    if [ -d "$esc/proyecto" ]; then
+      cp -R "$esc/proyecto/." "$sb/proyecto/"
+    fi
     cp "$HOOK" "$sb/hooks/summonaikit-harness.sh"
 
     # Se reinicia por escenario y vive FUERA del sandbox: adentro seria un

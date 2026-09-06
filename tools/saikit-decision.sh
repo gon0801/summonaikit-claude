@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # saikit-decision.sh — append seguro a una fila del rastro de decisiones
 # (Task 17.3 / D12).
 #
@@ -80,7 +85,7 @@ CUANDO=""; DIR=""; MODO=""; candado_propio=0
 lock_nonce=""; lock_dir=""
 
 uso() {
-  sed -n '2,80p' "$0"
+  sed -n '/^# saikit-decision.sh/,/^set -u/{ /^#/p; }' "$0"
 }
 
 while [ $# -gt 0 ]; do

@@ -102,9 +102,9 @@ correr_caso() {
 # ------------------------------------------------------------------- fixtures
 # Los saltos van escapados (\n) porque asi los guarda un JSONL real. Ese detalle
 # no es cosmetico: de ahi sale A8.
-_RECIBO_VINETAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VINETAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
-_RECIBO_CORRIDO='SUMMONAIKIT HARNESS RECEIPT\nUnderstand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.'
+_RECIBO_CORRIDO='SUMMONAIKIT HARNESS RECEIPT\nUnderstand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.\nTRAIL SKIP: golden fixture'
 
 # 18.23 — las seis etiquetas presentes pero pegadas en UN solo parrafo: la
 # entrada "Recibo del turno:" garantea que NINGUNA etiqueta empieza su linea,
@@ -121,11 +121,11 @@ _RECIBO_UN_PARRAFO='SUMMONAIKIT HARNESS RECEIPT\nRecibo del turno: Understand: p
 # entero. El lab incrusta el texto crudo en el JSON, asi que escribir \\n aca
 # reproduce exactamente el transporte medido. El matcher (no el decodificador)
 # es el que acepta el \n literal como frontera.
-_RECIBO_CODEX_ESCAPE='SUMMONAIKIT HARNESS RECEIPT\\n- Understand: pediste poder listar las sesiones abiertas.\\n- Implement: se agrego el endpoint y su ruta.\\n- Verify: se corrio la bateria completa, 12 en verde.\\n- Review: sin hallazgos.\\n- Close: entregado; no se toco codigo despues de la revision.\\n- Retro: none.'
+_RECIBO_CODEX_ESCAPE='SUMMONAIKIT HARNESS RECEIPT\\n- Understand: pediste poder listar las sesiones abiertas.\\n- Implement: se agrego el endpoint y su ruta.\\n- Verify: se corrio la bateria completa, 12 en verde.\\n- Review: sin hallazgos.\\n- Close: entregado; no se toco codigo despues de la revision.\\n- Retro: none.\\nTRAIL SKIP: golden fixture'
 
 # 18.23 r1 (hallazgo MEDIO): la vineta se ensancha a [-*+] — el asterisco y el
 # plus cuentan igual que el guion. Lineas "* **Label**: ..." cerrando limpio.
-_RECIBO_VINETAS_ASTERISCO='SUMMONAIKIT HARNESS RECEIPT\n* **Understand**: pediste poder listar las sesiones abiertas.\n* **Implement**: se agrego el endpoint y su ruta.\n* **Verify**: se corrio la bateria completa, 12 en verde.\n* **Review**: sin hallazgos.\n* **Close**: entregado; no se toco codigo despues de la revision.\n* **Retro**: none.'
+_RECIBO_VINETAS_ASTERISCO='SUMMONAIKIT HARNESS RECEIPT\n* **Understand**: pediste poder listar las sesiones abiertas.\n* **Implement**: se agrego el endpoint y su ruta.\n* **Verify**: se corrio la bateria completa, 12 en verde.\n* **Review**: sin hallazgos.\n* **Close**: entregado; no se toco codigo despues de la revision.\n* **Retro**: none.\nTRAIL SKIP: golden fixture'
 
 _RECIBO_SIN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.'
 
@@ -152,30 +152,30 @@ _RECIBO_SIN_RETRO_PYTEST_PUNTO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pedis
 # cualquier parte del recibo; aca se la agrega al final del bullet de Close,
 # como la escribiria el lead real. Un fixture por rol (los tres casos abajo
 # necesitan el suyo propio: ver el comentario sobre CASOS_G3).
-_RECIBO_ROLE_FALLBACK_IMPLEMENTER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: IMPLEMENTER (429).\n- Retro: none.'
+_RECIBO_ROLE_FALLBACK_IMPLEMENTER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: IMPLEMENTER (429).\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
-_RECIBO_ROLE_FALLBACK_VERIFIER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: VERIFIER (429).\n- Retro: none.'
+_RECIBO_ROLE_FALLBACK_VERIFIER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: VERIFIER (429).\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
-_RECIBO_ROLE_FALLBACK_REVIEWER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: REVIEWER (429).\n- Retro: none.'
+_RECIBO_ROLE_FALLBACK_REVIEWER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision. ROLE FALLBACK: REVIEWER (429).\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # C7 (auditoria 2026-08-13, Task 8.3) — el recibo con las etiquetas en
 # markdown bold (**Label**:), la forma MAS natural en que el modelo escribe
 # listas. El `**` entre la etiqueta y el `:` rompia has_receipt_label y un
 # recibo honesto y completo se bloqueaba con las seis etiquetas "faltantes".
-_RECIBO_BOLD='SUMMONAIKIT HARNESS RECEIPT\n- **Understand**: pediste poder listar las sesiones abiertas.\n- **Implement**: se agrego el endpoint y su ruta.\n- **Verify**: se corrio la bateria completa, 12 en verde.\n- **Review**: sin hallazgos.\n- **Close**: entregado; no se toco codigo despues de la revision.\n- **Retro**: none.'
+_RECIBO_BOLD='SUMMONAIKIT HARNESS RECEIPT\n- **Understand**: pediste poder listar las sesiones abiertas.\n- **Implement**: se agrego el endpoint y su ruta.\n- **Verify**: se corrio la bateria completa, 12 en verde.\n- **Review**: sin hallazgos.\n- **Close**: entregado; no se toco codigo despues de la revision.\n- **Retro**: none.\nTRAIL SKIP: golden fixture'
 
 # Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego, zcode).
 # El recibo que ACREDITA: verifier delegado en zcode, la verificacion real es
 # invisible para el hook (canal interno), y el lead declara con el label el
 # comando y su resultado de EXITO (predicado de la §4.3 del diseno 14.1).
-_RECIBO_VERIF_SUBAGENTE_ACREDITA='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_ACREDITA='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # (a) label sin comando ni resultado — afirmacion sin rastro.
 # Recibo de un host NO ciego que MENCIONA el label (meta-trabajo sobre el
 # harness: documentar la feature, citarla en el Retro) y ademas trae prosa de
 # runner LEGITIMA. En claude el label no aplica y la prosa tiene que seguir
 # acreditando — fija la regresion del caso (c-bis).
-_RECIBO_LABEL_MENCIONADO_CON_RUNNER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste documentar la via nueva del gate.\n- Implement: se documento en el spec.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado.\n- Retro: el label VERIFIED BY SUBAGENT: es solo para hosts con canal interno ciego.'
+_RECIBO_LABEL_MENCIONADO_CON_RUNNER='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste documentar la via nueva del gate.\n- Implement: se documento en el spec.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado.\n- Retro: el label VERIFIED BY SUBAGENT: es solo para hosts con canal interno ciego.\nTRAIL SKIP: golden fixture'
 
 # (a) label CON resultado pero SIN comando — "sin rastro" de comando re-corrible:
 # la declaracion dice que quedo en verde (resultado) pero no nombra ningun comando.
@@ -223,19 +223,19 @@ _RECIBO_VERIF_SUBAGENTE_FALLO_PELADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand:
 # acreditando: "0 failed" (conteo cero de fallos) y "no failures". Fijan que el
 # veto nuevo no se pase de largo (un veto de mas bloquea un recibo legitimo —
 # justo la friccion que la Phase 14 vino a quitar).
-_RECIBO_VERIF_SUBAGENTE_CERO_FAILED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
-_RECIBO_VERIF_SUBAGENTE_SIN_FALLOS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, no failures.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_CERO_FAILED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
+_RECIBO_VERIF_SUBAGENTE_SIN_FALLOS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, no failures.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 # (b-5 bots del PR #81) el span incluye el COMANDO: `tests/errors.py` no es un
 # fallo declarado (descuento por forma de ruta/archivo) — ACREDITA. "zero
 # failed" es negacion de la lista — ACREDITA. Y la puntuacion PEGADA
 # ("0 failed,error") no deja al segundo token sin frontera — BLOQUEA.
-_RECIBO_VERIF_SUBAGENTE_CMD_CON_ERROR='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest error.py tests/errors.py -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
-_RECIBO_VERIF_SUBAGENTE_ZERO_FAILED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, zero failed tests.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_CMD_CON_ERROR='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest error.py tests/errors.py -q, 12 passed, 0 failed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: fixture de verificacion'
+_RECIBO_VERIF_SUBAGENTE_ZERO_FAILED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed, zero failed tests.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 _RECIBO_VERIF_SUBAGENTE_FALLO_PEGADO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, ok, 0 failed,error\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
 
 # (b-ter) label en MINUSCULAS — el detector es case-insensitive (-Eiq) y el span
 # (grok r1 #2) tambien: la forma 'Verified by subagent:' debe acreditar igual.
-_RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: Verified by subagent: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_MINUSCULAS='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: Verified by subagent: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: fixture de verificacion'
 
 # (grok r1 #3) RESULTADO NEGADO — "no en verde" NO es un resultado de exito (el
 # bare "en verde" era subcadena negable y se quito del RESULT_RE).
@@ -246,14 +246,14 @@ _RECIBO_VERIF_SUBAGENTE_NO_EN_VERDE='SUMMONAIKIT HARNESS RECEIPT\n- Understand: 
 # repo (mientras el carril de evento si), asi que en zcode el verifier corria la
 # bateria real y el gate seguia bloqueando. Comando del vocabulario nuevo +
 # resultado de exito en la MISMA linea: ACREDITA.
-_RECIBO_VERIF_LABEL_RUNNER_PROPIO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_LABEL_RUNNER_PROPIO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: bash tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # 18.18 (segunda rama del RE) — forma DIRECTA sin shell delante. SAIKIT_VERIFIED_
 # RUNNER_PROPIO_RE tiene dos alternativas; la primera la ejercita el fixture de
 # arriba (bash tests/run.sh). Sin estos dos, borrar la rama `(\./)?…tests?/run.sh`
 # deja la bateria en verde.
-_RECIBO_VERIF_LABEL_RUNNER_PROPIO_DIRECTO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
-_RECIBO_VERIF_LABEL_RUNNER_PROPIO_DOTSLASH='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: ./tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_LABEL_RUNNER_PROPIO_DIRECTO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
+_RECIBO_VERIF_LABEL_RUNNER_PROPIO_DOTSLASH='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste un docstring.\n- Implement: se agrego el docstring.\n- Verify: VERIFIED BY SUBAGENT: ./tests/run.sh exit 0.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # 18.18 (negativo del veto) — mismo comando con resultado FALLIDO: el veto propio
 # del label (exit [1-9]) descalifica aunque el comando sea del vocabulario.
@@ -289,7 +289,7 @@ _RECIBO_VERIF_SUBAGENTE_DISPERSO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: ped
 # SPAN del label (Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed) no lo
 # contiene, asi que NO debe vetar la atestacion legitima. Con el predicado sobre
 # el recibo entero (defecto codex #3) el 'TypeError:' vetaba y bloqueaba.
-_RECIBO_VERIF_SUBAGENTE_FALSO_POSITIVO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste corregir el TypeError: del parser.\n- Implement: se agrego el fix.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.'
+_RECIBO_VERIF_SUBAGENTE_FALSO_POSITIVO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste corregir el TypeError: del parser.\n- Implement: se agrego el fix.\n- Verify: VERIFIED BY SUBAGENT: pytest -q, 12 passed.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 _TEXTO_LLANO='Ya quedo el endpoint de sesiones. Avisame si querias otra cosa.'
 _TEXTO_PAUSA='Necesito saber que datos van en la lista.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
@@ -321,7 +321,7 @@ _RECIBO_ROTO_CON_DELEGADO_INCIDENTAL='SUMMONAIKIT HARNESS RECEIPT\n- Understand:
 # Mitad "completo": recibo VALIDO con las 6 etiquetas, que menciona la frase
 # DELEGATED en el bullet de Retro -- plausible, porque el propio formato del
 # recibo invita a comentar mejoras del harness ahi.
-_RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: el harness podria documentar mejor el patron SUMMONAIKIT HARNESS DELEGATED - awaiting verifier para subagentes largos.'
+_RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: el harness podria documentar mejor el patron SUMMONAIKIT HARNESS DELEGATED - awaiting verifier para subagentes largos.\nTRAIL SKIP: golden fixture'
 
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16): el agente termina el trabajo,
 # escribe el recibo y agrega la linea PAUSED al final para preguntar si hace
@@ -330,17 +330,17 @@ _RECIBO_VINETAS_CON_DELEGADO_EN_RETRO='SUMMONAIKIT HARNESS RECEIPT\n- Understand
 # silencio. Con la guardia !recibo (paridad con DELEGATED), el recibo presente
 # desactiva la escotilla y el turno cae al gate normal. Estos dos fixtures son
 # las dos mitades: completa (cierra limpio) y rota (sin Retro).
-_RECIBO_VINETAS_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
+_RECIBO_VINETAS_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- Retro: none.\nTRAIL SKIP: golden fixture\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 _RECIBO_SIN_RETRO_CON_PAUSED='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste poder listar las sesiones abiertas.\n- Implement: se agrego el endpoint y su ruta.\n- Verify: se corrio la bateria completa, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n\nSUMMONAIKIT HARNESS PAUSED - awaiting your answer'
 
 # Task 13.5 (D4) — el recibo del turno con adversary lleva su linea label-only
 # (el gate jamas valida N contra el JSON del artefacto, limite declarado). La
 # evidencia de Verify nombra pytest para que la prosa cuente sola si hace falta.
-_RECIBO_ADV='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.'
+_RECIBO_ADV='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado; no se toco codigo despues de la revision.\n- ADVERSARY: 2 hallazgos, severidad máxima media.\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # D4/D6 — el adversary despachado que murio sin reportar: la declaracion
 # sustituye la linea ADVERSARY (misma disciplina substring de los otros tres).
-_RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado. ROLE FALLBACK: ADVERSARY (429).\n- Retro: none.'
+_RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pediste atacar el cambio con un adversary.\n- Implement: el cambio quedo implementado.\n- Verify: se corrio pytest, 12 en verde.\n- Review: sin hallazgos.\n- Close: entregado. ROLE FALLBACK: ADVERSARY (429).\n- Retro: none.\nTRAIL SKIP: golden fixture'
 
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
@@ -3006,7 +3006,11 @@ CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa
 # que es donde vive la condicion que se esta probando.
 caso_g4_fuga_top_level_no_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"           "$(lab_transcript_fuga_top_level "$_RECIBO_SIN_RETRO" 'Retro: none.')"
+  # Sin mensaje primario, el ultimo texto assistant del transcript es la
+  # fuente del skip. El unico gate roto debe ser Retro, para que la mutacion
+  # de fuga top-level siga discriminando y no quede tapada por trail.
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)" \
+    "$(lab_transcript_fuga_top_level "${_RECIBO_SIN_RETRO}\\nTRAIL SKIP: fixture de fuga top-level" 'Retro: none.')"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Retro'
 }
@@ -3293,7 +3297,9 @@ caso_g4_recibo_corrido_pasa_a8() {
 # content item. Sin este caso, revertir ese salto pasaria inadvertido.
 caso_g4_recibo_dos_bloques_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_dos_bloques_recibo)"
+  # El recibo sigue SOLO en transcript; el skip del rastro es del mensaje
+  # actual, no prestado del tail (G8 exige esa frontera desde 18.12).
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_dos_bloques_recibo)"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -3332,7 +3338,7 @@ caso_g4_recibo_en_vinetas_pasa() {
 # sin cubrir. Verifica que el walker del transcript decodifica los `\n`.
 caso_g4_recibo_corrido_solo_en_transcript_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_asistente "$_RECIBO_CORRIDO")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -3349,7 +3355,7 @@ caso_g4_recibo_corrido_solo_en_transcript_pasa() {
 # graba; este caso ata la mitad legitima.
 caso_g4_recibo_solo_en_transcript_pasa() {
   _sembrar_turno_completo
-  lab_run stop claude "$(lab_payload_stop 'Listo.')" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
+  lab_run stop claude "$(lab_payload_stop 'Listo.\nTRAIL SKIP: fixture del canal transcript')" "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
@@ -4176,7 +4182,10 @@ caso_g7_pretool_no_acredita() {
 # Un caso que no este en ninguna lista NO CORRE. La bateria de comportamiento
 # verifica que no haya huerfanos; sin ese chequeo, un caso podria quedar fuera
 # por un dedazo y nadie se enteraria.
-GATES="LAB G1 G2 G3 G4 G5 G6 G7"
+# shellcheck source=trail_gate_cases.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trail_gate_cases.sh"
+
+GATES="LAB G1 G2 G3 G4 G5 G6 G7 G8"
 
 casos_de_gate() { eval "printf '%s' \"\${CASOS_$1}\""; }
 

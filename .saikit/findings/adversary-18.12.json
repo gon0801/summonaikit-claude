@@ -1,0 +1,46 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "Stop trail check vs existing G3 adversary receipts (_RECIBO_ADV, _RECIBO_ROLE_FALLBACK_ADVERSARY)",
+    "TRAIL SKIP empty/prose/tail, glob cite, leftover-without-cite, fast exempt, Close-span, backslash cite",
+    "path_present_under_root prefix check (dir symlink, file symlink, C:/ vs /c/ form)",
+    "multi-emitter trail_parrafo (harness_context / build_gate_feedback / emit_budget_exhausted / grok exception)",
+    "Commit BEFORE bullet coexistence with trail_parrafo",
+    "installer ~/.claude/saikit-tools plant: grok-only, symlink preflight, file-at-path, idempotency, --check",
+    "golden 57/58 and G8 mutation catalog"
+  ],
+  "findings": [
+    {
+      "severity": "high",
+      "location": "tests/lib/gate_cases.sh:339",
+      "claim": "The trail Stop now blocks the repo's own canonical adversary-turn receipts: _RECIBO_ADV and _RECIBO_ROLE_FALLBACK_ADVERSARY still have no TRAIL SKIP and no Close cites, so G3 cases that expect a clean close (caso_g3_adversary_turno_completo_cierra, caso_g3_role_fallback_adversary_cierra, grok adversary close) go rojo. Vinetas-family receipts were patched; this family was not.",
+      "trigger": "Full-lane Stop with last_assistant_message=_RECIBO_ADV after implementer,verifier,adversary,reviewer and pytest (the G3 complete-adversary shape).",
+      "evidence": "agents_seen=implementer,verifier,adversary,reviewer lane=full\nG3-ADV-CLOSE LAB_RC=2\nMissing trail/blast\ndecision\":\"block\nstdout_head: {\"decision\":\"block\",\"reason\":\"SUMMONAIKIT HARNESS GATE\\n\\nFailed gates:\\n- Missing trail/blast: Close: must cite concrete paths that exist under PROJECT_ROOT ...\\n\nFALLBACK-ADV-RECEIPT LAB_RC=2\nMissing trail/blast",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/install-hook.sh:3389",
+      "claim": "--host grok installs the harness (and a grok verifier.md that now teaches bash \"$HOME/.claude/saikit-tools/saikit-blast.sh\") but never plants ~/.claude/saikit-tools. The plant lives only inside instalar_recetas_claude, which runs for --host claude and the default (HOST empty) path. A grok-only install exits 0 with the contract pointing at tools that do not exist.",
+      "trigger": "Isolated HOME; bash tools/install-hook.sh --host grok --source <hook> --manifest <m> --no-registration-check; then test -f \"$HOME/.claude/saikit-tools/saikit-decision.sh\".",
+      "evidence": "I4 grok rc=0\n[summonaikit] INSTALADO: el destino no existia.\n              destino: /tmp/saikit-adv-inst-0CNeHV/casa-grok/.grok/hooks/summonaikit-harness.sh\nI4 tools planted? NO\nI4 grok hook? summonaikit-harness.sh summonaikit.json\nPlanted grok verifier.md line 58 still names bash \"$HOME/.claude/saikit-tools/saikit-blast.sh\".",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/install-hook.sh:2754",
+      "claim": "Adding $HOME/.claude/saikit-tools and .../lib to the all-dests-first symlink preflight means a leftover symlink at either new path aborts publishing recetas/ and skills/ that used to install. Agents still get written (that phase already ran); recetas and skills do not.",
+      "trigger": "Isolated HOME with ln -s /tmp \"$HOME/.claude/saikit-tools\" (or .../saikit-tools/lib); then --host claude install of recetas.",
+      "evidence": "I1 rc=5\n[summonaikit] AGENTE CLAUDE INSTALADO: implementer\n[summonaikit] recetario: enlace, no se publica nada: /tmp/saikit-adv-inst-0CNeHV/casa-symlink/.claude/saikit-tools\nrecetas planted? NO\nskills planted? NO\nI6 rc=5 (lib symlink): [summonaikit] recetario: enlace, no se publica nada: .../saikit-tools/lib\nI6 recetas? NO",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "hooks/summonaikit-harness.sh:2726",
+      "claim": "path_present_under_root uses logical pwd (not pwd -P / cygpath), so the under-PROJECT_ROOT check accepts a .saikit/decisiones directory that is a symlink to a path outside the project. The same hook already documented this class for adversary paths (C:/ vs /c/, Darwin /var vs /private/var) at the ADV_PROJECT_CANON block and did not reuse that machinery.",
+      "trigger": "ln -s \"$OUTSIDE\" \"$PROJECT/.saikit/decisiones\" with $OUTSIDE/x.tsv present; Close cites .saikit/decisiones/x.tsv and an in-tree blast; full-lane Stop.",
+      "evidence": "link=/tmp/saikit-lab-tYq6vG/outside-trail\nphys=/private/tmp/saikit-lab-tYq6vG/outside-trail\nsymlink-escape LAB_RC=0\nstdout_empty\ncontrol-no-files LAB_RC=2\nMissing trail/blast\nfile-symlink /etc/hosts as x.tsv also LAB_RC=0\nSimulated Windows case: REJECT windows-mismatch dir=/c/Users/me/proj/.saikit/decisiones root=C:/Users/me/proj (not run on Git Bash).",
+      "confirmed": true
+    }
+  ]
+}

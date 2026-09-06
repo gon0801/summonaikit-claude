@@ -1395,6 +1395,9 @@ grok_rollback() {
 grok_publicar() {
   grok_publicar_json || { grok_rollback "el JSON de registro"; exit 5; }
   grok_publicar_agentes || { grok_rollback "los agentes de grok"; exit 5; }
+  # 18.12: el verifier de grok enseña ~/.claude/saikit-tools/...; sin este
+  # plant el comando no existe tras un --host grok solo (adversary 18.12).
+  publicar_saikit_tools || { grok_rollback "saikit-tools del perfil"; exit 5; }
 }
 
 # --quitar-grok (design D1): saca JSON nuestro + hook nuestro + agentes con
@@ -2734,13 +2737,80 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
   rm -rf "$old"
   return 0
 }
+# Task 18.12: tools del rastro/blast viven en ~/.claude/saikit-tools (ruta que
+# enseña agents/verifier.md). El dest es del perfil Claude a proposito: grok y
+# claude publican el mismo verifier plantilla con esa ruta. Sin este plant, un
+# --host grok enseña el comando y el archivo no existe (hallazgo adversary 18.12).
+publicar_saikit_tools() {
+  local f rel tools_estado tools_cambios=0 tools_dest tools_nuevo tools_publicar tools_old
+  for f in "$repo/tools/saikit-decision.sh" \
+           "$repo/tools/saikit-blast.sh" \
+           "$repo/tools/lib/redactar.sh"; do
+    [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
+  done
+  for f in "$HOME/.claude/saikit-tools" "$HOME/.claude/saikit-tools/lib"; do
+    if [ -L "$f" ]; then
+      decir "[summonaikit] saikit-tools: enlace, no se publica nada: $f"
+      return 5
+    fi
+  done
+  # Estos comandos son requeridos, no recetas opcionales: conservar uno
+  # ajeno/enlazado y salir 0 dejaria el contrato apuntando a un tool inutil.
+  # Clasificar los TRES antes de publicar; cualquier conflicto queda intacto.
+  for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+    f="$HOME/.claude/saikit-tools/$rel"
+    tools_estado="$(recetas_clasificar "$f" "$repo/tools/$rel")"
+    case "$tools_estado" in
+      DESCONOCIDO|NO_OBSERVABLE)
+        decir "[summonaikit] saikit-tools: $tools_estado, intacto: $f; no se publica nada"
+        return 5 ;;
+      NUESTRO_IDENTICO) ;;
+      *) tools_cambios=1 ;;
+    esac
+  done
+  [ "$tools_cambios" -eq 1 ] || return 0
+  tools_dest="$HOME/.claude/saikit-tools"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    recetas_publicar_dir "$tools_dest" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" || return $?
+    recetas_publicar_dir "$tools_dest/lib" "$repo/tools/lib/redactar.sh"
+    return $?
+  fi
+  # Los comandos y su dependencia se preparan JUNTOS fuera del destino.
+  # Un fallo de lib no puede dejar comandos nuevos con una lib vieja/ausente.
+  mkdir -p "$HOME/.claude" || return 5
+  tools_nuevo="$(mktemp -d "$HOME/.claude/.saikit-tools-XXXXXX")" || return 5
+  if [ -d "$tools_dest" ]; then
+    cp -p -R "$tools_dest"/. "$tools_nuevo"/ || { rm -rf "$tools_nuevo"; return 5; }
+  fi
+  tools_publicar="$tools_nuevo"
+  if ! recetas_publicar_dir "$tools_publicar" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" \
+    || ! recetas_publicar_dir "$tools_publicar/lib" "$repo/tools/lib/redactar.sh"; then
+    rm -rf "$tools_nuevo"
+    decir "[summonaikit] saikit-tools: no se publico; paquete anterior intacto"
+    return 5
+  fi
+  tools_old="$tools_nuevo.anterior"
+  if [ -d "$tools_dest" ]; then
+    mv "$tools_dest" "$tools_old" || { rm -rf "$tools_nuevo"; return 5; }
+  fi
+  mv "$tools_nuevo" "$tools_dest" || {
+    [ ! -d "$tools_old" ] || mv "$tools_old" "$tools_dest"
+    rm -rf "$tools_nuevo"
+    return 5
+  }
+  [ ! -d "$tools_old" ] || rm -rf "$tools_old"
+  return 0
+}
 instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
   local f rc_sencillo rc_verif
   for f in "$repo"/recetas/*.md "$repo/recetas/MANIFEST.sha256" \
            "$repo/skills/sencillo/SKILL.md" \
            "$repo/skills/saikit-verificar-app/SKILL.md" \
            "$repo/skills/saikit-verificar-app/verificar.sh" \
-           "$repo/skills/saikit-setup-autopilot/SKILL.md"; do
+           "$repo/skills/saikit-setup-autopilot/SKILL.md" \
+           "$repo/tools/saikit-decision.sh" \
+           "$repo/tools/saikit-blast.sh" \
+           "$repo/tools/lib/redactar.sh"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
   done
   # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
@@ -2748,7 +2818,8 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
   # primero, y el aviso decia "no se publica nada" nombrando solo el segundo.
   # Esta es la unica causa de aborto que se puede saber de antemano; el resto
   # (mktemp/cp) se declara abajo en vez de esconderse.
-  for f in "$1/recetas" "$2/sencillo" "$2/saikit-verificar-app" "$2/saikit-setup-autopilot"; do
+  for f in "$1/recetas" "$2/sencillo" "$2/saikit-verificar-app" "$2/saikit-setup-autopilot" \
+           "$HOME/.claude/saikit-tools" "$HOME/.claude/saikit-tools/lib"; do
     if [ -L "$f" ]; then
       decir "[summonaikit] recetario: enlace, no se publica nada: $f"
       return 5
@@ -2782,6 +2853,10 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
     rc_setup=$?
     decir "[summonaikit] recetario: la skill saikit-setup-autopilot no se publico, pero $1/recetas, $2/sencillo y $2/saikit-verificar-app SI quedaron publicados (el todo-o-nada es por directorio)"
     return "$rc_setup"; }
+  publicar_saikit_tools || {
+    local rc_tools=$?
+    decir "[summonaikit] recetario: saikit-tools no se publico, pero recetas y skills SI quedaron publicados (el todo-o-nada es por directorio)"
+    return "$rc_tools"; }
   # Ajenos: solo reportar. cross-review grok r4 #2: no basta con que el archivo
   # no exista en el repo — eso NO mide propiedad. Una receta NUESTRA retirada en
   # una version posterior del kit lleva la marca, y `--quitar-recetas` SI la
@@ -2806,7 +2881,7 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # y el manifiesto leido a traves del symlink podia atribuir la propiedad a un
   # manifiesto externo. Se rechaza ANTES de leer el manifiesto, expandir el glob
   # o borrar: se reporta y se deja intacto, igual que los archivos symlink.
-  local r_enlace=0 s_enlace=0 v_enlace=0 sa_enlace=0
+  local r_enlace=0 s_enlace=0 v_enlace=0 sa_enlace=0 tools_enlace=0 lib_enlace=0
   if [ -L "$1/recetas" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $1/recetas"
     r_enlace=1
@@ -2822,6 +2897,14 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   if [ -L "$2/saikit-setup-autopilot" ]; then
     decir "[summonaikit] recetario: enlace, intacto: $2/saikit-setup-autopilot"
     sa_enlace=1
+  fi
+  if [ -L "$HOME/.claude/saikit-tools" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $HOME/.claude/saikit-tools"
+    tools_enlace=1
+  fi
+  if [ -L "$HOME/.claude/saikit-tools/lib" ]; then
+    decir "[summonaikit] recetario: enlace, intacto: $HOME/.claude/saikit-tools/lib"
+    lib_enlace=1
   fi
   # Determinar PRIMERO si el manifiesto es nuestro, ANTES de borrar recetas
   # (cross-review codex-16.5-r2, hallazgo 3): si se decide despues, las recetas
@@ -2933,6 +3016,39 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   # archivo (SKILL.md con la marca saikit_owned en el frontmatter).
   if [ "$sa_enlace" -eq 0 ]; then
     for f in "$2/saikit-setup-autopilot/SKILL.md"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+
+  if [ "$tools_enlace" -eq 0 ]; then
+    for f in "$HOME/.claude/saikit-tools/saikit-decision.sh" "$HOME/.claude/saikit-tools/saikit-blast.sh"; do
+      [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
+      [ -f "$f" ] || continue
+      if zcode_agente_tiene_marca "$f"; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+          decir "[summonaikit] recetario: se quitara $f (dry-run)"
+        else
+          rm -f "$f" || { decir "[summonaikit] recetario: no se pudo borrar $f"; return 1; }
+          decir "[summonaikit] recetario: quitado $f"
+        fi
+      else
+        decir "[summonaikit] recetario: ajeno, intacto: $f"
+      fi
+    done
+  fi
+  if [ "$tools_enlace" -eq 0 ] && [ "$lib_enlace" -eq 0 ]; then
+    for f in "$HOME/.claude/saikit-tools/lib/redactar.sh"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
       if zcode_agente_tiene_marca "$f"; then
@@ -3301,6 +3417,14 @@ case "$estado" in
     decir "              El instalador falla CERRADO: es la excepcion declarada al fail-open."
     exit 4
     ;;
+esac
+
+# El contrato full tambien exige estos tools en Codex y dsh. Publicarlos
+# antes del hook evita declarar una instalacion correcta sin el comando que
+# el contrato enseña. Cubre fresh/reparacion/no-op; publicar_saikit_tools
+# respeta DRY_RUN y rechaza enlaces antes de escribir.
+case "$HOST" in
+  codex|dsh) publicar_saikit_tools || exit $? ;;
 esac
 
 # ------------------------------------------------- el estado que no escribe nada

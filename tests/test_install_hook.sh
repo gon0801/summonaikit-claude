@@ -2826,6 +2826,122 @@ out="$(host_claude_recetas --quitar-recetas 2>&1)"; rc=$?
 [ -e "$(dirname "$dest")/recetas/MANIFEST.sha256" ] || malo "el nombre inseguro NO debe volver 'nuestro' al manifiesto (se borro)"
 printf '%s' "$out" | grep -qi 'no es atribuible\|intacto' || malo "debe reportar el manifiesto como no atribuible: $out"
 
+# ============================================================================
+# Task 18.12 — el instalador planta ~/.claude/saikit-tools/{decision,blast,lib}
+# ============================================================================
+caso "18.12: limpio => planta los tres tools bajo ~/.claude/saikit-tools"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install limpio deberia salir 0, dio $rc: $out"
+for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  [ -f "$casa_recetas/.claude/saikit-tools/$rel" ] \
+    || malo "no planto saikit-tools/$rel"
+done
+cmp -s "$casa_recetas/.claude/saikit-tools/saikit-decision.sh" "$repo/tools/saikit-decision.sh" \
+  || malo "saikit-decision.sh instalado difiere del fuente"
+cmp -s "$casa_recetas/.claude/saikit-tools/saikit-blast.sh" "$repo/tools/saikit-blast.sh" \
+  || malo "saikit-blast.sh instalado difiere del fuente"
+cmp -s "$casa_recetas/.claude/saikit-tools/lib/redactar.sh" "$repo/tools/lib/redactar.sh" \
+  || malo "lib/redactar.sh instalado difiere del fuente"
+
+caso "18.12: el comando que ensena verifier.md EXISTE y corre (--help y --write)"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install deberia salir 0, dio $rc: $out"
+planted_verif="$casa_recetas/agents/verifier.md"
+[ -f "$planted_verif" ] || malo "precondicion: no se planto agents/verifier.md"
+grep -Fq 'bash "$HOME/.claude/saikit-tools/saikit-blast.sh"' "$planted_verif" \
+  || malo "el verifier plantado no ensena bash \"\$HOME/.claude/saikit-tools/saikit-blast.sh\""
+blast="$casa_recetas/.claude/saikit-tools/saikit-blast.sh"
+[ -x "$blast" ] || [ -f "$blast" ] || malo "el blast plantado no existe"
+help_out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$blast" --help 2>&1)"; help_rc=$?
+[ "$help_rc" -eq 0 ] || malo "--help del blast plantado deberia salir 0, dio $help_rc: $help_out"
+printf '%s' "$help_out" | grep -q -- '--write' \
+  || malo "--help del blast plantado no nombra --write: $help_out"
+write_dir="$casa_recetas/.saikit/findings"
+mkdir -p "$write_dir"
+write_out="$(HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$blast" --write \
+  --task t --hecho h --comando c --salida s --nivel 3 --dir "$write_dir" 2>&1)"; write_rc=$?
+[ "$write_rc" -eq 0 ] || malo "--write del blast plantado deberia salir 0, dio $write_rc: $write_out"
+[ -f "$write_dir/blast-t.json" ] || malo "--write no dejo blast-t.json en $write_dir"
+
+caso "18.12: --help sin lib plantada falla (dirname/lib/redactar.sh)"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+solo="$casa_recetas/blast-sin-lib"
+mkdir -p "$solo"
+cp "$casa_recetas/.claude/saikit-tools/saikit-blast.sh" "$solo/saikit-blast.sh"
+help_out="$(HOME="$casa_recetas" bash "$solo/saikit-blast.sh" --help 2>&1)"; help_rc=$?
+[ "$help_rc" -eq 2 ] || malo "--help sin lib deberia salir 2, dio $help_rc: $help_out"
+printf '%s' "$help_out" | grep -q 'no se encontro la lib' \
+  || malo "--help sin lib no dijo 'no se encontro la lib': $help_out"
+
+caso "18.12: nuestro-con-deriva se repara (marca presente)"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+st="$casa_recetas/.claude/saikit-tools/saikit-blast.sh"
+[ -f "$st" ] || malo "precondicion: blast no se instalo"
+printf '\n# deriva local\n' >> "$st"
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "la reparacion deberia salir 0, dio $rc: $out"
+cmp -s "$st" "$repo/tools/saikit-blast.sh" \
+  || malo "saikit-blast.sh NO se reparo: quedo la deriva local"
+
+caso "18.12: ajeno sin marca no se toca + DESCONOCIDO"
+nuevo_destino; nuevo_casa_recetas
+mkdir -p "$casa_recetas/.claude/saikit-tools"
+aj="$casa_recetas/.claude/saikit-tools/saikit-blast.sh"
+printf '#!/usr/bin/env bash\n# tool de otra persona\n' > "$aj"
+prev_aj="$(cat "$aj")"
+out="$(host_claude_recetas 2>&1)"
+[ "$(cat "$aj")" = "$prev_aj" ] || malo "piso un saikit-blast.sh ajeno (sin marca)"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' \
+  || malo "no reporto el blast ajeno como DESCONOCIDO: $out"
+
+caso "18.12: --dry-run no crea ~/.claude/saikit-tools"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas --dry-run >/dev/null 2>&1
+[ ! -e "$casa_recetas/.claude/saikit-tools" ] \
+  || malo "--dry-run creo saikit-tools"
+
+caso "18.12: --quitar-recetas quita los tres archivos propios"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  [ -f "$casa_recetas/.claude/saikit-tools/$rel" ] \
+    || malo "precondicion: $rel no se instalo; el quitar no mide nada"
+done
+host_claude_recetas --quitar-recetas >/dev/null 2>&1
+[ ! -f "$casa_recetas/.claude/saikit-tools/saikit-decision.sh" ] \
+  || malo "--quitar-recetas no quito saikit-decision.sh"
+[ ! -f "$casa_recetas/.claude/saikit-tools/saikit-blast.sh" ] \
+  || malo "--quitar-recetas no quito saikit-blast.sh"
+[ ! -f "$casa_recetas/.claude/saikit-tools/lib/redactar.sh" ] \
+  || malo "--quitar-recetas no quito lib/redactar.sh"
+
+caso "18.12: 00-lider plantado nombra saikit-tools/saikit-decision.sh"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+lider="$(dirname "$dest")/recetas/00-lider.md"
+[ -f "$lider" ] || malo "precondicion: no se planto 00-lider.md"
+grep -Fq 'saikit-tools/saikit-decision.sh' "$lider" \
+  || malo "el 00-lider plantado no nombra saikit-tools/saikit-decision.sh"
+
+caso "18.12: --host grok tambien planta ~/.claude/saikit-tools (el verifier lo enseña)"
+nuevo_home_grok
+out="$(host_grok 2>&1)"
+rc=$?
+[ "$rc" -eq 0 ] || malo "--host grok salio $rc: $out"
+for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  [ -f "$home_gk/.claude/saikit-tools/$rel" ] \
+    || malo "--host grok no planto saikit-tools/$rel"
+done
+blast="$home_gk/.claude/saikit-tools/saikit-blast.sh"
+out_h="$(HOME="$home_gk" bash "$blast" --help 2>&1)"; rc_h=$?
+[ "$rc_h" -eq 0 ] || malo "blast plantado por grok --help dio $rc_h: $out_h"
+printf '%s' "$out_h" | grep -Fq -- '--write' \
+  || malo "blast plantado por grok --help no nombra --write"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2
   exit 1

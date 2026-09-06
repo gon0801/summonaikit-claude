@@ -40,6 +40,9 @@ Why / Scope / Tradeoffs / Blast radius / Verification. Nunca draft. Cinco PRs ch
 ## Cuando retomas trabajo ajeno
 El rastro previo es autoritativo. No rehagas. Verifica lo heredado contra el artefacto real.
 
+## Rastro de este turno
+Antes de despachar al reviewer, agregá una fila con `bash "$HOME/.claude/saikit-tools/saikit-decision.sh" --append --task <id> --etapa verify --decision "..." --por-que "..." --evidencia "..." --resultado ok`. El Close cita esa ruta concreta y la del blast. Si este turno reusa un tsv heredado, Close cita ESA ruta despues de verificar el artefacto. Un leftover sin cita no es reuso.
+
 ## Voz
 - Sin frases de chatbot.
 - Sin puffery.

@@ -329,3 +329,93 @@ hooks/list post-deploy: 4 enabled=true, trustStatus=trusted; warnings=[], errors
 bash tools/audita-ledger.sh
 [saikit] AUDITORIA DEL LEDGER: OK — ninguna fila en cc:TODO tiene trabajo ya mergeado en origin/master
 Exit: 0
+
+18.12 — FIXES TRAS REVIEW, MEDICION DE RAMA (NO DEPLOY)
+2026-09-05 PDT, fuente da88cb9cc2024ce60ffa409a2411abb5008ff6ee
+Rojos y mutaciones: docs/review-18.12-fixes.md.
+Gate: 20 casos PASS; G8: 15 mutaciones atrapadas; instalacion: 4 mutaciones
+atrapadas; test_install_hook: OK; golden --check: 57 escenarios OK.
+Toda ejecucion del gate/instalador fue en sandbox; no se tocaron perfiles vivos.
+
+/tmp/saikit-drive-venv/bin/pytest verify/
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.78s ===============================
+Exit: 0
+
+18.12 — CIERRE DEL HALLAZGO DE REVIEW SOBRE TOOLS INDIVIDUALES
+git rev-parse HEAD && /tmp/saikit-drive-venv/bin/pytest verify/
+e647b890356152cd022f9d18a78a8099ea61be07
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.76s ===============================
+Exit: 0
+bash tests/test_trail_install.sh: test_trail_install: OK; exit 0.
+bash tests/test_trail_install_mutations.sh: test_trail_install_mutations: OK (5 mutaciones); exit 0.
+bash tests/test_install_hook.sh: test_install_hook: OK; exit 0.
+pre-commit run --all-files: todos los candados Passed; exit 0.
+Una revision acotada: P2 corregido y medido; hubo codigo posterior al reviewer
+para cerrar ese hallazgo, sin segunda ronda. No hubo deploy ni edicion de Plans.md.
+
+18.12 — FIXTURES DE INTEGRACION Y REGISTRO G8
+Primer CI rojo: https://github.com/gon0801/summonaikit-claude/actions/runs/34007591007
+Correcciones y limites de las corridas macOS: docs/review-18.12-fixes.md.
+test_gate_behavior: OK; exit 0 (un SKIP declarado por touch no portable).
+test_gate_mutations: OK; exit 0 (35 mutaciones G2/G4/G8 atrapadas).
+test_adversary_lock: OK; exit 0 (seis casos y seis mutaciones SKIP declarados).
+pre-commit run --all-files: todos los candados Passed; exit 0.
+
+git rev-parse HEAD && date +%F && /tmp/saikit-drive-venv/bin/pytest verify/
+f4916a9c93cef687058e837726bcb35fd0fbdeea
+2026-09-05
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.79s ===============================
+Exit: 0
+No hubo deploy ni edicion de Plans.md. Gate final: pendiente del nuevo CI.
+
+18.12 — CIERRE DE COMENTARIOS DEL PR Y HANDOFF DE CURSOR
+Normalizacion de privacidad: las lineas rootdir de pytest de este archivo
+usan <PROJECT_ROOT> en lugar de la ruta local. Resultados y duraciones reales.
+Rojos, fixes y limitaciones: docs/review-18.12-fixes.md.
+test_trail_gate: OK; exit 0 (22 casos).
+test_gate_mutations G8: OK; exit 0 (17 mutaciones atrapadas).
+test_trail_install: OK; exit 0.
+test_trail_install_mutations: OK (7 mutaciones); exit 0.
+test_install_hook: OK; exit 0.
+test_gate_behavior: OK; exit 0 (un SKIP declarado por touch no portable).
+test_adversary_lock: OK; exit 0 (seis casos y seis mutaciones SKIP declarados).
+golden-harness --check: OK, 57 escenarios; exit 0.
+golden-harness --record: 57 escenarios; exit 0. Diff: solo tres lineas de identidad.
+pre-commit run --all-files: todos Passed; exit 0.
+CI del head anterior c01b6ad: ocho jobs success, incluido gate.
+https://github.com/gon0801/summonaikit-claude/actions/runs/34008244026
+Ese CI no acredita los cambios posteriores; se exige otro run del head final.
+
+git rev-parse HEAD && /tmp/saikit-drive-venv/bin/pytest verify/
+c645c662dd5f2ca259b5dd3cf2ca900b0109435b
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: <PROJECT_ROOT>
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.77s ===============================
+Exit: 0
+No deploy, no edicion de Plans.md. Cambios de Cursor preservados en b2fcb38/c645c66.

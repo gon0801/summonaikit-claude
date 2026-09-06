@@ -521,5 +521,5 @@ lab_transcript_thinking_con_pausa() {
 # el primer bloque (termina en "T" de RECEIPT) y las ETIQUETAS en el segundo. Sin
 # el \n entre bloques, "Understand:" queda detras de "T" -> no matchea.
 lab_transcript_dos_bloques_recibo() {
-  printf '%s' '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_70","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"SUMMONAIKIT HARNESS RECEIPT"},{"type":"text","text":"Understand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none."}]},"uuid":"a2","timestamp":"2026-08-09T12:50:00.000Z"}'
+  printf '%s' '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_70","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"SUMMONAIKIT HARNESS RECEIPT"},{"type":"text","text":"Understand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.\nTRAIL SKIP: golden fixture"}]},"uuid":"a2","timestamp":"2026-08-09T12:50:00.000Z"}'
 }
