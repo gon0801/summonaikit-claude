@@ -176,7 +176,8 @@ G7|pretool_gh_pr_merge_apagado|el patron gh pr merge se apaga y el merge a pelo 
 G7|pretool_gh_pr_merge_literal|el patron gh pr merge vuelve al literal -Fq y gh  pr  merge / mayusculas pasan
 G7|pretool_gh_api_merge_apagado|el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar
 G7|pretool_git_push_protegida_apagado|el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar
-G7|pretool_git_push_exige_inmediato|el regex de git push exige push pegado a git y git -C <dir> push a master|main pasa
+G7|pretool_git_push_exige_inmediato|el regex de git push exige push pegado a git y git -C / --no-pager push a master|main pasa
+G7|pretool_git_push_dest_sin_plus_colon|el dest de git push pierde + y : inicial y un force-push o delete-ref a master|main pasa
 G7|pretool_git_push_token_en_cualquier_lado|el dest de git push vuelve a token-en-cualquier-lado y una URL con main niega un feature
 G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
 G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
@@ -896,8 +897,11 @@ mut_pretool_gh_pr_merge_apagado() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:s
 mut_pretool_gh_pr_merge_literal() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:space:\]\]+merge'/grep -Fq 'gh pr merge'/"; }
 mut_pretool_gh_api_merge_apagado() { sed 's/api\[\^\[:cntrl:\]\]\*\/merge/api[^[:cntrl:]]*\/mergeNUNCA/'; }
 mut_pretool_git_push_protegida_apagado() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+pushNUNCA'\''/'; }
-# F3: restaura git pegado a push; atrapa caso_g7_niega_git_dash_c_push.
+# F3: restaura git pegado a push; atrapa caso_g7_niega_git_dash_c_push
+# y caso_g7_niega_git_no_pager_push.
 mut_pretool_git_push_exige_inmediato() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+push'\''/'; }
+# Dest pierde [+:]? (force/delete); atrapa caso_g7_niega_git_push_force_y_delete.
+mut_pretool_git_push_dest_sin_plus_colon() { sed '/_pt_git_dest_re=/s/\[+:\]?//g'; }
 # F4: restaura token master|main en cualquier lado; atrapa caso_g7_permite_git_push_url_main.
 mut_pretool_git_push_token_en_cualquier_lado() { sed 's/^  _pt_git_dest_re=.*/  _pt_git_dest_re='\''(^|[^[:alnum:]_-])(master|main)([^[:alnum:]_-]|$)'\''/'; }
 mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 0; }/'; }

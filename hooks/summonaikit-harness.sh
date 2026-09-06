@@ -3304,12 +3304,13 @@ emit_pretool_deny() {
 pretool_es_gh_pr_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+pr[[:space:]]+merge'; }
 pretool_es_gh_api_merge() { printf '%s' "$1" | grep -Eiq 'gh[[:space:]]+api[^[:cntrl:]]*/merge'; }
 pretool_es_git_push_protegida() {
-  # optional -C <path> / -c k=v / lone -X before push (F3)
-  _pt_git_push_re='git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+-[a-zA-Z])*[[:space:]]+push'
+  # optional flags/args between git and push (F3); text-match, not a lexer
+  _pt_git_push_re='git([[:space:]]+(--?[^[:space:]]+|[[:alnum:]_.+/=-]+|=[^[:space:]]+))*[[:space:]]+push'
   printf '%s' "$1" | grep -Eq "$_pt_git_push_re" || return 1
-  # dest ref after push, not URL/path/comment substring (F4)
+  # dest ref after push, not URL/path/comment substring (F4).
+  # [+:]? cubre force (+master) y delete-ref (:main).
   _pt_push="${1%%#*}"
-  _pt_git_dest_re='push[[:space:]].*([[:space:]]origin[[:space:]]+(master|main)|[[:space:]]HEAD:(master|main)|refs/heads/(master|main)|[A-Za-z0-9._/-]+:(master|main)|[[:space:]](master|main))([[:space:]]|$)'
+  _pt_git_dest_re='push[[:space:]].*([[:space:]]origin[[:space:]]+[+:]?(master|main)|[[:space:]]HEAD:(master|main)|refs/heads/(master|main)|[A-Za-z0-9._/-]+:(master|main)|[[:space:]][+:]?(master|main))([[:space:]]|$)'
   printf '%s' "$_pt_push" | grep -Eq "$_pt_git_dest_re"
 }
 pretool_es_hatch() { printf '%s' "$1" | grep -q 'saikit-merge\.sh'; }
