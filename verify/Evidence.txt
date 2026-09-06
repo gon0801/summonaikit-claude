@@ -366,3 +366,25 @@ bash tests/test_install_hook.sh: test_install_hook: OK; exit 0.
 pre-commit run --all-files: todos los candados Passed; exit 0.
 Una revision acotada: P2 corregido y medido; hubo codigo posterior al reviewer
 para cerrar ese hallazgo, sin segunda ronda. No hubo deploy ni edicion de Plans.md.
+
+18.12 — FIXTURES DE INTEGRACION Y REGISTRO G8
+Primer CI rojo: https://github.com/gon0801/summonaikit-claude/actions/runs/34007591007
+Correcciones y limites de las corridas macOS: docs/review-18.12-fixes.md.
+test_gate_behavior: OK; exit 0 (un SKIP declarado por touch no portable).
+test_gate_mutations: OK; exit 0 (35 mutaciones G2/G4/G8 atrapadas).
+test_adversary_lock: OK; exit 0 (seis casos y seis mutaciones SKIP declarados).
+pre-commit run --all-files: todos los candados Passed; exit 0.
+
+git rev-parse HEAD && date +%F && /tmp/saikit-drive-venv/bin/pytest verify/
+f4916a9c93cef687058e837726bcb35fd0fbdeea
+2026-09-05
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/dn/dev/summonaikit-claude
+collected 5 items
+
+verify/test_drive.py .....                                               [100%]
+
+============================== 5 passed in 0.79s ===============================
+Exit: 0
+No hubo deploy ni edicion de Plans.md. Gate final: pendiente del nuevo CI.

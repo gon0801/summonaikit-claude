@@ -1,5 +1,5 @@
 ---
-generado: 2026-09-05 · e647b890356152cd022f9d18a78a8099ea61be07
+generado: 2026-09-05 · f4916a9c93cef687058e837726bcb35fd0fbdeea
 verify_app: drive
 ---
 # Mapa de funciones de la app
