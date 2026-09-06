@@ -2123,10 +2123,12 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    permiso permanente (decisión del 2026-08-30). Límite
    declarado: el modelo tiene `Write` y `gh`; lo que impide la
    auto-autorización en el mismo turno es esa lectura + `protected_branch_push:
-   deny`, no una barrera criptográfica. Un PR a la vez por repo: lock en
+   deny`, no una barrera criptográfica. Serie por repo (diseño D20): lock en
    `git-common-dir` (compartido por worktrees), adquirido con `mkdir` atómico,
    liberado por `trap EXIT`; un lock viejo se reporta y bloquea, nunca se
-   borra solo.
+   borra solo. Medido solo para el setup — el merge no adquiere este lock,
+   así que la exclusión de merges paralelos no está acreditada (ver Límites
+   MEDIDOS de la Phase 18).
 4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
    declarada al fail-open (la primera es el instalador): mergear no admite
    "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
@@ -2180,7 +2182,8 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    `merge_commit` existe, lleva el trailer `Saikit-Merge:` y ES la punta de
    `origin/<rama>`; si no, lo dice y no ofrece revert. El PR de revert lo
    arman el operador o el turno con ese bloque, y se mergea con
-   `saikit-merge.sh --revert-de <merge_commit> --confirmado`: un **modo con
+   `bash tools/saikit-merge.sh --revert-de <merge_commit> --confirmado`: un
+   **modo con
    precondiciones propias** — el turno desarmado ya no tiene el estado del
    hook que exige la regla 4 — que **no confía en ningún JSON local**: exige
    que `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git
@@ -2346,7 +2349,8 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
 
 - **Verde ⇒ merge: NO observado.** esc1: ceremonia completa y en orden, PR #4,
   CI verde; con el sí del operador el agente corrió SOLO
-  `saikit-merge.sh --confirmado`, recibió NO-MERGE y no buscó otra vía (el
+  `bash tools/saikit-merge.sh --confirmado`, recibió NO-MERGE y no buscó otra
+  vía (el
   comportamiento pedido, exacto). Cadena fail-closed medida en 4 capas con
   razón nombrada (parse de `gh` bajo el terminal del agente;
   `sin_verify_app`; base avanzada; commits después del veredicto) más el gap
@@ -2358,8 +2362,9 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
 - **Post-merge rojo ⇒ aviso + revert: OBSERVADO completo.** esc3: merge que
   saltó el gate (vía directa, declarado), `saikit-postmerge.sh` → ROJO exit 1
   con el bloque PARA REVERTIR y nada ejecutado (árbol intacto, verificado);
-  revert por la receta (PR #7 verde); `saikit-merge.sh --revert-de
-  --confirmado` → MERGE-OK `48aee6f`, rama remota borrada; `main` verde otra
+  revert por la receta (PR #7 verde); `bash tools/saikit-merge.sh --revert-de
+  <merge_commit> --confirmado` → MERGE-OK `48aee6f`, rama remota borrada;
+  `main` verde otra
   vez. Sin estado del hook y sin confiar en ningún JSON local.
 - **Costo medido, no estimado:** ~120-230k tokens y 8-18 min de pared por PR.
 - **18.25:** el gate de merge neutraliza el color de `gh` (`NO_COLOR=1`,
@@ -2393,10 +2398,16 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
   deny vive en el hook y se deployó a las 4 copias, pero dispara solo si el
   operador registra la fase `PreToolUse` en `~/.claude/settings.json`
   (operator-owned, fuera del PR); el deny en vivo queda `unknown` declarado.
-- **Contención y CI mínimo, medidos:** lock en `git-common-dir` con
-  contención real de dos worktrees (el segundo reporta y bloquea, nunca
-  mergean dos); sin workflows el setup ofrece el CI mínimo, y sin CI aceptado
-  el merge se niega con caso propio sobre el camino de merge (18.8).
+- **Contención del setup, medida (no exclusión de merges):** lock en
+  `git-common-dir` con contención real de dos worktrees corriendo el setup
+  (el segundo reporta exit 3 y no escribe;
+  `tests/test_autopilot_config.sh`, caso
+  `contencion_dos_worktrees_el_segundo_reporta_y_no_escribe`). Lo que el lock
+  serializa es el setup: `tools/saikit-merge.sh` no lo adquiere ni lo
+  consulta (cero referencias en el script), así que dos merges en paralelo ni
+  se impiden ni se midieron. Sin workflows el setup ofrece el CI mínimo, y
+  sin CI aceptado el merge se niega con caso propio sobre el camino de merge
+  (18.8).
 - **El descartable se entrega al operador, no se borra.** Estado observado y
   entrega en `docs/retro-phase-18.md`: topic + marcador verificados, borrado
   manual a criterio del operador (D23, recomendado).
