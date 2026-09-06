@@ -388,7 +388,7 @@
 
     <div class="cmds">
       <div class="cmd">
-        <code>tools/saikit-postmerge.sh --merge-commit &lt;sha&gt; --rama &lt;rama&gt;</code>
+        <code>bash tools/saikit-postmerge.sh --merge-commit &lt;sha&gt; --rama &lt;rama&gt;</code>
         <div class="body">
           <span class="what">Preguntar cómo quedó un merge</span>
           <span class="when">Mira las pruebas de ese merge y, si configuraste una dirección, si tu app sigue viva. Contesta VERDE (nada que hacer), ROJO (el aviso con el bloque para revertir, listo para copiar, sin ejecutar nada) o que no pudo mirar. El <code>sha</code> es el del merge publicado — el recibo del turno lo cita. En números: 0 verde, 1 rojo avisado, 2 no evaluable, 3 no se pudo mirar.</span>
@@ -396,10 +396,10 @@
       </div>
 
       <div class="cmd">
-        <code>git fetch origin &lt;rama&gt;<br>git checkout -b revert-&lt;corto&gt; origin/&lt;rama&gt;<br>git revert &lt;sha-del-merge&gt;<br>git push -u origin revert-&lt;corto&gt;<br>gh pr create --base &lt;rama&gt; --title "Revert &lt;corto&gt;" --body "Revert de &lt;sha-del-merge&gt; (&lt;motivo&gt;)"<br>tools/saikit-merge.sh --revert-de &lt;sha-del-merge&gt;</code>
+        <code>git fetch origin &lt;rama&gt;<br>git checkout -b revert-&lt;corto&gt; origin/&lt;rama&gt;<br>git revert &lt;sha-del-merge&gt;<br>git push -u origin revert-&lt;corto&gt;<br>gh pr create --base &lt;rama&gt; --title "Revert &lt;corto&gt;" --body "Revert de &lt;sha-del-merge&gt; (&lt;motivo&gt;)"<br>bash tools/saikit-merge.sh --revert-de &lt;sha-del-merge&gt;</code>
         <div class="body">
-          <span class="what">El bloque PARA REVERTIR, tal como lo trae el aviso</span>
-          <span class="when"><code>&lt;corto&gt;</code> son los primeros 12 caracteres del sha y <code>&lt;motivo&gt;</code> la razón del rojo. Las primeras cinco líneas arman el PR que deshace el merge; la última lo revisa y contesta LISTO. Recién cuando repites esa última con <code>--confirmado</code> se publica el revert — y antes vuelve a revisar todo: que ese merge siga siendo lo último publicado, que lleve la marca del camino revisado, que el revert sea exactamente su inverso, que traiga un solo commit y que las pruebas estén en verde. Si algo cambió, se niega diciendo cuál.</span>
+          <span class="what">El bloque PARA REVERTIR, listo para ejecutar</span>
+          <span class="when"><code>&lt;corto&gt;</code> son los primeros 12 caracteres del sha y <code>&lt;motivo&gt;</code> la razón del rojo. Las primeras cinco líneas arman el PR que deshace el merge; la última lo revisa y contesta LISTO. Una diferencia deliberada con el aviso: el aviso trae esa última línea sin <code>bash</code> delante (así la imprime el script), y sin <code>bash</code> no corre en un checkout limpio — los scripts no traen permiso de ejecución —; acá va con <code>bash</code> para que sí corra. Recién cuando repites esa última como <code>bash tools/saikit-merge.sh --revert-de &lt;sha-del-merge&gt; --confirmado</code> se publica el revert — y antes vuelve a revisar todo: que ese merge siga siendo lo último publicado, que lleve la marca del camino revisado, que el revert sea exactamente su inverso, que traiga un solo commit y que las pruebas estén en verde. Si algo cambió, se niega diciendo cuál.</span>
         </div>
       </div>
     </div>
