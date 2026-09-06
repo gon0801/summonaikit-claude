@@ -2082,8 +2082,11 @@ el recibo (`Understand: … Receta: <nombre>`), (2) una **lane de app real**
 ya tiene, acreditada por `TEST_RUNNER_RE` sin cambios), un **rastro de
 decisiones** en español (`.saikit/decisiones/<task>.tsv`) y el **hecho único**
 del blast radius con nivel 1–5 (`.saikit/findings/blast-<task>.json`), y (3)
-un **autopilot** que mergea el PR solo cuando un veredicto atado al SHA exacto
-y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
+un **autopilot** que prepara el PR y lo mergea solo con el sí explícito del
+operador cuando un veredicto atado al SHA exacto y el CI lo permiten
+(decisión del operador del 2026-08-30: prepara y para; el diseño original
+mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
+(MIT), adaptado.
 
 **Reglas nuevas.**
 
@@ -2112,9 +2115,12 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    `.saikit/autopilot.json` con `merge: true` y `merge_despliega` distinto de
    `unknown`, **leída SOLO de `origin/<rama>` tras `git fetch`** (nunca del
    working tree ni del head del PR); un PR que toque ese archivo nunca se
-   auto-mergea. Lo que el usuario autorizó ahí (el merge, el deploy que
-   dispara si `merge_despliega: true`, el aviso si `telegram: true`) queda
-   como excepción escrita de la regla de preguntar del contrato. Límite
+   mergea por esta vía. Lo que el usuario autorizó ahí (publicar con su sí,
+   el deploy que dispara si `merge_despliega: true`, el aviso si `telegram:
+   true`) queda como excepción escrita de la regla de preguntar del contrato.
+   **La config autoriza la vía, no el acto:** cada merge exige además el sí
+   explícito del turno (`--confirmado`), y el sentinel es por turno, sin
+   permiso permanente (decisión del 2026-08-30). Límite
    declarado: el modelo tiene `Write` y `gh`; lo que impide la
    auto-autorización en el mismo turno es esa lectura + `protected_branch_push:
    deny`, no una barrera criptográfica. Un PR a la vez por repo: lock en
@@ -2144,6 +2150,9 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    "Saikit-Merge: <sha>"` (el trailer sella el squash) **sin
    `--delete-branch`** (falla tras mergear cuando master vive en otro
    worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
+   Sin `--confirmado` el script corre el gate y, en verde, reporta LISTO y
+   termina; `--confirmado` repite el gate completo en esa invocación y solo
+   entonces mergea (el sí confirma la intención, no las condiciones).
    Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
    reviewer con `sha = HEAD` **después** de que el líder commiteó todo
    (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo. El
@@ -2160,26 +2169,32 @@ y el CI lo permiten. Origen: `cursor/plugins` → pstack (MIT), adaptado.
    sigue vigente. Hacer público el repo habilitaría la protección: alternativa
    rechazada aquí por ser decisión de visibilidad del operador, no de este
    plan.
-6. **Post-merge (turno desarmado)**: se localiza el run de CI por el
-   `merge_commit` que el propio script registró; sin run ⇒ `unknown` con
-   espera acotada, timeout ⇒ `unknown` sin revert; `salud_url` solo http(s),
-   sin redirects, redactada. En rojo, `git revert <merge_commit>` (squash: sin
-   `-m`) SOLO del merge propio, y el PR de revert se mergea con
-   `saikit-merge.sh --revert-de <merge_commit>`: un **modo con precondiciones
-   propias** — el turno desarmado ya no tiene el estado del hook que exige la
-   regla 4 — que **no confía en ningún JSON local**: exige que
-   `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git fetch`
-   (si algo aterrizó después, no revierte: reporta), que lleve el trailer
-   `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el inverso**
-   del `merge_commit` por **igualdad exacta de árboles** (`<head>^{tree}` ==
-   `<merge_commit>^^{tree}`; `patch-id` solo como comprobación extra, porque
-   ignora espacios en blanco), ningún otro commit, `baseRefName == rama`, CI
-   del head del revert en `success` y
+6. **Post-merge (turno desarmado): aviso, NUNCA revert automático** (D19
+   reducida por la decisión del 2026-08-30). Se localiza el run de CI por el
+   `--merge-commit` que recibe (el turno cita el sha en el recibo); sin run ⇒
+   `unknown` con espera acotada, timeout ⇒ `unknown` sin revertir;
+   `salud_url` solo http(s), sin redirects, redactada. En rojo, **AVISA** con
+   el bloque PARA REVERTIR listo para copiar y **no ejecuta nada**: ni `git
+   revert`, ni push, ni merge — si el operador no mira el aviso, nada deshace
+   el cambio solo (pérdida declarada). El aviso solo trae bloque si el
+   `merge_commit` existe, lleva el trailer `Saikit-Merge:` y ES la punta de
+   `origin/<rama>`; si no, lo dice y no ofrece revert. El PR de revert lo
+   arman el operador o el turno con ese bloque, y se mergea con
+   `saikit-merge.sh --revert-de <merge_commit> --confirmado`: un **modo con
+   precondiciones propias** — el turno desarmado ya no tiene el estado del
+   hook que exige la regla 4 — que **no confía en ningún JSON local**: exige
+   que `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git
+   fetch` (si algo aterrizó después, no revierte: reporta), que lleve el
+   trailer `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el
+   inverso** del `merge_commit` por **igualdad exacta de árboles**
+   (`<head>^{tree}` == `<merge_commit>^^{tree}`; `patch-id` solo como
+   comprobación extra, porque ignora espacios en blanco), ningún otro commit,
+   `baseRefName == rama`, CI del head del revert en `success` y
    `--match-head-commit`; no exige reviewer, blast ni estado de sesión (es la
    inversa mecánica de algo ya revisado). Fail-closed:
    cualquier `unknown` ⇒ no mergea el revert y avisa al usuario que la rama
-   está roja y cómo revertir a mano. Una vez (un revert rojo se reporta). El
-   usuario recibe un mensaje en español desde el `Close:` redactado: qué
+   está roja y cómo revertir a mano. Una vez (un revert rojo se reporta, no
+   se re-revierte). El usuario recibe un mensaje en español redactado: qué
    aterrizó, qué cambia para él, cómo deshacerlo.
 7. **Sin CI no hay autopilot, y el setup lo ofrece.** Si el repo no tiene
    workflows, el setup ofrece en español un CI mínimo (test del repo +
@@ -2200,8 +2215,10 @@ veredicto falso; el script verifica forma y CI, no verdad — el CI es lo
 independiente del modelo. `merge_despliega` nace `unknown` y es la única
 pregunta técnica que se le hace al usuario, una vez por repo. La suite mide el
 gate, no si el modelo sigue la receta: eso lo mide un turno vivo por receta
-(`docs/smoke-recetas-<fecha>.md`), n=1. Los demás hosts quedan sin menú y sin
-autopilot hasta una ola posterior. No se leen transcripts para auditar (A6).
+(`docs/smoke-recetas-<fecha>.md`), n=1. Los demás hosts quedan sin menú; el
+merge sellado no corre donde el sello no llega a la sesión que mergea (en el
+recorrido medido de Grok el merge es manual, 18.26). No se leen transcripts
+para auditar (A6).
 
 ### Límites MEDIDOS de la Phase 16 (cierre, 2026-08-30)
 
@@ -2320,6 +2337,69 @@ python tecleados por el operador):
   inicio del script (antes de los heredocs que escriben el frontmatter del
   `LEEME.md`, o el lector se quedaría con ESE bloque), con su caso de
   regresión.
+
+### Límites MEDIDOS de la Phase 18 (cierre, 2026-09-06)
+
+Medición viva: `docs/smoke-autopilot-2026-09-05.md` (repo
+`gon0801/saikit-descartable`, grok 1.0.13 headless; midió el lead). Claude no
+participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
+
+- **Verde ⇒ merge: NO observado.** esc1: ceremonia completa y en orden, PR #4,
+  CI verde; con el sí del operador el agente corrió SOLO
+  `saikit-merge.sh --confirmado`, recibió NO-MERGE y no buscó otra vía (el
+  comportamiento pedido, exacto). Cadena fail-closed medida en 4 capas con
+  razón nombrada (parse de `gh` bajo el terminal del agente;
+  `sin_verify_app`; base avanzada; commits después del veredicto) más el gap
+  de fondo: el sello no registra en grok (→ 18.25, 18.26). El camino verde
+  completo hasta publicar no se ha observado en ningún host; el happy path en
+  claude queda pendiente de la quota del operador, declarado.
+- **CI rojo ⇒ no merge: OBSERVADO.** esc2: PR #5, CI rojo, el agente NO
+  mergeó, cerró el PR sin mergear y reportó la razón literal; `main` intacto.
+- **Post-merge rojo ⇒ aviso + revert: OBSERVADO completo.** esc3: merge que
+  saltó el gate (vía directa, declarado), `saikit-postmerge.sh` → ROJO exit 1
+  con el bloque PARA REVERTIR y nada ejecutado (árbol intacto, verificado);
+  revert por la receta (PR #7 verde); `saikit-merge.sh --revert-de
+  --confirmado` → MERGE-OK `48aee6f`, rama remota borrada; `main` verde otra
+  vez. Sin estado del hook y sin confiar en ningún JSON local.
+- **Costo medido, no estimado:** ~120-230k tokens y 8-18 min de pared por PR.
+- **18.25:** el gate de merge neutraliza el color de `gh` (`NO_COLOR=1`,
+  `CLICOLOR=0`, `CLICOLOR_FORCE` desseteado) antes de cada llamada; residual
+  declarado: el parser de `saikit-postmerge.sh` no recibe esta
+  neutralización.
+- **18.26 (límite, no fix):** el write del reviewer hijo trae
+  `subagentType=reviewer`, pero la captura no identifica al padre; el hook
+  sella solo la sesión emisora (`lane=seal_boot`), sin transferir sello ni
+  `agents_seen` a otra sesión (dos negativos de aislamiento y la mutación
+  `sello_cruza_sesion` lo candan). Evidencia:
+  `docs/evidence/18.26-grok-reviewer-write/`. El sello aislado no satisface
+  el cruce de D18: **en el recorrido medido de Grok el merge queda manual, a
+  cargo del operador**. No se afirma happy path automático ni imposibilidad
+  general del host (`unknown` hasta medir otro canal).
+- **18.27 (PENDIENTE, reservado):** grok headless cerró sin recibo en esc2
+  (0/6 etiquetas, RC=0, estado limpiado) y con recibo 6/6 en esc1 — no
+  determinista. La decisión (límite escrito o mecanismo que lo sostenga) la
+  trae esa fila; este spec no adelanta su conclusión.
+- **cuidar-pr: implementada, n=0 en vivo.** En el manifiesto y ofrecida por
+  el hook (18.2); ningún turno vivo midió que se elija ni que se siga.
+- **setup-autopilot: implementado y ejercitado.** Su config movió el gate en
+  vivo (esc1: bloqueó con `sin_verify_app=no`, pasó tras corregir a `si`); la
+  skill se planta y se verificó plantada en el perfil vivo de macOS (18.7).
+  La skill vive solo en la copia de claude; el script corre donde haya bash,
+  git y gh.
+- **Recetario y skills: solo claude.** El instalador los planta en el flujo
+  por defecto y `--host claude`; en grok, dsh y codex el contrato muestra la
+  línea fija sin menú.
+- **18.11: la guardia contra el merge a pelo existe pero nace INERTE.** El
+  deny vive en el hook y se deployó a las 4 copias, pero dispara solo si el
+  operador registra la fase `PreToolUse` en `~/.claude/settings.json`
+  (operator-owned, fuera del PR); el deny en vivo queda `unknown` declarado.
+- **Contención y CI mínimo, medidos:** lock en `git-common-dir` con
+  contención real de dos worktrees (el segundo reporta y bloquea, nunca
+  mergean dos); sin workflows el setup ofrece el CI mínimo, y sin CI aceptado
+  el merge se niega con caso propio sobre el camino de merge (18.8).
+- **El descartable se entrega al operador, no se borra.** Estado observado y
+  entrega en `docs/retro-phase-18.md`: topic + marcador verificados, borrado
+  manual a criterio del operador (D23, recomendado).
 
 ## Non-Goals
 
