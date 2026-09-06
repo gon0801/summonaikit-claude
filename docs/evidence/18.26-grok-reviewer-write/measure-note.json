@@ -1,0 +1,88 @@
+{
+  "measured_at": "2026-09-06T04:28:28Z",
+  "grok_version": "1.0.13 (5e9a58528b76)",
+  "host": "grok",
+  "finding": "Child reviewer write carries top-level subagentType=reviewer and toolName=write with toolInput.file_path+content. Session is the CHILD id (distinct from parent). Child UPS prompt has NO -saikit, so harness never arms and early-exits before seal.",
+  "attribution_fields_present": [
+    "subagentType"
+  ],
+  "attribution_fields_absent": [
+    "agent_type",
+    "toolInput.subagent_type"
+  ],
+  "payload": {
+    "hookEventName": "post_tool_use",
+    "sessionId": "01a074f9-8779-79c3-bcb8-722104285275",
+    "cwd": "/private/tmp/saikit-1826-cap-4UyNxp",
+    "workspaceRoot": "/private/tmp/saikit-1826-cap-4UyNxp/",
+    "timestamp": "2026-09-06T04:28:28.833956+00:00",
+    "transcriptPath": "__TRANSCRIPT__",
+    "permissionMode": "auto",
+    "toolName": "write",
+    "toolUseId": "call-2b2f12ab-7436-490f-a457-5693b0fbc7ee-0",
+    "toolInput": {
+      "file_path": "/private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json",
+      "content": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n"
+    },
+    "toolResult": {
+      "type": "SearchReplace",
+      "EditsApplied": {
+        "old_string": "",
+        "new_string": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n",
+        "tool_output_for_prompt": "The file /private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json has been created.",
+        "tool_output_for_prompt_concise": "The file /private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json has been created.",
+        "absolute_path": "/private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json",
+        "edits": {
+          "details": [
+            {
+              "old_string": "",
+              "old_line": 1,
+              "new_string": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n",
+              "new_line": 1,
+              "context_before": "",
+              "context_after": "",
+              "line_prefix": ""
+            }
+          ]
+        }
+      }
+    },
+    "toolInputTruncated": false,
+    "toolResultTruncated": false,
+    "isBackgrounded": false,
+    "subagentType": "reviewer",
+    "hook_event_name": "post_tool_use",
+    "session_id": "01a074f9-8779-79c3-bcb8-722104285275",
+    "transcript_path": "__TRANSCRIPT__",
+    "permission_mode": "auto",
+    "tool_name": "write",
+    "tool_input": {
+      "file_path": "/private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json",
+      "content": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n"
+    },
+    "tool_response": {
+      "type": "SearchReplace",
+      "EditsApplied": {
+        "old_string": "",
+        "new_string": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n",
+        "tool_output_for_prompt": "The file /private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json has been created.",
+        "tool_output_for_prompt_concise": "The file /private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json has been created.",
+        "absolute_path": "/private/tmp/saikit-1826-cap-4UyNxp/.saikit/veredictos/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef.json",
+        "edits": {
+          "details": [
+            {
+              "old_string": "",
+              "old_line": 1,
+              "new_string": "{\"sha\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}\n",
+              "new_line": 1,
+              "context_before": "",
+              "context_after": "",
+              "line_prefix": ""
+            }
+          ]
+        }
+      }
+    },
+    "tool_use_id": "call-2b2f12ab-7436-490f-a457-5693b0fbc7ee-0"
+  }
+}

@@ -2020,6 +2020,48 @@ verdict_registrar_sello() {
   return 0
 }
 
+# Role comes from measured channels only. A path under veredictos/ is not reviewer.
+verdict_sealable_unarmed() {
+  [ -n "$3" ] || return 1
+  [ "$(canonical_agent_role "$3")" = "reviewer" ] || return 1
+  [ -n "$2" ] || return 1
+  printf '%s' "$1" | grep -Eiq '^(write)$' || return 1
+  verdict_path_dentro "$2" || return 1
+  [ -n "$4" ] || return 1
+  return 0
+}
+
+verdict_boot_and_seal() {
+  # saikit-merge.sh exige agents_seen con reviewer en el mismo harness-state.env
+  # que lleva veredicto_sha256. Sin sembrarlo, el sello del hijo unarmed queda
+  # ilegible para el merge (elige este estado por mtime y falla el cruce).
+  verdict_ensure_gitignore
+  if [ ! -f "$STATE_PATH" ]; then
+    write_state "unknown" "0" "0" "0" "reviewer" "" "" "" "" "" "" ""
+    printf 'agent: reviewer\n' >> "$LOG_PATH" 2>/dev/null || true
+  fi
+  vd_sha="$(printf '%s' "$1" | verdict_unescape | sha256sum | cut -c1-64)"
+  verdict_registrar_sello "$vd_sha"
+}
+
+verdict_try_seal_unarmed() {
+  local vd_tool_name vd_file_path vd_subagent vd_content
+  vd_tool_name="$(json_top_level_string tool_name)"
+  [ -n "$vd_tool_name" ] || vd_tool_name="$(json_top_level_string toolName)"
+  vd_file_path="$(json_tool_input_string file_path)"
+  [ -n "$vd_file_path" ] || vd_file_path="$(json_tool_input_string file_path toolInput)"
+  vd_subagent="$(json_tool_input_string subagent_type)"
+  [ -n "$vd_subagent" ] || vd_subagent="$(json_tool_input_string subagent_type toolInput)"
+  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_top_level_string subagentType)"; fi
+  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_tool_input_string subagentType)"; fi
+  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_top_level_string agent_type)"; fi
+  vd_content="$(json_tool_input_string content)"
+  [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
+  verdict_sealable_unarmed "$vd_tool_name" "$vd_file_path" "$vd_subagent" "$vd_content" || return 1
+  verdict_boot_and_seal "$vd_content"
+  return 0
+}
+
 # Reescribe el estado preservando los 6 campos clasicos y poniendo los 4 del
 # candado ($1 epoca, $2 rutas permitidas, $3 violacion, $4 rutas violadas);
 # $5 opcional reemplaza el ciclo (lo usa el bloque temprano del Stop).
@@ -2423,8 +2465,12 @@ record_tool_evidence() {
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # Sin tarea armada NO se crea archivo de estado. Si no, mark_evidence lo crearia
   # con task_hash=unknown en cualquier edicion y el Stop gate se activaria solo,
-  # anulando el sentinel.
-  if [ ! -f "$STATE_PATH" ]; then emit_allow; fi
+  # anulando el sentinel. SealableWrite igual sella. El hijo Grok trae
+  # subagentType medido y no trae -saikit.
+  if [ ! -f "$STATE_PATH" ]; then
+    if verdict_try_seal_unarmed; then emit_allow; fi
+    emit_allow
+  fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
   event_name="$(json_string_field hook_event_name)"
   # Task 8.1 (C3, clase A1): tool_name/command/file_path se leian con el sed

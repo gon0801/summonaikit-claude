@@ -725,6 +725,77 @@ caso "verdict_turno_solo_revision_sin_falso_aviso"
 verdict_turno_solo_revision_sin_falso_aviso
 fin_caso "verdict_turno_solo_revision_sin_falso_aviso"
 
+# ---------------------- Task 18.26: sello unarmed (hijo Grok)
+# Forma medida en docs/evidence/18.26-grok-reviewer-write/write.post_tool_use.json:
+# hookEventName=post_tool_use, toolName=write, toolInput.file_path+content,
+# subagentType top-level. Sin agent_type. Sesion sin -saikit (sin STATE_PATH).
+verdict_payload_grok_write() {
+  _vd_role_json=""
+  if [ -n "$1" ]; then
+    _vd_role_json="$(printf ',"subagentType":"%s"' "$1")"
+  fi
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"auto","hookEventName":"post_tool_use","toolName":"write","toolInput":{"file_path":"%s","content":"%s"},"toolResult":{"type":"SearchReplace"},"isBackgrounded":false%s}' "$2" "$(verdict_esc "$3")" "$_vd_role_json"
+}
+
+verdict_unarmed_grok_reviewer_write_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  _vacio "sesion sin armar (sin STATE_PATH)" "$(lab_estado task_hash)"
+  lab_run tool claude "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "hash unarmed grok-shaped" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+  _igual "hash unarmed contra el archivo" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
+  _contiene "agents_seen lleva reviewer (cruce del merge)" "$(lab_estado agents_seen)" "reviewer"
+}
+
+caso "verdict_unarmed_grok_reviewer_write_sella"
+verdict_unarmed_grok_reviewer_write_sella
+fin_caso "verdict_unarmed_grok_reviewer_write_sella"
+
+verdict_unarmed_write_sin_rol_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="reviewer-only-from-path"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write "" ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "sin rol medido no hay sello" "$(lab_estado veredicto_sha256)"
+  if lab_hay_estado; then
+    _mal "write sin atribucion no debe crear estado"
+  fi
+}
+
+caso "verdict_unarmed_write_sin_rol_no_sella"
+verdict_unarmed_write_sin_rol_no_sella
+fin_caso "verdict_unarmed_write_sin_rol_no_sella"
+
+verdict_unarmed_implementer_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="impl000impl000impl000"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  lab_run tool claude "$(verdict_payload_grok_write implementer ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "implementer unarmed no sella" "$(lab_estado veredicto_sha256)"
+}
+
+caso "verdict_unarmed_implementer_no_sella"
+verdict_unarmed_implementer_no_sella
+fin_caso "verdict_unarmed_implementer_no_sella"
+
+verdict_armed_implementer_no_sella() {
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="implarm0implarm0"
+  V="{\"sha\":\"$vsha\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  verdict_armar
+  lab_run tool claude "$(verdict_payload_grok_write implementer ".saikit/veredictos/$vsha.json" "$V")"
+  _vacio "implementer armed no sella" "$(lab_estado veredicto_sha256)"
+}
+
+caso "verdict_armed_implementer_no_sella"
+verdict_armed_implementer_no_sella
+fin_caso "verdict_armed_implementer_no_sella"
+
 # ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
 # agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
 # despacharte, asi que git rev-parse HEAD es el sha del arbol que estas
@@ -784,12 +855,14 @@ mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the re
 # Task 18.13 (a): el Close: pierde la clausula que cita el sha y la ruta del
 # veredicto sellado — la atrapa contrato_close_cita_sha_y_ruta_del_veredicto_sellado.
 mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
+mut_veredicto_sello_unarmed_apagado() { sed 's/^verdict_try_seal_unarmed() {$/verdict_try_seal_unarmed() {\n  return 1/'; }
 
 MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
 rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
 implemented_sin_guardia|verdict_write_no_acredita_implemented
 lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
-close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado"
+close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
+sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

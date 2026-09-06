@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-06T04:38:12Z|verify|seal-only boot: unarmed Grok child write with measured subagentType=reviewer registers veredicto_sha256 and agents_seen=reviewer|early-exit dropped seal despite attribution; merge needs both hash and agents_seen on same state file|docs/evidence/18.26-grok-reviewer-write/write.post_tool_use.json; tests/test_veredicto_contract.sh verdict_unarmed_* + mut sello_unarmed_apagado|ok
