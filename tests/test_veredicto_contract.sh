@@ -803,38 +803,61 @@ caso "verdict_unarmed_rol_en_toolinput_no_sella"
 verdict_unarmed_rol_en_toolinput_no_sella
 fin_caso "verdict_unarmed_rol_en_toolinput_no_sella"
 
-# Child seal must land on the armed parent (verified: in its log). Local
-# seal_boot would shadow that parent and merge would still fail D18.
-verdict_unarmed_sella_hermano_con_verified() {
+# The measured payload identifies the reviewer, NOT its parent session.
+# Reintroducing sibling selection (with or without verified:) must fail here.
+verdict_unarmed_aislamiento() {
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  LAB_SESSION_ID=unrelated-session-A
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+  lab_run prompt grok "$(lab_payload_prompt '-saikit trabajo A independiente')"
+  if [ "$1" = verified ]; then
+    lab_run tool grok "$(lab_payload_bash 'npm test -- verify/')"
+  fi
+  ruta_A="$(find "$LAB/hooks/state/grok" -path '*/unrelated-session-A/harness-state.env')"
+  if [ ! -f "$ruta_A" ]; then
+    _mal "no se pudo observar la sesion Grok A"
+    LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
+    return
+  fi
+  log_A="$(dirname "$ruta_A")/harness-evidence.log"
+  cp "$ruta_A" "$tmp/state-A.before"
+  cp "$log_A" "$tmp/log-A.before"
+  if [ "$1" = verified ]; then
+    _contiene "A tiene evidencia real del runner" "$(cat "$log_A")" "verified: "
+  fi
 
-  verdict_armar
-  ruta_A="$LAB_ESTADO_PATH"
-  _no_vacio "A tiene estado" "$ruta_A"
-  lab_run tool claude "$(lab_payload_bash 'npm test -- verify/')"
-  _contiene "A anoto verified:" "$(lab_log)" "verified: "
-  _contiene "A anoto el blast" "$(lab_log)" "npm test -- verify/"
-  _vacio "A aun no tiene sello" "$(lab_estado veredicto_sha256)"
-
-  LAB_SESSION_ID="b2b20000-2222-4333-8444-555566667777"
-  lab_run tool claude "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  LAB_SESSION_ID=independent-reviewer-B
+  lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  _igual "Write Grok permite" "$LAB_RC" "0"
+  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/independent-reviewer-B/harness-state.env')"
+  if [ -f "$ruta_B" ]; then
+    _igual "sello solo en B" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+    _igual "B no se arma" "$(sed -n 's/^lane=//p' "$ruta_B")" "seal_boot"
+  else
+    _mal "falta sello local en la sesion B"
+  fi
+  cmp -s "$ruta_A" "$tmp/state-A.before" || _mal "Write B altero estado de A sin vinculo padre-hijo"
+  cmp -s "$log_A" "$tmp/log-A.before" || _mal "Write B acredito reviewer en log de A sin vinculo"
+  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean.' end_turn)"
+  _igual "Stop Grok permite" "$LAB_RC" "0"
+  cmp -s "$ruta_A" "$tmp/state-A.before" || _mal "Stop B altero estado de A"
+  cmp -s "$log_A" "$tmp/log-A.before" || _mal "Stop B altero log de A"
   LAB_SESSION_ID=""
-
-  extra="$(find "$LAB/hooks/state" -type f -name harness-state.env ! -path "$ruta_A" 2>/dev/null || true)"
-  _vacio "B no creo estado local" "$extra"
-  [ -f "$ruta_A" ] || _mal "el estado de A desaparecio"
-  _igual "sello en A" "$(lab_estado veredicto_sha256)" "$want"
-  _contiene "A agents_seen reviewer" "$(lab_estado agents_seen)" "reviewer"
-  _contiene "A conserva verified:" "$(lab_log)" "verified: "
+  LAB_GROK_HOOK_EVENT=""
 }
 
-caso "verdict_unarmed_sella_hermano_con_verified"
-verdict_unarmed_sella_hermano_con_verified
-fin_caso "verdict_unarmed_sella_hermano_con_verified"
+verdict_unarmed_no_toca_sesion_verificada() { verdict_unarmed_aislamiento verified; }
+verdict_unarmed_no_toca_sesion_armada() { verdict_unarmed_aislamiento armed; }
+caso "verdict_unarmed_no_toca_sesion_verificada"
+verdict_unarmed_no_toca_sesion_verificada
+fin_caso "verdict_unarmed_no_toca_sesion_verificada"
+caso "verdict_unarmed_no_toca_sesion_armada"
+verdict_unarmed_no_toca_sesion_armada
+fin_caso "verdict_unarmed_no_toca_sesion_armada"
 
 verdict_armed_implementer_no_sella() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
@@ -952,6 +975,23 @@ mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the re
 mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
 mut_veredicto_sello_unarmed_apagado() { sed 's/^verdict_try_seal_unarmed() {$/verdict_try_seal_unarmed() {\n  return 1/'; }
 mut_veredicto_seal_boot_stop_apagado() { sed 's/read_state_value lane)" = "seal_boot"/read_state_value lane)" = ""/'; }
+# Simulate the removed cross-session write, without requiring dead production
+# helpers to survive solely for mutation tests. The target is a real sibling.
+mut_veredicto_sello_cruza_sesion() {
+  awk '
+    { print }
+    /^verdict_boot_and_seal\(\) \{$/ {
+      print "  for vd_other in \"$PROJECT_DIR\"/*/harness-state.env; do"
+      print "    [ -f \"$vd_other\" ] || continue"
+      print "    [ \"$vd_other\" = \"$STATE_PATH\" ] && continue"
+      print "    STATE_PATH=\"$vd_other\""
+      print "    STATE_DIR=\"$(dirname \"$STATE_PATH\")\""
+      print "    LOG_PATH=\"$STATE_DIR/harness-evidence.log\""
+      print "    break"
+      print "  done"
+    }
+  '
+}
 
 MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
 rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
@@ -959,7 +999,8 @@ implemented_sin_guardia|verdict_write_no_acredita_implemented
 lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
 close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
 sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella
-seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello"
+seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello
+sello_cruza_sesion|verdict_unarmed_no_toca_sesion_verificada"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
