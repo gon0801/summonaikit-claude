@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: ca0c45c32faa83a6fcbb645dac13804eb82ea21f2ad5142a57a7e3f5b82a649f
-# hook_bytes: 228783
-# hook_lineas: 3912
+# hook_sha256: d3e2e33f0cd4e6613d63a6a85cdf9dc5627154d2666c8ef67824a1b5a414e930
+# hook_bytes: 234907
+# hook_lineas: 4030
 # escenarios: 57
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -4663,6 +4663,13 @@ hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40001-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40001-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -4692,6 +4699,13 @@ hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40001-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40001-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -4722,6 +4736,13 @@ hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40001-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40001-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 07  phase=tool target=claude  payload=07.tool.claude.json
 exit 0
 stdout <vacio>
@@ -4753,12 +4774,21 @@ hooks/state/<PROJECT_KEY>/e5d40001-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40001-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40001-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 08  phase=stop target=claude  payload=08.stop.claude.json
 exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 08
 proyecto/.saikit/findings/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/.gitignore
 | *
 
 === escenario 48-adversary-fuera-de-orden-bloquea
@@ -4882,6 +4912,13 @@ hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40002-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40002-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 06  phase=stop target=claude  payload=06.stop.claude.json
 exit 2
 stdout (sha 7163ea5fb6a0ada9, 2112 bytes)
@@ -4937,6 +4974,13 @@ hooks/state/<PROJECT_KEY>/e5d40002-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40002-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40002-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 
 === escenario 49-adversary-dos-veces-cierra
 # D6 caso 3 (Task 13.5): adversary despachado dos veces. El dedupe conserva la posicion de
@@ -5034,6 +5078,13 @@ hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40003-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40003-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5062,6 +5113,13 @@ hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40003-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40003-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5091,12 +5149,21 @@ hooks/state/<PROJECT_KEY>/e5d40003-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40003-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40003-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
 exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 07
 proyecto/.saikit/findings/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/.gitignore
 | *
 
 === escenario 50-adversary-sin-verifier-previo-bloquea
@@ -5170,6 +5237,13 @@ hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40004-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40004-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5197,6 +5271,13 @@ hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40004-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40004-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 05  phase=stop target=claude  payload=05.stop.claude.json
 exit 2
 stdout (sha 2cbd49624b5c0810, 2187 bytes) identico a 20-zcode-falta-verifier/paso 05
@@ -5224,6 +5305,13 @@ hooks/state/<PROJECT_KEY>/e5d40004-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40004-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40004-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 
 === escenario 51-adversarial-audit-no-acredita-reviewer
 # D6 caso 5 (Task 13.5): la trampa medida de precedencia. adversarial-audit hoy resolvia a
@@ -5299,6 +5387,13 @@ hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40005-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40005-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=467566069
 --- paso 04  phase=tool target=claude  payload=04.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5329,6 +5424,13 @@ hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40005-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40005-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=467566069
 --- paso 05  phase=stop target=claude  payload=05.stop.claude.json
 exit 2
 stdout (sha 90b8d008837deb4e, 2181 bytes)
@@ -5386,6 +5488,13 @@ hooks/state/<PROJECT_KEY>/e5d40005-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40005-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40005-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=467566069
 
 === escenario 52-delegated-adversary-permite
 # D6 caso 6 (Task 13.5): la escotilla DELEGATED extendida a adversary. Un lead con el
@@ -5556,6 +5665,13 @@ hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40007-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40007-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 05  phase=tool target=claude  payload=05.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5584,6 +5700,13 @@ hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40007-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40007-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 06  phase=tool target=claude  payload=06.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5613,12 +5736,21 @@ hooks/state/<PROJECT_KEY>/e5d40007-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40007-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40007-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=35487042
 --- paso 07  phase=stop target=claude  payload=07.stop.claude.json
 exit 0
 stdout <vacio>
 stderr <vacio>
 --- estado tras el paso 07
 proyecto/.saikit/findings/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/.gitignore
 | *
 
 === escenario 54-sin-adversary-cierra-igual
@@ -5794,6 +5926,13 @@ hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40009-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40009-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=2176983542
 --- paso 03  phase=tool target=claude  payload=03.tool.claude.json
 exit 0
 stdout <vacio>
@@ -5820,6 +5959,13 @@ hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40009-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40009-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=2176983542
 --- paso 04  phase=stop target=claude  payload=04.stop.claude.json
 exit 2
 stdout (sha c02daf0e43eca6d2, 1546 bytes)
@@ -5871,6 +6017,13 @@ hooks/state/<PROJECT_KEY>/e5d40009-1111-4222-8333-444455556666/harness-state.env
 | adv_violation_paths=
 proyecto/.saikit/findings/.gitignore
 | *
+proyecto/.saikit/scratch/adversary/.gitignore
+| *
+proyecto/.saikit/scratch/adversary/e5d40009-1111-4222-8333-444455556666/owner
+| host=other
+| session=e5d40009-1111-4222-8333-444455556666
+| epoch=<TS>
+| task_hash=2176983542
 
 === escenario 56-veredicto-sellado
 # Escenario 56 — el sello del veredicto (D16, Task 18.3).

@@ -676,6 +676,176 @@ advlock_mensaje_redacta_paths() {
 }
 advlock_mensaje_redacta_paths; fin_caso "advlock_mensaje_redacta_paths"
 
+# ------------------------------------------- 20.6: zona de pruebas del adversary
+# Fila 20.6: ubicacion privada por ejecucion para fixtures adversariales, SIN
+# ampliar la frontera de escritura. La zona es .saikit/scratch/adversary/<llave
+# de sesion>/ (el hook la crea en el primer evento del adversary, la barre si
+# su owner es de otra epoca — ejecucion muerta de la misma sesion — y la elimina
+# al final de la ejecucion). La frontera sigue siendo EXACTAMENTE: artefacto
+# bajo findings/ + zona propia. Que afirman los casos:
+#   - fixture inocuo EN la zona: sin violacion, sin entrar al alcance del
+#     escaneo de secretos (adv_paths es de ARTEFACTOS, no de scratch) y el
+#     cierre limpio se lleva la zona (limpieza observable).
+#   - produccion (src real) y vecinos (scratch suelto, hermano de la zona)
+#     siguen siendo violacion: no se amplio nada.
+#   - ejecucion ajena (zona de OTRA sesion): violacion, y esa zona ajena JAMAS
+#     se barre desde esta sesion; el desarme (fin de ejecucion sin Stop) limpia
+#     la propia.
+#   - symlink dentro de la zona apuntando afuera y escape por ..: violacion.
+#   - re-armar la misma sesion barre la zona huerfana de la ejecucion muerta y
+#     la reclama con el owner de la epoca viva (propiedad por ejecucion).
+adv_zona_lab() {
+  printf '%s/proyecto/.saikit/scratch/adversary/%s' "$LAB" "${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+}
+
+caso "advzona_fixture_inocuo_y_limpieza_al_cerrar"
+advzona_fixture_inocuo_y_limpieza_al_cerrar() {
+  mkdir -p "$LAB/proyecto/.saikit/decisiones" "$LAB/proyecto/.saikit/findings"
+  : > "$LAB/proyecto/.saikit/decisiones/advlock.tsv"
+  : > "$LAB/proyecto/.saikit/findings/blast-advlock.json"
+  adv_armar
+  lab_run tool claude "$(lab_payload_agent 'implementer')"
+  lab_run tool claude "$(lab_payload_agent 'verifier')"
+  adv_despachar
+  _zona="$(adv_zona_lab)"
+  _epoca="$(lab_estado adv_epoch)"
+  _no_vacio "epoca de armado presente" "$_epoca"
+  _contiene "el owner declara la sesion" "$(cat "$_zona/owner" 2>/dev/null)" "${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  _contiene "el owner declara la epoca" "$(cat "$_zona/owner" 2>/dev/null)" "$_epoca"
+  _contiene "gitignore del scratch padre" "$(cat "$LAB/proyecto/.saikit/scratch/adversary/.gitignore" 2>/dev/null)" '*'
+  # El fixture inocuo EN la zona: permitido (fila 20.6). No registra violacion y
+  # NO entra a adv_paths: el escaneo de secretos es sobre ARTEFACTOS bajo
+  # findings/ — un fixture de prueba con token=falso es data legitima de un
+  # ataque a auth, no una fuga (la disciplina de redaccion del perfil sigue
+  # aplicando a lo que escribas, declarada ahi).
+  lab_run tool claude "$(adv_payload_edit_interno adversary ".saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/fixture-inocuo.json")"
+  _igual "fixture en la zona: sin violacion" "$(lab_estado adv_violation)" ""
+  _no_contiene "la zona no entra al alcance del escaneo" "$(lab_estado adv_paths)" 'fixture-inocuo'
+  # Idem una redireccion obvia por Bash DENTRO de la zona: scratch permitido.
+  lab_run tool claude "$(lab_payload_bash_en_subagente adversary "echo x > .saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/out.txt")"
+  _igual "redireccion en la zona: sin violacion" "$(lab_estado adv_violation)" ""
+  lab_run tool claude "$(lab_payload_agent 'reviewer')"
+  lab_run tool claude "$(lab_payload_bash 'pytest -q')"
+  lab_run stop claude "$(lab_payload_stop "$_ADV_RECIBO_CITA")"
+  _igual "cierre limpio" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
+  # LIMPIEZA OBSERVABLE: el cierre se lleva la zona entera (era scratch de ESTA
+  # ejecucion); el gitignore del scratch padre queda (idempotente, como el de
+  # findings/).
+  if [ -e "$_zona" ]; then _mal "la zona sobrevivio al cierre limpio"; fi
+  _contiene "gitignore del scratch padre sobrevive" "$(cat "$LAB/proyecto/.saikit/scratch/adversary/.gitignore" 2>/dev/null)" '*'
+}
+advzona_fixture_inocuo_y_limpieza_al_cerrar; fin_caso "advzona_fixture_inocuo_y_limpieza_al_cerrar"
+
+caso "advzona_produccion_y_vecinos_sigue_bloqueado"
+advzona_produccion_y_vecinos_sigue_bloqueado() {
+  mkdir -p "$LAB/proyecto/src" "$LAB/proyecto/.saikit"
+  adv_armar
+  adv_despachar
+  # PRODUCCION: un archivo real del repo sigue prohibido aunque la zona exista
+  # (control de la frontera: la fila exige NO ampliar permiso a todo el repo).
+  lab_run tool claude "$(adv_payload_edit_interno adversary 'src/prod.ts')"
+  _igual "produccion bloqueada" "$(lab_estado adv_violation)" "1"
+  _contiene "ruta de produccion registrada" "$(lab_estado adv_violation_paths)" 'src/prod.ts'
+  # VECINOS de la zona: ni un archivo suelto bajo scratch ni un directorio
+  # hermano del scratch del adversary son "la zona" — solo <padre>/<sesion>/.
+  lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/scratch/suelto.txt')"
+  _contiene "scratch directo bloqueado" "$(lab_estado adv_violation_paths)" 'suelto.txt'
+  lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/scratch/adversary2/x.json')"
+  _contiene "hermano de la zona bloqueado" "$(lab_estado adv_violation_paths)" 'adversary2'
+}
+advzona_produccion_y_vecinos_sigue_bloqueado; fin_caso "advzona_produccion_y_vecinos_sigue_bloqueado"
+
+caso "advzona_ejecucion_ajena_bloqueada_y_no_se_barre"
+advzona_ejecucion_ajena_bloqueada_y_no_se_barre() {
+  # Zona de OTRA sesion (ejecucion ajena), con su owner y su fixture: existe
+  # ANTES de que esta sesion arme.
+  _ajena="$LAB/proyecto/.saikit/scratch/adversary/otrasesion-9999"
+  mkdir -p "$_ajena"
+  printf 'host=claude\nsession=otrasesion-9999\nepoch=2020-01-01T00:00:00Z\ntask_hash=viejo\n' > "$_ajena/owner"
+  printf 'x\n' > "$_ajena/su-fixture.txt"
+  adv_armar
+  adv_despachar
+  lab_run tool claude "$(adv_payload_edit_interno adversary '.saikit/scratch/adversary/otrasesion-9999/mio.txt')"
+  _igual "zona ajena bloqueada" "$(lab_estado adv_violation)" "1"
+  _contiene "ruta ajena registrada" "$(lab_estado adv_violation_paths)" 'otrasesion-9999'
+  # Fin de ejecucion SIN Stop (desarme: prompt nuevo sin sentinel): la zona
+  # PROPIA se limpia, la AJENA queda intacta — y con su owner, que es lo que la
+  # declara huerfana de la ejecucion que la dejo.
+  lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
+  if [ -e "$(adv_zona_lab)" ]; then _mal "el desarme no limpio la zona propia"; fi
+  if [ ! -f "$_ajena/owner" ] || [ ! -f "$_ajena/su-fixture.txt" ]; then
+    _mal "la zona ajena fue barrida por esta sesion"
+  fi
+  _contiene "la ajena queda declarada por su owner" "$(cat "$_ajena/owner" 2>/dev/null)" 'otrasesion-9999'
+}
+advzona_ejecucion_ajena_bloqueada_y_no_se_barre; fin_caso "advzona_ejecucion_ajena_bloqueada_y_no_se_barre"
+
+caso "advzona_symlink_y_escape"
+advzona_symlink_y_escape() {
+  mkdir -p "$LAB/afuera" "$LAB/proyecto/src"
+  printf 'secreto\n' > "$LAB/afuera/target.txt"
+  adv_armar
+  adv_despachar
+  _zona="$(adv_zona_lab)"
+  # (a) symlink DENTRO de la zona apuntando AFUERA: el blanco fisico del enlace
+  # esta fuera de la zona => violacion, no ruta permitida (mismo criterio que
+  # el symlink bajo findings/). El mkdir es para el ln del fixture: con el hook
+  # sano la zona ya existe (la creo el despacho); sin el, la asercion cae del
+  # lado violacion igual.
+  mkdir -p "$_zona"
+  if adv_symlink_o_skip "$LAB/afuera/target.txt" "$_zona/eye.json"; then
+    lab_run tool claude "$(adv_payload_edit_interno adversary ".saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/eye.json")"
+    _contiene "symlink de la zona hacia afuera es violacion" "$(lab_estado adv_violation_paths)" 'eye.json'
+  else
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'
+  fi
+  # (b) escape por .. desde la zona: adv_canon_path colapsa el traversal y el
+  # blanco cae en produccion => violacion.
+  lab_run tool claude "$(adv_payload_edit_interno adversary ".saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/../../src/escape.ts")"
+  _contiene "escape por .. es violacion" "$(lab_estado adv_violation_paths)" 'escape.ts'
+  # (c) el padre .saikit/scratch MISMO enlazado: setup violado — la "zona" no
+  # es zona, escribir a traves es violacion (misma disciplina que .saikit o
+  # findings/ enlazados).
+  lab_limpiar_estado
+  rm -rf "$LAB/proyecto/.saikit"
+  mkdir -p "$LAB/proyecto/.saikit" "$LAB/otro-lado"
+  if adv_symlink_o_skip "$LAB/otro-lado" "$LAB/proyecto/.saikit/scratch"; then
+    adv_armar
+    adv_despachar
+    if [ -e "$LAB/otro-lado/adversary" ]; then
+      _mal "el hook creo la zona a traves del enlace .saikit/scratch"
+    fi
+    lab_run tool claude "$(adv_payload_edit_interno adversary ".saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/x.json")"
+    _igual "padre scratch enlazado: escribir a traves es violacion" "$(lab_estado adv_violation)" "1"
+  else
+    saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'
+  fi
+}
+advzona_symlink_y_escape; fin_caso "advzona_symlink_y_escape"
+
+caso "advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta"
+advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta() {
+  adv_armar
+  adv_despachar
+  _zona="$(adv_zona_lab)"
+  # Simular la ejecucion muerta de ESTA sesion: la zona quedo con owner de otra
+  # epoca (fija en 2020, nunca colisiona con la epoca viva) y un fixture viejo.
+  mkdir -p "$_zona"
+  printf 'host=claude\nsession=%s\nepoch=2020-01-01T00:00:00Z\ntask_hash=viejo\n' "${LAB_SESSION_ID:-$LAB_SESION_DEF}" > "$_zona/owner"
+  printf 'viejo\n' > "$_zona/fixture-viejo.json"
+  # RE-ARMAR la misma sesion (ejecucion nueva): el primer evento del adversary
+  # barre la huerfana y reclama la zona con el owner de la epoca viva.
+  adv_armar
+  adv_despachar
+  if [ -e "$_zona/fixture-viejo.json" ]; then _mal "el fixture de la ejecucion muerta sobrevivio al re-armado"; fi
+  _contiene "owner ahora declara la epoca viva" "$(cat "$_zona/owner" 2>/dev/null)" "$(lab_estado adv_epoch)"
+  # Y la ejecucion viva escribe su fixture sin violacion: la zona es suya.
+  lab_run tool claude "$(adv_payload_edit_interno adversary ".saikit/scratch/adversary/${LAB_SESSION_ID:-$LAB_SESION_DEF}/fixture-nuevo.json")"
+  _igual "fixture de la ejecucion viva: sin violacion" "$(lab_estado adv_violation)" ""
+}
+advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta; fin_caso "advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_adversary_lock: FAIL (casos)" >&2
   exit 1
@@ -739,6 +909,22 @@ mut_advlock_redactado_rama_estricta_muerta() { sed '/^SAIKIT_ADV_REDACTED_STRIP=
 # ninguna — la version anterior mutaba `[^A-Za-z0-9_-]`, que aparece 7 veces en
 # el hook, incluida SAIKIT_SENTINEL_RE, y rompia tambien el armado.
 mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|{},;:)>|{},;:)>A-Za-z0-9_-|g'; }
+# 20.6 — mutaciones de la zona de pruebas. Cada una rompe UNA condicion:
+#   zona_todo_el_repo: el chequeo de zona acepta TODO (return 0) => produccion
+#     deja de ser violacion — es la mutacion que exige la aceptacion de la fila
+#     ("ampliar la zona a todo el repo => rojo").
+#   zona_ajena_ciega: la zona se deriva al PADRE scratch en vez de <padre>/<ses>,
+#     o sea cualquier dir bajo scratch/adversary pasa por propio.
+#   zona_symlink_ciega: el blanco-symlink se resuelve a SI MISMO (el -L de
+#     adv_zona_dentro queda ciego) => escribir a traves del enlace sale gratis.
+#   zona_sin_limpieza: el teardown se neutraliza => la zona sobrevive al cierre.
+#   zona_sin_barrido: el primer evento del adversary deja de barrer la huerfana
+#     => el fixture de la ejecucion muerta sobrevive al re-armado.
+mut_advlock_zona_todo_el_repo()   { sed 's/^adv_zona_dentro() {$/adv_zona_dentro() {\n  return 0/'; }
+mut_advlock_zona_ajena_ciega()    { sed 's|^  printf '\''%s/%s'\'' "$ADV_SCRATCH_PARENT" "$SESSION_KEY"$|  printf '\''%s'\'' "$ADV_SCRATCH_PARENT"|'; }
+mut_advlock_zona_symlink_ciega()  { sed 's|^advzd_real="$(readlink -f "$1" 2>/dev/null || true)"$|advzd_real="$1"|'; }
+mut_advlock_zona_sin_limpieza()   { sed 's/^adv_limpiar_zona() {$/adv_limpiar_zona() {\n  return 0/'; }
+mut_advlock_zona_sin_barrido()    { sed 's|^  rm -rf "$advzz_dir" 2>/dev/null || true$|  :|'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -750,7 +936,12 @@ canon_logico|advlock_symlink_subdir_y_saikit_enlazado
 redactado_cuenta|advlock_artefacto_redactado_no_bloquea
 redactado_comillas_ciego|advlock_artefacto_redactado_no_bloquea
 redactado_rama_estricta_muerta|advlock_artefacto_redactado_no_bloquea
-redactado_cola_ciega|advlock_artefacto_redactado_no_bloquea"
+redactado_cola_ciega|advlock_artefacto_redactado_no_bloquea
+zona_todo_el_repo|advzona_produccion_y_vecinos_sigue_bloqueado
+zona_ajena_ciega|advzona_ejecucion_ajena_bloqueada_y_no_se_barre
+zona_symlink_ciega|advzona_symlink_y_escape
+zona_sin_limpieza|advzona_fixture_inocuo_y_limpieza_al_cerrar
+zona_sin_barrido|advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
@@ -763,13 +954,23 @@ while IFS='|' read -r nombre caso_atrapa; do
         saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue
       fi ;;
-    canon_logico)
+    canon_logico|zona_symlink_ciega)
       if [ "$ADV_SYMLINK_OK" != "1" ]; then
         saikit_skip_caso "mutacion_$nombre" 'necesita symlinks reales'
         continue
       fi ;;
   esac
   mutado="$tmp/hook-$nombre.sh"
+  # Guardia (20.6, incidente medido en la propia entrega): una funcion
+  # generadora que no existe dejaba el mutado VACIO — cmp pasa (difiere del
+  # vivo), bash -n pasa, y el caso se ponia rojo contra un hook inerte: la
+  # mutacion quedaba "atrapada" sin haber probado nada. El command-not-found
+  # es FAIL con nombre propio, no acreditacion en falso.
+  if ! type "mut_advlock_$nombre" >/dev/null 2>&1; then
+    printf '    FAIL: no existe mut_advlock_%s — la mutacion no puede generarse\n' "$nombre" >&2
+    fail=1
+    continue
+  fi
   "mut_advlock_$nombre" < "$vivo" > "$mutado"
   if cmp -s "$vivo" "$mutado"; then
     printf '    FAIL: %s no cambio nada — el sed quedo obsoleto\n' "$nombre" >&2
