@@ -220,31 +220,38 @@ def run(
                     transcript += more.decode("utf-8", "replace")
                 break
 
-        if not reaped:
-            if timed_out and do_killpg:
-                kill_group(pid, signal.SIGTERM)
-                status = reap(pid, 1.0)
-                if status is None:
-                    kill_group(pid, signal.SIGKILL)
-                    status = reap(pid, 1.0)
-                killed = True
-                reaped = status is not None
-            elif timed_out:
-                killed = False
-                reaped = False
-    finally:
-        # Always reap leftovers so a mutant does not leak a live child.
-        try:
-            wpid, st = os.waitpid(pid, os.WNOHANG)
-            if wpid == pid and not reaped:
-                status = st
-        except (ChildProcessError, OSError):
-            pass
-        if not reaped:
+        if timed_out and do_killpg:
+            kill_group(pid, signal.SIGTERM)
+            if not reaped:
+                term_status = reap(pid, 1.0)
+                if term_status is not None:
+                    status = term_status
+                    reaped = True
             kill_group(pid, signal.SIGKILL)
-            leftover = reap(pid, 1.0)
-            if leftover is not None and status is None:
-                status = leftover
+            if not reaped:
+                kill_status = reap(pid, 1.0)
+                if kill_status is not None:
+                    status = kill_status
+                    reaped = True
+            killed = True
+        elif timed_out:
+            killed = False
+    finally:
+        if timed_out and do_killpg:
+            kill_group(pid, signal.SIGKILL)
+            if not reaped:
+                leftover = reap(pid, 1.0)
+                if leftover is not None:
+                    status = leftover
+                    reaped = True
+        elif not reaped:
+            try:
+                wpid, st = os.waitpid(pid, os.WNOHANG)
+                if wpid == pid:
+                    status = st
+                    reaped = True
+            except (ChildProcessError, OSError):
+                reaped = True
         try:
             os.close(master)
         except OSError:

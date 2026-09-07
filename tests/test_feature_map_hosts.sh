@@ -13,6 +13,9 @@
 #   omit_symlink         — quita rechazo de symlink
 #   omit_hash            — quita dest_matches_source
 #   omit_routing         — quita claude_implementer
+#   omit_registro        — quita el diagnostico INCOMPLETO
+#   stub_registro_ok     — checker que imprime REGISTRO COMPLETO
+#   invalid_model        — observed definitely-invalid-model
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -180,7 +183,8 @@ assert_obs install-hosts dest_unchanged 'unchanged|igual|intact'
 assert_obs install-hosts retirada_preserva 'quitado|retirad|backup|intact'
 assert_obs install-hosts neighbor_intact_after_retirada 'intact|igual|unchanged'
 assert_obs install-hosts foreign_intact 'intact|igual|unchanged'
-assert_obs install-hosts registro_por_texto 'REGISTRO|INCOMPLETO|completo|fases|UserPromptSubmit|GROK|DSH'
+assert_obs install-hosts registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO'
+assert_obs install-hosts registro_por_texto 'gate NO corre'
 assert_obs install-hosts registro_no_solo_exit 'texto|estructura|no.exit.0|diagnostico'
 assert_obs install-hosts fases_estructura 'UserPromptSubmit|PostToolUse|SessionStart|Stop'
 assert_obs install-hosts other_hosts_observed 'claude|grok|dsh|codex'
@@ -430,8 +434,40 @@ mut_omit_hosts omit_symlink symlink_refused 'enlace|symlink|intact' \
   '/assert:symlink_refused/,/assert:symlink_refused_end/d'
 mut_omit_hosts omit_hash dest_matches_source '[a-f0-9]{12,}' \
   '/assert:dest_matches_source/,/assert:dest_matches_source_end/d'
+mut_omit_hosts omit_registro registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO' \
+  '/assert:registro_por_texto/,/assert:registro_por_texto_end/d'
 mut_omit_routing omit_routing claude_implementer "$CL_MODEL" \
   '/assert:claude_implementer/,/assert:claude_implementer_end/d'
+
+caso "mutante stub_registro_ok: REGISTRO COMPLETO no acredita incompleto"
+reset_art
+stub_reg="$SANDBOX/reg-completo.sh"
+cat > "$stub_reg" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'REGISTRO COMPLETO'
+exit 0
+EOF
+chmod +x "$stub_reg"
+mut="$SANDBOX/hosts-stub-reg.sh"
+if sed_must_change "$SANDBOX/hosts.src.sh" "$mut" \
+  "s|REG=\"\$VERIFY_REPO/tools/check-hook-registration.sh\"|REG=\"$stub_reg\"|" \
+  "stub_registro_ok"
+then
+  out="$(ctrl_drv "$mut" drive install-hosts 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail install-hosts registro_por_texto \
+    'REGISTRO DEL HOOK INCOMPLETO' "$rc"
+fi
+
+caso "mutante invalid_model: definitely-invalid-model se pone rojo"
+reset_art
+mut="$SANDBOX/routing-invalid-model.sh"
+if sed_must_change "$SANDBOX/routing.src.sh" "$mut" \
+  's/run_router --host claude --role implementer --field model 2>&1/printf %s definitely-invalid-model/' \
+  "invalid_model"
+then
+  out="$(ctrl_drv "$mut" drive routing-recipes 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail routing-recipes claude_implementer "$CL_MODEL" "$rc"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

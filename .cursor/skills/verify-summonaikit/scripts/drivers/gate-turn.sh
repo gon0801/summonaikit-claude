@@ -61,8 +61,14 @@ kv("SIN_ESTADO", "1" if "(sin estado)" in block else "0")
 kv("HAS_CONTRACT", "1" if "SUMMONAIKIT HARNESS REQUIRED" in block else "0")
 kv("HAS_HSTATE", "1" if "harness-state.env" in block else "0")
 kv("HAS_TASK_HASH", "1" if re.search(r"task_hash=[0-9]+", block) else "0")
-kv("HAS_EXIT2", "1" if re.search(r"^exit 2$", block, re.M) else "0")
-kv("HAS_GATE", "1" if re.search(r"recibo|evidencia|bloque|deny|gate", block, re.I) else "0")
+stop_exit = ""
+for p in pasos:
+    header = p.splitlines()[0] if p.splitlines() else ""
+    if "phase=stop" in header.split():
+        m_stop = re.search(r"^exit (\d+)$", p, re.M)
+        stop_exit = m_stop.group(1) if m_stop else ""
+        break
+kv("STOP_EXIT", stop_exit)
 ok_json = "0"
 if "SUMMONAIKIT HARNESS REQUIRED" in block:
     try:
@@ -164,12 +170,15 @@ if fm_only gate-stop-no-receipt; then
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block 07-evidencia-incompleta "$outf")"
   out="$(cat "$outf")"
-  if [ "${HAS_EXIT2:-0}" = 1 ] || [ "${HAS_GATE:-0}" = 1 ]; then
-    fm_pass gate-stop-no-receipt stop_rejected "exit 2 / gate" \
-      "exit 2=${HAS_EXIT2:-0} gate=${HAS_GATE:-0}"
+  # assert:stop_rejected
+  if [ "${STOP_EXIT:-}" = "2" ]; then
+    fm_pass gate-stop-no-receipt stop_rejected "stop exit 2" \
+      "stop exit ${STOP_EXIT}"
   else
-    fm_fail gate-stop-no-receipt stop_rejected "exit 2 / gate" "$out"
+    fm_fail gate-stop-no-receipt stop_rejected "stop exit 2" \
+      "stop exit ${STOP_EXIT:-missing} ${out}"
   fi
+  # assert:stop_rejected_end
   if [ "${BLOCK_NAME:-}" = "07-evidencia-incompleta" ]; then
     fm_pass gate-stop-no-receipt not_scenario_01_02 "07-evidencia-incompleta" \
       "07-evidencia-incompleta"

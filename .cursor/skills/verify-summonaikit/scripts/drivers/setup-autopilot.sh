@@ -118,7 +118,7 @@ print(" ".join("%s@%s"%(m,i) for m,i in zip(("1/5","2/5","3/5","4/5","5/5"),idx)
 print("ordered" if all(idx[i]>=0 and (i==0 or idx[i]>idx[i-1]) for i in range(5)) else "unordered")
 ' <<<"$transcript")"
     # assert:questions_order
-    if printf '%s' "$order" | grep -q 'ordered'; then
+    if printf '%s' "$order" | grep -qx 'ordered'; then
       fm_pass setup-interactive questions_order "1/5 < 2/5 < 3/5 < 4/5 < 5/5" "$order"
     else
       fm_fail setup-interactive questions_order "1/5 < 2/5 < 3/5 < 4/5 < 5/5" "$order"

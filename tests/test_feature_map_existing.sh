@@ -9,6 +9,7 @@
 #   omit_sin_estado       — unarmed sin afirmar ausencia de estado/contrato
 #   omit_contract         — armed sin afirmar JSON/contrato
 #   omit_harness_state    — armed sin afirmar harness-state/task_hash
+#   omit_stop_rejected    — Stop sin afirmar exit 2 del paso stop
 #   accept_stale_ledger   — ledger atrasado registrado como OK
 #   accept_dup_pr         — PR duplicado registrado como OK
 #   header_only           — solo encabezado + rc 0; no satisface conducta
@@ -189,7 +190,7 @@ assert_obs gate-turn sin_estado '\(sin estado\)'
 assert_obs gate-turn sin_contrato 'sin contrato|no.contrato|sin additionalContext|ausente'
 assert_obs gate-turn contract_json 'SUMMONAIKIT HARNESS REQUIRED'
 assert_obs gate-turn harness_state 'harness-state\.env'
-assert_obs gate-turn stop_rejected 'exit 2|deny|bloque|recibo|evidencia'
+assert_obs gate-turn stop_rejected 'stop exit 2'
 assert_obs gate-turn not_scenario_01_02 '07-evidencia-incompleta'
 
 # Independiente: 01/02 no acreditan el Stop
@@ -406,6 +407,28 @@ if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
 then
   out="$(ctrl_drv "$mut" drive-gate-scenario 02-armado-contrato 2>&1)" && rc=0 || rc=$?
   assert_missing_or_fail gate-turn harness_state 'harness-state' "$rc"
+fi
+
+caso "mutante omit_stop_rejected: Stop sin exit 2 se pone rojo"
+reset_art
+mut="$SANDBOX/gate-omit-stop.sh"
+if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
+  '/assert:stop_rejected/,/assert:stop_rejected_end/d' \
+  "omit_stop_rejected"
+then
+  out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
+fi
+
+caso "mutante zero_stop_exit: el nombre evidencia no acredita Stop"
+reset_art
+mut="$SANDBOX/gate-zero-stop.sh"
+if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
+  's/kv("STOP_EXIT", stop_exit)/kv("STOP_EXIT", "")/' \
+  "zero_stop_exit"
+then
+  out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
 fi
 
 caso "mutante omit_dry_run_no_write: quitar no-write se pone rojo"

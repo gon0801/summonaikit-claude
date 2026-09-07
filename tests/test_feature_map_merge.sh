@@ -16,6 +16,7 @@
 #   omit_head_cambiado      — commits tras el sello como OK
 #   omit_revert_trailer     — revert sin trailer como OK
 #   omit_revert_punta       — revert que no es la punta como OK
+#   extra_repo              — gh pr merge --repo unexpected/other
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -286,6 +287,25 @@ run_mut omit_revert_trailer \
 run_mut omit_revert_punta \
   '/assert:reject_no_punta/,/assert:reject_no_punta_end/d' \
   reject_no_punta 'no es la punta'
+
+caso "mutante extra_repo: --repo unexpected/other se pone rojo"
+reset_art
+extra_src="$SANDBOX/saikit-merge-tool.src.sh"
+extra_tool="$SANDBOX/saikit-merge-extra.sh"
+cp "$repo/tools/saikit-merge.sh" "$extra_src"
+if sed_must_change "$extra_src" "$extra_tool" \
+  's/gh pr merge "\$PR" --squash --match-head-commit "\$SHA"/gh pr merge "$PR" --squash --match-head-commit "$SHA" --repo unexpected\/other/' \
+  "extra_repo_tool"
+then
+  mut="$SANDBOX/merge-extra-repo.sh"
+  if sed_must_change "$SANDBOX/merge.src.sh" "$mut" \
+    "s|MERGE=\"\$VERIFY_REPO/tools/saikit-merge.sh\"|MERGE=\"$extra_tool\"|" \
+    "extra_repo"
+  then
+    out="$(ctrl_drv "$mut" drive saikit-merge 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail saikit-merge merge_ok 'MERGE-OK:' "$rc"
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

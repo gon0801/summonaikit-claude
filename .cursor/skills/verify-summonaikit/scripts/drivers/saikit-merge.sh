@@ -47,6 +47,27 @@ case "$1 $2" in
     exit 0 ;;
   "pr merge")
     if [ -f "$fix/merge-fail" ]; then cat "$fix/merge-fail"; exit 1; fi
+    shift 2
+    case "${1:-}" in
+      ''|*[!0-9]*)
+        printf 'gh-falso: forma no soportada: pr merge %s\n' "$*" >&2
+        exit 1 ;;
+    esac
+    shift
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --squash) shift ;;
+        --match-head-commit|--body)
+          if [ -z "${2:-}" ]; then
+            printf 'gh-falso: forma no soportada: falta valor de %s\n' "$1" >&2
+            exit 1
+          fi
+          shift 2 ;;
+        --repo|--admin|--delete-branch|*)
+          printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
+          exit 1 ;;
+      esac
+    done
     exit 0 ;;
 esac
 printf 'gh-falso: forma no soportada: %s\n' "$*" >&2

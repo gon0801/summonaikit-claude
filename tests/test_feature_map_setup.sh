@@ -10,7 +10,7 @@
 # SAIKIT_FM_PTY):
 #   omit_q1_merge omit_q2_despliega omit_q3_salud omit_q4_sve omit_q5_telegram
 #   omit_questions_order omit_defaults_unknown omit_lock_guard
-#   omit_timeout_cleanup accept_pipe_as_pty skip_killpg
+#   omit_timeout_cleanup accept_pipe_as_pty skip_killpg accept_unordered
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -352,6 +352,17 @@ then
   assert_missing_or_fail setup-autopilot pipe_not_pty 'pipe|not.pty|no.pty|defaults' "$rc"
 fi
 
+caso "mutante accept_unordered: 5/5 antes de 1/5 se pone rojo"
+reset_art
+mut="$SANDBOX/setup-accept-unordered.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's/print("ordered" if all(idx\[i\]>=0 and (i==0 or idx\[i\]>idx\[i-1\]) for i in range(5)) else "unordered")/print("unordered")/' \
+  "accept_unordered"
+then
+  out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail setup-autopilot questions_order '1/5' "$rc"
+fi
+
 caso "mutante skip_killpg: timeout sin kill/reap se pone rojo"
 reset_art
 if [ -f "$PTY" ]; then
@@ -365,6 +376,41 @@ if [ -f "$PTY" ]; then
       || malo "skip_killpg: mutante no parsea"
     out="$(ctrl_pty "$mutp" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
     assert_missing_or_fail setup-autopilot timeout_reaped 'reap|killed|timeout' "$rc"
+    hold="$SANDBOX/f13-hold.py"
+    mark="$SANDBOX/f13-gpid"
+    cat > "$hold" <<'PY'
+import os, signal, sys, time
+mark = sys.argv[1]
+g = os.fork()
+if g == 0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    open(mark, "w").write(str(os.getpid()))
+    time.sleep(30)
+    os._exit(0)
+time.sleep(30)
+PY
+    run_f13() {
+      local driver="$1" report="$2"
+      rm -f "$mark"
+      PYTHONDONTWRITEBYTECODE=1 python3 "$driver" \
+        --timeout 1.2 --cwd "$SANDBOX" --out "$report" \
+        -- python3 "$hold" "$mark" >/dev/null 2>&1 || true
+    }
+    run_f13 "$PTY" "$SANDBOX/f13-ok.json"
+    gpid="$(cat "$mark" 2>/dev/null || true)"
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null; then
+      malo "F13: pty sano dejo el nieto $gpid vivo"
+      kill -9 "$gpid" 2>/dev/null || true
+    fi
+    run_f13 "$mutp" "$SANDBOX/f13-mut.json"
+    gpid="$(cat "$mark" 2>/dev/null || true)"
+    if [ -z "$gpid" ]; then
+      malo "F13: skip_killpg no dejo marca de nieto"
+    elif ! kill -0 "$gpid" 2>/dev/null; then
+      malo "F13: skip_killpg no discrimina (nieto $gpid ya muerto)"
+    else
+      kill -9 "$gpid" 2>/dev/null || true
+    fi
   fi
 fi
 
