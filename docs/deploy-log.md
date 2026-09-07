@@ -7,6 +7,16 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #265 (plan de mantenimiento del feature map) — hooks NO-OP
+
+- **Merge:** `b5e5bccebe613fb4da341d55b38bb9268429ff82`; gate SUCCESS en el
+  [run 34089502460](https://github.com/gon0801/summonaikit-claude/actions/runs/34089502460).
+- **Deploy:** desde `origin/master` sincronizado se ejecutaron los instaladores
+  de claude, grok, dsh y codex; las cuatro copias respondieron `YA AL DIA`.
+- **Verificación:** `install-hook.sh --check` terminó con `veredicto=ok` y
+  registro ok para los cuatro hosts; `check-hook-registration.sh` y
+  `audita-ledger.sh` terminaron con exit 0. El hook no cambió.
+
 ## 2026-09-06 — PR #261 (cierre documental Phase 19 y ledger histórico) — hooks NO-OP
 
 - **Merge:** `9bcbed17a9c1f6de50800c736c771eabdc35a013`; gate SUCCESS en el
