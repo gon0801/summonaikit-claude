@@ -26,6 +26,11 @@
 #                                         # Saikit-Merge:, igualdad EXACTA de
 #                                         # arboles (patch-id solo como extra),
 #                                         # un solo commit y CI verde.
+#   tools/saikit-merge.sh --liberar-lock
+#                                         # recuperacion EXPLICITA del lock de
+#                                         # integracion (20.5): muestra su
+#                                         # contenido y lo quita. El lock jamas
+#                                         # se borra solo.
 #
 # EL MERGE, cuando toca: `gh pr merge --squash --match-head-commit <sha>
 # --body "Saikit-Merge: <sha>"` SIN --delete-branch (el borrado remoto es un
@@ -55,6 +60,24 @@
 #
 # El delay del reintento de mergeable UNKNOWN es SAIKIT_MERGE_RETRY_SEG
 # (default 3; los tests lo ponen en 0).
+#
+# LOCK DE INTEGRACION (20.5). Con --confirmado (modo normal o --revert-de) se
+# toma un lock en $(git rev-parse --git-common-dir)/saikit-merge.lock — el
+# MISMO archivo para todos los worktrees del clone. Mismo diseño que el lock
+# D20 del setup: mkdir atomico, el dir guarda pid/host/inicio/modo, el trap
+# EXIT libera SOLO el propio (comparando el pid), un lock ajeno se REPORTA y
+# BLOQUEA con exit 3 (distinguible del NO-MERGE del gate) y SOLO
+# --liberar-lock explicito lo quita — nunca se borra solo, ni con pid muerto:
+# el proceso pudo vivir en otra maquina.
+#   Revalidar al adquirir: el lock se toma al PRINCIPIO de la invocacion; TODO
+#   lo que decide corre DESPUES de adquirirlo. Un reintento con el lock ya
+#   libre vuelve a correr el gate completo desde cero (sello en modo normal;
+#   punta/trailer/arbol/CI en --revert-de, que sigue SIN estado propio) — no
+#   hay nada heredado del intento anterior.
+#   LIMITE DECLARADO: el lock es por git-common-dir. Dos clones independientes
+#   del mismo repo tienen common-dirs DISTINTOS y NO se excluyen entre si:
+#   este lock no promete exclusión entre clones.
+# Exit: 0 ok/listo/dry-run/liberar; 1 NO-MERGE (gate); 2 uso; 3 lock ajeno.
 set -u
 
 # 18.25: la forma de la salida de gh no es estable — depende del entorno del
@@ -73,8 +96,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIRMADO=0
 DRY_RUN=0
 REVERT_DE=""
+LIBERAR_LOCK=0
 
-uso() { sed -n '2,44p' "$0"; }
+uso() { sed -n '2,49p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -83,6 +107,7 @@ while [ $# -gt 0 ]; do
     --revert-de)
       [ $# -ge 2 ] || { printf 'saikit-merge: --revert-de exige un merge_commit\n' >&2; exit 2; }
       REVERT_DE="$2"; shift 2 ;;
+    --liberar-lock) LIBERAR_LOCK=1; shift ;;
     -h|--help)    uso; exit 0 ;;
     *)            printf 'saikit-merge: opcion desconocida: %s\n' "$1" >&2; uso >&2; exit 2 ;;
   esac
@@ -98,6 +123,91 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
   || no_merge "el cwd no es un repo git"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"   # misma forma fisica que el hook
 cd "$PROJECT_ROOT" || no_merge "no se pudo entrar al proyecto ($PROJECT_ROOT)"
+
+# ------------------------------------------------ lock de integracion (20.5)
+# El cwd ya es el toplevel: un common-dir relativo (`.git`) se resuelve contra
+# el toplevel. Contra el cwd de INVOCACION apuntaria fuera del repo (misma
+# leccion del cross-review kimi en el lock del setup, 18.7).
+COMMON="$(git rev-parse --git-common-dir 2>/dev/null)" \
+  || no_merge "no se pudo resolver el git-common-dir"
+case "$COMMON" in
+  /*) ;;
+  *) COMMON="$(cd "$COMMON" 2>/dev/null && pwd -P)" \
+       || no_merge "no se pudo resolver el common-dir ($COMMON)" ;;
+esac
+LOCK_DIR="$COMMON/saikit-merge.lock"
+
+mostrar_lock() {  # reporta el contenido del lock, campo por campo
+  printf '  lock: %s\n' "$LOCK_DIR"
+  printf '    pid: %s\n' "$(cat "$LOCK_DIR/pid" 2>/dev/null || printf '(sin pid)')"
+  printf '    host: %s\n' "$(cat "$LOCK_DIR/host" 2>/dev/null || printf '(sin host)')"
+  printf '    inicio: %s\n' "$(cat "$LOCK_DIR/started_at" 2>/dev/null || printf '(sin inicio)')"
+  printf '    modo: %s\n' "$(cat "$LOCK_DIR/modo" 2>/dev/null || printf '(sin modo)')"
+}
+
+# Recuperacion EXPLICITA del lock (20.5): muestra el contenido y lo quita.
+# Sin lock es no-op en verde. Es la UNICA via de recuperacion: el lock ajeno
+# nunca se borra solo (ver abajo).
+if [ "$LIBERAR_LOCK" = 1 ]; then
+  if [ ! -d "$LOCK_DIR" ]; then
+    printf 'saikit-merge: sin lock de integracion: nada que liberar (%s no existe)\n' "$LOCK_DIR"
+    exit 0
+  fi
+  printf 'saikit-merge: lock de integracion encontrado, se libera:\n'
+  mostrar_lock
+  rm -f "$LOCK_DIR"/pid "$LOCK_DIR"/host "$LOCK_DIR"/started_at "$LOCK_DIR"/modo 2>/dev/null
+  rmdir "$LOCK_DIR" 2>/dev/null \
+    || { printf 'saikit-merge: no se pudo quitar %s\n' "$LOCK_DIR" >&2; exit 2; }
+  printf 'saikit-merge: lock de integracion liberado\n'
+  exit 0
+fi
+
+# Adquisicion SOLO para la invocacion que puede producir el efecto (la que
+# trae --confirmado, en cualquiera de los dos modos): LISTO y --dry-run no
+# integran nada y no toman el lock. mkdir es atomico: si ya existe, otro
+# saikit-merge del mismo clone lo tiene (o lo dejo). Se REPORTA y se BLOQUEA
+# con exit 3 (distinguible del NO-MERGE del gate). NUNCA se borra solo — ni
+# con pid muerto ni viejo — : solo --liberar-lock explicito lo quita. La
+# caida del tenedor (kill -9) NO corre el trap y el lock SOBREVIVE para que
+# un tercero no lo libere en silencio.
+SOSTENER="${SAIKIT_MERGE_SOSTENER_SEG:-0}"
+candado_propio=0
+liberar_propio() {
+  if [ "$candado_propio" -ne 1 ]; then return 0; fi
+  if [ "$(cat "$LOCK_DIR/pid" 2>/dev/null || true)" = "$$" ]; then
+    rm -f "$LOCK_DIR"/pid "$LOCK_DIR"/host "$LOCK_DIR"/started_at "$LOCK_DIR"/modo 2>/dev/null
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+  candado_propio=0
+}
+if [ "$CONFIRMADO" = 1 ]; then
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s' "$$" > "$LOCK_DIR/pid" \
+      || { rmdir "$LOCK_DIR" 2>/dev/null; no_merge "no se pudo escribir el lock de integracion"; }
+    printf '%s' "$(hostname 2>/dev/null || printf '?')" > "$LOCK_DIR/pid.host.tmp" 2>/dev/null \
+      && mv "$LOCK_DIR/pid.host.tmp" "$LOCK_DIR/host" 2>/dev/null || true
+    printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')" > "$LOCK_DIR/started_at" 2>/dev/null || true
+    if [ -n "$REVERT_DE" ]; then MODO_LOCK=revert; else MODO_LOCK=merge; fi
+    printf '%s' "$MODO_LOCK" > "$LOCK_DIR/modo" 2>/dev/null || true
+    candado_propio=1
+    trap 'liberar_propio' EXIT
+  else
+    printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n' "$LOCK_DIR" >&2
+    mostrar_lock >&2
+    printf '  no se borra solo: si el dueno murio, liberalo explicito con:\n' >&2
+    printf '    bash tools/saikit-merge.sh --liberar-lock\n' >&2
+    exit 3
+  fi
+fi
+
+# Gancho SOLO de test (precedente: SAIKIT_SETUP_SOSTENER_SEG de la 18.7):
+# dormir N segundos con el lock tomado, para que un caso de contencion
+# orqueste la carrera con determinismo. Sin la variable es 0: PRODUCCION
+# INTACTA.
+if [ "$SOSTENER" -gt 0 ] 2>/dev/null && [ "$candado_propio" = 1 ]; then
+  sleep "$SOSTENER"
+fi
+
 RAMA_PR="$(git rev-parse --abbrev-ref HEAD)"
 [ "$RAMA_PR" != "HEAD" ] || no_merge "HEAD detached; el gate necesita la rama del PR"
 SHA="$(git rev-parse HEAD)"
