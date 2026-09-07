@@ -638,17 +638,22 @@ json_top_level_string() {
 #
 # Decide "1" SOLO si TODO esto cierra: clave == want a depth 1 (PRIMERA
 # ocurrencia, misma regla que json_top_level_string), valor que ARRANCA en
-# "[", "]" pareado con contenido no-blanco adentro, y documento
-# estructuralmente sano (brackets balanceados y tipados, strings cerrados,
-# sin escapes colgados, sin basura fuera del root). Todo lo demas — ausente,
-# null, string/numero/objeto, array vacio ([] / [ ]), JSON truncado o roto —
-# calla (fail-closed: sin evidencia de trabajo en vuelo).
+# "[", "]" pareado con contenido no-blanco adentro cuyo PRIMER token es un
+# iniciador de valor JSON (" { [ - digito t/f/n — la basura balanceada no
+# cuenta: un backslash-n LITERAL, una letra que no abre valor o un + fuera
+# de string invalidan), y documento estructuralmente sano (brackets
+# balanceados y tipados, strings cerrados, sin escapes colgados, sin basura
+# fuera del root). Todo lo demas — ausente, null, string/numero/objeto,
+# array vacio ([] / [ ] / multilinea real), JSON truncado o roto — calla
+# (fail-closed: sin evidencia de trabajo en vuelo).
 # Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
 # (json_top_level_string, json_escape, task_hash).
 #
-# Residual declarado: la validacion es de BALANCE, no de gramatica completa —
-# un payload roto EN OTRA parte cuya porcion del array esta bien formada y
-# poblada sigue contando como en vuelo.
+# Residual declarado: la validacion es de BALANCE mas el PRIMER token del
+# array, no de gramatica completa — basura DESPUES de un inicio valido
+# dentro del array (p.ej. [nul] o [1,]) y un payload roto EN OTRA parte
+# cuya porcion del array esta bien formada y poblada siguen contando como
+# en vuelo.
 json_top_level_array_poblado() {
   field="$1"
   case "$INPUT" in
@@ -662,7 +667,7 @@ json_top_level_array_poblado() {
       ins = 0; esc = 0; ini = 0
       pila = ""; raiz = 0
       candidata = 0; vista = 0; espera_valor = 0
-      en_array = 0; base = 0; contenido = 0; cerro = 0
+      en_array = 0; base = 0; contenido = 0; cerro = 0; ini_elem = 0
       valido = 1
       for (i = 1; i <= n; i++) {
         c = substr(buf, i, 1)
@@ -676,17 +681,17 @@ json_top_level_array_poblado() {
           continue
         }
         if (c == "\"") {
-          if (en_array)     { contenido = 1 }
+          if (en_array)     { contenido = 1; ini_elem = 0 }
           if (espera_valor) { espera_valor = 0 }
           ins = 1; ini = i + 1
           continue
         }
         if (c == "{" || c == "[") {
-          if (en_array) { contenido = 1 }
+          if (en_array) { contenido = 1; ini_elem = 0 }
           if (length(pila) == 0 && raiz) { valido = 0 }
           if (espera_valor) {
             espera_valor = 0
-            if (c == "[") { en_array = 1; base = length(pila) + 1; contenido = 0 }
+            if (c == "[") { en_array = 1; base = length(pila) + 1; contenido = 0; ini_elem = 1 }
           }
           pila = pila c; raiz = 1
           continue
@@ -709,10 +714,20 @@ json_top_level_array_poblado() {
           candidata = 0
           continue
         }
-        if (c == ",") { espera_valor = 0; candidata = 0; continue }
+        if (c == ",") {
+          if (en_array && ini_elem) { valido = 0 }
+          espera_valor = 0; candidata = 0
+          continue
+        }
         if (c == " " || c == "\t" || c == "\r" || c == "\n") { continue }
         if (length(pila) == 0) { valido = 0 }
-        if (en_array)     { contenido = 1 }
+        if (en_array) {
+          if (ini_elem) {
+            if (c == "-" || (c >= "0" && c <= "9") || c == "t" || c == "f" || c == "n") { ini_elem = 0; contenido = 1 }
+            else { valido = 0 }
+          }
+          else { contenido = 1 }
+        }
         if (espera_valor) { espera_valor = 0 }
         candidata = 0
       }
@@ -3364,9 +3379,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # declarados del grep — la forma MULTILINEA (contenido en la linea siguiente
   # a "[") ahora matchea, y un ECO de la clave citado en prosa o ANIDADA en
   # otro objeto (p.ej. toolInput) con array poblado ya no cuenta como en
-  # vuelo. Fail-closed AMPLIADO: JSON estructuralmente roto (truncado,
-  # brackets sin parear, string sin cerrar) tampoco habilita; el residual que
-  # queda queda declarado alla (balance, no gramatica completa).
+  # vuelo. Fail-closed AMPLIADO (r1): JSON estructuralmente roto (truncado,
+  # brackets sin parear, string sin cerrar) tampoco habilita, y la basura
+  # BALANCEADA dentro del array (token que no abre un valor JSON) ya no
+  # cuenta como poblacion; los residuales que quedan quedan declarados alla
+  # (balance + primer token, no gramatica completa).
   grok_bg_en_vuelo=0
   if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
