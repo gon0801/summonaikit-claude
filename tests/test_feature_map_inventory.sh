@@ -134,14 +134,82 @@ run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto ID duplicado entre descriptor
 out="$(run_lint "$R" "$S" 2>&1 || true)"
 printf '%s' "$out" | grep -qi 'duplicado' || malo "sin motivo de id duplicado: $out"
 
-caso "fuente de skill no permitida (artifacts/pyc) => 1"
-R="$SANDBOX/allow"; S="$SANDBOX/allow-skill"
+caso "artifacts/.run de runtime no versionados => 0"
+R="$SANDBOX/rt"; S="$SANDBOX/rt-skill"
 mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+mkdir -p "$S/artifacts/probe" "$S/.run"
+printf 'runtime\n' > "$S/artifacts/probe/launch.txt"
+printf '{}\n' > "$S/.run/state.json"
+out="$(run_lint "$R" "$S" 2>&1)" || malo "runtime artifacts/.run debio ignorarse: $out"
+printf '%s' "$out" | grep -q 'feature-map: OK' || malo "runtime sin OK: $out"
+
+caso "pyc sigue no permitido => 1"
+R="$SANDBOX/pyc"; S="$SANDBOX/pyc-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+mkdir -p "$S/scripts/__pycache__"
+printf 'x\n' > "$S/scripts/__pycache__/lint.pyc"
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto pyc"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'no permitida' || malo "sin motivo pyc: $out"
+
+caso "artifacts versionados en git => 1"
+R="$SANDBOX/vergit"
+S="$R/.cursor/skills/verify-summonaikit"
+mkdir -p "$R"
+mk_min_repo "$R"
+mk_min_skill "$S"
 mkdir -p "$S/artifacts"
-printf 'leak\n' > "$S/artifacts/nope.txt"
+printf 'leak\n' > "$S/artifacts/tracked.txt"
+git -C "$R" init -q
+git -C "$R" add -f .cursor/skills/verify-summonaikit/artifacts/tracked.txt
 run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto artifact versionado"
 out="$(run_lint "$R" "$S" 2>&1 || true)"
-printf '%s' "$out" | grep -q 'no permitida' || malo "sin motivo allowlist: $out"
+printf '%s' "$out" | grep -q 'runtime versionado\|no permitida' || malo "sin motivo versionado: $out"
+
+caso "artifacts filtrados al inventario (helpers) => 1"
+R="$SANDBOX/invleak"; S="$SANDBOX/invleak-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/catalog.json")
+c=json.loads(p.read_text())
+c["helpers"]["artifacts/leaked.txt"]={"kind":"internal","reason":"leak"}
+p.write_text(json.dumps(c), encoding="utf-8")
+PY
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto artifacts en inventario"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'inventario filtra runtime\|no permitida' || malo "sin motivo inventario: $out"
+
+caso "catalog feature no-such-feature => 1"
+R="$SANDBOX/nosuch"; S="$SANDBOX/nosuch-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/catalog.json")
+c=json.loads(p.read_text())
+c["surfaces"]["tools/install-hook.sh"]["feature"]="no-such-feature"
+p.write_text(json.dumps(c), encoding="utf-8")
+PY
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto feature inexistente"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'inexistente' || malo "sin motivo feature inexistente: $out"
+
+caso "descriptor surfaces=[] => 1"
+R="$SANDBOX/emptysurf"; S="$SANDBOX/emptysurf-skill"
+mkdir -p "$R" "$S"; mk_min_repo "$R"; mk_min_skill "$S"
+python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$S/features/saikit-merge.json")
+d=json.loads(p.read_text())
+d["surfaces"]=[]
+p.write_text(json.dumps(d), encoding="utf-8")
+PY
+run_lint "$R" "$S" >/dev/null 2>&1 && malo "acepto surfaces vacio"
+out="$(run_lint "$R" "$S" 2>&1 || true)"
+printf '%s' "$out" | grep -q 'surfaces vacío\|surfaces vacio' || malo "sin motivo surfaces vacio: $out"
 
 caso "scripts/lib no inventariado en helpers => 1"
 R="$SANDBOX/libjunk"; S="$SANDBOX/libjunk-skill"

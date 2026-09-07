@@ -44,17 +44,18 @@ Teardown:
 
 ## Doctor
 
-Run first whenever anything looks off:
+After launch, check the isolated instance before a Drive:
 
 ```bash
 "$CTRL" doctor
 ```
 
-Require `doctor: PASS`. That means: an active instance exists, `DEST` carries
+`doctor: PASS` means the disposable instance exists, `DEST` carries
 `# SAIKIT-CLAUDE-OWNED`, `bash -n` is clean, `DEST` matches the repo source
 byte-for-byte, and `DEST` is **not** the live `~/.claude/hooks/` copy.
 
-Refuse to drive if doctor fails. Never "fix" by installing into the real home.
+Refuse to drive if this instance doctor fails. Never "fix" by installing into
+the real home. Doctor does not scan the operator profile.
 
 ## Drive
 
@@ -122,8 +123,9 @@ Proof standards:
   armed prompt (`02-armado-contrato` → contract injected + state files).
 - For dry-run install: confirm exit 0 and a recognizable status line; do not
   treat the name "dry-run" as proof that nothing else ran — the log is the proof.
-- Mocks are not used; fixtures under `tests/fixtures/escenarios/` are real
-  captured payloads.
+- Gate fixtures under `tests/fixtures/escenarios/` are captured payloads.
+- Simulated features (`saikit-merge`, `saikit-postmerge`) use in-driver
+  doubles, not live remotes.
 
 Name artifacts with the run id from launch (`*-${VERIFY_RUN_ID}.txt`).
 
