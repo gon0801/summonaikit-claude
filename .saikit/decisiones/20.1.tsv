@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-07T07:53:24Z|verify|correr_mutacion exige control sano: el caso corre primero contra el fuente sano; si falla, no acredita la mutacion y el banco queda en FAIL mostrando la salida del caso|un caso siempre-rojo acreditaba mutantes espurias (residual 18.4): el rojo del mutado podia venir del caso, no de la mutacion|driver suelto exit 0 con 23 mutaciones atrapadas y meta-tests siempre-rojo/superviviente en verde; mutar el candado (control sano por true) pone el driver en exit 1|ok
