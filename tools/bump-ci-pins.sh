@@ -58,6 +58,9 @@ pin_al_dia() {  # $1=sha de la fuente $2=sha pineado → 0 si coinciden
 # ---------------------------------------------------------------------------
 
 pins_del_generador() {  # $1=generador → lineas `owner tag sha BASE' (o marcador PIN_*)
+  # r1 (cross-review 20.x): el marcador PIN_ILEGIBLE nombra QUE campo falta
+  # (OWNER, SHA o TAG) para que el lector pueda citarlo — sin eso, el diagnostico
+  # no identificaba el campo roto.
   awk '
     /^PIN_[A-Z0-9_]+_(OWNER|SHA|TAG)=/ {
       var=$0; sub(/=.*/, "", var)
@@ -72,7 +75,13 @@ pins_del_generador() {  # $1=generador → lineas `owner tag sha BASE' (o marcad
       n=0
       for (b in bases) {
         o=pin[b "-OWNER"]; s=pin[b "-SHA"]; t=pin[b "-TAG"]
-        if (o == "" || s == "" || t == "") { printf "PIN_ILEGIBLE %s\n", b; continue }
+        if (o == "" || s == "" || t == "") {
+          falta=""
+          if (o == "") falta = falta (falta == "" ? "" : ",") "OWNER"
+          if (s == "") falta = falta (falta == "" ? "" : ",") "SHA"
+          if (t == "") falta = falta (falta == "" ? "" : ",") "TAG"
+          printf "PIN_ILEGIBLE %s %s\n", b, falta; continue
+        }
         printf "%s %s %s %s\n", o, t, s, b
         n++
       }
@@ -86,10 +95,15 @@ leer_pins() {  # $1=generador → stdout lineas validadas `owner tag sha BASE'
   [ -f "$gen" ] || die "no encuentro el generador: $gen"
   out="$(pins_del_generador "$gen")"
   [ -n "$out" ] || die "el generador no expone pins: $gen"
+  # r1 (cross-review 20.x): el descarte de lineas vacias mira el PRIMER campo,
+  # no el cuarto. Los marcadores PIN_ILEGIBLE <base> <campo> y PIN_NINGUNO
+  # traen menos de 4 campos, y con el viejo `[ -n "$base" ] || continue` se
+  # descartaban ANTES del case: un pin sin OWNER/SHA/TAG quedaba tapado por los
+  # sanos y --check declaraba «todos los pins al dia» con exit 0 (medido).
   while read -r owner tag sha base; do
-    [ -n "$base" ] || continue
+    [ -n "$owner" ] || continue
     case "$owner" in
-      PIN_ILEGIBLE) die "pin ilegible: falta OWNER, SHA o TAG para PIN_${tag} en $gen" ;;
+      PIN_ILEGIBLE) die "pin ilegible: falta $sha para PIN_${tag} en $gen" ;;
       PIN_NINGUNO)  die "el generador no expone pins: $gen" ;;
     esac
     printf '%s' "$owner" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' \
