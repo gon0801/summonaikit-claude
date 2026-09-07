@@ -7,6 +7,18 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #260 (cierre Phase 19: feature map verificable) — deploy NO-OP; cuatro hosts verificados
+
+- **Mergeado:** PR #260 `fix/feature-map-lint-f16-f18` → `master`, merge squash `aedae68`.
+- **Qué traía:** cierre de los gaps de aislamiento, evidencia, drivers, PTY,
+  mutaciones, documentación y catálogo de la Phase 19.
+- **Deploy:** los cuatro instaladores se ejecutaron desde `origin/master` en
+  `aedae68`; las copias quedaron byte a byte al día y el hook no cambió (**NO-OP**).
+- **Verificación:** `install-hook.sh --check` terminó `veredicto=ok` para claude,
+  grok, dsh y codex. `check-hook-registration.sh` también se ejecutó.
+- **Ledger:** `Plans.md` cierra 19.4–19.17 con PR #260 y corrige la fila histórica
+  16.3, mergeada en PR #100 pero marcada anteriormente como `cc:TODO`.
+
 ## 2026-09-06 — PR #253 (19.17: integración feature-map) — hooks NO-OP
 
 - **Merge:** `3d151b822dfdf9955f89d5417fe2656449feaca6`, head
