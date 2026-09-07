@@ -29,6 +29,17 @@
 #     sin el export o sin el unset, la mutacion correspondiente da rojo).
 #     gh pr merge queda fuera (su stdout no se parsea) y gh pr checks no
 #     existe en el script (se usa run list, hallazgo 18.1 §2.1).
+#   - 20.5 lock de integracion: con --confirmado (normal o --revert-de) el
+#     script toma $(git-common-dir)/saikit-merge.lock. DOS PROCESOS: el
+#     segundo NO llama merge y sale 3 (distinguible del NO-MERGE). DOS
+#     WORKTREES del mismo clone: comparten common-dir, el hermano se bloquea.
+#     CAIDA (kill -9) del tenedor: el lock SOBREVIVE y un tercero ajeno no lo
+#     libera; la recuperacion es EXPLICITA (--liberar-lock), nunca automatica.
+#     REINTENTO con el lock libre: re-corre el gate completo del modo (normal:
+#     base/sello; revert: punta, SIN estado propio). LIMITE DECLARADO: dos
+#     clones independientes NO se excluyen (common-dirs distintos) — se mide
+#     para que quede fijado. Determinismo por gancho de test
+#     SAIKIT_MERGE_SOSTENER_SEG (duerme con el lock tomado; produccion = 0).
 #
 # INFRAESTRUCTURA: git REAL en sandbox (origin bare local alcanzado via
 # url.<path>.insteadOf de la URL github que espera el script) y gh FALSO que
@@ -266,6 +277,24 @@ GHEOF
 
 # refix: re-escribe los fixtures que dependen del HEAD actual (sha del PR,
 # veredicto sellado y estado del hook). Se llama tras commits nuevos.
+# sembrar_sello: veredicto sellado + estado del hook para el root $1 (20.5:
+# aditivo, para poder sembrar tambien un clon hermano sin pisar el del work).
+sembrar_sello() {  # $1=root del repo a sembrar
+  local key sd
+  mkdir -p "$1/.saikit/veredictos"
+  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.4.tsv"}' "$SHA" > "$1/.saikit/veredictos/$SHA.json"
+  key="$(printf '%s' "$1" | cksum | cut -d' ' -f 1)"
+  sd="$SB/estado/claude/$key/sess1"
+  mkdir -p "$sd"
+  {
+    printf 'task_hash=h184\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=%s\n' "$(sha256sum "$1/.saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  } > "$sd/harness-state.env"
+  printf 'prompt task started: h184\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+}
+
 refix() {
   SHA="$(git rev-parse HEAD)"
   printf '{"nameWithOwner":"op/sandbox"}' > "$SB/ghfix/repo.json"
@@ -274,21 +303,8 @@ refix() {
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' > "$SB/ghfix/pr-merge.json"
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
 
-  mkdir -p .saikit/veredictos
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.4.tsv"}' "$SHA" > ".saikit/veredictos/$SHA.json"
-
-  local key sd
   rm -rf "$SB/estado"
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  sd="$SB/estado/claude/$key/sess1"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h184\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'prompt task started: h184\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  sembrar_sello "$(pwd -P)"
 }
 
 correr() {  # corre el script bajo prueba desde el work del sandbox
@@ -844,6 +860,267 @@ caso "nunca_admin_en_el_fuente"
 }
 fin_caso "nunca_admin_en_el_fuente"
 
+# ------------------------------------------------- lock de integracion (20.5)
+# Dos procesos reales, dos worktrees del mismo clone, caida del tenedor,
+# reintento que revalida y el limite declarado entre clones. Determinismo por
+# gancho de test (no sleeps a ciegas): SAIKIT_MERGE_SOSTENER_SEG duerme al
+# tenedor CON el lock tomado (precedente: SAIKIT_SETUP_SOSTENER_SEG, 18.7).
+esperar_lock() {  # $1=ruta del lock; espera a que exista, acotado a ~10 s
+  local cont=0
+  while [ ! -d "$1" ] && [ "$cont" -lt 100 ]; do
+    sleep 0.1; cont=$((cont + 1))
+  done
+  [ -d "$1" ]
+}
+
+c_b_bloquea() {
+  # Parte comun de contencion (pre: sb_reset hecho, gh log truncado): A
+  # duerme CON el lock tomado; B corre --confirmado y NO llama merge, sale 3.
+  # Deja $a_pid vivo (duerme): el llamador decide esperarlo o matarlo.
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock ".git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock; el caso no mide contencion"; wait "$a_pid" 2>/dev/null; return 1; }
+  correr --confirmado
+  [ "$RC" -eq 3 ] || _mal "el segundo proceso deberia bloquearse con 3, dio $RC: $OUT"
+  _contiene "reporta el lock" "$OUT" "saikit-merge.lock"
+  _contiene "muestra como liberarlo" "$OUT" "--liberar-lock"
+  if merge_disparado; then _mal "el segundo proceso llamo merge pese al lock del primero"; fi
+  return 0
+}
+
+c_lock_dos_procesos() {
+  # DOS PROCESOS sobre el mismo worktree (caso de banco COMPLETO): tras
+  # bloquear a B, A despierta, mergea y LIBERA su lock al salir (trap propio).
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  c_b_bloquea || return 0
+  wait "$a_pid"; a_rc=$?
+  [ "$a_rc" -eq 0 ] || _mal "A deberia terminar en 0, dio $a_rc: $(cat "$SB/a.log")"
+  _contiene "A si mergueo" "$(cat "$SB/a.log")" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "A no libero su lock al salir"
+}
+
+c_lock_exclusion() {
+  # Mitad economica de c_lock_dos_procesos (caballo de las mutaciones): solo
+  # la exclusion de B; A se mata y se recupera por la via explicita.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  c_b_bloquea || return 0
+  kill -9 "$a_pid" 2>/dev/null; wait "$a_pid" 2>/dev/null
+  bash "$MERGE" --liberar-lock >/dev/null 2>&1
+}
+
+c_lock_libera_propio() {
+  # Sin SOSTENER (rapido): una invocacion que completa mergea y suelta su
+  # propio lock al salir — el trap de EXIT libera, y solo lo propio.
+  CASO_ROJO=0; sb_reset master
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el dueno no libero su lock al salir"
+}
+
+c_lock_dos_worktrees() {
+  # DOS WORKTREES del mismo clone: comparten git-common-dir, asi que el lock
+  # tomado desde el work principal BLOQUEA al hermano.
+  CASO_ROJO=0; sb_reset master
+  git worktree add -q "$SB/otro" -b feat/otro 2>/dev/null \
+    || { _mal "no se pudo crear el segundo worktree"; return; }
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock "$SB/work/.git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock (worktree); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
+  cd "$SB/otro" || { _mal "no se pudo entrar al worktree hermano"; return; }
+  OUT="$(bash "$MERGE" --confirmado 2>&1)"; RC=$?
+  [ "$RC" -eq 3 ] || _mal "desde el worktree hermano deberia bloquearse con 3, dio $RC: $OUT"
+  _contiene "reporta el lock COMPARTIDO (common-dir)" "$OUT" "$SB/work/.git/saikit-merge.lock"
+  _contiene "muestra como liberarlo" "$OUT" "--liberar-lock"
+  if merge_disparado; then _mal "el worktree hermano llamo merge"; fi
+  cd "$SB/work" || exit 1
+  kill -9 "$a_pid" 2>/dev/null; wait "$a_pid" 2>/dev/null
+  OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
+  [ "$RC2" -eq 0 ] || _mal "liberar-lock fallo tras la caida del tenedor: $OUT2"
+  [ ! -d "$SB/work/.git/saikit-merge.lock" ] || _mal "liberar-lock no quito el lock"
+}
+
+c_lock_caida() {
+  # CAIDA del tenedor (kill -9: el trap no corre) => el lock SOBREVIVE; un
+  # tercero ajeno queda bloqueado y SU salida no libera el lock de nadie; la
+  # recuperacion va por la via EXPLICITA (--liberar-lock), nunca automatica.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock ".git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock; el caso no mide caida"; wait "$a_pid" 2>/dev/null; return; }
+  kill -9 "$a_pid"; wait "$a_pid" 2>/dev/null
+  [ -d ".git/saikit-merge.lock" ] || _mal "la caida (SIGKILL) libero el lock: el trap no corre con -9 y el lock tiene que sobrevivir"
+  # Tercero ajeno: bloqueado por el huerfano...
+  correr --confirmado
+  [ "$RC" -eq 3 ] || _mal "el tercero deberia bloquearse con 3 (lock huerfano), dio $RC: $OUT"
+  _contiene "reporta el pid del dueno caido" "$OUT" "$a_pid"
+  _contiene "dice que no se borra solo" "$OUT" "no se borra solo"
+  if merge_disparado; then _mal "el tercero llamo merge con un lock huerfano presente"; fi
+  # ...y su salida NO libera el lock ajeno (el trap compara el pid).
+  [ -d ".git/saikit-merge.lock" ] || _mal "la salida del tercero libero un lock ajeno"
+  # Recuperacion EXPLICITA: --liberar-lock muestra el contenido y lo quita.
+  OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
+  [ "$RC2" -eq 0 ] || _mal "--liberar-lock fallo: $OUT2"
+  _contiene "muestra el contenido antes de quitar" "$OUT2" "$a_pid"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "--liberar-lock no quito el lock"
+  # Tras liberar, el reintento ya no esta bloqueado y llega al final del gate.
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "tras liberar, el reintento deberia llegar al gate y mergear, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
+c_lock_reintento_revalida() {
+  # REINTENTO revalida (modo normal): B bloqueado por el lock; tras liberar,
+  # la base avanzo mientras esperaba y el reintento RE-CORRE el gate completo
+  # (sello incluido: es el mismo camino de siempre, ahora bajo el lock) y NO
+  # mergea. Nada queda cacheado del intento anterior.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock ".git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock; el caso no mide reintento"; wait "$a_pid" 2>/dev/null; return; }
+  correr --confirmado
+  [ "$RC" -eq 3 ] || _mal "el intento bloqueado deberia salir 3, dio $RC: $OUT"
+  kill -9 "$a_pid"; wait "$a_pid" 2>/dev/null
+  bash "$MERGE" --liberar-lock >/dev/null 2>&1
+  avanzar_base
+  correr --confirmado
+  [ "$RC" -eq 1 ] || _mal "el reintento con la base avanzada deberia NO-MERGE (1), dio $RC: $OUT"
+  _contiene "re-corrio el gate completo desde cero" "$OUT" "NO-MERGE: base avanzada"
+  if merge_disparado; then _mal "el reintento mergeo sin revalidar la base"; fi
+}
+
+c_revert_lock() {
+  # Modo --revert-de cubierto por el mismo lock. El revert es STATELESS: no
+  # hay estado del hook en el sandbox y el flujo llega al merge igual (el
+  # sello es cosa del modo normal).
+  CASO_ROJO=0; monta_revert
+  [ ! -d "$SB/estado" ] || _mal "precondicion rota: monta_revert debia dejar el repo SIN estado (revert stateless)"
+  : > "$SAIKIT_GH_LOG"
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --revert-de "$MC" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock ".git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock (revert); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
+  _contiene "el lock declara el modo revert" "$(cat .git/saikit-merge.lock/modo 2>/dev/null)" "revert"
+  correr --revert-de "$MC" --confirmado
+  [ "$RC" -eq 3 ] || _mal "el segundo revert deberia bloquearse con 3, dio $RC: $OUT"
+  _contiene "reporta el lock" "$OUT" "saikit-merge.lock"
+  if merge_disparado; then _mal "el segundo revert llamo merge"; fi
+  wait "$a_pid"; a_rc=$?
+  [ "$a_rc" -eq 0 ] || _mal "A (revert) deberia terminar en 0, dio $a_rc: $(cat "$SB/a.log")"
+  _contiene "A si mergueo el revert" "$(cat "$SB/a.log")" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "A no libero su lock al salir (revert)"
+}
+
+c_revert_lock_reintento() {
+  # REINTENTO revalida (modo revert): tras liberar, la punta de master cambio
+  # mientras el reintento esperaba; re-corre punta/trailer/arbol/CI y NO
+  # mergea. El revert sigue SIN estado propio: nada de esto consulta sello.
+  CASO_ROJO=0; monta_revert
+  : > "$SAIKIT_GH_LOG"
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --revert-de "$MC" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock ".git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock (revert reintento); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
+  correr --revert-de "$MC" --confirmado
+  [ "$RC" -eq 3 ] || _mal "el revert bloqueado deberia salir 3, dio $RC: $OUT"
+  kill -9 "$a_pid"; wait "$a_pid" 2>/dev/null
+  bash "$MERGE" --liberar-lock >/dev/null 2>&1
+  # La punta de master avanzo mientras el reintento espero.
+  git checkout -q master
+  printf 'post\n' > post.sh
+  git add post.sh
+  git commit -qm "chore: algo mas aterrizo"
+  git push -q origin master
+  git checkout -q revert/task
+  correr --revert-de "$MC" --confirmado
+  [ "$RC" -eq 1 ] || _mal "el reintento del revert con la punta cambiada deberia NO-MERGE (1), dio $RC: $OUT"
+  _contiene "revalido la punta desde cero" "$OUT" "NO-MERGE: no es la punta"
+  if merge_disparado; then _mal "el reintento del revert mergeo sin revalidar la punta"; fi
+}
+
+c_lock_entre_clones() {
+  # LIMITE DECLARADO (20.5): el lock vive en el git-common-dir, asi que dos
+  # clones INDEPENDIENTES del mismo repo NO se excluyen entre si. A sostiene
+  # el lock del clone principal; B, en un clon hermano (common-dir propio,
+  # sembrado con su veredicto y estado), pasa de largo y mergea. Se mide para
+  # que el limite quede fijado como comportamiento, no como promesa rota.
+  CASO_ROJO=0; sb_reset master
+  git clone -q "$SB/origin.git" "$SB/clone2" 2>/dev/null \
+    || { _mal "no se pudo clonar el hermano"; return; }
+  git -C "$SB/clone2" config "url.$SB/origin.git.insteadOf" "https://github.com/op/sandbox.git"
+  git -C "$SB/clone2" remote set-url origin "https://github.com/op/sandbox.git"
+  git -C "$SB/clone2" config user.email op@example.com
+  git -C "$SB/clone2" config user.name op
+  git -C "$SB/clone2" checkout -q feat/task
+  # La forma FISICA del root (pwd -P): el script clavea el estado con la
+  # misma derivacion, y en macOS $SB viene por /tmp (symlink de /private/tmp).
+  sembrar_sello "$(cd "$SB/clone2" && pwd -P)"
+  SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
+  a_pid=$!
+  esperar_lock "$SB/work/.git/saikit-merge.lock" \
+    || { _mal "A no tomo el lock (clon hermano); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
+  cd "$SB/clone2" || { _mal "no se pudo entrar al clon hermano"; return; }
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "el clon hermano deberia mergear sin exclusion entre clones, dio $RC: $OUT"
+  _contiene "merge ok del hermano" "$OUT" "MERGE-OK:"
+  [ ! -d "$SB/clone2/.git/saikit-merge.lock" ] || _mal "el hermano no libero su propio lock al salir"
+  cd "$SB/work" || exit 1
+  [ -d "$SB/work/.git/saikit-merge.lock" ] || _mal "el lock del clone principal no deberia verse afectado por el hermano"
+  kill -9 "$a_pid" 2>/dev/null; wait "$a_pid" 2>/dev/null
+  OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
+  [ "$RC2" -eq 0 ] || _mal "limpieza: liberar-lock fallo: $OUT2"
+}
+
+caso "lock_segundo_proceso_no_llama_merge_exit_3"
+{
+  c_lock_dos_procesos
+}
+fin_caso "lock_segundo_proceso_no_llama_merge_exit_3"
+
+caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
+{
+  c_lock_dos_worktrees
+}
+fin_caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
+
+caso "lock_caida_no_libera_ajeno_recuperacion_explicita"
+{
+  c_lock_caida
+}
+fin_caso "lock_caida_no_libera_ajeno_recuperacion_explicita"
+
+caso "lock_reintento_tras_liberar_revalida_el_gate_normal"
+{
+  c_lock_reintento_revalida
+}
+fin_caso "lock_reintento_tras_liberar_revalida_el_gate_normal"
+
+caso "revert_lock_segundo_proceso_no_merguea"
+{
+  c_revert_lock
+}
+fin_caso "revert_lock_segundo_proceso_no_merguea"
+
+caso "revert_lock_reintento_revalida_punta"
+{
+  c_revert_lock_reintento
+}
+fin_caso "revert_lock_reintento_revalida_punta"
+
+caso "lock_no_excluye_entre_clones_declarado"
+{
+  c_lock_entre_clones
+}
+fin_caso "lock_no_excluye_entre_clones_declarado"
+
 cd - >/dev/null 2>&1 || true
 
 if [ "$fail" -ne 0 ]; then
@@ -1143,6 +1420,9 @@ registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_ansi
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
 emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:   tools/saikit-merge.sh --confirmado|	c_listo_emision
+lock_sin_guard	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if true; then|	c_lock_exclusion
+lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -p "\$LOCK_DIR" 2>/dev/null; then|	c_lock_exclusion
+trap_no_libera	s|^liberar_propio() {$|liberar_propio() { return 0; #|	c_lock_libera_propio
 MUTS
 
 # ---------------------------------------- meta: el banco se audita a si mismo
