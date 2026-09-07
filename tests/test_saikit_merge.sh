@@ -1156,7 +1156,7 @@ fail_previo="$fail"; fail=0
 meta_out="$(mktemp "${TMPDIR:-/tmp}/saikit-merge-meta-XXXXXX")"
 correr_mutacion "selftest_mutante_superviviente" 's/^CONFIRMADO=0$/CONFIRMADO=1/' c_indiferente_adrede >"$meta_out" 2>&1
 res="$fail"; fail="$fail_previo"  # idem: juzga SOLO su llamada
-if [ "$res" -ne 0 ] && grep -Fq 'selftest_mutante_superviviente' "$meta_out"; then
+if [ "$res" -ne 0 ] && grep -Fq 'selftest_mutante_superviviente' "$meta_out" && grep -Fq 'ningun caso detecto' "$meta_out"; then
   printf '    ok: banco rechaza mutante superviviente (caso sano-verde que no detecta)\n'
 else
   printf '    FAIL: el banco acredito un mutante que ningun caso detecto\n' >&2
