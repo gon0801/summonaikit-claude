@@ -1,8 +1,9 @@
 # Phase 20 — cerrar residuales abordables fuera del feature map
 
-Fecha: 2026-09-06. Base observada: `origin/master@949ca54` tras fetch.
+Fecha: 2026-09-06. Base original: `origin/master@949ca54`; ampliación de
+mantenimiento contrastada sobre `origin/master@905c095` tras fetch.
 Petición: «convertirlos en tareas explícitas, todo lo que se pueda cerrar».
-**Estado: plan; 25 tareas nuevas, ninguna implementada por este cambio.**
+**Estado: plan; 26 tareas nuevas, ninguna implementada por este cambio.**
 
 Contrato: [spec de residuales](spec/autopilot-residuals.md), subordinada a
 [spec del producto](spec/00-project-spec.md). La fila de `Plans.md` define
@@ -45,7 +46,8 @@ el tiempo, por tener CI verde sin prueba funcional o por quedar documentado.
 | Config autopilot ausente en este repo, adopción por proyecto | Optional | 20.22 exige destino y cinco opciones |
 | Texto adversary y estados históricos desactualizados | Required | 20.23 reconciliación sin falsificar capturas |
 | dry-run de quitar-zcode/quitar-grok ignora flag | Required | 20.24 sin escrituras, backups ni borrado |
-| Cierre verificable y trazabilidad | Required | 20.25 matriz y registro post-merge |
+| El catálogo de Phase19 superó el disparador de mantenimiento (>5 funciones) | Recommended | 20.23 contrato; 20.25 primera pasada completa |
+| Cierre verificable y trazabilidad | Required | 20.26 matriz y registro post-merge |
 
 ### Lo que se conserva, aplaza o rechaza con razón
 
@@ -86,7 +88,14 @@ UI con éxito; así el arreglo puede ejecutarse sin falsear un PASS previo.20.21
 para conseguir números de presentación.
 
 20.23 tiene una primera parte inmediata (frases desactualizadas) y se mantiene
-abierta hasta incorporar los resultados de las tareas activas.20.25 juzga el
+abierta hasta incorporar los resultados de las tareas activas y dejar el
+runbook de mantenimiento en la spec y la skill.20.25 corre después sobre el
+HEAD final: lectores de fuente pueden investigar fichas independientes en
+paralelo, pero doctor/drive/cleanup y toda operación live se serializan por
+instancia. Reutiliza evidencia20.x solo cuando SHA, modo y casos obligatorios
+coinciden; no repite llamadas externas para mejorar una matriz.
+
+20.26 juzga el
 conjunto: si falta una medición Required, la fase queda pendiente; si una
 Conditional resulta inviable, registra cancelación explícita y el límite que
 permanece. No transforma `unknown` en PASS ni marca la implementación hecha.
@@ -109,8 +118,10 @@ fuente de decisión y límite. Una Required bloqueada nunca se omite del rango.
 | 20.16 | Nueva superficie tools/ de supervisión si se elige; test propio y fuente/tipo de salida definidos por20.15 antes de implementar |
 | 20.19 | hosts/dsh/ y banco node; hook solo si la reproducción demuestra que allí está el defecto |
 | 20.22 | Config del proyecto elegido y su documentación; no activar este repo por default |
-| 20.23/20.25 | spec, guía, README, perfil adversary, Plans.md y deploy-log (estos dos últimos, líder) |
+| 20.23 | spec, skill verify-summonaikit, guía, README y perfil adversary |
 | 20.24 | tools/install-hook.sh, tests de instalación/retirada zcode/grok y controles dsh; snapshot del árbol completo con temporales/backups |
+| 20.25 | catálogo/fichas/skill/harness del feature map solo si la pasada detecta deriva; evidencia en docs/evidence/phase-20/20.25; tests feature-map acotados para cada corrección |
+| 20.26 | Plans.md y deploy-log del cierre, a cargo del líder |
 
 Un archivo listado es ownership previsto, no permiso para cambiar toda su
 superficie. Si otro PR lo modifica, integrar desde origin/master y resolver
@@ -139,6 +150,11 @@ el conflicto por contrato, sin checkout compartido ni revertir trabajo ajeno.
 - Para20.18: si el modelo siempre entrega recibo, no ejercitó el bloqueo.
   Preparar caso reproducible; un block observado que no continúa es FAIL,
   no unknown. Controles1/3 protegen lo que sí se había medido.
+- Para20.25: cada feature de `list-features` aparece una vez en la matriz con
+  fuente, modo, intento y resultado. Una omisión, evidencia de otro SHA, PASS
+  falso o cleanup que borra evidencia invalida la pasada. `changed` exige rojo,
+  verde y mutante de la corrección; `blocked` nombra el requisito y conserva
+  unknown/BLOCKED en la feature, nunca PASS.
 - Todas las implementaciones: pre-commit local, CI completo en PR abierto y
   gate verde sobre el head entregado; suites rápida/lenta siguen completas.
   No duplicar batería completa local. Tests POSIX no acreditan rutas Windows.
@@ -155,8 +171,9 @@ Ninguna tarea depende artificialmente de terminar toda Phase19.
 
 Cuando una superficie tenga ficha/driver, el PR de producto incorpora su
 ajuste correspondiente para que el mapa no derive; si está en construcción,
-los propietarios coordinan integración serial. El plan no edita la skill ni
-sus tests ni cambia el WIP de19.2. Versiones nuevas del host se miden al
+los propietarios coordinan integración serial.20.23 puede editar el contrato
+de la skill y20.25 sus fichas/harness/tests solo para corregir deriva probada;
+no cambia estados históricos de19. Versiones nuevas del host se miden al
 empezar cada tarea; los resultados de septiembre no se universalizan.
 
 ## Investigación, memoria y validación de equipo
@@ -181,7 +198,11 @@ Architecture/Security, Product/QA y Product/Skeptic; el líder integró sus
 hallazgos. Coincidieron en separar investigaciones de implementación,
 no duplicar Phase19 y mantener cierres históricos. Se incorporaron los
 adicionales de banco de mutaciones, emisores de comandos, dry-run de retirada,
-zona adversary, pins y corepack. Revisión final del plan: una ronda con veredicto inicial REQUEST_CHANGES.
+zona adversary, pins y corepack. Una segunda validación específica del
+mantenimiento acordó reutilizar el dispatcher y separar resultados de feature
+de resultados de pasada; el líder eligió una tarea propia antes del cierre
+porque puede descubrir cambios que necesitan re-drive. Revisión final del plan:
+una ronda con veredicto inicial REQUEST_CHANGES.
 El líder integró los dos hallazgos de contrato (dependencia de dsh que admite
 repro FAIL sin cerrar la medición, y sello solo en modo normal, no en revert)
 y los menores (reglas del rango final, dependencia20.6→20.4, nombre del test).
@@ -197,6 +218,7 @@ Juicio de planificación (1–5, no benchmark):
 | Mediciones vivas faltantes | 5 | 4 | 5 | 3 | 4 | 4 | 4 | 4 | Required con precondiciones |
 | Canal Grok y superficie headless | 5 | 4 | 5 | 2 | 2 | 3 | 3 | 3 | Required investigación; implementación Conditional |
 | Adversary/CI/costo | 4 | 4 | 4 | 3 | 3 | 4 | 4 | 4 | Recommended |
+| Mantenimiento periódico del feature map | 5 | 4 | 4 | 4 | 4 | 5 | 4 | 4 | Recommended; primera pasada20.25 |
 | Ruteo16.7 y adopción por proyecto | 3 | 3 | 3 | 3 | 3 | 3 | 3 | 3 | Optional, sin activar por omisión |
 | Auto-merge permanente/paridad/importar stack | 1 | 1 | 1 | 2 | 1 | 1 | 1 | 2 | Reject |
 
@@ -223,6 +245,9 @@ no se inventa una aprobación ni se pide permiso por cada comando ya cubierto.
 - 事項: GitHub en un repo descartable exacto, topic+marcador; push/PR/merge por tool y consultas CI
   理由: acreditar autorización, CI y publicación real sin usar un PR productivo
   scope: Phase20 /20.8–20.11,20.14; destino concreto y acciones antes de correr
+- 事項: reutilización o nueva ejecución de drives live durante mantenimiento
+  理由: cerrar la matriz del catálogo sin heredar alcance, cuota ni permisos de otra corrida
+  scope: Phase20 /20.25; solo destinos y operaciones autorizados por20.8
 - 事項: adopción autopilot del proyecto elegido, cinco opciones y publicación de config
   理由: la ausencia de config no autoriza habilitar permisos o despliegue
   scope: Phase20 /20.22 Optional, opt-in específico del operador

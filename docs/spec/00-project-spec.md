@@ -2327,6 +2327,9 @@ python tecleados por el operador):
   (`desactualizado`, 0 días, 1 commit) sin que nadie se lo pidiera: la deriva
   del mapa es observable, como la fila 17.1 prometía. Su límite sigue en pie:
   **avisa que el mapa envejeció, no comprueba que siga describiendo la app.**
+  Phase19 superó el disparador histórico de cinco funciones; Phase20 añade una
+  pasada periódica que cruza el catálogo con la fuente y vuelve a conducir cada
+  feature en su modo declarado antes de aceptar el cierre.
 - **La cobertura del instalador es Windows-bound.** Los casos que atan que
   `saikit-verificar-app` se planta, se repara y se quita viven en
   `tests/test_install_hook.sh`, que el CI Linux saltea entero. Que la skill se
