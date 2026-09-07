@@ -2989,7 +2989,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_con_bg_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -4097,6 +4097,63 @@ caso_g4_grok_delegado_bg_estructural_bloquea() {
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-sinclave","sessionCrons":[]}'
   LAB_GROK_HOOK_EVENT=""
   _contiene "Stop grok sin la clave backgroundTasks bloquea (20.4)" "$LAB_OUT" '"decision":"block"'
+}
+
+# 20.4 (hallazgo del verificador, r1): la basura BALANCEADA dentro del array
+# no cuenta como poblacion. El primer lector estructural contaba cualquier
+# caracter no-blanco entre "[" y su "]" — un token invalido fuera de string
+# (un backslash-n LITERAL, una letra que no abre valor, un +) dejaba pasar un
+# JSON roto como trabajo en vuelo. Ahora el PRIMER token del array tiene que
+# ser un iniciador de valor JSON (" { [ - digito t/f/n); si no, cae al gate
+# normal. Contracara en el MISMO caso: un numero ([7]) y un string con "]"
+# adentro (["x]"]) SON valores validos y siguen permitiendo, y el vacio
+# multilinea REAL (salto de linea de verdad, no backslash-n) sigue bloqueando.
+caso_g4_grok_delegado_bg_primer_token() {
+  for _v in \
+    '"backgroundTasks":[\n]' \
+    '"backgroundTasks":[x]' \
+    '"backgroundTasks":[,]' \
+    '"backgroundTasks":[+]' \
+    ; do
+    lab_limpiar_estado
+    LAB_GROK_HOOK_EVENT=user_prompt_submit
+    lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega y manda basura')"
+    LAB_GROK_HOOK_EVENT=post_tool_use
+    lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+    LAB_GROK_HOOK_EVENT=stop
+    lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tok",%s,"sessionCrons":[]}' "$_v")"
+    LAB_GROK_HOOK_EVENT=""
+    _contiene "Stop grok con token invalido en backgroundTasks ($_v) bloquea (20.4 r1)" "$LAB_OUT" '"decision":"block"'
+  done
+
+  # VACIO MULTILINEA REAL: salto de linea de verdad entre "[" y "]" — JSON
+  # valido, sin elementos: bloquea igual que el [] compacto.
+  lab_limpiar_estado
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con vacio multilinea')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-vm","backgroundTasks":[
+],"sessionCrons":[]}'
+  LAB_GROK_HOOK_EVENT=""
+  _contiene "Stop grok con backgroundTasks vacio multilinea real bloquea (20.4 r1)" "$LAB_OUT" '"decision":"block"'
+
+  # Valores VALIDOS como unico elemento: siguen permitiendo (el vacio no es
+  # la unica forma no-basura; un array con un numero o un string raro pero
+  # valido tiene un elemento y eso es trabajo visible).
+  for _v in '"backgroundTasks":[7]' '"backgroundTasks":["x]"]' '"backgroundTasks":[null]'; do
+    lab_limpiar_estado
+    LAB_GROK_HOOK_EVENT=user_prompt_submit
+    lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con un valor valido')"
+    LAB_GROK_HOOK_EVENT=post_tool_use
+    lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+    LAB_GROK_HOOK_EVENT=stop
+    lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-val",%s,"sessionCrons":[]}' "$_v")"
+    LAB_GROK_HOOK_EVENT=""
+    _igual "exit del Stop delegado con valor valido ($_v) en vuelo" "$LAB_RC" "0"
+    _vacio "stdout del allow grok con valor valido ($_v)" "$LAB_OUT"
+  done
 }
 
 # 18.27 (D-B), contracara: con el subagente genuinamente en vuelo
