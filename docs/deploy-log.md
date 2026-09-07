@@ -7,6 +7,28 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-07 — PR #271 (20.6: zona de pruebas privada por ejecución del adversary) — deploy REAL de las 4 copias
+
+- **Merge:** `775228dc47094155496d7f8a72a0185ba53a407d`, head
+  `f1cb941116a5e1721b3f4b906f557f957606cabe`; gate SUCCESS en el
+  [run 34160345217](https://github.com/gon0801/summonaikit-claude/actions/runs/34160345217).
+- **Deploy (13:54 UTC / 06:54 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0,
+  cuatro copias `REPARADO` (incluye el agente grok adversary); sha256 del
+  hook instalado `d3e2e33f0cd4e661...`. Backups:
+  `summonaikit-harness.sh.nuestro.20260907-135442.bak` (claude) y
+  `20260907-135443.bak` (grok/dsh/codex).
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` exit 0.
+- **Cierre:** fila Recommended ejecutada. Verificador FAIL r1 (dos
+  mutaciones del banco acreditadas en falso — sed vacuo — incluso con CI
+  verde) corregido en `a786947` con reanclaje y guardia de mutado no
+  vacío; adversario 4 hallazgos BAJA adjudicados como residuales
+  declarados (hardlink y colisión de llave: frontera general
+  preexistente; mismo-segundo y fixture inmutable: diferidos) en
+  [comentario del PR](https://github.com/gon0801/summonaikit-claude/pull/271#issuecomment-5575488479).
+  Golden sin cambios de veredicto. Última fila de la tanda 20.1-20.7+20.24.
+
 ## 2026-09-07 — PR #270 (20.5: lock de integración en saikit-merge) — hooks NO-OP
 
 - **Merge:** `caa2f69c65f18d45a4a8161c5dfe6f6a29a6a24f`, head
