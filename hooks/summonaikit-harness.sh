@@ -641,9 +641,12 @@ json_top_level_string() {
 # "[", "]" pareado con contenido no-blanco adentro cuyo PRIMER token es un
 # iniciador de valor JSON (" { [ - digito t/f/n — la basura balanceada no
 # cuenta: un backslash-n LITERAL, una letra que no abre valor o un + fuera
-# de string invalidan), y documento estructuralmente sano (brackets
-# balanceados y tipados, strings cerrados, sin escapes colgados, sin basura
-# fuera del root). Todo lo demas — ausente, null, string/numero/objeto,
+# de string invalidan), y documento estructuralmente sano: brackets
+# balanceados y tipados, strings cerrados, sin escapes colgados. Fuera del
+# root SOLO invalidan los corchetes (un segundo root o un closer sin
+# apertura) y los caracteres sueltos; la puntuacion colgante (",", ":") y
+# los strings fuera del root NO invalidan — quedan en la clase del
+# residual de abajo. Todo lo demas — ausente, null, string/numero/objeto,
 # array vacio ([] / [ ] / multilinea real), JSON truncado o roto — calla
 # (fail-closed: sin evidencia de trabajo en vuelo).
 # Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
@@ -651,9 +654,23 @@ json_top_level_string() {
 #
 # Residual declarado: la validacion es de BALANCE mas el PRIMER token del
 # array, no de gramatica completa — basura DESPUES de un inicio valido
-# dentro del array (p.ej. [nul] o [1,]) y un payload roto EN OTRA parte
-# cuya porcion del array esta bien formada y poblada siguen contando como
-# en vuelo.
+# dentro del array (p.ej. [nul] o [1,]), la puntuacion colgante o los
+# strings fuera del root, y un payload roto EN OTRA parte cuya porcion del
+# array esta bien formada y poblada siguen contando como en vuelo.
+#
+# PERFORMANCE (hallazgo MEDIA del adversario, PR 20.4, adjudicado): el
+# escaneo es cuadratico SOLO en el awk BSD de darwin (en el CI ubuntu es
+# lineal). Umbrales medidos: ~50KB ~= 70ms, ~100KB ~= 190ms, ~250KB ~=
+# 1.1s, ~1MB ~= 16.8s. Los turnos grok reales (~1.1KB) no lo sienten
+# (~15ms), y master ya pagaba costo cuadratico en el mismo Stop (el PR
+# agrega una segunda pasada). Reabrir como fila de performance con
+# medicion en 3 plataformas SOLO si se miden Stops grok con mensajes
+# grandes.
+#
+# BOM (hallazgo BAJA del adversario, PR 20.4, adjudicado): un payload grok
+# con BOM UTF-8 + backgroundTasks poblado invalida el documento y BLOQUEA
+# la escotilla (regresion vs master en direccion deny/fail-closed). BOM
+# nunca fue medido en los dumps grok; cubierto por el presupuesto 18.27.
 json_top_level_array_poblado() {
   field="$1"
   case "$INPUT" in
