@@ -39,7 +39,11 @@
 #
 # La mitad mutation-test vive al final: cada mutacion del script tiene que
 # poner rojo al caso que la nombra; una mutacion que sobrevive en verde es un
-# hueco y rompe esta suite.
+# hueco y rompe esta suite. 20.1: cada caso corre PRIMERO como control sano
+# contra el fuente sin mutar — un caso siempre-rojo no acredita mutantes y
+# deja el banco en FAIL con la salida del caso; el propio banco se audita al
+# final con un caso roto adrede (rechazado) y un mutante superviviente
+# (rechazado).
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -869,6 +873,23 @@ correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
     fail=1
     return
   fi
+  # 20.1 — control sano ANTES del mutado: el caso se corre contra el fuente
+  # SANO y tiene que salir verde. Un caso siempre-rojo "atraparia" cualquier
+  # mutante por la razon equivocada y acreditaria una proteccion que nadie
+  # probo (residual 18.4). Si el control falla, la mutacion NO acredita nada
+  # y el defecto del caso no se oculta: se reporta con su salida concreta y
+  # el banco queda en FAIL. La salida del caso se captura a un archivo
+  # hermano del mutado (fuera de $SB, que el proximo sb_reset borra).
+  local ctrl="$MUTADO.control"
+  CASO_ROJO=0
+  "$fun" >"$ctrl" 2>&1
+  if [ "$CASO_ROJO" -ne 0 ]; then
+    printf '    FAIL: mutacion %s: control sano fallo — el caso %s ya esta rojo contra el fuente SANO; NO acredita mutante (defecto del caso, no atrapada). Salida:\n' "$nombre" "$fun" >&2
+    cat "$ctrl" >&2
+    rm -f "$ctrl" "$MUTADO"
+    fail=1; return
+  fi
+  rm -f "$ctrl"
   MERGE="$MUTADO"
   CASO_ROJO=0
   "$fun"
@@ -1089,6 +1110,59 @@ registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_ansi
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
 MUTS
+
+# ---------------------------------------- meta: el banco se audita a si mismo
+# 20.1 (residual 18.4): un caso SIEMPRE-ROJO — rojo ya contra el fuente
+# SANO — "atrapa" cualquier mutante por la razon equivocada y acredita
+# protecciones que nadie probo. correr_mutacion tiene que correr el control
+# sano ANTES del mutado; si ese control falla, la mutacion no acredita nada,
+# el defecto del caso NO se oculta (fail=1) y el reporte nombra la causa
+# concreta. Se mide con un caso roto ADREDE y una mutacion real; el fail se
+# salva/restaura para no envenenar esta pasada cuando el candado funciona.
+c_roto_adrede() {
+  CASO_ROJO=0; sb_reset master
+  correr
+  _contiene "caso roto adrede" "$OUT" "NO-MERGE: texto que el sano nunca emite"
+}
+
+fail_previo="$fail"; fail=0
+meta_out="$(mktemp "${TMPDIR:-/tmp}/saikit-merge-meta-XXXXXX")"
+# Sin $( ): la sustitucion correria correr_mutacion en una subshell y su
+# fail=1 no llegaria nunca al shell del test. El archivo si lo conserva.
+correr_mutacion "selftest_caso_siempre_rojo" 's/^CONFIRMADO=0$/CONFIRMADO=1/' c_roto_adrede >"$meta_out" 2>&1
+res="$fail"; fail="$fail_previo"  # el veredicto acumulado se restaura: el meta juzga SOLO su llamada
+if [ "$res" -ne 0 ] \
+   && grep -Fq 'control sano' "$meta_out" \
+   && grep -Fq 'c_roto_adrede' "$meta_out" \
+   && grep -Fq 'caso roto adrede' "$meta_out"; then
+  printf '    ok: banco rechaza caso siempre-rojo (control sano rojo => no acredita y FAIL)\n'
+else
+  printf '    FAIL: el banco no rechazo un caso siempre-rojo — salida del intento:\n' >&2
+  cat "$meta_out" >&2
+  fail=1
+fi
+rm -f "$meta_out"
+
+# Espejo del candado conservado: un mutante que NINGUN caso detecta
+# (superviviente) tambien deja el banco en FAIL. Caso sano-verde adrede que
+# no observa nada de lo que la mutacion rompe.
+c_indiferente_adrede() {
+  CASO_ROJO=0; sb_reset master
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC"
+}
+
+fail_previo="$fail"; fail=0
+meta_out="$(mktemp "${TMPDIR:-/tmp}/saikit-merge-meta-XXXXXX")"
+correr_mutacion "selftest_mutante_superviviente" 's/^CONFIRMADO=0$/CONFIRMADO=1/' c_indiferente_adrede >"$meta_out" 2>&1
+res="$fail"; fail="$fail_previo"  # idem: juzga SOLO su llamada
+if [ "$res" -ne 0 ] && grep -Fq 'selftest_mutante_superviviente' "$meta_out" && grep -Fq 'ningun caso detecto' "$meta_out"; then
+  printf '    ok: banco rechaza mutante superviviente (caso sano-verde que no detecta)\n'
+else
+  printf '    FAIL: el banco acredito un mutante que ningun caso detecto\n' >&2
+  fail=1
+fi
+rm -f "$meta_out"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_saikit_merge: FAIL" >&2
