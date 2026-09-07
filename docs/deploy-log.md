@@ -7,6 +7,143 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-07 — PR #271 (20.6: zona de pruebas privada por ejecución del adversary) — deploy REAL de las 4 copias
+
+- **Merge:** `775228dc47094155496d7f8a72a0185ba53a407d`, head
+  `f1cb941116a5e1721b3f4b906f557f957606cabe`; gate SUCCESS en el
+  [run 34160345217](https://github.com/gon0801/summonaikit-claude/actions/runs/34160345217).
+- **Deploy (13:54 UTC / 06:54 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0,
+  cuatro copias `REPARADO` (incluye el agente grok adversary); sha256 del
+  hook instalado `d3e2e33f0cd4e661...`. Backups:
+  `summonaikit-harness.sh.nuestro.20260907-135442.bak` (claude) y
+  `20260907-135443.bak` (grok/dsh/codex).
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` exit 0.
+- **Cierre:** fila Recommended ejecutada. Verificador FAIL r1 (dos
+  mutaciones del banco acreditadas en falso — sed vacuo — incluso con CI
+  verde) corregido en `a786947` con reanclaje y guardia de mutado no
+  vacío; adversario 4 hallazgos BAJA adjudicados como residuales
+  declarados (hardlink y colisión de llave: frontera general
+  preexistente; mismo-segundo y fixture inmutable: diferidos) en
+  [comentario del PR](https://github.com/gon0801/summonaikit-claude/pull/271#issuecomment-5575488479).
+  Golden sin cambios de veredicto. Última fila de la tanda 20.1-20.7+20.24.
+
+## 2026-09-07 — PR #270 (20.5: lock de integración en saikit-merge) — hooks NO-OP
+
+- **Merge:** `caa2f69c65f18d45a4a8161c5dfe6f6a29a6a24f`, head
+  `ac7799537e48059cce81c97aab2eed76f125de16`; gate SUCCESS en el
+  [run 34155280509](https://github.com/gon0801/summonaikit-claude/actions/runs/34155280509).
+- **Deploy (03:5x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
+  `check-hook-registration.sh` exit 0.
+- **Cierre:** verificador PASS con montajes propios de dos procesos, dos
+  worktrees, kill -9 sin liberación ajena y revalidación; 27 mutaciones
+  atrapadas; reviewer APPROVE clean (patrón D20 simétrico al lock de
+  setup). Última fila Required de código de la tanda junto con 20.4.
+
+## 2026-09-07 — PR #264 (20.4: backgroundTasks estructural en el Stop grok) — deploy REAL de las 4 copias
+
+- **Merge:** `fcb2fda4e7fb5dbbdd4e1e1eb0d7588a90f0da3d`, head
+  `6496edc1fcb0237e66fdc1ab82efb5867641c26f`; gate SUCCESS en el
+  [run 34150287920](https://github.com/gon0801/summonaikit-claude/actions/runs/34150287920).
+- **Deploy (12:21 UTC / 05:21 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0,
+  cuatro copias `REPARADO`; sha256 del hook instalado
+  `ca0c45c32faa83a6...` (= identidad de la golden regrabada). Backups del
+  instalador: `summonaikit-harness.sh.nuestro.20260907-122121.bak` (claude)
+  y `20260907-122122.bak` (grok/dsh/codex).
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` exit 0.
+- **Cierre:** verificador PASS (matriz DoD 10/10 + re-check del fix r1);
+  adversario 3 hallazgos (1 MEDIA, 2 BAJA) adjudicados por el reviewer:
+  cuadraticidad en awk BSD y BOM UTF-8 quedan como residuales declarados
+  en el propio hook con umbrales medidos; el comentario que prometía más
+  de lo que el código cumple fue corregido (6496edc) y re-aprobado. La
+  escotilla grok lee backgroundTasks de primer nivel; hosts != grok
+  byte-idénticos; golden 57 escenarios intacta.
+
+## 2026-09-07 — PR #269 (20.2: comandos emitidos ejecutables con bash) — hooks NO-OP
+
+- **Merge:** `d7db31f9707e3bd99354807c58bd05720c1eb39d`, head
+  `dcab72c5879a1929ee9caafbf38a9fc315de4d1d`; gate SUCCESS en el
+  [run 34149524314](https://github.com/gon0801/summonaikit-claude/actions/runs/34149524314).
+- **Deploy (02:2x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
+  `check-hook-registration.sh` exit 0.
+- **Cierre:** los cinco emisores (LISTO, PARA REVERTIR, dos hints UNKNOWN,
+  liberar-lock) dictan `bash tools/...` probado contra copia 100644 con argv
+  capturado; 4 mutaciones sin_bash atrapadas; MANIFEST de saikit-merge
+  rotado. Reviewer difirió una frase de `docs/guia-usuario.html` que
+  documentaba la forma vieja — corregida en el push de cierre de esta tanda.
+  Habilita 20.5.
+
+## 2026-09-07 — PR #268 (20.7: mecanismo de refresh de pins del CI mínimo) — hooks NO-OP
+
+- **Merge:** `2d94b86377a47845b07d86dd3d80b6a3b0a6340a`, head
+  `ac2bae8ae207ef4c665d5116915463a9830ab31f`; gate SUCCESS en el
+  [run 34149526073](https://github.com/gon0801/summonaikit-claude/actions/runs/34149526073).
+- **Deploy (02:2x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
+  `check-hook-registration.sh` exit 0.
+- **Cierre:** `tools/bump-ci-pins.sh` con `--check` (0/1/2 fail-closed) y
+  `--proponer` solo-lectura verificado contra la API real; YAML generado
+  byte-identico; tests sin red. Fila Recommended ejecutada dentro de la
+  tanda según el plan de Phase 20.
+
+## 2026-09-07 — PR #267 (20.24: retirada zcode/grok respeta DRY_RUN) — hooks NO-OP
+
+- **Merge:** `e98de818af4a255b6067f599670f4a69f9bc5627`, head
+  `d13da15b33cd4cd9382f26c7b17e8575720864a0`; gate SUCCESS en el
+  [run 34099150449](https://github.com/gon0801/summonaikit-claude/actions/runs/34099150449).
+- **Deploy (01:3x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios:
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` ejecutado.
+- **Cierre:** snapshot find+cksum idéntico antes/después del dry-run en el
+  verificador independiente; guard neutralizado => 4 FAIL exactos; dsh ya
+  guardaba DRY_RUN (PR #88) y sigue verde. La fila 20.24 se cierra en el
+  push de cierre de la tanda.
+
+## 2026-09-07 — PR #263 (20.1: control sano en el banco de mutaciones de merge) — hooks NO-OP
+
+- **Merge:** `fa8ab85d33fa07f9a39c57ba08a1ca06ca89a2ed`, head
+  `061807e5e7ff06a4fb5d9b87fd4203742958d4a9`; gate SUCCESS en el
+  [run 34099147933](https://github.com/gon0801/summonaikit-claude/actions/runs/34099147933).
+- **Deploy (01:3x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` ejecutado.
+- **Cierre:** verificador PASS con mutación del candado medida (control sano
+  neutralizado => exit 1); reviewer APPROVE con un hallazgo BAJA corregido y
+  re-aprobado en `061807e`. La fila 20.1 se cierra en el push de cierre de
+  la tanda; habilita 20.2 y 20.5.
+
+## 2026-09-07 — PR #262 (20.3: neutralizar color de gh en postmerge) — hooks NO-OP
+
+- **Merge:** `8cf91ec960e71a47f59be7629c5f2947cd76da19`, head
+  `279c1758aa1b26abe009cbd2bcf60b26986fac95`; gate SUCCESS en el
+  [run 34097724333](https://github.com/gon0801/summonaikit-claude/actions/runs/34097724333).
+- **Deploy (01:10 PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios:
+  `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` ejecutado.
+- **Cierre:** implementador delegado entregó con rojo medido (gh falso
+  sensible a CLICOLOR_FORCE) y 12 mutaciones atrapadas; verificador y
+  reviewer independientes en PASS/APPROVE. La fila 20.3 se cierra en el
+  push de cierre de la tanda Phase 20 de esta sesión.
+
 ## 2026-09-06 — PR #265 (plan de mantenimiento del feature map) — hooks NO-OP
 
 - **Merge:** `b5e5bccebe613fb4da341d55b38bb9268429ff82`; gate SUCCESS en el
