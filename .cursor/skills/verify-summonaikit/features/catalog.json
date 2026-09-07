@@ -79,6 +79,7 @@
     "tools/saikit-postmerge.sh": {"feature": "saikit-postmerge"},
     "tools/saikit-setup-autopilot.sh": {"feature": "setup-autopilot"},
     "tools/saikit-ci-minimo.sh": {"feature": "ci-minimo"},
+    "tools/bump-ci-pins.sh": {"feature": "ci-minimo"},
     "tools/check-hook-registration.sh": {"feature": "install-hosts"},
     "tools/model-routing.sh": {"feature": "routing-recipes"},
     "tools/gen-recetas-manifest.sh": {"feature": "routing-recipes"},

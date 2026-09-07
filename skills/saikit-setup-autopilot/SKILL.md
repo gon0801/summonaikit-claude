@@ -23,6 +23,23 @@ que corre el test del repo y `verify/`. Sin terminal asume `no` y avisa
 que sin CI el autopilot no mergea. Quien ya sabe que lo quiere pasa
 `--ci-minimo si`.
 
+## Actualizar los pins de las actions
+
+El workflow mínimo usa actions pineadas por SHA de commit (el tag vive al
+lado, en `PIN_*_TAG`, solo como referencia). Mantenimiento:
+
+```
+bash tools/bump-ci-pins.sh --check            # 0 = al día, 1 = obsoleto, 2 = no pudo consultar
+bash tools/bump-ci-pins.sh --proponer actions/checkout v4.3.0
+```
+
+`--check` compara cada pin contra GitHub (o contra un fixture local con
+`--fuente <archivo>` de líneas `owner/repo tag sha`); si no hay red sale 2
+declarando que no pudo mirar, nunca inventa «al día». `--proponer` resuelve
+el SHA real del tag e **imprime un diff para revisar y aplicar a mano**:
+no escribe el generador ni ningún workflow, y el pin resultante sigue
+siendo SHA — un tag flotante (`@v4`) no se adopta jamás.
+
 ## Lo que el operador tiene que saber
 
 - Sin commitear y pushear a `origin/<rama>`, el setup no existe: el merge lee

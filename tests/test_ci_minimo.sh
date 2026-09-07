@@ -21,6 +21,8 @@ SETUP_REAL="$repo/tools/saikit-setup-autopilot.sh"
 SETUP="${SAIKIT_SETUP_TOOL:-$SETUP_REAL}"
 GEN_REAL="$repo/tools/saikit-ci-minimo.sh"
 GEN="$GEN_REAL"
+BUMP_REAL="$repo/tools/bump-ci-pins.sh"
+BUMP="$BUMP_REAL"
 MERGE="$repo/tools/saikit-merge.sh"
 
 fail=0
@@ -777,6 +779,207 @@ GHEOF
 }
 fin_caso "merge_sin_checks_tras_declinar"
 
+# --- 20.7: mantenimiento de pins (detector + propuesta revisable) -----------
+#
+# DoD de la fila: el detector distingue «al dia» de «obsoleto» con FIXTURE
+# sin red (exit 0 vs 1); la propuesta es un diff revisable que NO escribe
+# (ni el generador ni workflows ajenos) y no adopta tag flotante; el CI
+# generado conserva las cinco exigencias tras aplicar la propuesta. Los
+# tests no requieren red: --fuente (fixture) y el gancho
+# SAIKIT_BUMP_CI_PINS_API simulan la consulta.
+
+# Los pins ACTUALES del generador, espejados como «fuente que sabe» igual
+# que sec.yml espeja el sha de checkout: si alguien mueve un pin, esta
+# seccion lo exige verde de nuevo con fixture actualizado.
+FIX_CHECKOUT_SHA='11bd71901bbe5b1630ceea73d27597364c9af683'
+FIX_SETUP_PYTHON_SHA='a26af69be951a213d495a4c3e4e4022e16d87065'
+FIX_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'
+FIX_SHA_NUEVO_SETUP_NODE='eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+FIX_SHA_OTRO='ffffffffffffffffffffffffffffffffffffffff'
+
+fixture_escribir() {  # $1=path $2=sha_de_setup_node
+  cat > "$1" <<EOF
+actions/checkout v4.2.2 $FIX_CHECKOUT_SHA
+actions/setup-python v5.6.0 $FIX_SETUP_PYTHON_SHA
+actions/setup-node v4.4.0 $2
+EOF
+}
+
+caso "pins_detector_al_dia_fixture"
+{
+  fixture_escribir "$SB/f-al-dia" "$FIX_SETUP_NODE_SHA"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-al-dia" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "al dia debia ser exit 0, dio $RC: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'al dia' || _mal "no reporta al dia: $OUT"
+  if printf '%s' "$OUT" | grep -Fq 'OBSOLETO'; then
+    _mal "reporto OBSOLETO con fixture al dia: $OUT"
+  fi
+}
+fin_caso "pins_detector_al_dia_fixture"
+
+caso "pins_detector_obsoleto_fixture"
+{
+  gen_ck="$(cksum < "$GEN_REAL")"
+  fixture_escribir "$SB/f-vieja" "$FIX_SHA_OTRO"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-vieja" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 1 ] || _mal "obsoleto debia ser exit 1 (distinguible del 0), dio $RC: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'OBSOLETO' || _mal "no reporta OBSOLETO: $OUT"
+  _contiene "nombra la action obsoleta" "$OUT" "actions/setup-node"
+  _contiene "cita el sha de la fuente" "$OUT" "$FIX_SHA_OTRO"
+  _contiene "cita el sha pineado" "$OUT" "$FIX_SETUP_NODE_SHA"
+  _contiene "propone el camino" "$OUT" "--proponer"
+  # El check es solo lectura: el generador queda intacto.
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || _mal "el check modifico el generador"
+}
+fin_caso "pins_detector_obsoleto_fixture"
+
+caso "pins_detector_falla_cerrado"
+{
+  # Tag ausente de la fuente: NO se puede declarar ni al dia ni obsoleto.
+  printf 'actions/checkout v4.2.2 %s\n' "$FIX_CHECKOUT_SHA" > "$SB/f-incompleta"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-incompleta" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "tag ausente debia ser exit 2, dio $RC: $OUT"
+  if printf '%s' "$OUT" | grep -Fq 'todos los pins al dia'; then
+    _mal "declaro el veredicto al dia sin poder mirar un tag: $OUT"
+  fi
+  printf '%s' "$OUT" | grep -Eq 'no conoce|no se pudo' \
+    || _mal "no declara el tag ausente: $OUT"
+  # Fuente inexistente y fixture malformada: tambien exit 2, sin inventar.
+  OUT="$(bash "$BUMP" --check --fuente "$SB/no-existe" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "fuente inexistente debia ser exit 2, dio $RC: $OUT"
+  printf 'actions/checkout v4.2.2 nosha\n' > "$SB/f-mala"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-mala" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "fixture malformada debia ser exit 2, dio $RC: $OUT"
+}
+fin_caso "pins_detector_falla_cerrado"
+
+caso "pins_proponer_diff_revisable_sin_escribir"
+{
+  gen_ck="$(cksum < "$GEN_REAL")"
+  mkdir -p .github/workflows
+  printf 'name: ajeno\n' > .github/workflows/ajeno.yml
+  ajeno_ck="$(cksum < .github/workflows/ajeno.yml)"
+  printf 'actions/setup-node v4.5.0 %s\n' "$FIX_SHA_NUEVO_SETUP_NODE" > "$SB/f-nueva"
+  OUT="$(bash "$BUMP" --proponer actions/setup-node v4.5.0 --fuente "$SB/f-nueva" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "proponer debia ser exit 0, dio $RC: $OUT"
+  printf '%s' "$OUT" | grep -Eq '^---' || _mal "no es un diff: $OUT"
+  _contiene "avisa que no aplica" "$OUT" "NO aplicada"
+  _contiene "quita el sha viejo" "$OUT" "-PIN_SETUP_NODE_SHA='$FIX_SETUP_NODE_SHA'"
+  _contiene "pone el sha nuevo" "$OUT" "+PIN_SETUP_NODE_SHA='$FIX_SHA_NUEVO_SETUP_NODE'"
+  _contiene "quita el tag viejo" "$OUT" "-PIN_SETUP_NODE_TAG='v4.4.0'"
+  _contiene "pone el tag nuevo" "$OUT" "+PIN_SETUP_NODE_TAG='v4.5.0'"
+  # Tag flotante prohibido en la propuesta: ningun uses: apunta a @tag.
+  if printf '%s' "$OUT" | grep -Eq 'uses:[[:space:]]*[^ @]+@v[0-9]'; then
+    _mal "la propuesta adopta un tag flotante: $OUT"
+  fi
+  # NO escribio: generador intacto, workflow ajeno intacto, ningun nuevo.
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || _mal "la propuesta sobrescribio el generador"
+  [ "$(cksum < .github/workflows/ajeno.yml)" = "$ajeno_ck" ] \
+    || _mal "la propuesta toco un workflow ajeno"
+  [ ! -e "$(yml_dest)" ] || _mal "la propuesta escribio un workflow"
+}
+fin_caso "pins_proponer_diff_revisable_sin_escribir"
+
+caso "pins_propuesta_aplicada_conserva_exigencias"
+{
+  # DoD: el diff propuesto, APLICADO a una copia del generador, sigue
+  # generando un CI con las cinco exigencias. El repo no se toca.
+  cp "$GEN_REAL" "$SB/gen-copia.sh"
+  printf 'actions/setup-node v4.5.0 %s\n' "$FIX_SHA_NUEVO_SETUP_NODE" > "$SB/f-nueva"
+  OUT="$( cd "$SB" && bash "$BUMP" --proponer actions/setup-node v4.5.0 \
+      --fuente "$SB/f-nueva" --generador gen-copia.sh 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "proponer rc=$RC: $OUT"
+  printf '%s\n' "$OUT" > "$SB/propuesta.patch"
+  if ! ( cd "$SB" && patch -p0 -s < propuesta.patch ); then
+    _mal "el diff propuesto no aplica limpio: $OUT"
+  fi
+  grep -Fq "PIN_SETUP_NODE_SHA='$FIX_SHA_NUEVO_SETUP_NODE'" "$SB/gen-copia.sh" \
+    || _mal "la copia aplicada no tiene el sha nuevo"
+  # La copia patcheada genera el workflow: pnpm usa setup-node.
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
+  OUT="$(bash "$SB/gen-copia.sh" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "generador patcheado rc=$RC: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "la copia patcheada no escribio: $OUT"
+  if [ -f "$(yml_dest)" ]; then
+    # 1) pins @sha40 — con el sha PROPUESTO, no el viejo.
+    afirma_uses_sha "$(yml_dest)" || _mal "la propuesta rompio el pin sha40"
+    grep -Fq "actions/setup-node@$FIX_SHA_NUEVO_SETUP_NODE" "$(yml_dest)" \
+      || _mal "el YAML no pinea el sha propuesto: $(cat "$(yml_dest)")"
+    # 2) run reales de test y 3) sin secrets.
+    afirma_run_reales "$(yml_dest)" || _mal "faltan run: reales"
+    afirma_sin_secrets "$(yml_dest)" || _mal "el YAML menciona secrets."
+    # 4) permisos minimos.
+    yml="$(cat "$(yml_dest)")"
+    printf '%s\n' "$yml" | grep -Eq '^permissions:' || _mal "falta permissions:"
+    printf '%s\n' "$yml" | grep -Eq 'persist-credentials:[[:space:]]*false' \
+      || _mal "falta persist-credentials: false"
+    # 5) job amarrado.
+    printf '%s\n' "$yml" | grep -Eq 'runs-on:[[:space:]]*ubuntu-24\.04' \
+      || _mal "falta ubuntu-24.04"
+    printf '%s\n' "$yml" | grep -Eq 'timeout-minutes:[[:space:]]*15' \
+      || _mal "falta timeout-minutes: 15"
+    printf '%s\n' "$yml" | grep -Eq 'cancel-in-progress:[[:space:]]*true' \
+      || _mal "falta cancel-in-progress: true"
+  fi
+}
+fin_caso "pins_propuesta_aplicada_conserva_exigencias"
+
+caso "pins_consulta_api_simulada"
+{
+  # Sin --fuente: la consulta va por el cliente HTTP (gancho de test).
+  cat > "$SB/api-viva.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'actions/checkout v4.3.0') printf '%s\n' 'dddddddddddddddddddddddddddddddddddddddd'; exit 0 ;;
+esac
+exit 1
+EOF
+  chmod +x "$SB/api-viva.sh"
+  OUT="$(SAIKIT_BUMP_CI_PINS_API="$SB/api-viva.sh" bash "$BUMP" \
+    --proponer actions/checkout v4.3.0 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "consulta simulada rc=$RC: $OUT"
+  _contiene "resuelve el sha del tag" "$OUT" "+PIN_CHECKOUT_SHA='dddddddddddddddddddddddddddddddddddddddd'"
+  _contiene "mueve el tag" "$OUT" "+PIN_CHECKOUT_TAG='v4.3.0'"
+}
+fin_caso "pins_consulta_api_simulada"
+
+caso "pins_sin_red_falla_declarado"
+{
+  cat > "$SB/api-sin-red.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$SB/api-sin-red.sh"
+  OUT="$(SAIKIT_BUMP_CI_PINS_API="$SB/api-sin-red.sh" bash "$BUMP" \
+    --proponer actions/checkout v4.2.2 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "sin red debia ser exit 2, dio $RC: $OUT"
+  printf '%s' "$OUT" | grep -Eq 'no se pudo consultar|sin red' \
+    || _mal "no declara la falta de consulta: $OUT"
+  if printf '%s' "$OUT" | grep -Eq '^\+PIN_'; then
+    _mal "sin red no debia emitir propuesta: $OUT"
+  fi
+  # El check tampoco inventa «al dia» sin poder consultar.
+  OUT="$(SAIKIT_BUMP_CI_PINS_API="$SB/api-sin-red.sh" bash "$BUMP" --check 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "check sin red debia ser exit 2, dio $RC: $OUT"
+  if printf '%s' "$OUT" | grep -Fq 'todos los pins al dia'; then
+    _mal "check declaro el veredicto al dia sin red: $OUT"
+  fi
+}
+fin_caso "pins_sin_red_falla_declarado"
+
 # ------------------------------------------------------- mutation-test
 mut_sed_setup() {  # $1=sed-expr
   BASE="$SB-base-$$.sh"
@@ -792,13 +995,20 @@ mut_sed_gen() {  # $1=sed-expr
   sed "$1" "$BASE" > "$MUTADO"
 }
 
-correr_mutacion() {  # $1=nombre $2=sed-expr $3=fun $4=setup|gen
+mut_sed_bump() {  # $1=sed-expr
+  BASE="$SB-base-$$.sh"
+  MUTADO="$SB-mutado-$$.sh"
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$BUMP_REAL" > "$BASE"
+  sed "$1" "$BASE" > "$MUTADO"
+}
+
+correr_mutacion() {  # $1=nombre $2=sed-expr $3=fun $4=setup|gen|bump
   local nombre="$1" expr="$2" fun="$3" sobre="${4:-gen}"
-  if [ "$sobre" = setup ]; then
-    mut_sed_setup "$expr"
-  else
-    mut_sed_gen "$expr"
-  fi
+  case "$sobre" in
+    setup) mut_sed_setup "$expr" ;;
+    gen)   mut_sed_gen "$expr" ;;
+    bump)  mut_sed_bump "$expr" ;;
+  esac
   if [ ! -f "$BASE" ] || [ ! -f "$MUTADO" ]; then
     printf '    FAIL: mutacion %s no produjo archivos\n' "$nombre" >&2
     fail=1
@@ -818,6 +1028,8 @@ correr_mutacion() {  # $1=nombre $2=sed-expr $3=fun $4=setup|gen
   fi
   if [ "$sobre" = setup ]; then
     SETUP="$MUTADO"
+  elif [ "$sobre" = bump ]; then
+    BUMP="$MUTADO"
   else
     GEN="$MUTADO"
   fi
@@ -831,6 +1043,7 @@ correr_mutacion() {  # $1=nombre $2=sed-expr $3=fun $4=setup|gen
   fi
   SETUP="${SAIKIT_SETUP_TOOL:-$SETUP_REAL}"
   GEN="$GEN_REAL"
+  BUMP="$BUMP_REAL"
   rm -f "$MUTADO" "$BASE"
 }
 
@@ -1012,6 +1225,29 @@ c_leeme_mayus() {
   printf '%s' "$OUT" | grep -Fq 'verify/ solo markdown' || _mal "no omitio LEEME.MD"
 }
 
+c_pins_obsoleto() {
+  CASO_ROJO=0; sb_reset
+  fixture_escribir "$SB/f-vieja" "$FIX_SHA_OTRO"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-vieja" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 1 ] || _mal "obsoleto debia ser exit 1, dio $RC: $OUT"
+  printf '%s' "$OUT" | grep -Fq 'OBSOLETO' || _mal "no reporta OBSOLETO: $OUT"
+}
+
+c_pins_propuesta_seca() {
+  CASO_ROJO=0; sb_reset
+  cp "$GEN_REAL" "$SB/gen-copia.sh"
+  printf 'actions/setup-node v4.5.0 %s\n' "$FIX_SHA_NUEVO_SETUP_NODE" > "$SB/f-nueva"
+  antes="$(cksum < "$SB/gen-copia.sh")"
+  OUT="$(bash "$BUMP" --proponer actions/setup-node v4.5.0 --fuente "$SB/f-nueva" \
+    --generador "$SB/gen-copia.sh" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "proponer rc=$RC: $OUT"
+  printf '%s' "$OUT" | grep -Fq '+PIN_SETUP_NODE_SHA' || _mal "no propuso el diff: $OUT"
+  [ "$(cksum < "$SB/gen-copia.sh")" = "$antes" ] \
+    || _mal "la propuesta escribio el generador en vez de dejarlo revisable"
+}
+
 while IFS=$'\t' read -r nombre expr fun sobre; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun" "$sobre"
@@ -1034,6 +1270,8 @@ pip_sin_pytest_extra	s/pip install -r requirements.txt \&\& pip install pytest/p
 tiene_omite_verify	s/printf 'TIENE'/printf 'SOLO_MD'/	c_verify_tiene	gen
 setup_propaga_exit2	s|if ! bash "\$GEN" --ofrecer --root "\$ROOT".*|bash "$GEN" --ofrecer --root "$ROOT" \${ci_minimo_flag:+--ci-minimo "\$ci_minimo_flag"} \|\| exit 2\nif false; then|	c_setup_degrada	setup
 leeme_md_case_sensitive	s/-iname '\*\.md'/-name '*.md'/	c_leeme_mayus	gen
+detector_siempre_al_dia	s/\[ "\$1" = "\$2" \]/return 0/	c_pins_obsoleto	bump
+proponer_escribe_directo	s|diff -u -L "\$generador" -L "\$generador (propuesta)" "\$generador" "\$tmp" \|\| true|cp "$tmp" "$generador"; diff -u -L "$generador" -L "$generador" "$generador" "$tmp" \|\| true|	c_pins_propuesta_seca	bump
 MUTS
 
 if [ "$fail" -ne 0 ]; then
