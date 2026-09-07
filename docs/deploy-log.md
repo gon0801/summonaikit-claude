@@ -7,6 +7,20 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-07 — PR #272 (cierre de la tanda Phase 20: 20.1-20.7 + 20.24) — hooks NO-OP
+
+- **Merge:** `b93e2c6c6a73ea632db59af5546779675a6e9ae9`; gate SUCCESS en el
+  [run 34161235094](https://github.com/gon0801/summonaikit-claude/actions/runs/34161235094).
+- **Deploy (07:5x PDT):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA` (docs-only), sha256 sin cambios:
+  `d3e2e33f0cd4e661...`.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
+  `check-hook-registration.sh` exit 0; `audita-ledger.sh` y
+  `check-deploy-log.sh` exit 0 en la rama antes del merge.
+- **Cierre:** las ocho filas de código de la tanda quedan `cc:完了` con su
+  evidencia; el ledger no debe filas TODO con trabajo mergeado.
+
 ## 2026-09-07 — PR #271 (20.6: zona de pruebas privada por ejecución del adversary) — deploy REAL de las 4 copias
 
 - **Merge:** `775228dc47094155496d7f8a72a0185ba53a407d`, head
