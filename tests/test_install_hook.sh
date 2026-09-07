@@ -113,6 +113,21 @@ case "$grito_mtime" in
   *) malo "mtime_de no explico la medicion vacia: [$grito_mtime]" ;;
 esac
 
+# 20.24: snapshot del arbol bajo una raiz — rutas + tipo + cksum de cada
+# archivo. Es la evidencia del DoD de la retirada en dry-run: "snapshot de
+# archivos/config/backups/ajenos identico antes/después". Los directorios y
+# enlaces se listan por tipo (crear/borrar/reemplazar uno cambia la lista);
+# el CONTENIDO de cada archivo viaja en el cksum.
+snapshot_de() {  # $1=raiz
+  ( cd "$1" 2>/dev/null || exit 3
+    find . | LC_ALL=C sort | while IFS= read -r p; do
+      if [ -L "$p" ]; then printf 'L %s\n' "$p"
+      elif [ -d "$p" ]; then printf 'D %s\n' "$p"
+      elif [ -f "$p" ]; then printf 'F %s %s\n' "$(cksum < "$p")" "$p"
+      else printf 'O %s\n' "$p"; fi
+    done )
+}
+
 # Interprete de Python para los casos que inspeccionan el JSON de zcode/grok.
 # macOS no trae `python` a secas (solo `python3`): un `python -` literal mataba
 # los casos con `command not found` — fallo de portabilidad del TEST, no del
@@ -742,6 +757,39 @@ host_zcode --quitar-zcode >/dev/null 2>&1
   || malo "quitar reescribio un implementer DESCONOCIDO"
 [ ! -e "$zcode_agents/verifier.md" ] || malo "quitar debio borrar verifier.md (era nuestro)"
 
+# --- 20.24) la retirada respeta DRY_RUN: mismo criterio que el dry-run del
+# install (13.9) y que --quitar-dsh (guard del PR #88). Antes de la correccion
+# un --dry-run --quitar-zcode EJECUTABA la limpieza de verdad: config
+# reescrito, agentes nuestros borrados, backups creados. El caso pega el
+# snapshot de TODO el sandbox (config, agentes, backups, ajenos, DEST) y exige
+# que quede identico; la salida solo describe.
+caso "zcode: --dry-run --quitar-zcode no cambia NADA (snapshot identico) y solo describe"
+dest_listo; nuevo_zcode_cfg
+host_zcode >/dev/null 2>&1
+# Ajeno de las dos especies: agente sin marca en el dir de agentes.
+printf '%s\n' '---' 'name: implementer' 'description: de otro' '---' '# custom' \
+  > "$zcode_agents/implementer.md"
+snap_zcode="$(snapshot_de "$tmp")"
+out="$(host_zcode --dry-run --quitar-zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run --quitar-zcode debe salir 0, dio $rc: $out"
+[ "$snap_zcode" = "$(snapshot_de "$tmp")" ] \
+  || malo "dry-run --quitar-zcode cambio el arbol (config/agentes/backups/DEST)"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run --quitar-zcode no reporta dry-run: $out"
+# La salida DESCRIBE: cuenta real de entradas 5.4 (4 fases registradas) y
+# clasifica el agente ajeno como no tocado.
+printf '%s' "$out" | grep -q 'quitaria 4 entrada(s)' \
+  || malo "dry-run --quitar-zcode no describe el conteo real de entradas 5.4: $out"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' \
+  || malo "dry-run --quitar-zcode no clasifica el agente ajeno: $out"
+# Regresion (DoD): la retirada REAL sigue funcionando tras el dry-run y
+# preserva lo ajeno.
+out="$(host_zcode --quitar-zcode 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "la retirada real debe seguir saliendo 0, dio $rc: $out"
+[ "$(grep -c 'saikit-harness-id 5[.]4' "$zcode_cfg")" = "0" ] \
+  || malo "la retirada real no saco las entradas 5.4 del config"
+[ -f "$zcode_agents/implementer.md" ] || malo "la retirada real borro el agente ajeno"
+[ ! -e "$zcode_agents/verifier.md" ] || malo "la retirada real no borro el agente nuestro"
+
 caso "zcode: fuente de agentes ausente => exit 2, config intacto, dir vacio"
 dest_listo; nuevo_zcode_cfg
 src_vacio="$tmp/agents-vacio"
@@ -1309,6 +1357,32 @@ out="$(host_grok --quitar-grok 2>&1)"; rc=$?
   || malo "quito el hook sin backup"
 [ -n "$(find "$gk_agents" -type f -name 'implementer.md*.bak' 2>/dev/null)" ] \
   || malo "quito implementer.md sin backup"
+
+# --- 20.24) mismo DoD que zcode, sobre las TRES piezas de grok (JSON + hook +
+# agentes): el dry-run de la retirada no cambia nada y describe por pieza.
+caso "grok: --dry-run --quitar-grok no cambia NADA (snapshot identico) y solo describe"
+nuevo_home_grok
+host_grok >/dev/null 2>&1
+# El verifier ajeno del operador: el dry-run debe clasificarlo y no tocarlo.
+printf '%s\n' '---' 'name: verifier' 'description: del operador' '---' '# verifier propio' \
+  > "$gk_agents/verifier.md"
+snap_grok="$(snapshot_de "$tmp")"
+out="$(host_grok --dry-run --quitar-grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run --quitar-grok debe salir 0, dio $rc: $out"
+[ "$snap_grok" = "$(snapshot_de "$tmp")" ] \
+  || malo "dry-run --quitar-grok cambio el arbol (json/hook/agentos/backups/ajenos)"
+printf '%s' "$out" | grep -qi 'dry-run' || malo "dry-run --quitar-grok no reporta dry-run: $out"
+printf '%s' "$out" | grep -q 'se quitaria' \
+  || malo "dry-run --quitar-grok no describe las acciones (json/hook/agentes): $out"
+printf '%s' "$out" | grep -q 'DESCONOCIDO' \
+  || malo "dry-run --quitar-grok no clasifica el verifier ajeno: $out"
+# Regresion (DoD): la retirada REAL sigue retirando lo nuestro y preserva lo ajeno.
+out="$(host_grok --quitar-grok 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "la retirada real debe seguir saliendo 0, dio $rc: $out"
+[ ! -e "$gk_json" ] || malo "la retirada real no retiro el JSON nuestro"
+[ ! -e "$dest" ] || malo "la retirada real no retiro el hook nuestro"
+[ ! -e "$gk_agents/implementer.md" ] || malo "la retirada real no retiro implementer.md"
+[ -f "$gk_agents/verifier.md" ] || malo "la retirada real borro el verifier ajeno"
 
 caso "grok: sin bash.exe => exit 2 sin escribir nada"
 nuevo_home_grok

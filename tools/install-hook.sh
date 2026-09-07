@@ -853,6 +853,31 @@ zcode_quitar() {
     decir "[summonaikit] instalador: no existe el user-config de zcode ($user_config)."; exit 2; }
   if ! jq -e . "$user_config" >/dev/null 2>&1; then
     decir "[summonaikit] instalador: el user-config no es JSON valido; --quitar-zcode no procede."; exit 2; fi
+  # 20.24: la retirada respeta DRY_RUN. Este camino no miraba DRY_RUN y un
+  # --dry-run --quitar-zcode EJECUTABA la limpieza (config reescrito, agentes
+  # nuestros borrados, backups creados). Las validaciones de arriba (jq,
+  # config, JSON) son read-only y se conservan — un dry-run que no valida
+  # miente por omision (mismo criterio que el dry-run del install, 13.9). Aca
+  # se REPORTA lo que haria, con el conteo real de entradas 5.4 y la
+  # clasificacion por marca de cada agente, y se sale sin escribir.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    local dr_n dr_rol dr_dest
+    dr_n="$(jq '[(.hooks.events // {})[] | .[] | (.hooks // [])[]
+                 | select(((.command // "") | test("saikit-harness-id 5[.]4")))] | length' \
+              "$user_config" 2>/dev/null)" || dr_n='?'
+    decir "[summonaikit] dry-run: --quitar-zcode no ejecuta la retirada (solo reporta)."
+    decir "              quitaria ${dr_n} entrada(s) saikit-harness-id 5.4 del user-config (con backup): $user_config"
+    for dr_rol in $ZCODE_AGENT_ROLES; do
+      dr_dest="$(zcode_agents_dir)/$dr_rol.md"
+      [ -f "$dr_dest" ] || continue
+      if zcode_agente_tiene_marca "$dr_dest"; then
+        decir "              dry-run: AGENTE ZCODE nuestro: $dr_rol — se quitaria (con backup): $dr_dest"
+      else
+        decir "              dry-run: AGENTE ZCODE DESCONOCIDO: $dr_rol — no se quitaria: $dr_dest"
+      fi
+    done
+    return 0
+  fi
   uc_dir="$(dirname "$user_config")"
   umask 077
   tmp_new="$(mktemp "$uc_dir/.saikit-zcode-XXXXXX")" || {
@@ -1408,6 +1433,48 @@ grok_quitar() {
   local json rol dest dir
   command -v jq >/dev/null 2>&1 || {
     decir "[summonaikit] instalador: --quitar-grok requiere jq (no encontrado)."; exit 2; }
+  # 20.24: mismo guard que zcode_quitar y que --quitar-dsh (HIGH codex r1 PR
+  # #88): la retirada respeta DRY_RUN. Reporta la clasificacion de cada pieza
+  # (JSON, hook, agentes) sin archivar ni borrar nada — las lecturas son las
+  # mismas del camino real, las escrituras ninguna.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    decir "[summonaikit] dry-run: --quitar-grok no ejecuta la retirada (solo reporta)."
+    json="$(grok_json_path)"
+    if [ -e "$json" ]; then
+      if [ ! -f "$json" ] || [ ! -r "$json" ]; then
+        decir "[summonaikit] unknown — no se pudo clasificar el JSON ($json); no se quito."
+      elif jq -e '(.saikit_owned? // "") == "summonaikit-claude"' "$json" >/dev/null 2>&1; then
+        decir "[summonaikit] dry-run: JSON DE GROK nuestro — se quitaria (con backup): $json"
+      else
+        decir "[summonaikit] dry-run: JSON DE GROK DESCONOCIDO — no se quitaria: $json"
+      fi
+    else
+      decir "[summonaikit] dry-run: JSON DE GROK: no existe ($json)."
+    fi
+    if [ -e "$DEST" ]; then
+      if [ ! -f "$DEST" ] || [ ! -r "$DEST" ]; then
+        decir "[summonaikit] unknown — no se pudo clasificar el hook ($DEST); no se quito."
+      elif sed -n "${MARCADOR_LINEA}p" "$DEST" | grep -Eq "$MARCADOR_RE"; then
+        decir "[summonaikit] dry-run: HOOK DE GROK nuestro — se quitaria (con backup): $DEST"
+      else
+        decir "[summonaikit] dry-run: HOOK DE GROK DESCONOCIDO — no se quitaria: $DEST"
+      fi
+    else
+      decir "[summonaikit] dry-run: HOOK DE GROK: no existe ($DEST)."
+    fi
+    dir="$(grok_agents_dir)"
+    [ -d "$dir" ] || return 0
+    for rol in $GROK_AGENT_ROLES; do
+      dest="$dir/$rol.md"
+      [ -f "$dest" ] || continue
+      if zcode_agente_tiene_marca "$dest"; then
+        decir "[summonaikit] dry-run: AGENTE GROK nuestro: $rol — se quitaria (con backup): $dest"
+      else
+        decir "[summonaikit] dry-run: AGENTE GROK DESCONOCIDO: $rol — no se quitaria: $dest"
+      fi
+    done
+    return 0
+  fi
   json="$(grok_json_path)"
   if [ -e "$json" ]; then
     if [ ! -f "$json" ] || [ ! -r "$json" ]; then
