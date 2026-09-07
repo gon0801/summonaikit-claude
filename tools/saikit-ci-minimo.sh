@@ -32,15 +32,18 @@ WORKFLOW_NAME='saikit-ci-minimo'
 CONCURRENCY_GROUP='${{ github.workflow }}-${{ github.ref }}'
 
 PIN_SETUP_PYTHON_OWNER='actions/setup-python'
-PIN_SETUP_PYTHON_SHA='a26af69be951a213d495a4c3e4e4022e16d87065'  # v5.6.0
+PIN_SETUP_PYTHON_SHA='a26af69be951a213d495a4c3e4e4022e16d87065'
+PIN_SETUP_PYTHON_TAG='v5.6.0'
 
 PIN_SETUP_NODE_OWNER='actions/setup-node'
-PIN_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'  # v4.4.0
+PIN_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'
+PIN_SETUP_NODE_TAG='v4.4.0'
 
-# DEUDA 18.24: PIN_*_SHA no se refresca. El tag en comentario no mueve el sha.
-# Camino: tools/bump-ci-pins.sh (tag → sha por API, PR) o dependabot sobre
-# checkout / setup-python / setup-node. Fuera de la fila. quality.yml de ESTE
-# repo sigue en tags.
+# Refresh de pins (20.7): tools/bump-ci-pins.sh --check detecta pin obsoleto
+# contra una fuente (fixture o API de GitHub) y --proponer emite el diff a
+# revisar; nunca escribe ni adopta tag flotante. El tag vive en PIN_*_TAG
+# porque el check lo compara. quality.yml de ESTE repo sigue en tags (los
+# workflows reales son ajenos a este mecanismo).
 
 uso() { sed -n '2,20p' "$0"; }
 
@@ -214,7 +217,7 @@ EOF
       # ubuntu-24.04 trae npm/yarn, no pnpm. Sin setup-node + corepack nace rojo.
       pin_valido "$PIN_SETUP_NODE_SHA" || die "pin setup-node no es sha de 40"
       cat <<EOF
-      - uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA  # v4.4.0
+      - uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA  # $PIN_SETUP_NODE_TAG
         with:
           node-version: '20'
       - name: Enable pnpm
@@ -232,7 +235,7 @@ EOF
         pip_cmd='pip install pytest'
       fi
       cat <<EOF
-      - uses: $PIN_SETUP_PYTHON_OWNER@$PIN_SETUP_PYTHON_SHA  # v5.6.0
+      - uses: $PIN_SETUP_PYTHON_OWNER@$PIN_SETUP_PYTHON_SHA  # $PIN_SETUP_PYTHON_TAG
         with:
           python-version: '3.12'
       - name: Install deps
