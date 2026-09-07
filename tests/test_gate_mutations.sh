@@ -132,7 +132,8 @@ G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
 G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
 G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
 G4|delegado_grok_sin_bg|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
-G4|delegado_grok_bg_degenerado|el patron positivo de backgroundTasks vuelve al negativo y las formas degeneradas ([ ], null) vuelven a habilitar la escotilla (18.27, review r2)
+G4|delegado_grok_bg_degenerado|el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)
+G4|delegado_grok_bg_textual|la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -816,14 +817,25 @@ mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS REC
 # otra asignacion es =1 dentro del case). Lo atrapa
 # caso_g4_grok_delegado_sin_bg_bloquea.
 mut_delegado_grok_sin_bg() { sed 's/grok_bg_en_vuelo=0/grok_bg_en_vuelo=1/'; }
-# 18.27 (D-B) review r2 (R27-3): el patron POSITIVO (hay trabajo solo si se VE
-# contenido dentro del array) vuelve al negativo de la ronda 1 ("si no veo el
-# vacio compacto, hay trabajo") via inversion grep -Eqv del vacio compacto —
-# con el, [] compacto sigue bloqueando (el caso plain queda verde) pero [ ] y
-# null vuelven a habilitar la escotilla. Lo atrapa
-# caso_g4_grok_delegado_bg_degenerado_bloquea. (Una sola linea a proposito:
-# el c\\ multilinea de otras mutaciones no inserta texto en el sed BSD local.)
-mut_delegado_grok_bg_degenerado() { sed "s|grep -Eq '\"backgroundTasks[^']*'|grep -Eqv '\"backgroundTasks\":[[:space:]]*\\\\[\\\\]'|"; }
+# 18.27 (D-B) review r2 (R27-3), reescrita para el lector estructural de la
+# 20.4: la exigencia de CONTENIDO dentro del array (hay trabajo solo si se VE
+# algo entre "[" y su "]") se quita del veredicto del awk — con eso todo array
+# que abre y cierra pareado cuenta como poblado, y el VACIO ([] y [ ])
+# vuelve a habilitar la escotilla (null no: nunca abre el array). Lo atrapa
+# caso_g4_grok_delegado_bg_degenerado_bloquea, y antes a el
+# caso_g4_grok_delegado_sin_bg_bloquea con el [] compacto.
+# (Una sola linea a proposito: el c\\ multilinea de otras mutaciones no
+# inserta texto en el sed BSD local.)
+mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cerro) { print "1" }/'; }
+# 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
+# textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
+# siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un
+# subagente async bloquea en vez de permitir. Lo atrapa
+# caso_g4_grok_delegado_bg_multilinea_permite. (c\\ de una linea, mismo
+# formato que mut_paused_sin_guardia_de_recibo; los \\[ del ERE doblados
+# porque el texto de c\ come un nivel de backslash.)
+mut_delegado_grok_bg_textual() { sed '/if \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
+  if printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
 # !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
 # continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
