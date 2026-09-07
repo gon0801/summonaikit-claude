@@ -846,6 +846,116 @@ advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta() {
 }
 advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta; fin_caso "advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta"
 
+# r1 (cross-review 20.x) — el teardown JAMAS borra a traves de un enlace de
+# ANCESTRO. El adv_limpiar_zona de master solo miraba si el propio dir de
+# sesion era symlink: un .saikit, .saikit/scratch o .saikit/scratch/adversary
+# enlazado hacia que el rm -rf del dir de sesion RESOLVIERA el enlace y
+# borrara contenido fisicamente AJENO al proyecto (rojo medido: un centinela
+# bajo el destino del enlace moria con el desarme). Ahora cada ancestro se
+# comprueba uno por uno antes de rm/rmdir; si alguno es symlink la limpieza se
+# OMITE con diagnostico y el hook sigue fail-open (el Stop NO se bloquea).
+# Por eso cada sub-escenario exige TAMBIEN el diagnostico 'es symlink': el
+# cinturon de contencion fisica de adv_limpiar_zona sostiene el escenario aun
+# sin la comprobacion del ancestro (la zona enlazada resuelve fuera del canon),
+# y sin exigir QUE capa fired, una mutacion que saca un ancestro de la lista
+# quedaba tapada por el cinturon (medido en la primera vuelta de este driver).
+advzona_teardown_no_atraviesa_enlaces_de_ancestros() {
+  [ "$ADV_SYMLINK_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'; return 0; }
+  _ses="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  # $1=ancestro que se planta como symlink, $2=centinela ajeno bajo el
+  # destino. Monta la sesion, planta el enlace (el ataque: la zona "existe" a
+  # traves de el) y corre el desarme, que es un fin de ejecucion sin Stop.
+  _escenario_enlace_ancestro() {
+    lab_limpiar_estado
+    rm -rf "$LAB/proyecto" "$LAB/afuera"
+    mkdir -p "$(dirname "$1")" "$(dirname "$2")"
+    printf 'centinela-ajeno\n' > "$2"
+    adv_symlink_o_skip "$LAB/afuera" "$1" || { _mal "no se pudo plantar el enlace de ancestro $1"; return 1; }
+    adv_armar
+    adv_despachar
+    lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
+    return 0
+  }
+  # (a) .saikit enlazado: el centinela vive en afuera/scratch/adversary/<ses>.
+  if _escenario_enlace_ancestro "$LAB/proyecto/.saikit" "$LAB/afuera/scratch/adversary/$_ses/centinela.txt"; then
+    _igual "desarme fail-open con .saikit enlazado" "$LAB_RC" "0"
+    _contiene "limpieza declarada OMITIDA (.saikit)" "$LAB_ERR" 'limpieza de zona OMITIDA'
+    _contiene "el diagnostico nombra el enlace del ancestro (.saikit)" "$LAB_ERR" 'es symlink'
+    if [ ! -f "$LAB/afuera/scratch/adversary/$_ses/centinela.txt" ]; then
+      _mal "el teardown borro a traves del enlace .saikit (centinela ajeno muerto)"
+    fi
+  fi
+  # (b) .saikit/scratch enlazado: el centinela vive en afuera/adversary/<ses>.
+  if _escenario_enlace_ancestro "$LAB/proyecto/.saikit/scratch" "$LAB/afuera/adversary/$_ses/centinela.txt"; then
+    _igual "desarme fail-open con scratch enlazado" "$LAB_RC" "0"
+    _contiene "limpieza declarada OMITIDA (scratch)" "$LAB_ERR" 'limpieza de zona OMITIDA'
+    _contiene "el diagnostico nombra el enlace del ancestro (scratch)" "$LAB_ERR" 'es symlink'
+    if [ ! -f "$LAB/afuera/adversary/$_ses/centinela.txt" ]; then
+      _mal "el teardown borro a traves del enlace .saikit/scratch (centinela ajeno muerto)"
+    fi
+  fi
+  # (c) .saikit/scratch/adversary (el padre de las zonas) enlazado.
+  if _escenario_enlace_ancestro "$LAB/proyecto/.saikit/scratch/adversary" "$LAB/afuera/$_ses/centinela.txt"; then
+    _igual "desarme fail-open con el padre enlazado" "$LAB_RC" "0"
+    _contiene "limpieza declarada OMITIDA (padre)" "$LAB_ERR" 'limpieza de zona OMITIDA'
+    _contiene "el diagnostico nombra el enlace del ancestro (padre)" "$LAB_ERR" 'es symlink'
+    if [ ! -f "$LAB/afuera/$_ses/centinela.txt" ]; then
+      _mal "el teardown borro a traves del enlace scratch/adversary (centinela ajeno muerto)"
+    fi
+  fi
+  # (d) el propio dir de sesion enlazado: ya no se borra en silencio — la
+  # omision se DECLARA y el enlace queda donde esta (nada ajeno se toca).
+  lab_limpiar_estado
+  rm -rf "$LAB/proyecto" "$LAB/afuera-zona"
+  mkdir -p "$LAB/proyecto" "$LAB/afuera-zona"
+  printf 'centinela-ajeno\n' > "$LAB/afuera-zona/centinela.txt"
+  adv_armar
+  adv_despachar
+  _zona="$(adv_zona_lab)"
+  rm -rf "$_zona"
+  if adv_symlink_o_skip "$LAB/afuera-zona" "$_zona"; then
+    lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
+    _igual "desarme fail-open con la zona enlazada" "$LAB_RC" "0"
+    _contiene "limpieza declarada OMITIDA (dir de sesion)" "$LAB_ERR" 'limpieza de zona OMITIDA'
+    _contiene "el diagnostico nombra el enlace del ancestro (dir de sesion)" "$LAB_ERR" 'es symlink'
+    [ -L "$_zona" ] || _mal "el teardown removio el enlace de la zona en vez de omitir"
+    [ -f "$LAB/afuera-zona/centinela.txt" ] || _mal "el teardown toco el destino del enlace de sesion"
+  fi
+}
+caso "advzona_teardown_no_atraviesa_enlaces_de_ancestros"
+advzona_teardown_no_atraviesa_enlaces_de_ancestros
+fin_caso "advzona_teardown_no_atraviesa_enlaces_de_ancestros"
+
+# r1 (cross-review 20.x) — la salida terminal del caso unknown honesto (11.4:
+# sin canal de texto observable NI transcript, fail-open que limpia el estado
+# sin consumir ciclo) tambien destruye el estado de la sesion, asi que tambien
+# debe llevarse la zona de ESTA ejecucion con el teardown seguro — y jamas
+# tocar el contenido ajeno del scratch (zona de otra sesion, archivo suelto).
+# Contra master la zona quedaba viva tras un cierre sin dueno (rojo medido).
+advzona_unknown_honesto_limpia_la_zona() {
+  adv_armar
+  adv_despachar
+  _zona="$(adv_zona_lab)"
+  mkdir -p "$_zona"
+  printf 'fixture\n' > "$_zona/fixture.json"
+  _ajena="$LAB/proyecto/.saikit/scratch/adversary/otrasesion-7777"
+  mkdir -p "$_ajena"
+  printf 'ajeno\n' > "$_ajena/su-fixture.txt"
+  printf 'suelto\n' > "$LAB/proyecto/.saikit/scratch/suelto.txt"
+  # Stop SIN last_assistant_message y SIN transcript legible: ambos canales de
+  # texto ciegos -> salida unknown honesto (exit 0, estado limpio).
+  lab_run stop claude "$(lab_payload_stop_sin_mensaje)"
+  _igual "exit 0 sin consumir ciclo" "$LAB_RC" "0"
+  _contiene "declara el cierre unknown" "$LAB_ERR" 'unknown honesto'
+  if lab_hay_estado; then _mal "el cierre unknown debia limpiar el estado"; fi
+  if [ -e "$_zona" ]; then _mal "la salida unknown dejo viva la zona de la ejecucion"; fi
+  if [ ! -f "$_ajena/su-fixture.txt" ]; then _mal "la salida unknown toco la zona de otra sesion"; fi
+  if [ ! -f "$LAB/proyecto/.saikit/scratch/suelto.txt" ]; then _mal "la salida unknown toco scratch ajeno al teardown"; fi
+}
+caso "advzona_unknown_honesto_limpia_la_zona"
+advzona_unknown_honesto_limpia_la_zona
+fin_caso "advzona_unknown_honesto_limpia_la_zona"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_adversary_lock: FAIL (casos)" >&2
   exit 1
@@ -920,6 +1030,10 @@ mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|{},;:)>
 #   zona_sin_limpieza: el teardown se neutraliza => la zona sobrevive al cierre.
 #   zona_sin_barrido: el primer evento del adversary deja de barrer la huerfana
 #     => el fixture de la ejecucion muerta sobrevive al re-armado.
+#   teardown_ciego_* (r1): una mutacion por ANCESTRO de la lista nueva de
+#     adv_limpiar_zona => ese ancestro enlazado vuelve a atravesarse al borrar.
+#   zona_unknown_sin_limpieza (r1): la salida unknown honesto pierde su llamada
+#     al teardown => la zona vuelve a quedar viva tras el cierre sin dueno.
 mut_advlock_zona_todo_el_repo()   { sed 's/^adv_zona_dentro() {$/adv_zona_dentro() {\n  return 0/'; }
 mut_advlock_zona_ajena_ciega()    { sed 's|^  printf '\''%s/%s'\'' "$ADV_SCRATCH_PARENT" "$SESSION_KEY"$|  printf '\''%s'\'' "$ADV_SCRATCH_PARENT"|'; }
 # OJO delimitador/indentacion (falla medida del PR #271): estas dos lineas del
@@ -930,6 +1044,20 @@ mut_advlock_zona_ajena_ciega()    { sed 's|^  printf '\''%s/%s'\'' "$ADV_SCRATCH
 mut_advlock_zona_symlink_ciega()  { sed 's#^    advzd_real="$(readlink -f "$1" 2>/dev/null || true)"$#    advzd_real="$1"#'; }
 mut_advlock_zona_sin_limpieza()   { sed 's/^adv_limpiar_zona() {$/adv_limpiar_zona() {\n  return 0/'; }
 mut_advlock_zona_sin_barrido()    { sed 's#^    rm -rf "$advzz_dir" 2>/dev/null || true$#    :#'; }
+# r1 (cross-review 20.x): una mutacion por ANCESTRO del chequeo nuevo del
+# teardown. Cada una saca UNA entrada de la lista de adv_limpiar_zona (la
+# cambia por una ruta que nunca existe): el ancestro correspondiente deja de
+# comprobarse y el sub-caso que lo planta como symlink vuelve a borrar (o a
+# retirar el enlace sin declararlo) — lo atrapa
+# advzona_teardown_no_atraviesa_enlaces_de_ancestros.
+mut_advlock_teardown_ciego_saikit()  { sed 's#^    "${ADV_PROJECT_CANON}/.saikit" \\$#    "/z-nunca-z" \\#'; }
+mut_advlock_teardown_ciego_scratch() { sed 's#^    "${ADV_PROJECT_CANON}/.saikit/scratch" \\$#    "/z-nunca-z" \\#'; }
+mut_advlock_teardown_ciego_padre()   { sed 's#^    "$ADV_SCRATCH_PARENT" \\$#    "/z-nunca-z" \\#'; }
+mut_advlock_teardown_ciego_dir()     { sed 's#^    "$advzl_dir"; do$#    "/z-nunca-z"; do#'; }
+# r1: la salida unknown honesto (11.4) sin su llamada al teardown — la zona
+# vuelve a quedar viva tras un cierre que ya no tiene dueno. Lo atrapa
+# advzona_unknown_honesto_limpia_la_zona.
+mut_advlock_zona_unknown_sin_limpieza() { sed 's@^    adv_limpiar_zona   # r1:.*$@    :@'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -946,7 +1074,12 @@ zona_todo_el_repo|advzona_produccion_y_vecinos_sigue_bloqueado
 zona_ajena_ciega|advzona_ejecucion_ajena_bloqueada_y_no_se_barre
 zona_symlink_ciega|advzona_symlink_y_escape
 zona_sin_limpieza|advzona_fixture_inocuo_y_limpieza_al_cerrar
-zona_sin_barrido|advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta"
+zona_sin_barrido|advzona_rearmar_barre_la_zona_de_la_ejecucion_muerta
+teardown_ciego_saikit|advzona_teardown_no_atraviesa_enlaces_de_ancestros
+teardown_ciego_scratch|advzona_teardown_no_atraviesa_enlaces_de_ancestros
+teardown_ciego_padre|advzona_teardown_no_atraviesa_enlaces_de_ancestros
+teardown_ciego_dir|advzona_teardown_no_atraviesa_enlaces_de_ancestros
+zona_unknown_sin_limpieza|advzona_unknown_honesto_limpia_la_zona"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue
@@ -959,7 +1092,7 @@ while IFS='|' read -r nombre caso_atrapa; do
         saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue
       fi ;;
-    canon_logico|zona_symlink_ciega)
+    canon_logico|zona_symlink_ciega|teardown_ciego_saikit|teardown_ciego_scratch|teardown_ciego_padre|teardown_ciego_dir)
       if [ "$ADV_SYMLINK_OK" != "1" ]; then
         saikit_skip_caso "mutacion_$nombre" 'necesita symlinks reales'
         continue

@@ -2465,6 +2465,17 @@ adv_zona_dentro() {
 # llaveado), jamas rm a traves de un enlace, y los padres se podan solo si
 # quedaron vacios (misma higiene que podar_dir_sesion; .saikit nunca se toca:
 # findings/ y veredictos/ viven ahi).
+# r1 (cross-review 20.x): "jamas rm a traves de un enlace" se cumple comprobando
+# CADA ancestro uno por uno ANTES de rm/rmdir — el chequeo de solo el dir de
+# sesion no veia un .saikit/scratch/adversary enlazado, y el rm -rf del dir de
+# sesion resolvia el enlace y borraba FUERA del proyecto (medido: un centinela
+# ajeno bajo el destino del enlace moria con el desarme). Si cualquier ancestro
+# es symlink, la limpieza se OMITE con diagnostico: el hook es fail-open y el
+# Stop NO se bloquea por una limpieza omitida — lo que queda es una zona
+# huerfana que su owner declara, nunca un borrado externo. Cinturon extra: si
+# la zona existe, su ruta RESUELTA (cd + pwd -P) tiene que quedar bajo el root
+# canonico — inalcanzable en la practica sin algun ancestro enlazado (el
+# prefijo ya es fisico), pero la direccion de falla es omitir, no borrar.
 adv_limpiar_zona() {
   if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
   advzl_dir="$(adv_zona_dir)" || return 0
@@ -2472,7 +2483,26 @@ adv_limpiar_zona() {
     "$ADV_SCRATCH_PARENT"/?*) ;;
     *) return 0 ;;
   esac
-  if [ -L "$advzl_dir" ]; then return 0; fi
+  for advzl_anc in \
+    "${ADV_PROJECT_CANON}/.saikit" \
+    "${ADV_PROJECT_CANON}/.saikit/scratch" \
+    "$ADV_SCRATCH_PARENT" \
+    "$advzl_dir"; do
+    if [ -L "$advzl_anc" ]; then
+      printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — %s es symlink; borrar a traves de un enlace tocaba fuera del proyecto (fail-open: el Stop no se bloquea por esto)\n' "$advzl_anc" >&2
+      return 0
+    fi
+  done
+  if [ -d "$advzl_dir" ]; then
+    advzl_real="$(cd "$advzl_dir" 2>/dev/null && pwd -P)" || advzl_real=""
+    case "$advzl_real" in
+      "$ADV_PROJECT_CANON"/?*) ;;
+      *)
+        printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — %s resuelve fuera del proyecto canonico %s (fail-open: el Stop no se bloquea por esto)\n' "${advzl_real:-ruta no resoluble}" "$ADV_PROJECT_CANON" >&2
+        return 0
+        ;;
+    esac
+  fi
   rm -rf "$advzl_dir" 2>/dev/null || true
   rmdir "$ADV_SCRATCH_PARENT" "${ADV_SCRATCH_PARENT%/adversary}" 2>/dev/null || true
   return 0
@@ -3586,8 +3616,14 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # cierre borra el log de la sesion una linea mas abajo, asi que un append
   # seria evidencia efimera que no hace lo que declara. El presupuesto agotado
   # (A4) tampoco loguea; el diagnostico vivible es el stderr.
+  # r1 (cross-review 20.x): esta salida terminal tambien destruye el estado de
+  # la sesion, asi que tambien se lleva la zona de pruebas de ESTA ejecucion —
+  # sin esto la salida unknown dejaba la zona viva tras un cierre que ya no
+  # tiene dueno (medido); el teardown es el seguro de adv_limpiar_zona (no
+  # atraviesa enlaces, omite con diagnostico antes que borrar afuera).
   if [ "$canal_payload_observed" -eq 0 ] && [ "$transcript_observed" -eq 0 ]; then
     printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
+    adv_limpiar_zona   # r1: la zona de pruebas se va con el estado (teardown seguro)
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
     podar_dir_sesion
     emit_allow
