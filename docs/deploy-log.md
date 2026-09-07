@@ -7,6 +7,16 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
+## 2026-09-06 — PR #261 (cierre documental Phase 19 y ledger histórico) — hooks NO-OP
+
+- **Merge:** `9bcbed17a9c1f6de50800c736c771eabdc35a013`; gate SUCCESS en el
+  [run 34085942333](https://github.com/gon0801/summonaikit-claude/actions/runs/34085942333).
+- **Deploy:** desde `origin/master` sincronizado se ejecutaron los instaladores
+  de claude, grok, dsh y codex; las cuatro copias respondieron `YA AL DIA`.
+- **Verificación:** `install-hook.sh --check` terminó con `veredicto=ok`;
+  `check-hook-registration.sh`, `audita-ledger.sh` y `check-deploy-log.sh`
+  terminaron con exit 0. No quedan filas históricas cerradas marcadas TODO.
+
 ## 2026-09-06 — PR #260 (cierre Phase 19: feature map verificable) — deploy NO-OP; cuatro hosts verificados
 
 - **Mergeado:** PR #260 `fix/feature-map-lint-f16-f18` → `master`, merge squash `aedae68`.
