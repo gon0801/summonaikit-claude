@@ -16,6 +16,7 @@
 #   omit_head_cambiado      — commits tras el sello como OK
 #   omit_revert_trailer     — revert sin trailer como OK
 #   omit_revert_punta       — revert que no es la punta como OK
+#   extra_repo              — gh pr merge --repo unexpected/other
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -33,18 +34,13 @@ CARD="$SKILL/features/saikit-merge.md"
 DRV="$SKILL/scripts/drivers/saikit-merge.sh"
 CATALOG="$SKILL/features/catalog.json"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
@@ -84,50 +80,12 @@ if not re.search(pat, obs):
 PY
 }
 
-assert_missing_or_fail() {
-  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
-  local sum steps
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
 copy_driver() {
   cp "$DRV" "$1"
   chmod +x "$1"
 }
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el driver (patron obsoleto)"
-    return 1
-  fi
-  bash -n "$dest" || { malo "$label: mutante no parsea"; return 1; }
-  return 0
-}
 
 # ---------------------------------------------------------------------------
 # Inventario activo + descriptor/ficha/driver
@@ -263,11 +221,52 @@ for line in open(sys.argv[1], encoding="utf-8"):
 PY
 fi
 
+caso "fake gh rechaza PR, flags y SHA distintos del fixture"
+verify_tmp="$(python3 - "$STATE/state.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["tmpdir"])
+PY
+)"
+fake_gh="$verify_tmp/saikit-merge-sb/bin/gh"
+gh_fix="$verify_tmp/saikit-merge-sb/ghfix"
+if [ ! -x "$fake_gh" ]; then
+  malo "no quedo fake gh para probar su contrato"
+else
+  rm -f "$gh_fix/merge-fail"
+  read -r expected_pr expected_sha <<EOF
+$(python3 - "$gh_fix/pr.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+print(d["number"], d["headRefOid"])
+PY
+)
+EOF
+  printf '%s\n' "$expected_pr" > "$gh_fix/expected-pr"
+  printf '%s\n' "$expected_sha" > "$gh_fix/expected-sha"
+  expect_fake_reject() {
+    local label="$1"; shift
+    SAIKIT_GH_FIX="$gh_fix" SAIKIT_GH_LOG="$verify_tmp/fake-contract.log" \
+      "$fake_gh" "$@" >/dev/null 2>&1 && \
+      malo "$label: fake gh acepto argv incorrecto"
+  }
+  expect_fake_reject wrong-pr pr merge 999 --squash \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject missing-squash pr merge "$expected_pr" \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject duplicate-squash pr merge "$expected_pr" --squash --squash \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject wrong-sha pr merge "$expected_pr" --squash \
+    --match-head-commit 0000000000000000000000000000000000000000 \
+    --body "Saikit-Merge: $expected_sha"
+fi
+
 # ---------------------------------------------------------------------------
 # Mutantes
 # ---------------------------------------------------------------------------
 [ -f "$DRV" ] || { echo "FAIL: $fail aserciones (sin driver no hay mutantes)" >&2; exit 1; }
 copy_driver "$SANDBOX/merge.src.sh"
+fm_mut_check_flat_infra saikit-merge "$DRV" drive saikit-merge
+fm_mut_require_baseline saikit-merge "$DRV" drive saikit-merge
 
 run_mut() {
   local label="$1" expr="$2" asid="$3" signal="$4"
@@ -327,6 +326,25 @@ run_mut omit_revert_trailer \
 run_mut omit_revert_punta \
   '/assert:reject_no_punta/,/assert:reject_no_punta_end/d' \
   reject_no_punta 'no es la punta'
+
+caso "mutante extra_repo: --repo unexpected/other se pone rojo"
+reset_art
+extra_src="$SANDBOX/saikit-merge-tool.src.sh"
+extra_tool="$SANDBOX/saikit-merge-extra.sh"
+cp "$repo/tools/saikit-merge.sh" "$extra_src"
+if sed_must_change "$extra_src" "$extra_tool" \
+  's/gh pr merge "\$PR" --squash --match-head-commit "\$SHA"/gh pr merge "$PR" --squash --match-head-commit "$SHA" --repo unexpected\/other/' \
+  "extra_repo_tool"
+then
+  mut="$SANDBOX/merge-extra-repo.sh"
+  if sed_must_change "$SANDBOX/merge.src.sh" "$mut" \
+    "s|MERGE=\"\$VERIFY_REPO/tools/saikit-merge.sh\"|MERGE=\"$extra_tool\"|" \
+    "extra_repo"
+  then
+    out="$(ctrl_drv "$mut" drive saikit-merge 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail saikit-merge merge_ok 'MERGE-OK:' "$rc"
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

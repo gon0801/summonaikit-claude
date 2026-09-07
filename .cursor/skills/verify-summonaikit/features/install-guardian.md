@@ -24,7 +24,8 @@ install or report without writing.
 
 Preconditions:
 
-- `control-summonaikit doctor` reports `doctor: PASS`.
+- `control-summonaikit launch` created the isolated run. Hook preparation is
+  part of this drive and its result is recorded in the attempt.
 - No second instance is active (`.run/env` already consumed by launch).
 
 - Case `install-dry-run`: action Drive dry-run without writes; command `control-summonaikit drive-install-dry-run`; observable exit `0`, `procedencia: rama=`, and dest absent or unchanged.
@@ -33,9 +34,9 @@ Preconditions:
 - Case `install-foreign`: action Install beside a neighbor file; command `control-summonaikit drive install-guardian`; observable neighbor checksum intact.
 - Case `install-restore`: action Restore known vendor fixture; command `control-summonaikit drive install-guardian`; observable dest bytes match the vendor backup.
 
-- **Isolated install (already done by launch).** Confirm the launch log.
-  Inspect `.cursor/skills/verify-summonaikit/artifacts/launch-*.txt`. It must
-  show `INSTALADO` (or equivalent success) and `DEST` under the disposable HOME.
+- **Isolated install.** Inspect `hook-prepare.log` inside the attempt. It must
+  be redacted, show a successful installer execution, and correspond to `DEST`
+  under the disposable HOME.
 - **Proof.** Keep both `launch-*.txt` and the drive attempt under
   `artifacts/<run>/install-guardian/<attempt>/`. Confirm `VERIFY_DEST` still
   exists and matches the source sha (doctor).

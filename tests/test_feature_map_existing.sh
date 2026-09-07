@@ -9,6 +9,7 @@
 #   omit_sin_estado       — unarmed sin afirmar ausencia de estado/contrato
 #   omit_contract         — armed sin afirmar JSON/contrato
 #   omit_harness_state    — armed sin afirmar harness-state/task_hash
+#   omit_stop_rejected    — Stop sin afirmar exit 2 del paso stop
 #   accept_stale_ledger   — ledger atrasado registrado como OK
 #   accept_dup_pr         — PR duplicado registrado como OK
 #   header_only           — solo encabezado + rc 0; no satisface conducta
@@ -26,18 +27,13 @@ VERIFY="$repo/verify"
 STATE="$SANDBOX/verify-state"
 ART="$SANDBOX/verify-artifacts"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
 latest_summary() {
   local fid="$1"
@@ -77,37 +73,6 @@ if not re.search(pat, obs):
 PY
 }
 
-assert_missing_or_fail() {
-  # After a mutant: required assertion omitted or recorded without the signal.
-  # $1=feature $2=assertion_id $3=signal that a honest observed would carry
-  local fid="$1" asid="$2" signal="$3"
-  local sum steps rc_drive="$4"
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-# Discriminante: o falta la aserción (finalize FAIL), o se registro sin la
-# señal, o el drive no fue PASS. Un mutante que sigue en verde es un hueco.
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
 # ---------------------------------------------------------------------------
 # verify/ preservado (no se toca; criterios se reutilizan, no se invoca)
@@ -170,13 +135,15 @@ import json, sys
 print(json.load(open(sys.argv[1]))["verify_home"])
 PY
 )"
-[ -n "$VERIFY_DEST" ] && [ -f "$VERIFY_DEST" ] || malo "launch no dejo DEST"
+[ -n "$VERIFY_DEST" ] && [ ! -e "$VERIFY_DEST" ] \
+  || malo "launch debio diferir la preparacion de DEST"
 
 # ---- install-guardian -------------------------------------------------------
 caso "drive install-guardian: dry-run sin delta, identidad, no-op, ajeno, restore"
 reset_art
 out="$(ctrl drive install-guardian 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "drive install-guardian rc=$rc: $out"
+[ -f "$VERIFY_DEST" ] || malo "drive dependiente no preparo DEST"
 sum="$(latest_summary install-guardian)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "install-guardian sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
@@ -225,7 +192,7 @@ assert_obs gate-turn sin_estado '\(sin estado\)'
 assert_obs gate-turn sin_contrato 'sin contrato|no.contrato|sin additionalContext|ausente'
 assert_obs gate-turn contract_json 'SUMMONAIKIT HARNESS REQUIRED'
 assert_obs gate-turn harness_state 'harness-state\.env'
-assert_obs gate-turn stop_rejected 'exit 2|deny|bloque|recibo|evidencia'
+assert_obs gate-turn stop_rejected 'stop exit 2'
 assert_obs gate-turn not_scenario_01_02 '07-evidencia-incompleta'
 
 # Independiente: 01/02 no acreditan el Stop
@@ -401,17 +368,14 @@ copy_driver() {
   chmod +x "$dest"
 }
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el driver (patron obsoleto)"
-    return 1
-  fi
-  bash -n "$dest" || { malo "$label: mutante no parsea"; return 1; }
-  return 0
-}
+fm_mut_check_flat_infra gate-turn "$SKILL/scripts/drivers/gate-turn.sh" drive gate-turn
+fm_mut_require_baseline gate-turn "$SKILL/scripts/drivers/gate-turn.sh" drive gate-turn
+fm_mut_check_flat_infra install-guardian "$SKILL/scripts/drivers/install-guardian.sh" drive-install-dry-run
+fm_mut_require_baseline install-guardian "$SKILL/scripts/drivers/install-guardian.sh" drive-install-dry-run
+fm_mut_check_flat_infra audit-ledger "$SKILL/scripts/drivers/audit-ledger.sh" drive audit-ledger
+fm_mut_require_baseline audit-ledger "$SKILL/scripts/drivers/audit-ledger.sh" drive audit-ledger
+fm_mut_check_flat_infra check-deploy-log "$SKILL/scripts/drivers/check-deploy-log.sh" drive check-deploy-log
+fm_mut_require_baseline check-deploy-log "$SKILL/scripts/drivers/check-deploy-log.sh" drive check-deploy-log
 
 caso "mutante omit_sin_estado: unarmed sin asercion de estado se pone rojo"
 reset_art
@@ -447,6 +411,28 @@ then
   assert_missing_or_fail gate-turn harness_state 'harness-state' "$rc"
 fi
 
+caso "mutante omit_stop_rejected: Stop sin exit 2 se pone rojo"
+reset_art
+mut="$SANDBOX/gate-omit-stop.sh"
+if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
+  '/assert:stop_rejected/,/assert:stop_rejected_end/d' \
+  "omit_stop_rejected"
+then
+  out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
+fi
+
+caso "mutante zero_stop_exit: el nombre evidencia no acredita Stop"
+reset_art
+mut="$SANDBOX/gate-zero-stop.sh"
+if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
+  's/kv("STOP_EXIT", stop_exit)/kv("STOP_EXIT", "")/' \
+  "zero_stop_exit"
+then
+  out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
+fi
+
 caso "mutante omit_dry_run_no_write: quitar no-write se pone rojo"
 reset_art
 copy_driver install-guardian "$SANDBOX/install.src.sh"
@@ -466,13 +452,16 @@ if sed_must_change "$SANDBOX/install.src.sh" "$mut" \
   's/SAIKIT_FM_DRY_RUN=1/SAIKIT_FM_DRY_RUN=0/' \
   "write_on_dry_run"
 then
-  dest_probe="$SANDBOX/dry-dest-probe"
+  vtmp="$(python3 - "$STATE/state.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["tmpdir"])
+PY
+)"
+  dest_probe="$vtmp/dry-dest-probe"
   : > "$dest_probe"
-  out="$(SAIKIT_FM_DRY_DEST="$SANDBOX/fm-dry-dest.sh" \
+  out="$(SAIKIT_FM_DRY_DEST="$vtmp/fm-dry-dest.sh" \
     ctrl_drv "$mut" drive-install-dry-run 2>&1)" && rc=0 || rc=$?
-  # El dest fresco del caso no debe existir tras un dry-run honesto.
-  # El mutante instala de verdad: el archivo aparece, o la aserción falla.
-  if [ -f "$SANDBOX/fm-dry-dest.sh" ]; then
+  if [ -f "$vtmp/fm-dry-dest.sh" ]; then
     printf '    (discriminante: write_on_dry_run creo el dest)\n'
     [ "$rc" -ne 0 ] || assert_missing_or_fail install-guardian dry_run_no_write \
       'unchanged|ausente|sin.delta' "$rc"

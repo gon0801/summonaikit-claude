@@ -68,7 +68,7 @@ for c in d.get("cases") or []:
     if want and cid not in want:
         continue
     cases.append(cid)
-    reqs.extend(c.get("required_assertions") or [])
+    reqs.extend(f"{cid}:{a}" for a in (c.get("required_assertions") or []) if a)
 print("CASES=" + " ".join(cases))
 print("REQS=" + " ".join(reqs))
 PY
@@ -94,9 +94,53 @@ print(mode)
 PY
 }
 
+_fm_driver_allowed() {
+  # $1 = candidate path. Allow only under skill_root or verify/sandbox roots.
+  python3 - "$1" "$skill_root" \
+    "${STATE_DIR:-}" "${ARTIFACTS:-}" "${TMPDIR:-}" \
+    "${VERIFY_TMPDIR:-}" "${VERIFY_HOME:-}" <<'PY'
+import sys
+from pathlib import Path
+
+def under(child: Path, root: str) -> bool:
+    if not root:
+        return False
+    try:
+        r = Path(root).resolve()
+    except OSError:
+        return False
+    if not r.exists():
+        return False
+    # Never treat filesystem root as an allow root.
+    if r == r.anchor or str(r) in ("/", "\\"):
+        return False
+    try:
+        child.resolve().relative_to(r)
+        return True
+    except ValueError:
+        return False
+
+cand = Path(sys.argv[1])
+if not cand.is_file():
+    raise SystemExit(1)
+skill = sys.argv[2]
+state, art, tmpdir, vtmp, vhome = sys.argv[3:8]
+roots = [skill, tmpdir, vtmp, vhome]
+# Mutant driver copies live next to verify-state (sandbox parent).
+for r in (state, art):
+    if r:
+        roots.append(r)
+        roots.append(str(Path(r).resolve().parent))
+ok = any(under(cand, r) for r in roots)
+raise SystemExit(0 if ok else 1)
+PY
+}
+
 _driver_script() {
-  if [ -n "${SAIKIT_FM_DRIVER:-}" ] && [ -f "${SAIKIT_FM_DRIVER}" ]; then
-    printf '%s' "$SAIKIT_FM_DRIVER"
+  if [ -n "${SAIKIT_FM_DRIVER:-}" ]; then
+    if [ -f "${SAIKIT_FM_DRIVER}" ] && _fm_driver_allowed "$SAIKIT_FM_DRIVER"; then
+      printf '%s' "$SAIKIT_FM_DRIVER"
+    fi
     return
   fi
   python3 - "$skill_root/features/$1.json" "$skill_root" <<'PY'
@@ -113,18 +157,70 @@ print(skill / path)
 PY
 }
 
-_feature_mode() {
+_feature_needs_hook() {
   python3 - "$skill_root/features/$1.json" <<'PY'
 import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
 if not p.is_file():
-    print("sandbox")
-    raise SystemExit(0)
+    raise SystemExit(1)
 d = json.loads(p.read_text(encoding="utf-8"))
-mode = d.get("execution_mode") or "sandbox"
-print(mode if mode in ("sandbox", "simulated", "live") else "sandbox")
+raise SystemExit(0 if d.get("requires_hook") is True else 1)
 PY
+}
+
+_ensure_artifacts_write_safe() {
+  python3 "$STATEPY" member --path "$ARTIFACTS" --label ARTIFACTS \
+    --mutate "$(runtime_mutate)" >/dev/null || exit 1
+  if [ -f "$STATE_DIR/.saikit-assignment.json" ]; then
+    python3 "$STATEPY" check-assignment \
+      --state-dir "$STATE_DIR" --artifacts "$ARTIFACTS" >/dev/null || exit 1
+    return 0
+  fi
+  python3 - "$ARTIFACTS" "$skill_root/artifacts" <<'PY' || \
+    iso_fail "ARTIFACTS externo sin asignación privada del run"
+import sys
+from pathlib import Path
+raise SystemExit(0 if Path(sys.argv[1]).resolve() == Path(sys.argv[2]).resolve() else 1)
+PY
+}
+
+_check_feature_hook_dependencies() {
+  local fid="$1"
+  _feature_needs_hook "$fid" || return 0
+  [ -f "$HOOK_SRC" ] || write_blocked_attempt "$fid" "hook source MISSING"
+  [ -f "$INSTALLER" ] || write_blocked_attempt "$fid" "installer MISSING"
+}
+
+_prepare_feature_hook() {
+  local fid="$1" adir="$2" reqs="$3" scope="$4" out rc first_case
+  _feature_needs_hook "$fid" || return 0
+  out="$adir/hook-prepare.log"
+  set +e
+  runtime_exec "$VERIFY_HOME" bash "$INSTALLER" \
+    --host codex \
+    --dest "$VERIFY_DEST" --source "$HOOK_SRC" --manifest "$MANIFEST" \
+    --no-registration-check \
+    >"$out" 2>&1
+  rc=$?
+  set -e
+  evidence redact-file --path "$out" >/dev/null || true
+  first_case="${5%% *}"
+  evidence append-step --attempt-dir "$adir" --type action \
+    --case-id "$first_case" --step-id hook-prepare --tool-exit "$rc" \
+    --observation "install-hook exit $rc" --log-ref hook-prepare.log \
+    --command bash --command "$INSTALLER" >/dev/null
+  if [ "$rc" -ne 0 ] || [ ! -f "$VERIFY_DEST" ] \
+    || ! grep -q 'SAIKIT-CLAUDE-OWNED' "$VERIFY_DEST" 2>/dev/null \
+    || ! cmp -s "$HOOK_SRC" "$VERIFY_DEST"; then
+    append_assertion "$adir" "$first_case" hook_prepare FAIL \
+      "installer exit 0 y DEST idéntico" "install exit $rc o DEST inválido"
+    set +e
+    finish_attempt "$adir" "$reqs" "$scope" >/dev/null
+    set -e
+    printf 'control-summonaikit: preparación del hook falló (exit %s)\n' "$rc" >&2
+    exit 1
+  fi
 }
 
 _dispatch_driver() {
@@ -137,10 +233,17 @@ _dispatch_driver() {
   fi
   cases="$(_parse_kv CASES "$meta")"
   reqs="$(_parse_kv REQS "$meta")"
+  _ensure_artifacts_write_safe
+  _check_feature_hook_dependencies "$fid"
   local created adir driver
   created="$(begin_attempt "$fid" "$cases" "$reqs" "$scope")"
   adir="$(_parse_kv ATTEMPT_DIR "$created")"
   [ -d "$adir" ] || iso_fail "no se pudo crear intento de evidencia"
+  _prepare_feature_hook "$fid" "$adir" "$reqs" "$scope" "$cases"
+  if [ -n "${SAIKIT_FM_DRIVER:-}" ] && [ -f "${SAIKIT_FM_DRIVER}" ] \
+    && ! _fm_driver_allowed "$SAIKIT_FM_DRIVER"; then
+    write_blocked_attempt "$fid" "SAIKIT_FM_DRIVER fuera de allowlist"
+  fi
   driver="$(_driver_script "$fid")"
   if [ ! -f "$driver" ]; then
     write_blocked_attempt "$fid" "sin driver"
@@ -151,8 +254,19 @@ _dispatch_driver() {
   SAIKIT_FM_SCOPE="$scope" \
   SAIKIT_FM_ONLY_CASE="$only" \
   SAIKIT_FM_EVIDENCE="$EVIDPY" \
-    bash "$driver"
+    runtime_exec "$VERIFY_HOME" bash "$driver"
+  local drv_ec=$?
   set -e
+  if [ "$drv_ec" -ne 0 ]; then
+    local first_case=""
+    # shellcheck disable=SC2086
+    set -- $cases
+    first_case="${1:-}"
+    append_action "$adir" "$first_case" "driver-exit" "$drv_ec" \
+      "driver terminó con exit $drv_ec" bash "$driver"
+    append_assertion "$adir" "$first_case" "driver_exit" FAIL \
+      "exit 0" "exit $drv_ec"
+  fi
   set +e
   finish_attempt "$adir" "$reqs" "$scope"
   local ec=$?
@@ -230,10 +344,17 @@ record_case_assertions() {
   # $1=adir $2=case $3=result $4=observed-note; rest=assertion ids
   local adir="$1" case_id="$2" result="$3" note="$4"
   shift 4
-  local a
+  local a assertion_case assertion_id
   for a in "$@"; do
     [ -n "$a" ] || continue
-    append_assertion "$adir" "$case_id" "$a" "$result" "$a" "$note"
+    assertion_case="$case_id"
+    assertion_id="$a"
+    if [[ "$a" == *:* ]]; then
+      assertion_case="${a%%:*}"
+      assertion_id="${a#*:}"
+    fi
+    append_assertion "$adir" "$assertion_case" "$assertion_id" \
+      "$result" "$assertion_id" "$note"
   done
 }
 
@@ -241,6 +362,11 @@ run_synthetic_drive() {
   local fid="$1" cases="$2" reqs="$3" scope="${4:-full}"
   local kind="${SAIKIT_VERIFY_SYNTHETIC_EXECUTOR:-}"
   [ -n "$kind" ] || return 0
+  if [ "${SAIKIT_VERIFY_ALLOW_SYNTHETIC:-}" != 1 ]; then
+    printf 'control-summonaikit: synthetic refused — set SAIKIT_VERIFY_ALLOW_SYNTHETIC=1\n' >&2
+    exit 3
+  fi
+  _ensure_artifacts_write_safe
   mkdir -p "$ARTIFACTS"
   local created adir result_kind tool_exit note
   created="$(begin_attempt "$fid" "$cases" "$reqs" "$scope")" || return 1
@@ -274,6 +400,7 @@ run_synthetic_drive() {
 
 write_blocked_attempt() {
   local fid="$1" reason="$2"
+  _ensure_artifacts_write_safe
   mkdir -p "$ARTIFACTS"
   local created adir
   created="$(begin_attempt "$fid" "" "" full)" || {
@@ -307,8 +434,6 @@ cmd_launch() {
   need_cmd bash
   need_cmd mktemp
   need_cmd python3
-  [ -f "$HOOK_SRC" ] || die "hook source missing: $HOOK_SRC"
-  [ -f "$INSTALLER" ] || die "installer missing: $INSTALLER"
   [ -f "$STATEPY" ] || die "missing $STATEPY"
 
   runtime_preflight_launch
@@ -329,6 +454,15 @@ cmd_launch() {
     "$verify_home/git" \
     "$run_tmp"
   runtime_write_marker "$verify_home" "$run_id" "$token"
+  if ! python3 "$STATEPY" assign \
+    --state-dir "$STATE_DIR" \
+    --artifacts "$ARTIFACTS" \
+    --run-id "$run_id" \
+    --token "$token"; then
+    rm -rf "$verify_home"
+    runtime_clear_state_files
+    iso_fail "no se pudieron asignar STATE/ARTIFACTS al run"
+  fi
 
   dest="$verify_home/.claude/hooks/summonaikit-harness.sh"
   disposable=""
@@ -349,44 +483,46 @@ cmd_launch() {
   VERIFY_TMPDIR="$run_tmp"
   out="$ARTIFACTS/launch-${run_id}.txt"
   mkdir -p "$ARTIFACTS"
-  set +e
-  runtime_exec "$verify_home" bash "$INSTALLER" \
-    --dest "$dest" --source "$HOOK_SRC" --manifest "$MANIFEST" \
-    >"$out" 2>&1
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    cat "$out" >&2
-    rm -rf "$verify_home"
-    runtime_clear_state_files
-    iso_fail "install failed (exit $rc); see $out"
-  fi
+  printf 'hook preparation deferred until a dependent drive\n' >"$out"
 
   payload="$(mktemp "${TMPDIR:-/tmp}/saikit-state-XXXXXX.json")"
-  python3 - "$payload" <<PY
-import json, sys
+  SAIKIT_LAUNCH_RUN_ID="$run_id" \
+  SAIKIT_LAUNCH_REPO="$repo" \
+  SAIKIT_LAUNCH_VERIFY_HOME="$verify_home" \
+  SAIKIT_LAUNCH_DEST="$dest" \
+  SAIKIT_LAUNCH_STATE_DIR="$STATE_DIR" \
+  SAIKIT_LAUNCH_ARTIFACTS="$ARTIFACTS" \
+  SAIKIT_LAUNCH_TMP="$run_tmp" \
+  SAIKIT_LAUNCH_GIT_COMMON="$git_common" \
+  SAIKIT_LAUNCH_DISPOSABLE="$disposable" \
+  SAIKIT_LAUNCH_TOKEN="$token" \
+  python3 - "$payload" <<'PY'
+import json, os, sys
 from datetime import datetime, timezone
 path = sys.argv[1]
+vh = os.environ["SAIKIT_LAUNCH_VERIFY_HOME"]
+dest = os.environ["SAIKIT_LAUNCH_DEST"]
+run_tmp = os.environ["SAIKIT_LAUNCH_TMP"]
 data = {
     "schema_version": 1,
-    "run_id": "$run_id",
+    "run_id": os.environ["SAIKIT_LAUNCH_RUN_ID"],
     "launched_at": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-    "repo": "$repo",
-    "verify_home": "$verify_home",
-    "dest": "$dest",
-    "state_dir": "$STATE_DIR",
-    "artifacts_dir": "$ARTIFACTS",
-    "tmpdir": "$run_tmp",
-    "owned_temps": ["$verify_home", "$run_tmp"],
+    "repo": os.environ["SAIKIT_LAUNCH_REPO"],
+    "verify_home": vh,
+    "dest": dest,
+    "state_dir": os.environ["SAIKIT_LAUNCH_STATE_DIR"],
+    "artifacts_dir": os.environ["SAIKIT_LAUNCH_ARTIFACTS"],
+    "tmpdir": run_tmp,
+    "owned_temps": [vh, run_tmp],
     "host_dests": {
-        "claude": "$dest",
-        "grok": "$verify_home/.grok/hooks/summonaikit-harness.sh",
-        "dsh": "$verify_home/.dsh/hooks/summonaikit-harness.sh",
-        "codex": "$verify_home/.codex/hooks/summonaikit-harness.sh",
+        "claude": dest,
+        "grok": f"{vh}/.grok/hooks/summonaikit-harness.sh",
+        "dsh": f"{vh}/.dsh/hooks/summonaikit-harness.sh",
+        "codex": f"{vh}/.codex/hooks/summonaikit-harness.sh",
     },
-    "git_common_dir": "$git_common",
-    "disposable_repo": "$disposable",
-    "token": "$token",
+    "git_common_dir": os.environ.get("SAIKIT_LAUNCH_GIT_COMMON") or "",
+    "disposable_repo": os.environ.get("SAIKIT_LAUNCH_DISPOSABLE") or "",
+    "token": os.environ["SAIKIT_LAUNCH_TOKEN"],
 }
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
@@ -422,11 +558,42 @@ cmd_cleanup() {
   if [ -f "$STATE_DIR/env" ]; then
     iso_fail "legacy .run/env — re-lanzar: borrar solo el archivo env (nunca su HOME) y correr launch"
   fi
+  member_err="$(mktemp "${TMPDIR:-/tmp}/saikit-state-member-XXXXXX")"
+  if ! python3 "$STATEPY" member \
+    --path "$STATE_DIR" \
+    --label STATE \
+    --mutate "$(runtime_mutate)" 2>"$member_err"; then
+    reason="$(cat "$member_err" 2>/dev/null || true)"
+    rm -f "$member_err"
+    printf 'cleanup: STATE_DIR symlink o no asignado — no se borra\n'
+    if [ -n "$reason" ]; then
+      printf 'cleanup: motivo: %s\n' "$reason"
+    fi
+    exit 1
+  fi
+  rm -f "$member_err"
   if [ ! -f "$STATE_DIR/state.json" ]; then
+    if [ -d "$STATE_DIR/.active" ] || [ -f "$STATE_DIR/.saikit-assignment.json" ]; then
+      if ! python3 "$STATEPY" check-assignment \
+        --state-dir "$STATE_DIR" --artifacts "$ARTIFACTS" >/dev/null; then
+        printf 'cleanup: STATE sin asignación válida — no se borra\n' >&2
+        exit 1
+      fi
+      runtime_clear_state_files
+      printf 'cleanup: estado asignado incompleto eliminado; HOME no tocado\n' >&2
+      exit 1
+    fi
     printf 'cleanup: nothing to do (no active instance)\n'
-    runtime_clear_state_files
     printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
     exit 0
+  fi
+  if [ "$(runtime_mutate)" != skip_physical_path ] \
+    && [ "$(runtime_mutate)" != skip_cleanup_ownership ]; then
+    if ! python3 "$STATEPY" check-assignment \
+      --state-dir "$STATE_DIR" --artifacts "$ARTIFACTS" >/dev/null; then
+      printf 'cleanup: STATE no asignado a este run — no se borra\n' >&2
+      exit 1
+    fi
   fi
   # Load must not trap the operator: invalid JSON, missing VERIFY_HOME, or
   # foreign ownership ⇒ soft-clear state/.active only (never rm an unverified HOME).
@@ -456,7 +623,7 @@ cmd_cleanup() {
   fi
   printf 'cleanup: re-lanzar con launch (nunca borres un HOME a ciegas)\n'
   printf 'cleanup: instance cleared (artifacts kept under %s)\n' "$ARTIFACTS"
-  exit 0
+  exit 1
 }
 
 cmd_cli() {
@@ -576,7 +743,7 @@ usage() {
 usage: control-summonaikit <command> [args]
 
 commands:
-  launch                         create isolated HOME and install the hook there
+  launch                         create isolated HOME/Git state for later drives
   doctor [id]                    granular requirements + doctor.json (v1)
   cleanup                        remove owned temps; keep artifacts/
   cli -- <catalog-entry...>      run a catalog public entry under the run env

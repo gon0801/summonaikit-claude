@@ -13,6 +13,9 @@
 #   omit_symlink         — quita rechazo de symlink
 #   omit_hash            — quita dest_matches_source
 #   omit_routing         — quita claude_implementer
+#   omit_registro        — quita el diagnostico INCOMPLETO
+#   stub_registro_ok     — checker que imprime REGISTRO COMPLETO
+#   invalid_model        — observed definitely-invalid-model
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -29,18 +32,13 @@ CATALOG="$SKILL/features/catalog.json"
 DRV_HOSTS="$SKILL/scripts/drivers/install-hosts.sh"
 DRV_ROUTING="$SKILL/scripts/drivers/routing-recipes.sh"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
@@ -80,45 +78,7 @@ if not re.search(pat, obs):
 PY
 }
 
-assert_missing_or_fail() {
-  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
-  local sum steps
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el archivo (patron obsoleto)"
-    return 1
-  fi
-  bash -n "$dest" || { malo "$label: mutante no parsea"; return 1; }
-  return 0
-}
 
 # ---------------------------------------------------------------------------
 # Inventario: ambas features pending→active, drivers, no 16.7
@@ -223,7 +183,8 @@ assert_obs install-hosts dest_unchanged 'unchanged|igual|intact'
 assert_obs install-hosts retirada_preserva 'quitado|retirad|backup|intact'
 assert_obs install-hosts neighbor_intact_after_retirada 'intact|igual|unchanged'
 assert_obs install-hosts foreign_intact 'intact|igual|unchanged'
-assert_obs install-hosts registro_por_texto 'REGISTRO|INCOMPLETO|completo|fases|UserPromptSubmit|GROK|DSH'
+assert_obs install-hosts registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO'
+assert_obs install-hosts registro_por_texto 'gate NO corre'
 assert_obs install-hosts registro_no_solo_exit 'texto|estructura|no.exit.0|diagnostico'
 assert_obs install-hosts fases_estructura 'UserPromptSubmit|PostToolUse|SessionStart|Stop'
 assert_obs install-hosts other_hosts_observed 'claude|grok|dsh|codex'
@@ -428,6 +389,10 @@ if [ -f "$DRV_ROUTING" ]; then
   cp "$DRV_ROUTING" "$SANDBOX/routing.src.sh"
   chmod +x "$SANDBOX/routing.src.sh"
 fi
+fm_mut_check_flat_infra install-hosts "$DRV_HOSTS" drive install-hosts
+fm_mut_require_baseline install-hosts "$DRV_HOSTS" drive install-hosts
+fm_mut_check_flat_infra routing-recipes "$DRV_ROUTING" drive routing-recipes
+fm_mut_require_baseline routing-recipes "$DRV_ROUTING" drive routing-recipes
 
 mut_omit_hosts() {
   local label="$1" asid="$2" signal="$3" expr="$4"
@@ -469,8 +434,40 @@ mut_omit_hosts omit_symlink symlink_refused 'enlace|symlink|intact' \
   '/assert:symlink_refused/,/assert:symlink_refused_end/d'
 mut_omit_hosts omit_hash dest_matches_source '[a-f0-9]{12,}' \
   '/assert:dest_matches_source/,/assert:dest_matches_source_end/d'
+mut_omit_hosts omit_registro registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO' \
+  '/assert:registro_por_texto/,/assert:registro_por_texto_end/d'
 mut_omit_routing omit_routing claude_implementer "$CL_MODEL" \
   '/assert:claude_implementer/,/assert:claude_implementer_end/d'
+
+caso "mutante stub_registro_ok: REGISTRO COMPLETO no acredita incompleto"
+reset_art
+stub_reg="$SANDBOX/reg-completo.sh"
+cat > "$stub_reg" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'REGISTRO COMPLETO'
+exit 0
+EOF
+chmod +x "$stub_reg"
+mut="$SANDBOX/hosts-stub-reg.sh"
+if sed_must_change "$SANDBOX/hosts.src.sh" "$mut" \
+  "s|REG=\"\$VERIFY_REPO/tools/check-hook-registration.sh\"|REG=\"$stub_reg\"|" \
+  "stub_registro_ok"
+then
+  out="$(ctrl_drv "$mut" drive install-hosts 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail install-hosts registro_por_texto \
+    'REGISTRO DEL HOOK INCOMPLETO' "$rc"
+fi
+
+caso "mutante invalid_model: definitely-invalid-model se pone rojo"
+reset_art
+mut="$SANDBOX/routing-invalid-model.sh"
+if sed_must_change "$SANDBOX/routing.src.sh" "$mut" \
+  's/run_router --host claude --role implementer --field model 2>&1/printf %s definitely-invalid-model/' \
+  "invalid_model"
+then
+  out="$(ctrl_drv "$mut" drive routing-recipes 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail routing-recipes claude_implementer "$CL_MODEL" "$rc"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

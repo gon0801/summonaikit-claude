@@ -191,7 +191,9 @@ if fm_only autopilot-no-inherit; then
   fm_action autopilot-no-inherit act-plain "$rc02" "golden 02-armado-contrato" \
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block 02-armado-contrato "$out02")"
-  if [ "${HAS_AUTOPILOT:-1}" = 0 ]; then
+  if [ "${HAS_HEADER:-0}" != 1 ]; then
+    fm_fail autopilot-no-inherit plain_no_flag "sin flag" "sin encabezado golden"
+  elif [ "${HAS_AUTOPILOT:-1}" = 0 ]; then
     fm_pass autopilot-no-inherit plain_no_flag "sin flag" "ausente"
   else
     fm_fail autopilot-no-inherit plain_no_flag "sin flag" "autopilot=1 en 02"
@@ -207,7 +209,9 @@ if fm_only autopilot-no-inherit; then
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block ap-typo "$outt")"
   # assert:typo_no_flag
-  if [ "${HAS_AUTOPILOT:-1}" = 0 ]; then
+  if [ "${HAS_HEADER:-0}" != 1 ]; then
+    fm_fail autopilot-no-inherit typo_no_flag "sin flag" "sin encabezado golden"
+  elif [ "${HAS_AUTOPILOT:-1}" = 0 ]; then
     fm_pass autopilot-no-inherit typo_no_flag "sin flag" "ausente"
   else
     fm_fail autopilot-no-inherit typo_no_flag "sin flag" "typo heredo flag"
@@ -223,7 +227,10 @@ if fm_only autopilot-no-inherit; then
   fm_action autopilot-no-inherit act-follow "$rcf" "golden derived ap-follow" \
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block ap-follow "$outf")"
-  if [ "${LAST_SIN_ESTADO:-0}" = 1 ] || [ "${LAST_AUTOPILOT:-1}" = 0 ]; then
+  if [ "${HAS_HEADER:-0}" != 1 ]; then
+    fm_fail autopilot-no-inherit followup_no_inherit "no inherit" \
+      "sin encabezado golden"
+  elif [ "${LAST_SIN_ESTADO:-0}" = 1 ] || [ "${LAST_AUTOPILOT:-1}" = 0 ]; then
     fm_pass autopilot-no-inherit followup_no_inherit "no inherit" \
       "sin estado/ausente"
   else

@@ -87,7 +87,9 @@ Su frontera sí debe impedir escapes por configuración, rutas o entorno.
 7. STATE/ARTIFACTS externos solo se aceptan en directorios privados asignados
    al run y validados. Los defaults de la skill permanecen posibles mediante
    directorios privados bajo `.run/` y `artifacts/`, nunca symlinks. En CI se
-   ubican fuera del checkout para respetar la guardia de fuga del runner.
+   ubican fuera del checkout para respetar la guardia de fuga del runner. Una
+   marca privada en STATE liga ambos destinos al `run_id` y token creados por
+   `launch`; cambiar después STATE, ARTIFACTS o el repo invalida el run.
 8. Cleanup elimina solo temporales reconocidos como propios del run; conserva
    sus evidencias y las de intentos anteriores. Repetir cleanup es inocuo.
    Directorios genéricos, estado manipulado y destinos ajenos se rechazan.
@@ -119,6 +121,9 @@ aserciones requeridas/observadas. Conteos de pasos y aserciones se **derivan**
 de `steps.jsonl`; el validador verifica coincidencia de IDs, referencias,
 esquema, conteos, casos, resultado y código final. Los descriptores fijan el
 conjunto requerido antes del intento; no se reduce para fabricar verde.
+Cuando hay varios casos, cada requisito se congela como
+`case_id:assertion_id`; una lista plana ambigua se rechaza antes de crear el
+directorio del intento y un paso con un caso ajeno invalida la evidencia.
 
 | Resultado del drive | Exit | Regla |
 |---|---|---|

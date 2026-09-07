@@ -4,7 +4,8 @@
 CLI: create-attempt, append-step, finalize, validate, redact, redact-file.
 Mutaciones (SAIKIT_VERIFY_MUTATE): skip_empty_guard, skip_required_assertions,
 lie_counts, exit_summary_mismatch, degrade_fail_to_unknown, skip_redact,
-reuse_attempt_id.
+reuse_attempt_id, skip_result_recompute, skip_case_keys, skip_required_freeze,
+skip_redacted_strip.
 """
 from __future__ import annotations
 
@@ -17,9 +18,12 @@ import secrets
 import shlex
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+AssertionKey = tuple[str, str]
 
 SCHEMA_VERSION = 1
 RESULTS = ("PASS", "FAIL", "unknown")
@@ -27,6 +31,18 @@ STEP_TYPES = ("action", "assertion", "diagnostic")
 MODES = ("sandbox", "simulated", "live")
 RANK = {"PASS": 0, "unknown": 1, "FAIL": 2}
 EXIT_FOR = {"PASS": 0, "FAIL": 1, "unknown": 3}
+_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_IDENTITY_REQUIRED = (
+    "schema_version",
+    "run_id",
+    "attempt_id",
+    "feature_id",
+    "mode",
+    "cases",
+    "required_assertions",
+    "required_keys",
+    "provenance",
+)
 
 # Misma familia que tools/lib/redactar.sh (escaneo + reemplazo).
 _SCAN_RE = re.compile(
@@ -91,8 +107,156 @@ def redact_value(value: Any) -> Any:
     return value
 
 
+# Hook SAIKIT_ADV_REDACTED_STRIP: token=[REDACTED] is not a secret.
+_REDACTED_STRIP: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r'="\[REDACTED\]"(?=\s|$)'), '= "'),
+    (re.compile(r'="\[REDACTED\]"([]"[,}>])(?=[]"[{},;:)>]|\s|$)'), r'= "\1'),
+    (re.compile(r'="\[REDACTED\]"([;)])(?=\s|$)'), r'= "\1'),
+    (re.compile(r"=\[REDACTED\](?=\s|$)"), "= "),
+    (re.compile(r'=\[REDACTED\]([]"[,}>])(?=[]"[{},;:)>]|\s|$)'), r"= \1"),
+    (re.compile(r"=\[REDACTED\]([;)])(?=\s|$)"), r"= \1"),
+    (re.compile(r"://\[REDACTED\]@"), ":// "),
+]
+
+
+def strip_redacted(text: str) -> str:
+    out = text
+    for pat, repl in _REDACTED_STRIP:
+        out = pat.sub(repl, out)
+    return out
+
+
 def contains_secret(text: str) -> bool:
-    return bool(_SCAN_RE.search(text))
+    scanned = text if mutate() == "skip_redacted_strip" else strip_redacted(text)
+    return bool(_SCAN_RE.search(scanned))
+
+
+def assertion_key(case_id: Any, assertion_id: Any) -> AssertionKey:
+    return (str(case_id or "").strip(), str(assertion_id or "").strip())
+
+
+def format_key(key: AssertionKey) -> str:
+    case_id, asid = key
+    if case_id:
+        return f"{case_id}:{asid}"
+    return asid
+
+
+def validate_id(value: Any, label: str) -> str:
+    text = str(value or "")
+    if not _ID_RE.fullmatch(text):
+        raise EvidenceError(f"{label}: identificador inválido")
+    return text
+
+
+def reject_symlink_components(path: Path, label: str) -> None:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not current.is_symlink():
+            continue
+        system_alias = (
+            current.parent == Path(current.anchor)
+            and current.name in {"tmp", "var", "etc"}
+            and current.resolve() == Path("/private") / current.name
+        )
+        if not system_alias:
+            raise EvidenceError(f"{label}: symlink escape")
+
+
+def parse_required_token(token: str, cases: list[str]) -> AssertionKey:
+    raw = token.strip()
+    if ":" in raw:
+        case_id, asid = raw.split(":", 1)
+        if not case_id or not asid:
+            raise EvidenceError("required-assertions: clave case_id:assertion_id inválida")
+        if cases and case_id not in cases:
+            raise EvidenceError(
+                f"required-assertions: case_id {case_id!r} no está en identity"
+            )
+        return assertion_key(case_id, asid)
+    if len(cases) == 1:
+        return assertion_key(cases[0], raw)
+    if len(cases) > 1:
+        raise EvidenceError(
+            "required-assertions ambiguas: use case_id:assertion_id con varios casos"
+        )
+    return assertion_key("", raw)
+
+
+def parse_required_list(tokens: list[str], cases: list[str]) -> list[AssertionKey]:
+    return [parse_required_token(t, cases) for t in tokens if t]
+
+
+def keys_equal(left: list[AssertionKey], right: list[AssertionKey]) -> bool:
+    return Counter(left) == Counter(right)
+
+
+def frozen_required(ident: dict[str, Any]) -> list[AssertionKey]:
+    cases = [str(c) for c in (ident.get("cases") or []) if c]
+    stored = ident.get("required_keys")
+    if isinstance(stored, list) and stored:
+        out: list[AssertionKey] = []
+        for item in stored:
+            if isinstance(item, dict):
+                out.append(assertion_key(item.get("case_id"), item.get("assertion_id")))
+        if out:
+            return out
+    return parse_required_list([str(t) for t in (ident.get("required_assertions") or [])], cases)
+
+
+def is_availability_channel(frozen: list[AssertionKey], cli: list[AssertionKey]) -> bool:
+    return (not frozen) and cli == [("", "availability")]
+
+
+def serialize_keys(keys: list[AssertionKey]) -> list[dict[str, str]]:
+    return [{"case_id": c, "assertion_id": a} for c, a in keys]
+
+
+def observed_keys(steps: list[dict[str, Any]]) -> list[AssertionKey]:
+    out: list[AssertionKey] = []
+    for rec in assertions_of(steps):
+        asid = rec.get("assertion_id")
+        if asid:
+            out.append(assertion_key(rec.get("case_id"), asid))
+    return out
+
+
+def missing_required(
+    required: list[AssertionKey],
+    observed: list[AssertionKey],
+) -> list[str]:
+    if mutate() == "skip_case_keys":
+        seen = {asid for _, asid in observed if asid}
+        return [format_key(k) for k in required if k[1] not in seen]
+    missing: list[str] = []
+    obs_set = set(observed)
+    for key in required:
+        if key[0] and key not in obs_set:
+            missing.append(format_key(key))
+    need = Counter(asid for case, asid in required if not case)
+    got = Counter(asid for _, asid in observed if asid in need)
+    for asid, count in need.items():
+        if got[asid] < count:
+            missing.append(asid)
+    return missing
+
+
+def resolve_required(ident: dict[str, Any], raw: str | None) -> list[AssertionKey]:
+    cases = [str(c) for c in (ident.get("cases") or []) if c]
+    frozen = frozen_required(ident)
+    tokens = split_words(raw)
+    if not tokens:
+        return frozen
+    cli = parse_required_list(tokens, cases)
+    if keys_equal(cli, frozen):
+        return frozen
+    if is_availability_channel(frozen, cli):
+        return cli
+    if mutate() == "skip_required_freeze":
+        return cli
+    raise EvidenceError("required-assertions no coincide con identity")
 
 
 def split_words(raw: str | None) -> list[str]:
@@ -143,7 +307,27 @@ def load_identity(attempt_dir: Path) -> dict[str, Any]:
     p = identity_path(attempt_dir)
     if not p.is_file():
         raise EvidenceError(f"falta identity.json en {attempt_dir}")
-    return json.loads(p.read_text(encoding="utf-8"))
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise EvidenceError("identity.json no es un objeto")
+    missing = [key for key in _IDENTITY_REQUIRED if key not in data]
+    if missing:
+        raise EvidenceError(f"identity.json incompleta: {','.join(missing)}")
+    if data.get("schema_version") != SCHEMA_VERSION:
+        raise EvidenceError("identity.json schema_version inválida")
+    for key in ("run_id", "attempt_id", "feature_id"):
+        validate_id(data.get(key), f"identity.{key}")
+    if data.get("mode") not in MODES:
+        raise EvidenceError("identity.mode inválido")
+    if not isinstance(data.get("cases"), list):
+        raise EvidenceError("identity.cases inválido")
+    if not isinstance(data.get("required_assertions"), list):
+        raise EvidenceError("identity.required_assertions inválido")
+    if not isinstance(data.get("required_keys"), list):
+        raise EvidenceError("identity.required_keys inválido")
+    if not isinstance(data.get("provenance"), dict):
+        raise EvidenceError("identity.provenance inválida")
+    return data
 
 
 def read_steps(attempt_dir: Path) -> list[dict[str, Any]]:
@@ -170,8 +354,13 @@ def parse_tool_exit(raw: str | None) -> int | None:
 
 def cmd_create_attempt(args: argparse.Namespace) -> int:
     artifacts = Path(args.artifacts)
-    run_id = args.run_id
-    feature_id = args.feature_id
+    run_id = validate_id(args.run_id, "run_id")
+    feature_id = validate_id(args.feature_id, "feature_id")
+    cases = split_words(args.cases)
+    required = split_words(args.required_assertions)
+    keys = parse_required_list(required, cases)
+    reject_symlink_components(artifacts, "artifacts")
+    reject_symlink_components(artifacts / run_id / feature_id, "attempt path")
     attempt_id = new_attempt_id()
     dest = artifacts / run_id / feature_id / attempt_id
     if mutate() == "reuse_attempt_id":
@@ -188,8 +377,6 @@ def cmd_create_attempt(args: argparse.Namespace) -> int:
             raise EvidenceError("no se pudo asignar attempt_id exclusivo")
     # Escribir antes de ejecutar: dir + steps vacíos + identidad.
     (dest / "steps.jsonl").write_text("", encoding="utf-8")
-    cases = split_words(args.cases)
-    required = split_words(args.required_assertions)
     ident = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
@@ -198,6 +385,7 @@ def cmd_create_attempt(args: argparse.Namespace) -> int:
         "mode": args.mode,
         "cases": cases,
         "required_assertions": required,
+        "required_keys": serialize_keys(keys),
         "started_at": utc_now(),
         "repo": args.repo,
         "scope": args.scope,
@@ -267,13 +455,13 @@ def aggregate(results: list[str]) -> str:
 def build_summary(
     ident: dict[str, Any],
     steps: list[dict[str, Any]],
-    required: list[str],
+    required: list[AssertionKey],
     reasons: list[str],
     result: str,
     extra_scope: str | None,
     scope_partial: bool,
 ) -> dict[str, Any]:
-    observed = [a.get("assertion_id") for a in assertions_of(steps) if a.get("assertion_id")]
+    observed = [format_key(k) for k in observed_keys(steps)]
     step_count = len(steps)
     assertion_count = len(assertions_of(steps))
     if mutate() == "lie_counts":
@@ -312,7 +500,7 @@ def build_summary(
         "result": result,
         "exit_code": exit_code,
         "reasons": reasons,
-        "required_assertions": required,
+        "required_assertions": [format_key(k) for k in required],
         "observed_assertions": observed,
         "step_count": step_count,
         "assertion_count": assertion_count,
@@ -324,7 +512,7 @@ def build_summary(
 
 def decide_result(
     steps: list[dict[str, Any]],
-    required: list[str],
+    required: list[AssertionKey],
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
     empty = not steps
@@ -335,8 +523,7 @@ def decide_result(
     if empty and m == "skip_empty_guard":
         return "PASS", reasons
 
-    observed = {a.get("assertion_id") for a in assertions_of(steps) if a.get("assertion_id")}
-    missing = [r for r in required if r not in observed]
+    missing = missing_required(required, observed_keys(steps))
     if missing and m != "skip_required_assertions":
         reasons.append("aserción omitida: " + ",".join(missing))
         return "FAIL", reasons
@@ -362,7 +549,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     attempt_dir = Path(args.attempt_dir)
     ident = load_identity(attempt_dir)
     steps = read_steps(attempt_dir)
-    required = split_words(args.required_assertions) or list(ident.get("required_assertions") or [])
+    required = resolve_required(ident, args.required_assertions)
     result, reasons = decide_result(steps, required)
     summary = build_summary(
         ident,
@@ -384,6 +571,9 @@ def cmd_finalize(args: argparse.Namespace) -> int:
             "exit_summary_mismatch",
             "degrade_fail_to_unknown",
             "skip_redact",
+            "skip_case_keys",
+            "skip_required_freeze",
+            "skip_result_recompute",
         }:
             summary["result"] = "FAIL"
             summary["exit_code"] = 1
@@ -416,6 +606,8 @@ def validate_step(rec: dict[str, Any]) -> list[str]:
     te = rec.get("tool_exit", None)
     if te is not None and not isinstance(te, int):
         bad.append("tool_exit")
+    if rec.get("mode") not in MODES:
+        bad.append("step mode")
     if rec.get("type") == "assertion":
         if rec.get("result") not in RESULTS:
             bad.append("assertion result")
@@ -446,6 +638,68 @@ def validate_summary_shape(summary: dict[str, Any]) -> list[str]:
     return bad
 
 
+def _identity_id_problems(
+    ident: dict[str, Any],
+    summary: dict[str, Any],
+    steps: list[dict[str, Any]],
+) -> list[str]:
+    bad: list[str] = []
+    sind = summary.get("identity") or {}
+    for field in ("run_id", "attempt_id", "feature_id"):
+        want = ident.get(field)
+        if summary.get(field) != want:
+            bad.append(f"summary.{field} != identity")
+        if sind.get(field) not in (None, want):
+            bad.append(f"summary.identity.{field} != identity")
+        for rec in steps:
+            if rec.get(field) != want:
+                bad.append(f"step {field} != identity")
+                break
+    ident_cases = [str(c) for c in (ident.get("cases") or [])]
+    sum_cases = [str(c) for c in (summary.get("cases") or summary.get("cases_requested") or [])]
+    if ident_cases != sum_cases:
+        bad.append("cases != identity")
+    for rec in steps:
+        case_id = str(rec.get("case_id") or "")
+        if case_id and case_id not in ident_cases:
+            bad.append("step case_id fuera de identity")
+            break
+    if summary.get("mode") != ident.get("mode"):
+        bad.append("summary.mode != identity")
+    if summary.get("provenance") != ident.get("provenance"):
+        bad.append("summary.provenance != identity")
+    for rec in steps:
+        if rec.get("mode") != ident.get("mode"):
+            bad.append("step mode != identity")
+            break
+    return bad
+
+
+def _log_ref_problems(attempt_dir: Path, steps: list[dict[str, Any]]) -> list[str]:
+    bad: list[str] = []
+    root = attempt_dir.resolve()
+    for rec in steps:
+        raw = rec.get("log_ref")
+        if raw in (None, ""):
+            continue
+        if not isinstance(raw, str):
+            bad.append("log_ref inválido")
+            continue
+        ref = Path(raw)
+        if ref.is_absolute() or ".." in ref.parts:
+            bad.append("log_ref fuera del intento")
+            continue
+        path = attempt_dir / ref
+        try:
+            path.resolve().relative_to(root)
+        except (OSError, ValueError):
+            bad.append("log_ref fuera del intento")
+            continue
+        if path.is_symlink() or not path.is_file():
+            bad.append("log_ref ausente o no regular")
+    return bad
+
+
 def validate_attempt(attempt_dir: Path, *, apply_mutate: bool) -> list[str]:
     problems: list[str] = []
     m = mutate() if apply_mutate else ""
@@ -458,16 +712,49 @@ def validate_attempt(attempt_dir: Path, *, apply_mutate: bool) -> list[str]:
     for rec in steps:
         problems.extend(validate_step(rec))
 
+    try:
+        ident = load_identity(attempt_dir)
+    except EvidenceError as exc:
+        problems.append(str(exc))
+        ident = {}
+
+    if ident:
+        problems.extend(_identity_id_problems(ident, summary, steps))
+    problems.extend(_log_ref_problems(attempt_dir, steps))
+
     if not steps and m != "skip_empty_guard":
         if summary.get("result") == "PASS" or summary.get("exit_code") == 0:
             problems.append("pasos vacíos con exit 0")
 
-    required = list(summary.get("required_assertions") or [])
-    observed = set(summary.get("observed_assertions") or [])
-    if required and m != "skip_required_assertions":
-        missing = [r for r in required if r not in observed]
+    cases = [str(c) for c in (ident.get("cases") or [])]
+    frozen = frozen_required(ident) if ident else []
+    sum_req = parse_required_list(
+        [str(x) for x in (summary.get("required_assertions") or [])],
+        cases,
+    )
+    req_for_decide = frozen
+    if ident and is_availability_channel(frozen, sum_req):
+        req_for_decide = sum_req
+
+    if req_for_decide and m != "skip_required_assertions":
+        missing = missing_required(req_for_decide, observed_keys(steps))
         if missing and summary.get("result") != "FAIL":
             problems.append("aserción omitida")
+
+    if ident and m != "skip_required_freeze" and not keys_equal(sum_req, req_for_decide):
+        problems.append("required_assertions != identity")
+
+    if m != "skip_result_recompute":
+        computed, _ = decide_result(steps, req_for_decide)
+        if summary.get("result") != computed:
+            problems.append("result no deriva de steps")
+        if m != "skip_case_keys":
+            obs_sum = parse_required_list(
+                [str(x) for x in (summary.get("observed_assertions") or [])],
+                cases,
+            )
+            if Counter(observed_keys(steps)) != Counter(obs_sum):
+                problems.append("observed_assertions no deriva de steps")
 
     real_steps = len(steps)
     real_asrt = len(assertions_of(steps))

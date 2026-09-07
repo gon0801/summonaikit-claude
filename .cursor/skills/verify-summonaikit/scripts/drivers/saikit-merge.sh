@@ -47,7 +47,20 @@ case "$1 $2" in
     exit 0 ;;
   "pr merge")
     if [ -f "$fix/merge-fail" ]; then cat "$fix/merge-fail"; exit 1; fi
-    exit 0 ;;
+    expected_pr="$(cat "$fix/expected-pr" 2>/dev/null)" || exit 1
+    expected_sha="$(cat "$fix/expected-sha" 2>/dev/null)" || exit 1
+    if [ "$#" -eq 8 ] \
+      && [ "$1" = pr ] && [ "$2" = merge ] \
+      && [ "$3" = "$expected_pr" ] \
+      && [ "$4" = --squash ] \
+      && [ "$5" = --match-head-commit ] \
+      && [ "$6" = "$expected_sha" ] \
+      && [ "$7" = --body ] \
+      && [ "$8" = "Saikit-Merge: $expected_sha" ]; then
+      exit 0
+    fi
+    printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
+    exit 1 ;;
 esac
 printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
 exit 1
@@ -61,6 +74,8 @@ refix() {
   printf '{"login":"op"}' > "$SB/ghfix/user.json"
   printf '{"number":7,"baseRefName":"master","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' \
     "$SHA" > "$SB/ghfix/pr.json"
+  printf '7\n' > "$SB/ghfix/expected-pr"
+  printf '%s\n' "$SHA" > "$SB/ghfix/expected-sha"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' \
     > "$SB/ghfix/pr-merge.json"
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' \
@@ -145,6 +160,8 @@ Saikit-Merge: $SHA"
   RHEAD="$(gitr rev-parse HEAD)"
   printf '{"number":8,"baseRefName":"master","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' \
     "$RHEAD" > "$SB/ghfix/pr.json"
+  printf '8\n' > "$SB/ghfix/expected-pr"
+  printf '%s\n' "$RHEAD" > "$SB/ghfix/expected-sha"
 }
 
 run_merge() {

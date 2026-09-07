@@ -21,9 +21,11 @@ seal. Live merge (`merge-happy-path`) stays inventariado; no observado.
 
 ## Launch
 
-No long-lived server. Launch means: create a disposable `HOME`, install the
-repo hook into it, and record validated state in
+No long-lived server. Launch means: create a disposable `HOME` and Git area,
+then record validated state in
 `.cursor/skills/verify-summonaikit/.run/state.json` (never a sourced env file).
+Hook installation is deferred until a drive that needs it; fixture-only ledger
+and deploy-log audits do not depend on the hook or installer.
 
 ```bash
 CTRL=.cursor/skills/verify-summonaikit/scripts/control-summonaikit
@@ -31,10 +33,13 @@ chmod +x "$CTRL"   # once
 "$CTRL" launch
 ```
 
-Ready when stdout shows `launched run_id=...` and `DEST=.../summonaikit-harness.sh`,
-and the launch log under `artifacts/launch-*.txt` contains `INSTALADO` (or an
-equivalent success line). The helper sets `HOME`/`USERPROFILE` to the disposable
-dir for every later command.
+Ready when stdout shows `launched run_id=...` and
+`DEST=.../summonaikit-harness.sh`. The launch log records that hook preparation
+is deferred. A hook-dependent drive writes a redacted `hook-prepare.log` inside
+its attempt and must install successfully before it runs. The helper sets
+`HOME`/`USERPROFILE` to the disposable dir for every later command. `launch`
+also binds STATE and ARTIFACTS to that run; changing either path or the recorded
+repo makes later commands fail.
 
 Teardown:
 
@@ -44,17 +49,24 @@ Teardown:
 
 ## Doctor
 
-Run first whenever anything looks off:
+After launch, inspect all requirements or one feature:
 
 ```bash
 "$CTRL" doctor
+"$CTRL" doctor audit-ledger
 ```
 
-Require `doctor: PASS`. That means: an active instance exists, `DEST` carries
-`# SAIKIT-CLAUDE-OWNED`, `bash -n` is clean, `DEST` matches the repo source
-byte-for-byte, and `DEST` is **not** the live `~/.claude/hooks/` copy.
+The all-feature report can be `unknown/MISSING` before the first hook-dependent
+drive. Fixture-only features remain ready without preparing the hook.
 
-Refuse to drive if doctor fails. Never "fix" by installing into the real home.
+For a feature with an instance requirement, `doctor: PASS` means `DEST` carries
+`# SAIKIT-CLAUDE-OWNED`, `bash -n` is clean, `DEST` matches repo source
+byte-for-byte, and `DEST` is **not** the live `~/.claude/hooks/` copy. For a
+fixture-only feature, PASS covers only that feature's declared requirements.
+
+Resolve `doctor: FAIL` before driving. `MISSING` for the deferred isolated hook
+is prepared by a dependent drive. Never "fix" by installing into the real
+home. Doctor does not scan the operator profile.
 
 ## Drive
 
@@ -93,7 +105,9 @@ arbitrary shell or command — a deliberate restriction vs the old CLI):
 
 `cli --` rejects `bash`, `/bin/sh`, and any path that is not a catalog
 surface. Setup/merge/postmerge are refused on the working checkout; they
-need a disposable repo owned by the run.
+need a disposable repo owned by the run. Output paths for installer, CI,
+decision/blast, recipes, golden recording, capture and staging must also stay
+under the assigned run; golden `--record` requires an explicit safe baseline.
 
 **Hard rule:** never run `tools/install-hook.sh` (without `--dry-run`) or
 `--check` against the operator profile from this skill. Writes go only through
@@ -122,8 +136,9 @@ Proof standards:
   armed prompt (`02-armado-contrato` → contract injected + state files).
 - For dry-run install: confirm exit 0 and a recognizable status line; do not
   treat the name "dry-run" as proof that nothing else ran — the log is the proof.
-- Mocks are not used; fixtures under `tests/fixtures/escenarios/` are real
-  captured payloads.
+- Gate fixtures under `tests/fixtures/escenarios/` are captured payloads.
+- Simulated features (`saikit-merge`, `saikit-postmerge`) use in-driver
+  doubles, not live remotes.
 
 Name artifacts with the run id from launch (`*-${VERIFY_RUN_ID}.txt`).
 
@@ -138,10 +153,11 @@ A textual `/tmp` prefix is not enough. Does **not** kill processes by name,
 does **not** touch live profiles, and does **not** delete `artifacts/`.
 Repeating cleanup is a no-op.
 
-If `state.json` is truncated/invalid, `VERIFY_HOME` is already gone, or ownership
-cannot be proven, cleanup **soft-clears** only `state.json` / `.active` (HOME
-untouched) and prints a re-lanzar instruction — so launch is never deadlocked
-behind an impossible cleanup.
+If an assigned `state.json` is truncated/invalid, `VERIFY_HOME` is already gone,
+or ownership cannot be proven, cleanup **soft-clears** only its assigned state
+metadata (HOME untouched), prints a re-lanzar instruction, and exits 1 because
+the violation was observed. Unassigned STATE is rejected without deleting it.
+A later cleanup with no active run is a no-op with exit 0.
 
 If a drive fails mid-run, still run cleanup so the next launch is not blocked.
 A leftover `.run/env` is rejected (re-lanzar); cleanup will not delete its
@@ -155,8 +171,8 @@ Executable helper (invocation above):
 
 | Command | Purpose |
 |---|---|
-| `launch` | Isolated HOME + install hook |
-| `doctor` | Read-only instance health |
+| `launch` | Isolated HOME/Git state; hook preparation deferred |
+| `doctor` | Read-only per-feature requirement report |
 | `cleanup` | Tear down instance; keep evidence |
 | `cli -- …` | Run a **catalog public** entry with isolated env (not an arbitrary shell) |
 | `list-features` | Enumerate id/card/mode/scope without launch |

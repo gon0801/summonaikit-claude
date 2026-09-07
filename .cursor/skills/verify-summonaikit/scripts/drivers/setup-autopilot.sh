@@ -118,7 +118,7 @@ print(" ".join("%s@%s"%(m,i) for m,i in zip(("1/5","2/5","3/5","4/5","5/5"),idx)
 print("ordered" if all(idx[i]>=0 and (i==0 or idx[i]>idx[i-1]) for i in range(5)) else "unordered")
 ' <<<"$transcript")"
     # assert:questions_order
-    if printf '%s' "$order" | grep -q 'ordered'; then
+    if printf '%s' "$order" | grep -qx 'ordered'; then
       fm_pass setup-interactive questions_order "1/5 < 2/5 < 3/5 < 4/5 < 5/5" "$order"
     else
       fm_fail setup-interactive questions_order "1/5 < 2/5 < 3/5 < 4/5 < 5/5" "$order"
@@ -312,7 +312,8 @@ if fm_only setup-pipe-not-pty; then
   desp_v="$(json_field "$cfg" merge_despliega)"
   fm_action setup-pipe-not-pty act-pipe "$rc" "$out" bash "$SETUP" --pipe
   if [ "$SAIKIT_FM_PIPE_IS_PTY" = 1 ]; then
-    fm_pass setup-pipe-not-pty pipe_not_pty "pty" "accredited-as-pty"
+    fm_fail setup-pipe-not-pty pipe_not_pty "pipe-not-pty" \
+      "mutation accepted pipe as PTY"
   elif [ "$merge_v" = "false" ] && [ "$desp_v" = "unknown" ]; then
     fm_pass setup-pipe-not-pty pipe_not_pty "pipe-not-pty" \
       "pipe-not-pty defaults-used merge=$merge_v despliega=$desp_v"

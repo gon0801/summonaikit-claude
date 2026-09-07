@@ -10,13 +10,25 @@ fm_only() {
   return 0
 }
 
+fm_resolve_case() {
+  if [ -n "${1:-}" ]; then
+    printf '%s' "$1"
+    return
+  fi
+  printf '%s' "${SAIKIT_FM_ONLY_CASE:-}"
+}
+
 fm_evidence() {
   local ev="${SAIKIT_FM_EVIDENCE:-$skill_root/scripts/lib/evidence.py}"
   PYTHONDONTWRITEBYTECODE=1 python3 "$ev" "$@"
 }
 
 fm_action() {
-  local case_id="$1" step="$2" tool_exit="$3" observation="$4"
+  local case_id step tool_exit observation
+  case_id="$(fm_resolve_case "$1")"
+  step="$2"
+  tool_exit="$3"
+  observation="$4"
   shift 4
   fm_evidence append-step --attempt-dir "$SAIKIT_FM_ATTEMPT_DIR" --type action \
     --case-id "$case_id" --step-id "$step" \
@@ -25,9 +37,19 @@ fm_action() {
 }
 
 fm_assert() {
-  local case_id="$1" asid="$2" result="$3" expected="$4" observed="$5"
+  local case_id asid result expected observed step
+  case_id="$(fm_resolve_case "$1")"
+  asid="$2"
+  result="$3"
+  expected="$4"
+  observed="$5"
+  if [ -n "$case_id" ]; then
+    step="s-${case_id}-${asid}"
+  else
+    step="s-${asid}"
+  fi
   fm_evidence append-step --attempt-dir "$SAIKIT_FM_ATTEMPT_DIR" --type assertion \
-    --case-id "$case_id" --step-id "s-$asid" --assertion-id "$asid" \
+    --case-id "$case_id" --step-id "$step" --assertion-id "$asid" \
     --expected "$expected" --observed "$observed" --result "$result" >/dev/null
 }
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -61,10 +62,9 @@ def skill_rel_allowed(
     """Files that may exist under the versioned skill tree.
 
     Prefijos abiertos (lib/**, features/*.json) no bastan: cada archivo debe
-    estar inventariado en helpers / features del catálogo.
+    estar inventariado en helpers / features del catálogo. artifacts/ y .run/
+    no se juzgan aquí: el walk ignora runtime no versionado.
     """
-    if rel.startswith("artifacts/") or rel.startswith(".run/"):
-        return False
     if Path(rel).name == ".DS_Store":
         return True
     if "__pycache__" in rel.split("/") or rel.endswith(".pyc"):
@@ -102,6 +102,41 @@ def skill_rel_allowed(
         # pending no finge descriptor versionado
         return meta.get("status", "active") in {"active", "blocked"}
     return False
+
+
+def is_runtime_rel(rel: str) -> bool:
+    return rel.startswith("artifacts/") or rel.startswith(".run/")
+
+
+def skill_to_repo_rel(repo: Path, skill: Path, rel: str) -> str | None:
+    try:
+        return (skill / rel).resolve().relative_to(repo.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def git_tracks(repo: Path, rel_from_repo: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", rel_from_repo],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def catalog_feature_refs(meta: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    feat = meta.get("feature")
+    if isinstance(feat, str) and feat:
+        refs.append(feat)
+    also = meta.get("also")
+    if isinstance(also, list):
+        refs.extend(x for x in also if isinstance(x, str) and x)
+    return refs
 
 
 def skill_dir_from_args(repo: Path, skill: Path | None) -> Path:
@@ -256,11 +291,20 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
 
     problems: list[str] = []
 
-    # skill checkout allowlist: only permitted sources (no artifacts/.run/pyc)
+    for path in list(classifications) + list(exclusions) + list(helpers):
+        posix = str(path).replace("\\", "/")
+        if posix.startswith("artifacts/") or posix.startswith(".run/"):
+            problems.append(f"inventario filtra runtime: {path}")
+
     for p in sorted(skill.rglob("*")):
         if not p.is_file() or p.name == ".DS_Store":
             continue
         rel = p.relative_to(skill).as_posix()
+        if is_runtime_rel(rel):
+            repo_rel = skill_to_repo_rel(repo, skill, rel)
+            if repo_rel and git_tracks(repo, repo_rel):
+                problems.append(f"runtime versionado: {rel}")
+            continue
         if not skill_rel_allowed(
             rel, features_meta=features_meta, helpers=helpers
         ):
@@ -290,8 +334,12 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         p = repo / path
         if not p.exists():
             problems.append(f"superficie clasificada ausente: {path}")
-        if isinstance(meta, dict) and meta.get("feature") is None and not meta.get("kind"):
-            problems.append(f"clasificación incompleta: {path}")
+        if isinstance(meta, dict):
+            for feat in catalog_feature_refs(meta):
+                if feat not in features_meta:
+                    problems.append(f"feature de catálogo inexistente: {feat} ({path})")
+            if meta.get("feature") is None and not meta.get("kind"):
+                problems.append(f"clasificación incompleta: {path}")
 
     feature_ids = list(features_meta.keys())
     if len(feature_ids) != len(set(feature_ids)):
@@ -365,6 +413,10 @@ def lint(repo: Path, skill: Path, mutate: str | None = None) -> int:
         if desc.get("card") != Path(card).name and desc.get("card") != card:
             if Path(desc.get("card", "")).name != Path(card).name:
                 problems.append(f"{fid}: descriptor.card no coincide con catálogo")
+
+        surfaces = desc.get("surfaces")
+        if not isinstance(surfaces, list) or not surfaces:
+            problems.append(f"{fid}: surfaces vacío")
 
         cases = desc.get("cases") or []
         case_ids = [c.get("id") for c in cases]

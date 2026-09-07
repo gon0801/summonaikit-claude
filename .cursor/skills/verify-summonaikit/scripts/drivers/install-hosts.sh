@@ -310,13 +310,17 @@ JSON
   cl_reg_rc=$?
   set -e
   fm_action hosts-registration act-reg-incompleto "$cl_reg_rc" "$cl_reg" bash "$REG" --settings
-  blob="$grok_reg"$'\n'"$cl_reg"
-  if printf '%s' "$blob" | grep -Eq 'REGISTRO|INCOMPLETO|completo|GROK|HOOK DE GROK|UserPromptSubmit'; then
-    fm_pass hosts-registration registro_por_texto "diagnostico REGISTRO/fases" \
-      "REGISTRO/INCOMPLETO/GROK observado"
+  cl_reg_one="$(printf '%s' "$cl_reg" | tr '\n' ' ' | cut -c1-200)"
+  # assert:registro_por_texto
+  if printf '%s' "$cl_reg" | grep -F -q 'REGISTRO DEL HOOK INCOMPLETO' \
+    && printf '%s' "$cl_reg" | grep -F -q 'el gate NO corre'; then
+    fm_pass hosts-registration registro_por_texto \
+      "INCOMPLETO — el gate NO corre" "$cl_reg_one"
   else
-    fm_fail hosts-registration registro_por_texto "diagnostico REGISTRO/fases" "$blob"
+    fm_fail hosts-registration registro_por_texto \
+      "INCOMPLETO — el gate NO corre" "$cl_reg_one"
   fi
+  # assert:registro_por_texto_end
   if [ "$grok_reg_rc" -eq 0 ] && [ "$cl_reg_rc" -eq 0 ]; then
     fm_pass hosts-registration registro_no_solo_exit \
       "texto/estructura; no.exit.0" \
@@ -325,25 +329,15 @@ JSON
     fm_fail hosts-registration registro_no_solo_exit \
       "advisory exit 0 + texto" "rc grok=$grok_reg_rc claude=$cl_reg_rc"
   fi
-  zc="$VERIFY_HOME/.zcode/cli/config.json"
-  fases_obs=''
-  if [ -f "$zc" ]; then
-    fases_obs="$(python3 - "$zc" <<'PY'
-import json, sys
-ev = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {}).get("events", {})
-print(" ".join(k for k in ("UserPromptSubmit", "PostToolUse", "Stop", "SessionStart") if k in ev))
-PY
-)"
-  fi
   # assert:fases_estructura
-  if printf '%s' "$fases_obs $cl_reg" | grep -q 'UserPromptSubmit' \
-    && printf '%s' "$fases_obs $cl_reg" | grep -Eq 'PostToolUse|INCOMPLETO'; then
+  if printf '%s' "$cl_reg" | grep -F -q 'INCOMPLETO' \
+    && printf '%s' "$cl_reg" | grep -q 'PostToolUse' \
+    && printf '%s' "$cl_reg" | grep -q 'SessionStart'; then
     fm_pass hosts-registration fases_estructura \
-      "UserPromptSubmit/PostToolUse/SessionStart/Stop" \
-      "fases=$fases_obs incompleto=$(printf '%s' "$cl_reg" | tr '\n' ' ' | cut -c1-160)"
+      "INCOMPLETO PostToolUse SessionStart" "$cl_reg_one"
   else
     fm_fail hosts-registration fases_estructura \
-      "UserPromptSubmit/PostToolUse/SessionStart/Stop" "fases=$fases_obs $cl_reg"
+      "INCOMPLETO PostToolUse SessionStart" "$cl_reg_one"
   fi
   # assert:fases_estructura_end
 fi

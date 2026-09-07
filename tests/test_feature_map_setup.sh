@@ -10,7 +10,7 @@
 # SAIKIT_FM_PTY):
 #   omit_q1_merge omit_q2_despliega omit_q3_salud omit_q4_sve omit_q5_telegram
 #   omit_questions_order omit_defaults_unknown omit_lock_guard
-#   omit_timeout_cleanup accept_pipe_as_pty skip_killpg
+#   omit_timeout_cleanup accept_pipe_as_pty skip_killpg accept_unordered
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -26,25 +26,14 @@ DRV="$SKILL/scripts/drivers/setup-autopilot.sh"
 STATE="$SANDBOX/verify-state"
 ART="$SANDBOX/verify-artifacts"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
-ctrl_pty() {
-  local pty="$1"; shift
-  SAIKIT_FM_PTY="$pty" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
 latest_summary() {
   local fid="$1"
@@ -103,33 +92,6 @@ if found.get("result") != want:
 PY
 }
 
-assert_missing_or_fail() {
-  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
-  local sum steps
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
@@ -138,16 +100,6 @@ copy_driver() {
   chmod +x "$1"
 }
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el archivo (patron obsoleto)"
-    return 1
-  fi
-  return 0
-}
 
 # ---------------------------------------------------------------------------
 # Inventario: helper clasificado, descriptor activo, no legacy
@@ -354,6 +306,8 @@ fi
 # Mutantes
 # ---------------------------------------------------------------------------
 copy_driver "$SANDBOX/setup.src.sh"
+fm_mut_check_flat_infra setup-autopilot "$DRV" drive setup-autopilot
+fm_mut_require_baseline setup-autopilot "$DRV" drive setup-autopilot
 
 mut_omit() {
   local label="$1" asid="$2" signal="$3" expr="$4"
@@ -398,6 +352,17 @@ then
   assert_missing_or_fail setup-autopilot pipe_not_pty 'pipe|not.pty|no.pty|defaults' "$rc"
 fi
 
+caso "mutante accept_unordered: 5/5 antes de 1/5 se pone rojo"
+reset_art
+mut="$SANDBOX/setup-accept-unordered.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's/print("ordered" if all(idx\[i\]>=0 and (i==0 or idx\[i\]>idx\[i-1\]) for i in range(5)) else "unordered")/print("unordered")/' \
+  "accept_unordered"
+then
+  out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail setup-autopilot questions_order '1/5' "$rc"
+fi
+
 caso "mutante skip_killpg: timeout sin kill/reap se pone rojo"
 reset_art
 if [ -f "$PTY" ]; then
@@ -411,6 +376,68 @@ if [ -f "$PTY" ]; then
       || malo "skip_killpg: mutante no parsea"
     out="$(ctrl_pty "$mutp" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
     assert_missing_or_fail setup-autopilot timeout_reaped 'reap|killed|timeout' "$rc"
+    hold="$SANDBOX/f13-hold.py"
+    mark="$SANDBOX/f13-gpid"
+    cat > "$hold" <<'PY'
+import os, signal, sys, time
+mark = sys.argv[1]
+g = os.fork()
+if g == 0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    open(mark, "w").write(str(os.getpid()))
+    time.sleep(30)
+    os._exit(0)
+time.sleep(30)
+PY
+    run_f13() {
+      local driver="$1" report="$2"
+      rm -f "$mark"
+      PYTHONDONTWRITEBYTECODE=1 python3 "$driver" \
+        --timeout 1.2 --cwd "$SANDBOX" --out "$report" \
+        -- python3 "$hold" "$mark" >/dev/null 2>&1 || true
+    }
+    run_f13 "$PTY" "$SANDBOX/f13-ok.json"
+    gpid="$(cat "$mark" 2>/dev/null || true)"
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null; then
+      malo "F13: pty sano dejo el nieto $gpid vivo"
+      kill -9 "$gpid" 2>/dev/null || true
+    fi
+    run_f13 "$mutp" "$SANDBOX/f13-mut.json"
+    gpid="$(cat "$mark" 2>/dev/null || true)"
+    if [ -z "$gpid" ]; then
+      malo "F13: skip_killpg no dejo marca de nieto"
+    elif ! kill -0 "$gpid" 2>/dev/null; then
+      malo "F13: skip_killpg no discrimina (nieto $gpid ya muerto)"
+    else
+      kill -9 "$gpid" 2>/dev/null || true
+    fi
+
+    caso "F13b: EOF del PTY no deja vivo al hijo"
+    eof_child="$SANDBOX/f13-eof.py"
+    eof_mark="$SANDBOX/f13-eof-pid"
+    cat > "$eof_child" <<'PY'
+import os, signal, sys, time
+child = os.fork()
+if child == 0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    open(sys.argv[1], "w", encoding="utf-8").write(str(os.getpid()))
+for fd in (0, 1, 2):
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+time.sleep(30)
+PY
+    PYTHONDONTWRITEBYTECODE=1 python3 "$PTY" \
+      --timeout 5 --cwd "$SANDBOX" --out "$SANDBOX/f13-eof.json" \
+      -- python3 "$eof_child" "$eof_mark" >/dev/null 2>&1 || true
+    eof_pid="$(cat "$eof_mark" 2>/dev/null || true)"
+    if [ -z "$eof_pid" ]; then
+      malo "F13b: hijo no dejo pid"
+    elif kill -0 "$eof_pid" 2>/dev/null; then
+      malo "F13b: EOF temprano dejo el hijo $eof_pid vivo"
+      kill -9 "$eof_pid" 2>/dev/null || true
+    fi
   fi
 fi
 
