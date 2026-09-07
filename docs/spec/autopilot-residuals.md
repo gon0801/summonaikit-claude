@@ -85,3 +85,12 @@ superficie ya catalogada, su ficha/casos se actualizan en el mismo PR; cuando
 su driver esté en desarrollo, ambos responsables integran serialmente.
 No se edita el contrato19.16: su prueba viva sigue Optional en esa fase;
 20.10/20.14 son las nuevas tareas de medición con su propio alcance.
+
+El umbral histórico de más de cinco funciones para activar mantenimiento ya se
+cumple con el catálogo de Phase19. Phase20 define el runbook en20.23 y ejecuta
+una primera pasada en20.25 sobre su HEAD final. Esa pasada reutiliza el
+dispatcher y el contrato de evidencia existentes, conduce cada feature en su
+modo declarado y produce `clean`, `changed` o `blocked` sin crear un cuarto
+resultado de feature ni ampliar la autorización de20.8. Sus hallazgos se
+separan entre deriva documental, gap del harness y regresión de producto; solo
+los dos primeros pueden corregirse dentro del alcance del verificador.

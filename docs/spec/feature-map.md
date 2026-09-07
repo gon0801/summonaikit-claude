@@ -197,3 +197,30 @@ revisión y PR con `gate` verde. La batería completa corre una vez en CI por
 tarea; nuevas dependencias deben estar instaladas allí y los unknown obligatorios
 no se aceptan como cobertura. Las limitaciones Windows se declaran por caso.
 El mapa no vuelve obligatorio el Optional 16.7 ni importa pstack.
+
+El catálogo se mantiene con dos ritmos. Cada PR que cambie una superficie
+catalogada actualiza su descriptor, ficha y casos y pasa el lint barato. Una
+pasada completa se ejecuta al cierre de una fase o release que cambie esas
+superficies, al agregar una feature, cuando el sello supere 30 días o bajo
+petición explícita. La pasada no añade otro dispatcher: usa `list-features`,
+`launch`, `doctor <id>`, `drive <id>` y `cleanup`.
+
+La pasada cruza cada entrada del catálogo con al menos un punto de entrada
+concreto de la fuente y conduce cada feature una vez en su `execution_mode`
+declarado. `sandbox` y `simulated` no se renombran como live. Una evidencia
+anterior solo se reutiliza si acredita el mismo checkout/hook SHA y el mismo
+conjunto de casos obligatorios; un recorrido live conserva el destino,
+operaciones, presupuesto y autorización de su propia medición. No hereda
+credenciales ni amplía permisos por pertenecer al mantenimiento.
+
+Cada feature conserva los únicos resultados `PASS`, `FAIL` y `unknown` de este
+contrato. La pasada agrega un resultado distinto, exactamente `clean`,
+`changed` o `blocked`: `clean` significa catálogo reconciliado y cobertura
+requerida observada sin deriva; `changed`, que una corrección acotada de la
+skill, fichas o harness se probó y lo afectado volvió a conducirse; `blocked`,
+que una precondición o corrección segura quedó pendiente y se nombra. Un
+`blocked` global no acredita las features `unknown`, y un FAIL observado domina.
+Una regresión del producto se reporta como gap del producto; no se corrige la
+documentación para hacerla coincidir con el defecto. La evidencia redactada
+sobrevive al cleanup y la pasada demuestra que no dejó procesos ni temporales
+propios.
