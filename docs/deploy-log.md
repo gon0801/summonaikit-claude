@@ -22,6 +22,31 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 - **Cierre:** Phase 19 feature-map integrado; vivo inventariado y no
   observado; sello `verify/` no renovado. Operador Gon (sesión Cursor).
 
+### Hueco de registro — PRs de implementación fase 19
+
+Los PRs siguientes están mergeados en master con CI verde. Este log no tiene
+una entrada de deploy para ellos. La ausencia no prueba que el deploy no se
+ejecutó. No se inventan fechas ni resultados.
+
+| PR | Fila | Merge | Nota |
+|---|---|---|---|
+| #220 | 19.4 | `a5d7b6f` | sin entrada de deploy en este log |
+| #221 | 19.5 | `a27a1f6` | sin entrada de deploy en este log |
+| #223 | 19.6 | `c1831b2` | sin entrada de deploy en este log |
+| #226 | 19.7 | `e66ede8` | sin entrada de deploy en este log |
+| #228 | 19.8 | `b840e62` | sin entrada de deploy en este log |
+| #234 | 19.9 | `8d3d39f` | sin entrada de deploy en este log |
+| #230 | 19.10 | `d449571` | sin entrada de deploy en este log |
+| #236 | 19.11 | `c2fa107` | sin entrada de deploy en este log |
+| #244 | 19.12 | `aefeb42` | sin entrada de deploy en este log |
+| #245 | 19.13 | `caac14a` | sin entrada de deploy en este log |
+| #239 | 19.14 | `cca1c0c` | sin entrada de deploy en este log |
+| #248 | 19.15 | `58bdb98` | sin entrada de deploy en este log |
+| #251 | 19.16 | `cbdd276` | sin entrada de deploy en este log |
+
+Entradas ya presentes para 19.1 (`#213`), 19.2 (`#215`), 19.3 (`#217`) y
+19.17 (`#253`).
+
 ## 2026-09-06 — PR #217 (19.3: evidencia v1 y dispatch) — hooks NO-OP
 
 - **Merge:** `eddb11cb4ff1255ba5a22081632cb50b15f8d034`, head
