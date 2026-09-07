@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-07T07:53:27Z|verify|postmerge neutraliza NO_COLOR/CLICOLOR/CLICOLOR_FORCE antes de la primera captura de gh, igual que merge|con CLICOLOR_FORCE=1 (gh 2.98.0) gh emite ANSI a un pipe y todo estado de CI degradaba a UNKNOWN no-JSON|driver suelto exit 0: casos VERDE/ROJO/PENDIENTE/JSON-invalido/tty con entorno contaminado conservan semantica; quitando la neutralizacion el driver da exit 1|ok
