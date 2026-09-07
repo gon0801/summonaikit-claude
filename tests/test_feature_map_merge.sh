@@ -33,18 +33,13 @@ CARD="$SKILL/features/saikit-merge.md"
 DRV="$SKILL/scripts/drivers/saikit-merge.sh"
 CATALOG="$SKILL/features/catalog.json"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 ctrl() {
   SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    bash "$CTRL" "$@"
-}
 
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
@@ -84,50 +79,12 @@ if not re.search(pat, obs):
 PY
 }
 
-assert_missing_or_fail() {
-  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
-  local sum steps
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
 copy_driver() {
   cp "$DRV" "$1"
   chmod +x "$1"
 }
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el driver (patron obsoleto)"
-    return 1
-  fi
-  bash -n "$dest" || { malo "$label: mutante no parsea"; return 1; }
-  return 0
-}
 
 # ---------------------------------------------------------------------------
 # Inventario activo + descriptor/ficha/driver
@@ -268,6 +225,8 @@ fi
 # ---------------------------------------------------------------------------
 [ -f "$DRV" ] || { echo "FAIL: $fail aserciones (sin driver no hay mutantes)" >&2; exit 1; }
 copy_driver "$SANDBOX/merge.src.sh"
+fm_mut_check_flat_infra saikit-merge "$DRV" drive saikit-merge
+fm_mut_require_baseline saikit-merge "$DRV" drive saikit-merge
 
 run_mut() {
   local label="$1" expr="$2" asid="$3" signal="$4"

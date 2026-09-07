@@ -29,6 +29,7 @@ DRV_SECRETS="$SKILL/scripts/drivers/check-secrets.sh"
 DRV_CAPTURE="$SKILL/scripts/drivers/capture-payloads.sh"
 WF="$repo/.github/workflows/quality.yml"
 mkdir -p "$STATE" "$ART"
+. "$here/lib/feature_map_mut.sh"
 
 # Secreto sintético armado en runtime: nada contiguo en el blob del test.
 # Misma familia ghp_ que check-secrets/gitleaks ya conocen.
@@ -42,13 +43,6 @@ ctrl() {
     bash "$CTRL" "$@"
 }
 
-ctrl_drv() {
-  local drv="$1"; shift
-  SAIKIT_FM_DRIVER="$drv" \
-    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
-    SAIKIT_FM_SYNTH_SECRET="$SYNTH" \
-    bash "$CTRL" "$@"
-}
 
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
@@ -131,45 +125,7 @@ if found.get("result") != want:
 PY
 }
 
-assert_missing_or_fail() {
-  local fid="$1" asid="$2" signal="$3" rc_drive="$4"
-  local sum steps
-  sum="$(latest_summary "$fid")"
-  steps="$(latest_steps "$fid")"
-  python3 - "$sum" "$steps" "$asid" "$signal" "$rc_drive" <<'PY' || malo "$fid: mutante de $asid sobrevivio"
-import json, re, sys
-sum_p, steps_p, asid, signal, rc = sys.argv[1:6]
-summary = json.loads(open(sum_p, encoding="utf-8").read()) if sum_p else {}
-found = None
-if steps_p:
-    for line in open(steps_p, encoding="utf-8"):
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("type") == "assertion" and rec.get("assertion_id") == asid:
-            found = rec
-result = summary.get("result")
-if found is None:
-    if result == "PASS" or rc == "0":
-        raise SystemExit(f"omitio {asid} pero drive/result siguio verde")
-    raise SystemExit(0)
-obs = str(found.get("observed") or "")
-if found.get("result") == "PASS" and re.search(signal, obs) and result == "PASS":
-    raise SystemExit(f"mutante de {asid} sobrevive: result=PASS obs={obs!r}")
-PY
-}
 
-sed_must_change() {
-  local src="$1" dest="$2" expr="$3" label="$4"
-  sed "$expr" "$src" > "$dest"
-  chmod +x "$dest"
-  if cmp -s "$src" "$dest"; then
-    malo "$label: sed no cambio el archivo (patron obsoleto)"
-    return 1
-  fi
-  bash -n "$dest" || { malo "$label: mutante no parsea"; return 1; }
-  return 0
-}
 
 scan_art_for_synth() {
   python3 - "$ART" "$SYNTH" <<'PY'
@@ -411,6 +367,10 @@ if [ -f "$DRV_CAPTURE" ]; then
   cp "$DRV_CAPTURE" "$SANDBOX/capture.src.sh"
   chmod +x "$SANDBOX/capture.src.sh"
 fi
+fm_mut_check_flat_infra check-secrets "$DRV_SECRETS" drive check-secrets
+fm_mut_require_baseline check-secrets "$DRV_SECRETS" drive check-secrets
+fm_mut_check_flat_infra capture-payloads "$DRV_CAPTURE" drive capture-payloads
+fm_mut_require_baseline capture-payloads "$DRV_CAPTURE" drive capture-payloads
 
 mut_omit_secrets() {
   local label="$1" asid="$2" signal="$3" expr="$4"
