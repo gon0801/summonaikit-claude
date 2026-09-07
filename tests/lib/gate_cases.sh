@@ -2989,7 +2989,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -4154,6 +4154,41 @@ caso_g4_grok_delegado_bg_primer_token() {
     _igual "exit del Stop delegado con valor valido ($_v) en vuelo" "$LAB_RC" "0"
     _vacio "stdout del allow grok con valor valido ($_v)" "$LAB_OUT"
   done
+}
+
+# r1 (cross-review 20.x) — la escotilla grok exige que el documento COMPLETO
+# sea JSON valido: un backgroundTasks poblado dentro de un payload roto no es
+# evidencia de trabajo en vuelo. Cuatro formas que el lector de "balance +
+# primer token" dejaba pasar (las cuatro medidas en rojo contra el lector
+# viejo): literal incompleto DENTRO del array ([nul] — ojo el contraste con
+# [null], que SI es valido y sigue permitiendo), coma colgante ([1,]), valor
+# invalido en OTRA clave del documento ("bad":oops) y basura tras el cierre
+# del root. Las cuatro caen al gate normal (fail-closed).
+caso_g4_grok_delegado_bg_doc_roto_bloquea() {
+  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops'; do
+    lab_limpiar_estado
+    LAB_GROK_HOOK_EVENT=user_prompt_submit
+    lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con payload roto')"
+    LAB_GROK_HOOK_EVENT=post_tool_use
+    lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+    LAB_GROK_HOOK_EVENT=stop
+    lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-doc",%s,"sessionCrons":[]}' "$_v")"
+    LAB_GROK_HOOK_EVENT=""
+    _contiene "Stop grok con documento roto ($_v) bloquea (r1)" "$LAB_OUT" '"decision":"block"'
+  done
+
+  # Trailing garbage: el documento COMPLETO cierra y DESPUES del cierre del
+  # root hay contenido — invalido a nivel documento, cae al gate normal. Va
+  # con payload propio porque la basura tiene que ir DETRAS del "}" final.
+  lab_limpiar_estado
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega y cola basura tras el root')"
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  lab_run auto grok "$(lab_payload_grok_spawn implementer)"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tg","backgroundTasks":[1],"sessionCrons":[]} "trailing"'
+  LAB_GROK_HOOK_EVENT=""
+  _contiene "Stop grok con basura tras el cierre del root bloquea (r1)" "$LAB_OUT" '"decision":"block"'
 }
 
 # 18.27 (D-B), contracara: con el subagente genuinamente en vuelo

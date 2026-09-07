@@ -636,27 +636,34 @@ json_top_level_string() {
 # (contenido en la linea siguiente a "[") y contaba como trabajo en vuelo un
 # eco de la clave citado en prosa o una clave anidada en otro objeto.
 #
-# Decide "1" SOLO si TODO esto cierra: clave == want a depth 1 (PRIMERA
-# ocurrencia, misma regla que json_top_level_string), valor que ARRANCA en
-# "[", "]" pareado con contenido no-blanco adentro cuyo PRIMER token es un
-# iniciador de valor JSON (" { [ - digito t/f/n — la basura balanceada no
-# cuenta: un backslash-n LITERAL, una letra que no abre valor o un + fuera
-# de string invalidan), y documento estructuralmente sano: brackets
-# balanceados y tipados, strings cerrados, sin escapes colgados. Fuera del
-# root SOLO invalidan los corchetes (un segundo root o un closer sin
-# apertura) y los caracteres sueltos; la puntuacion colgante (",", ":") y
-# los strings fuera del root NO invalidan — quedan en la clase del
-# residual de abajo. Todo lo demas — ausente, null, string/numero/objeto,
-# array vacio ([] / [ ] / multilinea real), JSON truncado o roto — calla
-# (fail-closed: sin evidencia de trabajo en vuelo).
+# r1 (cross-review 20.x): la validacion paso de "balance + primer token" a
+# GRAMATICA COMPLETA del documento. Un backgroundTasks poblado solo habilita
+# la escotilla si TODO el documento es JSON valido: la maquina de estados del
+# awk (V=espera valor, K/K1=clave, KC=dospuntos, A=tras valor, S/SK=string,
+# L=literal, N*=subestados de numero) valida strings cerrados con escapes
+# sanos, numeros completos (signo, enteros sin cero a la izquierda, fraccion,
+# exponente), literales true/false/null COMPLETOS, separadores correctos (coma
+# colgante invalida, valor sin clave, clave sin comillas) y NADA tras el
+# cierre del root. Cierra los residuales que la vuelta anterior declaraba:
+# [nul], [1,], valores rotos en OTRAS claves del documento y basura tras el
+# root (los cuatro medidos en rojo contra el lector viejo) ya no cuentan como
+# trabajo en vuelo — caen al gate normal (fail-closed).
+#
+# Decide "1" SOLO si TODO esto cierra: documento gramaticalmente valido (ver
+# arriba), clave == want a depth 1 (PRIMERA ocurrencia, misma regla que
+# json_top_level_string), valor que es un array "[...]" pareado con al menos
+# un elemento adentro. Todo lo demas — ausente, null, string/numero/objeto,
+# array vacio ([] / [ ] / multilinea real), JSON truncado o roto EN CUALQUIER
+# parte — calla (fail-closed: sin evidencia de trabajo en vuelo).
 # Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
 # (json_top_level_string, json_escape, task_hash).
 #
-# Residual declarado: la validacion es de BALANCE mas el PRIMER token del
-# array, no de gramatica completa — basura DESPUES de un inicio valido
-# dentro del array (p.ej. [nul] o [1,]), la puntuacion colgante o los
-# strings fuera del root, y un payload roto EN OTRA parte cuya porcion del
-# array esta bien formada y poblada siguen contando como en vuelo.
+# Residual declarado: los STRINGS se validan por cierre y escape sano, no por
+# gramatica de escapes estricta — cualquier caracter tras "\" vale (JSON solo
+# admite "\/bfnrt" y "u" con 4 hex), "\uXXXX" no exige sus 4 hexadecimales y
+# los caracteres de control crudos dentro de un string no invalidan. Ninguna
+# de esas formas aparece en los dumps grok medidos; si apareciera, quedaria en
+# la misma clase fail-closed que un documento roto.
 #
 # PERFORMANCE (hallazgo MEDIA del adversario, PR 20.4, adjudicado): el
 # escaneo es cuadratico SOLO en el awk BSD de darwin (en el CI ubuntu es
@@ -678,77 +685,147 @@ json_top_level_array_poblado() {
     *) return 0 ;;
   esac
   printf '%s' "$INPUT" | awk -v want="$field" '
+    function inval() { if (en_array && length(pila) >= base) gram_arr = 0; gram_doc = 0 }
+    function cerrar(cc,  abre) {
+      abre = substr(pila, length(pila), 1)
+      if (pila == "" || (cc == "]" && abre != "[") || (cc == "}" && abre != "{")) { inval(); return }
+      if (en_array) {
+        if (length(pila) > base) contenido = 1
+        if (cc == "]" && length(pila) == base) { en_array = 0; cerro = 1 }
+      }
+      pila = substr(pila, 1, length(pila) - 1)
+      st = "A"
+    }
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
-      ins = 0; esc = 0; ini = 0
-      pila = ""; raiz = 0
-      candidata = 0; vista = 0; espera_valor = 0
-      en_array = 0; base = 0; contenido = 0; cerro = 0; ini_elem = 0
-      valido = 1
+      ins = 0; esc = 0
+      pila = ""; st = "V"
+      key_buf = ""; candidata = 0; pend = 0; vista = 0
+      en_array = 0; base = 0; contenido = 0; cerro = 0
+      gram_arr = 1; gram_doc = 1
+      lit = ""
       for (i = 1; i <= n; i++) {
         c = substr(buf, i, 1)
-        if (ins) {
-          if (esc)            { esc = 0 }
-          else if (c == "\\") { esc = 1 }
-          else if (c == "\"") {
-            ins = 0
-            candidata = (length(pila) == 1 && substr(buf, ini, i - ini) == want)
+        rep = 1
+        while (rep) {
+          rep = 0
+          if (ins) {
+            if (esc)              { esc = 0 }
+            else if (c == "\\")   { esc = 1 }
+            else if (c == "\"") {
+              ins = 0
+              if (st == "SK") { st = "KC"; candidata = (length(pila) == 1 && key_buf == want) }
+              else            { st = "A" }
+            }
+            else if (st == "SK") { key_buf = key_buf c }
+            continue
           }
-          continue
-        }
-        if (c == "\"") {
-          if (en_array)     { contenido = 1; ini_elem = 0 }
-          if (espera_valor) { espera_valor = 0 }
-          ins = 1; ini = i + 1
-          continue
-        }
-        if (c == "{" || c == "[") {
-          if (en_array) { contenido = 1; ini_elem = 0 }
-          if (length(pila) == 0 && raiz) { valido = 0 }
-          if (espera_valor) {
-            espera_valor = 0
-            if (c == "[") { en_array = 1; base = length(pila) + 1; contenido = 0; ini_elem = 1 }
+          if (c == " " || c == "\t" || c == "\r" || c == "\n") {
+            if (st == "NS" || st == "N0" || st == "NI" || st == "ND" || st == "NF" || st == "NE" || st == "NX" || st == "NG") st = "A"
+            else if (st == "L") inval()
+            continue
           }
-          pila = pila c; raiz = 1
-          continue
-        }
-        if (c == "}" || c == "]") {
-          abre = substr(pila, length(pila), 1)
-          if (pila == "" || (c == "}" && abre != "{") || (c == "]" && abre != "[")) {
-            valido = 0; continue
+          if (c == "\"" && (st == "V" || st == "A1" || st == "K" || st == "K1")) {
+            if (en_array && length(pila) >= base) contenido = 1
+            if (pend) pend = 0
+            ins = 1
+            key_buf = ""
+            st = (st == "K" || st == "K1") ? "SK" : "S"
+            continue
           }
-          pila = substr(pila, 1, length(pila) - 1)
-          if (en_array) {
-            if (c == "]" && length(pila) == base - 1) { en_array = 0; cerro = 1 }
-            else                                      { contenido = 1 }
+          if (st == "A1") {
+            if (c == "]") { cerrar(c); continue }
+            st = "V"
           }
-          continue
-        }
-        if (c == ":") {
-          if (espera_valor) { espera_valor = 0 }
-          else if (candidata && length(pila) == 1 && !vista) { espera_valor = 1; vista = 1 }
-          candidata = 0
-          continue
-        }
-        if (c == ",") {
-          if (en_array && ini_elem) { valido = 0 }
-          espera_valor = 0; candidata = 0
-          continue
-        }
-        if (c == " " || c == "\t" || c == "\r" || c == "\n") { continue }
-        if (length(pila) == 0) { valido = 0 }
-        if (en_array) {
-          if (ini_elem) {
-            if (c == "-" || (c >= "0" && c <= "9") || c == "t" || c == "f" || c == "n") { ini_elem = 0; contenido = 1 }
-            else { valido = 0 }
+          if (st == "V") {
+            if (c == "{") { pila = pila c; st = "K1" }
+            else if (c == "[") {
+              pila = pila c; st = "A1"
+              if (pend) { en_array = 1; base = length(pila); contenido = 0; cerro = 0; pend = 0 }
+            }
+            else if (c == "-") { st = "NS"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c == "0") { st = "N0"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c >= "1" && c <= "9") { st = "NI"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c == "t" || c == "f" || c == "n") { st = "L"; lit = c; if (en_array && length(pila) >= base) contenido = 1 }
+            else inval()
+            continue
           }
-          else { contenido = 1 }
+          if (st == "K1") {
+            if (c == "}") cerrar(c)
+            else inval()
+            continue
+          }
+          if (st == "K") { inval(); continue }
+          if (st == "KC") {
+            if (c == ":") {
+              if (candidata && !vista) { vista = 1; pend = 1 }
+              candidata = 0; st = "V"
+            } else inval()
+            continue
+          }
+          if (st == "A") {
+            if (c == ",") {
+              if (pila == "") { gram_doc = 0 }
+              else if (substr(pila, length(pila), 1) == "[") st = "V"
+              else st = "K"
+            }
+            else if (c == "]" || c == "}") cerrar(c)
+            else gram_doc = 0   # r1-trailing: basura tras el cierre del root o separador invalido tras valor
+            continue
+          }
+          if (st == "L") {
+            if (c < "a" || c > "z") { inval(); continue }
+            lit = lit c
+            if (lit == "true" || lit == "false" || lit == "null") st = "A"
+            else if (substr("true", 1, length(lit)) != lit && substr("false", 1, length(lit)) != lit && substr("null", 1, length(lit)) != lit) inval()
+            continue
+          }
+          if (st == "NS") {
+            if (c == "0") st = "N0"
+            else if (c >= "1" && c <= "9") st = "NI"
+            else inval()
+            continue
+          }
+          if (st == "N0" || st == "NI") {
+            if (c >= "0" && c <= "9") { if (st == "N0") inval() }
+            else if (c == ".") st = "ND"
+            else if (c == "e" || c == "E") st = "NE"
+            else { st = "A"; rep = 1 }
+            continue
+          }
+          if (st == "ND") {
+            if (c >= "0" && c <= "9") st = "NF"
+            else inval()
+            continue
+          }
+          if (st == "NF") {
+            if (c >= "0" && c <= "9") ;
+            else if (c == "e" || c == "E") st = "NE"
+            else if (c == ".") inval()
+            else { st = "A"; rep = 1 }
+            continue
+          }
+          if (st == "NE") {
+            if (c >= "0" && c <= "9") st = "NG"
+            else if (c == "+" || c == "-") st = "NX"
+            else inval()
+            continue
+          }
+          if (st == "NX") {
+            if (c >= "0" && c <= "9") st = "NG"
+            else inval()
+            continue
+          }
+          if (st == "NG") {
+            if (c >= "0" && c <= "9") ;
+            else if (c == ".") inval()
+            else { st = "A"; rep = 1 }
+            continue
+          }
         }
-        if (espera_valor) { espera_valor = 0 }
-        candidata = 0
       }
-      if (valido && pila == "" && !ins && !esc && cerro && contenido) { print "1" }
+      if (gram_arr && gram_doc && pila == "" && !ins && !esc && st == "A" && cerro && contenido) { print "1" }
     }'
 }
 
@@ -3545,8 +3622,11 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # vuelo. Fail-closed AMPLIADO (r1): JSON estructuralmente roto (truncado,
   # brackets sin parear, string sin cerrar) tampoco habilita, y la basura
   # BALANCEADA dentro del array (token que no abre un valor JSON) ya no
-  # cuenta como poblacion; los residuales que quedan quedan declarados alla
-  # (balance + primer token, no gramatica completa).
+  # cuenta como poblacion. r1 (cross-review 20.x): la exigencia subio a
+  # GRAMATICA COMPLETA del documento — basura tras el cierre del root, coma
+  # colgante y valores rotos en OTRAS claves tampoco habilitan; los
+  # residuales que quedan (escapes/chars de control dentro de strings) quedan
+  # declarados alla.
   grok_bg_en_vuelo=0
   if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
