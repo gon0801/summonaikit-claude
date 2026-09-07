@@ -477,6 +477,20 @@ cmd_cleanup() {
   if [ -f "$STATE_DIR/env" ]; then
     iso_fail "legacy .run/env — re-lanzar: borrar solo el archivo env (nunca su HOME) y correr launch"
   fi
+  member_err="$(mktemp "${TMPDIR:-/tmp}/saikit-state-member-XXXXXX")"
+  if ! python3 "$STATEPY" member \
+    --path "$STATE_DIR" \
+    --label STATE \
+    --mutate "$(runtime_mutate)" 2>"$member_err"; then
+    reason="$(cat "$member_err" 2>/dev/null || true)"
+    rm -f "$member_err"
+    printf 'cleanup: STATE_DIR symlink o no asignado — no se borra\n'
+    if [ -n "$reason" ]; then
+      printf 'cleanup: motivo: %s\n' "$reason"
+    fi
+    exit 0
+  fi
+  rm -f "$member_err"
   if [ ! -f "$STATE_DIR/state.json" ]; then
     printf 'cleanup: nothing to do (no active instance)\n'
     runtime_clear_state_files

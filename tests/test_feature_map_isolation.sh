@@ -585,6 +585,77 @@ fi
   || malo "sentinel codex mutado"
 
 # ---------------------------------------------------------------------------
+# F1-F4: pertenencia al run (dest, tmpdir, CLI flags, STATE)
+# ---------------------------------------------------------------------------
+caso "F1: drive dry-run no borra SAIKIT_FM_DRY_DEST ajeno"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "f1-launch: $out"
+else
+  f1_sent="$SANDBOX/f1-external-dry.sh"
+  printf 'F1-KEEP-%s\n' "$$" > "$f1_sent"
+  f1_sha="$(sha_of "$f1_sent")"
+  drv="$(
+    env SAIKIT_FM_DRY_DEST="$f1_sent" \
+      SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+      bash "$CTRL" drive-install-dry-run 2>&1
+  )" && drv_rc=0 || drv_rc=$?
+  [ -f "$f1_sent" ] || malo "F1: borro el sentinela ajeno: $drv"
+  [ "$(sha_of "$f1_sent")" = "$f1_sha" ] || malo "F1: muto el sentinela ajeno"
+  [ "$drv_rc" -eq 3 ] && malo "F1: unknown (3) — aislamiento observado es FAIL: $drv"
+fi
+
+caso "F2: cli --dest absoluto externo se rechaza"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "f2-launch: $out"
+else
+  f2_hook="$SANDBOX/f2-cli-hook.sh"
+  expect_fail "f2-cli-dest" 'escape|fuera del run|dest|perten|member' \
+    env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/install-hook.sh --dest "$f2_hook"
+  [ ! -e "$f2_hook" ] || malo "F2: instalo hook fuera del run"
+fi
+
+caso "F3: tmpdir externo inexistente se rechaza y no se crea"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "f3-launch: $out"
+else
+  f3_tmp="$SANDBOX/f3-missing-tmp"
+  python3 - "$STATE/state.json" "$f3_tmp" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["tmpdir"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  expect_fail "f3-tmpdir" 'escape|fuera del run|tmpdir|perten|member' \
+    env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help
+  [ ! -e "$f3_tmp" ] || malo "F3: creo tmpdir externo"
+fi
+
+caso "F4: cleanup no borra a traves de STATE symlink"
+reset_state
+f4_out="$SANDBOX/f4-outside-state"
+mkdir -p "$f4_out"
+printf 'not-json\n' > "$f4_out/state.json"
+ln -sfn "$f4_out" "$SANDBOX/f4-state-link"
+out="$(
+  env SAIKIT_VERIFY_STATE="$SANDBOX/f4-state-link" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cleanup 2>&1
+)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "F4: debio salir 0: $out"
+[ "$rc" -eq 3 ] && malo "F4: unknown (3) — aislamiento observado es FAIL"
+printf '%s' "$out" | grep -Eq 'symlink|asignad|no se borra|escape|STATE' \
+  || malo "F4: sin motivo visible: $out"
+[ -f "$f4_out/state.json" ] || malo "F4: borro state.json externo"
+printf '%s' "$(cat "$f4_out/state.json")" | grep -q 'not-json' \
+  || malo "F4: muto state.json externo"
+
+# ---------------------------------------------------------------------------
 # Mutaciones: cada guardia, un caso que se pone verde en falso
 # ---------------------------------------------------------------------------
 caso "mutacion skip_physical_path: symlink STATE deja de atrapar"
@@ -606,6 +677,67 @@ if SAIKIT_VERIFY_MUTATE=skip_physical_path \
 else
   malo "mutacion skip_physical_path debio pasar en falso (protege ruta fisica)"
 fi
+
+caso "mutacion skip_physical_path: F1 borra dest ajeno"
+reset_state
+if ! ctrl launch >/dev/null 2>&1; then
+  malo "mut-f1-launch fallo"
+else
+  f1m="$SANDBOX/f1-mut-dry.sh"
+  printf 'F1-MUT-KEEP\n' > "$f1m"
+  SAIKIT_VERIFY_MUTATE=skip_physical_path \
+    SAIKIT_FM_DRY_DEST="$f1m" \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" drive-install-dry-run >/dev/null 2>&1 || true
+  [ ! -e "$f1m" ] || malo "mutacion skip_physical_path F1 debio borrar el dest ajeno"
+fi
+
+caso "mutacion skip_physical_path: F2 instala --dest externo"
+reset_state
+if ! ctrl launch >/dev/null 2>&1; then
+  malo "mut-f2-launch fallo"
+else
+  f2m="$SANDBOX/f2-mut-hook.sh"
+  if SAIKIT_VERIFY_MUTATE=skip_physical_path \
+     SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+     bash "$CTRL" cli -- tools/install-hook.sh --dest "$f2m" --dry-run \
+     >/dev/null 2>&1; then
+    :
+  else
+    malo "mutacion skip_physical_path F2 debio aceptar --dest externo"
+  fi
+fi
+
+caso "mutacion skip_physical_path: F3 crea tmpdir externo"
+reset_state
+if ! ctrl launch >/dev/null 2>&1; then
+  malo "mut-f3-launch fallo"
+else
+  f3m="$SANDBOX/f3-mut-tmp"
+  python3 - "$STATE/state.json" "$f3m" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["tmpdir"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  SAIKIT_VERIFY_MUTATE=skip_physical_path \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help >/dev/null 2>&1 || true
+  [ -d "$f3m" ] || malo "mutacion skip_physical_path F3 debio crear tmpdir externo"
+fi
+
+caso "mutacion skip_physical_path: F4 borra state.json via symlink"
+reset_state
+f4m="$SANDBOX/f4-mut-outside"
+mkdir -p "$f4m"
+printf 'not-json\n' > "$f4m/state.json"
+ln -sfn "$f4m" "$SANDBOX/f4-mut-link"
+SAIKIT_VERIFY_MUTATE=skip_physical_path \
+  SAIKIT_VERIFY_STATE="$SANDBOX/f4-mut-link" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+  bash "$CTRL" cleanup >/dev/null 2>&1 || true
+[ ! -f "$f4m/state.json" ] || malo "mutacion skip_physical_path F4 debio borrar state.json externo"
 
 caso "mutacion skip_env_sanitize: override grok deja de atraparse"
 reset_state

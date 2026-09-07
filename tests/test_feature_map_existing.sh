@@ -466,13 +466,16 @@ if sed_must_change "$SANDBOX/install.src.sh" "$mut" \
   's/SAIKIT_FM_DRY_RUN=1/SAIKIT_FM_DRY_RUN=0/' \
   "write_on_dry_run"
 then
-  dest_probe="$SANDBOX/dry-dest-probe"
+  vtmp="$(python3 - "$STATE/state.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["tmpdir"])
+PY
+)"
+  dest_probe="$vtmp/dry-dest-probe"
   : > "$dest_probe"
-  out="$(SAIKIT_FM_DRY_DEST="$SANDBOX/fm-dry-dest.sh" \
+  out="$(SAIKIT_FM_DRY_DEST="$vtmp/fm-dry-dest.sh" \
     ctrl_drv "$mut" drive-install-dry-run 2>&1)" && rc=0 || rc=$?
-  # El dest fresco del caso no debe existir tras un dry-run honesto.
-  # El mutante instala de verdad: el archivo aparece, o la aserción falla.
-  if [ -f "$SANDBOX/fm-dry-dest.sh" ]; then
+  if [ -f "$vtmp/fm-dry-dest.sh" ]; then
     printf '    (discriminante: write_on_dry_run creo el dest)\n'
     [ "$rc" -ne 0 ] || assert_missing_or_fail install-guardian dry_run_no_write \
       'unchanged|ausente|sin.delta' "$rc"

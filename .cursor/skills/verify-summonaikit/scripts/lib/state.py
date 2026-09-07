@@ -12,7 +12,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 SCHEMA_VERSION = 1
 MARKER_NAME = ".saikit-run"
@@ -37,6 +37,12 @@ WRITE_TOOLS = frozenset(
         "tools/saikit-setup-autopilot.sh",
     }
 )
+INSTALL_HOOK = "tools/install-hook.sh"
+INSTALL_HOOK_PATH_FLAGS = {
+    "--dest": "run",
+    "--source": "repo",
+    "--manifest": "repo",
+}
 # `;|&$\`` y expansiones: peligrosos si alguien sourceara el valor.
 _UNSAFE = re.compile(r"[\n\r;|&`$]|\$\(|&&|\|\|")
 
@@ -69,6 +75,20 @@ def assert_under(child: Path, root: Path, label: str) -> None:
         child.resolve().relative_to(root.resolve())
     except ValueError as e:
         raise StateError(f"escape: {label} fuera del run") from e
+
+
+def assert_run_member(path: Path, roots: Sequence[Path], label: str) -> None:
+    lexical_safe(str(path), label)
+    assert_no_symlink(path, label)
+    if not roots:
+        raise StateError(f"escape: {label} fuera del run")
+    for root in roots:
+        try:
+            assert_under(path, root, label)
+            return
+        except StateError:
+            continue
+    raise StateError(f"escape: {label} fuera del run")
 
 
 def read_marker(home: Path) -> tuple[str, str] | None:
@@ -190,17 +210,15 @@ def validate_payload(
     dest = Path(data["dest"])
     tmpdir = Path(data["tmpdir"])
     assert_no_symlink(home, "verify_home")
-    assert_no_symlink(dest, "dest")
-    assert_no_symlink(tmpdir, "tmpdir")
     assert_no_symlink(Path(data["state_dir"]), "state_dir")
     assert_no_symlink(Path(data["artifacts_dir"]), "artifacts_dir")
-    if dest.exists() or dest.is_symlink():
-        assert_under(dest, home, "dest")
+    roots = [home]
+    for item in data["owned_temps"]:
+        roots.append(Path(item))
+    assert_run_member(tmpdir, roots, "tmpdir")
+    assert_run_member(dest, roots, "dest")
     for host, dest_s in data["host_dests"].items():
-        hp = Path(dest_s)
-        assert_no_symlink(hp, f"host_dests.{host}")
-        if hp.exists() or hp.is_symlink():
-            assert_under(hp, home, f"host_dests.{host}")
+        assert_run_member(Path(dest_s), roots, f"host_dests.{host}")
 
     if mode != "cleanup" or not skip_own:
         if mode == "cleanup" and skip_own:
@@ -289,6 +307,41 @@ def public_tools(catalog: dict[str, Any]) -> set[str]:
     return out
 
 
+def resolve_cli_path(raw: str, base: Path) -> Path:
+    p = Path(raw)
+    if not p.is_absolute():
+        p = base / p
+    return p
+
+
+def iter_flag_values(argv: list[str], names: Sequence[str]) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    i = 1
+    while i < len(argv):
+        a = argv[i]
+        matched = False
+        for name in names:
+            if a == name:
+                if i + 1 >= len(argv) or argv[i + 1].startswith("-"):
+                    raise StateError(f"cli: {name} exige un valor")
+                out.append((name, argv[i + 1]))
+                i += 2
+                matched = True
+                break
+            prefix = name + "="
+            if a.startswith(prefix):
+                val = a[len(prefix) :]
+                if not val:
+                    raise StateError(f"cli: {name} exige un valor")
+                out.append((name, val))
+                i += 1
+                matched = True
+                break
+        if not matched:
+            i += 1
+    return out
+
+
 def normalize_tool(arg: str, repo: Path) -> str | None:
     s = arg
     if s.startswith("./"):
@@ -327,6 +380,26 @@ def cmd_cli_ok(args: argparse.Namespace) -> int:
                 raise StateError("cli: argumento con metacaracteres de shell")
             if ".." in Path(extra).parts:
                 raise StateError("cli: argumento con .. escape")
+        if tool == INSTALL_HOOK and mutate != "skip_physical_path":
+            pairs = iter_flag_values(argv, tuple(INSTALL_HOOK_PATH_FLAGS))
+            if pairs:
+                if not args.home:
+                    raise StateError("cli: falta --home para validar dest")
+                home = Path(args.home)
+                run_roots = [home]
+                for item in args.owned_temp or []:
+                    if item:
+                        run_roots.append(Path(item))
+                for flag, raw in pairs:
+                    kind = INSTALL_HOOK_PATH_FLAGS[flag]
+                    if kind == "run":
+                        assert_run_member(
+                            resolve_cli_path(raw, home), run_roots, f"cli {flag}"
+                        )
+                    else:
+                        assert_run_member(
+                            resolve_cli_path(raw, repo), [repo], f"cli {flag}"
+                        )
         if tool in WRITE_TOOLS and mutate != "skip_cwd_isolation":
             cwd = Path(args.cwd).resolve()
             repo_r = repo.resolve()
@@ -344,6 +417,24 @@ def cmd_cli_ok(args: argparse.Namespace) -> int:
                     "checkout de trabajo rechazado"
                 )
         print(tool)
+    except StateError as e:
+        err(str(e))
+        return 1
+    return 0
+
+
+def cmd_member(args: argparse.Namespace) -> int:
+    mutate = args.mutate or None
+    if mutate == "skip_physical_path":
+        return 0
+    try:
+        path = Path(args.path)
+        roots = [Path(r) for r in (args.root or []) if r]
+        if roots:
+            assert_run_member(path, roots, args.label)
+        else:
+            lexical_safe(str(path), args.label)
+            assert_no_symlink(path, args.label)
     except StateError as e:
         err(str(e))
         return 1
@@ -378,9 +469,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--cwd", required=True)
     p.add_argument("--disposable", default="")
+    p.add_argument("--home", default="")
+    p.add_argument("--owned-temp", action="append", default=[])
     p.add_argument("--mutate", default="")
     p.add_argument("argv", nargs=argparse.REMAINDER)
     p.set_defaults(func=cmd_cli_ok)
+
+    p = sub.add_parser("member")
+    p.add_argument("--path", required=True)
+    p.add_argument("--root", action="append", default=[])
+    p.add_argument("--label", default="path")
+    p.add_argument("--mutate", default="")
+    p.set_defaults(func=cmd_member)
 
     args = ap.parse_args(argv)
     if args.cmd == "cli-ok" and args.argv and args.argv[0] == "--":

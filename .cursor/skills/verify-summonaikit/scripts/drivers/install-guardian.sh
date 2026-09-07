@@ -24,6 +24,12 @@ SAIKIT_FM_DRY_RUN=1
 
 if fm_only install-dry-run; then
   dry_dest="${SAIKIT_FM_DRY_DEST:-$VERIFY_TMPDIR/fm-install-dry-dest.sh}"
+  python3 "$skill_root/scripts/lib/state.py" member \
+    --path "$dry_dest" \
+    --root "$VERIFY_HOME" \
+    --root "$VERIFY_TMPDIR" \
+    --label SAIKIT_FM_DRY_DEST \
+    --mutate "$(runtime_mutate)" || exit 1
   rm -f "$dry_dest"
   args=(--dest "$dry_dest" --source "$HOOK_SRC" --manifest "$MANIFEST")
   if [ "$SAIKIT_FM_DRY_RUN" = 1 ]; then

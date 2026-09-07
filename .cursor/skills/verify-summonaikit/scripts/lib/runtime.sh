@@ -112,6 +112,9 @@ runtime_cli_ok() {
     --repo "$VERIFY_REPO" \
     --cwd "$PWD" \
     --disposable "${VERIFY_DISPOSABLE:-}" \
+    --home "${VERIFY_HOME:-}" \
+    --owned-temp "${VERIFY_HOME:-}" \
+    --owned-temp "${VERIFY_TMPDIR:-}" \
     --mutate "$(runtime_mutate)" \
     -- "$@"
 }
@@ -140,6 +143,11 @@ runtime_cleanup_home() {
 }
 
 runtime_clear_state_files() {
+  python3 "$STATEPY" member \
+    --path "$STATE_DIR" \
+    --label STATE \
+    --mutate "$(runtime_mutate)" \
+    >/dev/null 2>&1 || return 1
   rm -f "$STATE_DIR/state.json" "$STATE_DIR/state.json.tmp"
   rmdir "$STATE_DIR/.active" 2>/dev/null || true
   rmdir "$STATE_DIR" 2>/dev/null || true
