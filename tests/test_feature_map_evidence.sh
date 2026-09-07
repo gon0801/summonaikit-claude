@@ -10,6 +10,10 @@
 #   degrade_fail_to_unknown  — fail-dominates-unknown
 #   skip_redact              — secret-never-in-artifacts
 #   reuse_attempt_id         — exclusive-attempt-ids
+#   skip_result_recompute    — forged-pass-over-fail (F5)
+#   skip_case_keys           — cross-case-credit (F6)
+#   skip_required_freeze     — shrink-on-finalize (F7)
+#   skip_redacted_strip      — redacted-token-not-secret (F15)
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -269,7 +273,8 @@ fi
 # DoD: vacio / omitida / conteos / incoherencia / degradar = rojos
 # ---------------------------------------------------------------------------
 caso "empty-steps-exit-0: pasos vacios son FAIL del verificador"
-created="$(create_attempt "run-empty" "feat-e" --mode sandbox --cases "c1" 2>&1)" || true
+created="$(create_attempt "run-empty" "feat-e" --mode sandbox --cases "c1" \
+  --required-assertions need 2>&1)" || true
 AD_EMPTY="$(parse_kv ATTEMPT_DIR "$created")"
 if [ -d "$AD_EMPTY" ]; then
   fout="$(ev finalize --attempt-dir "$AD_EMPTY" --required-assertions need 2>&1)" && frc=0 || frc=$?
@@ -346,7 +351,8 @@ if [ -d "$AD_SEC" ]; then
     --observation "password=s3cret ${TOK_PAT} ${TOK_GHO} key=${TOK_SK} ${TOK_AKIA} ${TOK_XOX}" \
     >/dev/null
   append_pass "$AD_SEC" c1 a1 >/dev/null
-  ev finalize --attempt-dir "$AD_SEC" --required-assertions a1 >/dev/null 2>&1 || true
+  fout="$(ev finalize --attempt-dir "$AD_SEC" --required-assertions a1 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 0 ] || malo "secret-never-in-artifacts: finalize debio PASS/0 tras redactar (got $frc): $fout"
   leaked=0
   for tok in "$TOK_GHP" "$TOK_PAT" "$TOK_GHO" "$TOK_SK" "$TOK_AKIA" "$TOK_XOX" \
              "password=s3cret" "token=${TOK_GHP}" "user:p4ss@"; do
@@ -394,7 +400,8 @@ fi
 # Mutaciones discriminantes
 # ---------------------------------------------------------------------------
 caso "mutacion skip_empty_guard: empty-steps-exit-0 deja de atrapar"
-created="$(create_attempt "run-m-empty" "feat-me" --mode sandbox --cases "c1" 2>&1)" || true
+created="$(create_attempt "run-m-empty" "feat-me" --mode sandbox --cases "c1" \
+  --required-assertions need 2>&1)" || true
 AD_ME="$(parse_kv ATTEMPT_DIR "$created")"
 if [ -d "$AD_ME" ]; then
   ev finalize --attempt-dir "$AD_ME" --required-assertions need >/dev/null 2>&1 && \
@@ -488,6 +495,220 @@ dirb="$(parse_kv ATTEMPT_DIR "$out_b")"
   || malo "mutacion reuse_attempt_id debio chocar IDs (protege exclusive-attempt-ids): '$ida' vs '$idb'"
 [ -n "$dira" ] && [ "$dira" = "$dirb" ] \
   || malo "mutacion reuse_attempt_id debio reusar el dir: '$dira' vs '$dirb'"
+
+# ---------------------------------------------------------------------------
+# F5 validate rederiva result/observed; F6 claves por caso; F7 freeze; F15 strip
+# ---------------------------------------------------------------------------
+caso "forged-pass-over-fail: validate no acepta PASS sobre asercion FAIL"
+created="$(create_attempt "run-f5" "feat-f5" --mode sandbox --cases "c1" \
+  --required-assertions need 2>&1)" || true
+AD_F5="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_F5" ]; then
+  ev append-step --attempt-dir "$AD_F5" --type assertion \
+    --case-id c1 --step-id s-need --assertion-id need \
+    --expected ok --observed no --result FAIL >/dev/null
+  ev finalize --attempt-dir "$AD_F5" --required-assertions need >/dev/null 2>&1 || true
+  python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$AD_F5")/"summary.json"
+s=json.loads(p.read_text())
+s["result"]="PASS"
+s["exit_code"]=0
+p.write_text(json.dumps(s), encoding="utf-8")
+PY
+  vout="$(ev validate --attempt-dir "$AD_F5" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "forged-pass-over-fail debio validate nonzero: $vout"
+fi
+
+caso "cross-case-credit: mismo assertion_id no acredita el otro caso"
+created="$(create_attempt "run-f6" "feat-f6" --mode sandbox --cases "unarmed armed" \
+  --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" || true
+AD_F6="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_F6" ]; then
+  ev append-step --attempt-dir "$AD_F6" --type assertion \
+    --case-id unarmed --step-id s-unarmed-hook_sha --assertion-id hook_sha \
+    --expected sha --observed sha --result PASS >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_F6" \
+    --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 1 ] || malo "cross-case-credit debio FAIL/1 (got $frc): $fout"
+  [ "$(parse_kv result "$fout")" = FAIL ] || malo "cross-case-credit no marco FAIL: $fout"
+fi
+
+caso "cross-case-credit flatten: hook_sha hook_sha pide dos observaciones"
+created="$(create_attempt "run-f6flat" "feat-f6f" --mode sandbox --cases "unarmed armed" \
+  --required-assertions "hook_sha hook_sha" 2>&1)" || true
+AD_F6F="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_F6F" ]; then
+  ev append-step --attempt-dir "$AD_F6F" --type assertion \
+    --case-id unarmed --step-id s-hook --assertion-id hook_sha \
+    --expected sha --observed sha --result PASS >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_F6F" --required-assertions "hook_sha hook_sha" 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 1 ] || malo "flatten cross-case debio FAIL/1 (got $frc): $fout"
+fi
+
+caso "identity-swap: validate falla si identity.json cambia ids"
+AD_ID="$(make_pass_attempt "run-f6b" "feat-id" "c1" "a1" 2>&1)" || AD_ID=""
+if [ -d "$AD_ID" ]; then
+  ev finalize --attempt-dir "$AD_ID" --required-assertions a1 >/dev/null 2>&1 || true
+  python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$AD_ID")/"identity.json"
+ident=json.loads(p.read_text())
+ident["run_id"]="ajeno"
+ident["attempt_id"]="otro"
+ident["feature_id"]="no-es-esta"
+p.write_text(json.dumps(ident), encoding="utf-8")
+PY
+  vout="$(ev validate --attempt-dir "$AD_ID" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "identity-swap debio validate nonzero: $vout"
+fi
+
+caso "shrink-on-finalize: no se puede recortar el contrato al cerrar"
+created="$(create_attempt "run-f7" "feat-f7" --mode sandbox --cases "c1" \
+  --required-assertions "a1 a2" 2>&1)" || true
+AD_F7="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_F7" ]; then
+  append_pass "$AD_F7" c1 a1 >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_F7" --required-assertions a1 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -ne 0 ] || malo "shrink-on-finalize debio rechazar: $fout"
+  [ "$(parse_kv result "$fout")" != PASS ] || malo "shrink-on-finalize no puede ser PASS: $fout"
+fi
+
+caso "blocked-availability: identity vacia + availability sigue unknown/3"
+created="$(create_attempt "run-blk" "feat-blk" --mode sandbox 2>&1)" || true
+AD_BLK="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_BLK" ]; then
+  ev append-step --attempt-dir "$AD_BLK" --type diagnostic \
+    --case-id "" --step-id blocked --observation "sin driver" --tool-exit "" >/dev/null
+  ev append-step --attempt-dir "$AD_BLK" --type assertion \
+    --case-id "" --step-id s-blocked --assertion-id availability \
+    --expected runnable --observed "BLOCKED sin driver" --result unknown >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_BLK" --required-assertions availability 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 3 ] || malo "blocked-availability debio unknown/3 (got $frc): $fout"
+  [ "$(parse_kv result "$fout")" = unknown ] || malo "blocked-availability result no unknown: $fout"
+fi
+
+caso "honest-multi-case: dos casos con el mismo assertion_id y ambos observados"
+created="$(create_attempt "run-ok2" "feat-ok2" --mode sandbox --cases "unarmed armed" \
+  --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" || true
+AD_OK2="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_OK2" ]; then
+  ev append-step --attempt-dir "$AD_OK2" --type assertion \
+    --case-id unarmed --step-id s-unarmed-hook_sha --assertion-id hook_sha \
+    --expected sha --observed sha --result PASS >/dev/null
+  ev append-step --attempt-dir "$AD_OK2" --type assertion \
+    --case-id armed --step-id s-armed-hook_sha --assertion-id hook_sha \
+    --expected sha --observed sha --result PASS >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_OK2" \
+    --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 0 ] || malo "honest-multi-case debio PASS/0: $fout"
+  vout="$(ev validate --attempt-dir "$AD_OK2" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -eq 0 ] || malo "honest-multi-case validate: $vout"
+fi
+
+caso "redacted-token-not-secret: token=[REDACTED] no es secreto"
+created="$(create_attempt "run-f15" "feat-f15" --mode sandbox --cases "c1" \
+  --required-assertions a1 2>&1)" || true
+AD_F15="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_F15" ]; then
+  ev append-step --attempt-dir "$AD_F15" --type assertion \
+    --case-id c1 --step-id s-a1 --assertion-id a1 \
+    --expected redacted --observed "token=[REDACTED]" --result PASS >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_F15" --required-assertions a1 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -eq 0 ] || malo "redacted-token-not-secret finalize debio PASS/0 (got $frc): $fout"
+  vout="$(ev validate --attempt-dir "$AD_F15" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -eq 0 ] || malo "redacted-token-not-secret validate: $vout"
+fi
+
+caso "fm_assert hereda SAIKIT_FM_ONLY_CASE cuando case_id viene vacio"
+created="$(create_attempt "run-drv" "feat-drv" --mode sandbox --cases "c1" \
+  --required-assertions a1 2>&1)" || true
+AD_DRV="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_DRV" ]; then
+  SAIKIT_FM_ATTEMPT_DIR="$AD_DRV" SAIKIT_FM_ONLY_CASE="c1" SAIKIT_FM_EVIDENCE="$EVID" \
+    skill_root="$SKILL" \
+    bash -c '. "$1/scripts/lib/driver.sh"; fm_assert "" a1 PASS exp obs' \
+    bash "$SKILL" \
+    || malo "fm_assert con SAIKIT_FM_ONLY_CASE fallo"
+  python3 - <<PY || malo "fm_assert no estampo case_id=c1"
+import json
+from pathlib import Path
+rows=[json.loads(l) for l in Path("$AD_DRV/steps.jsonl").read_text().splitlines() if l.strip()]
+assert rows and rows[0].get("case_id")=="c1", rows
+assert rows[0].get("assertion_id")=="a1"
+assert "c1" in (rows[0].get("step_id") or "")
+PY
+fi
+
+caso "mutacion skip_result_recompute: forged-pass-over-fail deja de atrapar"
+created="$(create_attempt "run-m-f5" "feat-mf5" --mode sandbox --cases "c1" \
+  --required-assertions need 2>&1)" || true
+AD_MF5="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_MF5" ]; then
+  ev append-step --attempt-dir "$AD_MF5" --type assertion \
+    --case-id c1 --step-id s-need --assertion-id need \
+    --expected ok --observed no --result FAIL >/dev/null
+  ev finalize --attempt-dir "$AD_MF5" --required-assertions need >/dev/null 2>&1 || true
+  python3 - <<PY
+import json
+from pathlib import Path
+p=Path("$AD_MF5")/"summary.json"
+s=json.loads(p.read_text())
+s["result"]="PASS"
+s["exit_code"]=0
+p.write_text(json.dumps(s), encoding="utf-8")
+PY
+  ev validate --attempt-dir "$AD_MF5" >/dev/null 2>&1 && \
+    malo "baseline forged-pass-over-fail debio fallar"
+  ev_mut skip_result_recompute validate --attempt-dir "$AD_MF5" >/dev/null 2>&1 \
+    || malo "mutacion skip_result_recompute en validate debio pasar en falso"
+fi
+
+caso "mutacion skip_case_keys: cross-case-credit deja de atrapar"
+created="$(create_attempt "run-m-f6" "feat-mf6" --mode sandbox --cases "unarmed armed" \
+  --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" || true
+AD_MF6="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_MF6" ]; then
+  ev append-step --attempt-dir "$AD_MF6" --type assertion \
+    --case-id unarmed --step-id s-hook --assertion-id hook_sha \
+    --expected sha --observed sha --result PASS >/dev/null
+  ev finalize --attempt-dir "$AD_MF6" \
+    --required-assertions "unarmed:hook_sha armed:hook_sha" >/dev/null 2>&1 && \
+    malo "baseline cross-case-credit debio fallar"
+  fout="$(ev_mut skip_case_keys finalize --attempt-dir "$AD_MF6" \
+    --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" && mrc=0 || mrc=$?
+  [ "$mrc" -eq 0 ] || malo "mutacion skip_case_keys debio pasar en falso: $fout"
+fi
+
+caso "mutacion skip_required_freeze: shrink-on-finalize deja de atrapar"
+created="$(create_attempt "run-m-f7" "feat-mf7" --mode sandbox --cases "c1" \
+  --required-assertions "a1 a2" 2>&1)" || true
+AD_MF7="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_MF7" ]; then
+  append_pass "$AD_MF7" c1 a1 >/dev/null
+  ev finalize --attempt-dir "$AD_MF7" --required-assertions a1 >/dev/null 2>&1 && \
+    malo "baseline shrink-on-finalize debio fallar"
+  fout="$(ev_mut skip_required_freeze finalize --attempt-dir "$AD_MF7" \
+    --required-assertions a1 2>&1)" && mrc=0 || mrc=$?
+  [ "$mrc" -eq 0 ] || malo "mutacion skip_required_freeze debio pasar en falso: $fout"
+fi
+
+caso "mutacion skip_redacted_strip: redacted-token-not-secret deja de atrapar"
+created="$(create_attempt "run-m-f15" "feat-mf15" --mode sandbox --cases "c1" \
+  --required-assertions a1 2>&1)" || true
+AD_MF15="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_MF15" ]; then
+  ev append-step --attempt-dir "$AD_MF15" --type assertion \
+    --case-id c1 --step-id s-a1 --assertion-id a1 \
+    --expected redacted --observed "token=[REDACTED]" --result PASS >/dev/null
+  ev finalize --attempt-dir "$AD_MF15" --required-assertions a1 >/dev/null 2>&1 || \
+    malo "baseline redacted-token-not-secret debio PASS"
+  fout="$(ev_mut skip_redacted_strip finalize --attempt-dir "$AD_MF15" \
+    --required-assertions a1 2>&1)" && mrc=0 || mrc=$?
+  [ "$mrc" -ne 0 ] || malo "mutacion skip_redacted_strip debio FAIL por falso secreto: $fout"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2
