@@ -34,6 +34,17 @@
 # 3 UNKNOWN (sin run aun, CI pendiente, o salud no observable).
 set -u
 
+# 20.3: la forma de la salida de gh no es estable — depende del entorno del
+# agente que lo corre. Medido (gh 2.98.0, 2026-09-05): con CLICOLOR_FORCE=1
+# heredado (harnesses de agentes) gh colorea y pretty-imprime su --json incluso
+# a un pipe (la captura de $(...)), y CLICOLOR_FORCE LE GANA a NO_COLOR; el
+# parser estricto muere con el primer ESC (control char) y TODO estado de CI
+# se degrada a UNKNOWN. Misma neutralizacion que tools/saikit-merge.sh (18.25),
+# ANTES de la primera captura de gh; si la salida aun asi no parsea, el aviso
+# sigue cayendo en UNKNOWN igual que hoy.
+export NO_COLOR=1 CLICOLOR=0
+unset CLICOLOR_FORCE
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/veredicto_contract.sh"   # saikit_json_* (sin jq)
 . "$HERE/lib/redactar.sh"             # redactar (secretos fuera del aviso)

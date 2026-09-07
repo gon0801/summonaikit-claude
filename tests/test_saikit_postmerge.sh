@@ -79,11 +79,107 @@ sb_reset() {
   cat > "$SB/bin/gh" <<'GHEOF'
 #!/usr/bin/env bash
 # gh falso del banco de la 18.5: solo `run list --commit`, argv al log.
+#
+# 20.3: ademas modela el CONTRATO MEDIDO del color de gh (2.98.0, 2026-09-05),
+# igual que el falso del banco de la 18.4 (tests/test_saikit_merge.sh): con
+# CLICOLOR_FORCE=1 heredado gh colorea y pretty-imprime su --json incluso a
+# un pipe y LE GANA a NO_COLOR; con NO_COLOR=1 (o CLICOLOR=0) responde
+# limpio; con stdout-tty colorea. El falso COMPRUEBA esa condicion — NO
+# responde siempre limpio, sino no probaria el neutralizado del script.
 set -u
 [ -n "${SAIKIT_GH_LOG:-}" ] && printf 'gh %s\n' "$*" >> "$SAIKIT_GH_LOG"
 fix="${SAIKIT_GH_FIX:?}"
+
+# gh_colorea: el contrato medido, EN ESTE ORDEN:
+#   1. CLICOLOR_FORCE=1 manda sobre todo (le gana a NO_COLOR; medido).
+#   2. NO_COLOR=1 o CLICOLOR=0 => limpio (el neutralizado del script).
+#   3. si no: color solo con stdout-tty — aqui lo modela SAIKIT_GH_ANSI=1
+#      (sin esa var, el pipe del $(...) del script recibe JSON limpio).
+gh_colorea() {
+  if [ "${CLICOLOR_FORCE:-0}" = 1 ]; then return 0; fi
+  if [ "${NO_COLOR:-0}" = 1 ] || [ "${CLICOLOR:-1}" = 0 ]; then return 1; fi
+  [ "${SAIKIT_GH_ANSI:-0}" = 1 ]
+}
+
+emitir() {  # $1 = fixture: la forma coloreada medida o el crudo del fixture
+  if gh_colorea; then coloriza "$1"; else cat "$1"; fi
+}
+
+# coloriza: reproduce la forma EXACTA medida de gh con color (copiada del
+# falso del banco de la 18.4): pretty con indent 2 espacios por nivel;
+# llaves/corchetes/comas/dospuntos en 1;37; claves en 1;34; strings-valor en
+# 32; numeros/true/false/null desnudos; contenedor vacio en una linea. El ESC
+# entra por -v (portable BWK awk y gawk; \033 literal dentro del programa awk
+# NO lo es).
+coloriza() {
+  awk -v esc="$(printf '\033')" '
+    function sangria(d,  k, s) { s = ""; for (k = 0; k < d; k++) s = s "  "; return s }
+    function pun(s) { return esc "[1;37m" s esc "[m" }
+    function cla(s) { return esc "[1;34m" s esc "[m" }
+    function val(s) { return esc "[32m" s esc "[m" }
+    {
+      n = length($0); i = 1; depth = 0; out = ""
+      while (i <= n) {
+        c = substr($0, i, 1)
+        if (c == "\"") {
+          j = i + 1; s = "\""
+          while (j <= n) {
+            ch = substr($0, j, 1)
+            if (ch == "\\") { s = s ch substr($0, j + 1, 1); j += 2; continue }
+            s = s ch
+            if (ch == "\"") break
+            j++
+          }
+          i = j + 1
+          # clave o valor: si el proximo char no-espacio es ":", es clave.
+          k = i
+          while (k <= n && substr($0, k, 1) == " ") k++
+          out = out ((substr($0, k, 1) == ":") ? cla(s) : val(s))
+        } else if (c == "{") {
+          if (substr($0, i + 1, 1) == "}") { out = out pun("{}"); i += 2; continue }
+          depth++
+          out = out pun("{") "\n" sangria(depth)
+          i++
+        } else if (c == "}") {
+          depth--
+          out = out "\n" sangria(depth) pun("}")
+          i++
+        } else if (c == "[") {
+          if (substr($0, i + 1, 1) == "]") { out = out pun("[]"); i += 2; continue }
+          depth++
+          out = out pun("[") "\n" sangria(depth)
+          i++
+        } else if (c == "]") {
+          depth--
+          out = out "\n" sangria(depth) pun("]")
+          i++
+        } else if (c == ",") {
+          out = out pun(",") "\n" sangria(depth)
+          i++
+        } else if (c == ":") {
+          out = out pun(":") " "
+          i++
+        } else if (c == " ") {
+          i++
+        } else {
+          # numero / true / false / null: desnudo hasta el delimitador.
+          j = i; s = ""
+          while (j <= n) {
+            ch = substr($0, j, 1)
+            if (ch == "," || ch == "}" || ch == "]" || ch == " ") break
+            s = s ch; j++
+          }
+          out = out s
+          i = j
+        }
+      }
+      printf "%s\n", out
+    }
+  ' "$1"
+}
+
 case "$1 $2" in
-  "run list") cat "$fix/runs.json"; exit 0 ;;
+  "run list") emitir "$fix/runs.json"; exit 0 ;;
 esac
 printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
 exit 1
@@ -115,6 +211,9 @@ TGEOF
   export SAIKIT_POSTMERGE_TIMEOUT_SEG=0 SAIKIT_POSTMERGE_SALUD_SEG=2
   unset SAIKIT_CURL_BIN SAIKIT_TELEGRAM_BIN
   export PATH="$SB/bin:$PATH"
+  # 20.3: el banco no hereda el entorno de color del corredor (ni un knob del
+  # falso dejado por un caso anterior): cada caso arranca determinista.
+  unset NO_COLOR CLICOLOR CLICOLOR_FORCE SAIKIT_GH_ANSI
   printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
 }
 
@@ -369,6 +468,79 @@ caso "esquema_roto_con_token_sale_redactado (lead PR #161)"
 }
 fin_caso "esquema_roto_con_token_sale_redactado (lead PR #161)"
 
+# ------------------------------------------- color de gh heredado (20.3)
+# El mecanismo EXACTO medido en vivo (grok headless, gh 2.98.0): el harness
+# hereda CLICOLOR_FORCE=1 y gh colorea y pretty-imprime su --json incluso al
+# pipe de $(...), y LE GANA a NO_COLOR. Sin neutralizar el entorno, el parser
+# estricto muere con el primer ESC y TODO estado de CI se degrada a UNKNOWN
+# "no es JSON". Cada caso afirma que el guard decide lo mismo con el entorno
+# contaminado que sin el.
+caso "color_forzado_del_harness_verde_sigue_verde (20.3)"
+{
+  export CLICOLOR_FORCE=1
+  correr
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "dice VERDE" "$OUT" "VERDE:"
+  _no_contiene "no ofrece revert en verde" "$OUT" "PARA REVERTIR"
+}
+fin_caso "color_forzado_del_harness_verde_sigue_verde (20.3)"
+
+caso "color_forzado_del_harness_rojo_sigue_rojo (20.3)"
+{
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  antes="$(arbol_huella)"
+  export CLICOLOR_FORCE=1
+  correr
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "dice ROJO" "$OUT" "ROJO:"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+  _contiene "el comando nombra el merge_commit" "$OUT" "$MC"
+  despues="$(arbol_huella)"
+  [ "$antes" = "$despues" ] || _mal "el arbol cambio pese a que solo debia avisar"
+}
+fin_caso "color_forzado_del_harness_rojo_sigue_rojo (20.3)"
+
+caso "color_forzado_del_harness_pendiente_sigue_unknown (20.3)"
+{
+  printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  export CLICOLOR_FORCE=1
+  correr
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  _contiene "dice pendiente" "$OUT" "pendiente"
+  _no_contiene "no ofrece revert pendiente" "$OUT" "PARA REVERTIR"
+}
+fin_caso "color_forzado_del_harness_pendiente_sigue_unknown (20.3)"
+
+caso "color_forzado_del_harness_json_invalido_sigue_unknown (20.3)"
+{
+  # Garbage real de gh sigue siendo garbage coloreado: la neutralizacion no
+  # puede convertir basura en JSON ni tapar el UNKNOWN de fail-closed.
+  printf 'no-es-json\n' > "$SB/ghfix/runs.json"
+  export CLICOLOR_FORCE=1
+  correr
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  _contiene "declara el JSON invalido" "$OUT" "no es JSON"
+  _no_contiene "no ofrece revert sin evaluar" "$OUT" "PARA REVERTIR"
+}
+fin_caso "color_forzado_del_harness_json_invalido_sigue_unknown (20.3)"
+
+caso "terminal_ansi_verde_sigue_verde (20.3)"
+{
+  # El entorno del agente modela un stdout con terminal: gh colorea su --json
+  # por tty y el neutralizado del script (NO_COLOR/CLICOLOR) come el color
+  # ANTES de que el parser estricto vea un solo ESC.
+  export SAIKIT_GH_ANSI=1
+  correr
+  unset SAIKIT_GH_ANSI
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "dice VERDE" "$OUT" "VERDE:"
+}
+fin_caso "terminal_ansi_verde_sigue_verde (20.3)"
+
 # ------------------------------------------------------- mutation-test propio
 # La guarda anti-sed-obsoleto baselinea contra BASE (la copia ya reescrita en
 # HERE, SIN mutar): comparar contra $POST_REAL nunca daba iguales porque el
@@ -490,6 +662,28 @@ c_token_esquema() {
   _no_contiene "sin el token crudo" "$OUT" "sk-test-1234567890"
 }
 
+c_color_tty() {
+  # 20.3: sin el export neutralizador, el falso colorea bajo el terminal
+  # modelado y el parser estricto rechaza por PRESENTACION.
+  CASO_ROJO=0; sb_reset
+  export SAIKIT_GH_ANSI=1
+  correr
+  unset SAIKIT_GH_ANSI
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "dice VERDE" "$OUT" "VERDE:"
+}
+
+c_color_force() {
+  # 20.3: sin el unset, CLICOLOR_FORCE heredado colorea aunque el script
+  # exporte NO_COLOR (FORCE le gana; medido).
+  CASO_ROJO=0; sb_reset
+  export CLICOLOR_FORCE=1
+  correr
+  unset CLICOLOR_FORCE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "dice VERDE" "$OUT" "VERDE:"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
@@ -504,6 +698,8 @@ salud_traga_rojo	s|if \[ -n "\$ROJO_MOTIVO" \]; then|if false; then|	c_rojo_sin_
 aviso_sin_redactar	s|texto="\$(redactar "\$texto")"|texto="$texto"|	c_secreto
 telegram_sin_redactar	s|TG_MSG="\$(redactar "\$MENSAJE")"|TG_MSG="$MENSAJE"|	c_secreto
 esquema_roto_sin_redactar	s|"\$(redactar "\$SALUD")"|"$SALUD"|	c_token_esquema
+sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_color_tty
+sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_color_force
 MUTS
 
 if [ "$fail" -ne 0 ]; then
