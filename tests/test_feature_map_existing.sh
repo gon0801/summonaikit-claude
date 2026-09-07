@@ -135,13 +135,15 @@ import json, sys
 print(json.load(open(sys.argv[1]))["verify_home"])
 PY
 )"
-[ -n "$VERIFY_DEST" ] && [ -f "$VERIFY_DEST" ] || malo "launch no dejo DEST"
+[ -n "$VERIFY_DEST" ] && [ ! -e "$VERIFY_DEST" ] \
+  || malo "launch debio diferir la preparacion de DEST"
 
 # ---- install-guardian -------------------------------------------------------
 caso "drive install-guardian: dry-run sin delta, identidad, no-op, ajeno, restore"
 reset_art
 out="$(ctrl drive install-guardian 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "drive install-guardian rc=$rc: $out"
+[ -f "$VERIFY_DEST" ] || malo "drive dependiente no preparo DEST"
 sum="$(latest_summary install-guardian)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "install-guardian sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then

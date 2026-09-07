@@ -108,6 +108,14 @@ else
   [ -f "$ADIR/steps.jsonl" ] || malo "falta steps.jsonl al crear (escribir antes de ejecutar)"
 fi
 
+caso "ids con rutas se rechazan antes de crear artefactos"
+escape_feature="$SANDBOX/escaped-feature"
+out="$(create_attempt run-safe "$escape_feature" --mode sandbox 2>&1)" && irc=0 || irc=$?
+[ "$irc" -ne 0 ] || malo "feature_id absoluto debio rechazarse: $out"
+[ ! -e "$escape_feature" ] || malo "feature_id absoluto creo artefactos fuera del root"
+out="$(create_attempt ../run-escape feat-safe --mode sandbox 2>&1)" && irc=0 || irc=$?
+[ "$irc" -ne 0 ] || malo "run_id con .. debio rechazarse: $out"
+
 caso "exclusive-attempt-ids: dos creates no comparten dir"
 out2="$(create_attempt "run-a" "feat-a" --mode sandbox --cases "c1" 2>&1)" && rc2=0 || rc2=$?
 if [ "$rc2" -ne 0 ]; then
@@ -209,7 +217,7 @@ fi
 
 caso "fail-dominates-unknown: FAIL gana a unknown"
 created="$(create_attempt "run-dom" "feat-d" --mode sandbox --cases "c1 c2" \
-  --required-assertions "a b" 2>&1)" || true
+  --required-assertions "c1:a c2:b" 2>&1)" || true
 AD_DOM="$(parse_kv ATTEMPT_DIR "$created")"
 if [ ! -d "$AD_DOM" ]; then
   malo "no hay intento para dominancia: $created"
@@ -220,21 +228,21 @@ else
   ev append-step --attempt-dir "$AD_DOM" --type assertion \
     --case-id c2 --step-id s-b --assertion-id b \
     --expected ok --observed "?" --result unknown >/dev/null
-  fout="$(ev finalize --attempt-dir "$AD_DOM" --required-assertions "a b" 2>&1)" && frc=0 || frc=$?
+  fout="$(ev finalize --attempt-dir "$AD_DOM" --required-assertions "c1:a c2:b" 2>&1)" && frc=0 || frc=$?
   [ "$frc" -eq 1 ] || malo "FAIL+unknown debio exit 1: $fout"
   [ "$(parse_kv result "$fout")" = FAIL ] || malo "FAIL no domino unknown: $fout"
 fi
 
 caso "unknown domina PASS"
 created="$(create_attempt "run-up" "feat-up" --mode sandbox --cases "c1 c2" \
-  --required-assertions "a b" 2>&1)" || true
+  --required-assertions "c1:a c2:b" 2>&1)" || true
 AD_UP="$(parse_kv ATTEMPT_DIR "$created")"
 if [ -d "$AD_UP" ]; then
   append_pass "$AD_UP" c1 a >/dev/null
   ev append-step --attempt-dir "$AD_UP" --type assertion \
     --case-id c2 --step-id s-b --assertion-id b \
     --expected ok --observed "?" --result unknown >/dev/null
-  fout="$(ev finalize --attempt-dir "$AD_UP" --required-assertions "a b" 2>&1)" && frc=0 || frc=$?
+  fout="$(ev finalize --attempt-dir "$AD_UP" --required-assertions "c1:a c2:b" 2>&1)" && frc=0 || frc=$?
   [ "$frc" -eq 3 ] || malo "unknown+PASS debio exit 3: $fout"
   [ "$(parse_kv result "$fout")" = unknown ] || malo "unknown no domino PASS: $fout"
 fi
@@ -521,6 +529,43 @@ PY
   [ "$vrc" -ne 0 ] || malo "forged-pass-over-fail debio validate nonzero: $vout"
 fi
 
+caso "identity vacia no desactiva recomputacion FAIL"
+if [ -d "${AD_F5:-}" ]; then
+  printf '{}\n' > "$AD_F5/identity.json"
+  vout="$(ev validate --attempt-dir "$AD_F5" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "identity vacia acepto summary PASS sobre FAIL: $vout"
+fi
+
+caso "mode del summary y steps coincide con identity"
+AD_MODE="$(make_pass_attempt run-mode feat-mode c1 a1 2>&1)" || AD_MODE=""
+if [ -d "$AD_MODE" ]; then
+  ev finalize --attempt-dir "$AD_MODE" --required-assertions a1 >/dev/null 2>&1 || true
+  python3 - "$AD_MODE/summary.json" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+d = json.loads(p.read_text(encoding="utf-8"))
+d["mode"] = "live"
+p.write_text(json.dumps(d), encoding="utf-8")
+PY
+  vout="$(ev validate --attempt-dir "$AD_MODE" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "summary live falsificado sobre identity sandbox fue aceptado"
+fi
+
+caso "log_ref debe existir dentro del intento"
+created="$(create_attempt run-log feat-log --mode sandbox --cases c1 \
+  --required-assertions a1 2>&1)" || true
+AD_LOG="$(parse_kv ATTEMPT_DIR "$created")"
+if [ -d "$AD_LOG" ]; then
+  append_pass "$AD_LOG" c1 a1 >/dev/null
+  ev append-step --attempt-dir "$AD_LOG" --type diagnostic \
+    --case-id c1 --step-id bad-log --observation bad \
+    --log-ref ../../outside.log >/dev/null
+  ev finalize --attempt-dir "$AD_LOG" --required-assertions a1 >/dev/null 2>&1 || true
+  vout="$(ev validate --attempt-dir "$AD_LOG" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "log_ref externo inexistente fue aceptado: $vout"
+fi
+
 caso "cross-case-credit: mismo assertion_id no acredita el otro caso"
 created="$(create_attempt "run-f6" "feat-f6" --mode sandbox --cases "unarmed armed" \
   --required-assertions "unarmed:hook_sha armed:hook_sha" 2>&1)" || true
@@ -535,16 +580,60 @@ if [ -d "$AD_F6" ]; then
   [ "$(parse_kv result "$fout")" = FAIL ] || malo "cross-case-credit no marco FAIL: $fout"
 fi
 
-caso "cross-case-credit flatten: hook_sha hook_sha pide dos observaciones"
+caso "cross-case-credit flatten: contrato multi-caso ambiguo se rechaza"
+f6flat_before="$(find "$ART/run-f6flat" -mindepth 1 -maxdepth 3 -type d 2>/dev/null | wc -l | tr -d ' ')"
 created="$(create_attempt "run-f6flat" "feat-f6f" --mode sandbox --cases "unarmed armed" \
-  --required-assertions "hook_sha hook_sha" 2>&1)" || true
-AD_F6F="$(parse_kv ATTEMPT_DIR "$created")"
-if [ -d "$AD_F6F" ]; then
-  ev append-step --attempt-dir "$AD_F6F" --type assertion \
-    --case-id unarmed --step-id s-hook --assertion-id hook_sha \
-    --expected sha --observed sha --result PASS >/dev/null
-  fout="$(ev finalize --attempt-dir "$AD_F6F" --required-assertions "hook_sha hook_sha" 2>&1)" && frc=0 || frc=$?
-  [ "$frc" -eq 1 ] || malo "flatten cross-case debio FAIL/1 (got $frc): $fout"
+  --required-assertions "hook_sha hook_sha" 2>&1)" && crc=0 || crc=$?
+[ "$crc" -ne 0 ] \
+  || malo "flatten cross-case debio rechazar required_assertions sin case_id: $created"
+f6flat_after="$(find "$ART/run-f6flat" -mindepth 1 -maxdepth 3 -type d 2>/dev/null | wc -l | tr -d ' ')"
+[ "$f6flat_after" = "$f6flat_before" ] \
+  || malo "contrato ambiguo dejo un directorio de intento huerfano"
+
+caso "step con case_id ajeno a identity invalida el intento"
+created="$(create_attempt "run-case-id" "feat-case-id" --mode sandbox --cases c1 \
+  --required-assertions a1 2>&1)" || true
+AD_CASE_ID="$(parse_kv ATTEMPT_DIR "$created")"
+if [ ! -d "$AD_CASE_ID" ]; then
+  malo "no se creo intento para validar case_id: $created"
+else
+  append_pass "$AD_CASE_ID" c1 a1 >/dev/null
+  ev append-step --attempt-dir "$AD_CASE_ID" --type assertion \
+    --case-id rogue --step-id s-rogue --assertion-id extra \
+    --expected none --observed extra --result PASS >/dev/null
+  fout="$(ev finalize --attempt-dir "$AD_CASE_ID" --required-assertions a1 2>&1)" && frc=0 || frc=$?
+  [ "$frc" -ne 0 ] || malo "case_id ajeno debio invalidar finalize: $fout"
+  vout="$(ev validate --attempt-dir "$AD_CASE_ID" 2>&1)" && vrc=0 || vrc=$?
+  [ "$vrc" -ne 0 ] || malo "case_id ajeno debio invalidar validate: $vout"
+fi
+
+caso "controlador congela required_assertions con case_id"
+rm -rf "$STATE"
+mkdir -p "$STATE"
+if ! ctrl_out="$(SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+  bash "$CTRL" launch 2>&1)"; then
+  malo "controller-case-keys launch fallo: $ctrl_out"
+else
+  synth_out="$(SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=PASS \
+    SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 SAIKIT_VERIFY_STATE="$STATE" \
+    SAIKIT_VERIFY_ARTIFACTS="$ART" bash "$CTRL" drive gate-turn 2>&1)" && src=0 || src=$?
+  [ "$src" -eq 0 ] || malo "controller-case-keys synthetic PASS fallo: $synth_out"
+  ident_path="$(find "$ART" -path '*/gate-turn/*/identity.json' -type f -print | tail -1)"
+  if [ -z "$ident_path" ]; then
+    malo "controller-case-keys no produjo identity.json"
+  else
+    python3 - "$ident_path" <<'PY' || malo "controller dejo required_keys sin caso"
+import json, sys
+from pathlib import Path
+d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+keys = d.get("required_keys") or []
+assert keys, d
+assert all(k.get("case_id") for k in keys), keys
+assert {k["case_id"] for k in keys} == set(d.get("cases") or []), (keys, d.get("cases"))
+PY
+  fi
+  SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cleanup >/dev/null 2>&1 || true
 fi
 
 caso "identity-swap: validate falla si identity.json cambia ids"

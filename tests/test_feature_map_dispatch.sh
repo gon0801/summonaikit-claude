@@ -70,6 +70,9 @@ printf '%s' "$out" | grep -E 'id=merge-happy-path' | grep -q 'status=blocked' \
 # ---------------------------------------------------------------------------
 reset_art() { rm -rf "$ART"; mkdir -p "$ART"; }
 
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "launch para drives sinteticos fallo: $out"
+
 caso "drive <id> sintetico PASS/0 escribe evidencia exclusiva"
 reset_art
 out="$(ctrl_synth PASS drive install-guardian 2>&1)" && rc=0 || rc=$?
@@ -160,9 +163,10 @@ printf '%s' "$out" | grep -Eqi 'BLOCKED|pending|unknown|sin ejecutor|blocked|ins
 
 caso "drive activo sin instancia (doctor faltante) no es PASS"
 reset_art
+ctrl cleanup >/dev/null 2>&1 || true
 out="$(ctrl drive install-guardian 2>&1)" && rc=0 || rc=$?
 [ "$rc" -ne 0 ] || malo "drive sin launch no debe PASS: $out"
-printf '%s' "$out" | grep -Eqi 'BLOCKED|doctor|instancia|launch|unknown|FAIL|activo' \
+printf '%s' "$out" | grep -Eqi 'BLOCKED|doctor|instancia|launch|unknown|FAIL|activo|ARTIFACTS|asign' \
   || malo "sin instancia sin motivo: $out"
 
 # ---------------------------------------------------------------------------
@@ -170,6 +174,8 @@ printf '%s' "$out" | grep -Eqi 'BLOCKED|doctor|instancia|launch|unknown|FAIL|act
 # ---------------------------------------------------------------------------
 caso "cuatro aliases sintetico PASS escriben evidencia v1"
 reset_art
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "launch para aliases sinteticos fallo: $out"
 for alias in drive-install-dry-run drive-audit-ledger drive-deploy-log; do
   out="$(ctrl_synth PASS "$alias" 2>&1)" && rc=0 || rc=$?
   [ "$rc" -eq 0 ] || malo "$alias sintetico PASS fallo: $out"
@@ -233,6 +239,74 @@ SAIKIT_VERIFY_MUTATE=reuse_attempt_id SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
   bash "$CTRL" drive audit-ledger >/dev/null 2>&1 || true
 n="$(find "$ART" -name summary.json | wc -l | tr -d ' ')"
 [ "$n" -eq 1 ] || malo "reuse_attempt_id debio dejar 1 summary (hay $n; protege exclusive-attempt-ids)"
+
+# ---------------------------------------------------------------------------
+# Driver real: entorno cerrado y exit no puede dejar summary PASS
+# ---------------------------------------------------------------------------
+caso "driver no hereda configuracion Git ni credenciales del caller"
+reset_art
+if [ ! -f "$STATE/state.json" ]; then
+  malo "falta run activo para driver aislado"
+else
+  safe_driver="$SANDBOX/safe-driver.sh"
+  cat > "$safe_driver" <<EOF
+#!/usr/bin/env bash
+set -eu
+skill_root='$SKILL'
+. "\$skill_root/scripts/lib/driver.sh"
+leak="\${GIT_DIR-}\${GIT_WORK_TREE-}\${GIT_CONFIG_GLOBAL-}\${GH_TOKEN-}"
+if [ -n "\$leak" ]; then
+  fm_fail ledger-ok header_AUDITORIA absent "leaked=\$leak"
+else
+  fm_pass ledger-ok header_AUDITORIA header clean-env
+fi
+fm_pass ledger-ok ledger_ok_line OK OK
+fm_pass ledger-ok exit_0 0 0
+fm_pass ledger-stale stale_reason stale stale
+EOF
+  chmod +x "$safe_driver"
+  out="$(env GIT_DIR="$SANDBOX/evil.git" GIT_WORK_TREE="$SANDBOX/evil-tree" \
+    GIT_CONFIG_GLOBAL="$SANDBOX/evil-config" GH_TOKEN=synthetic-secret \
+    SAIKIT_FM_DRIVER="$safe_driver" SAIKIT_VERIFY_STATE="$STATE" \
+    SAIKIT_VERIFY_ARTIFACTS="$ART" bash "$CTRL" drive audit-ledger 2>&1)" \
+    && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || malo "driver heredo GIT_*/GH_TOKEN o fallo: rc=$rc $out"
+fi
+
+caso "exit no cero del driver fuerza summary FAIL/1"
+reset_art
+crash_driver="$SANDBOX/crash-driver.sh"
+cat > "$crash_driver" <<EOF
+#!/usr/bin/env bash
+set -eu
+skill_root='$SKILL'
+. "\$skill_root/scripts/lib/driver.sh"
+fm_pass ledger-ok header_AUDITORIA header header
+fm_pass ledger-ok ledger_ok_line OK OK
+fm_pass ledger-ok exit_0 0 0
+fm_pass ledger-stale stale_reason stale stale
+exit 7
+EOF
+chmod +x "$crash_driver"
+out="$(SAIKIT_FM_DRIVER="$crash_driver" SAIKIT_VERIFY_STATE="$STATE" \
+  SAIKIT_VERIFY_ARTIFACTS="$ART" bash "$CTRL" drive audit-ledger 2>&1)" \
+  && rc=0 || rc=$?
+[ "$rc" -eq 1 ] || malo "driver exit 7 debio normalizarse a FAIL/1 (rc=$rc): $out"
+sum="$(find "$ART" -path '*audit-ledger*' -name summary.json | tail -1)"
+if [ -f "$sum" ]; then
+  python3 - "$sum" "$(dirname "$sum")/steps.jsonl" <<'PY' \
+    || malo "driver crash dejo evidencia incoherente"
+import json, sys
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+steps = [json.loads(x) for x in open(sys.argv[2], encoding="utf-8") if x.strip()]
+assert s.get("result") == "FAIL" and s.get("exit_code") == 1, s
+assert any(x.get("assertion_id") == "driver_exit" and x.get("result") == "FAIL"
+           for x in steps), steps
+PY
+else
+  malo "driver crash no dejo summary"
+fi
+ctrl cleanup >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
 # SKILL.md documenta los comandos nuevos

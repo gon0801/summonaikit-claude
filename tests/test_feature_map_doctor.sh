@@ -20,6 +20,7 @@ malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 
 SKILL="$repo/.cursor/skills/verify-summonaikit"
 CTRL="$SKILL/scripts/control-summonaikit"
+STATEPY="$SKILL/scripts/lib/state.py"
 DOCTOR="$SKILL/scripts/lib/doctor.py"
 SCHEMA="$SKILL/schemas/doctor.schema.json"
 CATALOG="$SKILL/features/catalog.json"
@@ -567,6 +568,9 @@ Path("$STATE/state.json").write_text(json.dumps({
   "token": "tok-planted-19-5",
 }, indent=2) + "\n", encoding="utf-8")
 PY
+python3 "$STATEPY" assign --state-dir "$STATE" --artifacts "$ART" \
+  --run-id planted --token tok-planted-19-5 \
+  || malo "no se pudo asignar STATE/ARTIFACTS del fixture propio"
 out="$(ctrl doctor 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "doctor con instancia propia debio 0: $out"
 printf '%s' "$out" | grep -q 'doctor: PASS' \

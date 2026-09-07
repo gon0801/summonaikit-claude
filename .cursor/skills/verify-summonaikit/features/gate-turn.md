@@ -21,7 +21,9 @@ must not create session state or block the turn.
 
 Preconditions:
 
-- `control-summonaikit doctor` reports `doctor: PASS`.
+- `control-summonaikit launch` created the isolated run. A scoped
+  `doctor gate-turn` may report the deferred hook as `MISSING`; the drive
+  prepares it from repo source before running the fixtures.
 - Fixture directories exist under `tests/fixtures/escenarios/`.
 
 - Case `gate-unarmed`: action Drive unarmed golden scenario; command `control-summonaikit drive-gate-scenario 01-sin-armar`; observable hook sha, steps `01 02 03`, `(sin estado)`, and no harness contract.

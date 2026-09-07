@@ -7,6 +7,7 @@
     "path": "scripts/drivers/install-hosts.sh"
   },
   "execution_mode": "sandbox",
+  "requires_hook": true,
   "surfaces": [
     "tools/install-hook.sh",
     "tools/check-hook-registration.sh"

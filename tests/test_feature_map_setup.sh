@@ -411,6 +411,33 @@ PY
     else
       kill -9 "$gpid" 2>/dev/null || true
     fi
+
+    caso "F13b: EOF del PTY no deja vivo al hijo"
+    eof_child="$SANDBOX/f13-eof.py"
+    eof_mark="$SANDBOX/f13-eof-pid"
+    cat > "$eof_child" <<'PY'
+import os, signal, sys, time
+child = os.fork()
+if child == 0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    open(sys.argv[1], "w", encoding="utf-8").write(str(os.getpid()))
+for fd in (0, 1, 2):
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+time.sleep(30)
+PY
+    PYTHONDONTWRITEBYTECODE=1 python3 "$PTY" \
+      --timeout 5 --cwd "$SANDBOX" --out "$SANDBOX/f13-eof.json" \
+      -- python3 "$eof_child" "$eof_mark" >/dev/null 2>&1 || true
+    eof_pid="$(cat "$eof_mark" 2>/dev/null || true)"
+    if [ -z "$eof_pid" ]; then
+      malo "F13b: hijo no dejo pid"
+    elif kill -0 "$eof_pid" 2>/dev/null; then
+      malo "F13b: EOF temprano dejo el hijo $eof_pid vivo"
+      kill -9 "$eof_pid" 2>/dev/null || true
+    fi
   fi
 fi
 

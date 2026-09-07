@@ -194,17 +194,17 @@ printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
 expect_fail "json-truncado-cli" 'JSON|truncad|mal formado|inválid|invalid' \
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
   bash "$CTRL" cli -- tools/check-deploy-log.sh
-# cleanup soft-clear: exit 0, motivo visible, desbloquea launch (no deadlock)
+# Sin marca de asignación, cleanup rechaza y no borra STATE ajeno.
 printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
 out="$(
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" cleanup 2>&1
 )" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "json-truncado-cleanup: debio salir 0 (soft-clear): $out"
+[ "$rc" -eq 1 ] || malo "json-truncado-cleanup: debio salir 1: $out"
 [ "$rc" -eq 3 ] && malo "json-truncado-cleanup: unknown (3) — aislamiento observado es FAIL"
-printf '%s' "$out" | grep -Eq 'JSON|truncad|mal formado|inválid|invalid|no recuperable' \
+printf '%s' "$out" | grep -Eq 'asign|no se borra|STATE|propio|ownership' \
   || malo "json-truncado-cleanup: sin motivo: $out"
-[ ! -f "$STATE/state.json" ] || malo "json-truncado-cleanup: debio borrar state.json"
+[ -f "$STATE/state.json" ] || malo "json-truncado-cleanup: borro STATE no asignado"
 
 # ---------------------------------------------------------------------------
 # Symlink escape
@@ -225,6 +225,106 @@ ln -s "$SANDBOX/outside-art" "$SANDBOX/art-link"
 expect_fail "symlink-art-launch" 'symlink|enlace|escape|físic|fisic' \
   env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$SANDBOX/art-link" \
   bash "$CTRL" launch
+
+caso "symlink en un padre de STATE se rechaza"
+reset_state
+parent_out="$SANDBOX/parent-state-out"
+parent_link="$SANDBOX/parent-state-link"
+mkdir -p "$parent_out"
+ln -s "$parent_out" "$parent_link"
+expect_fail "symlink-state-parent" 'symlink|enlace|escape|físic|fisic' \
+  env SAIKIT_VERIFY_STATE="$parent_link/state" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+  bash "$CTRL" launch
+[ ! -e "$parent_out/state/state.json" ] \
+  || malo "STATE atraveso un symlink padre y escribio fuera"
+
+caso "symlink en un padre de ARTIFACTS se rechaza"
+reset_state
+parent_art_out="$SANDBOX/parent-art-out"
+parent_art_link="$SANDBOX/parent-art-link"
+mkdir -p "$parent_art_out"
+ln -s "$parent_art_out" "$parent_art_link"
+expect_fail "symlink-art-parent" 'symlink|enlace|escape|físic|fisic' \
+  env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$parent_art_link/art" \
+  bash "$CTRL" launch
+[ ! -e "$parent_art_out/art/.saikit-assignment.json" ] \
+  || malo "ARTIFACTS atraveso un symlink padre y escribio fuera"
+
+caso "blocked no escribe en ARTIFACTS externo sin asignacion"
+reset_state
+blocked_out="$SANDBOX/blocked-outside"
+mkdir -p "$blocked_out"
+ln -s "$blocked_out" "$SANDBOX/blocked-art-link"
+expect_fail "blocked-art-unassigned" 'ARTIFACTS|artifact|asign|symlink|escape' \
+  env SAIKIT_VERIFY_STATE="$STATE" \
+  SAIKIT_VERIFY_ARTIFACTS="$SANDBOX/blocked-art-link" \
+  bash "$CTRL" drive no-such-feature
+[ -z "$(find "$blocked_out" -mindepth 1 -print -quit)" ] \
+  || malo "blocked escribio evidencia fuera del ARTIFACTS asignado"
+
+caso "drive rechaza symlink hijo dentro de ARTIFACTS"
+reset_state
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 0 ]; then
+  malo "child-art launch fallo: $out"
+else
+  child_run="$(python3 - "$STATE/state.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["run_id"])
+PY
+)"
+  child_out="$SANDBOX/child-art-outside"
+  mkdir -p "$ART/$child_run" "$child_out"
+  ln -s "$child_out" "$ART/$child_run/audit-ledger"
+  expect_fail "child-art-drive" 'artifact|symlink|escape|evidencia' \
+    ctrl drive audit-ledger
+  [ -z "$(find "$child_out" -mindepth 1 -print -quit)" ] \
+    || malo "drive escribio a traves de symlink hijo en ARTIFACTS"
+  ctrl cleanup >/dev/null 2>&1 || true
+fi
+
+caso "writes de asignacion y state.json no siguen symlinks hoja"
+reset_state
+assign_leaf="$SANDBOX/assign-leaf-sentinel"
+state_leaf="$SANDBOX/state-leaf-sentinel"
+printf 'KEEP-ASSIGN\n' > "$assign_leaf"
+printf 'KEEP-STATE\n' > "$state_leaf"
+assign_sha="$(sha_of "$assign_leaf")"
+state_sha="$(sha_of "$state_leaf")"
+ln -s "$assign_leaf" "$STATE/.saikit-assignment.json.tmp"
+ln -s "$state_leaf" "$STATE/state.json.tmp"
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "launch con symlinks hoja debio reemplazarlos sin seguirlos: $out"
+[ "$(sha_of "$assign_leaf")" = "$assign_sha" ] \
+  || malo "write_assignment siguio el symlink hoja externo"
+[ "$(sha_of "$state_leaf")" = "$state_sha" ] \
+  || malo "state save siguio el symlink hoja externo"
+[ -f "$STATE/.saikit-assignment.json" ] \
+  && [ ! -L "$STATE/.saikit-assignment.json" ] \
+  || malo "assignment final no es archivo regular"
+[ -f "$STATE/state.json" ] && [ ! -L "$STATE/state.json" ] \
+  || malo "state.json final no es archivo regular"
+ctrl cleanup >/dev/null 2>&1 || true
+
+caso "doctor.json no sigue un symlink hoja externo"
+reset_state
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 0 ]; then
+  malo "doctor-leaf launch fallo: $out"
+else
+  doctor_leaf="$SANDBOX/doctor-leaf-sentinel"
+  printf 'KEEP-DOCTOR\n' > "$doctor_leaf"
+  doctor_sha="$(sha_of "$doctor_leaf")"
+  ln -s "$doctor_leaf" "$ART/doctor.json"
+  doc_out="$(ctrl doctor 2>&1)" && doc_rc=0 || doc_rc=$?
+  [ "$doc_rc" -eq 3 ] \
+    || malo "doctor sin hook preparado debio unknown/3 y reemplazar symlink: $doc_out"
+  [ "$(sha_of "$doctor_leaf")" = "$doctor_sha" ] \
+    || malo "doctor siguio el symlink hoja externo"
+  [ -f "$ART/doctor.json" ] && [ ! -L "$ART/doctor.json" ] \
+    || malo "doctor.json final no es archivo regular"
+  ctrl cleanup >/dev/null 2>&1 || true
+fi
 
 caso "symlink escape en verify_home se rechaza"
 reset_state
@@ -461,26 +561,39 @@ p.write_text(json.dumps({
   "token": "not-this-run",
 }), encoding="utf-8")
 PY
-# Soft-clear: exit 0, state gone, foreign HOME untouched, launch unblocked.
+# Estado sin marca: FAIL y ni STATE ni HOME se tocan.
 out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "cleanup-ajeno: debio salir 0 (recuperacion): $out"
-printf '%s' "$out" | grep -Eq 'propio|ownership|perten|ajeno|token|marker|no recuperable|HOME no tocado' \
+[ "$rc" -eq 1 ] || malo "cleanup-ajeno: debio salir 1: $out"
+printf '%s' "$out" | grep -Eq 'propio|ownership|perten|ajeno|asign|token|marker|no recuperable|HOME no tocado' \
   || malo "cleanup-ajeno: sin motivo de ownership/recuperacion: $out"
 [ -f "$foreign/important.txt" ] || malo "cleanup borro temporal ajeno"
 [ -d "$foreign" ] || malo "cleanup elimino el dir ajeno"
-[ ! -f "$STATE/state.json" ] || malo "cleanup-ajeno: debio borrar state.json"
+[ -f "$STATE/state.json" ] || malo "cleanup-ajeno: borro state.json no asignado"
+reset_state
 out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "cleanup-ajeno: launch tras soft-clear debio pasar: $out"
+[ "$rc" -eq 0 ] || malo "cleanup-ajeno: launch tras reset explicito debio pasar: $out"
 ctrl cleanup >/dev/null 2>&1 || true
+
+caso "cleanup no-op conserva temporales de STATE sin asignacion"
+reset_state
+printf 'KEEP-TMP\n' > "$STATE/state.json.tmp"
+tmp_sha="$(sha_of "$STATE/state.json.tmp")"
+out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup no-op con tmp ajeno debio ser inocuo: $out"
+[ -f "$STATE/state.json.tmp" ] \
+  && [ "$(sha_of "$STATE/state.json.tmp")" = "$tmp_sha" ] \
+  || malo "cleanup no-op borro o muto state.json.tmp sin asignacion"
 
 # ---------------------------------------------------------------------------
 # Recuperacion: cleanup inocuo desbloquea launch (review major)
 # ---------------------------------------------------------------------------
 caso "cleanup recupera JSON truncado y desbloquea launch"
 reset_state
+out="$(ctrl launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "cleanup-truncado: launch inicial fallo: $out"
 printf '{"schema_version":1,"run_id":' > "$STATE/state.json"
 out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "cleanup-truncado: debio salir 0: $out"
+[ "$rc" -eq 1 ] || malo "cleanup-truncado: corrupcion observada debio salir 1: $out"
 printf '%s' "$out" | grep -Eq 'no recuperable|re-lanzar|HOME no tocado|truncad|mal formado' \
   || malo "cleanup-truncado: sin mensaje de recuperacion: $out"
 [ ! -f "$STATE/state.json" ] || malo "cleanup-truncado: debio borrar state.json"
@@ -496,7 +609,7 @@ vh="$(printf '%s\n' "$out" | sed -n 's/.*VERIFY_HOME=\([^ ]*\).*/\1/p' | head -1
 [ -n "$vh" ] && [ -d "$vh" ] || malo "cleanup-wipe: no se obtuvo VERIFY_HOME"
 rm -rf "$vh"
 out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "cleanup-wipe: debio salir 0: $out"
+[ "$rc" -eq 1 ] || malo "cleanup-wipe: ownership perdido debio salir 1: $out"
 printf '%s' "$out" | grep -Eq 'no recuperable|re-lanzar|HOME no tocado|propio|token|marker|already gone' \
   || malo "cleanup-wipe: sin mensaje de recuperacion: $out"
 [ ! -f "$STATE/state.json" ] || malo "cleanup-wipe: debio borrar state.json"
@@ -555,9 +668,9 @@ out="$(
 
 if [ "$rc" -eq 0 ]; then
   doc="$(ctrl doctor 2>&1)" && d_rc=0 || d_rc=$?
-  [ "$d_rc" -eq 0 ] || malo "doctor (sentinelas) fallo: $doc"
-  printf '%s' "$doc" | grep -q 'doctor: PASS' \
-    || malo "doctor no dijo PASS: $doc"
+  [ "$d_rc" -eq 3 ] || malo "doctor sin hook preparado debio unknown/3: $doc"
+  printf '%s' "$doc" | grep -Eqi 'MISSING|unknown|not prepared|no preparado' \
+    || malo "doctor sin hook no explico la precondicion: $doc"
 
   dry="$(ctrl drive-install-dry-run 2>&1)" && dry_rc=0 || dry_rc=$?
   [ "$dry_rc" -eq 0 ] || malo "drive-install-dry-run fallo: $dry"
@@ -617,6 +730,40 @@ else
   [ ! -e "$f2_hook" ] || malo "F2: instalo hook fuera del run"
 fi
 
+caso "cli contiene las rutas de escritura de todas las entradas publicas"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "cli-write-paths launch: $out"
+else
+  cli_external="$SANDBOX/cli-external"
+  mkdir -p "$cli_external"
+  printf 'KEEP\n' > "$cli_external/sentinel"
+  cli_ext_sha="$(sha_of "$cli_external/sentinel")"
+  expect_fail "cli-ci-root" 'escape|fuera del run|root|perten' \
+    ctrl cli -- tools/saikit-ci-minimo.sh --ofrecer --root "$cli_external"
+  expect_fail "cli-decision-dir" 'escape|fuera del run|dir|perten' \
+    ctrl cli -- tools/saikit-decision.sh --append --task x --etapa x \
+      --decision x --por-que x --evidencia x --resultado ok --dir "$cli_external"
+  expect_fail "cli-blast-dir" 'escape|fuera del run|dir|perten' \
+    ctrl cli -- tools/saikit-blast.sh --write --task x --hecho x \
+      --nivel 1 --dir "$cli_external"
+  expect_fail "cli-recetas-dir" 'escape|fuera del run|dir|perten' \
+    ctrl cli -- tools/gen-recetas-manifest.sh --dir "$cli_external"
+  expect_fail "cli-golden-record" 'escape|fuera del run|baseline|record|perten' \
+    ctrl cli -- tools/golden-harness.sh --record --baseline "$cli_external/base.txt"
+  expect_fail "cli-golden-hook" 'escape|fuera del run|hook|perten' \
+    ctrl cli -- tools/golden-harness.sh --print --hook "$cli_external/program.sh"
+  expect_fail "cli-verify-app" 'escape|fuera del run|repo|perten' \
+    ctrl cli -- skills/saikit-verificar-app/verificar.sh generar "$cli_external"
+  expect_fail "cli-capture-install" 'escape|fuera del run|repo|destino|perten' \
+    ctrl cli -- tools/capture-payloads.sh --instalar "$cli_external"
+  expect_fail "cli-stage-repo" 'escape|fuera del run|repo|desechable|perten' \
+    ctrl cli -- tools/stage-override.sh "$cli_external" --no-medir
+  [ "$(sha_of "$cli_external/sentinel")" = "$cli_ext_sha" ] \
+    || malo "una entrada CLI muto el sentinel externo"
+  ctrl cleanup >/dev/null 2>&1 || true
+fi
+
 caso "F3: tmpdir externo inexistente se rechaza y no se crea"
 reset_state
 if ! out="$(ctrl launch 2>&1)"; then
@@ -647,13 +794,102 @@ out="$(
   env SAIKIT_VERIFY_STATE="$SANDBOX/f4-state-link" SAIKIT_VERIFY_ARTIFACTS="$ART" \
     bash "$CTRL" cleanup 2>&1
 )" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "F4: debio salir 0: $out"
+[ "$rc" -eq 1 ] || malo "F4: symlink observado debio salir 1: $out"
 [ "$rc" -eq 3 ] && malo "F4: unknown (3) — aislamiento observado es FAIL"
 printf '%s' "$out" | grep -Eq 'symlink|asignad|no se borra|escape|STATE' \
   || malo "F4: sin motivo visible: $out"
 [ -f "$f4_out/state.json" ] || malo "F4: borro state.json externo"
 printf '%s' "$(cat "$f4_out/state.json")" | grep -q 'not-json' \
   || malo "F4: muto state.json externo"
+
+caso "owned_temps adulterado no amplia la pertenencia del run"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "owned-forged-launch: $out"
+else
+  forged_tmp="$SANDBOX/forged-owned/tmp"
+  python3 - "$STATE/state.json" "$SANDBOX/forged-owned" "$forged_tmp" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["owned_temps"].append(sys.argv[2])
+data["tmpdir"] = sys.argv[3]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  expect_fail "owned-forged" 'owned_temps|tmpdir|escape|fuera del run|perten' \
+    env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help
+  [ ! -e "$forged_tmp" ] || malo "owned_temps adulterado creo un tmp externo"
+fi
+
+caso "repo adulterado no redirige una entrada publica del CLI"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "repo-forged-launch: $out"
+else
+  fake_repo="$SANDBOX/fake-repo"
+  fake_hit="$SANDBOX/fake-repo-ran"
+  mkdir -p "$fake_repo/tools"
+  cat > "$fake_repo/tools/check-deploy-log.sh" <<EOF
+#!/usr/bin/env bash
+printf 'RAN\n' > '$fake_hit'
+EOF
+  chmod +x "$fake_repo/tools/check-deploy-log.sh"
+  python3 - "$STATE/state.json" "$fake_repo" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["repo"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  expect_fail "repo-forged" 'repo|escape|fuera del run|asign|identity|identidad' \
+    env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help
+  [ ! -e "$fake_hit" ] || malo "repo adulterado ejecuto una herramienta ajena"
+fi
+
+caso "artifacts adulterado no cambia el destino asignado al run"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "artifacts-forged-launch: $out"
+else
+  forged_art="$SANDBOX/forged-artifacts"
+  python3 - "$STATE/state.json" "$forged_art" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["artifacts_dir"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  expect_fail "artifacts-forged" 'artifact|asign|identity|identidad|escape|perten' \
+    env SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$forged_art" \
+    bash "$CTRL" doctor
+  [ ! -e "$forged_art/doctor.json" ] \
+    || malo "artifacts adulterado recibio doctor.json fuera del destino asignado"
+fi
+
+caso "copiar STATE no transfiere la asignacion del run"
+reset_state
+if ! out="$(ctrl launch 2>&1)"; then
+  malo "state-copy-launch: $out"
+else
+  copied_state="$SANDBOX/copied-state"
+  cp -R "$STATE" "$copied_state"
+  python3 - "$copied_state/state.json" "$copied_state" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["state_dir"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  expect_fail "state-copy" 'STATE|state_dir|asign|identity|identidad|perten' \
+    env SAIKIT_VERIFY_STATE="$copied_state" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help
+fi
 
 # ---------------------------------------------------------------------------
 # Mutaciones: cada guardia, un caso que se pone verde en falso
@@ -739,6 +975,57 @@ SAIKIT_VERIFY_MUTATE=skip_physical_path \
   bash "$CTRL" cleanup >/dev/null 2>&1 || true
 [ ! -f "$f4m/state.json" ] || malo "mutacion skip_physical_path F4 debio borrar state.json externo"
 
+caso "mutacion skip_physical_path: owned_temps adulterado amplia la allowlist"
+reset_state
+if ! ctrl launch >/dev/null 2>&1; then
+  malo "mut-owned-launch fallo"
+else
+  owned_mut="$SANDBOX/mut-forged-owned"
+  tmp_mut="$owned_mut/tmp"
+  python3 - "$STATE/state.json" "$owned_mut" "$tmp_mut" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["owned_temps"].append(sys.argv[2])
+data["tmpdir"] = sys.argv[3]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  SAIKIT_VERIFY_MUTATE=skip_physical_path \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help >/dev/null 2>&1 || true
+  [ -d "$tmp_mut" ] \
+    || malo "mutacion skip_physical_path debio crear tmp de owned_temps adulterado"
+fi
+
+caso "mutacion skip_physical_path: repo adulterado ejecuta la entrada ajena"
+reset_state
+if ! ctrl launch >/dev/null 2>&1; then
+  malo "mut-repo-launch fallo"
+else
+  fake_repo_mut="$SANDBOX/mut-fake-repo"
+  fake_hit_mut="$SANDBOX/mut-fake-repo-ran"
+  mkdir -p "$fake_repo_mut/tools"
+  cat > "$fake_repo_mut/tools/check-deploy-log.sh" <<EOF
+#!/usr/bin/env bash
+printf 'RAN\n' > '$fake_hit_mut'
+EOF
+  chmod +x "$fake_repo_mut/tools/check-deploy-log.sh"
+  python3 - "$STATE/state.json" "$fake_repo_mut" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+data["repo"] = sys.argv[2]
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+  SAIKIT_VERIFY_MUTATE=skip_physical_path \
+    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+    bash "$CTRL" cli -- tools/check-deploy-log.sh --help >/dev/null 2>&1 || true
+  [ -f "$fake_hit_mut" ] \
+    || malo "mutacion skip_physical_path debio ejecutar repo adulterado"
+fi
+
 caso "mutacion skip_env_sanitize: override grok deja de atraparse"
 reset_state
 ext_mut="$SANDBOX/mut-grok-hooks"
@@ -821,11 +1108,11 @@ PY
 }
 plant_foreign_state
 out="$(ctrl cleanup 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 0 ] || malo "mut-clean-baseline: soft-clear debio salir 0: $out"
+[ "$rc" -eq 1 ] || malo "mut-clean-baseline: estado ajeno debio salir 1: $out"
 [ -f "$foreign_mut/important.txt" ] || malo "baseline cleanup borro ajeno"
-[ ! -f "$STATE/state.json" ] || malo "mut-clean-baseline: debio borrar state.json"
-# Reponer estado para la mitad mutada (cleanup pudo rmdir STATE)
-mkdir -p "$STATE" "$ART"
+[ -f "$STATE/state.json" ] || malo "mut-clean-baseline: borro state.json ajeno"
+# Reponer estado para la mitad mutada.
+reset_state
 plant_foreign_state
 if SAIKIT_VERIFY_MUTATE=skip_cleanup_ownership \
    SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \

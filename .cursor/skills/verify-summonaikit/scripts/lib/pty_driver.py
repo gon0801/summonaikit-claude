@@ -170,6 +170,7 @@ def run(
     transcript = ""
     sent = 0
     timed_out = False
+    pty_eof = False
     killed = False
     reaped = False
     status: int | None = None
@@ -191,6 +192,7 @@ def run(
                 except OSError:
                     chunk = b""
                 if not chunk:
+                    pty_eof = True
                     break
                 transcript += chunk.decode("utf-8", "replace")
                 while sent < len(answers):
@@ -244,6 +246,23 @@ def run(
                 if leftover is not None:
                     status = leftover
                     reaped = True
+        elif not reaped and do_killpg:
+            # EOF only closes the terminal stream. The child (or one of its
+            # descendants) may still be alive after closing fd 0/1/2.
+            kill_group(pid, signal.SIGTERM)
+            term_status = reap(pid, 1.0)
+            if term_status is not None:
+                status = term_status
+                reaped = True
+            # The leader may have exited while a descendant in the same
+            # process group ignored SIGTERM. Always clear the whole group.
+            kill_group(pid, signal.SIGKILL)
+            if not reaped:
+                kill_status = reap(pid, 1.0)
+                if kill_status is not None:
+                    status = kill_status
+                    reaped = True
+            killed = True
         elif not reaped:
             try:
                 wpid, st = os.waitpid(pid, os.WNOHANG)
@@ -264,7 +283,7 @@ def run(
         "killed": killed,
         "reaped": reaped,
         "transcript": transcript,
-        "reason": "timeout" if timed_out else "",
+        "reason": "timeout" if timed_out else ("PTY EOF before child exit" if pty_eof and killed else ""),
         "answers_sent": sent,
     }
 

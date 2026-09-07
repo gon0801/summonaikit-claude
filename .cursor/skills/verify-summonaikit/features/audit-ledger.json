@@ -8,7 +8,7 @@
   },
   "execution_mode": "sandbox",
   "surfaces": ["tools/audita-ledger.sh"],
-  "requirements": ["doctor"],
+  "requirements": [],
   "cases": [
     {
       "id": "ledger-ok",

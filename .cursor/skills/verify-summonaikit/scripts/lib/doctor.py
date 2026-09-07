@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -228,9 +229,9 @@ def eval_instance(state: dict[str, Any] | None, repo: Path) -> dict[str, Any]:
     if not dest.is_file():
         return req_result(
             kind="instance",
-            result="FAIL",
-            availability="failed",
-            reason="hook not installed at DEST",
+            result="unknown",
+            availability="MISSING",
+            reason="hook not prepared at DEST; run a hook-dependent drive",
         )
     try:
         head = dest.read_text(encoding="utf-8", errors="replace").splitlines()[:4]
@@ -614,47 +615,73 @@ def check_isolation(
     state_mod: Any,
     state_dir: Path,
     artifacts: Path,
+    repo: Path,
     mutate: str,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], dict[str, Any] | None, bool]:
     skip = mutate == "skip_isolation"
     iso_mutate = "skip_physical_path" if skip else mutate
     try:
         state_mod.reject_legacy(state_dir)
     except state_mod.StateError as e:
-        return {"result": "FAIL", "reason": str(e)}, None
+        return {"result": "FAIL", "reason": str(e)}, None, False
     try:
         state_mod.assert_assigned(str(state_dir), "STATE", mutate=iso_mutate)
         state_mod.assert_assigned(str(artifacts), "artifacts", mutate=iso_mutate)
     except state_mod.StateError as e:
         if skip:
-            return {"result": "PASS", "reason": "skip_isolation"}, None
-        return {"result": "FAIL", "reason": str(e)}, None
+            return {"result": "PASS", "reason": "skip_isolation"}, None, True
+        return {"result": "FAIL", "reason": str(e)}, None, False
 
     path = state_dir / "state.json"
     if not path.is_file():
-        return {"result": "PASS", "reason": ""}, None
+        return {"result": "PASS", "reason": ""}, None, True
+    artifacts_safe = False
     try:
         data = state_mod.load_json_file(path)
+        if isinstance(data, dict):
+            state_mod.assert_assignment(
+                state_dir,
+                artifacts,
+                str(data.get("run_id") or ""),
+                str(data.get("token") or ""),
+                "artifacts_dir",
+            )
+            artifacts_safe = True
         data = state_mod.validate_payload(
             data,
             state_dir=state_dir,
             artifacts=artifacts,
+            repo=repo,
             mutate=iso_mutate,
             mode="doctor",
         )
     except state_mod.StateError as e:
         msg = str(e)
         if skip and is_escape_reason(msg):
-            return {"result": "PASS", "reason": "skip_isolation"}, None
-        return {"result": "FAIL", "reason": msg}, None
-    return {"result": "PASS", "reason": ""}, data
+            return {"result": "PASS", "reason": "skip_isolation"}, None, True
+        return {"result": "FAIL", "reason": msg}, None, artifacts_safe
+    return {"result": "PASS", "reason": ""}, data, True
 
 
 def write_doctor_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    fd, raw_tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    tmp = Path(raw_tmp)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fd = -1
+            fh.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def human_report(payload: dict[str, Any]) -> None:
@@ -694,7 +721,9 @@ def run(args: argparse.Namespace) -> int:
         return 1
 
     state_mod = load_state_mod()
-    isolation, state = check_isolation(state_mod, state_dir, artifacts, mutate)
+    isolation, state, artifacts_safe = check_isolation(
+        state_mod, state_dir, artifacts, repo, mutate
+    )
     isolation_fail = (
         isolation["reason"] if isolation.get("result") == "FAIL" else None
     )
@@ -775,11 +804,12 @@ def run(args: argparse.Namespace) -> int:
         "exit_code": EXIT_FOR[overall],
         "scope": scope or "all",
     }
-    try:
-        write_doctor_json(artifacts / "doctor.json", payload)
-    except OSError as e:
-        print(f"control-summonaikit: no se pudo escribir doctor.json: {e}", file=sys.stderr)
-        return 1
+    if artifacts_safe:
+        try:
+            write_doctor_json(artifacts / "doctor.json", payload)
+        except OSError as e:
+            print(f"control-summonaikit: no se pudo escribir doctor.json: {e}", file=sys.stderr)
+            return 1
     human_report(payload)
     return int(payload["exit_code"])
 

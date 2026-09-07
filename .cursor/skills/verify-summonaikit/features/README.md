@@ -10,10 +10,12 @@ matching feature file as the recipe.
   directory under `/tmp` (or `$TMPDIR`).
 - Put `control-summonaikit` on your invocation path:
   `.cursor/skills/verify-summonaikit/scripts/control-summonaikit`.
-- Run `control-summonaikit doctor` and require `doctor: PASS`.
+- Run `control-summonaikit doctor <feature-id>` and resolve any `FAIL`.
+  A fresh run can report the deferred hook as `MISSING`; a hook-dependent
+  drive prepares it inside the run before observing the feature.
 - Never drive the live `~/.claude`, `~/.grok`, `~/.dsh`, or `~/.codex` profiles.
-- Prefer repo source via the launched `VERIFY_DEST`; do not assume the live
-  installed hook matches the checkout.
+- Hook-dependent drives prepare `VERIFY_DEST` from repo source; do not assume
+  the live installed hook matches the checkout.
 
 ## Driving conventions
 

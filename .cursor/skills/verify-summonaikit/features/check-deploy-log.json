@@ -8,7 +8,7 @@
   },
   "execution_mode": "sandbox",
   "surfaces": ["tools/check-deploy-log.sh"],
-  "requirements": ["doctor", "docs/deploy-log.md"],
+  "requirements": ["docs/deploy-log.md"],
   "cases": [
     {
       "id": "deploy-log-ok",

@@ -18,7 +18,8 @@ fields, and one record per PR/change after a merge deploy.
 
 Preconditions:
 
-- `control-summonaikit doctor` reports `doctor: PASS`.
+- `control-summonaikit doctor check-deploy-log` reports `doctor: PASS`; this
+  fixture audit does not require hook preparation.
 - The driver writes disposable fixtures; it does not rewrite the checkout log.
 
 - Case `deploy-log-ok`: action Validate a well-formed fixture; command `control-summonaikit drive-deploy-log`; observable exit `0` and `[deploy-log] OK`.

@@ -90,6 +90,21 @@ runtime_exec() {
       LOGNAME="${LOGNAME:-}" \
       TERM="${TERM:-dumb}" \
       TZ="${TZ:-}" \
+      VERIFY_HOME="${VERIFY_HOME:-}" \
+      VERIFY_DEST="${VERIFY_DEST:-}" \
+      VERIFY_RUN_ID="${VERIFY_RUN_ID:-}" \
+      VERIFY_REPO="${VERIFY_REPO:-}" \
+      VERIFY_TMPDIR="${VERIFY_TMPDIR:-}" \
+      SAIKIT_FM_ATTEMPT_DIR="${SAIKIT_FM_ATTEMPT_DIR:-}" \
+      SAIKIT_FM_FEATURE="${SAIKIT_FM_FEATURE:-}" \
+      SAIKIT_FM_SCOPE="${SAIKIT_FM_SCOPE:-}" \
+      SAIKIT_FM_ONLY_CASE="${SAIKIT_FM_ONLY_CASE:-}" \
+      SAIKIT_FM_EVIDENCE="${SAIKIT_FM_EVIDENCE:-}" \
+      SAIKIT_FM_DRY_DEST="${SAIKIT_FM_DRY_DEST:-}" \
+      SAIKIT_FM_SYNTH_SECRET="${SAIKIT_FM_SYNTH_SECRET:-}" \
+      SAIKIT_FM_PTY="${SAIKIT_FM_PTY:-}" \
+      SAIKIT_VERIFY_PTY="${SAIKIT_VERIFY_PTY:-}" \
+      SAIKIT_VERIFY_MUTATE="${SAIKIT_VERIFY_MUTATE:-}" \
       "$@"
   )
 }
@@ -148,7 +163,8 @@ runtime_clear_state_files() {
     --label STATE \
     --mutate "$(runtime_mutate)" \
     >/dev/null 2>&1 || return 1
-  rm -f "$STATE_DIR/state.json" "$STATE_DIR/state.json.tmp"
+  rm -f "$STATE_DIR/state.json" "$STATE_DIR/state.json.tmp" \
+    "$STATE_DIR/.saikit-assignment.json" "$STATE_DIR/.saikit-assignment.json.tmp"
   rmdir "$STATE_DIR/.active" 2>/dev/null || true
   rmdir "$STATE_DIR" 2>/dev/null || true
 }

@@ -221,6 +221,45 @@ for line in open(sys.argv[1], encoding="utf-8"):
 PY
 fi
 
+caso "fake gh rechaza PR, flags y SHA distintos del fixture"
+verify_tmp="$(python3 - "$STATE/state.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["tmpdir"])
+PY
+)"
+fake_gh="$verify_tmp/saikit-merge-sb/bin/gh"
+gh_fix="$verify_tmp/saikit-merge-sb/ghfix"
+if [ ! -x "$fake_gh" ]; then
+  malo "no quedo fake gh para probar su contrato"
+else
+  rm -f "$gh_fix/merge-fail"
+  read -r expected_pr expected_sha <<EOF
+$(python3 - "$gh_fix/pr.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+print(d["number"], d["headRefOid"])
+PY
+)
+EOF
+  printf '%s\n' "$expected_pr" > "$gh_fix/expected-pr"
+  printf '%s\n' "$expected_sha" > "$gh_fix/expected-sha"
+  expect_fake_reject() {
+    local label="$1"; shift
+    SAIKIT_GH_FIX="$gh_fix" SAIKIT_GH_LOG="$verify_tmp/fake-contract.log" \
+      "$fake_gh" "$@" >/dev/null 2>&1 && \
+      malo "$label: fake gh acepto argv incorrecto"
+  }
+  expect_fake_reject wrong-pr pr merge 999 --squash \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject missing-squash pr merge "$expected_pr" \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject duplicate-squash pr merge "$expected_pr" --squash --squash \
+    --match-head-commit "$expected_sha" --body "Saikit-Merge: $expected_sha"
+  expect_fake_reject wrong-sha pr merge "$expected_pr" --squash \
+    --match-head-commit 0000000000000000000000000000000000000000 \
+    --body "Saikit-Merge: $expected_sha"
+fi
+
 # ---------------------------------------------------------------------------
 # Mutantes
 # ---------------------------------------------------------------------------

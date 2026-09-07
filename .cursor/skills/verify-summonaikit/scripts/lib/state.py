@@ -11,11 +11,13 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
 SCHEMA_VERSION = 1
 MARKER_NAME = ".saikit-run"
+ASSIGNMENT_NAME = ".saikit-assignment.json"
 REQUIRED = (
     "schema_version",
     "run_id",
@@ -43,6 +45,13 @@ INSTALL_HOOK_PATH_FLAGS = {
     "--source": "repo",
     "--manifest": "repo",
 }
+RUN_PATH_FLAGS: dict[str, tuple[str, ...]] = {
+    "tools/saikit-ci-minimo.sh": ("--root",),
+    "tools/saikit-decision.sh": ("--dir",),
+    "tools/saikit-blast.sh": ("--dir",),
+    "tools/gen-recetas-manifest.sh": ("--dir",),
+    "tools/capture-payloads.sh": ("--capture-dir", "--only-cwd"),
+}
 # `;|&$\`` y expansiones: peligrosos si alguien sourceara el valor.
 _UNSAFE = re.compile(r"[\n\r;|&`$]|\$\(|&&|\|\|")
 
@@ -65,9 +74,20 @@ def lexical_safe(value: str, label: str) -> None:
 
 
 def assert_no_symlink(path: Path, label: str) -> None:
-    # Solo el path pedido: /tmp → /private/tmp en macOS no es un escape.
-    if path.is_symlink():
-        raise StateError(f"symlink escape: {label}")
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not current.is_symlink():
+            continue
+        # Alias del sistema en macOS; no es configuración controlada por el run.
+        system_alias = (
+            current.parent == Path(current.anchor)
+            and current.name in {"tmp", "var", "etc"}
+            and current.resolve() == Path("/private") / current.name
+        )
+        if not system_alias:
+            raise StateError(f"symlink escape: {label}")
 
 
 def assert_under(child: Path, root: Path, label: str) -> None:
@@ -75,6 +95,11 @@ def assert_under(child: Path, root: Path, label: str) -> None:
         child.resolve().relative_to(root.resolve())
     except ValueError as e:
         raise StateError(f"escape: {label} fuera del run") from e
+
+
+def assert_same_path(actual: Path, expected: Path, label: str) -> None:
+    if actual.resolve() != expected.resolve():
+        raise StateError(f"{label}: no coincide con la asignación del run")
 
 
 def assert_run_member(path: Path, roots: Sequence[Path], label: str) -> None:
@@ -118,6 +143,92 @@ def assert_owned(home: Path, run_id: str, token: str, label: str) -> None:
         raise StateError(f"{label} no es propio de este run (token/marker)")
 
 
+def assignment_path(directory: Path) -> Path:
+    return directory / ASSIGNMENT_NAME
+
+
+def atomic_write(dest: Path, text: str) -> None:
+    """Write beside dest and replace its leaf without following a symlink."""
+    fd, raw_tmp = tempfile.mkstemp(prefix=f".{dest.name}.", dir=dest.parent)
+    tmp = Path(raw_tmp)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fd = -1
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, dest)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def write_assignment(
+    state_dir: Path, artifacts: Path, run_id: str, token: str
+) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    artifacts.mkdir(parents=True, exist_ok=True)
+    os.chmod(state_dir, 0o700)
+    os.chmod(artifacts, 0o700)
+    marker = assignment_path(state_dir)
+    atomic_write(
+        marker,
+        json.dumps(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "run_id": run_id,
+                "token": token,
+                "state_dir": str(state_dir.resolve()),
+                "artifacts_dir": str(artifacts.resolve()),
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+    )
+
+
+def load_assignment(state_dir: Path, artifacts: Path, label: str) -> dict[str, Any]:
+    marker = assignment_path(state_dir)
+    if marker.is_symlink() or not marker.is_file():
+        raise StateError(f"{label}: falta asignación privada del run")
+    data = load_json_file(marker)
+    if not isinstance(data, dict):
+        raise StateError(f"{label}: asignación inválida")
+    if data.get("schema_version") != SCHEMA_VERSION:
+        raise StateError(f"{label}: schema de asignación inválido")
+    if not data.get("run_id") or not data.get("token"):
+        raise StateError(f"{label}: asignación sin identidad")
+    if data.get("state_dir") != str(state_dir.resolve()):
+        raise StateError(f"{label}: STATE no coincide con su asignación")
+    if data.get("artifacts_dir") != str(artifacts.resolve()):
+        raise StateError(f"{label}: ARTIFACTS no coincide con su asignación")
+    return data
+
+
+def assert_assignment(
+    state_dir: Path,
+    artifacts: Path,
+    run_id: str,
+    token: str,
+    label: str,
+) -> None:
+    data = load_assignment(state_dir, artifacts, label)
+    expected = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "token": token,
+        "state_dir": str(state_dir.resolve()),
+        "artifacts_dir": str(artifacts.resolve()),
+    }
+    if data != expected:
+        raise StateError(f"{label}: asignación no pertenece a este run")
+
+
 def assert_assigned(path_str: str, label: str, *, mutate: str | None) -> Path:
     if mutate != "skip_physical_path":
         lexical_safe(path_str, label)
@@ -151,6 +262,7 @@ def validate_payload(
     *,
     state_dir: Path,
     artifacts: Path,
+    repo: Path,
     mutate: str | None,
     mode: str,
 ) -> dict[str, Any]:
@@ -209,22 +321,34 @@ def validate_payload(
     home = Path(data["verify_home"])
     dest = Path(data["dest"])
     tmpdir = Path(data["tmpdir"])
+    run_id = str(data["run_id"])
+    token = str(data["token"])
     assert_no_symlink(home, "verify_home")
     assert_no_symlink(Path(data["state_dir"]), "state_dir")
     assert_no_symlink(Path(data["artifacts_dir"]), "artifacts_dir")
-    roots = [home]
+    assert_same_path(Path(data["repo"]), repo, "repo")
+    assert_same_path(Path(data["state_dir"]), state_dir, "state_dir")
+    assert_same_path(Path(data["artifacts_dir"]), artifacts, "artifacts_dir")
+    if not skip_own:
+        assert_assignment(
+            state_dir, artifacts, run_id, token, "STATE/ARTIFACTS"
+        )
+
     for item in data["owned_temps"]:
-        roots.append(Path(item))
-    assert_run_member(tmpdir, roots, "tmpdir")
-    assert_run_member(dest, roots, "dest")
+        assert_run_member(Path(item), [home], "owned_temps")
+    assert_run_member(tmpdir, [home], "tmpdir")
+    assert_run_member(dest, [home], "dest")
     for host, dest_s in data["host_dests"].items():
-        assert_run_member(Path(dest_s), roots, f"host_dests.{host}")
+        assert_run_member(Path(dest_s), [home], f"host_dests.{host}")
+    for opt in ("git_common_dir", "disposable_repo"):
+        if data.get(opt):
+            assert_run_member(Path(data[opt]), [home], opt)
 
     if mode != "cleanup" or not skip_own:
         if mode == "cleanup" and skip_own:
             pass
         else:
-            assert_owned(home, str(data["run_id"]), str(data["token"]), "verify_home")
+            assert_owned(home, run_id, token, "verify_home")
 
     if mode == "cleanup" and skip_own:
         return data
@@ -264,6 +388,7 @@ def cmd_load(args: argparse.Namespace) -> int:
             data,
             state_dir=state_dir,
             artifacts=artifacts,
+            repo=Path(args.repo),
             mutate=mutate,
             mode=args.mode,
         )
@@ -283,18 +408,39 @@ def cmd_save(args: argparse.Namespace) -> int:
         state_dir = Path(args.state_dir)
         state_dir.mkdir(parents=True, exist_ok=True)
         dest = state_dir / "state.json"
-        tmp = state_dir / "state.json.tmp"
-        tmp.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-        os.chmod(tmp, 0o600)
-        tmp.replace(dest)
+        atomic_write(dest, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     except StateError as e:
         err(str(e))
         return 1
     except OSError as e:
         err(f"no se pudo escribir state.json: {e}")
         return 1
+    return 0
+
+
+def cmd_assign(args: argparse.Namespace) -> int:
+    try:
+        write_assignment(
+            Path(args.state_dir), Path(args.artifacts), args.run_id, args.token
+        )
+    except (OSError, StateError) as e:
+        err(f"no se pudo asignar directorios privados: {e}")
+        return 1
+    return 0
+
+
+def cmd_check_assignment(args: argparse.Namespace) -> int:
+    try:
+        state_dir = Path(args.state_dir)
+        artifacts = Path(args.artifacts)
+        assert_assigned(str(state_dir), "STATE", mutate=None)
+        assert_assigned(str(artifacts), "ARTIFACTS", mutate=None)
+        data = load_assignment(state_dir, artifacts, "STATE/ARTIFACTS")
+    except StateError as e:
+        err(str(e))
+        return 1
+    json.dump(data, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
     return 0
 
 
@@ -373,6 +519,22 @@ def cmd_cli_ok(args: argparse.Namespace) -> int:
             raise StateError(
                 "cli no admite comandos fuera del catálogo público"
             )
+        home = Path(args.home) if args.home else None
+        run_roots: list[Path] = [home] if home else []
+        run_roots.extend(Path(item) for item in (args.owned_temp or []) if item)
+
+        def require_run_path(raw: str, label: str) -> None:
+            if home is None:
+                raise StateError(f"cli: falta --home para validar {label}")
+            assert_run_member(resolve_cli_path(raw, home), run_roots, label)
+
+        def require_trusted_path(raw: str, label: str) -> None:
+            if home is None:
+                raise StateError(f"cli: falta --home para validar {label}")
+            assert_run_member(
+                resolve_cli_path(raw, home), [repo, *run_roots], label
+            )
+
         for extra in argv[1:]:
             if extra.startswith("-"):
                 continue
@@ -380,26 +542,60 @@ def cmd_cli_ok(args: argparse.Namespace) -> int:
                 raise StateError("cli: argumento con metacaracteres de shell")
             if ".." in Path(extra).parts:
                 raise StateError("cli: argumento con .. escape")
+        if mutate != "skip_physical_path" and tool in RUN_PATH_FLAGS:
+            for flag, raw in iter_flag_values(argv, RUN_PATH_FLAGS[tool]):
+                require_run_path(raw, f"cli {flag}")
+
         if tool == INSTALL_HOOK and mutate != "skip_physical_path":
             pairs = iter_flag_values(argv, tuple(INSTALL_HOOK_PATH_FLAGS))
             if pairs:
-                if not args.home:
-                    raise StateError("cli: falta --home para validar dest")
-                home = Path(args.home)
-                run_roots = [home]
-                for item in args.owned_temp or []:
-                    if item:
-                        run_roots.append(Path(item))
                 for flag, raw in pairs:
                     kind = INSTALL_HOOK_PATH_FLAGS[flag]
                     if kind == "run":
-                        assert_run_member(
-                            resolve_cli_path(raw, home), run_roots, f"cli {flag}"
-                        )
+                        require_run_path(raw, f"cli {flag}")
                     else:
                         assert_run_member(
                             resolve_cli_path(raw, repo), [repo], f"cli {flag}"
                         )
+        if mutate != "skip_physical_path" and tool == "tools/golden-harness.sh":
+            for flag, raw in iter_flag_values(
+                argv, ("--hook", "--scenarios", "--baseline")
+            ):
+                require_trusted_path(raw, f"cli {flag}")
+            if "--record" in argv:
+                pairs = iter_flag_values(argv, ("--baseline",))
+                if not pairs:
+                    raise StateError(
+                        "cli: --record exige --baseline dentro del run"
+                    )
+                for flag, raw in pairs:
+                    require_run_path(raw, f"cli {flag}")
+        if (
+            mutate != "skip_physical_path"
+            and tool == "skills/saikit-verificar-app/verificar.sh"
+        ):
+            if len(argv) < 3 or argv[1] not in {"generar", "estado"}:
+                raise StateError("cli: verificar-app exige generar|estado y repo")
+            require_run_path(argv[2], "cli verificar-app repo")
+        if mutate != "skip_physical_path" and tool == "tools/gen-recetas-manifest.sh":
+            if "--check" not in argv and not iter_flag_values(argv, ("--dir",)):
+                raise StateError("cli: generar recetas exige --dir dentro del run")
+        if mutate != "skip_physical_path" and tool == "tools/capture-payloads.sh":
+            for mode in ("--instalar", "--cosechar", "--quitar"):
+                for _, raw in iter_flag_values(argv, (mode,)):
+                    require_run_path(raw, f"cli {mode} repo")
+        if mutate != "skip_physical_path" and tool == "tools/stage-override.sh":
+            if len(argv) < 2 or argv[1].startswith("-"):
+                raise StateError("cli: stage-override exige repo desechable")
+            require_run_path(argv[1], "cli stage repo")
+            for flag, raw in iter_flag_values(argv, ("--settings",)):
+                require_run_path(raw, f"cli {flag}")
+            for flag, raw in iter_flag_values(
+                argv, ("--source", "--manifest", "--installer")
+            ):
+                assert_run_member(
+                    resolve_cli_path(raw, repo), [repo], f"cli {flag}"
+                )
         if tool in WRITE_TOOLS and mutate != "skip_cwd_isolation":
             cwd = Path(args.cwd).resolve()
             repo_r = repo.resolve()
@@ -463,6 +659,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--state-dir", required=True)
     p.add_argument("--payload", required=True)
     p.set_defaults(func=cmd_save)
+
+    p = sub.add_parser("assign")
+    p.add_argument("--state-dir", required=True)
+    p.add_argument("--artifacts", required=True)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--token", required=True)
+    p.set_defaults(func=cmd_assign)
+
+    p = sub.add_parser("check-assignment")
+    p.add_argument("--state-dir", required=True)
+    p.add_argument("--artifacts", required=True)
+    p.set_defaults(func=cmd_check_assignment)
 
     p = sub.add_parser("cli-ok")
     p.add_argument("--catalog", required=True)

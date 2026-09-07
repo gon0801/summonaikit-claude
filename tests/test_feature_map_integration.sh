@@ -363,6 +363,62 @@ fi
 # ---------------------------------------------------------------------------
 # Combo doctor → drive → reintento → cleanup (evidencia sobrevive)
 # ---------------------------------------------------------------------------
+caso "launch y auditorias de fixtures no dependen de hook/installer"
+lazy_repo="$SANDBOX/lazy-repo"
+lazy_skill="$lazy_repo/.cursor/skills/verify-summonaikit"
+mkdir -p "$lazy_repo/.cursor/skills" "$lazy_repo/tools" "$lazy_repo/docs"
+cp -R "$SKILL" "$lazy_skill"
+cp "$repo/tools/audita-ledger.sh" "$repo/tools/check-deploy-log.sh" "$lazy_repo/tools/"
+cp "$repo/docs/deploy-log.md" "$lazy_repo/docs/deploy-log.md"
+lazy_ctrl="$lazy_skill/scripts/control-summonaikit"
+lazy_state="$SANDBOX/lazy-state"
+lazy_art="$SANDBOX/lazy-artifacts"
+mkdir -p "$lazy_state" "$lazy_art"
+lazy() {
+  SAIKIT_VERIFY_STATE="$lazy_state" SAIKIT_VERIFY_ARTIFACTS="$lazy_art" \
+    bash "$lazy_ctrl" "$@"
+}
+out="$(lazy launch 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "launch sin hook/installer debio pasar: rc=$rc $out"
+if [ "$rc" -eq 0 ]; then
+  out="$(lazy doctor audit-ledger 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || malo "doctor audit-ledger sin hook/installer: rc=$rc $out"
+  out="$(lazy drive audit-ledger 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || malo "drive audit-ledger sin hook/installer: rc=$rc $out"
+  out="$(lazy drive check-deploy-log 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || malo "drive deploy-log sin hook/installer: rc=$rc $out"
+  mkdir -p "$lazy_repo/hooks"
+  cp "$repo/hooks/summonaikit-harness.sh" "$lazy_repo/hooks/summonaikit-harness.sh"
+  cat > "$lazy_repo/tools/install-hook.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'TOKEN=synthetic-install-secret\n'
+exit 7
+EOF
+  chmod +x "$lazy_repo/tools/install-hook.sh"
+  out="$(lazy drive gate-turn 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || malo "installer ejecutado/fallido debio FAIL/1: rc=$rc $out"
+  out="$(lazy drive gate-turn 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || malo "reintento de installer fallido debio FAIL/1: rc=$rc $out"
+  log_count="$(find "$lazy_art" -path '*/gate-turn/*/hook-prepare.log' | wc -l | tr -d ' ')"
+  [ "$log_count" -eq 2 ] \
+    || malo "preparacion fallida no conservo dos logs por intento (n=$log_count)"
+  if grep -R 'synthetic-install-secret' "$lazy_art" >/dev/null 2>&1; then
+    malo "salida del installer quedo sin redactar"
+  fi
+  fail_sum="$(find "$lazy_art" -path '*/gate-turn/*/summary.json' | sort | tail -1)"
+  fail_steps="$(dirname "$fail_sum")/steps.jsonl"
+  python3 - "$fail_sum" "$fail_steps" <<'PY' \
+    || malo "fallo del installer no dejo evidencia FAIL/tool_exit=7"
+import json, sys
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+steps = [json.loads(x) for x in open(sys.argv[2], encoding="utf-8") if x.strip()]
+assert s.get("result") == "FAIL" and s.get("exit_code") == 1, s
+assert any(x.get("step_id") == "hook-prepare" and x.get("tool_exit") == 7
+           for x in steps), steps
+PY
+  lazy cleanup >/dev/null 2>&1 || true
+fi
+
 caso "combo doctor→drive→reintento→cleanup conserva intentos"
 reset_art
 out="$(ctrl doctor audit-ledger 2>&1)" && rc=0 || rc=$?

@@ -17,7 +17,8 @@ marked `cc:TODO` already have their work merged on `origin/master`.
 
 Preconditions:
 
-- `control-summonaikit doctor` reports `doctor: PASS`.
+- `control-summonaikit doctor audit-ledger` reports `doctor: PASS`; this
+  fixture audit does not require hook preparation.
 - The driver builds a disposable git repo; it does not judge the operator
   checkout's live `Plans.md`.
 

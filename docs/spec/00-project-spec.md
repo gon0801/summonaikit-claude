@@ -2420,14 +2420,17 @@ participó (quota del operador) y kimi no podía (su port no tiene Phase 18).
   entrega en `docs/retro-phase-18.md`: topic + marcador verificados, borrado
   manual a criterio del operador (D23, recomendado).
 
-## Mapa de verificación del repositorio — Phase 19 (plan, 2026-09-06)
+## Mapa de verificación del repositorio — Phase 19 (implementado, 2026-09-06)
 
 El contrato de la ampliación está en [feature-map.md](feature-map.md): inventario
 de superficies, dispatch por ID, evidencia por intento, aislamiento obligatorio,
 doctor por feature y límites de simulación/medición viva. Las tareas están en
 `Plans.md`, Phase 19, con detalle en `docs/phase-19-feature-map-plan.md`.
-Es comportamiento planificado, no cobertura ya acreditada. La skill local y
-`verify/` se conservan como recorridos complementarios.
+La implementación versiona inventario, dispatch, evidencia por intento,
+aislamiento, doctor granular y drivers locales. Las mediciones conservan su
+resultado real: `PASS`, `FAIL` y `unknown` no se intercambian. La conciliación
+histórica de deploy documenta los registros que faltan sin inventar ejecuciones.
+La skill local y `verify/` se conservan como recorridos complementarios.
 
 ## Non-Goals
 

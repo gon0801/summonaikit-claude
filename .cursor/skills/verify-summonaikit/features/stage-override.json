@@ -7,6 +7,7 @@
     "path": "scripts/drivers/stage-override.sh"
   },
   "execution_mode": "sandbox",
+  "requires_hook": true,
   "surfaces": ["tools/stage-override.sh"],
   "requirements": ["doctor"],
   "cases": [
