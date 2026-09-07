@@ -2432,6 +2432,16 @@ resultado real: `PASS`, `FAIL` y `unknown` no se intercambian. La conciliación
 histórica de deploy documenta los registros que faltan sin inventar ejecuciones.
 La skill local y `verify/` se conservan como recorridos complementarios.
 
+## Residuales del autopilot y cobertura viva — Phase 20 (plan, 2026-09-06)
+
+El [contrato de residuales](autopilot-residuals.md) define correcciones,
+serialización local, investigaciones de Grok y pruebas vivas pendientes.
+Las tareas están en `Plans.md`, con detalle en `docs/phase-20-residual-plan.md`.
+Amplía el alcance futuro sin alterar lo ya medido en Phases18/19: no acredita
+merge completo, vínculo de sesiones ni cierre headless por estar planificado.
+Conserva la confirmación por acto y requiere decisiones positivas antes de
+habilitar cruces de sello o nuevas superficies de supervisión.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
