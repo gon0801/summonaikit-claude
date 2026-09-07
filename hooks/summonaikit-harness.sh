@@ -1815,6 +1815,7 @@ start_harness() {
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ] \
        && [ -n "$prompt_text" ] \
        && ! parece_notificacion_laxa "$prompt_text"; then
+      adv_limpiar_zona   # 20.6: fin de la ejecucion sin Stop — su zona se va con su estado
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
       podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     fi
@@ -1975,6 +1976,17 @@ redact_secrets() {
 ADV_PROJECT_CANON="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || ADV_PROJECT_CANON=""
 ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
 VERDICTOS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/veredictos"
+# 20.6 — zona de pruebas del adversary: ubicacion privada por ejecucion para
+# fixtures adversariales (plan 18 dejo la deuda: el rol no tenia DONDE montar
+# un repro que escriba). Bajo el repo, no bajo TMPDIR: la canonizacion FISICA
+# anclada al root que este candado ya aplica a findings/ cubre la zona gratis;
+# una zona en TMPDIR reabriria la divergencia de formas C:/... vs /c/... entre
+# el proceso del hook y el Bash del adversary (A6 / kimi #1) — una frontera que
+# no se canonicaliza igual en ambos lados, o bloquea fixtures honestos o abre
+# un hoyo. El nombre del dir lleva la llave de SESION (dos sesiones del mismo
+# repo jamas comparten zona); la propiedad POR EJECUCION la carga el marcador
+# owner adentro (epoca de armado): ver adv_asegurar_zona.
+ADV_SCRATCH_PARENT="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/scratch/adversary"
 
 # Familia de patrones del escaneo de secretos = la MISMA que redact_secrets
 # lleva inline (claude #3 del cross-review): el hook corre en el repo CONSUMER,
@@ -2371,6 +2383,101 @@ adv_path_dentro() {
   return 0
 }
 
+# 20.6 — Ruta de la zona de pruebas de ESTA sesion. Vacio (exit 1) si la raiz
+# fisica no pudo resolverse: misma postura que adv_ensure_gitignore, no se
+# escribe ni se permite nada bajo una ruta que nadie pudo canonicalizar.
+adv_zona_dir() {
+  [ -n "$ADV_PROJECT_CANON" ] || return 1
+  printf '%s/%s' "$ADV_SCRATCH_PARENT" "$SESSION_KEY"
+}
+
+# Crea/reclama la zona para ESTA ejecucion. Mismo disparo y la misma
+# disciplina que adv_ensure_gitignore (primer evento que resuelve a adversary
+# de una sesion armada): idempotente, jamas escribe a traves de enlaces, y sin
+# root canonico no toca nada (fail-open, Core Rule 1). La propiedad por
+# ejecucion vive en el marcador owner (sesion + epoca de armado): si la zona
+# existente es de OTRA epoca, es la zona huerfana de una ejecucion muerta de
+# ESTA misma sesion — se BARRE y se reclama (el scratch de la ejecucion que ya
+# termino no puede sangrar a la siguiente). La zona de OTRA sesion tiene otro
+# nombre y jamas se toca desde aca.
+adv_asegurar_zona() {
+  if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
+  advzz_dir="$(adv_zona_dir)" || return 0
+  # JAMAS crear a traves de enlaces (misma razon que adv_ensure_gitignore):
+  # un .saikit/scratch/adversary enlazado mandaria la zona fisica afuera.
+  if [ -L "${ADV_PROJECT_CANON}/.saikit" ] || [ -L "${ADV_PROJECT_CANON}/.saikit/scratch" ] || [ -L "$ADV_SCRATCH_PARENT" ]; then return 0; fi
+  advzz_epoca="$(read_state_value adv_epoch)"
+  advzz_huerfana=0
+  if [ -L "$advzz_dir" ]; then
+    advzz_huerfana=1
+  elif [ -d "$advzz_dir" ]; then
+    advzz_own_s="$(sed -n 's/^session=//p' "$advzz_dir/owner" 2>/dev/null | head -n 1)"
+    advzz_own_e="$(sed -n 's/^epoch=//p' "$advzz_dir/owner" 2>/dev/null | head -n 1)"
+    if [ "$advzz_own_s" != "$SESSION_KEY" ] || [ "$advzz_own_e" != "$advzz_epoca" ]; then
+      advzz_huerfana=1
+    fi
+  fi
+  if [ "$advzz_huerfana" = "1" ]; then
+    rm -rf "$advzz_dir" 2>/dev/null || true
+  fi
+  mkdir -p "$advzz_dir" 2>/dev/null || return 0
+  [ -L "$advzz_dir" ] && return 0
+  # owner: la declaracion de huerfana si ESTA ejecucion muere sin Stop —
+  # nombra la sesion y la epoca que la dejo, para quien la encuentre.
+  printf 'host=%s\nsession=%s\nepoch=%s\ntask_hash=%s\n' "$HOST" "$SESSION_KEY" "$advzz_epoca" "$(read_state_value task_hash)" > "$advzz_dir/owner" 2>/dev/null || true
+  if [ ! -e "$ADV_SCRATCH_PARENT/.gitignore" ] && [ ! -L "$ADV_SCRATCH_PARENT/.gitignore" ]; then
+    printf '*\n' > "$ADV_SCRATCH_PARENT/.gitignore" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# ¿El blanco canonico cae bajo la zona de ESTA sesion? Misma disciplina que
+# adv_path_dentro: prefijo LITERAL sobre el canon fisico (un ancestro .saikit/
+# scratch/... o la propia zona que SEA symlink es setup violado, no ruta
+# permitida), y un blanco que SEA symlink se resuelve FISICO antes de comparar
+# — un enlace DENTRO de la zona apuntando afuera (o a findings/) escribe
+# afuera. El escape por .. ya lo colapso adv_canon_path antes de llegar aca:
+# cae fuera del prefijo y es violacion.
+adv_zona_dentro() {
+  advzd_zona="$(adv_zona_dir)" || return 1
+  if [ -L "${ADV_PROJECT_CANON}/.saikit" ] || [ -L "${ADV_PROJECT_CANON}/.saikit/scratch" ] || [ -L "$ADV_SCRATCH_PARENT" ] || [ -L "$advzd_zona" ]; then
+    return 1
+  fi
+  case "$1" in
+    "$advzd_zona"/*) ;;
+    *) return 1 ;;
+  esac
+  if [ -L "$1" ]; then
+    advzd_real="$(readlink -f "$1" 2>/dev/null || true)"
+    [ -n "$advzd_real" ] || return 1
+    case "$advzd_real" in
+      "$advzd_zona"/*) return 0 ;;
+    esac
+    return 1
+  fi
+  return 0
+}
+
+# Teardown de la zona al final de la ejecucion (fila 20.6): la limpieza es
+# OBSERVABLE — donde el turno destruye su estado, la zona se va entera; lo que
+# una ejecucion muerta sin Stop deja atras es una zona HUERFANA DECLARADA por
+# su owner (nombra sesion/epoca). Borra SOLO la de esta sesion (nombre
+# llaveado), jamas rm a traves de un enlace, y los padres se podan solo si
+# quedaron vacios (misma higiene que podar_dir_sesion; .saikit nunca se toca:
+# findings/ y veredictos/ viven ahi).
+adv_limpiar_zona() {
+  if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
+  advzl_dir="$(adv_zona_dir)" || return 0
+  case "$advzl_dir" in
+    "$ADV_SCRATCH_PARENT"/?*) ;;
+    *) return 0 ;;
+  esac
+  if [ -L "$advzl_dir" ]; then return 0; fi
+  rm -rf "$advzl_dir" 2>/dev/null || true
+  rmdir "$ADV_SCRATCH_PARENT" "${ADV_SCRATCH_PARENT%/adversary}" 2>/dev/null || true
+  return 0
+}
+
 # Deteccion post-hoc de Edit/Write (D3). El vocabulario de tools de edicion es
 # el MISMO que usa la senal de orden del review-notice (Task 7.3 D5): una sola
 # definicion de "que es una edicion" en el hook. La escritura PERMITIDA tambien
@@ -2385,6 +2492,13 @@ adv_guard_edit() {
   fi
   if adv_path_dentro "$advg_canon"; then
     adv_registrar_path_permitido "$advg_canon"
+  elif adv_zona_dentro "$advg_canon"; then
+    # 20.6: fixture en la zona de pruebas de esta ejecucion — permitido, y NO
+    # entra a adv_paths: ese registro es el alcance del escaneo de secretos
+    # (ARTEFACTOS bajo findings/); un fixture de prueba con token=falso es data
+    # legitima de un ataque a auth. La disciplina de redaccion del perfil sigue
+    # aplicando a lo que se escriba en la zona (declarada ahi).
+    :
   else
     adv_registrar_violacion "$advg_canon"
   fi
@@ -2425,7 +2539,7 @@ adv_guard_bash() {
     esac
     advb_canon="$(adv_canon_path "$advb_b")"
     [ -n "$advb_canon" ] || continue
-    if ! adv_path_dentro "$advb_canon"; then
+    if ! adv_path_dentro "$advb_canon" && ! adv_zona_dentro "$advb_canon"; then
       adv_registrar_violacion "$advb_canon"
     fi
   done <<EOF
@@ -2708,6 +2822,7 @@ record_tool_evidence() {
   if [ -n "$subagent" ]; then adv_event_role="$(canonical_agent_role "$subagent")"; fi
   if [ "$adv_event_role" = "adversary" ]; then
     adv_ensure_gitignore
+    adv_asegurar_zona
     adv_guard_edit "$tool_name" "$file_path"
     adv_guard_bash "$tool_name" "$command_text"
   fi
@@ -3301,6 +3416,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     if [ "$adv_cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
       _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
       _lane_budget="$(read_state_value lane)"
+      adv_limpiar_zona   # 20.6: la ejecucion se declara agotada — su zona se va con su estado
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
       podar_dir_sesion
       emit_budget_exhausted "$adv_early_missing" "$_ap_budget" "$_lane_budget"
@@ -3687,6 +3803,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
       printf '{"systemMessage":"SAIKIT REVIEW NOTICE: code was edited after the reviewer subagent last ran in this turn; those edits were not re-reviewed. The next -saikit turn on this project will see this notice too. (Tool-name signal only -- edits made via shell commands are not detected.)"}\n'
     fi
     # <<< SAIKIT-REVIEW-NOTICE v1 <<<
+    adv_limpiar_zona   # 20.6: cierre limpio — la zona de pruebas se va con el estado
     rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
     podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_allow
@@ -3699,6 +3816,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # cobrando recibo despues de declararse agotado (A4).
     _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
     _lane_budget="$(read_state_value lane)"
+    adv_limpiar_zona   # 20.6: presupuesto agotado — la ejecucion termina, su zona se va
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
     podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
     emit_budget_exhausted "$missing" "$_ap_budget" "$_lane_budget"
