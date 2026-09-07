@@ -922,9 +922,14 @@ mut_advlock_redactado_cola_ciega() { sed '/^SAIKIT_ADV_REDACTED_STRIP=/s|{},;:)>
 #     => el fixture de la ejecucion muerta sobrevive al re-armado.
 mut_advlock_zona_todo_el_repo()   { sed 's/^adv_zona_dentro() {$/adv_zona_dentro() {\n  return 0/'; }
 mut_advlock_zona_ajena_ciega()    { sed 's|^  printf '\''%s/%s'\'' "$ADV_SCRATCH_PARENT" "$SESSION_KEY"$|  printf '\''%s'\'' "$ADV_SCRATCH_PARENT"|'; }
-mut_advlock_zona_symlink_ciega()  { sed 's|^advzd_real="$(readlink -f "$1" 2>/dev/null || true)"$|advzd_real="$1"|'; }
+# OJO delimitador/indentacion (falla medida del PR #271): estas dos lineas del
+# hook viven a 4 espacios y traen `|| true` — un sed con delimitador `|` muere
+# en "bad flag" y el mutado queda VACIO (cmp y bash -n pasan contra vacio, y
+# la mutacion se acreditaba en falso contra un hook inerte). Delimitador `#`
+# (no aparece en la linea) y el ancla con la indentacion REAL.
+mut_advlock_zona_symlink_ciega()  { sed 's#^    advzd_real="$(readlink -f "$1" 2>/dev/null || true)"$#    advzd_real="$1"#'; }
 mut_advlock_zona_sin_limpieza()   { sed 's/^adv_limpiar_zona() {$/adv_limpiar_zona() {\n  return 0/'; }
-mut_advlock_zona_sin_barrido()    { sed 's|^  rm -rf "$advzz_dir" 2>/dev/null || true$|  :|'; }
+mut_advlock_zona_sin_barrido()    { sed 's#^    rm -rf "$advzz_dir" 2>/dev/null || true$#    :#'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -972,6 +977,16 @@ while IFS='|' read -r nombre caso_atrapa; do
     continue
   fi
   "mut_advlock_$nombre" < "$vivo" > "$mutado"
+  # Segunda mitad del mismo hueco (FAIL medido del PR #271): un generador que
+  # EXISTE pero erra (sed con delimitador colisionado: "bad flag") deja el
+  # mutado en 0 bytes — cmp pasa (difiere del vivo), bash -n pasa (vacio
+  # parsea) y el caso se ponia rojo contra un hook INERTE: "atrapada" sin
+  # probar nada. Un mutado vacio es FAIL con nombre propio.
+  if [ ! -s "$mutado" ]; then
+    printf '    FAIL: %s dejo el mutado VACIO — el generador erro (sed) o no produjo nada\n' "$nombre" >&2
+    fail=1
+    continue
+  fi
   if cmp -s "$vivo" "$mutado"; then
     printf '    FAIL: %s no cambio nada — el sed quedo obsoleto\n' "$nombre" >&2
     fail=1
