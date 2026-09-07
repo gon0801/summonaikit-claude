@@ -627,6 +627,99 @@ json_top_level_string() {
     }'
 }
 
+# Hay CONTENIDO en el array de PRIMER NIVEL de la clave pedida (20.4). Mismo
+# escaner char por char que json_top_level_string (pila de brackets + in-string
+# + escape), extendido con lo que un array exige: pila TIPADA (un "]" solo
+# cierra un "[", un "}" solo una "{") y conteo de contenido no-blanco entre el
+# "[" propio y su "]" pareado. Reemplaza al grep textual que leia
+# backgroundTasks en el Stop grok: esa forma no veia el array MULTILINEA
+# (contenido en la linea siguiente a "[") y contaba como trabajo en vuelo un
+# eco de la clave citado en prosa o una clave anidada en otro objeto.
+#
+# Decide "1" SOLO si TODO esto cierra: clave == want a depth 1 (PRIMERA
+# ocurrencia, misma regla que json_top_level_string), valor que ARRANCA en
+# "[", "]" pareado con contenido no-blanco adentro, y documento
+# estructuralmente sano (brackets balanceados y tipados, strings cerrados,
+# sin escapes colgados, sin basura fuera del root). Todo lo demas — ausente,
+# null, string/numero/objeto, array vacio ([] / [ ]), JSON truncado o roto —
+# calla (fail-closed: sin evidencia de trabajo en vuelo).
+# Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
+# (json_top_level_string, json_escape, task_hash).
+#
+# Residual declarado: la validacion es de BALANCE, no de gramatica completa —
+# un payload roto EN OTRA parte cuya porcion del array esta bien formada y
+# poblada sigue contando como en vuelo.
+json_top_level_array_poblado() {
+  field="$1"
+  case "$INPUT" in
+    *"\"$field\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk -v want="$field" '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      ins = 0; esc = 0; ini = 0
+      pila = ""; raiz = 0
+      candidata = 0; vista = 0; espera_valor = 0
+      en_array = 0; base = 0; contenido = 0; cerro = 0
+      valido = 1
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") {
+            ins = 0
+            candidata = (length(pila) == 1 && substr(buf, ini, i - ini) == want)
+          }
+          continue
+        }
+        if (c == "\"") {
+          if (en_array)     { contenido = 1 }
+          if (espera_valor) { espera_valor = 0 }
+          ins = 1; ini = i + 1
+          continue
+        }
+        if (c == "{" || c == "[") {
+          if (en_array) { contenido = 1 }
+          if (length(pila) == 0 && raiz) { valido = 0 }
+          if (espera_valor) {
+            espera_valor = 0
+            if (c == "[") { en_array = 1; base = length(pila) + 1; contenido = 0 }
+          }
+          pila = pila c; raiz = 1
+          continue
+        }
+        if (c == "}" || c == "]") {
+          abre = substr(pila, length(pila), 1)
+          if (pila == "" || (c == "}" && abre != "{") || (c == "]" && abre != "[")) {
+            valido = 0; continue
+          }
+          pila = substr(pila, 1, length(pila) - 1)
+          if (en_array) {
+            if (c == "]" && length(pila) == base - 1) { en_array = 0; cerro = 1 }
+            else                                      { contenido = 1 }
+          }
+          continue
+        }
+        if (c == ":") {
+          if (espera_valor) { espera_valor = 0 }
+          else if (candidata && length(pila) == 1 && !vista) { espera_valor = 1; vista = 1 }
+          candidata = 0
+          continue
+        }
+        if (c == ",") { espera_valor = 0; candidata = 0; continue }
+        if (c == " " || c == "\t" || c == "\r" || c == "\n") { continue }
+        if (length(pila) == 0) { valido = 0 }
+        if (en_array)     { contenido = 1 }
+        if (espera_valor) { espera_valor = 0 }
+        candidata = 0
+      }
+      if (valido && pila == "" && !ins && !esc && cerro && contenido) { print "1" }
+    }'
+}
+
 # Keep gate state isolated per project AND per session (Task 3.4 / A4). Antes el
 # estado se llaveaba solo por proyecto, asi que dos sesiones del mismo repo
 # compartian harness-state.env y un turno -saikit abandonado en una cobraba
@@ -3263,16 +3356,19 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # Fail-closed declarado: un Stop grok SIN la clave backgroundTasks (nunca
   # medido) trata "sin evidencia de trabajo en vuelo" y cae al gate normal.
   # Review r2 (R27-3): el patron es POSITIVO — hay trabajo en vuelo solo si se
-  # VE contenido dentro del array (primer caracter no-blanco tras "[" que no
-  # sea "]"). Las formas degeneradas "no encontré el vacío compacto = hay
-  # trabajo" ([]) / ([ ]) / (null) / ausente quedan todas fuera de la escotilla
-  # y caen al gate normal. Multilinea (el contenido en la linea siguiente a
-  # "[") sigue sin matchear: forma no medida, residual declarado. Un ECO de la
-  # clave con array poblado citado en otro campo de texto del payload cuenta
-  # como en vuelo — misma clase de trade-off textual ya declarada de la
-  # escotilla (el array vacío real, en cambio, no matchea el patron positivo).
+  # VE contenido dentro del array. Las formas degeneradas "no encontré el
+  # vacío compacto = hay trabajo" ([]) / ([ ]) / (null) / ausente quedan todas
+  # fuera de la escotilla y caen al gate normal.
+  # 20.4: la lectura es ESTRUCTURAL (json_top_level_array_poblado), ya no
+  # textual: solo la clave de PRIMER nivel cuenta. Cierra los dos residuales
+  # declarados del grep — la forma MULTILINEA (contenido en la linea siguiente
+  # a "[") ahora matchea, y un ECO de la clave citado en prosa o ANIDADA en
+  # otro objeto (p.ej. toolInput) con array poblado ya no cuenta como en
+  # vuelo. Fail-closed AMPLIADO: JSON estructuralmente roto (truncado,
+  # brackets sin parear, string sin cerrar) tampoco habilita; el residual que
+  # queda queda declarado alla (balance, no gramatica completa).
   grok_bg_en_vuelo=0
-  if printf '%s' "$INPUT" | grep -Eq '"backgroundTasks":[[:space:]]*\[[[:space:]]*[^][:space:]]'; then
+  if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
   fi
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
