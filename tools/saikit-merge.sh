@@ -225,7 +225,9 @@ merge_final() {
   fi
   if [ "$CONFIRMADO" != 1 ]; then
     printf 'LISTO: todas las condiciones del gate estan en verde para %s (PR %s). El merge lo autoriza el operador:\n' "$SHA" "$PR"
-    printf 'LISTO:   tools/saikit-merge.sh --confirmado\n'
+    # Con "bash " adelante (20.2): un checkout sin bit de ejecucion (copia
+    # extraida, zip, algunos filesystems) no puede correr la forma pelada.
+    printf 'LISTO:   bash tools/saikit-merge.sh --confirmado\n'
     exit 0
   fi
   # Con --confirmado el gate completo ACABA de correr otra vez en esta

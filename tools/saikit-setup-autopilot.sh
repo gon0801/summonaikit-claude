@@ -153,7 +153,9 @@ else
   printf 'saikit-setup-autopilot: LOCK ocupado, no se sigue (%s):\n' "$LOCK_DIR" >&2
   mostrar_lock >&2
   printf '  no se borra solo: si el dueno murio, liberalo explicito con:\n' >&2
-  printf '    tools/saikit-setup-autopilot.sh --liberar-lock\n' >&2
+  # Con "bash " adelante (20.2): un checkout sin bit de ejecucion (copia
+  # extraida, zip, algunos filesystems) no puede correr la forma pelada.
+  printf '    bash tools/saikit-setup-autopilot.sh --liberar-lock\n' >&2
   exit 3
 fi
 

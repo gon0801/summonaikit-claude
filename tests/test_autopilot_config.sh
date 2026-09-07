@@ -75,6 +75,33 @@ json_get() {  # $1=archivo $2=ruta
   saikit_json_get "$(cat "$1" 2>/dev/null)" "$2"
 }
 
+c_lock_emision() {
+  # 20.2: ver el caso lock_ocupado_emite_liberar_ejecutable_con_scripts_100644.
+  # Vive como c_ para que la mutacion emision_lock_sin_bash la corra contra el
+  # mutado.
+  CASO_ROJO=0; sb_reset
+  lock=".git/saikit-autopilot.lock"
+  mkdir -p "$lock"
+  printf '99999999' > "$lock/pid"
+  printf 'host-viejo' > "$lock/host"
+  printf '2000-01-01T00:00:00Z' > "$lock/started_at"
+  printf '7' > "$lock/pr"
+  correr --merge si --despliega no --sin-verify-app no --telegram no --pr 9
+  [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  _contiene "B muestra como liberarlo" "$OUT" "--liberar-lock"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-setup-autopilot.sh --liberar-lock' | head -1 | sed 's/^[[:space:]]*//')"
+  [ -n "$cmd" ] || _mal "no se pudo extraer el comando de liberacion"
+  rm -rf tools
+  cp -R "$repo/tools" tools
+  cp "$SETUP" tools/saikit-setup-autopilot.sh   # el (posible) mutado
+  find tools -type f -exec chmod 644 {} +
+  OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
+  [ "$RC2" -eq 0 ] || _mal "la forma emitida fallo con scripts 100644 (rc=$RC2): $OUT2"
+  _contiene "libera de verdad" "$OUT2" "lock liberado"
+  [ ! -e "$lock" ] || _mal "la forma emitida no quito el lock"
+  _no_contiene "sin denegacion de ejecucion" "$OUT2" "denied"
+}
+
 # ------------------------------------------------------------------ casos
 caso "valido_5_respuestas_escriben_el_esquema"
 {
@@ -305,6 +332,17 @@ caso "liberar_lock_muestra_y_quita"
 }
 fin_caso "liberar_lock_muestra_y_quita"
 
+caso "lock_ocupado_emite_liberar_ejecutable_con_scripts_100644"
+{
+  # 20.2: el hint de LOCK ocupado ("liberalo explicito con: ...") tiene que
+  # correr TAL CUAL aunque el checkout este 100644 (sin bit de ejecucion).
+  # Se ejecuta de VERDAD la linea emitida contra una copia del repo con el bit
+  # quitado — chmod 644, JAMAS chmod +x — y libera el lock de verdad. No hay
+  # git ni gh involucrados: el liberar es local al sandbox.
+  c_lock_emision
+}
+fin_caso "lock_ocupado_emite_liberar_ejecutable_con_scripts_100644"
+
 # ------------------------------------------------------- mutation-test propio
 # Cada mutacion rompe UNA proteccion del script; el caso que la nombra tiene
 # que ponerse rojo (mismo mecanismo que tests/test_saikit_merge.sh).
@@ -439,6 +477,7 @@ flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor
 common_contra_root	s|cd "$INVOC" && cd "$COMMON"|cd "$ROOT" \&\& cd "$COMMON"|	c_subdir
 salud_sin_veto	s|printf 'saikit-setup-autopilot: --salud-url no puede traer comillas.*|    ;;|	c_veto_json
 veto_y_validacion_fuera	s|printf 'saikit-setup-autopilot: --salud-url no puede traer comillas.*|    ;;|;s|if ! saikit_json_valido "\$(cat "\$CFG_TMP")"; then|if false; then|	c_atomico
+emision_lock_sin_bash	s|bash tools/saikit-setup-autopilot.sh --liberar-lock|tools/saikit-setup-autopilot.sh --liberar-lock|	c_lock_emision
 MUTS
 
 if [ "$fail" -ne 0 ]; then
