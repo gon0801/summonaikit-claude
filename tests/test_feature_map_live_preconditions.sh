@@ -216,6 +216,12 @@ printf '%s' "$out" | grep -E 'id=merge-happy-path' | grep -q 'mode=live' \
 # ---------------------------------------------------------------------------
 caso "drive sin instancia: unknown/BLOCKED y sonda gh/curl/ssh vacia"
 reset_art
+# La evidencia bloqueada sigue necesitando destinos privados asignados, aunque
+# este caso omita state.json a propósito para representar "sin instancia".
+python3 "$SKILL/scripts/lib/state.py" assign \
+  --state-dir "$STATE" --artifacts "$ART" \
+  --run-id no-instance --token no-instance-token \
+  || malo "no se pudo asignar STATE/ARTIFACTS para el caso sin instancia"
 PROBELOG="$SANDBOX/ext-probe-noinst.log"
 rm -f "$PROBELOG"
 PROBEDIR="$SANDBOX/probe-bin-noinst"
@@ -329,6 +335,9 @@ PY
 
 # Doctor global sigue PASS (blocked live no tumba el agregado local)
 caso "doctor global: activas locales PASS; merge-happy-path en blocked"
+out="$(ctrl drive gate-turn 2>&1)" && prep_rc=0 || prep_rc=$?
+[ "$prep_rc" -eq 0 ] \
+  || malo "no se pudo preparar el hook diferido antes del doctor global: $out"
 out="$(ctrl doctor 2>&1)" && grc=0 || grc=$?
 [ "$grc" -eq 0 ] || malo "doctor global debio 0 con live blocked (got $grc): $out"
 printf '%s' "$out" | grep -q 'doctor: PASS' \

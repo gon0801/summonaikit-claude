@@ -70,6 +70,9 @@ printf '%s' "$out" | grep -qiE 'ALLOW_SYNTHETIC|synthetic.*refus|rechaz' \
 
 caso "synthetic con ALLOW=PASS sigue en verde"
 rm -rf "$ART"; mkdir -p "$ART"
+SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+  bash "$CTRL" launch >/dev/null 2>&1 \
+  || malo "launch fallo antes del synthetic autorizado"
 out="$(
   SAIKIT_VERIFY_ALLOW_SYNTHETIC=1 \
   SAIKIT_VERIFY_SYNTHETIC_EXECUTOR=PASS \
@@ -88,12 +91,11 @@ case "$evil" in
   "$SANDBOX"/*) malo "temp under sandbox; test invalid"; evil="" ;;
 esac
 if [ -n "$evil" ]; then
-  # launch so we do not confuse "sin instancia" with allowlist
+  # Reusa el launch anterior para no confundir aislamiento con allowlist.
   ctrl() {
     SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
       bash "$CTRL" "$@"
   }
-  ctrl launch >/dev/null 2>&1 || true
   out="$(
     SAIKIT_FM_DRIVER="$evil" \
     SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
