@@ -240,6 +240,67 @@ arbol_huella() {
   git log --oneline -3
 }
 
+# 20.2: monta una copia del repo en el work del sandbox con TODOS los tools
+# 100644 (sin bit de ejecucion: copia extraida, zip, algunos filesystems) y
+# corre la linea de comando que el aviso le da al operador, TAL CUAL. Sin
+# chmod +x a proposito: la forma emitida tiene que valer por si misma.
+instalar_tools_100644() {  # $1 = script bajo prueba que pisa a su copia
+  rm -rf tools
+  cp -R "$repo/tools" tools
+  cp "$1" tools/"$(basename "$1")"
+  find tools -type f -exec chmod 644 {} +
+}
+
+c_revert_emision() {
+  # 20.2: la linea del bloque PARA REVERTIR que llama al tool tiene que correr
+  # TAL CUAL aunque el checkout este 100644. Lo que se prueba es la FORMA: el
+  # merge tool corre su gate (en este sandbox rechaza porque el gh falso solo
+  # habla run list; el revert queda en el doble, no hay revert real).
+  CASO_ROJO=0; sb_reset
+  printf '[{"event":"push","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC: $OUT"
+  _contiene "ofrece el comando listo" "$OUT" "PARA REVERTIR"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-merge.sh --revert-de' | head -1 | sed 's/^[[:space:]]*//')"
+  [ -n "$cmd" ] || _mal "no se pudo extraer el comando del bloque PARA REVERTIR"
+  instalar_tools_100644 "$repo/tools/saikit-merge.sh"
+  : > "$SAIKIT_GH_LOG"
+  OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
+  [ "$RC2" -eq 1 ] || _mal "la forma emitida debe llegar al gate del merge tool y rechazar (rc esperaba 1, dio $RC2): $OUT2"
+  _contiene "el tool corrio su gate (no permission denied)" "$OUT2" "NO-MERGE:"
+  _no_contiene "sin denegacion de ejecucion" "$OUT2" "denied"
+  _contiene "argv capturado por el doble de gh" "$(cat "$SAIKIT_GH_LOG")" "repo view"
+}
+
+c_hints_unknown() {
+  # 20.2: los hints de UNKNOWN ("vuelve a mirar con: ...") emiten el mismo
+  # comando re-ejecutable; misma prueba contra scripts 100644. Cubre los DOS
+  # hints (sin run aun y CI pendiente).
+  CASO_ROJO=0; sb_reset
+  printf '[]' > "$SB/ghfix/runs.json"
+  correr
+  [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
+  [ -n "$cmd" ] || _mal "no se pudo extraer el hint de sin run"
+  instalar_tools_100644 "$POST"
+  OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
+  [ "$RC2" -eq 3 ] || _mal "la forma emitida (sin run) fallo con scripts 100644 (rc=$RC2): $OUT2"
+  _contiene "re-consulta y sigue UNKNOWN" "$OUT2" "UNKNOWN:"
+  _no_contiene "sin denegacion de ejecucion (sin run)" "$OUT2" "denied"
+
+  CASO_ROJO=0; sb_reset
+  printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr
+  [ "$RC" -eq 3 ] || _mal "rc esperaba 3 (pendiente), dio $RC: $OUT"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
+  [ -n "$cmd" ] || _mal "no se pudo extraer el hint de pendiente"
+  instalar_tools_100644 "$POST"
+  OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
+  [ "$RC2" -eq 3 ] || _mal "la forma emitida (pendiente) fallo con scripts 100644 (rc=$RC2): $OUT2"
+  _contiene "re-consulta y sigue UNKNOWN (pendiente)" "$OUT2" "UNKNOWN:"
+  _no_contiene "sin denegacion de ejecucion (pendiente)" "$OUT2" "denied"
+}
+
 caso "verde_sin_salud_mensaje_y_cero"
 {
   correr
@@ -305,6 +366,27 @@ caso "ci_pendiente_unknown"
   _contiene "dice pendiente" "$OUT" "pendiente"
 }
 fin_caso "ci_pendiente_unknown"
+
+caso "revert_emite_forma_ejecutable_con_scripts_100644"
+{
+  # 20.2: la linea del bloque PARA REVERTIR que llama al tool tiene que correr
+  # TAL CUAL aunque el checkout este 100644 (sin bit de ejecucion). Se ejecuta
+  # de VERDAD contra una copia del repo con el bit quitado — chmod 644, JAMAS
+  # chmod +x — y lo que se prueba es la FORMA: el merge tool corre su gate
+  # (en este sandbox rechaza porque el gh falso solo habla run list; el
+  # revert queda en el doble, no hay revert real).
+  c_revert_emision
+}
+fin_caso "revert_emite_forma_ejecutable_con_scripts_100644"
+
+caso "hints_unknown_emiten_forma_ejecutable_con_scripts_100644"
+{
+  # 20.2: los hints de UNKNOWN ("vuelve a mirar con: ...") emiten el mismo
+  # comando re-ejecutable; misma prueba contra scripts 100644. Cubre los DOS
+  # hints (sin run aun y CI pendiente).
+  c_hints_unknown
+}
+fin_caso "hints_unknown_emiten_forma_ejecutable_con_scripts_100644"
 
 caso "sin_trailer_no_ofrece_revert"
 {
@@ -700,6 +782,8 @@ telegram_sin_redactar	s|TG_MSG="\$(redactar "\$MENSAJE")"|TG_MSG="$MENSAJE"|	c_s
 esquema_roto_sin_redactar	s|"\$(redactar "\$SALUD")"|"$SALUD"|	c_token_esquema
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_color_tty
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_color_force
+emision_revert_sin_bash	s|bash tools/saikit-merge.sh --revert-de|tools/saikit-merge.sh --revert-de|	c_revert_emision
+emision_hints_sin_bash	s|con: bash tools/saikit-postmerge.sh|con: tools/saikit-postmerge.sh|g	c_hints_unknown
 MUTS
 
 if [ "$fail" -ne 0 ]; then

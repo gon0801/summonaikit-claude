@@ -168,7 +168,7 @@ done
 
 ROJO_MOTIVO=""
 if [ "$n" -eq 0 ]; then
-  aviso UNKNOWN "sin run aun para $MC en $ORIGEN: el CI todavia no arranca o el commit no disparo workflow. Vuelve a mirar en unos minutos con: tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
+  aviso UNKNOWN "sin run aun para $MC en $ORIGEN: el CI todavia no arranca o el commit no disparo workflow. Vuelve a mirar en unos minutos con: bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
   exit 3
 fi
 # Un rojo conocido gana a lo pendiente (cross-review grok, alta): con un
@@ -179,7 +179,7 @@ if [ -n "$rojos" ]; then
   ROJO_MOTIVO="CI rojo en $MC:$rojos"
   [ "$pendientes" -eq 0 ] || ROJO_MOTIVO="$ROJO_MOTIVO (mas $pendientes run(s) aun pendientes)"
 elif [ "$pendientes" -gt 0 ]; then
-  aviso UNKNOWN "CI pendiente para $MC ($pendientes run(s) sin concluir). Vuelve a mirar con: tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
+  aviso UNKNOWN "CI pendiente para $MC ($pendientes run(s) sin concluir). Vuelve a mirar con: bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
   exit 3
 fi
 
@@ -240,13 +240,16 @@ if [ -z "$ROJO_MOTIVO" ]; then
   rc=0
 else
   MENSAJE="merge $MC en $ORIGEN: ROJO ($ROJO_MOTIVO). $SALUD_TXT. Este script NO revierte solo: abajo va el comando listo para copiar."
+  # El tool del revert va con "bash " adelante (20.2): un checkout sin bit de
+  # ejecucion (copia extraida, zip, algunos filesystems) no puede correr la
+  # forma pelada y el revert quedaria trunco a un "Permission denied".
   BLOQUE="PARA REVERTIR (copiar y pegar; este script NO lo ejecuto):
   git fetch origin $RAMA
   git checkout -b revert-$corto $ORIGEN
   git revert $MC
   git push -u origin revert-$corto
   gh pr create --base $RAMA --title \"Revert $corto\" --body \"Revert de $MC ($ROJO_MOTIVO)\"
-  tools/saikit-merge.sh --revert-de $MC   # solo con tu si; repite el gate"
+  bash tools/saikit-merge.sh --revert-de $MC   # solo con tu si; repite el gate"
   aviso ROJO "$MENSAJE" "" "$BLOQUE"
   rc=1
 fi

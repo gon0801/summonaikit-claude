@@ -298,6 +298,27 @@ correr() {  # corre el script bajo prueba desde el work del sandbox
 
 merge_disparado() { grep -q '^gh pr merge' "$SAIKIT_GH_LOG" 2>/dev/null; }
 
+c_listo_emision() {
+  # 20.2: ver el caso listo_emite_forma_ejecutable_con_scripts_100644. Vive
+  # como c_ para que la mutacion emision_listo_sin_bash la corra contra el
+  # mutado (y su control sano contra el fuente sin mutar).
+  CASO_ROJO=0; sb_reset master
+  rm -rf tools
+  cp -R "$repo/tools" tools
+  cp "$MERGE" tools/saikit-merge.sh   # el (posible) mutado, no el del repo
+  find tools -type f -exec chmod 644 {} +
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC"
+  _contiene "reporta LISTO" "$OUT" "LISTO:"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-merge.sh --confirmado' | head -1 | sed 's/^LISTO:[[:space:]]*//')"
+  [ -n "$cmd" ] || _mal "no se pudo extraer el comando de LISTO"
+  : > "$SAIKIT_GH_LOG"
+  OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
+  [ "$RC2" -eq 0 ] || _mal "la forma emitida fallo con scripts 100644 (rc=$RC2): $OUT2"
+  _contiene "argv capturado: la forma emitida llega al merge" "$(cat "$SAIKIT_GH_LOG")" "pr merge 7 --squash --match-head-commit $SHA"
+  [ -f ".saikit/veredictos/$SHA.merge" ] || _mal "la forma emitida no completo el flujo del merge"
+}
+
 c_sin_checks() {
   CASO_ROJO=0; sb_reset master
   printf '[]' > "$SB/ghfix/runs.json"
@@ -699,6 +720,18 @@ caso "dry_run_dice_que_haria_sin_hacerlo"
   if merge_disparado; then _mal "el dry-run disparo un merge"; fi
 }
 fin_caso "dry_run_dice_que_haria_sin_hacerlo"
+
+caso "listo_emite_forma_ejecutable_con_scripts_100644"
+{
+  # 20.2: el comando que LISTO le da al operador para copiar tiene que correr
+  # TAL CUAL aunque el checkout no tenga bit de ejecucion (100644: copia
+  # extraida, zip, algunos filesystems). Se ejecuta de VERDAD la linea emitida
+  # contra una copia del repo con el bit quitado — chmod 644, JAMAS chmod +x
+  # (esconderia el defecto que este caso afirma) — y el argv del merge llega
+  # al doble de gh. Nada real: gh es el falso del banco, origin el bare local.
+  c_listo_emision
+}
+fin_caso "listo_emite_forma_ejecutable_con_scripts_100644"
 
 # ------------------------------------------------------------- --revert-de
 # monta_revert: master con un squash-merge con trailer (MC), y una rama
@@ -1109,6 +1142,7 @@ revert_punta_floja	s|\[ "\$PUNTA" = "\$REVERT_DE" \]|true|	c_revert_punta
 registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_ansi
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
+emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:   tools/saikit-merge.sh --confirmado|	c_listo_emision
 MUTS
 
 # ---------------------------------------- meta: el banco se audita a si mismo
