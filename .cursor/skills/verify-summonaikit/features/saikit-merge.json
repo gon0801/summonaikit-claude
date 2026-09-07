@@ -52,6 +52,22 @@
     {
       "id": "revert-no-punta",
       "required_assertions": ["reject_no_punta", "no_merge_on_punta"]
+    },
+    {
+      "id": "merge-lock-contencion",
+      "required_assertions": ["lock_exit_3", "lock_reporta_hint", "no_merge_on_lock"]
+    },
+    {
+      "id": "merge-lock-propio",
+      "required_assertions": ["lock_ajeno_sobrevive", "lock_propio_liberado"]
+    },
+    {
+      "id": "merge-lock-worktrees",
+      "required_assertions": ["lock_comun_worktrees", "no_merge_on_lock_wt"]
+    },
+    {
+      "id": "merge-lock-recuperacion",
+      "required_assertions": ["liberar_quita_y_muestra", "liberar_sin_lock_verde"]
     }
   ]
 }

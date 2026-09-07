@@ -16,6 +16,12 @@ An existing workflow is left intact. Local generation is not a live Actions run.
 - `ci-runners` emits the admitted test commands (bash/npm/yarn/pnpm/pytest).
 - `ci-unsupported` exits 2 and writes nothing when no runner is present.
 - `ci-run-fixture` runs the generated test and verify commands locally; that is not live Actions.
+- `ci-pins-ilegible` drives `tools/bump-ci-pins.sh --check` against a fixture
+  source (no network): a pin missing OWNER, SHA or TAG makes the check die with
+  exit 2 naming the broken pin and the missing field — never «todos los pins al
+  dia». Anchored by the product regression
+  `pins_pin_incompleto_falla_cerrado_por_campo` (tests/test_ci_minimo.sh) and
+  its mutation `pin_ilegible_se_descarta`.
 
 ## How to get to it (user POV)
 
@@ -40,10 +46,16 @@ Preconditions:
 - Case `ci-runners`: action Generate for each admitted runner; command `control-summonaikit drive ci-minimo`; observable `bash tests/run.sh`, `npm test`, `yarn test`, `pnpm test`, and `python -m pytest`.
 - Case `ci-unsupported`: action Accept on a repo with no runner; command `control-summonaikit drive ci-minimo`; observable exit 2 and no YAML.
 - Case `ci-run-fixture`: action Execute the generated `run:` lines in the fixture (skip install/network); command `control-summonaikit drive ci-minimo`; observable test and verify commands ran locally, not live Actions.
+- Case `ci-pins-ilegible`: action Delete one `PIN_SETUP_NODE_<campo>` line from a copy of the generator and run `--check` with a fixture source that knows the healthy pins; command `control-summonaikit drive ci-minimo`; observable exit 2 with `PIN_SETUP_NODE` plus the missing field (OWNER, SHA and TAG each), and no «todos los pins al dia».
 
 ## Gotchas
 
 - A pipe or redirected stdin is not a PTY. The tool then assumes no and does not write.
 - Missing PTY is `unknown` for accept/reject only; flags, defaults, runners, and fixture runs stay observable.
 - Pins are historical; this drive does not refresh them. A green local run does not mean Actions ran.
+- `bump-ci-pins.sh --check` is read-only and fail-closed: exit 0 («al dia») is
+  only valid when EVERY pin could be read and compared. An incomplete pin
+  (missing OWNER/SHA/TAG) is illegible and dies with exit 2 naming pin and
+  field; exit 1 is a readable-but-stale pin and exit 2 also covers no network
+  or unknown tag. `--proponer` never writes: it prints a reviewable diff.
 - Any existing `*.yml`/`*.yaml` under `.github/workflows` is PRESENTE: the tool is a no-op and must not overwrite.

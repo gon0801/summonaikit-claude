@@ -35,4 +35,11 @@ Preconditions:
   outside this skill's write path.
 - A valid deploy log does not prove the live hosts are up to date; pair with
   the operator's `install-hook.sh --check` when that is the question.
+- History can be RECTIFIED, not rewritten silently: entries whose merge hash
+  or UTC hour was recorded wrong are corrected in place against GitHub
+  (`mergedAt`/`mergeCommit`) under a dated banner section that names the
+  affected PRs, describes the error, and states that the deploy itself was
+  NOT repeated (see the `Rectificación histórica` banner in
+  `docs/deploy-log.md`, 2026-09-07). The checker validates order, fields and
+  one-record-per-PR; it does not treat the log as immutable bytes.
 - Do not invent deploy-log entries to make the drive pass.
