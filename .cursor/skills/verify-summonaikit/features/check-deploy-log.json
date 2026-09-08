@@ -21,6 +21,18 @@
     {
       "id": "deploy-log-dup",
       "required_assertions": ["exit_nonzero", "reason_dup_pr"]
+    },
+    {
+      "id": "deploy-log-hora-evidente",
+      "required_assertions": ["hora_evidente_aceptado"]
+    },
+    {
+      "id": "deploy-log-hora-no-recuperada",
+      "required_assertions": ["hora_no_recuperada_aceptado"]
+    },
+    {
+      "id": "deploy-log-hora-sin-evidencia",
+      "required_assertions": ["hora_sin_evidencia_rechazado", "reason_evidencia"]
     }
   ]
 }

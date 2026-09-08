@@ -8,11 +8,27 @@
 #   prefijo: lo juzgado es un PREFIJO: nada juzgado debajo de una abuela
 #           (el error historico fue apendar al final en vez de anteponer).
 #   unico:  un registro por PR: cada PR en un solo encabezado juzgado.
+#   evidencia (20.27, cordón propio HORA_CONTROL): en entradas con fecha >=
+#           HORA_CONTROL, la SECCION Deploy (todos sus bullets `- **Deploy...`
+#           y sus lineas de continuacion) con HORA exige evidencia de deploy
+#           por tipo/fuente DENTRO de esa seccion: un nombre de backup `.bak`
+#           del instalador (nombre de archivo pegado — «no quedo ningun .bak»
+#           en prosa ajena no acredita) O el marcador explicito `hora medida
+#           en vivo`. Sin evidencia => FAIL: la hora pudo ser copiada del
+#           minuto de mergedAt (que acredita el merge, NO el deploy; error
+#           historico rectificado 2026-09-07). `hora no recuperada` sin hora
+#           pasa (unknown honesto). NUNCA se comparan timestamps: dos horas
+#           iguales CON evidencia pasan — se juzga el tipo de evidencia, no
+#           la desigualdad.
 #
 # Lo anterior al CORTE es abuelo y NO se juzga: las invariantes ya estan
 # violadas hoy (tres inversiones de fecha; 19 de 78 encabezados fuera de norma,
 # medidos) y reescribir el historico falsificaria el log. El corte se declara
-# aca, no se esconde.
+# aca, no se esconde. La regla de evidencia tiene su PROPIO cordon
+# (HORA_CONTROL) posterior al CORTE: la region juzgada 2026-09-04..2026-09-07
+# ya tiene ~10 entradas legitimas con horas medidas en vivo y sin marcador
+# (medido 2026-09-08); exigirles el marcador reescribiria historia que ya
+# estaba bien.
 #
 # La extraccion de PRs no es un #[0-9]+ ingenuo: solo corre sobre encabezados
 # ## con ancla PR (la prosa trae (#122, hallazgo #3, #72: falsos positivos
@@ -29,6 +45,9 @@ repo="$(cd "$here/.." && pwd)"
 LOG="$repo/docs/deploy-log.md"
 # 18.20: corte declarado. Entradas con fecha >= CORTE se juzgan; las viejas no.
 CORTE='2026-09-04'
+# 20.27: cordón de la regla de evidencia de horas de deploy (propio, posterior
+# al CORTE por lo declarado en la cabecera).
+HORA_CONTROL='2026-09-08'
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -82,6 +101,34 @@ extraer_prs() {
   done
 }
 
+# Cuerpo de la entrada cuyo encabezado vive en la linea $1: desde esa linea
+# hasta el siguiente encabezado `## ` (o EOF). Para la regla de evidencia de
+# horas: el bullet Deploy y su fuente se leen en la ENTRADA, no en el header.
+cuerpo_de() {
+  local inicio="$1" fin
+  fin="$(awk -v n="$inicio" -F: '$1+0 > n {print $1+0; exit}' "$tmp/headers")"
+  if [ -n "$fin" ]; then
+    sed -n "${inicio},$((fin - 1))p" "$LOG"
+  else
+    sed -n "${inicio},\$p" "$LOG"
+  fi
+}
+
+# Seccion Deploy de una entrada: TODOS los bullets `- **Deploy...` con sus
+# lineas de continuacion (hasta que abre otro bullet `- **`). r2c (adversario
+# M1/M2): el grep -m1 del primer corte dejaba pasar la hora de un SEGUNDO
+# bullet Deploy (convencion real: un bullet por host) y las horas en lineas de
+# continuacion del propio bullet. La evidencia se ancla a esta seccion para
+# que una NEGACION del backup en prosa ajena o el marcador en otra clave no
+# acrediten (M3).
+seccion_deploy() {
+  printf '%s' "$1" | awk '
+    /^[[:space:]]*-[[:space:]]*\*\*Deploy/ { dentro = 1; print; next }
+    /^[[:space:]]*-[[:space:]]*\*\*/       { dentro = 0 }
+    dentro { print }
+  '
+}
+
 prev_juzgada='9999-99-99'
 hay_abuela=0
 n_juzgadas=0
@@ -114,6 +161,21 @@ while IFS= read -r hlin; do
       "## $fecha — PR #"*|"## $fecha — PRs #"*|"## $fecha — PR kimi#"*|"## $fecha — PRs kimi#"*|"## $fecha — Deploy correctivo fuera de PR:"*) ;;
       *) mal "norma: encabezado juzgado fuera de norma en linea $num: [$lin]" ;;
     esac
+    # 20.27: hora de deploy con cordón propio. Solo entradas >= HORA_CONTROL;
+    # el bullet de merge (mergedAt) NO es evidencia de deploy y no se comparan
+    # timestamps — se exige fuente por tipo (backup o marcador en vivo), anclada
+    # a la seccion Deploy (todos sus bullets y continuaciones). El .bak cuenta
+    # solo como NOMBRE DE ARCHIVO pegado ([A-Za-z0-9._/-]+\.bak: «no quedo
+    # ningun .bak» en prosa no acredita) y la hora admite 1-2 digitos (1:05).
+    if [ "$fecha" \> "$HORA_CONTROL" ] || [ "$fecha" = "$HORA_CONTROL" ]; then
+      seccion="$(seccion_deploy "$(cuerpo_de "$num")")"
+      if [ -n "$seccion" ] \
+        && printf '%s' "$seccion" | grep -Eq '[0-9]{1,2}:[0-5][0-9]' \
+        && ! printf '%s' "$seccion" | grep -Eq '[A-Za-z0-9._/-]+\.bak' \
+        && ! printf '%s' "$seccion" | grep -F -q 'hora medida en vivo'; then
+        mal "evidencia: hora de deploy sin evidencia (backup o fuente explicita); mergedAt acredita el merge — usa 'hora no recuperada' (entrada $fecha, linea $num)"
+      fi
+    fi
     refs="$(extraer_prs "$lin")"
     while IFS=' ' read -r ns nm; do
       [ -n "${ns:-}" ] || continue

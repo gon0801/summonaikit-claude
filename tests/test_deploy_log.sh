@@ -198,6 +198,164 @@ case "$out" in
   *) malo "--log sin valor no nombro la falta: [$out]" ;;
 esac
 
+# 20.27 — evidencia de horas de deploy (cordón propio HORA_CONTROL, declarado
+# en la cabecera del checker): desde 2026-09-08, un bullet Deploy con HORA
+# exige fuente por tipo (backup `.bak` del instalador O marcador `hora medida
+# en vivo`). La region 2026-09-04..2026-09-07 tiene ~10 entradas legitimas con
+# horas medidas en vivo sin marcador (medido 2026-09-08) y NO se toca.
+#
+# T15: (a) deploy RECUPERABLE: hora + .bak citado => aceptado.
+caso "T15: hora de deploy con .bak citado => 0"
+cat > "$tmp/t15.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #301 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (13:54 PDT / 20:54 UTC):** master sincronizado; cuatro copias
+  REPARADO. Backups: `summonaikit-harness.sh.nuestro.20260908-135442.bak` (claude)
+  y `20260908-135443.bak` (grok/dsh/codex).
+- **Verificación:** `install-hook.sh --check` exit 0.
+EOF
+out="$(bash "$tool" --log "$tmp/t15.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora con .bak dio $rc, se esperaba 0: $out"
+
+# T16: (b) NO recuperable: bullet `hora no recuperada` SIN hora => aceptado
+# (unknown honesto, no un rechazo).
+caso "T16: hora no recuperada (sin hora) => 0"
+cat > "$tmp/t16.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #302 / Task Y — hooks NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `b93e2c61528`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado.
+EOF
+out="$(bash "$tool" --log "$tmp/t16.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora no recuperada dio $rc, se esperaba 0: $out"
+
+# T17: (c) hora de deploy SIN evidencia => 1 nombrando la regla. Este es el
+# hueco medido: contra el checker sin la regla este fixture daba verde.
+caso "T17: hora de deploy sin evidencia => 1"
+cat > "$tmp/t17.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #303 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (13:29 PDT / 20:29 UTC):** master sincronizado; cuatro copias
+  REPARADO. Sin backup citado.
+- **Verificación:** `install-hook.sh --check` exit 0.
+EOF
+out="$(bash "$tool" --log "$tmp/t17.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora sin evidencia dio $rc, se esperaba 1: $out"
+case "$out" in
+  *'evidencia'*) ;;
+  *) malo "no nombro la regla de evidencia: [$out]" ;;
+esac
+case "$out" in
+  *'hora no recuperada'*) ;;
+  *) malo "no sugiere la forma honesta (hora no recuperada): [$out]" ;;
+esac
+
+# T18: (d) hora IGUAL a la del merge PERO con .bak citado => aceptado. El
+# criterio es el TIPO de evidencia, jamas la desigualdad de timestamps.
+caso "T18: hora igual a la del merge con .bak => 0"
+cat > "$tmp/t18.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #304 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (13:29 PDT / 20:29 UTC):** master sincronizado; cuatro copias
+  REPARADO. Backup: `summonaikit-harness.sh.nuestro.20260908-132900.bak`.
+EOF
+out="$(bash "$tool" --log "$tmp/t18.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora igual al merge con .bak dio $rc, se esperaba 0: $out"
+
+# T19-T24 (r2c, hallazgos M1/M2/M3/L1 del adversario): el primer corte de la
+# regla miraba SOLO el primer bullet Deploy con grep -m1, grepeaba la
+# evidencia en el cuerpo entero y exibia dos digitos de hora. Las cuatro
+# formas siguientes PASABAN en verde (medido contra la regla original).
+# T19 (M1): SEGUNDO bullet Deploy con hora sin evidencia => 1. La convencion
+# real del log trae mas de un bullet Deploy por entrada (un bullet por host).
+caso "T19: segundo bullet Deploy con hora sin evidencia => 1"
+cat > "$tmp/t19.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #305 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup):** claude reusada, sin cambios.
+- **Deploy (14:02 PDT / 21:02 UTC):** grok/dsh/codex REPARADO. Sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t19.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "segundo bullet con hora dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T19 no nombro evidencia: [$out]" ;; esac
+
+# T20 (M2): hora en linea de CONTINUACION del bullet Deploy => 1 (markdown
+# natural al envolver; la primera linea del bullet no trae la hora).
+caso "T20: hora en continuacion del bullet Deploy => 1"
+cat > "$tmp/t20.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #306 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy:** cuatro copias REPARADO; instalado
+  a las 14:05 PDT, sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t20.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora en continuacion dio $rc, se esperaba 1: $out"
+
+# T21 (M3a): .bak NEGADO en prosa ajena no acredita => 1. La cita valida es
+# un NOMBRE DE ARCHIVO pegado a .bak en la seccion Deploy, no la subcadena
+# pelada en cualquier parte del cuerpo.
+caso "T21: .bak negado en prosa ajena => 1"
+cat > "$tmp/t21.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #307 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:11 PDT / 21:11 UTC):** cuatro copias REPARADO.
+- **Nota:** revisado el perfil: no quedo ningun .bak de esta corrida.
+EOF
+out="$(bash "$tool" --log "$tmp/t21.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "prosa con .bak negado dio $rc, se esperaba 1: $out"
+
+# T22 (M3b): el marcador 'hora medida en vivo' en clave AJENA no acredita => 1.
+caso "T22: marcador en clave ajena => 1"
+cat > "$tmp/t22.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #308 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:20 PDT / 21:20 UTC):** cuatro copias REPARADO, sin backup.
+- **Verificación:** fue una hora medida en vivo, segun el operador.
+EOF
+out="$(bash "$tool" --log "$tmp/t22.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "marcador en clave ajena dio $rc, se esperaba 1: $out"
+
+# T23: contracara del marcador: 'hora medida en vivo' EN la seccion Deploy
+# (la fuente explicita acompana a la hora que respalda) => aceptado.
+caso "T23: marcador en la seccion Deploy => 0"
+cat > "$tmp/t23.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #309 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:30 PDT / 21:30 UTC, hora medida en vivo):** cuatro copias
+  REPARADO; no-op no deja backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t23.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "marcador en seccion Deploy dio $rc, se esperaba 0: $out"
+
+# T24 (L1): hora de UN digito (1:05 PDT) sin evidencia => 1.
+caso "T24: hora de un digito sin evidencia => 1"
+cat > "$tmp/t24.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #310 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (1:05 PDT):** cuatro copias REPARADO, sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t24.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora de un digito dio $rc, se esperaba 1: $out"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
@@ -224,6 +382,48 @@ EOF
     malo "mutacion unicidad-anulada SOBREVIVIO: T5 dio verde sin la guarda"
   else
     malo "mutacion unicidad-anulada invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# 20.27: anular la regla de evidencia (el mal -> no-op ':') => T17 pasa a
+# verde con el mutante; el control sano inmediatamente antes exige rojo.
+caso "mutacion: evidencia anulada => T17 la atrapa"
+mut_ev_base="$tmp/mut-base-ev.sh"; mut_ev="$tmp/mut-ev.sh"
+cp "$tool" "$mut_ev_base"
+sed 's/mal "evidencia:/: "evidencia:/' "$mut_ev_base" > "$mut_ev"
+out="$(bash "$tool" --log "$tmp/t17.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T17 dio $rc, se esperaba 1 (regla viva)"
+if cmp -s "$mut_ev_base" "$mut_ev"; then
+  malo "mutacion evidencia-anulada no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mut_ev" 2>/dev/null; then
+  malo "mutacion evidencia-anulada no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_ev" --log "$tmp/t17.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion evidencia-anulada atrapada (T17 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion evidencia-anulada SOBREVIVIO: T17 dio verde sin la regla"
+  else
+    malo "mutacion evidencia-anulada invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# 20.27: mutante de FIXTURE — copiar la hora del bullet de merge al Deploy sin
+# evidencia (el error historico) => el checker sano lo rechaza. El control
+# sano antes: la forma honesta (`hora no recuperada`) sigue en verde.
+caso "mutacion: fixture copia hora del merge al Deploy sin evidencia => 1"
+t16m="$tmp/t16-copia-hora.md"
+sed 's|\*\*Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):*|**Deploy (21:12 PDT / 21:12 UTC):|' "$tmp/t16.md" > "$t16m"
+out="$(bash "$tool" --log "$tmp/t16.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "control sano T16 dio $rc, se esperaba 0 (forma honesta)"
+if cmp -s "$tmp/t16.md" "$t16m"; then
+  malo "mutacion fixture-copia-hora no cambio nada — el sed quedo obsoleto"
+else
+  out="$(bash "$tool" --log "$t16m" 2>&1)"; rc=$?
+  if [ "$rc" -eq 1 ]; then
+    printf '    mutacion fixture-copia-hora atrapada (rechazada)\n'
+  else
+    malo "mutacion fixture-copia-hora SOBREVIVIO: hora copiada del merge aceptada (rc=$rc)"
   fi
 fi
 
