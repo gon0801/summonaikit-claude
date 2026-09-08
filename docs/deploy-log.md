@@ -20,11 +20,20 @@ merges reales. Rectificado contra la API de GitHub (`mergedAt` y
 repitió: cada entrada describe el deploy original. Entradas de otras
 sesiones no se tocaron.
 
+Segunda rectificación (misma fecha, misma rama): los datos del MERGE (hash y
+`mergedAt`) se rectifican contra la API de GitHub. La hora de deploy de los
+siete deploys no-op (#262, #263, #267, #268, #269, #270 y #272) no tiene
+respaldo — sus entradas la habían copiado del minuto de `mergedAt` — y queda
+registrada como NO recuperada; la hora de merge se conserva por separado en
+el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
+los nombres de backup del instalador. El deploy NO se repitió: cada entrada
+describe el deploy original.
+
 ## 2026-09-07 — PR #272 (cierre de la tanda Phase 20: 20.1-20.7 + 20.24) — hooks NO-OP
 
-- **Merge:** `b93e2c61528d6d0c8c0fa2a18efc00f7d5956c20`; gate SUCCESS en el
+- **Merge (21:12 UTC — mergedAt de GitHub):** `b93e2c61528d6d0c8c0fa2a18efc00f7d5956c20`; gate SUCCESS en el
   [run 34161235094](https://github.com/gon0801/summonaikit-claude/actions/runs/34161235094).
-- **Deploy (21:12 UTC / 14:12 PDT, inmediatamente tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (docs-only), sha256 sin cambios:
   `d3e2e33f0cd4e661...`.
@@ -58,10 +67,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #270 (20.5: lock de integración en saikit-merge) — hooks NO-OP
 
-- **Merge:** `caa2f69ae87d036489cfd499bde690bf3f0abca0`, head
+- **Merge (20:08 UTC — mergedAt de GitHub):** `caa2f69ae87d036489cfd499bde690bf3f0abca0`, head
   `ac7799537e48059cce81c97aab2eed76f125de16`; gate SUCCESS en el
   [run 34155280509](https://github.com/gon0801/summonaikit-claude/actions/runs/34155280509).
-- **Deploy (20:08 UTC / 13:08 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
 - **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
@@ -94,10 +103,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #269 (20.2: comandos emitidos ejecutables con bash) — hooks NO-OP
 
-- **Merge:** `d7db31f806227f10ff45cb7abf187c9927fd88b4`, head
+- **Merge (18:12 UTC — mergedAt de GitHub):** `d7db31f806227f10ff45cb7abf187c9927fd88b4`, head
   `dcab72c5879a1929ee9caafbf38a9fc315de4d1d`; gate SUCCESS en el
   [run 34149524314](https://github.com/gon0801/summonaikit-claude/actions/runs/34149524314).
-- **Deploy (18:12 UTC / 11:12 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
 - **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
@@ -111,10 +120,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #268 (20.7: mecanismo de refresh de pins del CI mínimo) — hooks NO-OP
 
-- **Merge:** `2d94b868a463c394d9a650fb1cba9947f6a56ee1`, head
+- **Merge (18:12 UTC — mergedAt de GitHub):** `2d94b868a463c394d9a650fb1cba9947f6a56ee1`, head
   `ac2bae8ae207ef4c665d5116915463a9830ab31f`; gate SUCCESS en el
   [run 34149526073](https://github.com/gon0801/summonaikit-claude/actions/runs/34149526073).
-- **Deploy (18:12 UTC / 11:12 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
 - **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok`;
@@ -126,10 +135,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #267 (20.24: retirada zcode/grok respeta DRY_RUN) — hooks NO-OP
 
-- **Merge:** `e98de818af4a255b6067f599670f4a69f9bc5627`, head
+- **Merge (13:29 UTC — mergedAt de GitHub):** `e98de818af4a255b6067f599670f4a69f9bc5627`, head
   `d13da15b33cd4cd9382f26c7b17e8575720864a0`; gate SUCCESS en el
   [run 34099150449](https://github.com/gon0801/summonaikit-claude/actions/runs/34099150449).
-- **Deploy (13:29 UTC / 06:29 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios:
   `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
@@ -142,10 +151,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #263 (20.1: control sano en el banco de mutaciones de merge) — hooks NO-OP
 
-- **Merge:** `fa8ab85d9623f864fd694058ac4a78b9e3eb11b6`, head
+- **Merge (13:28 UTC — mergedAt de GitHub):** `fa8ab85d9623f864fd694058ac4a78b9e3eb11b6`, head
   `061807e5e7ff06a4fb5d9b87fd4203742958d4a9`; gate SUCCESS en el
   [run 34099147933](https://github.com/gon0801/summonaikit-claude/actions/runs/34099147933).
-- **Deploy (13:28 UTC / 06:28 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios.
 - **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
@@ -157,10 +166,10 @@ sesiones no se tocaron.
 
 ## 2026-09-07 — PR #262 (20.3: neutralizar color de gh en postmerge) — hooks NO-OP
 
-- **Merge:** `8cf91ec25223f24773480ca02709b850c186eec0`, head
+- **Merge (08:14 UTC — mergedAt de GitHub):** `8cf91ec25223f24773480ca02709b850c186eec0`, head
   `279c1758aa1b26abe009cbd2bcf60b26986fac95`; gate SUCCESS en el
   [run 34097724333](https://github.com/gon0801/summonaikit-claude/actions/runs/34097724333).
-- **Deploy (08:14 UTC / 01:14 PDT, tras el merge):** master sincronizado; `sucio=no`,
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; `sucio=no`,
   `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
   cuatro copias `YA AL DIA` (el PR no toca el hook), sha256 sin cambios:
   `8d13c9a0f34b3998a28104d89396523c50bca475c75d04c8aa4805243a751f39`.
