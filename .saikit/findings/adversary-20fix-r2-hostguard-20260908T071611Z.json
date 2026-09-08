@@ -1,0 +1,58 @@
+{
+  "schema": "saikit-adversary-findings.v1",
+  "timestamp": "2026-09-08T07:16:11Z",
+  "head_attacked": "4caf87b9700273b40799b98527c33bd2bca8ef4d",
+  "attacked": [
+    "La guarda de costo de json_top_level_array_poblado en hooks/summonaikit-harness.sh:3729",
+    "La decision de la escotilla DELEGATED Grok en hooks/summonaikit-harness.sh:3732-3735",
+    "La relacion entre la identidad autoritativa HOST=grok derivada de GROK_HOOK_EVENT y TARGET derivado de SUMMONAIKIT_HOOK_TARGET",
+    "El caso caso_g4_parser_bg_solo_corre_en_grok y el mutante delegado_parser_bg_sin_guardia_host"
+  ],
+  "highest_severity": "HIGH",
+  "findings": [
+    {
+      "id": "ADV-R2-HOSTGUARD-1",
+      "severity": "HIGH",
+      "title": "Una ejecucion identificada como Grok omite la comprobacion fail-closed si TARGET falta o diverge",
+      "locations": [
+        "hooks/summonaikit-harness.sh:192-204",
+        "hooks/summonaikit-harness.sh:3725-3735"
+      ],
+      "detail": "El hook considera GROK_HOOK_EVENT, incluso vacio, la senal autoritativa del host y fija HOST=grok. Sin embargo, tanto la llamada al parser como la condicion posterior de la escotilla consultan TARGET. En un turno ya armado bajo HOST=grok, un Stop con GROK_HOOK_EVENT presente y SUMMONAIKIT_HOOK_TARGET ausente deja TARGET vacio; con TARGET=claude deja TARGET divergente. En ambos casos un mensaje DELEGATED y backgroundTasks vacio sale con RC=0 y sin decision:block. El control alineado TARGET=grok/HOST=grok con el mismo array vacio si bloquea. La proteccion de 18.27 queda por tanto fail-open ante perdida o divergencia del env map, aunque el runner siga aportando su senal de identidad medida.",
+      "evidence": {
+        "command": "bash /tmp/adv-hostguard-r2.sh",
+        "observed": [
+          "signal_target_missing target=auto signal=set rc=0 out= state_grok=1",
+          "signal_target_claude target=claude signal=set rc=0 out= state_grok=1",
+          "control_aligned_empty_bg rc=0 out={decision:block,...}",
+          "control_aligned_populated_bg rc=0 out="
+        ]
+      },
+      "impact": "Una degradacion parcial del adaptador de Grok, o una invocacion con sus dos variables de identidad inconsistentes, permite cerrar un turno delegado sin recibo y sin trabajo en vuelo aun cuando HOST observa que el proceso es Grok. Es un bypass del gate, no solo una regresion de rendimiento.",
+      "recommendation": "Tomar una unica identidad autoritativa para esta politica. Como GROK_HOOK_EVENT ya determina HOST=grok con precedencia y no depende del payload, acotar el parser y la rama fail-closed con HOST=grok, o rechazar explicitamente cualquier divergencia HOST/TARGET antes de evaluar la escotilla. Agregar casos para HOST=grok con TARGET vacio y divergente."
+    },
+    {
+      "id": "ADV-R2-HOSTGUARD-2",
+      "severity": "MEDIUM",
+      "title": "La regresion de costo prueba etiquetas TARGET, pero no la identidad real ni sus divergencias",
+      "locations": [
+        "tests/lib/gate_cases.sh:4208-4247",
+        "tests/test_gate_mutations.sh:887-892"
+      ],
+      "detail": "caso_g4_parser_bg_solo_corre_en_grok llama lab_run con target claude, codex, dsh y zcode. El token zcode exporta SUMMONAIKIT_HOOK_TARGET=zcode y resuelve HOST=other; no reproduce la via real HOST=zcode/TARGET=claude basada en ZCODE_*. El caso tampoco enfrenta HOST=grok con TARGET ausente o falsificado, por lo que el mutante acredita el ahorro de awk pero no discrimina el bypass de identidad.",
+      "impact": "El test y su mutante quedan verdes mientras la condicion de seguridad puede evitarse en el host al que pretende proteger.",
+      "recommendation": "Mantener la observacion por shim, pero construir cada host con sus senales reales y agregar la matriz HOST/TARGET divergente. El caso Grok debe afirmar a la vez que el parser se invoca y que backgroundTasks vacio bloquea."
+    }
+  ],
+  "controls": [
+    {
+      "check": "Mutaciones enfocadas existentes",
+      "command": "SAIKIT_MUTACIONES='G4|delegado_grok_bg_textual|...\\nG4|delegado_parser_bg_sin_guardia_host|...' bash tests/test_gate_mutations.sh",
+      "result": "OK: el parser estructural alineado de Grok y la omision del parser en los cuatro targets del caso quedan discriminados"
+    },
+    {
+      "check": "No se observo costo nuevo en hosts no Grok alineados",
+      "result": "El short-circuit de && evita la llamada al awk cuando TARGET no es grok; el hallazgo es la eleccion de la senal de identidad, no el orden del short-circuit"
+    }
+  ]
+}
