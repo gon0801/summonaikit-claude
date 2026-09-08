@@ -3739,6 +3739,16 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # sin esto la salida unknown dejaba la zona viva tras un cierre que ya no
   # tiene dueno (medido); el teardown es el seguro de adv_limpiar_zona (no
   # atraviesa enlaces, omite con diagnostico antes que borrar afuera).
+  # Residual declarado (H2, adversario 20fix-r1, BAJA): el desarme de la
+  # salida unknown honesto destruye estado y zona de la sesion que nombra el
+  # session_id del payload, sin chequeo de owner — un Stop con session_id
+  # ajeno y ambos canales de texto ciegos borra el scratch de esa sesion
+  # (medido; el rm del estado ya existia en master, el delta r1 es la zona).
+  # Explotarlo exige forjar el payload de Stop, que en este kit solo produce
+  # el host; la zona es scratch efimero del adversary (findings/ no se toca).
+  # El chequeo de owner (p.ej. anotar session_id contra transcript_path del
+  # propio payload) cambia el contrato fail-open de esta ruta y queda como
+  # fila propia del ledger.
   if [ "$canal_payload_observed" -eq 0 ] && [ "$transcript_observed" -eq 0 ]; then
     printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
     adv_limpiar_zona   # r1: la zona de pruebas se va con el estado (teardown seguro)
