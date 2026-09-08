@@ -4179,7 +4179,7 @@ caso_g4_grok_delegado_bg_primer_token() {
 # prosa de mas abajo) siguen permitiendo.
 caso_g4_grok_delegado_bg_doc_roto_bloquea() {
   _v_tab_crudo="$(printf '"backgroundTasks":[1],"x":"a\tb"')"
-  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]' '"backgroundTasks":[1],"x":"\q"' '"backgroundTasks":[1],"x":"\u12G"' '"backgroundTasks":[1],"x":"\u12GX"' "$_v_tab_crudo"; do
+  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]' '"backgroundTasks":[1],"x":"\q"' '"backgroundTasks":[1],"x":"\u12G"' '"backgroundTasks":[1],"x":"\u12GX"' '"backgroundTasks":[1],"x":"\u12G34"' "$_v_tab_crudo"; do
     lab_limpiar_estado
     LAB_GROK_HOOK_EVENT=user_prompt_submit
     lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con payload roto')"

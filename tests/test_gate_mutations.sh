@@ -139,6 +139,7 @@ G4|delegado_grok_bg_trailing|la basura tras el cierre del root deja de invalidar
 G4|delegado_grok_bg_ignora_doc|la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)
 G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: "\q" habilita la escotilla (r3)
 G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
+G4|delegado_grok_bg_uhex_leniente|el veto de "\u"+4hex se quita y "\u12G34" (G colado entre hex) habilita la escotilla (r3)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -856,11 +857,15 @@ mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cer
 #     escape vuelve a valer y "\q" reabre la escotilla.
 #   bg_control_crudo: se quita la inval del char de control crudo en strings y
 #     el tab literal dentro de un string vuelve a valer.
+#   bg_uhex_leniente: se quita la inval del hex tras "\u" y "\u12G34" (una G
+#     colada entre hex) vuelve a valer; "\u12G"/"\u12GX" solas NO discriminan
+#     esta rama (sin la inval el string queda abierto y caen igual).
 mut_delegado_grok_bg_solo_balance() { sed 's/if (gram_arr && gram_doc && pila == ""/if (pila == ""/'; }
 mut_delegado_grok_bg_trailing()     { sed 's/else gram_doc = 0   # r1-trailing/else { }                # r1-trailing/'; }
 mut_delegado_grok_bg_ignora_doc()   { sed 's/if (gram_arr && gram_doc && pila/if (gram_arr \&\& pila/'; }
 mut_delegado_grok_bg_escape_leniente() { sed '/^            inval()   # r3-escape: tras/d'; }
 mut_delegado_grok_bg_control_crudo()   { sed '/^          if (c < " ") { inval(); continue }   # r3-control/d'; }
+mut_delegado_grok_bg_uhex_leniente()   { sed '/^            else inval()   # r3-uhex/d'; }
 # 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
 # textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
 # siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un
