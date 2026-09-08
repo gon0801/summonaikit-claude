@@ -2989,7 +2989,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_parser_bg_solo_corre_en_grok caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_parser_bg_solo_corre_en_grok caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -4210,8 +4210,9 @@ caso_g4_grok_delegado_bg_doc_roto_bloquea() {
 # payloads grandes; ejecutarlo para Claude/Codex/dsh/zcode no cambia ninguna
 # decision y puede exceder el timeout del hook. Un shim observa el argumento
 # unico `want=backgroundTasks` sin usar reloj: los otros awk del Stop siguen
-# pasando al binario real y no cuentan. La mutacion que quita TARGET=grok
-# vuelve a crear el marcador en los cuatro hosts y pone rojo este caso.
+# pasando al binario real y no cuentan. Las senales son las medidas de cada
+# host, no etiquetas TARGET de laboratorio; la matriz divergente exige que la
+# invocacion Y la decision fail-closed usen la identidad autoritativa HOST.
 caso_g4_parser_bg_solo_corre_en_grok() {
   _awk_real="$(command -v awk)"
   _awk_bin="$LAB/awk-trace-bin"
@@ -4231,16 +4232,53 @@ EOF
   PATH="$_awk_bin:$PATH"
   export PATH SAIKIT_AWK_REAL="$_awk_real" SAIKIT_AWK_BG_MARKER="$_awk_marker"
 
-  for _host in claude codex dsh zcode; do
+  # Hosts no Grok con sus senales reales. zcode usa ZCODE_SESSION_ID y deja
+  # TARGET caer al fallback claude; Claude usa CLAUDECODE. Codex/dsh carecen de
+  # otra senal medible y sus wrappers declaran el target exacto.
+  for _host in claude codex dsh zcode claude-target-grok; do
     lab_limpiar_estado
-    lab_run prompt "$_host" "$(lab_payload_prompt '-saikit verifica costo por host')"
+    LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_ZCODE_PROJECT_DIR=""
+    _target="auto"
+    case "$_host" in
+      claude)             LAB_CLAUDECODE=1 ;;
+      codex)              _target=codex ;;
+      dsh)                _target=dsh ;;
+      zcode)              LAB_ZCODE_SESSION_ID="sess-r3-hostguard" ;;
+      claude-target-grok) LAB_CLAUDECODE=1; _target=grok ;;
+    esac
+    lab_run prompt "$_target" "$(lab_payload_prompt '-saikit verifica costo por host')"
     rm -f "$_awk_marker"
-    lab_run stop "$_host" "$(lab_payload_stop 'Delegue y sigo esperando.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
+    lab_run stop "$_target" "$(lab_payload_stop 'Delegue y sigo esperando.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
     if [ -e "$_awk_marker" ]; then
       _mal "$_host: el parser backgroundTasks exclusivo de grok fue invocado"
     fi
   done
 
+  # HOST=grok por la senal real del runner, con TARGET ausente y divergente.
+  # Ambos tienen que invocar el parser; vacio bloquea y poblado permite.
+  LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_ZCODE_PROJECT_DIR=""
+  for _target in auto claude; do
+    for _bg in vacio poblado; do
+      lab_limpiar_estado
+      LAB_GROK_HOOK_EVENT=user_prompt_submit
+      lab_run auto "$_target" "$(lab_payload_grok_prompt '-saikit verifica identidad grok')"
+      rm -f "$_awk_marker"
+      LAB_GROK_HOOK_EVENT=stop
+      if [ "$_bg" = "vacio" ]; then
+        lab_run auto "$_target" "$(lab_payload_grok_stop 'SUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
+      else
+        lab_run auto "$_target" "$(lab_payload_grok_stop_bg 'SUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
+      fi
+      [ -e "$_awk_marker" ] || _mal "grok target=$_target bg=$_bg: no invoco el parser"
+      if [ "$_bg" = "vacio" ]; then
+        _contiene "grok target=$_target con bg vacio bloquea" "$LAB_OUT" '"decision":"block"'
+      else
+        _vacio "grok target=$_target con bg poblado permite" "$LAB_OUT"
+      fi
+    done
+  done
+
+  LAB_GROK_HOOK_EVENT=""; LAB_CLAUDECODE=""; LAB_ZCODE_SESSION_ID=""; LAB_ZCODE_PROJECT_DIR=""
   PATH="$_path_antes"
   export PATH
   unset SAIKIT_AWK_REAL SAIKIT_AWK_BG_MARKER

@@ -3723,15 +3723,16 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # residuales que quedan (escapes/chars de control dentro de strings) quedan
   # declarados alla.
   grok_bg_en_vuelo=0
-  # review r2 del PR #273: el parser completo es exclusivo del canal Grok que
-  # se midio arriba. Claude/Codex/dsh/zcode no consultan backgroundTasks para
-  # esta escotilla; evitar el awk aqui conserva su costo y su timeout previos.
-  if [ "$TARGET" = "grok" ] && [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
+  # review r3 del PR #273: el parser completo es exclusivo del HOST Grok que
+  # se midio arriba. HOST es la identidad autoritativa (incluye la senal real
+  # GROK_HOOK_EVENT); TARGET puede faltar o divergir. Claude/Codex/dsh/zcode no
+  # consultan backgroundTasks para esta escotilla, preservando costo y timeout.
+  if [ "$HOST" = "grok" ] && [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
   fi
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE" \
-     && { [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
+     && { [ "$HOST" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
     emit_allow
   fi
 

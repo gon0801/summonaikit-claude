@@ -141,7 +141,8 @@ G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquie
 G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
 G4|delegado_grok_bg_uhex_leniente|el veto de "\u"+4hex se quita y "\u12G34" (G colado entre hex) habilita la escotilla (r3)
 G4|delegado_grok_bg_escape_clave_sin_decodificar|la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)
-G4|delegado_parser_bg_sin_guardia_host|la guarda TARGET=grok se quita y Claude/Codex/dsh/zcode vuelven a pagar el parser backgroundTasks exclusivo de Grok (review r2 PR #273)
+G4|delegado_parser_bg_usa_target|la invocacion del parser vuelve a decidir por TARGET en vez de HOST y falla ante identidades divergentes (review r3 PR #273)
+G4|delegado_grok_bg_decide_por_target|la exigencia fail-closed de backgroundTasks vuelve a decidir por TARGET en vez de HOST y Grok divergente puede salir sin trabajo en vuelo (review r3 PR #273)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -884,11 +885,14 @@ mut_delegado_grok_bg_escape_clave_sin_decodificar() {
       -e 's/key_buf = key_buf noascii; continue/key_buf = key_buf; continue/' \
       -e '/key_buf = key_buf udec(uhex)/d'
 }
-# review r2 del PR #273: vuelve a evaluar el parser de backgroundTasks para
-# todos los hosts. El shim del caso dedicado observa la invocacion exacta sin
-# depender de cuanto tarde el awk de la plataforma.
-mut_delegado_parser_bg_sin_guardia_host() {
-  sed 's/if \[ "$TARGET" = "grok" \] \&\& \[ "$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then/'
+# review r3 del PR #273: cada proteccion vuelve independientemente a la
+# identidad secundaria TARGET. La matriz divergente del caso dedicado exige
+# que ambas usen HOST, que ya incorpora las senales reales y su precedencia.
+mut_delegado_parser_bg_usa_target() {
+  sed 's/if \[ "$HOST" = "grok" \] \&\& \[ "$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/if [ "$TARGET" = "grok" ] \&\& [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then/'
+}
+mut_delegado_grok_bg_decide_por_target() {
+  sed 's/{ \[ "$HOST" != "grok" \] || \[ "$grok_bg_en_vuelo" = "1" \]; }/{ [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }/'
 }
 # 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
 # textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
@@ -897,8 +901,8 @@ mut_delegado_parser_bg_sin_guardia_host() {
 # caso_g4_grok_delegado_bg_multilinea_permite. (c\\ de una linea, mismo
 # formato que mut_paused_sin_guardia_de_recibo; los \\[ del ERE doblados
 # porque el texto de c\ come un nivel de backslash.)
-mut_delegado_grok_bg_textual() { sed '/if \[ "$TARGET" = "grok" \] && \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
-  if [ "$TARGET" = "grok" ] \&\& printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
+mut_delegado_grok_bg_textual() { sed '/if \[ "$HOST" = "grok" \] && \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
+  if [ "$HOST" = "grok" ] \&\& printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
 # !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
 # continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
