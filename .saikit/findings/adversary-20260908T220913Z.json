@@ -1,0 +1,52 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "limite de seccion `^-` en seccion_bullets_deploy (tools/check-deploy-log.sh:159): fixtures A/B contra HEAD pre-r5 y contra el log real (continuaciones a columna 0, hora en linea hermana sin negritas, hora en linea desnuda sin sangria)",
+    "marca de etiqueta `hora medida en vivo` (tools/check-deploy-log.sh:189-190): negacion ANTES de coma, negacion DESPUES de la etiqueta, parentesis anidado, raya/em-dash honesta",
+    "snapshot_tree (drivers/install-hosts.sh:37): swap por hardlink a bytes identicos (gemelo interno y externo), symlink relativo vs absoluto, cadena link->link->file",
+    "extraccion de hint con igualdad exacta (drivers/saikit-postmerge.sh:351-352,379-380): CRLF, comando duplicado en la linea, backticks con punto final, forma real emitida por tools/saikit-postmerge.sh (171/182)",
+    "baterias nuevas corridas sueltas (tests/test_deploy_log.sh, tests/test_feature_map_hosts.sh, tests/test_feature_map_postmerge.sh) buscando rojos de infra; lectura del control sane clicolor y de assert_missing_or_fail"
+  ],
+  "findings": [
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:189-190",
+      "claim": "La 'forma de etiqueta' de r5 sigue acreditando una NEGACION dentro del mismo parentesis si la negacion va DESPUES de la etiqueta o antes de la coma que la precede: el fix solo cerro la forma negacion-antes-de-etiqueta que testa T39.",
+      "trigger": "Entrada >= 2026-09-07 con bullet `- **Deploy (14:30 PDT, hora medida en vivo no es — copiada del mergedAt):** ...` (o `(hora medida en vivo no es tal cosa, son las 14:30)`, o `(no es, hora medida en vivo, 14:30)`).",
+      "evidence": "Fixtures en .saikit/scratch/adversary/f2,f4,f6.md: NEW rc=0 (pasa) en las tres formas; regex directa: '(14:30 PDT, hora medida en vivo no es — copiada del mergedAt)' -> regex1=1; '(hora medida en vivo no es tal cosa, son las 14:30)' -> regex2=1; '(no es, hora medida en vivo, 14:30)' -> regex2=1. La cabecera (lineas 22-24) afirma «una NEGACION dentro del parentesis ... no acredita», falso para estas formas.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:159",
+      "claim": "El nuevo limite `^-` deja de juzgar horas de deploy que viven en un bullet hermano SIN negritas: una hora copiada del mergedAt escapa al gate (falso PASS; pre-r5 era rechazada).",
+      "trigger": "Entrada >= 2026-09-07: `- **Deploy:** grok REPARADO. Las horas quedaron asi:` seguido de `- claude 21:12 UTC y grok 21:13 UTC (copiadas del mergedAt)` a columna 0.",
+      "evidence": "Fixture .saikit/scratch/adversary/f5.md: NEW (r5) rc=0 vs OLD (git show HEAD:tools/check-deploy-log.sh) rc=1 — flip medido 1->0. T38 solo cubre la direccion .bak-hermano-que-acredita, no esta. Una hora en linea desnuda SIN guion a columna 0 sigue juzgada (f7.md rc=1, medido); el log real no tiene continuaciones a columna 0 (grep `^-` en docs/deploy-log.md: todas son bullets con negritas), asi que el presente pasa.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:189-190",
+      "claim": "La evidencia honesta con raya en vez de coma se rechaza: `(14:30 PDT — hora medida en vivo)` pasa a FAIL y el mensaje induce a declarar 'hora no recuperada' por una hora que SI fue medida.",
+      "trigger": "Entrada >= 2026-09-07 con bullet `- **Deploy (14:30 PDT — hora medida en vivo):** ...` (em-dash u otra puntuacion adyacente que no sea parentesis-apertura ni coma).",
+      "evidence": "Fixture .saikit/scratch/adversary/f1.md: NEW rc=1 con «FAIL: evidencia: ... — usa 'hora no recuperada'» vs OLD rc=0. Ni la cabecera ni los tests documentan esta forma honesta como rechazada (las formas aceptadas se listan en las lineas 19-22 sin declarar el falso negativo).",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": ".cursor/skills/verify-summonaikit/scripts/drivers/install-hosts.sh:37",
+      "claim": "snapshot_tree es invisible a un swap por HARDLINK con bytes identicos: reemplazar un archivo por un hardlink (interno o a un gemelo externo al arbol) deja el snapshot identico, y el aliasing posterior escapa a la invariant 'dry-run no muta el arbol'.",
+      "trigger": "Tras el snapshot 'antes': rm arbol/a.txt && ln gemelo.txt arbol/a.txt (mismo contenido), luego snapshot 'despues'.",
+      "evidence": "Probe .saikit/scratch/adversary/snap-probe.sh contra la funcion verbatim (sed -n '/^snapshot_tree()/,/^}/p'): «INVISIBLE: snapshot identico tras reemplazar a.txt por hardlink» (gemelo interno) e «INVISIBLE: snapshot identico tras hardlink externo». Symlink relativo vs absoluto y cadena link->link->file SI se detectan (strings difieren, medido). El bloque de LIMITES declarados (lines ~30-33) menciona enlaces por destino pero no hardlinks.",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": ".cursor/skills/verify-summonaikit/scripts/drivers/saikit-postmerge.sh:351-352",
+      "claim": "La extraccion del hint usa `^.*bash tools/saikit-postmerge.sh` voraz: si una linea contiene el comando DOS veces, se queda con la ULTIMA copia y una primera copia corrupta en la misma linea pasa la igualdad exacta.",
+      "trigger": "Linea de salida del estilo `con: bash tools/saikit-postmerge.sh --merge-commit WRONG --rama WRONG; luego bash tools/saikit-postmerge.sh --merge-commit <MC> --rama <RAMA>`.",
+      "evidence": "Probe .saikit/scratch/adversary/hint-probe2.sh con el sed verbatim (correctamente escapado en el archivo): «DOBLE: IGUAL (pasa)». Mismo patron en hint_sinrun (linea 379-380). El tool real emite un solo hint por linea, texto plano tras 'con: ' (tools/saikit-postmerge.sh:171/182, verificado; sin backticks), y CRLF se tolera («CRLF: IGUAL»), asi que hoy no hay falso rojo ni verde practico — es un hueco del idioma de extraccion, no un fallo observable contra el tool actual.",
+      "confirmed": true
+    }
+  ]
+}
