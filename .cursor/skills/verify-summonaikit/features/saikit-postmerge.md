@@ -45,6 +45,7 @@ Preconditions:
   `postmerge-no-run`): a regression in one hint must not be masked by the
   other — the product battery keeps the same one-hint-per-case discipline
   (`c_hint_unknown_sin_run` / `c_hint_unknown_pendiente` with independent
-  `emision_hints_*` mutations in tests/test_saikit_postmerge.sh).
+  `emision_hint_sin_run_sin_bash` / `emision_hint_pendiente_sin_bash` mutations
+  in tests/test_saikit_postmerge.sh).
 - A real `gh` or `curl` on PATH is not used; inherited transports fail closed.
 - Redaction is judged on the tool output before evidence is stored.
