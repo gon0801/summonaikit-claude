@@ -2989,7 +2989,7 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_parser_bg_solo_corre_en_grok caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -4203,6 +4203,47 @@ caso_g4_grok_delegado_bg_doc_roto_bloquea() {
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tg","backgroundTasks":[1],"sessionCrons":[]} "trailing"'
   LAB_GROK_HOOK_EVENT=""
   _contiene "Stop grok con basura tras el cierre del root bloquea (r1)" "$LAB_OUT" '"decision":"block"'
+}
+
+# review r2 del PR #273: el parser completo de backgroundTasks es una
+# necesidad exclusiva de Grok. En BSD awk su walker puede ser cuadratico para
+# payloads grandes; ejecutarlo para Claude/Codex/dsh/zcode no cambia ninguna
+# decision y puede exceder el timeout del hook. Un shim observa el argumento
+# unico `want=backgroundTasks` sin usar reloj: los otros awk del Stop siguen
+# pasando al binario real y no cuentan. La mutacion que quita TARGET=grok
+# vuelve a crear el marcador en los cuatro hosts y pone rojo este caso.
+caso_g4_parser_bg_solo_corre_en_grok() {
+  _awk_real="$(command -v awk)"
+  _awk_bin="$LAB/awk-trace-bin"
+  _awk_marker="$LAB/awk-backgroundTasks-called"
+  mkdir -p "$_awk_bin"
+  cat > "$_awk_bin/awk" <<'EOF'
+#!/bin/sh
+for _arg in "$@"; do
+  if [ "$_arg" = "want=backgroundTasks" ]; then
+    : > "$SAIKIT_AWK_BG_MARKER"
+  fi
+done
+exec "$SAIKIT_AWK_REAL" "$@"
+EOF
+  chmod +x "$_awk_bin/awk"
+  _path_antes="$PATH"
+  PATH="$_awk_bin:$PATH"
+  export PATH SAIKIT_AWK_REAL="$_awk_real" SAIKIT_AWK_BG_MARKER="$_awk_marker"
+
+  for _host in claude codex dsh zcode; do
+    lab_limpiar_estado
+    lab_run prompt "$_host" "$(lab_payload_prompt '-saikit verifica costo por host')"
+    rm -f "$_awk_marker"
+    lab_run stop "$_host" "$(lab_payload_stop 'Delegue y sigo esperando.\n\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
+    if [ -e "$_awk_marker" ]; then
+      _mal "$_host: el parser backgroundTasks exclusivo de grok fue invocado"
+    fi
+  done
+
+  PATH="$_path_antes"
+  export PATH
+  unset SAIKIT_AWK_REAL SAIKIT_AWK_BG_MARKER
 }
 
 # r4 (review r2 del PR #273, hallazgo P1): la IDENTIDAD de la clave dejo de ser

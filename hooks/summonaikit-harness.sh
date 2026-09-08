@@ -692,8 +692,9 @@ json_top_level_string() {
 # escapes ya no colisiona. Contracara: una grafia escapada EQUIVALENTE de la
 # clave real ("back\u0067roundTasks") SI cuenta; para que esa llegue al
 # parser, el pre-filter manda al awk cualquier documento con backslash.
-# Coste: los soloDocs con backslash pagan la segunda pasada del awk (payloads
-# grok reales ~1KB ~= 15ms; el coste cuadratico del awk BSD solo importa en
+# Coste: los Stop GROK con backslash pagan la segunda pasada del awk (payloads
+# reales ~1KB ~= 15ms); el caller acota esta funcion a ese host porque el coste
+# cuadratico del awk BSD puede exceder el timeout con payloads grandes.
 # documentos grandes, ver PERFORMANCE de arriba).
 json_top_level_array_poblado() {
   field="$1"
@@ -3722,7 +3723,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # residuales que quedan (escapes/chars de control dentro de strings) quedan
   # declarados alla.
   grok_bg_en_vuelo=0
-  if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
+  # review r2 del PR #273: el parser completo es exclusivo del canal Grok que
+  # se midio arriba. Claude/Codex/dsh/zcode no consultan backgroundTasks para
+  # esta escotilla; evitar el awk aqui conserva su costo y su timeout previos.
+  if [ "$TARGET" = "grok" ] && [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
   fi
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \

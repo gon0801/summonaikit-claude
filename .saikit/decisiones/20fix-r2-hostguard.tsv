@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-08T06:44:14Z|implement|Acotar el parser estructural de backgroundTasks a TARGET=grok y observar su invocacion con shim de awk sin reloj|Solo Grok usa ese canal en la escotilla; en los otros hosts el parser no decide y puede exceder el timeout|test_gate_behavior OK; mutante delegado_parser_bg_sin_guardia_host atrapado por caso_g4_parser_bg_solo_corre_en_grok|ok
