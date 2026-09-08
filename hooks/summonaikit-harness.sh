@@ -679,10 +679,27 @@ json_top_level_string() {
 # con BOM UTF-8 + backgroundTasks poblado invalida el documento y BLOQUEA
 # la escotilla (regresion vs master en direccion deny/fail-closed). BOM
 # nunca fue medido en los dumps grok; cubierto por el presupuesto 18.27.
+#
+# r4 (review r2 del PR #273, hallazgo P1): la IDENTIDAD de la clave paso de
+# textual a semantica. El awk r3 validaba los escapes de la clave pero los
+# DESCARTABA al acumular key_buf, asi que claves DISTINTAS escritas con
+# escapes ("back\ngroundTasks", "background\u0000Tasks", "backgroundTasks\t")
+# colapsaban sobre backgroundTasks y habilitaban la escotilla DELEGATED sin
+# trabajo en vuelo (las tres medidas en rojo). Ahora los escapes validos se
+# decodifican al construir la clave: todo code point fuera del ASCII
+# imprimible [0x20,0x7E] entra como el byte marcador noascii (sprintf("%c",
+# 255)), que jamas puede aparecer en un want ASCII — una clave DISTINTA con
+# escapes ya no colisiona. Contracara: una grafia escapada EQUIVALENTE de la
+# clave real ("back\u0067roundTasks") SI cuenta; para que esa llegue al
+# parser, el pre-filter manda al awk cualquier documento con backslash.
+# Coste: los soloDocs con backslash pagan la segunda pasada del awk (payloads
+# grok reales ~1KB ~= 15ms; el coste cuadratico del awk BSD solo importa en
+# documentos grandes, ver PERFORMANCE de arriba).
 json_top_level_array_poblado() {
   field="$1"
   case "$INPUT" in
     *"\"$field\""*) ;;
+    *\\*) ;;   # r4: grafía escapada equivalente de la clave (p.ej. \u0067) también va al parser
     *) return 0 ;;
   esac
   printf '%s' "$INPUT" | awk -v want="$field" '
@@ -697,15 +714,25 @@ json_top_level_array_poblado() {
       pila = substr(pila, 1, length(pila) - 1)
       st = "A"
     }
+    # r4: decodifica los 4 hex de un "\uXXXX" ya validado por la gramatica. Solo
+    # el ASCII imprimible entra tal cual; todo lo demas (NUL, controles, DEL,
+    # >=0x80 incluidas mitades de surrogate) entra como noascii, que jamas puede
+    # igualar a un want ASCII imprimible.
+    function udec(h,  j, lc, d, cp) {
+      cp = 0; lc = tolower(h)
+      for (j = 1; j <= 4; j++) { d = index("0123456789abcdef", substr(lc, j, 1)); cp = cp * 16 + d - 1 }
+      return (cp >= 32 && cp <= 126) ? sprintf("%c", cp) : noascii
+    }
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
-      ins = 0; esc = 0; uesc = 0
+      ins = 0; esc = 0; uesc = 0; uhex = ""
       pila = ""; st = "V"
       key_buf = ""; candidata = 0; pend = 0; vista = 0
       en_array = 0; base = 0; contenido = 0; cerro = 0
       gram_arr = 1; gram_doc = 1
       lit = ""
+      noascii = sprintf("%c", 255)   # r4: marcador de code point no imprimible-ASCII
       for (i = 1; i <= n; i++) {
         c = substr(buf, i, 1)
         rep = 1
@@ -713,14 +740,18 @@ json_top_level_array_poblado() {
           rep = 0
         if (ins) {
           if (uesc > 0) {
-            if ((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F")) { uesc-- }
+            if ((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F")) {
+              uesc--; uhex = uhex c
+              if (uesc == 0 && st == "SK") key_buf = key_buf udec(uhex)
+            }
             else inval()   # r3-uhex: "\u" exige EXACTAMENTE 4 hex
             continue
           }
           if (esc) {
             esc = 0
-            if (c == "u") { uesc = 4; continue }
-            if (c == "\"" || c == "\\" || c == "/" || c == "b" || c == "f" || c == "n" || c == "r" || c == "t") continue
+            if (c == "u") { uesc = 4; uhex = ""; continue }
+            if (c == "\"" || c == "\\" || c == "/") { if (st == "SK") key_buf = key_buf c; continue }
+            if (c == "b" || c == "f" || c == "n" || c == "r" || c == "t") { if (st == "SK") key_buf = key_buf noascii; continue }
             inval()   # r3-escape: tras "\" JSON solo admite " \ / b f n r t u
             continue
           }

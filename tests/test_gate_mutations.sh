@@ -140,6 +140,7 @@ G4|delegado_grok_bg_ignora_doc|la validez fuera de la clave deja de pesar y un v
 G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: "\q" habilita la escotilla (r3)
 G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
 G4|delegado_grok_bg_uhex_leniente|el veto de "\u"+4hex se quita y "\u12G34" (G colado entre hex) habilita la escotilla (r3)
+G4|delegado_grok_bg_escape_clave_sin_decodificar|la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -866,6 +867,22 @@ mut_delegado_grok_bg_ignora_doc()   { sed 's/if (gram_arr && gram_doc && pila/if
 mut_delegado_grok_bg_escape_leniente() { sed '/^            inval()   # r3-escape: tras/d'; }
 mut_delegado_grok_bg_control_crudo()   { sed '/^          if (c < " ") { inval(); continue }   # r3-control/d'; }
 mut_delegado_grok_bg_uhex_leniente()   { sed '/^            else inval()   # r3-uhex/d'; }
+# r4 (review r2 del PR #273, hallazgo P1): la decodificacion de escapes al
+# acumular la clave se quita — los escapes se VALIDAN pero su aporte vuelve a
+# descartarse (key_buf = key_buf, sin el char decodificado), asi que una clave
+# DISTINTA escrita con escapes ("back\ngroundTasks", "background\u0000Tasks",
+# "backgroundTasks\t") vuelve a colapsar sobre backgroundTasks y a habilitar
+# la escotilla sin trabajo en vuelo. OJO la forma: el `continue` se conserva
+# en su lugar — reescribir el bloque a `{ if (st == "SK") continue }` dejaria
+# caer los escapes VALIDOS de los strings de VALOR al inval() de abajo y el
+# caso multilinea (lastAssistantMessage con \n\n) se pondria rojo ANTES, por
+# la razon equivocada. Lo atrapa caso_g4_grok_delegado_bg_clave_escapada (las
+# tres contrapruebas esperan block y vuelve a salir allow).
+mut_delegado_grok_bg_escape_clave_sin_decodificar() {
+  sed -e 's/key_buf = key_buf c; continue/key_buf = key_buf; continue/' \
+      -e 's/key_buf = key_buf noascii; continue/key_buf = key_buf; continue/' \
+      -e '/key_buf = key_buf udec(uhex)/d'
+}
 # 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
 # textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
 # siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un

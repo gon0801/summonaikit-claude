@@ -75,7 +75,12 @@ Preconditions:
   root, INVALID ESCAPES (`\` followed by anything but `" \ / b f n r t u`,
   `\u` without exactly 4 hex) and raw control chars (< 0x20) inside strings
   all fall back to the normal gate (block). The former escape-grammar
-  residual is CLOSED (r3): escape validation is strict.
+  residual is CLOSED (r3): escape validation is strict. Key IDENTITY is
+  semantic (r4): escaped key spellings are DECODED before comparison, so a
+  DIFFERENT key written with escapes (`back\ngroundTasks`,
+  `background\u0000Tasks`, `backgroundTasks\t`) no longer collides with
+  `backgroundTasks`, while an equivalent escaped spelling of the real key
+  (`back\u0067roundTasks`) still counts as in-flight work.
 - Zone teardown is fail-open BY DESIGN: if the cleanup cannot prove the zone
   is under the canonical root (symlinked ancestor), it omits itself with a
   diagnostic instead of blocking the turn — nothing foreign is deleted, and
