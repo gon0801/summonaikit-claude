@@ -71,10 +71,11 @@ Preconditions:
   promised on every headless exit. Merge stays fail-closed without it.
 - The DELEGATED hatch demands a COMPLETE valid JSON document, not just a
   balanced-looking `backgroundTasks` token: broken literals, hanging commas,
-  invalid values under a foreign key or garbage after the root all fall back
-  to the normal gate (block). Declared residual: the escape GRAMMAR
-  (`\` followed by any char, `\u` without 4 hex, raw control chars in
-  strings) is not validated — it does not appear in the measured grok dumps.
+  incomplete numbers, invalid values under a foreign key, garbage after the
+  root, INVALID ESCAPES (`\` followed by anything but `" \ / b f n r t u`,
+  `\u` without exactly 4 hex) and raw control chars (< 0x20) inside strings
+  all fall back to the normal gate (block). The former escape-grammar
+  residual is CLOSED (r3): escape validation is strict.
 - Zone teardown is fail-open BY DESIGN: if the cleanup cannot prove the zone
   is under the canonical root (symlinked ancestor), it omits itself with a
   diagnostic instead of blocking the turn — nothing foreign is deleted, and

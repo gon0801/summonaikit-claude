@@ -4171,8 +4171,15 @@ caso_g4_grok_delegado_bg_primer_token() {
 # numero COMPLETO. Los numeros VALIDOS (0, -0.5, 1e10, 1E+2, anidados) siguen
 # permitiendo — cubiertos por caso_g4_grok_delegado_bg_primer_token y
 # caso_g4_grok_delegado_con_bg_permite.
+# r3 (cross-review hosts, hallazgo ALTA): la gramatica de escapes es ESTRICTA —
+# tras "\" solo " \ / b f n r t o "u"+4 hex, y chars de control crudos (< 0x20)
+# prohibidos en strings. Todas estas formas PERMITIAN antes del fix (medido):
+# "\q", "\u12G" (3 hex + cierre), "\u12GX" (hex invalido) y un tab CRUDO
+# dentro de un string. Los escapes VALIDOS ("\n", "\"", "\u0041", el eco en
+# prosa de mas abajo) siguen permitiendo.
 caso_g4_grok_delegado_bg_doc_roto_bloquea() {
-  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]'; do
+  _v_tab_crudo="$(printf '"backgroundTasks":[1],"x":"a\tb"')"
+  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]' '"backgroundTasks":[1],"x":"\q"' '"backgroundTasks":[1],"x":"\u12G"' '"backgroundTasks":[1],"x":"\u12GX"' "$_v_tab_crudo"; do
     lab_limpiar_estado
     LAB_GROK_HOOK_EVENT=user_prompt_submit
     lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con payload roto')"

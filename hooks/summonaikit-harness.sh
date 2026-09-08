@@ -658,12 +658,13 @@ json_top_level_string() {
 # Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
 # (json_top_level_string, json_escape, task_hash).
 #
-# Residual declarado: los STRINGS se validan por cierre y escape sano, no por
-# gramatica de escapes estricta — cualquier caracter tras "\" vale (JSON solo
-# admite "\/bfnrt" y "u" con 4 hex), "\uXXXX" no exige sus 4 hexadecimales y
-# los caracteres de control crudos dentro de un string no invalidan. Ninguna
-# de esas formas aparece en los dumps grok medidos; si apareciera, quedaria en
-# la misma clase fail-closed que un documento roto.
+# r3 (cross-review hosts Codex/Grok, PR #273): la gramatica de ESCAPES es
+# estricta — tras "\" solo se admiten " \ / b f n r t o "u" seguido de
+# EXACTAMENTE 4 hexadecimales, y los caracteres de control crudos (< 0x20)
+# dentro de strings invalidan. Antes cualquiera de esas formas dejaba pasar un
+# documento roto como trabajo en vuelo (medido en rojo: "\q", "\u12G4", tab
+# crudo). Con esto el residual declarado de la r1 sobre escapes QUEDA CERRADO:
+# la validacion de strings es de gramatica completa.
 #
 # PERFORMANCE (hallazgo MEDIA del adversario, PR 20.4, adjudicado): el
 # escaneo es cuadratico SOLO en el awk BSD de darwin (en el CI ubuntu es
@@ -699,7 +700,7 @@ json_top_level_array_poblado() {
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
-      ins = 0; esc = 0
+      ins = 0; esc = 0; uesc = 0
       pila = ""; st = "V"
       key_buf = ""; candidata = 0; pend = 0; vista = 0
       en_array = 0; base = 0; contenido = 0; cerro = 0
@@ -710,17 +711,30 @@ json_top_level_array_poblado() {
         rep = 1
         while (rep) {
           rep = 0
-          if (ins) {
-            if (esc)              { esc = 0 }
-            else if (c == "\\")   { esc = 1 }
-            else if (c == "\"") {
-              ins = 0
-              if (st == "SK") { st = "KC"; candidata = (length(pila) == 1 && key_buf == want) }
-              else            { st = "A" }
-            }
-            else if (st == "SK") { key_buf = key_buf c }
+        if (ins) {
+          if (uesc > 0) {
+            if ((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F")) { uesc-- }
+            else inval()   # r3-uhex: "\u" exige EXACTAMENTE 4 hex
             continue
           }
+          if (esc) {
+            esc = 0
+            if (c == "u") { uesc = 4; continue }
+            if (c == "\"" || c == "\\" || c == "/" || c == "b" || c == "f" || c == "n" || c == "r" || c == "t") continue
+            inval()   # r3-escape: tras "\" JSON solo admite " \ / b f n r t u
+            continue
+          }
+          if (c == "\\") { esc = 1; continue }
+          if (c == "\"") {
+            ins = 0
+            if (st == "SK") { st = "KC"; candidata = (length(pila) == 1 && key_buf == want) }
+            else            { st = "A" }
+            continue
+          }
+          if (c < " ") { inval(); continue }   # r3-control: char de control crudo prohibido en strings
+          if (st == "SK") { key_buf = key_buf c }
+          continue
+        }
           if (c == " " || c == "\t" || c == "\r" || c == "\n") {
             # Solo los subestados de numero COMPLETO cierran en blanco (N0/NI
             # entero, NF fraccion, NG exponente); los INCOMPLETOS (NS tras

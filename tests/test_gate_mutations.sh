@@ -134,9 +134,11 @@ G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo es
 G4|delegado_grok_sin_bg|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
 G4|delegado_grok_bg_degenerado|el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)
 G4|delegado_grok_bg_textual|la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)
-G4|delegado_grok_bg_solo_balance|el validador completo del documento vuelve a solo balance + primer token y las cuatro formas rotas ([nul], [1,], clave ajena rota, trailing) vuelven a habilitar la escotilla (r1)
+G4|delegado_grok_bg_solo_balance|el validador completo del documento vuelve a solo balance (sin gram_*) y las formas rotas cuya inval vive solo en gram_* ([1,], clave ajena rota, trailing, escapes) vuelven a habilitar la escotilla (r1; tabla medida en el comentario de la mutacion)
 G4|delegado_grok_bg_trailing|la basura tras el cierre del root deja de invalidar y un documento con trailing garbage vuelve a habilitar la escotilla (r1)
 G4|delegado_grok_bg_ignora_doc|la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)
+G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: "\q" habilita la escotilla (r3)
+G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -833,9 +835,14 @@ mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cer
 # r1 (cross-review 20.x): la gramatica COMPLETA del documento entro al veredicto
 # del awk (gram_arr = validez de lo DENTRO del array buscado, gram_doc = validez
 # del documento entero). Tres mutaciones, una por proteccion nueva:
-#   solo_balance: el veredicto vuelve a "balance + primer token" (sin gram_* ni
-#     estado terminal) — las cuatro formas rotas de
-#     caso_g4_grok_delegado_bg_doc_roto_bloquea vuelven a PERMITIR.
+#   solo_balance: el veredicto vuelve a "balance + primer token" (sin gram_*; el
+#     estado terminal st == "A" SIGUE en el veredicto). r3 (Grok, medido): NO
+#     son "las cuatro formas" — las que viven SOLO en gram_* reabren y las que
+#     mata la maquina abierta no. Tabla medida sano→mutante:
+#       [nul]=bloquea→bloquea (queda en st="L"≠"A" y eso no lo toca la mutacion)
+#       [1. ]=bloquea→bloquea (idem, st queda en subestado de numero incompleto)
+#       [1,]=bloquea→PERMITE    bad:oops=bloquea→PERMITE    trailing=bloquea→PERMITE
+#       (y desde r3, "\q"=bloquea→PERMITE: la inval del escape vive en gram_*)
 #   bg_trailing: la rama de basura tras el cierre del root (o separador invalido
 #     tras valor) deja de invalidar — el sub-caso del trailing garbage vuelve a
 #     PERMITIR.
@@ -843,9 +850,17 @@ mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cer
 #     array — un valor roto en OTRA clave del documento vuelve a PERMITIR
 #     ([nul] y [1,] siguen rechazados por gram_arr: la mutacion aisla la
 #     validez FUERA de la clave).
+# r3 (cross-review hosts, hallazgo ALTA): dos mutaciones mas, una por mitad de
+# la estrictura de ESCAPES nueva:
+#   bg_escape_leniente: se quita la inval del caracter tras "\" — cualquier
+#     escape vuelve a valer y "\q" reabre la escotilla.
+#   bg_control_crudo: se quita la inval del char de control crudo en strings y
+#     el tab literal dentro de un string vuelve a valer.
 mut_delegado_grok_bg_solo_balance() { sed 's/if (gram_arr && gram_doc && pila == ""/if (pila == ""/'; }
 mut_delegado_grok_bg_trailing()     { sed 's/else gram_doc = 0   # r1-trailing/else { }                # r1-trailing/'; }
 mut_delegado_grok_bg_ignora_doc()   { sed 's/if (gram_arr && gram_doc && pila/if (gram_arr \&\& pila/'; }
+mut_delegado_grok_bg_escape_leniente() { sed '/^            inval()   # r3-escape: tras/d'; }
+mut_delegado_grok_bg_control_crudo()   { sed '/^          if (c < " ") { inval(); continue }   # r3-control/d'; }
 # 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
 # textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
 # siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un
