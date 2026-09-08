@@ -4164,8 +4164,15 @@ caso_g4_grok_delegado_bg_primer_token() {
 # [null], que SI es valido y sigue permitiendo), coma colgante ([1,]), valor
 # invalido en OTRA clave del documento ("bad":oops) y basura tras el cierre
 # del root. Las cuatro caen al gate normal (fail-closed).
+# review r2 (hallazgo BAJA): tres formas mas, numeros INCOMPLETOS que el
+# whitespace del awk promovia a valor cerrado — [1. ] (fraccion sin digitos),
+# [- ] (signo sin digitos) y [1e ] (exponente sin digitos) PERMITIAN con JSON
+# invalido (medido en rojo); el fix solo cierra en blanco los subestados de
+# numero COMPLETO. Los numeros VALIDOS (0, -0.5, 1e10, 1E+2, anidados) siguen
+# permitiendo — cubiertos por caso_g4_grok_delegado_bg_primer_token y
+# caso_g4_grok_delegado_con_bg_permite.
 caso_g4_grok_delegado_bg_doc_roto_bloquea() {
-  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops'; do
+  for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]'; do
     lab_limpiar_estado
     LAB_GROK_HOOK_EVENT=user_prompt_submit
     lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con payload roto')"

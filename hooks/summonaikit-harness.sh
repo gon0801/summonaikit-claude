@@ -722,8 +722,13 @@ json_top_level_array_poblado() {
             continue
           }
           if (c == " " || c == "\t" || c == "\r" || c == "\n") {
-            if (st == "NS" || st == "N0" || st == "NI" || st == "ND" || st == "NF" || st == "NE" || st == "NX" || st == "NG") st = "A"
-            else if (st == "L") inval()
+            # Solo los subestados de numero COMPLETO cierran en blanco (N0/NI
+            # entero, NF fraccion, NG exponente); los INCOMPLETOS (NS tras
+            # "-", ND tras ".", NE tras e/E, NX tras el signo del exponente) y
+            # un literal a medio escribir son JSON invalido: [1. ], [- ] y
+            # [1e ] no habilitan la escotilla (review r2, medido en rojo).
+            if (st == "N0" || st == "NI" || st == "NF" || st == "NG") st = "A"
+            else if (st == "NS" || st == "ND" || st == "NE" || st == "NX" || st == "L") inval()
             continue
           }
           if (c == "\"" && (st == "V" || st == "A1" || st == "K" || st == "K1")) {
