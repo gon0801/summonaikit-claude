@@ -642,6 +642,69 @@ EOF
 out="$(bash "$tool" --log "$tmp/t42.md" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "hora en hermano sin negritas dio $rc, se esperaba 1: $out"
 
+# T43-T45 (r6): tiempos ajenos al Deploy no son una afirmacion de hora de
+# deploy. El cordon de 20.27 debe juzgar el bullet Deploy y cortar su seccion
+# ante cualquier bullet hermano, sin convertir horas de verificacion,
+# duraciones o puertos en deployed_at.
+caso "T43: hora de verificacion no es hora de deploy => 0"
+cat > "$tmp/t43.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #324 / Task X — deploy NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup):** cuatro copias YA AL DIA.
+- **Verificacion (21:15 UTC):** gate y registro completados.
+EOF
+out="$(bash "$tool" --log "$tmp/t43.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora de verificacion dio $rc, se esperaba 0: $out"
+
+caso "T44: duracion mm:ss no es hora de deploy => 0"
+cat > "$tmp/t44.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #325 / Task X — deploy NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup):** cuatro copias YA AL DIA.
+- **Verificacion:** suite completada en 2:58.
+EOF
+out="$(bash "$tool" --log "$tmp/t44.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "duracion mm:ss dio $rc, se esperaba 0: $out"
+
+caso "T45: puerto de URL no es hora de deploy => 0"
+cat > "$tmp/t45.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #326 / Task X — deploy NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup):** cuatro copias YA AL DIA.
+- **Verificacion:** `curl http://127.0.0.1:3000/health` respondio 200.
+EOF
+out="$(bash "$tool" --log "$tmp/t45.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "puerto de URL dio $rc, se esperaba 0: $out"
+
+caso "T46: rotulo hora de verificacion del deploy no es deployed_at => 0"
+cat > "$tmp/t46.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #327 / Task X — deploy NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup):** cuatro copias YA AL DIA.
+- hora de verificacion del deploy: 21:15 UTC, gate completado.
+EOF
+out="$(bash "$tool" --log "$tmp/t46.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora de verificacion del deploy dio $rc, se esperaba 0: $out"
+
+caso "T47: rotulo negrita cerrado antes de dos puntos sigue siendo Deploy => 1"
+cat > "$tmp/t47.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #328 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy**: cuatro copias REPARADO a las 21:12 UTC, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t47.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "rotulo **Deploy** dio $rc, se esperaba 1: $out"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
@@ -790,6 +853,66 @@ else
     malo "mutacion solo-deploy SOBREVIVIO: la hora del hermano sin negritas vuelve a escapar"
   else
     malo "mutacion solo-deploy invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# r6: volver a juzgar TODOS los bullets reproduce el falso positivo que
+# confundia una hora de Verificacion, una duracion o un puerto con deployed_at.
+caso "mutacion: todos los bullets vuelven a ser juzgables => T43 la atrapa"
+out="$(bash "$tool" --log "$tmp/t43.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "control sano T43 dio $rc, se esperaba 0 (scope vivo)"
+mut_scope_base="$tmp/mut-base-scope.sh"; mut_scope="$tmp/mut-scope.sh"
+cp "$tool" "$mut_scope_base"
+python3 - "$mut_scope_base" "$mut_scope" <<'PY_SCOPE'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = "    /^-/ { dentro = es_deploy($0); if (dentro) print; next }\n"
+nuevo = "    /^-/ { dentro = 1; print; next }\n"
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_SCOPE
+if cmp -s "$mut_scope_base" "$mut_scope"; then
+  malo "mutacion scope-todos no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_scope" 2>/dev/null; then
+  malo "mutacion scope-todos no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_scope" --log "$tmp/t43.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 1 ]; then
+    printf '    mutacion scope-todos atrapada (T43 en rojo)\n'
+  elif [ "$rc" -eq 0 ]; then
+    malo "mutacion scope-todos SOBREVIVIO: hora de Verificacion aceptada como deploy"
+  else
+    malo "mutacion scope-todos invalida (rc=$rc, se esperaba el flip 0->1)"
+  fi
+fi
+
+# El cierre Markdown `**` tambien forma parte del rotulo; quitar esa variante
+# debe reabrir el bypass de T47.
+caso "mutacion: cierre negrita de Deploy ignorado => T47 la atrapa"
+out="$(bash "$tool" --log "$tmp/t47.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T47 dio $rc, se esperaba 1 (rotulo vivo)"
+mut_bold_base="$tmp/mut-base-bold.sh"; mut_bold="$tmp/mut-bold.sh"
+cp "$tool" "$mut_bold_base"
+python3 - "$mut_bold_base" "$mut_bold" <<'PY_BOLD'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = "([[:space:](]|:|\\*)"
+nuevo = "([[:space:](]|:)"
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_BOLD
+if cmp -s "$mut_bold_base" "$mut_bold"; then
+  malo "mutacion cierre-negrita no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_bold" 2>/dev/null; then
+  malo "mutacion cierre-negrita no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_bold" --log "$tmp/t47.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion cierre-negrita atrapada (T47 en verde indebido)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion cierre-negrita SOBREVIVIO: **Deploy** siguio juzgado"
+  else
+    malo "mutacion cierre-negrita invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 

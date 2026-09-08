@@ -1,0 +1,4 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-08T23:22:26Z|implementacion|Limitar la evidencia de hora a rotulos de Deploy y hora final del deploy|Los bullets de verificacion, duraciones y puertos no representan deployed_at|T43-T45 rojos antes; test_deploy_log y mutante scope-todos verdes despues|ok
+2026-09-08T23:24:26Z|adversary|Acotar el rotulo llano a hora del deploy u hora final del deploy|Hora de verificacion del deploy describe la verificacion y no deployed_at|T46 rojo antes y verde despues en tests/test_deploy_log.sh|ok
+2026-09-08T23:26:01Z|review|Reconocer el rotulo Markdown Deploy con cierre negrita antes de dos puntos|La forma **Deploy**: quedaba fuera del selector y evadia la regla de evidencia|T47 rojo antes, verde despues y mutante cierre-negrita atrapado|ok

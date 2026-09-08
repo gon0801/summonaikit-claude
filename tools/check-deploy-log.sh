@@ -9,9 +9,8 @@
 #           (el error historico fue apendar al final en vez de anteponer).
 #   unico:  un registro por PR: cada PR en un solo encabezado juzgado.
 #   evidencia (20.27, cordón propio HORA_CONTROL): en entradas con fecha >=
-#           HORA_CONTROL, CADA bullet sin sangria que NO sea el de Merge (el
-#           Deploy y cualquier hermano, con sus continuaciones indentadas)
-#           que cita HORA exige evidencia de deploy por
+#           HORA_CONTROL, cada bullet que AFIRMA una hora de Deploy (rotulo
+#           Deploy, o el rotulo llano «hora [final] del deploy») exige evidencia
 #           tipo/fuente DENTRO DE ESE bullet: un nombre de backup `.bak` del
 #           instalador (nombre de archivo pegado — el «.bak» pelado en prosa
 #           no acredita; LIMITE declarado: una negacion con token
@@ -154,20 +153,23 @@ cuerpo_de() {
 # hora de OTRO bullet sin respaldo propio.
 BULLET_SEP='@@SAIKIT-DEPLOY-BULLET@@'
 
-# Secciones JUZGABLES de una entrada: primero se quitan las secciones
-# encabezadas por Merge (el bullet de merge lleva mergedAt legitimo y no
-# exige evidencia de deploy, ni el ni sus continuaciones); despues, TODOS
-# los bullets sin sangria (con sus lineas de continuacion indentadas)
-# abren seccion juzgable. r5 (adversario M2): juzgar solo los bullets
-# Deploy dejaba esconder la hora copiada en un bullet hermano sin negritas
-# (flip medido rc=1 -> rc=0); la hora de un deploy puede vivir en
-# cualquier bullet no-merge de la entrada.
-secciones_sin_merge() {
+# Secciones JUZGABLES de una entrada: un rotulo Deploy (con o sin negritas) o
+# el rotulo llano «hora [final] del deploy» abre una seccion. CUALQUIER bullet sin
+# sangria la cierra, aunque no sea juzgable: asi un hermano `- Nota:` no puede
+# prestar su .bak o marcador. r5 conserva la forma real sin negritas
+# `- hora final del deploy: ...`; r6 evita tratar horas de Verificacion,
+# duraciones mm:ss y puertos como si fueran deployed_at.
+secciones_deploy() {
   printf '%s' "$1" | awk '
-    /^-[[:space:]]*\*\*Merge/ { salta = 1; next }
-    /^-/                        { salta = 0 }
-    salta { next }
-    { print }
+    function es_deploy(linea, etiqueta) {
+      linea = tolower(linea)
+      if (linea ~ /^-[[:space:]]*\*\*deploy([[:space:](]|:|\*)/) return 1
+      etiqueta = linea
+      sub(/:[[:space:]].*$/, "", etiqueta)
+      return etiqueta ~ /^-[[:space:]]*(deploy|hora[[:space:]]+(final[[:space:]]+)?del[[:space:]]+deploy)([[:space:]]|:|$)/
+    }
+    /^-/ { dentro = es_deploy($0); if (dentro) print; next }
+    dentro { print }
   '
 }
 
@@ -270,7 +272,7 @@ while IFS= read -r hlin; do
         else
           bullet="$bullet $blin"
         fi
-      done < <(seccion_bullets "$(secciones_sin_merge "$(cuerpo_de "$num")")"; printf '%s\n' "$BULLET_SEP")
+      done < <(seccion_bullets "$(secciones_deploy "$(cuerpo_de "$num")")"; printf '%s\n' "$BULLET_SEP")
       if [ -n "$falta_evid" ]; then
         mal "evidencia: hora de deploy sin evidencia (backup o fuente explicita); mergedAt acredita el merge — usa 'hora no recuperada' (entrada $fecha, linea $num)"
       fi
