@@ -564,6 +564,84 @@ EOF
 out="$(bash "$tool" --log "$tmp/t37.md" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "marcador antes de la hora dio $rc, se esperaba 0: $out"
 
+# T38/T39 (r5, hallazgos (a)/(b) de la quinta revision del PR #273): el
+# limite de la seccion exigia `^-[[:space:]]*\*\*` (un bullet hermano SIN
+# negritas quedaba como continuacion y su .bak acreditaba la hora del Deploy,
+# rc=0 medido) y la regex del marcador aceptaba una NEGACION dentro del
+# parentesis («(21:12 UTC, no es una hora medida en vivo)», rc=0 medido).
+# T38 (a): un `- Nota:` hermano SIN negritas con un .bak ajeno NO es
+# continuacion del Deploy: cierra la seccion y la hora sin evidencia propia
+# se rechaza.
+caso "T38: bullet hermano sin negritas con .bak ajeno no acredita => 1"
+cat > "$tmp/t38.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #330 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:50 PDT / 21:50 UTC):** grok REPARADO. Sin backup citado.
+- Nota: backup ajeno config.bak.
+EOF
+out="$(bash "$tool" --log "$tmp/t38.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "bullet hermano sin negritas dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T38 no nombro evidencia: [$out]" ;; esac
+
+# T39 (b): la NEGACION del marcador dentro del parentesis no es etiqueta
+# adyacente (pegada al parentesis que abre o inmediatamente tras coma) y no
+# acredita la hora que niega.
+caso "T39: negacion del marcador dentro del parentesis => 1"
+cat > "$tmp/t39.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #331 / Task Y — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (21:12 PDT / 21:12 UTC, no es una hora medida en vivo):** cuatro
+  copias REPARADO, sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t39.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "negacion dentro del parentesis dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T39 no nombro evidencia: [$out]" ;; esac
+
+# T40-T42 (r5, adversario M1/M3/M2): las tres formas medidas en rojo contra
+# el corte r5 (negacion tras etiqueta acreditaba; la raya honesta se
+# rechazaba; la hora en un bullet hermano sin negritas escapaba).
+caso "T40: negacion DESPUES de la etiqueta no acredita => 1"
+cat > "$tmp/t40.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #321 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:30, hora medida en vivo no es):** cuatro copias REPARADO, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t40.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "negacion tras etiqueta dio $rc, se esperaba 1: $out"
+
+# T41 (M3): contracara honesta con RAYA — la forma «(14:30 — hora medida en
+# vivo)» es etiqueta valida (la raya se normaliza a coma).
+caso "T41: etiqueta honesta tras raya => 0"
+cat > "$tmp/t41.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #322 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:30 — hora medida en vivo):** cuatro copias REPARADO.
+EOF
+out="$(bash "$tool" --log "$tmp/t41.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "etiqueta tras raya dio $rc, se esperaba 0: $out"
+
+# T42 (M2): la hora de un deploy que vive en un bullet hermano SIN negritas
+# tambien se juzga (solo el bullet de Merge esta exento).
+caso "T42: hora en bullet hermano sin negritas => 1"
+cat > "$tmp/t42.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #323 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy:** cuatro copias REPARADO.
+- hora final del deploy: 21:12 UTC, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t42.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora en hermano sin negritas dio $rc, se esperaba 1: $out"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
@@ -680,6 +758,70 @@ else
     malo "mutacion separador-anulado SOBREVIVIO: la seccion volvio a concatenarse"
   else
     malo "mutacion separador-anulado invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# r5: mutaciones propias de los DOS cambios del checker (limite de bullet sin
+# negritas; etiqueta del marcador). La discriminancia la habia probado el
+# verificador con copias revertidas; la bateria la posee ahora.
+caso "mutacion: solo bullets Deploy abren seccion => T42 la atrapa"
+out="$(bash "$tool" --log "$tmp/t42.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T42 dio $rc, se esperaba 1 (regla viva)"
+mut_lb_base="$tmp/mut-base-lb.sh"; mut_lb="$tmp/mut-lb.sh"
+cp "$tool" "$mut_lb_base"
+python3 - "$mut_lb_base" "$mut_lb" <<'PY_LB'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = "    /^-/ { if (n++) print sep; dentro = 1; print; next }\n"
+nuevo = ("    /^-[[:space:]]*\\*\\*[Dd]eploy/ { if (n++) print sep; dentro = 1; print; next }\n"
+         "    /^-/                           { dentro = 0 }\n")
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_LB
+if cmp -s "$mut_lb_base" "$mut_lb"; then
+  malo "mutacion solo-deploy no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mut_lb" 2>/dev/null; then
+  malo "mutacion solo-deploy no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_lb" --log "$tmp/t42.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion solo-deploy atrapada (T42 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion solo-deploy SOBREVIVIO: la hora del hermano sin negritas vuelve a escapar"
+  else
+    malo "mutacion solo-deploy invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+caso "mutacion: terminador de la etiqueta anulado => T40 la atrapa"
+out="$(bash "$tool" --log "$tmp/t40.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T40 dio $rc, se esperaba 1 (regla viva)"
+mut_et_base="$tmp/mut-base-et.sh"; mut_et="$tmp/mut-et.sh"
+cp "$tool" "$mut_et_base"
+python3 - "$mut_et_base" "$mut_et" <<'PY_ET'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+pares = [
+  (",[[:space:]]*hora medida en vivo[)]", "[^)]*hora medida en vivo[^)]*[)]"),
+  ("hora medida en vivo:[^)]*", "hora medida en vivo[^)]*"),
+]
+for viejo, nuevo in pares:
+    assert src.count(viejo) == 1, (viejo, src.count(viejo))
+    src = src.replace(viejo, nuevo)
+open(sys.argv[2], "w", encoding="utf-8").write(src)
+PY_ET
+if cmp -s "$mut_et_base" "$mut_et"; then
+  malo "mutacion etiqueta-laxa no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_et" 2>/dev/null; then
+  malo "mutacion etiqueta-laxa no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_et" --log "$tmp/t40.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion terminador-anulado atrapada (T40 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion terminador-anulado SOBREVIVIO: la negacion tras la etiqueta vuelve a acreditar"
+  else
+    malo "mutacion etiqueta-laxa invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 

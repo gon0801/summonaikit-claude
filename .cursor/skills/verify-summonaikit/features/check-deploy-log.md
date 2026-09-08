@@ -55,15 +55,23 @@ Preconditions:
   the repaired history of that day: the nine-entry batch is exactly seven
   `hora no recuperada` plus two `.bak`-cited deploys, so the real log passes),
   it also REQUIRES an explicit deploy source for every hour, validated PER
-  BULLET: each `- **Deploy...` bullet (case-insensitive; only an UNINDENTED
-  bullet ends one — an indented `  - **detail:**` sub-bullet is part of its
-  Deploy bullet, hour included) with its continuation lines that cites an
-  hour must carry its own source — an installer backup name (`.bak` as a
-  glued filename; a bare `.bak` in prose does not count) or the explicit
-  marker `hora medida en vivo` INSIDE the same parenthesis as the hour, in
-  either order. A sibling bullet's `.bak` or marker, or the marker negated
-  in prose, does not accredit another bullet's hour; thin spaces (U+00A0 /
-  U+202F) inside an hour are normalized before matching (web copy-paste).
+  SECTION: every UNINDENTED bullet that is NOT the Merge bullet is judged
+  (the Deploy bullet AND any plain sibling — an hour can hide in a
+  `- hora final: 21:12` line; the Merge bullet and its continuations are
+  exempt because mergedAt is legitimate there; an indented sub-bullet
+  belongs to its parent section). Each judged section with its continuation
+  lines that cites an hour must carry its own source — an installer backup
+  name (`.bak` as a glued filename; a bare `.bak` in prose does not count)
+  or the marker `hora medida en vivo` as a TERMINAL TAG inside the hour's
+  parenthesis: glued to the opening paren and followed by a colon
+  (`(hora medida en vivo: 14:40 ...)`), or immediately after a comma and
+  running to the closing paren (`(..., hora medida en vivo)`); an em dash
+  is normalized to a comma, so `(14:30 — hora medida en vivo)` is the same
+  honest tag. A negation before or after the tag (`no es una hora medida
+  en vivo`, `..., hora medida en vivo no es)`) has no terminator and never
+  accredits; neither does a sibling section's `.bak` or marker; thin
+  spaces (U+00A0 / U+202F) inside an hour are normalized before matching
+  (web copy-paste).
   Header extraction is fence-aware: a fake `## ` line inside a ``` block
   does not split an entry. Hours equal to the merge hour are judged by
   evidence type, never by timestamp inequality; the legitimately

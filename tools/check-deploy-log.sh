@@ -9,16 +9,26 @@
 #           (el error historico fue apendar al final en vez de anteponer).
 #   unico:  un registro por PR: cada PR en un solo encabezado juzgado.
 #   evidencia (20.27, cordón propio HORA_CONTROL): en entradas con fecha >=
-#           HORA_CONTROL, CADA bullet Deploy (`- **Deploy...` con sus lineas
-#           de continuacion) que cita HORA exige evidencia de deploy por
+#           HORA_CONTROL, CADA bullet sin sangria que NO sea el de Merge (el
+#           Deploy y cualquier hermano, con sus continuaciones indentadas)
+#           que cita HORA exige evidencia de deploy por
 #           tipo/fuente DENTRO DE ESE bullet: un nombre de backup `.bak` del
 #           instalador (nombre de archivo pegado — el «.bak» pelado en prosa
 #           no acredita; LIMITE declarado: una negacion con token
 #           filename-shape («no quedo ningun harness.sh.bak») si acredita,
 #           el checker juzga texto, no semantica) O el marcador `hora medida en
-#           vivo` dentro del MISMO parentesis que la hora (forma estructural:
-#           la negacion en prosa y el marcador o el .bak de un bullet hermano
-#           no acreditan la hora de este bullet). Sin evidencia => FAIL: la
+#           vivo` dentro del MISMO parentesis que la hora y en FORMA DE
+#           ETIQUETA: pegado al parentesis que abre («(hora medida en
+#           vivo...») o inmediatamente tras coma («..., hora medida en
+#           vivo...»), antes o despues de la hora. La forma de etiqueta es la
+#           estructural: una NEGACION dentro del parentesis («(21:12 UTC, no
+#           es una hora medida en vivo)») no es etiqueta adyacente y no
+#           acredita; tampoco la negacion o el marcador en prosa, ni el
+#           .bak o el marcador de un bullet hermano. La seccion de un bullet
+#           Deploy la cierra CUALQUIER bullet sin sangria (`^-`, con o sin
+#           negritas: un `- Nota: ...config.bak` hermano no es continuacion);
+#           las continuaciones legitimas van indentadas (el sub-bullet
+#           `  - **detalle:**` SI es continuacion). Sin evidencia => FAIL: la
 #           hora pudo ser copiada del minuto de mergedAt (que acredita el
 #           merge, NO el deploy; error historico rectificado 2026-09-07).
 #           `hora no recuperada` sin hora pasa (unknown honesto). NUNCA se
@@ -129,47 +139,81 @@ cuerpo_de() {
 }
 
 # Bullets Deploy de una entrada, UNO POR REGISTRO: cada `- **Deploy...` con
-# sus lineas de continuacion (hasta que abre otro bullet `- **`), separados
-# por una linea centinela jamas presente en el log. r2c (adversario M1/M2):
-# el grep -m1 del primer corte dejaba pasar la hora de un SEGUNDO bullet
-# Deploy (convencion real: un bullet por host) y las horas en lineas de
-# continuacion del propio bullet. r4 (hallazgo B2): la evidencia se valida
-# POR BULLET — concatenar la seccion dejaba que el .bak de un bullet hermano
-# (la copia de claude) o el marcador en prosa ajena acreditaran la hora de
-# OTRO bullet sin respaldo propio.
+# sus lineas de continuacion, separados por una linea centinela jamas
+# presente en el log. La seccion la cierra CUALQUIER bullet SIN SANGRIA
+# (`^-`, con o sin negritas — r5, revisor (a): el limite `^-[[:space:]]*\*\*`
+# dejaba que un bullet hermano sin negritas (`- Nota: backup ajeno
+# config.bak.`) siguiera DENTRO de la seccion y su .bak acreditara la hora
+# del Deploy; las continuaciones legitimas del log real van INDENTADAS, y un
+# sub-bullet indentado `  - **detalle:**` sigue siendo continuacion). r2c
+# (adversario M1/M2): el grep -m1 del primer corte dejaba pasar la hora de un
+# SEGUNDO bullet Deploy (convencion real: un bullet por host) y las horas en
+# lineas de continuacion del propio bullet. r4 (hallazgo B2): la evidencia se
+# valida POR BULLET — concatenar la seccion dejaba que el .bak de un bullet
+# hermano (la copia de claude) o el marcador en prosa ajena acreditaran la
+# hora de OTRO bullet sin respaldo propio.
 BULLET_SEP='@@SAIKIT-DEPLOY-BULLET@@'
 
-seccion_bullets_deploy() {
+# Secciones JUZGABLES de una entrada: primero se quitan las secciones
+# encabezadas por Merge (el bullet de merge lleva mergedAt legitimo y no
+# exige evidencia de deploy, ni el ni sus continuaciones); despues, TODOS
+# los bullets sin sangria (con sus lineas de continuacion indentadas)
+# abren seccion juzgable. r5 (adversario M2): juzgar solo los bullets
+# Deploy dejaba esconder la hora copiada en un bullet hermano sin negritas
+# (flip medido rc=1 -> rc=0); la hora de un deploy puede vivir en
+# cualquier bullet no-merge de la entrada.
+secciones_sin_merge() {
+  printf '%s' "$1" | awk '
+    /^-[[:space:]]*\*\*Merge/ { salta = 1; next }
+    /^-/                        { salta = 0 }
+    salta { next }
+    { print }
+  '
+}
+
+seccion_bullets() {
   printf '%s' "$1" | awk -v sep="$BULLET_SEP" '
-    /^-[[:space:]]*\*\*[Dd]eploy/ { if (n++) print sep; dentro = 1; print; next }
-    /^-[[:space:]]*\*\*/          { dentro = 0 }
+    /^-/ { if (n++) print sep; dentro = 1; print; next }
     dentro { print }
   '
 }
 
 # Cierto si el bullet (texto del bullet ya unido) cita hora de deploy SIN
 # fuente en SUS PROPIAS lineas: .bak pegado o marcador `hora medida en vivo`
-# en el MISMO parentesis que la hora, en CUALQUIER orden (la negacion en
-# prosa y el marcador en otro parentesis o bullet no acreditan). r4 (adversario
-# M2/L1/L3/L4): solo un bullet SIN SANGRIA corta la seccion (un sub-bullet
-# `  - **detalle:**` indentado es continuacion del Deploy — su hora cuenta);
-# `deploy` en minuscula tambien es bullet Deploy; el NBSP (U+00A0) y el
-# espacio fino (U+202F) se normalizan antes de matchear (el copy-paste de la
-# web de GitHub es justo lo que los arrastra); el marcador cuenta antes o
-# despues de la hora dentro del mismo parentesis.
+# en el MISMO parentesis que la hora, en CUALQUIER orden. r5 (revisor (b)):
+# el marcador cuenta solo en FORMA DE ETIQUETA — pegado al parentesis que
+# abre (`[(][[:space:]]*hora medida en vivo`) o inmediatamente tras coma
+# (`,[[:space:]]*hora medida en vivo`); una NEGACION dentro del parentesis
+# («(21:12 UTC, no es una hora medida en vivo)») no es etiqueta adyacente y
+# quedaba acreditada por la regex laxa `[^)]*hora medida en vivo` (rc=0
+# medido). r4 (adversario M2/L1/L3/L4): solo un bullet SIN SANGRIA corta la
+# seccion (un sub-bullet `  - **detalle:**` indentado es continuacion del
+# Deploy — su hora cuenta); `deploy` en minuscula tambien es bullet Deploy;
+# el NBSP (U+00A0) y el espacio fino (U+202F) se normalizan antes de matchear
+# (el copy-paste de la web de GitHub es justo lo que los arrastra); el
+# marcador cuenta antes o despues de la hora dentro del mismo parentesis.
 bullet_sin_evidencia() {
   # El NBSP (U+00A0) y el espacio fino (U+202F) se normalizan por SECUENCIA
-  # (tr por bytes los partiria en dos espacios y romperia la hora); la regex
-  # de hora tolera espacio alrededor de los dos puntos para el mismo motivo.
-  local texto nbsp nnbsp
+  # (tr por bytes los partiria en dos espacios y romperia la hora); la raya
+  # (U+2014) se normaliza a COMA para que la forma honesta «(14:30 — hora
+  # medida en vivo)» sea etiqueta valida sin regex multibyte (bash compara
+  # bytes, inmune al locale). El marcador cuenta solo como ETIQUETA con
+  # TERMINADOR: pegado al parentesis que abre y seguida de dos puntos
+  # («(hora medida en vivo: 14:40 ...)»), o inmediatamente tras coma y hasta
+  # el parentesis que cierra («(..., hora medida en vivo)»). Una negacion
+  # antes o despues de la etiqueta («no es una...», «..., hora medida en
+  # vivo no es)») no tiene terminador y no acredita (adversario M1/M3).
+  local texto nbsp nnbsp raya
   nbsp="$(printf '\302\240')"
   nnbsp="$(printf '\342\200\257')"
+  raya="$(printf '\342\200\224')"
   texto="${1//$nbsp/ }"
   texto="${texto//$nnbsp/ }"
+  texto="${texto//$raya/,}"
   printf '%s' "$texto" | grep -Eq '[0-9]{1,2}[[:space:]]*:[[:space:]]*[0-5][0-9]' \
     && ! printf '%s' "$texto" | grep -Eq '[A-Za-z0-9._/-]+\.bak' \
-    && ! printf '%s' "$texto" | grep -Eq '[(][^)]*[0-9]{1,2}[[:space:]]*:[[:space:]]*[0-5][0-9][^)]*hora medida en vivo[)]' \
-    && ! printf '%s' "$texto" | grep -Eq '[(][^)]*hora medida en vivo[^)]*[0-9]{1,2}[[:space:]]*:[[:space:]]*[0-5][0-9][^)]*[)]'
+    && ! printf '%s' "$texto" | grep -Eq '[(][^)]*[0-9]{1,2}[[:space:]]*:[[:space:]]*[0-5][0-9][^)]*,[[:space:]]*hora medida en vivo[)]' \
+    && ! printf '%s' "$texto" | grep -Eq '[(][[:space:]]*hora medida en vivo:[^)]*[0-9]{1,2}[[:space:]]*:[[:space:]]*[0-5][0-9][^)]*[)]'
 }
 
 prev_juzgada='9999-99-99'
@@ -226,7 +270,7 @@ while IFS= read -r hlin; do
         else
           bullet="$bullet $blin"
         fi
-      done < <(seccion_bullets_deploy "$(cuerpo_de "$num")"; printf '%s\n' "$BULLET_SEP")
+      done < <(seccion_bullets "$(secciones_sin_merge "$(cuerpo_de "$num")")"; printf '%s\n' "$BULLET_SEP")
       if [ -n "$falta_evid" ]; then
         mal "evidencia: hora de deploy sin evidencia (backup o fuente explicita); mergedAt acredita el merge — usa 'hora no recuperada' (entrada $fecha, linea $num)"
       fi
