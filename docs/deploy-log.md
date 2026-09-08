@@ -7,7 +7,7 @@ El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
 (tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
-## 2026-09-07 — Rectificación histórica de la tanda Phase 20
+**Rectificación histórica (2026-09-07, rama fix/phase20-harness-review-r1):**
 
 Los hashes completos de merge citados en las entradas de los PR #262, #263,
 #264, #268, #269, #270, #271 y #272 estaban rellenados erróneamente tras su
