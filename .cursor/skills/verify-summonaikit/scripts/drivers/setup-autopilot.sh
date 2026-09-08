@@ -75,6 +75,23 @@ run_pty() {
 }
 
 cfg_of() { printf '%s/.saikit/autopilot.json' "$1"; }
+
+# Ejecuta contra $1 (cwd) el comando $2 EXTRAIDO de un hint — `bash
+# tools/saikit-setup-autopilot.sh <args>` (20fix B3): la ruta relativa del
+# tool se resuelve al script real y el resto del argv corre TAL CUAL el hint
+# lo dicta; el driver nunca reescribe a mano lo que el tool emitio.
+ejecutar_hint() {
+  local cwd="$1" cmd="$2"
+  # Separar en palabras es el proposito; la forma ya se valido exacta.
+  # shellcheck disable=SC2086
+  set -- $cmd
+  if [ "${1:-}" != bash ] || [ "${2:-}" != tools/saikit-setup-autopilot.sh ]; then
+    printf 'hint-ejecutable: forma inesperada: %s\n' "$cmd" >&2
+    return 2
+  fi
+  shift 2
+  runtime_exec "$cwd" bash "$SETUP" "$@"
+}
 lock_of() {
   local common
   common="$(git -C "$1" rev-parse --git-common-dir 2>/dev/null || true)"
@@ -400,43 +417,65 @@ if fm_only setup-lock-held; then
     fi
     # assert:lock_held_exit_3_end
     # assert:lock_held_hint_ejecutable
-    if printf '%s' "$out" \
-      | grep -F -q 'bash tools/saikit-setup-autopilot.sh --liberar-lock'; then
+    # 20fix B3: el comando se EXTRAE de la salida observada (la linea del
+    # hint, sin sangria) y se exige la forma COMPLETA de linea — `bash
+    # tools/saikit-setup-autopilot.sh --liberar-lock`, sin flags que el tool
+    # no acepta. Un hint con un flag inexistente CONTIENE el comando como
+    # subcadena pero no ES el comando: de ejecutarlo de verdad, rc=2.
+    hint_cmd="$(printf '%s' "$out" | grep -F 'bash tools/saikit-setup-autopilot.sh' \
+      | head -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)"
+    if [ "$hint_cmd" = 'bash tools/saikit-setup-autopilot.sh --liberar-lock' ]; then
       fm_pass setup-lock-held lock_held_hint_ejecutable \
-        "bash tools/saikit-setup-autopilot.sh --liberar-lock" \
-        "hint de recuperacion ejecutable con bash"
+        'bash tools/saikit-setup-autopilot.sh --liberar-lock' \
+        "hint exacto y ejecutable: [$hint_cmd]"
     else
       fm_fail setup-lock-held lock_held_hint_ejecutable \
-        "bash tools/saikit-setup-autopilot.sh --liberar-lock" "$out"
+        'bash tools/saikit-setup-autopilot.sh --liberar-lock' \
+        "forma del hint inesperada: [${hint_cmd:-ausente}] en: $out"
     fi
     # assert:lock_held_hint_ejecutable_end
     # 20fix H3: el hint debe poder EJECUTARSE inocuamente contra una COPIA
     # del fixture. El tool resuelve el repo/lock desde el cwd, asi que la
     # corrida usa la copia como cwd: libera el lock DE LA COPIA y el original
-    # (aun sostenido por el holder) queda intacto.
-    copia="$VERIFY_TMPDIR/setup-lock-held-copia"
-    rm -rf "$copia"
-    cp -R "$work" "$copia"
-    chmod 644 "$copia/.git/saikit-autopilot.lock"/* 2>/dev/null || true
-    lock_copia="$copia/.git/saikit-autopilot.lock"
-    set +e
-    lib_out="$(runtime_exec "$copia" bash "$SETUP" --liberar-lock 2>&1)"
-    lib_rc=$?
-    set -e
-    fm_action setup-lock-held act-liberar-inocuo "$lib_rc" "$lib_out" \
-      bash "$SETUP" --liberar-lock
-    # assert:lock_hint_ejecucion_inocua
-    if [ "$lib_rc" -eq 0 ] && [ ! -d "$lock_copia" ] && [ -d "$lock" ] \
-      && printf '%s' "$lib_out" | grep -q 'lock liberado'; then
-      fm_pass setup-lock-held lock_hint_ejecucion_inocua \
-        "exit 0 + lock de la copia liberado + original intacto" \
-        "hint corrido desde la copia; original sigue con su lock"
+    # (aun sostenido por el holder) queda intacto. 20fix B3: la corrida usa
+    # el argv EXTRAIDO del hint (resuelto al tool real), no uno escrito a
+    # mano — un hint con flag raro muere con el rc=2 del propio tool (uso),
+    # sin escribir nada. r4 (adversario L5): la ejecucion queda GATED tras la
+    # igualdad exacta — una forma inesperada NO se ejecuta aunque su prefijo
+    # sea valido — y el stdin se cierra con </dev/null (como run_setup) para
+    # que un flag interactivo no cuelgue leyendo el stdin del runner.
+    if [ "$hint_cmd" = 'bash tools/saikit-setup-autopilot.sh --liberar-lock' ]; then
+      copia="$VERIFY_TMPDIR/setup-lock-held-copia"
+      rm -rf "$copia"
+      cp -R "$work" "$copia"
+      chmod 644 "$copia/.git/saikit-autopilot.lock"/* 2>/dev/null || true
+      lock_copia="$copia/.git/saikit-autopilot.lock"
+      set +e
+      lib_out="$(ejecutar_hint "$copia" "$hint_cmd" 2>&1 </dev/null)"
+      lib_rc=$?
+      set -e
+      fm_action setup-lock-held act-liberar-inocuo "$lib_rc" "$lib_out" \
+        $hint_cmd
+      # assert:lock_hint_ejecucion_inocua
+      if [ "$lib_rc" -eq 0 ] && [ ! -d "$lock_copia" ] && [ -d "$lock" ] \
+        && printf '%s' "$lib_out" | grep -q 'lock liberado'; then
+        fm_pass setup-lock-held lock_hint_ejecucion_inocua \
+          "exit 0 + lock de la copia liberado + original intacto" \
+          "hint corrido desde la copia; original sigue con su lock"
+      else
+        fm_fail setup-lock-held lock_hint_ejecucion_inocua \
+          "exit 0 + lock de la copia liberado + original intacto" \
+          "rc=$lib_rc copia=$([ -d "$lock_copia" ] && echo locked || echo libre) original=$([ -d "$lock" ] && echo locked || echo libre) out=$lib_out"
+      fi
+      # assert:lock_hint_ejecucion_inocua_end
     else
+      # La ejecucion NO ocurrio (forma del hint inesperada, adversario L5):
+      # ausencia con diagnostico fiel, sin fm_action con argv de corrida que
+      # no fue — igual que la rama de holder sin lock.
       fm_fail setup-lock-held lock_hint_ejecucion_inocua \
         "exit 0 + lock de la copia liberado + original intacto" \
-        "rc=$lib_rc copia=$([ -d "$lock_copia" ] && echo locked || echo libre) original=$([ -d "$lock" ] && echo locked || echo libre) out=$lib_out"
+        "ejecucion omitida: forma del hint inesperada [${hint_cmd:-ausente}]; nada corrio contra la copia"
     fi
-    # assert:lock_hint_ejecucion_inocua_end
   else
     # La segunda ejecucion NO ocurrio (timeout esperando el lock): se
     # registra la AUSENCIA con diagnostico fiel — nada de fm_action con argv

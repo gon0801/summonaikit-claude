@@ -9,7 +9,7 @@ ready-to-copy revert command. It never runs that revert.
 - `postmerge-green` exits 0 with `VERDE` when CI succeeded and no revert is offered.
 - `postmerge-red` exits 1 with `ROJO` and `PARA REVERTIR`, leaving HEAD and the worktree unchanged.
 - `postmerge-pending` and `postmerge-no-run` exit 3 with `UNKNOWN` and name the gap.
-- `postmerge-hint-pendiente` and `postmerge-hint-sin-run` assert each UNKNOWN hint in its own case, and the hint line carries the executable form `bash tools/saikit-postmerge.sh --merge-commit`.
+- `postmerge-hint-pendiente` and `postmerge-hint-sin-run` assert each UNKNOWN hint in its own case, and the hint line carries the executable form COMPLETE with the SHA and branch the case built: `bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>` (a bare `--merge-commit` prefix without the SHA is not a re-runnable command and fails the assertion).
 - `postmerge-no-color` inherits `CLICOLOR_FORCE=1` and still parses green without ANSI escapes.
 - `postmerge-redacted` keeps synthetic secrets out of the warning and telegram text.
 - `postmerge-transport` rejects unexpected gh, curl, and telegram calls.
@@ -32,8 +32,8 @@ Preconditions:
 - Case `postmerge-red`: action Observe native red without revert; command `control-summonaikit drive saikit-postmerge`; observable exit `1`, `ROJO`, `--revert-de <sha>`, and intact HEAD/worktree.
 - Case `postmerge-pending`: action Observe native unknown for in-progress CI; command `control-summonaikit drive saikit-postmerge`; observable exit `3`, `UNKNOWN`, and `pendiente`.
 - Case `postmerge-no-run`: action Observe native unknown when CI has no run; command `control-summonaikit drive saikit-postmerge`; observable exit `3`, `UNKNOWN`, and `sin run`.
-- Case `postmerge-hint-pendiente`: action Observe the pending-CI hint; command `control-summonaikit drive saikit-postmerge`; observable exit `3` and the hint line contains `bash tools/saikit-postmerge.sh --merge-commit`.
-- Case `postmerge-hint-sin-run`: action Observe the no-run hint; command `control-summonaikit drive saikit-postmerge`; observable exit `3` and the hint line contains `bash tools/saikit-postmerge.sh --merge-commit`.
+- Case `postmerge-hint-pendiente`: action Observe the pending-CI hint; command `control-summonaikit drive saikit-postmerge`; observable exit `3` and the hint line contains the full command `bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>`.
+- Case `postmerge-hint-sin-run`: action Observe the no-run hint; command `control-summonaikit drive saikit-postmerge`; observable exit `3` and the hint line contains the full command `bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>`.
 - Case `postmerge-no-color`: action Inherit CLICOLOR_FORCE=1 into the tool environment; command `control-summonaikit drive saikit-postmerge`; observable `VERDE` and no ANSI escape bytes in the judged output.
 - Case `postmerge-redacted`: action Observe a redacted warning; command `control-summonaikit drive saikit-postmerge`; observable `[REDACTED]` and no raw synthetic secret.
 - Case `postmerge-transport`: action Probe unexpected transports; command `control-summonaikit drive saikit-postmerge`; observable unexpected gh/curl/telegram fail and only expected calls are logged.

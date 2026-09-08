@@ -30,6 +30,9 @@ SAIKIT_FM_ISOLATE_TRANSPORT=1
 SAIKIT_FM_FORCE_COLOR=0
 
 MC=""
+# Rama que construye el fixture (la config del repo la fija pm_reset y el
+# hint del tool la repite): una sola fuente para correr y para afirmar.
+RAMA="master"
 OUT=""
 RC=0
 
@@ -204,7 +207,7 @@ arbol_huella() {
 correr() {
   write_wrapper
   set +e
-  OUT="$(runtime_exec "$WORK" bash "$WRAP" --merge-commit "$MC" --rama master)"
+  OUT="$(runtime_exec "$WORK" bash "$WRAP" --merge-commit "$MC" --rama "$RAMA")"
   RC=$?
   set -e
 }
@@ -322,27 +325,30 @@ fi
 
 # Disciplina one-hint-per-case (ver ficha): el hint de CI pendiente se afirma
 # en su PROPIO caso — una regresion en el texto del hint no debe quedar
-# enmascarada por el caso del otro hint. Lo afirmado es la forma EJECUTABLE:
-# la linea del hint dicta `bash tools/saikit-postmerge.sh --merge-commit ...`.
+# enmascarada por el caso del otro hint. Lo afirmado es el comando EJECUTABLE
+# COMPLETO: la linea del hint dicta `bash tools/saikit-postmerge.sh
+# --merge-commit $MC --rama $RAMA` (20fix B5: sin el SHA el prefijo suelto
+# no es un comando que el caso pueda re-ejecutar).
 if fm_only postmerge-hint-pendiente; then
   pm_reset
   printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' \
     > "$FIX/runs.json"
   correr
   fm_action postmerge-hint-pendiente act-hint-pend "$RC" "$OUT" \
-    bash "$POST" --merge-commit "$MC" --rama master
+    bash "$POST" --merge-commit "$MC" --rama "$RAMA"
   if [ "$RC" -eq 3 ]; then
     fm_pass postmerge-hint-pendiente tool_exit_3 "3" "exit $RC"
   else
     fm_fail postmerge-hint-pendiente tool_exit_3 "3" "exit $RC: $OUT"
   fi
   # assert:hint_pendiente_ejecutable
-  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit"; then
+  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"; then
     fm_pass postmerge-hint-pendiente hint_pendiente_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit" "hint ejecutable con bash"
+      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" \
+      "hint ejecutable con bash, SHA y rama"
   else
     fm_fail postmerge-hint-pendiente hint_pendiente_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit" "$OUT"
+      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" "$OUT"
   fi
   # assert:hint_pendiente_ejecutable_end
 fi
@@ -353,19 +359,20 @@ if fm_only postmerge-hint-sin-run; then
   printf '[]' > "$FIX/runs.json"
   correr
   fm_action postmerge-hint-sin-run act-hint-sinrun "$RC" "$OUT" \
-    bash "$POST" --merge-commit "$MC" --rama master
+    bash "$POST" --merge-commit "$MC" --rama "$RAMA"
   if [ "$RC" -eq 3 ]; then
     fm_pass postmerge-hint-sin-run tool_exit_3 "3" "exit $RC"
   else
     fm_fail postmerge-hint-sin-run tool_exit_3 "3" "exit $RC: $OUT"
   fi
   # assert:hint_sin_run_ejecutable
-  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit"; then
+  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"; then
     fm_pass postmerge-hint-sin-run hint_sin_run_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit" "hint ejecutable con bash"
+      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" \
+      "hint ejecutable con bash, SHA y rama"
   else
     fm_fail postmerge-hint-sin-run hint_sin_run_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit" "$OUT"
+      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" "$OUT"
   fi
   # assert:hint_sin_run_ejecutable_end
 fi

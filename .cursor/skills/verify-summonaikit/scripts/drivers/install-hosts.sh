@@ -21,14 +21,21 @@ SRC_SHA="$(fm_sha "$HOOK_SRC")"
 
 fm_unknown() { fm_assert "$1" "$2" unknown "$3" "$4"; }
 
-# Identidad EXACTA de un arbol (20fix H1): lista de archivos ordenada + cksum
-# por archivo (portable mac/linux). Comparar el string completo detecta
-# escrituras, borrados, reescrituras, backups nuevos y archivos ajenos que un
-# conteo de piezas o una lista de nombres no ven.
+# Identidad de CONTENIDO y ARBOL de un directorio (20fix H1): toda entrada
+# del arbol — archivos con cksum y directorios, incluidos los vacios —
+# listada y ordenada (portable mac/linux). Comparar el string completo
+# detecta escrituras, borrados, reescrituras, backups nuevos, archivos
+# ajenos y directorios creados o borrados (un dir vacio no es invisible) que
+# un conteo de piezas o una lista de nombres no ven. LIMITES declarados:
+# permisos y timestamps quedan fuera del snapshot.
 snapshot_tree() {
   local tree="$1" f
-  find "$tree" -type f | LC_ALL=C sort | while IFS= read -r f; do
-    printf '%s %s\n' "$f" "$(cksum < "$f")"
+  find "$tree" | LC_ALL=C sort | while IFS= read -r f; do
+    if [ -f "$f" ]; then
+      printf 'F %s %s\n' "$f" "$(cksum < "$f")"
+    else
+      printf 'D %s\n' "$f"
+    fi
   done
 }
 
@@ -455,8 +462,9 @@ fi
 # 20.24: la retirada zcode respeta DRY_RUN — reporta y clasifica sin tocar
 # las piezas. 20fix H1 endurece el caso: se planta un agente DESCONOCIDO (sin
 # marca saikit_owned) para observar la clasificacion en AMBAS direcciones, un
-# archivo AJENO en el arbol, y se exige identidad EXACTA del arbol completo
-# (find+cksum: config, agentes, saikit-backups y ajenos) antes == despues.
+# archivo AJENO en el arbol, y se exige identidad de CONTENIDO y ARBOL del
+# arbol completo (find+cksum con dirs incluidos: config, agentes,
+# saikit-backups, vacios y ajenos) antes == despues.
 # La linea fm_action de abajo es la costura de los mutantes de escritura del
 # banco (tests/test_feature_map_hosts.sh): nada legitimo escribe entre el
 # dry-run y el snapshot de despues.
@@ -553,7 +561,7 @@ if fm_only hosts-quitar-zcode-dry; then
     # assert:quitar_zcode_dry_snapshot_igual
     if [ "$zc_antes" = "$zc_despues" ]; then
       fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_snapshot_igual \
-        "snapshot antes == despues" "identidad exacta del arbol .zcode (find+cksum)"
+        "snapshot antes == despues" "identidad de contenido y arbol .zcode (find+cksum, dirs incluidos)"
     else
       fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_snapshot_igual \
         "snapshot antes == despues" "el arbol .zcode cambio tras el dry-run"
@@ -590,8 +598,9 @@ fi
 # agentes sin archivar ni borrar nada. 20fix H1 endurece el caso: exige los
 # CUATRO perfiles presentes (no "al menos uno"), clasificacion por pieza con
 # ancla de guion largo, un agente DESCONOCIDO para la direccion negativa, un
-# archivo AJENO y snapshot exacto (find+cksum) del arbol .grok completo
-# (hook, json, agentes y sus dirs de backups). La linea fm_action de abajo es
+# archivo AJENO y snapshot de contenido y arbol (find+cksum con dirs
+# incluidos) del arbol .grok completo (hook, json, agentes y sus dirs de
+# backups). La linea fm_action de abajo es
 # la costura de los mutantes de escritura del banco.
 if fm_only hosts-quitar-grok-dry; then
   if ! has_jq; then
@@ -682,7 +691,7 @@ if fm_only hosts-quitar-grok-dry; then
     # assert:quitar_grok_dry_snapshot_igual
     if [ "$g_antes" = "$g_despues" ]; then
       fm_pass hosts-quitar-grok-dry quitar_grok_dry_snapshot_igual \
-        "snapshot antes == despues" "identidad exacta del arbol .grok (find+cksum)"
+        "snapshot antes == despues" "identidad de contenido y arbol .grok (find+cksum, dirs incluidos)"
     else
       fm_fail hosts-quitar-grok-dry quitar_grok_dry_snapshot_igual \
         "snapshot antes == despues" "el arbol .grok cambio tras el dry-run"

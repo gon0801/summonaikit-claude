@@ -13,6 +13,8 @@
 #   omit_timeout_cleanup accept_pipe_as_pty skip_killpg accept_unordered
 # 20fix: caso de argv reales del setup-lock-held (H3) y
 #   hint_liberar_sin_bash — strip del prefijo bash del hint liberar-lock (H2)
+# 20fix r4: hint_flag_inexistente — hint con flag que el tool no acepta (B3):
+#   la forma completa de linea es lo afirmado y lo ejecutado
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -427,6 +429,27 @@ if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
   "hint_liberar_sin_bash"
 then
   bash -n "$mut" || { malo "hint_liberar_sin_bash: mutante no parsea"; }
+  if bash -n "$mut" 2>/dev/null; then
+    out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail setup-autopilot lock_held_hint_ejecutable \
+      'bash tools/saikit-setup-autopilot.sh --liberar-lock|hint' "$rc"
+  fi
+fi
+
+# 20fix B3: hint con un FLAG INEXISTENTE — contiene el comando como
+# subcadena pero no ES el comando (de ejecutarlo de verdad, rc=2). La
+# asercion debe exigir la forma completa de linea y la ejecucion inocua debe
+# correr el argv EXTRAIDO (medido contra el driver pre-B3: drive rc=0 con
+# ambas aserciones en PASS).
+caso "mutante hint_flag_inexistente: hint con flag raro se pone rojo"
+reset_art
+control_sano_setup
+mut="$SANDBOX/setup-hint-flag.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's@# assert:lock_held_hint_ejecutable@out="$(printf %s "$out" | sed '"'"'s|bash tools/saikit-setup-autopilot.sh --liberar-lock|\& --flag-inexistente|'"'"')"; &@' \
+  "hint_flag_inexistente"
+then
+  bash -n "$mut" || { malo "hint_flag_inexistente: mutante no parsea"; }
   if bash -n "$mut" 2>/dev/null; then
     out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
     assert_missing_or_fail setup-autopilot lock_held_hint_ejecutable \
