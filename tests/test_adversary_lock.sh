@@ -1013,6 +1013,55 @@ caso "advzona_teardown_gana_la_carrera_de_swap"
 advzona_teardown_gana_la_carrera_de_swap
 fin_caso "advzona_teardown_gana_la_carrera_de_swap"
 
+# r3 (cross-review hosts Grok, BAJA) — EXACTITUD del ancla del teardown. El
+# chequeo de pwd -P aceptaba CUALQUIER subruta del proyecto
+# ("<canon>/?*"): un scratch swappeado a un symlink INTERNO (p.ej.
+# .saikit/findings) en la ventana chequeos->cd aterrizaba adentro del prefijo
+# y el rm relativo borraba <llave> dentro de findings (rojo medido con el
+# ancla prefijo: findings/adversary/<ses>/archivo-interno.txt BORRADO). Ahora
+# el lugar aterrizado tiene que ser EXACTAMENTE el scratch del adversary. La
+# regresion es determinista con el gancho SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG
+# (pausa ENTRE los chequeos -L y el cd; default 0): el plantador swappea
+# scratch por un symlink a .saikit/findings EN plena pausa — el loop de
+# ancestros ya paso (scratch era real), el cd aterriza en findings y el ancla
+# exacta lo declara y OMITE. Con el ancla prefijo (mutante
+# teardown_ancla_prefijo) el rm borra dentro de findings: rojo.
+advzona_teardown_ancla_exacta() {
+  [ "$ADV_SYMLINK_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'; return 0; }
+  _ses="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  _an_S="$LAB/proyecto/.saikit/scratch"
+  _an_F="$LAB/proyecto/.saikit/findings"
+  _an_interno="$_an_F/adversary/$_ses/archivo-interno.txt"
+  mkdir -p "$(dirname "$_an_interno")" "$_an_S/adversary" "$LAB/proyecto/.saikit"
+  printf 'interno\n' > "$_an_interno"
+  export SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG=2
+  lab_limpiar_estado
+  lab_sembrar h1 0 1 0 "implementer,adversary"
+  # plantador determinista: a los 0.5s (en plena pausa pre-cd de 2s) swappea
+  # scratch por un symlink INTERNO a .saikit/findings
+  ( sleep 0.5; rm -rf "$_an_S"; ln -s "$_an_F" "$_an_S" ) >/dev/null 2>&1 &
+  _an_pid=$!
+  _an_t0="${EPOCHREALTIME:-}"
+  lab_run prompt claude "$(lab_payload_prompt 'seguimos sin sentinel')"
+  wait "$_an_pid" 2>/dev/null
+  unset SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG
+  _igual "desarme fail-open pese al swap interno en la pausa" "$LAB_RC" "0"
+  _contiene "limpieza declarada OMITIDA por ancla no exacta" "$LAB_ERR" 'no es exactamente el scratch del adversary'
+  if [ ! -f "$_an_interno" ]; then
+    _mal "el teardown borro dentro de findings (ancla acepto una subruta interna del proyecto)"
+  fi
+  if [ -n "$_an_t0" ] && [ -n "${EPOCHREALTIME:-}" ]; then
+    awk -v a="$_an_t0" -v b="$EPOCHREALTIME" 'BEGIN { exit !(b - a > 1.0) }' \
+      || _mal "el gancho SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG no disparo y esta corrida no probo la ventana"
+  fi
+  # devolver el arbol a estado sano: el plantador dejo scratch=enlace
+  rm -f "$_an_S" 2>/dev/null
+  mkdir -p "$_an_S/adversary"
+}
+caso "advzona_teardown_ancla_exacta"
+advzona_teardown_ancla_exacta
+fin_caso "advzona_teardown_ancla_exacta"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_adversary_lock: FAIL (casos)" >&2
   exit 1
@@ -1120,6 +1169,11 @@ mut_advlock_zona_unknown_sin_limpieza() { sed 's@^    adv_limpiar_zona   # r1:.*
 # los nombres de los ancestros en su ventana y el swap en plena pausa lo
 # atraviesa. Lo atrapa advzona_teardown_gana_la_carrera_de_swap.
 mut_advlock_teardown_sin_anclaje() { sed 's#^    rm -rf -- "./\$SESSION_KEY" 2>/dev/null || true$#    rm -rf "$advzl_dir" 2>/dev/null || true#'; }
+# r3 (Grok): el ancla se relaja a cualquier subruta del proyecto — el swap
+# interno a .saikit/findings en la ventana chequeos->cd vuelve a aterrizar
+# adentro del prefijo y el rm borra en findings. Lo atrapa
+# advzona_teardown_ancla_exacta.
+mut_advlock_teardown_ancla_prefijo() { sed 's#^    if \[ "\$advzl_aqui" != "\$ADV_SCRATCH_PARENT" \]; then$#    if [[ "$advzl_aqui" != "$ADV_PROJECT_CANON"/* ]]; then#'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -1142,6 +1196,7 @@ teardown_ciego_scratch|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_ciego_padre|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_ciego_dir|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_sin_anclaje|advzona_teardown_gana_la_carrera_de_swap
+teardown_ancla_prefijo|advzona_teardown_ancla_exacta
 zona_unknown_sin_limpieza|advzona_unknown_honesto_limpia_la_zona"
 
 while IFS='|' read -r nombre caso_atrapa; do
@@ -1155,7 +1210,7 @@ while IFS='|' read -r nombre caso_atrapa; do
         saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue
       fi ;;
-    canon_logico|zona_symlink_ciega|teardown_ciego_saikit|teardown_ciego_scratch|teardown_ciego_padre|teardown_ciego_dir|teardown_sin_anclaje)
+    canon_logico|zona_symlink_ciega|teardown_ciego_saikit|teardown_ciego_scratch|teardown_ciego_padre|teardown_ciego_dir|teardown_sin_anclaje|teardown_ancla_prefijo)
       if [ "$ADV_SYMLINK_OK" != "1" ]; then
         saikit_skip_caso "mutacion_$nombre" 'necesita symlinks reales'
         continue

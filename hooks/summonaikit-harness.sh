@@ -2607,15 +2607,26 @@ adv_limpiar_zona() {
   # ya no existe o nunca existio): salida SILENTE, es el caso normal de un
   # turno sin adversary y no puede ensuciar el stderr de cada Stop.
   (
+    # Gancho de test (r3, hallazgo Grok): pausa opcional ENTRE los chequeos -L
+    # de ancestros y el cd del ancla, para exponer esa ventana en la regresion
+    # del ancla exacta. Default 0 = cero efecto; mismo patron y misma seguridad
+    # que la pausa de abajo (el env viene del runner del host, nunca del
+    # adversary).
+    advzl_pausa_pre="${SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG:-0}"
+    case "$advzl_pausa_pre" in ''|*[!0-9]*) advzl_pausa_pre=0 ;; esac
+    [ "$advzl_pausa_pre" -gt 0 ] && sleep "$advzl_pausa_pre" 2>/dev/null
     cd -P "$ADV_SCRATCH_PARENT" 2>/dev/null || exit 0
     advzl_aqui="$(pwd -P)"
-    case "$advzl_aqui" in
-      "$ADV_PROJECT_CANON"/?*) ;;
-      *)
-        printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — el ancla (%s) resuelve fuera del proyecto canonico %s (fail-open: el Stop no se bloquea por esto)\n' "$advzl_aqui" "$ADV_PROJECT_CANON" >&2
-        exit 0
-        ;;
-    esac
+    # r3 (hallazgo Grok): EXACTITUD del ancla — el lugar aterrizado tiene que
+    # ser EXACTAMENTE el scratch del adversary construido bajo el canon, no
+    # cualquier subruta del proyecto: un scratch swappeado a un symlink INTERNO
+    # (p.ej. .saikit/findings) en la ventana chequeos->cd aterrizaba adentro
+    # del prefijo "<canon>/?*" y el rm relativo borraba <llave> ahi dentro
+    # (medido en rojo). Exacto contra exacto: ambos lados vienen de pwd -P.
+    if [ "$advzl_aqui" != "$ADV_SCRATCH_PARENT" ]; then
+      printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — el ancla (%s) no es exactamente el scratch del adversary (%s); un swap de ancestro redirigio el borrado (fail-open: el Stop no se bloquea por esto)\n' "$advzl_aqui" "$ADV_SCRATCH_PARENT" >&2
+      exit 0
+    fi
     # Gancho de test (H1): pausa opcional ENTRE la verificacion del ancla y el
     # borrado para exponer la ventana check->act en la regresion de la carrera
     # (sin esto, la ventana es de ~un fork y la carrera del toggler no es
