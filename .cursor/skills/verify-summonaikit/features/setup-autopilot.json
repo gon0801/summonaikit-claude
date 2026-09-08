@@ -56,7 +56,11 @@
     },
     {
       "id": "setup-lock-held",
-      "required_assertions": ["lock_held_exit_3", "lock_held_hint_ejecutable"]
+      "required_assertions": [
+        "lock_held_exit_3",
+        "lock_held_hint_ejecutable",
+        "lock_hint_ejecucion_inocua"
+      ]
     },
     {
       "id": "setup-with-ci",

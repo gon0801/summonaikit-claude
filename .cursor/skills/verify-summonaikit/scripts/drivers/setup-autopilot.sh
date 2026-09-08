@@ -371,6 +371,11 @@ if fm_only setup-lock-held; then
       --telegram no --ci-minimo no --pr 11 >/dev/null 2>&1 \
       ; echo $? > "$holder_rc" ) &
   holder_pid=$!
+  # PREPARACION registrada con su argv real (20fix H3): el holder SI corrio.
+  fm_action setup-lock-held act-holder "" \
+    "preparacion: holder en background sostiene el lock 8s" \
+    env SAIKIT_SETUP_SOSTENER_SEG=8 bash "$SETUP" --merge no --despliega no \
+    --sin-verify-app no --telegram no --ci-minimo no --pr 11
   i=0
   while [ ! -d "$lock" ] && [ "$i" -lt 50 ]; do
     sleep 0.1
@@ -382,7 +387,11 @@ if fm_only setup-lock-held; then
       --telegram no --ci-minimo no --pr 12 2>&1)"
     rc=$?
     set -e
-    fm_action setup-lock-held act-lock-held "$rc" "$out" bash "$SETUP" --lock-held
+    # argv EXACTO de la corrida real (20fix H3): el flag --lock-held no
+    # existe en el tool; un argv inventado es evidencia falsa.
+    fm_action setup-lock-held act-lock-held "$rc" "$out" \
+      bash "$SETUP" --merge no --despliega no --sin-verify-app no \
+      --telegram no --ci-minimo no --pr 12
     # assert:lock_held_exit_3
     if [ "$rc" -eq 3 ]; then
       fm_pass setup-lock-held lock_held_exit_3 "exit 3" "exit 3 (lock sostenido)"
@@ -401,13 +410,46 @@ if fm_only setup-lock-held; then
         "bash tools/saikit-setup-autopilot.sh --liberar-lock" "$out"
     fi
     # assert:lock_held_hint_ejecutable_end
+    # 20fix H3: el hint debe poder EJECUTARSE inocuamente contra una COPIA
+    # del fixture. El tool resuelve el repo/lock desde el cwd, asi que la
+    # corrida usa la copia como cwd: libera el lock DE LA COPIA y el original
+    # (aun sostenido por el holder) queda intacto.
+    copia="$VERIFY_TMPDIR/setup-lock-held-copia"
+    rm -rf "$copia"
+    cp -R "$work" "$copia"
+    chmod 644 "$copia/.git/saikit-autopilot.lock"/* 2>/dev/null || true
+    lock_copia="$copia/.git/saikit-autopilot.lock"
+    set +e
+    lib_out="$(runtime_exec "$copia" bash "$SETUP" --liberar-lock 2>&1)"
+    lib_rc=$?
+    set -e
+    fm_action setup-lock-held act-liberar-inocuo "$lib_rc" "$lib_out" \
+      bash "$SETUP" --liberar-lock
+    # assert:lock_hint_ejecucion_inocua
+    if [ "$lib_rc" -eq 0 ] && [ ! -d "$lock_copia" ] && [ -d "$lock" ] \
+      && printf '%s' "$lib_out" | grep -q 'lock liberado'; then
+      fm_pass setup-lock-held lock_hint_ejecucion_inocua \
+        "exit 0 + lock de la copia liberado + original intacto" \
+        "hint corrido desde la copia; original sigue con su lock"
+    else
+      fm_fail setup-lock-held lock_hint_ejecucion_inocua \
+        "exit 0 + lock de la copia liberado + original intacto" \
+        "rc=$lib_rc copia=$([ -d "$lock_copia" ] && echo locked || echo libre) original=$([ -d "$lock" ] && echo locked || echo libre) out=$lib_out"
+    fi
+    # assert:lock_hint_ejecucion_inocua_end
   else
-    fm_action setup-lock-held act-lock-held "" "" bash "$SETUP" --lock-held
+    # La segunda ejecucion NO ocurrio (timeout esperando el lock): se
+    # registra la AUSENCIA con diagnostico fiel — nada de fm_action con argv
+    # inventado ni salida vacia de una corrida que no fue (20fix H3). El
+    # holder real ya quedo registrado arriba en act-holder.
     fm_fail setup-lock-held lock_held_exit_3 "exit 3" \
-      "el holder no tomo el lock (timeout esperando $lock)"
+      "el holder no tomo el lock (timeout esperando $lock); segunda ejecucion no ocurrio"
     fm_fail setup-lock-held lock_held_hint_ejecutable \
       "bash tools/saikit-setup-autopilot.sh --liberar-lock" \
       "sin ventana de contencion; hint no observado"
+    fm_fail setup-lock-held lock_hint_ejecucion_inocua \
+      "exit 0 + lock de la copia liberado + original intacto" \
+      "sin ventana de contencion; no hubo lock que copiar ni hint que ejecutar"
   fi
   wait "$holder_pid" 2>/dev/null || true
 fi

@@ -61,6 +61,9 @@
       "required_assertions": [
         "quitar_zcode_dry_reporta",
         "quitar_zcode_dry_clasifica",
+        "quitar_zcode_dry_clasifica_agente",
+        "quitar_zcode_dry_clasifica_desconocido",
+        "quitar_zcode_dry_snapshot_igual",
         "quitar_zcode_dry_preserva"
       ]
     },
@@ -69,6 +72,9 @@
       "required_assertions": [
         "quitar_grok_dry_reporta",
         "quitar_grok_dry_clasifica",
+        "quitar_grok_dry_clasifica_agente",
+        "quitar_grok_dry_clasifica_desconocido",
+        "quitar_grok_dry_snapshot_igual",
         "quitar_grok_dry_preserva"
       ]
     },

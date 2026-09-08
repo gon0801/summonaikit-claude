@@ -10,6 +10,10 @@
 #   omit_revert_text   — omite el comando PARA REVERTIR / --revert-de
 #   omit_redact        — omite la redaccion del secreto sintético
 #   inherit_transport  — no antepone los dobles; usa PATH heredado
+# 20fix H2 (costura: la linea fm_action de cada caso; control sano antes):
+#   hint_pendiente_sin_bash    — strip del prefijo bash del hint pendiente
+#   hint_sin_run_sin_bash      — strip del prefijo bash del hint sin-run
+#   clicolor_sin_neutralizar   — ANSI inyectado en la salida observada
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -241,6 +245,56 @@ then
   out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
   # Sin dobles del caso, el transporte heredado (stub fail-closed) impide VERDE.
   assert_missing_or_fail saikit-postmerge tool_exit_0 '^exit 0$' "$rc"
+fi
+
+# ---------------------------------------------------------------------------
+# Mutantes 20fix H2: hints ejecutables y asercion sin-ANSI. La costura es la
+# linea fm_action de cada caso (el codigo inyectado corre despues de la
+# corrida y antes de la asercion objetivo). Control sano inmediato antes de
+# cada mutante.
+# ---------------------------------------------------------------------------
+control_sano_pm() {
+  # Control sano: el drive SIN mutar en verde antes de cada mutante.
+  rm -f "$SANDBOX/baseline-ok-saikit-postmerge"
+  fm_mut_require_baseline saikit-postmerge "$SKILL/scripts/drivers/saikit-postmerge.sh" drive saikit-postmerge
+}
+
+caso "mutante hint_pendiente_sin_bash: hint pendiente sin bash se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-pend-sinbash.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-pendiente act-hint-pend@  OUT="$(printf %s "$OUT" | sed '"'"'s|bash tools/saikit-postmerge.sh|tools/saikit-postmerge.sh|g'"'"')"; &@' \
+  "hint_pendiente_sin_bash"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_pendiente_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+caso "mutante hint_sin_run_sin_bash: hint sin-run sin bash se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-sinrun-sinbash.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-sin-run act-hint-sinrun@  OUT="$(printf %s "$OUT" | sed '"'"'s|bash tools/saikit-postmerge.sh|tools/saikit-postmerge.sh|g'"'"')"; &@' \
+  "hint_sin_run_sin_bash"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_sin_run_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+caso "mutante clicolor_sin_neutralizar: ANSI en la salida se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-ansi.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-no-color act-color@  OUT="$(printf %s "$OUT" | sed "s/VERDE/$(printf "\\033")[1;34mVERDE$(printf "\\033")[0m/g")"; &@' \
+  "clicolor_sin_neutralizar"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge sin_ansi_salida 'sin ESC\[|sin bytes' "$rc"
 fi
 
 if [ "$fail" -ne 0 ]; then
