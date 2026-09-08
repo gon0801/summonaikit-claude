@@ -13,8 +13,8 @@ is judged by diagnostic text and structure, never by exit 0 alone.
 - `hosts-identity` checks ownership marker, dest hash vs source, and known Git provenance.
 - `hosts-noop` reprints `YA AL DIA` when a host dest already matches the source.
 - `hosts-retirada` removes a host publish while leaving a neighbor intact.
-- `hosts-quitar-zcode-dry` reports and classifies the zcode retirement without executing it: per piece (config `quitaria N entrada(s)`, each marked agent `— se quitaria`, one unknown agent `— no se quitaria`), the full `.zcode` tree keeps content-and-tree find+cksum identity (config bytes, agents, `saikit-backups/`, foreign files, and directories — empty ones included), and every piece stays present.
-- `hosts-quitar-grok-dry` reports and classifies the grok retirement (JSON, hook, agents) without executing it: per piece with the `— se quitaria` anchor, one unknown agent classified `— no se quitaria`, the full `.grok` tree keeps content-and-tree find+cksum identity (directories included), and all FOUR profiles plus hook and JSON stay present.
+- `hosts-quitar-zcode-dry` reports and classifies the zcode retirement without executing it: per piece (config `quitaria N entrada(s)`, each marked agent `— se quitaria`, one unknown agent `— no se quitaria`), the full `.zcode` tree keeps content-and-tree identity (files with checksum AND inode — a hardlink swap of identical bytes breaks it —, agents, `saikit-backups/`, foreign files, symlinks with their target, and directories — empty ones included), and every piece stays present.
+- `hosts-quitar-grok-dry` reports and classifies the grok retirement (JSON, hook, agents) without executing it: per piece with the `— se quitaria` anchor, one unknown agent classified `— no se quitaria`, the full `.grok` tree keeps content-and-tree identity (checksums+inodes, symlinks with target, directories included), and all FOUR profiles plus hook and JSON stay present.
 - `hosts-foreign` leaves a neighbor file that is not the destination untouched.
 - `hosts-registration` judges registration by diagnostic text and phase structure, not exit 0.
 - `hosts-os-unavailable` records the Windows or POSIX branch that this OS cannot observe, without invalidating the other hosts.
@@ -61,8 +61,10 @@ Preconditions:
   `— no se quitaria`, and the bare substring also matches it, so a mutante
   that rewrites every affirmative into its negative survives. Presence alone
   is not preservation either: identity is a full-tree snapshot
-  (`find <tree> | sort` + `cksum` per file entry, with every directory
-  listed too — backups dir, foreign files and empty directories included)
+  (`find <tree> -type f` + `cksum` per file entry, every directory listed
+  too — backups dir, foreign files and empty directories included — and each
+  symlink listed with its target as an `L` line, WITHOUT following the link)
   compared as one string before vs after the dry-run. It assures content,
-  presence and the directory tree; permissions and timestamps are declared
-  OUT of the snapshot (limit).
+  presence and the directory tree; swapping a file for a symlink to identical
+  bytes flips its `F` line into an `L` line and breaks identity. Permissions
+  and timestamps are declared OUT of the snapshot (limit).

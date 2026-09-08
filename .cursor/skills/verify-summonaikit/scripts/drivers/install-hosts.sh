@@ -22,20 +22,32 @@ SRC_SHA="$(fm_sha "$HOOK_SRC")"
 fm_unknown() { fm_assert "$1" "$2" unknown "$3" "$4"; }
 
 # Identidad de CONTENIDO y ARBOL de un directorio (20fix H1): toda entrada
-# del arbol — archivos con cksum y directorios, incluidos los vacios —
-# listada y ordenada (portable mac/linux). Comparar el string completo
-# detecta escrituras, borrados, reescrituras, backups nuevos, archivos
-# ajenos y directorios creados o borrados (un dir vacio no es invisible) que
-# un conteo de piezas o una lista de nombres no ven. LIMITES declarados:
-# permisos y timestamps quedan fuera del snapshot.
+# del arbol — archivos con cksum, directorios (incluidos los vacios) y
+# symlinks con su destino — listada y ordenada (portable mac/linux). Comparar
+# el string completo detecta escrituras, borrados, reescrituras, backups
+# nuevos, archivos ajenos y directorios creados o borrados (un dir vacio no
+# es invisible) que un conteo de piezas o una lista de nombres no ven.
+# 20fix r5 (C4): la clasificacion NO sigue enlaces (primarias de find, no
+# `[ -f ]` que SIgue el enlace): reemplazar un archivo por un symlink a bytes
+# IDENTICOS conservaba el cksum y el swap pasaba inadvertido (medido). Ahora
+# la sustitucion cambia la linea `F <path> <cksum>` por `L <path> -> <destino>`
+# y rompe la identidad aunque los bytes sean los mismos.
+# r5 (adversario L1): el inodo entra en la linea F — un archivo reemplazado
+# por un HARDLINK a bytes identicos conserva el cksum y era invisible (la
+# sustitucion cambia el inodo y rompe la identidad; comparable porque el
+# snapshot se toma dos veces sobre el MISMO arbol).
+# LIMITES declarados: permisos y timestamps quedan fuera del snapshot; los
+# enlaces entran con su destino (readlink), no con el contenido apuntado.
 snapshot_tree() {
   local tree="$1" f
-  find "$tree" | LC_ALL=C sort | while IFS= read -r f; do
-    if [ -f "$f" ]; then
-      printf 'F %s %s\n' "$f" "$(cksum < "$f")"
-    else
-      printf 'D %s\n' "$f"
-    fi
+  find "$tree" -type f | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'F %s %s %s\n' "$f" "$(cksum < "$f")" "$(ls -i "$f" | awk '{print $1}')"
+  done
+  find "$tree" -type d | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'D %s\n' "$f"
+  done
+  find "$tree" -type l | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'L %s -> %s\n' "$f" "$(readlink "$f")"
   done
 }
 

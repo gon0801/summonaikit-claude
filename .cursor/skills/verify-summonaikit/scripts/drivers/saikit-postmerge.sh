@@ -342,13 +342,21 @@ if fm_only postmerge-hint-pendiente; then
     fm_fail postmerge-hint-pendiente tool_exit_3 "3" "exit $RC: $OUT"
   fi
   # assert:hint_pendiente_ejecutable
-  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"; then
+  # 20fix r5 (C3): mismo idioma que setup B3 — el comando se EXTRAE de la
+  # linea del hint (grep -F del prefijo, primera linea, sin la prosa que
+  # precede al comando ni sangria; `|| true` blinda el pipeline vacio bajo
+  # set -o pipefail) y se exige IGUALDAD EXACTA de linea. El contains era
+  # SUBCADENA: un comando correcto seguido de ` --flag-inexistente` (rc=2 de
+  # uso si se ejecutara de verdad) pasaba la asercion.
+  hint_pend="$(printf '%s' "$OUT" | grep -F 'bash tools/saikit-postmerge.sh' \
+    | head -1 | sed 's/^.*bash tools\/saikit-postmerge\.sh/bash tools\/saikit-postmerge.sh/;s/^[[:space:]]*//;s/[[:space:]]*$//' || true)"
+  hint_pend_ok="bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
+  if [ "$hint_pend" = "$hint_pend_ok" ]; then
     fm_pass postmerge-hint-pendiente hint_pendiente_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" \
-      "hint ejecutable con bash, SHA y rama"
+      "$hint_pend_ok" "hint exacto y ejecutable: [$hint_pend]"
   else
     fm_fail postmerge-hint-pendiente hint_pendiente_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" "$OUT"
+      "$hint_pend_ok" "forma del hint inesperada: [${hint_pend:-ausente}] en: $OUT"
   fi
   # assert:hint_pendiente_ejecutable_end
 fi
@@ -366,13 +374,17 @@ if fm_only postmerge-hint-sin-run; then
     fm_fail postmerge-hint-sin-run tool_exit_3 "3" "exit $RC: $OUT"
   fi
   # assert:hint_sin_run_ejecutable
-  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"; then
+  # 20fix r5 (C3): igualdad EXACTA de linea, como hint_pendiente (contains
+  # aceptaba sufijos que el tool rechazaria con rc=2 de uso).
+  hint_sinrun="$(printf '%s' "$OUT" | grep -F 'bash tools/saikit-postmerge.sh' \
+    | head -1 | sed 's/^.*bash tools\/saikit-postmerge\.sh/bash tools\/saikit-postmerge.sh/;s/^[[:space:]]*//;s/[[:space:]]*$//' || true)"
+  hint_sinrun_ok="bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA"
+  if [ "$hint_sinrun" = "$hint_sinrun_ok" ]; then
     fm_pass postmerge-hint-sin-run hint_sin_run_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" \
-      "hint ejecutable con bash, SHA y rama"
+      "$hint_sinrun_ok" "hint exacto y ejecutable: [$hint_sinrun]"
   else
     fm_fail postmerge-hint-sin-run hint_sin_run_ejecutable \
-      "bash tools/saikit-postmerge.sh --merge-commit $MC --rama $RAMA" "$OUT"
+      "$hint_sinrun_ok" "forma del hint inesperada: [${hint_sinrun:-ausente}] en: $OUT"
   fi
   # assert:hint_sin_run_ejecutable_end
 fi

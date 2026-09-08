@@ -24,6 +24,11 @@
 #   dry_retira_parcial   — borra UN perfil grok tras el dry-run
 #   omit_clasifica_pieza — quita la clasificacion de los agentes grok
 #   se_por_no_se         — toda forma afirmativa pasa a negativa en la salida
+# 20fix r5:
+#   dry_zcode_symlink_swap — sustituye un archivo por un symlink de bytes
+#   dry_zcode_hardlink_swap — sustituye un archivo por un hardlink de bytes
+#                           IDENTICOS tras el dry-run (C4: el snapshot que
+#                           SIGUE enlaces no lo veia)
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -538,6 +543,21 @@ mut_inyecta_hosts dry_crea_backup quitar_zcode_dry_snapshot_igual \
 # set -e, no por la asercion).
 mut_inyecta_hosts dry_retira_parcial quitar_grok_dry_preserva \
   's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@rm -f "$gagents/adversary.md"; &@'
+
+# 20fix r5 (C4): sustituye el archivo ajeno del arbol zcode por un SYMLINK a
+# una copia con bytes IDENTICOS tras el dry-run. Con `[ -f ]` (que sigue
+# enlaces) el cksum no cambiaba y el snapshot quedaba identico (medido rc=0
+# contra el driver pre-r5); con la clasificacion por primarias de find la
+# linea F se vuelve L y la identidad se rompe. (Ojo sed: sin `&&` en el
+# reemplazo — cada `&` re-expande el texto matcheado y corrompe la linea.)
+mut_inyecta_hosts dry_zcode_symlink_swap quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@cp "$zc_tree/ajeno.txt" "$VERIFY_TMPDIR/ajeno-twin.txt"; rm -f "$zc_tree/ajeno.txt"; ln -s "$VERIFY_TMPDIR/ajeno-twin.txt" "$zc_tree/ajeno.txt"; &@'
+
+# r5 (adversario L1): sustituye el archivo ajeno por un HARDLINK a bytes
+# IDENTICOS — mismo contenido, distinto inodo: sin el inodo en la linea F el
+# swap era invisible (medido). Con el inodo, la identidad se rompe.
+mut_inyecta_hosts dry_zcode_hardlink_swap quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@cp "$zc_tree/ajeno.txt" "$(dirname "$zc_tree")/ajeno-twin"; rm -f "$zc_tree/ajeno.txt"; ln "$(dirname "$zc_tree")/ajeno-twin" "$zc_tree/ajeno.txt"; &@'
 
 # Omite la asercion de clasificacion de UN grupo de piezas (los agentes
 # nuestros del caso grok): la asercion requerida falta y el drive cae en
