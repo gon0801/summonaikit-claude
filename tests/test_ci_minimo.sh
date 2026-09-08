@@ -883,6 +883,41 @@ caso "pins_pin_incompleto_falla_cerrado_por_campo"
 }
 fin_caso "pins_pin_incompleto_falla_cerrado_por_campo"
 
+# r3 (cross-review hosts, Grok): --proponer pasa de gotcha a ficha — el punto
+# 6 de la instruccion del bloque exigia cubrir el mantenimiento
+# --check/--proponer. Resuelve por el gancho SAIKIT_BUMP_CI_PINS_API (sin
+# red) y lo emitido es un diff REVISABLE que no aplica nada: generador
+# intacto (cksum), workflow ajeno intacto, ningun tag flotante.
+caso "pins_proponer_api_simulada_revisable"
+{
+  gen_ck="$(cksum < "$GEN_REAL")"
+  mkdir -p .github/workflows
+  printf 'name: ajeno\n' > .github/workflows/ajeno.yml
+  ajeno_ck="$(cksum < .github/workflows/ajeno.yml)"
+  cat > "$SB/api-proponer.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'actions/setup-node v4.5.0') printf '%s\n' 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'; exit 0 ;;
+esac
+exit 1
+EOF
+  chmod +x "$SB/api-proponer.sh"
+  OUT="$(SAIKIT_BUMP_CI_PINS_API="$SB/api-proponer.sh" bash "$BUMP" \
+      --proponer actions/setup-node v4.5.0 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "proponer por API simulada rc=$RC: $OUT"
+  printf '%s' "$OUT" | grep -Eq '^---' || _mal "no es un diff: $OUT"
+  _contiene "avisa que no aplica" "$OUT" "NO aplicada"
+  _contiene "propone el sha resuelto por la API" "$OUT" "+PIN_SETUP_NODE_SHA='eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'"
+  if printf '%s' "$OUT" | grep -Eq 'uses:[[:space:]]*[^ @]+@v[0-9]'; then
+    _mal "la propuesta adopta un tag flotante: $OUT"
+  fi
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || _mal "la propuesta escribio el generador"
+  [ "$(cksum < .github/workflows/ajeno.yml)" = "$ajeno_ck" ] \
+    || _mal "la propuesta toco un workflow ajeno"
+}
+fin_caso "pins_proponer_api_simulada_revisable"
+
 caso "pins_proponer_diff_revisable_sin_escribir"
 {
   gen_ck="$(cksum < "$GEN_REAL")"

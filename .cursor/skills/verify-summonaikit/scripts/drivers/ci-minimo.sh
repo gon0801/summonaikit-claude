@@ -537,4 +537,64 @@ if fm_only ci-pins-ilegible; then
   esac
 fi
 
+# ---------------------------------------------------------------------------
+# bump-ci-pins --proponer: propuesta REVISABLE resuelta sin red por el gancho
+# SAIKIT_BUMP_CI_PINS_API. r3 (cross-review hosts, Grok): --proponer tenia
+# gotcha pero no ficha — la instruccion del bloque exigia cubrir el
+# mantenimiento --check/--proponer. Espejo driver del producto
+# pins_proponer_api_simulada_revisable (tests/test_ci_minimo.sh).
+# ---------------------------------------------------------------------------
+if fm_only ci-pins-proponer; then
+  BUMP="$VERIFY_REPO/tools/bump-ci-pins.sh"
+  GEN_REAL="$VERIFY_REPO/tools/saikit-ci-minimo.sh"
+  work="$VERIFY_TMPDIR/ci-pins-prop"
+  rm -rf "$work"
+  mkdir -p "$work"
+  cat > "$work/api.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'actions/setup-node v4.5.0') printf '%s\n' 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'; exit 0 ;;
+esac
+exit 1
+EOF
+  chmod +x "$work/api.sh"
+  gen_ck="$(cksum < "$GEN_REAL")"
+  set +e
+  out="$(runtime_exec "$work" \
+    env SAIKIT_BUMP_CI_PINS_API="$work/api.sh" \
+    bash "$BUMP" --proponer actions/setup-node v4.5.0 2>&1)"
+  rc=$?
+  set -e
+  fm_action ci-pins-proponer "act-proponer" "$rc" "$out" \
+    env SAIKIT_BUMP_CI_PINS_API=api.sh bash bump-ci-pins.sh --proponer actions/setup-node v4.5.0
+  fallos=""
+  [ "$rc" -eq 0 ] || fallos="$fallos rc=$rc"
+  printf '%s' "$out" | grep -Eq '^---' || fallos="$fallos no-diff"
+  printf '%s' "$out" | grep -Fq 'NO aplicada' || fallos="$fallos sin-aviso"
+  printf '%s' "$out" | grep -Fq "+PIN_SETUP_NODE_SHA='eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'" \
+    || fallos="$fallos sin-sha-nuevo"
+  printf '%s' "$out" | grep -Eq 'uses:[[:space:]]*[^ @]+@v[0-9]' && fallos="$fallos tag-flotante"
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || fallos="$fallos escribio-generador"
+  # assert:proponer_resuelve_sin_red
+  case "$fallos" in
+    *rc=*|*sin-sha-nuevo*) fm_fail ci-pins-proponer proponer_resuelve_sin_red "rc 0 con sha del gancho" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-proponer proponer_resuelve_sin_red "rc 0 con sha del gancho" "sha 40hex via SAIKIT_BUMP_CI_PINS_API" ;;
+  esac
+  # assert:proponer_diff_revisable_no_aplicado
+  case "$fallos" in
+    *no-diff*|*sin-aviso*) fm_fail ci-pins-proponer proponer_diff_revisable_no_aplicado "diff --- + NO aplicada" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-proponer proponer_diff_revisable_no_aplicado "diff --- + NO aplicada" "diff unificado con aviso de no aplicada" ;;
+  esac
+  # assert:proponer_cksum_intacto
+  case "$fallos" in
+    *escribio-generador*) fm_fail ci-pins-proponer proponer_cksum_intacto "generador intacto" "la propuesta escribio el generador" ;;
+    *) fm_pass ci-pins-proponer proponer_cksum_intacto "generador intacto" "cksum del generador sin cambios" ;;
+  esac
+  # assert:proponer_sin_tag_flotante
+  case "$fallos" in
+    *tag-flotante*) fm_fail ci-pins-proponer proponer_sin_tag_flotante "ningun uses @tag" "la propuesta adopto @vN" ;;
+    *) fm_pass ci-pins-proponer proponer_sin_tag_flotante "ningun uses @tag" "el pin queda owner@sha40" ;;
+  esac
+fi
+
 exit 0

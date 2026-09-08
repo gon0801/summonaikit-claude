@@ -22,6 +22,12 @@ An existing workflow is left intact. Local generation is not a live Actions run.
   dia». Anchored by the product regression
   `pins_pin_incompleto_falla_cerrado_por_campo` (tests/test_ci_minimo.sh) and
   its mutation `pin_ilegible_se_descarta`.
+- `ci-pins-proponer` drives `tools/bump-ci-pins.sh --proponer` resolved through
+  the `SAIKIT_BUMP_CI_PINS_API` test hook (no network): the output is a
+  reviewable unified diff that is NOT applied — the generator checksum is
+  unchanged and no floating `@tag` is adopted (the pin stays `owner@sha40`).
+  Anchored by the product case `pins_proponer_api_simulada_revisable`
+  (tests/test_ci_minimo.sh).
 
 ## How to get to it (user POV)
 
@@ -47,6 +53,7 @@ Preconditions:
 - Case `ci-unsupported`: action Accept on a repo with no runner; command `control-summonaikit drive ci-minimo`; observable exit 2 and no YAML.
 - Case `ci-run-fixture`: action Execute the generated `run:` lines in the fixture (skip install/network); command `control-summonaikit drive ci-minimo`; observable test and verify commands ran locally, not live Actions.
 - Case `ci-pins-ilegible`: action Delete one `PIN_SETUP_NODE_<campo>` line from a copy of the generator and run `--check` with a fixture source that knows the healthy pins; command `control-summonaikit drive ci-minimo`; observable exit 2 with `PIN_SETUP_NODE` plus the missing field (OWNER, SHA and TAG each), and no «todos los pins al dia».
+- Case `ci-pins-proponer`: action Run `--proponer actions/setup-node v4.5.0` with the `SAIKIT_BUMP_CI_PINS_API` hook resolving the tag to a sha40; command `control-summonaikit drive ci-minimo`; observable a unified diff marked «NO aplicada», the generator checksum unchanged, and no `uses: ...@vN` floating tag.
 
 ## Gotchas
 
@@ -57,5 +64,6 @@ Preconditions:
   only valid when EVERY pin could be read and compared. An incomplete pin
   (missing OWNER/SHA/TAG) is illegible and dies with exit 2 naming pin and
   field; exit 1 is a readable-but-stale pin and exit 2 also covers no network
-  or unknown tag. `--proponer` never writes: it prints a reviewable diff.
+  or unknown tag. `--proponer` never writes: it prints a reviewable diff
+  (covered by the `ci-pins-proponer` case, not just this gotcha).
 - Any existing `*.yml`/`*.yaml` under `.github/workflows` is PRESENTE: the tool is a no-op and must not overwrite.
