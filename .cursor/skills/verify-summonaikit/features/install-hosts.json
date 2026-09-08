@@ -57,6 +57,22 @@
       ]
     },
     {
+      "id": "hosts-quitar-zcode-dry",
+      "required_assertions": [
+        "quitar_zcode_dry_reporta",
+        "quitar_zcode_dry_clasifica",
+        "quitar_zcode_dry_preserva"
+      ]
+    },
+    {
+      "id": "hosts-quitar-grok-dry",
+      "required_assertions": [
+        "quitar_grok_dry_reporta",
+        "quitar_grok_dry_clasifica",
+        "quitar_grok_dry_preserva"
+      ]
+    },
+    {
       "id": "hosts-foreign",
       "required_assertions": ["foreign_intact"]
     },

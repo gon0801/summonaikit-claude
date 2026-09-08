@@ -13,6 +13,7 @@ lock. A missing CI offer is a separate prompt, never question 6/5.
 - `setup-defaults` writes the safe defaults when stdin is not a terminal.
 - `setup-pipe-not-pty` treats a pipe as non-interactive (piped text is not a PTY).
 - `setup-lock` reports a stale lock and refuses to write.
+- `setup-lock-held` reports a LIVE held lock (exit 3) and prints the recovery hint in executable form `bash tools/saikit-setup-autopilot.sh --liberar-lock`.
 - `setup-with-ci` skips the CI offer when workflows already exist.
 - `setup-without-ci` warns that the autopilot will not merge, without calling that warning 6/5.
 
@@ -37,6 +38,7 @@ Preconditions:
 - Case `setup-defaults`: action Run with no answers and no TTY; command `control-summonaikit drive setup-autopilot`; observable `merge=false` and `merge_despliega=unknown`.
 - Case `setup-pipe-not-pty`: action Pipe answers into the assistant; command `control-summonaikit drive setup-autopilot`; observable defaults (pipe is not a PTY).
 - Case `setup-lock`: action Run against a stale lock; command `control-summonaikit drive setup-autopilot`; observable exit 3 and no config write.
+- Case `setup-lock-held`: action Hold the lock with the tool's own SOSTENER test hook and run a second setup; command `control-summonaikit drive setup-autopilot`; observable exit `3` and stderr carries `bash tools/saikit-setup-autopilot.sh --liberar-lock`.
 - Case `setup-with-ci`: action Run flags on a repo that already has workflows; command `control-summonaikit drive setup-autopilot`; observable `ya hay workflows` / no offer.
 - Case `setup-without-ci`: action Run flags on a repo with no workflows; command `control-summonaikit drive setup-autopilot`; observable the no-CI warning is not labeled 6/5.
 

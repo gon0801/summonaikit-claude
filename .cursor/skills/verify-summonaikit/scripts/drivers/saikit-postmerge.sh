@@ -26,6 +26,8 @@ TG_LOG="$VERIFY_TMPDIR/pm-tg.log"
 # Literal 0/1 so mutants can flip them with sed.
 SAIKIT_FM_AUTO_REVERT=0
 SAIKIT_FM_ISOLATE_TRANSPORT=1
+# 20.3: 1 hereda CLICOLOR_FORCE=1 al tool (el doble de gh colorea entonces).
+SAIKIT_FM_FORCE_COLOR=0
 
 MC=""
 OUT=""
@@ -45,8 +47,20 @@ install_fakes() {
 set -u
 [ -n "${SAIKIT_GH_LOG:-}" ] && printf 'gh %s\n' "$*" >> "$SAIKIT_GH_LOG"
 fix="${SAIKIT_GH_FIX:?}"
-case "$1 $2" in
-  "run list") cat "$fix/runs.json"; exit 0 ;;
+  case "$1 $2" in
+  "run list")
+    # Contrato medido de gh (2.98.0, ver tests/test_saikit_postmerge.sh):
+    # CLICOLOR_FORCE=1 heredado colorea incluso a un pipe y le gana a
+    # NO_COLOR. Si el falso respondiera siempre limpio, el caso
+    # postmerge-no-color no discriminaria el neutralizado del tool.
+    if [ "${CLICOLOR_FORCE:-0}" = 1 ]; then
+      printf '\033[1;34m'
+      cat "$fix/runs.json"
+      printf '\033[0m'
+    else
+      cat "$fix/runs.json"
+    fi
+    exit 0 ;;
 esac
 printf 'gh-falso: forma no soportada: %s\n' "$*" >&2
 exit 1
@@ -99,7 +113,7 @@ EOF
 }
 
 write_wrapper() {
-  local path_line
+  local path_line color_line
   if [ "$SAIKIT_FM_ISOLATE_TRANSPORT" = 1 ]; then
     path_line="export PATH=\"$FAKEBIN:\$PATH\""
   else
@@ -108,10 +122,16 @@ write_wrapper() {
     install_inherited_stubs
     path_line="export PATH=\"$VERIFY_TMPDIR/pm-inh:\$PATH\""
   fi
+  if [ "$SAIKIT_FM_FORCE_COLOR" = 1 ]; then
+    color_line="export CLICOLOR_FORCE=1"
+  else
+    color_line=":"
+  fi
   cat > "$WRAP" <<EOF
 #!/usr/bin/env bash
 set -u
 $path_line
+$color_line
 export SAIKIT_GH_FIX="$FIX"
 export SAIKIT_GH_LOG="$GH_LOG"
 export SAIKIT_CURL_LOG="$CURL_LOG"
@@ -298,6 +318,85 @@ if fm_only postmerge-no-run; then
   else
     fm_fail postmerge-no-run unknown_sin_run "sin run" "$OUT"
   fi
+fi
+
+# Disciplina one-hint-per-case (ver ficha): el hint de CI pendiente se afirma
+# en su PROPIO caso — una regresion en el texto del hint no debe quedar
+# enmascarada por el caso del otro hint. Lo afirmado es la forma EJECUTABLE:
+# la linea del hint dicta `bash tools/saikit-postmerge.sh --merge-commit ...`.
+if fm_only postmerge-hint-pendiente; then
+  pm_reset
+  printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' \
+    > "$FIX/runs.json"
+  correr
+  fm_action postmerge-hint-pendiente act-hint-pend "$RC" "$OUT" \
+    bash "$POST" --merge-commit "$MC" --rama master
+  if [ "$RC" -eq 3 ]; then
+    fm_pass postmerge-hint-pendiente tool_exit_3 "3" "exit $RC"
+  else
+    fm_fail postmerge-hint-pendiente tool_exit_3 "3" "exit $RC: $OUT"
+  fi
+  # assert:hint_pendiente_ejecutable
+  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit"; then
+    fm_pass postmerge-hint-pendiente hint_pendiente_ejecutable \
+      "bash tools/saikit-postmerge.sh --merge-commit" "hint ejecutable con bash"
+  else
+    fm_fail postmerge-hint-pendiente hint_pendiente_ejecutable \
+      "bash tools/saikit-postmerge.sh --merge-commit" "$OUT"
+  fi
+  # assert:hint_pendiente_ejecutable_end
+fi
+
+# one-hint-per-case: el hint de "sin run aun" en su propio caso.
+if fm_only postmerge-hint-sin-run; then
+  pm_reset
+  printf '[]' > "$FIX/runs.json"
+  correr
+  fm_action postmerge-hint-sin-run act-hint-sinrun "$RC" "$OUT" \
+    bash "$POST" --merge-commit "$MC" --rama master
+  if [ "$RC" -eq 3 ]; then
+    fm_pass postmerge-hint-sin-run tool_exit_3 "3" "exit $RC"
+  else
+    fm_fail postmerge-hint-sin-run tool_exit_3 "3" "exit $RC: $OUT"
+  fi
+  # assert:hint_sin_run_ejecutable
+  if contains "$OUT" "bash tools/saikit-postmerge.sh --merge-commit"; then
+    fm_pass postmerge-hint-sin-run hint_sin_run_ejecutable \
+      "bash tools/saikit-postmerge.sh --merge-commit" "hint ejecutable con bash"
+  else
+    fm_fail postmerge-hint-sin-run hint_sin_run_ejecutable \
+      "bash tools/saikit-postmerge.sh --merge-commit" "$OUT"
+  fi
+  # assert:hint_sin_run_ejecutable_end
+fi
+
+# 20.3: CLICOLOR_FORCE=1 heredado no degrada el veredicto — el tool lo
+# neutraliza antes de la primera captura de gh. El doble de gh colorea bajo
+# CLICOLOR_FORCE (contrato medido), asi que sin neutralizacion el parser
+# estricto muere con el primer ESC y el caso baja a UNKNOWN (rojo).
+if fm_only postmerge-no-color; then
+  SAIKIT_FM_FORCE_COLOR=1
+  pm_reset
+  correr
+  SAIKIT_FM_FORCE_COLOR=0
+  fm_action postmerge-no-color act-color "$RC" "$OUT" \
+    bash "$POST" --merge-commit "$MC" --rama master
+  # assert:verde_con_clicolor_force
+  if [ "$RC" -eq 0 ] && contains "$OUT" "VERDE"; then
+    fm_pass postmerge-no-color verde_con_clicolor_force \
+      "VERDE con CLICOLOR_FORCE=1" "exit $RC VERDE pese al color heredado"
+  else
+    fm_fail postmerge-no-color verde_con_clicolor_force \
+      "VERDE con CLICOLOR_FORCE=1" "exit $RC: $OUT"
+  fi
+  # assert:verde_con_clicolor_force_end
+  # assert:sin_ansi_salida
+  if printf '%s' "$OUT" | LC_ALL=C grep -q "$(printf '\033')\["; then
+    fm_fail postmerge-no-color sin_ansi_salida "sin ESC[" "salida con bytes ANSI"
+  else
+    fm_pass postmerge-no-color sin_ansi_salida "sin ESC[" "sin bytes de escape"
+  fi
+  # assert:sin_ansi_salida_end
 fi
 
 if fm_only postmerge-redacted; then

@@ -13,6 +13,8 @@ is judged by diagnostic text and structure, never by exit 0 alone.
 - `hosts-identity` checks ownership marker, dest hash vs source, and known Git provenance.
 - `hosts-noop` reprints `YA AL DIA` when a host dest already matches the source.
 - `hosts-retirada` removes a host publish while leaving a neighbor intact.
+- `hosts-quitar-zcode-dry` reports and classifies the zcode retirement without executing it: every piece (user-config 5.4 entries, agent profiles) stays present after the dry-run.
+- `hosts-quitar-grok-dry` reports and classifies the grok retirement (JSON, hook, agents) without executing it: all pieces stay present after the dry-run.
 - `hosts-foreign` leaves a neighbor file that is not the destination untouched.
 - `hosts-registration` judges registration by diagnostic text and phase structure, not exit 0.
 - `hosts-os-unavailable` records the Windows or POSIX branch that this OS cannot observe, without invalidating the other hosts.
@@ -39,6 +41,8 @@ Preconditions:
 - Case `hosts-identity`: action Inspect installed copies and installer log; command `control-summonaikit drive install-hosts`; observable `SAIKIT-CLAUDE-OWNED`, dest sha equals source, and `procedencia: rama=`.
 - Case `hosts-noop`: action Reinstall a matching host dest; command `control-summonaikit drive install-hosts`; observable `YA AL DIA` and dest bytes unchanged.
 - Case `hosts-retirada`: action Remove a grok publish beside a neighbor; command `control-summonaikit drive install-hosts`; observable quit/backup text and neighbor checksum intact.
+- Case `hosts-quitar-zcode-dry`: action Dry-run the zcode retirement after a zcode install; command `control-summonaikit drive install-hosts`; observable `dry-run: --quitar-zcode no ejecuta la retirada`, per-piece classification, and config entries plus agent profiles still present.
+- Case `hosts-quitar-grok-dry`: action Dry-run the grok retirement after a grok install; command `control-summonaikit drive install-hosts`; observable `dry-run: --quitar-grok no ejecuta la retirada`, JSON/hook/agents classified, and all pieces still present.
 - Case `hosts-foreign`: action Install beside a neighbor file; command `control-summonaikit drive install-hosts`; observable neighbor checksum intact.
 - Case `hosts-registration`: action Run the registration checker on isolated host files; command `control-summonaikit drive install-hosts`; observable diagnostic text naming phases or REGISTRO, recorded as structure, not as exit 0.
 - Case `hosts-os-unavailable`: action Observe the Windows or POSIX wrap branch this OS cannot run; command `control-summonaikit drive install-hosts`; observable `unknown` for the missing OS branch and the other host copies still present.

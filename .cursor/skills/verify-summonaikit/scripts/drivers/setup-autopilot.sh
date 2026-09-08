@@ -355,6 +355,64 @@ if fm_only setup-lock; then
 fi
 
 # ---------------------------------------------------------------------------
+# Contention: a LIVE holder (SOSTENER test hook) keeps the lock; the second
+# run must report exit 3 with the EXECUTABLE recovery hint.
+# ---------------------------------------------------------------------------
+if fm_only setup-lock-held; then
+  work="$VERIFY_TMPDIR/setup-lock-held"
+  make_repo "$work" with_ci
+  lock="$(lock_of "$work")"
+  holder_rc="$VERIFY_TMPDIR/setup-lock-held.rc"
+  : > "$holder_rc"
+  # Gancho de test del propio tool (produccion = 0): duerme CON el lock
+  # tomado, igual que el driver de saikit-merge orquesta su contencion.
+  ( runtime_exec "$work" env SAIKIT_SETUP_SOSTENER_SEG=8 \
+      bash "$SETUP" --merge no --despliega no --sin-verify-app no \
+      --telegram no --ci-minimo no --pr 11 >/dev/null 2>&1 \
+      ; echo $? > "$holder_rc" ) &
+  holder_pid=$!
+  i=0
+  while [ ! -d "$lock" ] && [ "$i" -lt 50 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ -d "$lock" ]; then
+    set +e
+    out="$(run_setup "$work" --merge no --despliega no --sin-verify-app no \
+      --telegram no --ci-minimo no --pr 12 2>&1)"
+    rc=$?
+    set -e
+    fm_action setup-lock-held act-lock-held "$rc" "$out" bash "$SETUP" --lock-held
+    # assert:lock_held_exit_3
+    if [ "$rc" -eq 3 ]; then
+      fm_pass setup-lock-held lock_held_exit_3 "exit 3" "exit 3 (lock sostenido)"
+    else
+      fm_fail setup-lock-held lock_held_exit_3 "exit 3" "rc=$rc $out"
+    fi
+    # assert:lock_held_exit_3_end
+    # assert:lock_held_hint_ejecutable
+    if printf '%s' "$out" \
+      | grep -F -q 'bash tools/saikit-setup-autopilot.sh --liberar-lock'; then
+      fm_pass setup-lock-held lock_held_hint_ejecutable \
+        "bash tools/saikit-setup-autopilot.sh --liberar-lock" \
+        "hint de recuperacion ejecutable con bash"
+    else
+      fm_fail setup-lock-held lock_held_hint_ejecutable \
+        "bash tools/saikit-setup-autopilot.sh --liberar-lock" "$out"
+    fi
+    # assert:lock_held_hint_ejecutable_end
+  else
+    fm_action setup-lock-held act-lock-held "" "" bash "$SETUP" --lock-held
+    fm_fail setup-lock-held lock_held_exit_3 "exit 3" \
+      "el holder no tomo el lock (timeout esperando $lock)"
+    fm_fail setup-lock-held lock_held_hint_ejecutable \
+      "bash tools/saikit-setup-autopilot.sh --liberar-lock" \
+      "sin ventana de contencion; hint no observado"
+  fi
+  wait "$holder_pid" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
 # Repo WITH CI: flags, no CI offer
 # ---------------------------------------------------------------------------
 if fm_only setup-with-ci; then

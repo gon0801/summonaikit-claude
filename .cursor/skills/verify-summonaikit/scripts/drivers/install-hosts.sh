@@ -441,6 +441,139 @@ if fm_only hosts-retirada; then
   fi
 fi
 
+# 20.24: la retirada zcode respeta DRY_RUN — reporta y clasifica sin tocar
+# las piezas. Se instala zcode contra el dest primero para que la retirada
+# tenga algo real que clasificar, y se afirma que despues del dry-run TODO
+# sigue presente (entradas 5.4 del user-config y perfiles de agente).
+if fm_only hosts-quitar-zcode-dry; then
+  plant_zcode_cfg
+  if ! has_jq; then
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+      "dry-run: --quitar-zcode no ejecuta la retirada" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+      "clasificacion por pieza" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+      "piezas presentes" "jq ausente; zcode retirada no observada"
+  else
+    set +e
+    ins_out="$(run_install --host zcode --dest "$VERIFY_DEST" 2>&1)"
+    ins_rc=$?
+    set -e
+    user_cfg="$VERIFY_HOME/.zcode/cli/config.json"
+    zc_agents="$VERIFY_HOME/.zcode/agents"
+    entradas_antes="$(jq '[(.hooks.events // {})[] | .[] | (.hooks // [])[]
+                 | select(((.command // "") | test("saikit-harness-id 5[.]4")))] | length' \
+              "$user_cfg" 2>/dev/null || printf '?')"
+    agentes_antes="$(for r in implementer verifier reviewer adversary; do
+      [ -f "$zc_agents/$r.md" ] && printf '%s ' "$r"
+    done)"
+    set +e
+    out="$(run_install --host zcode --quitar-zcode --dry-run 2>&1)"
+    rc=$?
+    set -e
+    fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry "$rc" "$out" \
+      bash "$INSTALLER" --host zcode --quitar-zcode --dry-run
+    # assert:quitar_zcode_dry_reporta
+    if [ "$rc" -eq 0 ] \
+      && printf '%s' "$out" | grep -q 'dry-run: --quitar-zcode no ejecuta la retirada'; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+        "dry-run: --quitar-zcode no ejecuta la retirada" "reporta sin ejecutar (install rc=$ins_rc)"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+        "dry-run: --quitar-zcode no ejecuta la retirada" "rc=$rc $out"
+    fi
+    # assert:quitar_zcode_dry_reporta_end
+    # assert:quitar_zcode_dry_clasifica
+    if printf '%s' "$out" | grep -q 'se quitaria'; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+        "clasificacion por pieza" "clasifica entradas/agentes our-marked"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+        "clasificacion por pieza" "$out"
+    fi
+    # assert:quitar_zcode_dry_clasifica_end
+    entradas_despues="$(jq '[(.hooks.events // {})[] | .[] | (.hooks // [])[]
+                 | select(((.command // "") | test("saikit-harness-id 5[.]4")))] | length' \
+              "$user_cfg" 2>/dev/null || printf '?')"
+    agentes_despues="$(for r in implementer verifier reviewer adversary; do
+      [ -f "$zc_agents/$r.md" ] && printf '%s ' "$r"
+    done)"
+    # assert:quitar_zcode_dry_preserva
+    if [ "$entradas_antes" != "?" ] && [ "$entradas_antes" -gt 0 ] \
+      && [ "$entradas_antes" = "$entradas_despues" ] \
+      && [ "$agentes_antes" = "$agentes_despues" ] \
+      && [ -n "$agentes_despues" ]; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+        "piezas presentes" "entradas 5.4=$entradas_despues agentes=[$agentes_despues]"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+        "piezas presentes" \
+        "entradas $entradas_antes->$entradas_despues agentes [$agentes_antes]->[$agentes_despues]"
+    fi
+    # assert:quitar_zcode_dry_preserva_end
+  fi
+fi
+
+# 20.24: la retirada grok respeta DRY_RUN — reporta y clasifica JSON/hook/
+# agentes sin archivar ni borrar nada. Instala grok primero y afirma que
+# todas las piezas siguen presentes tras el dry-run.
+if fm_only hosts-quitar-grok-dry; then
+  if ! has_jq; then
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_reporta \
+      "dry-run: --quitar-grok no ejecuta la retirada" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+      "clasificacion por pieza" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_preserva \
+      "piezas presentes" "jq ausente; grok retirada no observada"
+  else
+    set +e
+    ins_out="$(run_install --host grok 2>&1)"
+    ins_rc=$?
+    set -e
+    gdest="$(hook_path grok)"
+    gjson="$(dirname "$gdest")/summonaikit.json"
+    gagents="$VERIFY_HOME/.grok/agents"
+    set +e
+    out="$(run_install --host grok --quitar-grok --dry-run 2>&1)"
+    rc=$?
+    set -e
+    fm_action hosts-quitar-grok-dry act-quitar-grok-dry "$rc" "$out" \
+      bash "$INSTALLER" --host grok --quitar-grok --dry-run
+    # assert:quitar_grok_dry_reporta
+    if [ "$rc" -eq 0 ] \
+      && printf '%s' "$out" | grep -q 'dry-run: --quitar-grok no ejecuta la retirada'; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_reporta \
+        "dry-run: --quitar-grok no ejecuta la retirada" "reporta sin ejecutar (install rc=$ins_rc)"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_reporta \
+        "dry-run: --quitar-grok no ejecuta la retirada" "rc=$rc $out"
+    fi
+    # assert:quitar_grok_dry_reporta_end
+    # assert:quitar_grok_dry_clasifica
+    if printf '%s' "$out" | grep -q 'se quitaria'; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+        "clasificacion por pieza" "clasifica JSON/hook/agentes"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+        "clasificacion por pieza" "$out"
+    fi
+    # assert:quitar_grok_dry_clasifica_end
+    agentes_despues="$(for r in implementer verifier reviewer adversary; do
+      [ -f "$gagents/$r.md" ] && printf '%s ' "$r"
+    done)"
+    # assert:quitar_grok_dry_preserva
+    if [ -f "$gdest" ] && [ -f "$gjson" ] && [ -n "$agentes_despues" ]; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_preserva \
+        "piezas presentes" "hook+json presentes agentes=[$agentes_despues]"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_preserva \
+        "piezas presentes" \
+        "hook=$([ -f "$gdest" ] && echo si || echo no) json=$([ -f "$gjson" ] && echo si || echo no) agentes=[$agentes_despues]"
+    fi
+    # assert:quitar_grok_dry_preserva_end
+  fi
+fi
+
 if fm_only hosts-no-live; then
   fm_pass hosts-no-live no_live_turn \
     "install != live turn" \

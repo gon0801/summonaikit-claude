@@ -27,6 +27,18 @@
       "required_assertions": ["tool_exit_3", "verdict_unknown", "unknown_sin_run"]
     },
     {
+      "id": "postmerge-hint-pendiente",
+      "required_assertions": ["tool_exit_3", "hint_pendiente_ejecutable"]
+    },
+    {
+      "id": "postmerge-hint-sin-run",
+      "required_assertions": ["tool_exit_3", "hint_sin_run_ejecutable"]
+    },
+    {
+      "id": "postmerge-no-color",
+      "required_assertions": ["verde_con_clicolor_force", "sin_ansi_salida"]
+    },
+    {
       "id": "postmerge-redacted",
       "required_assertions": ["secret_redacted", "raw_secret_absent"]
     },
