@@ -51,13 +51,26 @@ Preconditions:
   states that the deploy itself was NOT repeated (see the
   `Rectificación histórica` banner in `docs/deploy-log.md`, 2026-09-07). The
   checker validates order, fields and one-record-per-PR. Since the checker's
-  own cordon `HORA_CONTROL` (declared in its header, 2026-09-08), it also
-  REQUIRES an explicit deploy source for every hour in the Deploy SECTION
-  (all `- **Deploy...` bullets plus their continuation lines) of entries
-  dated on or after that cordon: an installer backup name (`.bak` as a glued
-  filename — a negated `.bak` in foreign prose does not count) or the
-  explicit marker `hora medida en vivo`, both INSIDE that section. Hours
-  equal to the merge hour are judged by evidence type, never by timestamp
-  inequality; the judged region before the cordon keeps its ~10 legitimately
-  live-measured hours without a marker and is not touched.
+  own cordon `HORA_CONTROL` (declared in its header, 2026-09-07 — it covers
+  the repaired history of that day: the nine-entry batch is exactly seven
+  `hora no recuperada` plus two `.bak`-cited deploys, so the real log passes),
+  it also REQUIRES an explicit deploy source for every hour, validated PER
+  BULLET: each `- **Deploy...` bullet (case-insensitive; only an UNINDENTED
+  bullet ends one — an indented `  - **detail:**` sub-bullet is part of its
+  Deploy bullet, hour included) with its continuation lines that cites an
+  hour must carry its own source — an installer backup name (`.bak` as a
+  glued filename; a bare `.bak` in prose does not count) or the explicit
+  marker `hora medida en vivo` INSIDE the same parenthesis as the hour, in
+  either order. A sibling bullet's `.bak` or marker, or the marker negated
+  in prose, does not accredit another bullet's hour; thin spaces (U+00A0 /
+  U+202F) inside an hour are normalized before matching (web copy-paste).
+  Header extraction is fence-aware: a fake `## ` line inside a ``` block
+  does not split an entry. Hours equal to the merge hour are judged by
+  evidence type, never by timestamp inequality; the legitimately
+  live-measured hours without a marker live on 2026-09-05/09-06 and stay
+  grandfathered outside the cordon. Declared limits: an entry backdated to
+  2026-09-06 evades this control (the checker cannot verify calendar
+  dates), and a negation carrying a filename-shaped token (`no quedo ningun
+  harness.sh.bak`) still accredits — the checker judges text, not
+  semantics; the canonical citation is the log's `Backups:` form.
 - Do not invent deploy-log entries to make the drive pass.

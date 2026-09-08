@@ -356,6 +356,214 @@ EOF
 out="$(bash "$tool" --log "$tmp/t24.md" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "hora de un digito dio $rc, se esperaba 1: $out"
 
+# T25-T31 (r4, hallazgos B1/B2 de la cuarta revision del PR #273): el cordon
+# HORA_CONTROL bajaba al 09-08 y dejaba FUERA a la tanda reparada del 09-07
+# (una hora copiada de mergedAt reintroducida alli pasaba, medido), y la
+# evidencia se grepeaba en la seccion CONCATENADA (el .bak o el marcador de
+# un bullet hermano acreditaba la hora de otro, medido en cuatro variantes).
+# El cordon cubre ahora el 09-07 y la evidencia se valida POR BULLET: la
+# fuente (un .bak pegado o el marcador `hora medida en vivo` dentro del MISMO
+# parentesis que la hora) debe vivir en las lineas del bullet que cita la
+# hora. Las contracaras reales de la tanda (las nueve entradas del 09-07 del
+# log real) siguen en 0.
+
+# T25 (B1): la FORMA REAL del error del #272, en el dia 7 — Merge con
+# mergedAt a 21:12 y Deploy con la hora COPIADA 21:12 sin evidencia. Con
+# HORA_CONTROL=2026-09-08 esta entrada pasaba (medido rc=0): el cordon debe
+# cubrir el historico que la rectificacion reparo.
+caso "T25: hora copiada del mergedAt en entrada del 09-07 (forma #272) => 1"
+cat > "$tmp/t25.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #272 (cierre de la tanda Phase 20: 20.1-20.7 + 20.24) — hooks NO-OP
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `b93e2c61528d6d0c8c0fa2a18efc00f7d5956c20`; gate SUCCESS.
+- **Deploy (21:12 PDT / 21:12 UTC):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0;
+  cuatro copias `YA AL DIA`; sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t25.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora copiada del dia 7 dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T25 no nombro evidencia: [$out]" ;; esac
+
+# T26: contracara real del 09-07 — la forma honesta `hora no recuperada`
+# (siete entradas de la tanda) sigue aceptada DENTRO del cordon.
+caso "T26: hora no recuperada en entrada del 09-07 => 0"
+cat > "$tmp/t26.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #262 (20.3: neutralizar color de gh en postmerge) — hooks NO-OP
+
+- **Merge (08:14 UTC — mergedAt de GitHub):** `8cf91ec25223f24773480ca02709b850c186eec0`; gate SUCCESS.
+- **Deploy (hora no recuperada — no-op sin backup; mergedAt acredita el merge, no el deploy):** master sincronizado; cuatro copias
+  `YA AL DIA`; sha256 sin cambios.
+EOF
+out="$(bash "$tool" --log "$tmp/t26.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora no recuperada del dia 7 dio $rc, se esperaba 0: $out"
+
+# T27: contracara real del 09-07 — hora con .bak citado EN SU PROPIO bullet
+# (forma #271/#264: la hora abre el bullet y los backups llegan en lineas de
+# continuacion del MISMO bullet) => aceptado.
+caso "T27: hora del 09-07 con .bak en su propio bullet (forma #271) => 0"
+cat > "$tmp/t27.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #271 (20.6: zona de pruebas privada) — deploy REAL de las 4 copias
+
+- **Merge (13:52 UTC — mergedAt de GitHub):** `775228d2278a9c711b0db9c8af8c4ba3a193cba0`; gate SUCCESS.
+- **Deploy (13:54 PDT / 20:54 UTC):** master sincronizado; `sucio=no`,
+  `coincide_origin_master=si`. Instaladores claude/grok/dsh/codex exit 0,
+  cuatro copias `REPARADO`. Backups:
+  `summonaikit-harness.sh.nuestro.20260907-135442.bak` (claude) y
+  `20260907-135443.bak` (grok/dsh/codex).
+- **Verificación:** `install-hook.sh --check` exit 0.
+EOF
+out="$(bash "$tool" --log "$tmp/t27.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "hora con .bak propio del dia 7 dio $rc, se esperaba 0: $out"
+
+# T28 (B2, variante 1 del reviewer): el .bak del bullet Deploy de CLAUDE no
+# acredita la hora del bullet de GROK — con la seccion concatenada pasaba
+# (medido rc=0): cada host cita su propio respaldo o no cita hora.
+caso "T28: .bak de un bullet hermano Deploy no acredita la hora de otro => 1"
+cat > "$tmp/t28.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #311 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (13:30 PDT / 20:30 UTC):** claude reusada; backup
+  `summonaikit-harness.sh.nuestro.20260908-133000.bak` (claude).
+- **Deploy (13:31 PDT / 20:31 UTC):** grok/dsh/codex REPARADO. Sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t28.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo ".bak de bullet hermano dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T28 no nombro evidencia: [$out]" ;; esac
+
+# T29 (B2, variante 2 del reviewer): la NEGACION del marcador en prosa
+# («no es una hora medida en vivo») no acredita — con grep -F el marcador
+# casaba dentro de la negacion (medido rc=0). Solo cuenta el marcador en su
+# forma estructural: dentro del MISMO parentesis que la hora.
+caso "T29: negacion del marcador en prosa no acredita => 1"
+cat > "$tmp/t29.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #312 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:40 PDT / 21:40 UTC):** cuatro copias REPARADO; el operador
+  aclara que no es una hora medida en vivo, salio copiada del merge.
+EOF
+out="$(bash "$tool" --log "$tmp/t29.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "negacion del marcador dio $rc, se esperaba 1: $out"
+
+# T30 (B2, variante 3 del reviewer): un bullet hermano Deploy que cita
+# `config.bak` (backup de config, no del instalador) no acredita la hora del
+# bullet que no trae respaldo (medido rc=0 con la seccion concatenada).
+caso "T30: config.bak de un bullet hermano no acredita => 1"
+cat > "$tmp/t30.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #313 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:50 PDT / 21:50 UTC):** grok REPARADO. Sin backup citado.
+- **Deploy (config restaurado de `summonaikit.json.20260908-145000.bak`):** dsh/codex reusados.
+EOF
+out="$(bash "$tool" --log "$tmp/t30.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "config.bak hermano dio $rc, se esperaba 1: $out"
+
+# T31 (B2, variante 4 del reviewer): el marcador `hora medida en vivo` en un
+# bullet hermano SIN hora no acredita la hora del bullet que la cita (medido
+# rc=0: el grep -F lo hallaba en la seccion).
+caso "T31: marcador en bullet hermano sin hora no acredita => 1"
+cat > "$tmp/t31.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #314 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora medida en vivo, claude):** reusada, sin cambios.
+- **Deploy (15:00 PDT / 22:00 UTC):** grok/dsh/codex REPARADO. Sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t31.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "marcador en bullet hermano dio $rc, se esperaba 1: $out"
+
+# T32 (B2, extra): el marcador PELADO (sin negar) en prosa de continuacion
+# del propio bullet tampoco acredita: fuera del parentesis de la hora no es
+# forma estructural.
+caso "T32: marcador en prosa del propio bullet (sin parentesis) => 1"
+cat > "$tmp/t32.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #315 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (14:35 PDT / 21:35 UTC):** cuatro copias REPARADO; fue hora
+  medida en vivo, segun el operador. Sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t32.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "marcador en prosa dio $rc, se esperaba 1: $out"
+
+# T33-T37 (r2d, adversario M1/M2/L1/L3/L4): formas que evadian la regla por
+# bullet. Todas medidas en rc=0 contra la regla r2d (arteacto del adversario,
+# fixtures f01/f02/f05/f16 + fence).
+# T33 (M1): un `## ` falso dentro de un fence NO parte la entrada — el bullet
+# Deploy con hora copiada que vive tras el fence sigue JUZGADO por la entrada.
+caso "T33: fence con header falso no saca el bullet del cordón => 1"
+cat > "$tmp/t33.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #316 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+```
+## 2026-09-06 — Deploy correctivo fuera de PR: notas viejas pegadas
+```
+- **Deploy (21:12 UTC / 14:12 PDT, inmediatamente tras el merge):** cuatro
+  copias REPARADO. Sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t33.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "fence con header falso dio $rc, se esperaba 1: $out"
+case "$out" in *'evidencia'*) ;; *) malo "T33 no nombro evidencia: [$out]" ;; esac
+
+# T34 (M2): la hora en un sub-bullet NEGRITA anidado del propio Deploy es
+# parte del bullet (la continuacion indentada no corta la seccion) => 1.
+caso "T34: hora en sub-bullet anidado del Deploy => 1"
+cat > "$tmp/t34.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #317 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy:** cuatro copias REPARADO.
+  - **detalle:** instalado a las 21:12 UTC, sin backup citado.
+EOF
+out="$(bash "$tool" --log "$tmp/t34.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora en sub-bullet anidado dio $rc, se esperaba 1: $out"
+
+# T35 (L1): bullet deploy en minuscula tambien es bullet Deploy => 1.
+caso "T35: bullet deploy en minuscula con hora => 1"
+cat > "$tmp/t35.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-07 — PR #318 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **deploy (21:12 UTC / 14:12 PDT):** cuatro copias REPARADO, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t35.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "deploy minuscula dio $rc, se esperaba 1: $out"
+
+# T36 (L3): NBSP dentro de la hora (copy-paste de web) no la vuelve invisible
+# => 1 (se normaliza el espacio fino antes de matchear).
+caso "T36: hora con NBSP sin evidencia => 1"
+printf '# Deploy log — fixture\n## 2026-09-07 — PR #319 / Task X — deploy REAL\n\n- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.\n- **Deploy (21\xc2\xa0:12 UTC):** cuatro copias REPARADO, sin backup.\n' > "$tmp/t36.md"
+out="$(bash "$tool" --log "$tmp/t36.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora con NBSP dio $rc, se esperaba 1: $out"
+
+# T37 (L4, contracara): el marcador ANTES de la hora dentro del MISMO
+# parentesis es evidencia valida (la forma invertida de la honesta) => 0.
+caso "T37: marcador antes de la hora en el mismo parentesis => 0"
+cat > "$tmp/t37.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #320 / Task X — deploy REAL
+
+- **Merge (13:29 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **Deploy (hora medida en vivo: 14:40 PDT / 21:40 UTC):** cuatro copias
+  REPARADO; no-op no deja backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t37.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "marcador antes de la hora dio $rc, se esperaba 0: $out"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
@@ -424,6 +632,54 @@ else
     printf '    mutacion fixture-copia-hora atrapada (rechazada)\n'
   else
     malo "mutacion fixture-copia-hora SOBREVIVIO: hora copiada del merge aceptada (rc=$rc)"
+  fi
+fi
+
+# r4 (hallazgo B1): devolver el cordon al 09-08 reabre el hueco del historico
+# reparado — con el mutante, T25 (la forma real del #272 del dia 7) vuelve a
+# pasar. Control sano inmediatamente antes: T25 en rojo con el checker vivo.
+caso "mutacion: cordon HORA_CONTROL devuelto al 09-08 => T25 la atrapa"
+out="$(bash "$tool" --log "$tmp/t25.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T25 dio $rc, se esperaba 1 (cordon vivo)"
+mut_hc_base="$tmp/mut-base-hc.sh"; mut_hc="$tmp/mut-hc.sh"
+cp "$tool" "$mut_hc_base"
+sed "s/HORA_CONTROL='2026-09-07'/HORA_CONTROL='2026-09-08'/" "$mut_hc_base" > "$mut_hc"
+if cmp -s "$mut_hc_base" "$mut_hc"; then
+  malo "mutacion cordon-09-08 no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mut_hc" 2>/dev/null; then
+  malo "mutacion cordon-09-08 no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_hc" --log "$tmp/t25.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion cordon-09-08 atrapada (T25 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion cordon-09-08 SOBREVIVIO: la tanda del dia 7 volvio a quedar fuera"
+  else
+    malo "mutacion cordon-09-08 invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# r4 (hallazgo B2): anular el separador de bullets re-arma la seccion
+# concatenada (la evidencia de un bullet hermano vuelve a acreditar la hora
+# de otro) — con el mutante, T28 pasa. Control sano antes: T28 en rojo.
+caso "mutacion: separador de bullets anulado => T28 la atrapa"
+out="$(bash "$tool" --log "$tmp/t28.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T28 dio $rc, se esperaba 1 (regla viva)"
+mut_sep_base="$tmp/mut-base-sep.sh"; mut_sep="$tmp/mut-sep.sh"
+cp "$tool" "$mut_sep_base"
+sed 's/if (n++) print sep/if (0) print sep/' "$mut_sep_base" > "$mut_sep"
+if cmp -s "$mut_sep_base" "$mut_sep"; then
+  malo "mutacion separador-anulado no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mut_sep" 2>/dev/null; then
+  malo "mutacion separador-anulado no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_sep" --log "$tmp/t28.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion separador-anulado atrapada (T28 en rojo)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion separador-anulado SOBREVIVIO: la seccion volvio a concatenarse"
+  else
+    malo "mutacion separador-anulado invalida (rc=$rc, se esperaba el flip 1->0)"
   fi
 fi
 
