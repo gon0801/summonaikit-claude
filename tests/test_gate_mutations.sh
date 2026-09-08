@@ -897,8 +897,8 @@ mut_delegado_parser_bg_sin_guardia_host() {
 # caso_g4_grok_delegado_bg_multilinea_permite. (c\\ de una linea, mismo
 # formato que mut_paused_sin_guardia_de_recibo; los \\[ del ERE doblados
 # porque el texto de c\ come un nivel de backslash.)
-mut_delegado_grok_bg_textual() { sed '/if \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
-  if printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
+mut_delegado_grok_bg_textual() { sed '/if \[ "$TARGET" = "grok" \] && \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
+  if [ "$TARGET" = "grok" ] \&\& printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
 # !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
 # continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
