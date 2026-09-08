@@ -2549,10 +2549,23 @@ adv_zona_dentro() {
 # ajeno bajo el destino del enlace moria con el desarme). Si cualquier ancestro
 # es symlink, la limpieza se OMITE con diagnostico: el hook es fail-open y el
 # Stop NO se bloquea por una limpieza omitida — lo que queda es una zona
-# huerfana que su owner declara, nunca un borrado externo. Cinturon extra: si
-# la zona existe, su ruta RESUELTA (cd + pwd -P) tiene que quedar bajo el root
-# canonico — inalcanzable en la practica sin algun ancestro enlazado (el
-# prefijo ya es fisico), pero la direccion de falla es omitir, no borrar.
+# huerfana que su owner declara, nunca un borrado externo.
+# r1 adversario (H1, ALTA): los chequeos -L y el rm por PATH son check-then-act
+# — un ancestro swappeado a symlink EN LA VENTANA entre chequeo y borrado
+# re-resuelve el nombre y borra fuera (medido: toggler concurrente sobre
+# .saikit/scratch, 6/15 lotes con centinela ajeno muerto). El borrado ahora va
+# ANCLADO AL INODO: cd fisico (-P) al padre de la zona, verificacion canonica
+# del lugar DONDE SE ATERRIZO (pwd -P), y rm/rmdir RELATIVOS a ese cwd — el
+# cwd es una referencia por inodo, un swap posterior del nombre del ancestro
+# no lo mueve (verificado en darwin: rm relativo borra el contenido real y el
+# centinela bajo el enlace sobrevive; cd -P .. sube por el ".." del inodo).
+# La poda de padres sube igual (cd -P .. + rmdir relativo): rmdir sobre un
+# nombre que se volvio symlink falla solo (ENOTDIR), nunca lo sigue. La
+# verificacion puede abortar por un swap EN curso (pwd -P re-resuelve el
+# string y muestra el destino del enlace): direccion segura — omite y declara,
+# no borra. Forma elegida: rm -rf -- ./<llave> en vez de rm -rf . porque POSIX
+# prohibe remover "."/.." (BSD y GNU rm lo rechazan) y en vez de find -depth
+# porque no agrega dependencia (rm/rmdir ya son dependencia dura del hook).
 adv_limpiar_zona() {
   if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
   advzl_dir="$(adv_zona_dir)" || return 0
@@ -2570,18 +2583,38 @@ adv_limpiar_zona() {
       return 0
     fi
   done
-  if [ -d "$advzl_dir" ]; then
-    advzl_real="$(cd "$advzl_dir" 2>/dev/null && pwd -P)" || advzl_real=""
-    case "$advzl_real" in
+  # ANCLAJE (H1): todo el borrado vive en este subshell, con cwd fijado por
+  # inodo al padre de la zona. cd fallido = no hay padre que recorrer (la zona
+  # ya no existe o nunca existio): salida SILENTE, es el caso normal de un
+  # turno sin adversary y no puede ensuciar el stderr de cada Stop.
+  (
+    cd -P "$ADV_SCRATCH_PARENT" 2>/dev/null || exit 0
+    advzl_aqui="$(pwd -P)"
+    case "$advzl_aqui" in
       "$ADV_PROJECT_CANON"/?*) ;;
       *)
-        printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — %s resuelve fuera del proyecto canonico %s (fail-open: el Stop no se bloquea por esto)\n' "${advzl_real:-ruta no resoluble}" "$ADV_PROJECT_CANON" >&2
-        return 0
+        printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — el ancla (%s) resuelve fuera del proyecto canonico %s (fail-open: el Stop no se bloquea por esto)\n' "$advzl_aqui" "$ADV_PROJECT_CANON" >&2
+        exit 0
         ;;
     esac
-  fi
-  rm -rf "$advzl_dir" 2>/dev/null || true
-  rmdir "$ADV_SCRATCH_PARENT" "${ADV_SCRATCH_PARENT%/adversary}" 2>/dev/null || true
+    # Gancho de test (H1): pausa opcional ENTRE la verificacion del ancla y el
+    # borrado para exponer la ventana check->act en la regresion de la carrera
+    # (sin esto, la ventana es de ~un fork y la carrera del toggler no es
+    # reproducible). Default 0 = cero efecto. El env del hook lo hereda del
+    # runner DEL HOST, nunca del adversary (corre en otro proceso): no es
+    # superficie de ataque. Mismo patron que SAIKIT_MERGE_SOSTENER_SEG en tools/.
+    advzl_pausa="${SAIKIT_ADV_TEARDOWN_PAUSA_SEG:-0}"
+    case "$advzl_pausa" in ''|*[!0-9]*) advzl_pausa=0 ;; esac
+    [ "$advzl_pausa" -gt 0 ] && sleep "$advzl_pausa" 2>/dev/null
+    rm -rf -- "./$SESSION_KEY" 2>/dev/null || true
+    # Poda de padres, nivel por nivel, ANCLADA: cd -P .. resuelve el ".." del
+    # INODO (no el nombre del ancestro, que pudo swappearse); rmdir relativo
+    # solo poda si quedo vacio y jamas sigue un enlace (ENOTDIR).
+    advzl_padre="${ADV_SCRATCH_PARENT##*/}"
+    advzl_abuelo="${ADV_SCRATCH_PARENT%/adversary}"; advzl_abuelo="${advzl_abuelo##*/}"
+    if cd -P .. 2>/dev/null; then rmdir -- "$advzl_padre" 2>/dev/null || true; fi
+    if cd -P .. 2>/dev/null; then rmdir -- "$advzl_abuelo" 2>/dev/null || true; fi
+  )
   return 0
 }
 

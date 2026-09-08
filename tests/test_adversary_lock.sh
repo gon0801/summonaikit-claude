@@ -956,6 +956,63 @@ caso "advzona_unknown_honesto_limpia_la_zona"
 advzona_unknown_honesto_limpia_la_zona
 fin_caso "advzona_unknown_honesto_limpia_la_zona"
 
+# r1 adversario (H1, ALTA) — la carrera check->act del teardown. Los chequeos
+# -L de ancestros y el rm por PATH son TOCTOU: un .saikit/scratch swappeado a
+# symlink EN LA VENTANA entre chequeo y borrado re-resuelve el nombre y borra
+# fuera del proyecto (repro del adversario: toggler concurrente, 4/5 lotes con
+# hit; repro local medida: 21/60 lotes con centinela ajeno muerto). El borrado
+# ahora va ANCLADO AL INODO (cd -P al padre de la zona + rm relativo), y este
+# caso lo prueba DETERMINISTICAMENTE con la forma (b): el gancho de test
+# SAIKIT_ADV_TEARDOWN_PAUSA_SEG (default 0, mismo patron que
+# SAIKIT_MERGE_SOSTENER_SEG) pausa el hook ENTRE la verificacion del ancla y el
+# rm, y un plantador swappea scratch por un symlink al blanco externo EN plena
+# pausa (0.5s de una pausa de 2s). Con el ancla: el rm relativo al cwd no ve
+# el swap y el centinela sobrevive; con rm por PATH (mutante
+# teardown_sin_anclaje) el rm re-resuelve el nombre y lo mata. Se exige ademas
+# que la pausa DISPARO de verdad (duracion > 1s con EPOCHREALTIME donde existe;
+# sin ella el caso seria verde de vacio si alguien quitara el gancho).
+advzona_teardown_gana_la_carrera_de_swap() {
+  [ "$ADV_SYMLINK_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin symlinks reales (MSYS copia); el CI de Linux lo ejercita'; return 0; }
+  _ses="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  _carr_S="$LAB/proyecto/.saikit/scratch"
+  _carr_A="$LAB/afuera-carrera"
+  _carr_blanco="$_carr_A/adversary/$_ses"
+  mkdir -p "$_carr_blanco" "$LAB/proyecto/.saikit"
+  export SAIKIT_ADV_TEARDOWN_PAUSA_SEG=2
+  for _carr_i in 1 2 3; do
+    # estado inicial DETERMINISTA: scratch real con su hijo adversary, sin
+    # enlaces — los chequeos del hook pasan y el ancla aterriza en el dir real.
+    rm -rf "$_carr_S" 2>/dev/null
+    mkdir -p "$_carr_S/adversary"
+    mkdir -p "$_carr_blanco"
+    printf 'centinela-ajeno\n' > "$_carr_blanco/centinela.txt"
+    lab_limpiar_estado
+    lab_sembrar h1 0 1 0 "implementer,adversary"
+    # plantador: a los 0.5s (en plena pausa de 2s) swappea scratch por un
+    # symlink al blanco externo — el ataque de la carrera, SIN estadistica.
+    ( sleep 0.5; rm -rf "$_carr_S"; ln -s "$_carr_A" "$_carr_S" ) >/dev/null 2>&1 &
+    _carr_pid=$!
+    _carr_t0="${EPOCHREALTIME:-}"
+    lab_run prompt claude "$(lab_payload_prompt 'seguimos sin sentinel')"
+    wait "$_carr_pid" 2>/dev/null
+    _igual "desarme fail-open pese al swap en plena pausa (iter $_carr_i)" "$LAB_RC" "0"
+    if [ ! -f "$_carr_blanco/centinela.txt" ]; then
+      _mal "iter $_carr_i: el teardown borro a traves del enlace plantado en la ventana check->act (centinela ajeno muerto)"
+    fi
+    if [ -n "$_carr_t0" ] && [ -n "${EPOCHREALTIME:-}" ]; then
+      awk -v a="$_carr_t0" -v b="$EPOCHREALTIME" 'BEGIN { exit !(b - a > 1.0) }' \
+        || _mal "iter $_carr_i: el hook no pauso — el gancho SAIKIT_ADV_TEARDOWN_PAUSA_SEG no disparo y esta corrida no probo la carrera"
+    fi
+  done
+  unset SAIKIT_ADV_TEARDOWN_PAUSA_SEG
+  # devolver el arbol a estado sano: el ultimo plantador dejo scratch=enlace
+  rm -f "$_carr_S" 2>/dev/null
+  mkdir -p "$_carr_S/adversary"
+}
+caso "advzona_teardown_gana_la_carrera_de_swap"
+advzona_teardown_gana_la_carrera_de_swap
+fin_caso "advzona_teardown_gana_la_carrera_de_swap"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_adversary_lock: FAIL (casos)" >&2
   exit 1
@@ -1058,6 +1115,11 @@ mut_advlock_teardown_ciego_dir()     { sed 's#^    "$advzl_dir"; do$#    "/z-nun
 # vuelve a quedar viva tras un cierre que ya no tiene dueno. Lo atrapa
 # advzona_unknown_honesto_limpia_la_zona.
 mut_advlock_zona_unknown_sin_limpieza() { sed 's@^    adv_limpiar_zona   # r1:.*$@    :@'; }
+# r1 adversario (H1, ALTA): el borrado vuelve a ser por PATH dentro del
+# subshell anclado — la verificacion del ancla sigue, pero el rm re-resuelve
+# los nombres de los ancestros en su ventana y el swap en plena pausa lo
+# atraviesa. Lo atrapa advzona_teardown_gana_la_carrera_de_swap.
+mut_advlock_teardown_sin_anclaje() { sed 's#^    rm -rf -- "./\$SESSION_KEY" 2>/dev/null || true$#    rm -rf "$advzl_dir" 2>/dev/null || true#'; }
 
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
@@ -1079,6 +1141,7 @@ teardown_ciego_saikit|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_ciego_scratch|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_ciego_padre|advzona_teardown_no_atraviesa_enlaces_de_ancestros
 teardown_ciego_dir|advzona_teardown_no_atraviesa_enlaces_de_ancestros
+teardown_sin_anclaje|advzona_teardown_gana_la_carrera_de_swap
 zona_unknown_sin_limpieza|advzona_unknown_honesto_limpia_la_zona"
 
 while IFS='|' read -r nombre caso_atrapa; do
@@ -1092,7 +1155,7 @@ while IFS='|' read -r nombre caso_atrapa; do
         saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue
       fi ;;
-    canon_logico|zona_symlink_ciega|teardown_ciego_saikit|teardown_ciego_scratch|teardown_ciego_padre|teardown_ciego_dir)
+    canon_logico|zona_symlink_ciega|teardown_ciego_saikit|teardown_ciego_scratch|teardown_ciego_padre|teardown_ciego_dir|teardown_sin_anclaje)
       if [ "$ADV_SYMLINK_OK" != "1" ]; then
         saikit_skip_caso "mutacion_$nombre" 'necesita symlinks reales'
         continue
