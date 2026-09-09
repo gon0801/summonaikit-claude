@@ -858,6 +858,66 @@ caso "pins_detector_falla_cerrado"
 }
 fin_caso "pins_detector_falla_cerrado"
 
+# r1 (cross-review 20.x): un pin con OWNER, SHA o TAG ausente es ILEGIBLE y
+# --check muere con exit 2 nombrando el pin y el campo — JAMAS «todos los
+# pins al dia». Antes el marcador PIN_ILEGIBLE (menos de 4 campos) caia en el
+# `[ -n "$base" ] || continue` del lector ANTES del case, se descartaba en
+# silencio y los pins sanos tapaban al roto: exit 0 (rojo medido). Tres
+# regresiones INDEPENDIENTES (una por campo) con los OTROS pins validos.
+caso "pins_pin_incompleto_falla_cerrado_por_campo"
+{
+  for campo in OWNER SHA TAG; do
+    sed "/^PIN_SETUP_NODE_$campo=/d" "$GEN_REAL" > "$SB/gen-sin-$campo.sh"
+    fixture_escribir "$SB/f-sanos-$campo" "$FIX_SETUP_NODE_SHA"
+    OUT="$(bash "$BUMP" --check --fuente "$SB/f-sanos-$campo" --generador "$SB/gen-sin-$campo.sh" 2>&1)"
+    RC=$?
+    [ "$RC" -eq 2 ] || _mal "pin sin $campo debia ser exit 2, dio $RC: $OUT"
+    if printf '%s' "$OUT" | grep -Fq 'todos los pins al dia'; then
+      _mal "con $campo ausente declaro el veredicto al dia: $OUT"
+    fi
+    printf '%s' "$OUT" | grep -Fq 'PIN_SETUP_NODE' \
+      || _mal "con $campo ausente no nombra el pin roto: $OUT"
+    printf '%s' "$OUT" | grep -Fq "$campo" \
+      || _mal "con $campo ausente no nombra el campo: $OUT"
+  done
+}
+fin_caso "pins_pin_incompleto_falla_cerrado_por_campo"
+
+# r3 (cross-review hosts, Grok): --proponer pasa de gotcha a ficha — el punto
+# 6 de la instruccion del bloque exigia cubrir el mantenimiento
+# --check/--proponer. Resuelve por el gancho SAIKIT_BUMP_CI_PINS_API (sin
+# red) y lo emitido es un diff REVISABLE que no aplica nada: generador
+# intacto (cksum), workflow ajeno intacto, ningun tag flotante.
+caso "pins_proponer_api_simulada_revisable"
+{
+  gen_ck="$(cksum < "$GEN_REAL")"
+  mkdir -p .github/workflows
+  printf 'name: ajeno\n' > .github/workflows/ajeno.yml
+  ajeno_ck="$(cksum < .github/workflows/ajeno.yml)"
+  cat > "$SB/api-proponer.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'actions/setup-node v4.5.0') printf '%s\n' 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'; exit 0 ;;
+esac
+exit 1
+EOF
+  chmod +x "$SB/api-proponer.sh"
+  OUT="$(SAIKIT_BUMP_CI_PINS_API="$SB/api-proponer.sh" bash "$BUMP" \
+      --proponer actions/setup-node v4.5.0 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "proponer por API simulada rc=$RC: $OUT"
+  printf '%s' "$OUT" | grep -Eq '^---' || _mal "no es un diff: $OUT"
+  _contiene "avisa que no aplica" "$OUT" "NO aplicada"
+  _contiene "propone el sha resuelto por la API" "$OUT" "+PIN_SETUP_NODE_SHA='eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'"
+  if printf '%s' "$OUT" | grep -Eq 'uses:[[:space:]]*[^ @]+@v[0-9]'; then
+    _mal "la propuesta adopta un tag flotante: $OUT"
+  fi
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || _mal "la propuesta escribio el generador"
+  [ "$(cksum < .github/workflows/ajeno.yml)" = "$ajeno_ck" ] \
+    || _mal "la propuesta toco un workflow ajeno"
+}
+fin_caso "pins_proponer_api_simulada_revisable"
+
 caso "pins_proponer_diff_revisable_sin_escribir"
 {
   gen_ck="$(cksum < "$GEN_REAL")"
@@ -1240,12 +1300,28 @@ c_pins_propuesta_seca() {
   printf 'actions/setup-node v4.5.0 %s\n' "$FIX_SHA_NUEVO_SETUP_NODE" > "$SB/f-nueva"
   antes="$(cksum < "$SB/gen-copia.sh")"
   OUT="$(bash "$BUMP" --proponer actions/setup-node v4.5.0 --fuente "$SB/f-nueva" \
-    --generador "$SB/gen-copia.sh" 2>&1)"
+      --generador "$SB/gen-copia.sh" 2>&1)"
   RC=$?
   [ "$RC" -eq 0 ] || _mal "proponer rc=$RC: $OUT"
   printf '%s' "$OUT" | grep -Fq '+PIN_SETUP_NODE_SHA' || _mal "no propuso el diff: $OUT"
   [ "$(cksum < "$SB/gen-copia.sh")" = "$antes" ] \
     || _mal "la propuesta escribio el generador en vez de dejarlo revisable"
+}
+
+# r1: acreditacion de la correccion del orden en leer_pins — el descarte de
+# lineas vueltas al cuarto campo ([ -n "$base" ]) vuelven a tragarse el
+# marcador PIN_ILEGIBLE y el check vuelve a declarar «todos los pins al dia»
+# con un pin sin SHA (el rojo medido de la cross-review).
+c_pins_ilegible() {
+  CASO_ROJO=0; sb_reset
+  sed "/^PIN_SETUP_NODE_SHA=/d" "$GEN_REAL" > "$SB/gen-sin-sha.sh"
+  fixture_escribir "$SB/f-sanos" "$FIX_SETUP_NODE_SHA"
+  OUT="$(bash "$BUMP" --check --fuente "$SB/f-sanos" --generador "$SB/gen-sin-sha.sh" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "pin sin SHA debia ser exit 2, dio $RC: $OUT"
+  if printf '%s' "$OUT" | grep -Fq 'todos los pins al dia'; then
+    _mal "declaro el veredicto al dia con un pin ilegible: $OUT"
+  fi
 }
 
 while IFS=$'\t' read -r nombre expr fun sobre; do
@@ -1272,6 +1348,7 @@ setup_propaga_exit2	s|if ! bash "\$GEN" --ofrecer --root "\$ROOT".*|bash "$GEN" 
 leeme_md_case_sensitive	s/-iname '\*\.md'/-name '*.md'/	c_leeme_mayus	gen
 detector_siempre_al_dia	s/\[ "\$1" = "\$2" \]/return 0/	c_pins_obsoleto	bump
 proponer_escribe_directo	s|diff -u -L "\$generador" -L "\$generador (propuesta)" "\$generador" "\$tmp" \|\| true|cp "$tmp" "$generador"; diff -u -L "$generador" -L "$generador" "$generador" "$tmp" \|\| true|	c_pins_propuesta_seca	bump
+pin_ilegible_se_descarta	s/\[ -n "\$owner" \] || continue/[ -n "$base" ] || continue/	c_pins_ilegible	bump
 MUTS
 
 if [ "$fail" -ne 0 ]; then

@@ -11,6 +11,10 @@
 #   omit_q1_merge omit_q2_despliega omit_q3_salud omit_q4_sve omit_q5_telegram
 #   omit_questions_order omit_defaults_unknown omit_lock_guard
 #   omit_timeout_cleanup accept_pipe_as_pty skip_killpg accept_unordered
+# 20fix: caso de argv reales del setup-lock-held (H3) y
+#   hint_liberar_sin_bash — strip del prefijo bash del hint liberar-lock (H2)
+# 20fix r4: hint_flag_inexistente — hint con flag que el tool no acepta (B3):
+#   la forma completa de linea es lo afirmado y lo ejecutado
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -185,6 +189,10 @@ assert_obs setup-autopilot defaults_merge 'false'
 assert_obs setup-autopilot pipe_not_pty 'pipe|not.pty|no.pty|defaults'
 assert_obs setup-autopilot lock_blocks '3|LOCK|lock'
 assert_obs setup-autopilot lock_no_write 'ausente|intact|no.write|sin.escritura'
+assert_obs setup-autopilot lock_held_exit_3 'exit 3|lock'
+assert_obs setup-autopilot lock_held_hint_ejecutable 'bash tools/saikit-setup-autopilot.sh --liberar-lock|hint'
+# 20fix H3: el hint se EJECUTA inocuamente contra una copia del fixture.
+assert_obs setup-autopilot lock_hint_ejecucion_inocua 'copia|original|inocu'
 assert_obs setup-autopilot with_ci_no_offer 'ya hay workflows|no se ofrece'
 assert_obs setup-autopilot without_ci_aviso 'sin CI|no mergea'
 assert_obs setup-autopilot ci_not_q6 'no 6/5|not 6/5|no.es.6'
@@ -356,11 +364,97 @@ caso "mutante accept_unordered: 5/5 antes de 1/5 se pone rojo"
 reset_art
 mut="$SANDBOX/setup-accept-unordered.sh"
 if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
-  's/print("ordered" if all(idx\[i\]>=0 and (i==0 or idx\[i\]>idx\[i-1\]) for i in range(5)) else "unordered")/print("unordered")/' \
+  's/print("ordered" if all(idx\[i\]>=0 and (i==0 or idx\[i\]>idx\[i\-1\]) for i in range(5)) else "unordered")/print("unordered")/' \
   "accept_unordered"
 then
   out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
   assert_missing_or_fail setup-autopilot questions_order '1/5' "$rc"
+fi
+
+# ---------------------------------------------------------------------------
+# 20fix H3: setup-lock-held registra argv REALES. El flag --lock-held no
+# existe en tools/saikit-setup-autopilot.sh — un fm_action con ese argv es
+# evidencia inventada. Se exige: act-holder (preparacion, --pr 11 +
+# SOSTENER), act-lock-held con el argv exacto de la corrida real (--pr 12,
+# sin --lock-held) y act-liberar-inocuo (--liberar-lock).
+# ---------------------------------------------------------------------------
+caso "setup-lock-held registra argv reales (sin --lock-held inventado)"
+reset_art
+out="$(ctrl drive setup-autopilot 2>&1)" && drc=0 || drc=$?
+steps="$(latest_steps setup-autopilot)"
+[ -n "$steps" ] && [ -f "$steps" ] || malo "setup-autopilot sin steps para acciones"
+if [ -n "$steps" ] && [ -f "$steps" ]; then
+python3 - "$steps" <<'PY' || malo "act-lock-held/act-holder/act-liberar-inocuo no fieles"
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+def cmd_of(rec):
+    c = rec.get("command")
+    if isinstance(c, list):
+        return " ".join(str(x) for x in c)
+    return str(c or "")
+acts = [r for r in rows if r.get("type") == "action"]
+for a in acts:
+    cmd = cmd_of(a)
+    assert "--lock-held" not in cmd, f"argv inventado --lock-held en {a.get('step_id')}: {cmd}"
+holder = [a for a in acts if a.get("step_id") == "act-holder"]
+assert holder, "falta action act-holder (preparacion del sostenedor)"
+hcmd = cmd_of(holder[-1])
+assert "SAIKIT_SETUP_SOSTENER_SEG=60" in hcmd and "--pr 11" in hcmd, hcmd
+held = [a for a in acts if a.get("step_id") == "act-lock-held"]
+assert held, "falta action act-lock-held"
+cmd = cmd_of(held[-1])
+assert cmd.startswith("bash "), cmd
+for part in ("--merge no", "--despliega no", "--sin-verify-app no",
+             "--telegram no", "--ci-minimo no", "--pr 12"):
+    assert part in cmd, (part, cmd)
+inocuo = [a for a in acts if a.get("step_id") == "act-liberar-inocuo"]
+assert inocuo, "falta action act-liberar-inocuo"
+icmd = cmd_of(inocuo[-1])
+assert icmd.endswith("--liberar-lock"), icmd
+PY
+fi
+
+# 20fix H2: strip del prefijo bash del hint en la salida capturada, antes de
+# la asercion — la forma ejecutable (`bash tools/...`) es lo afirmado.
+caso "mutante hint_liberar_sin_bash: hint sin prefijo bash se pone rojo"
+reset_art
+control_sano_setup() {
+  rm -f "$SANDBOX/baseline-ok-setup-autopilot"
+  fm_mut_require_baseline setup-autopilot "$DRV" drive setup-autopilot
+}
+control_sano_setup
+mut="$SANDBOX/setup-hint-sin-bash.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's@# assert:lock_held_hint_ejecutable@out="$(printf %s "$out" | sed '"'"'s|bash tools/saikit-setup-autopilot.sh|tools/saikit-setup-autopilot.sh|g'"'"')"; &@' \
+  "hint_liberar_sin_bash"
+then
+  bash -n "$mut" || { malo "hint_liberar_sin_bash: mutante no parsea"; }
+  if bash -n "$mut" 2>/dev/null; then
+    out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail setup-autopilot lock_held_hint_ejecutable \
+      'bash tools/saikit-setup-autopilot.sh --liberar-lock|hint' "$rc"
+  fi
+fi
+
+# 20fix B3: hint con un FLAG INEXISTENTE — contiene el comando como
+# subcadena pero no ES el comando (de ejecutarlo de verdad, rc=2). La
+# asercion debe exigir la forma completa de linea y la ejecucion inocua debe
+# correr el argv EXTRAIDO (medido contra el driver pre-B3: drive rc=0 con
+# ambas aserciones en PASS).
+caso "mutante hint_flag_inexistente: hint con flag raro se pone rojo"
+reset_art
+control_sano_setup
+mut="$SANDBOX/setup-hint-flag.sh"
+if sed_must_change "$SANDBOX/setup.src.sh" "$mut" \
+  's@# assert:lock_held_hint_ejecutable@out="$(printf %s "$out" | sed '"'"'s|bash tools/saikit-setup-autopilot.sh --liberar-lock|\& --flag-inexistente|'"'"')"; &@' \
+  "hint_flag_inexistente"
+then
+  bash -n "$mut" || { malo "hint_flag_inexistente: mutante no parsea"; }
+  if bash -n "$mut" 2>/dev/null; then
+    out="$(ctrl_drv "$mut" drive setup-autopilot 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail setup-autopilot lock_held_hint_ejecutable \
+      'bash tools/saikit-setup-autopilot.sh --liberar-lock|hint' "$rc"
+  fi
 fi
 
 caso "mutante skip_killpg: timeout sin kill/reap se pone rojo"

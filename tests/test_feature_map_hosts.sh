@@ -16,6 +16,19 @@
 #   omit_registro        — quita el diagnostico INCOMPLETO
 #   stub_registro_ok     — checker que imprime REGISTRO COMPLETO
 #   invalid_model        — observed definitely-invalid-model
+# 20fix H1 (costura: la linea fm_action de cada caso seco; control sano
+# inmediatamente antes de cada mutante):
+#   dry_zcode_escribe    — reescribe el config zcode tras el dry-run
+#   dry_grok_escribe     — reescribe el hook grok tras el dry-run
+#   dry_crea_backup      — crea un .bak en saikit-backups tras el dry-run
+#   dry_retira_parcial   — borra UN perfil grok tras el dry-run
+#   omit_clasifica_pieza — quita la clasificacion de los agentes grok
+#   se_por_no_se         — toda forma afirmativa pasa a negativa en la salida
+# 20fix r5:
+#   dry_zcode_symlink_swap — sustituye un archivo por un symlink de bytes
+#   dry_zcode_hardlink_swap — sustituye un archivo por un hardlink de bytes
+#                           IDENTICOS tras el dry-run (C4: el snapshot que
+#                           SIGUE enlaces no lo veia)
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -158,7 +171,7 @@ for need in (
     "hosts-four-copies", "hosts-zcode-reuses", "hosts-kimi-profiles",
     "hosts-identity", "hosts-noop", "hosts-retirada", "hosts-foreign",
     "hosts-registration", "hosts-os-unavailable", "hosts-symlink",
-    "hosts-no-live",
+    "hosts-quitar-zcode-dry", "hosts-quitar-grok-dry", "hosts-no-live",
 ):
     assert need in text, (need, cases)
 PY
@@ -182,6 +195,20 @@ assert_obs install-hosts ya_al_dia 'YA AL DIA'
 assert_obs install-hosts dest_unchanged 'unchanged|igual|intact'
 assert_obs install-hosts retirada_preserva 'quitado|retirad|backup|intact'
 assert_obs install-hosts neighbor_intact_after_retirada 'intact|igual|unchanged'
+# 20fix H1: los dry-run se observan con clasificacion por pieza (ancla de
+# guion largo), direccion desconocida y snapshot exacto del arbol.
+assert_obs install-hosts quitar_zcode_dry_reporta 'reporta sin ejecutar|dry-run'
+assert_obs install-hosts quitar_zcode_dry_clasifica 'config 5[.]4|entrada'
+assert_obs install-hosts quitar_zcode_dry_clasifica_agente 'implementer.*verifier.*adversary|por pieza'
+assert_obs install-hosts quitar_zcode_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
+assert_obs install-hosts quitar_zcode_dry_snapshot_igual 'identidad|snapshot|igual'
+assert_obs install-hosts quitar_zcode_dry_preserva 'entradas 5[.]4=4|implementer.*reviewer.*adversary'
+assert_obs install-hosts quitar_grok_dry_reporta 'reporta sin ejecutar|dry-run'
+assert_obs install-hosts quitar_grok_dry_clasifica 'JSON y HOOK|por pieza'
+assert_obs install-hosts quitar_grok_dry_clasifica_agente 'implementer.*verifier.*adversary|por pieza'
+assert_obs install-hosts quitar_grok_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
+assert_obs install-hosts quitar_grok_dry_snapshot_igual 'identidad|snapshot|igual'
+assert_obs install-hosts quitar_grok_dry_preserva '4 perfiles|implementer.*reviewer.*adversary'
 assert_obs install-hosts foreign_intact 'intact|igual|unchanged'
 assert_obs install-hosts registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO'
 assert_obs install-hosts registro_por_texto 'gate NO corre'
@@ -468,6 +495,86 @@ then
   out="$(ctrl_drv "$mut" drive routing-recipes 2>&1)" && rc=0 || rc=$?
   assert_missing_or_fail routing-recipes claude_implementer "$CL_MODEL" "$rc"
 fi
+
+# ---------------------------------------------------------------------------
+# Mutantes 20fix H1: escritura/retirada tras el dry-run y clasificacion por
+# subcadena. La costura es la linea fm_action del caso seco correspondiente:
+# el codigo inyectado corre justo despues del dry-run, antes del snapshot de
+# despues y de las aserciones de clasificacion.
+# ---------------------------------------------------------------------------
+control_sano_hosts() {
+  # Control sano inmediato: el drive SIN mutar en verde antes de cada mutante.
+  rm -f "$SANDBOX/baseline-ok-install-hosts"
+  fm_mut_require_baseline install-hosts "$DRV_HOSTS" drive install-hosts
+}
+
+mut_inyecta_hosts() {
+  local label="$1" asid="$2" expr="$3"
+  caso "mutante $label: se pone rojo"
+  reset_art
+  local mut="$SANDBOX/hosts-$label.sh"
+  if [ ! -f "$SANDBOX/hosts.src.sh" ]; then
+    malo "$label: sin driver fuente"; return
+  fi
+  control_sano_hosts
+  if sed_must_change "$SANDBOX/hosts.src.sh" "$mut" "$expr" "$label"; then
+    out="$(ctrl_drv "$mut" drive install-hosts 2>&1)" && rc=0 || rc=$?
+    assert_missing_or_fail install-hosts "$asid" "$asid" "$rc"
+  fi
+}
+
+# Escribe sin borrar tras el dry-run zcode: el config ya no puede quedar
+# identico (snapshot) ni parsear igual (preserva).
+mut_inyecta_hosts dry_zcode_escribe quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@printf x >> "$user_cfg"; &@'
+
+# Escribe sin borrar tras el dry-run grok: el hook appended rompe la
+# identidad exacta del arbol (la version con solo presencia sobrevivia).
+mut_inyecta_hosts dry_grok_escribe quitar_grok_dry_snapshot_igual \
+  's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@printf x >> "$gdest"; &@'
+
+# Crea un .bak en el dir de backups tras el dry-run zcode: el snapshot cubre
+# saikit-backups/ (antes el .bak nuevo pasaba inadvertido).
+mut_inyecta_hosts dry_crea_backup quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@mkdir -p "$(dirname "$user_cfg")/saikit-backups" && printf bak > "$(dirname "$user_cfg")/saikit-backups/fixture.bak"; &@'
+
+# Retira UN perfil tras el dry-run grok: preserva exige los CUATRO (antes
+# bastaba uno y el mutante sobrevivia; solo se ponia rojo por el crash de
+# set -e, no por la asercion).
+mut_inyecta_hosts dry_retira_parcial quitar_grok_dry_preserva \
+  's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@rm -f "$gagents/adversary.md"; &@'
+
+# 20fix r5 (C4): sustituye el archivo ajeno del arbol zcode por un SYMLINK a
+# una copia con bytes IDENTICOS tras el dry-run. Con `[ -f ]` (que sigue
+# enlaces) el cksum no cambiaba y el snapshot quedaba identico (medido rc=0
+# contra el driver pre-r5); con la clasificacion por primarias de find la
+# linea F se vuelve L y la identidad se rompe. (Ojo sed: sin `&&` en el
+# reemplazo — cada `&` re-expande el texto matcheado y corrompe la linea.)
+mut_inyecta_hosts dry_zcode_symlink_swap quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@cp "$zc_tree/ajeno.txt" "$VERIFY_TMPDIR/ajeno-twin.txt"; rm -f "$zc_tree/ajeno.txt"; ln -s "$VERIFY_TMPDIR/ajeno-twin.txt" "$zc_tree/ajeno.txt"; &@'
+
+# r5 (adversario L1): sustituye el archivo ajeno por un HARDLINK a bytes
+# IDENTICOS — mismo contenido, distinto inodo: sin el inodo en la linea F el
+# swap era invisible (medido). Con el inodo, la identidad se rompe.
+mut_inyecta_hosts dry_zcode_hardlink_swap quitar_zcode_dry_snapshot_igual \
+  's@fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry@cp "$zc_tree/ajeno.txt" "$(dirname "$zc_tree")/ajeno-twin"; rm -f "$zc_tree/ajeno.txt"; ln "$(dirname "$zc_tree")/ajeno-twin" "$zc_tree/ajeno.txt"; &@'
+
+# Omite la asercion de clasificacion de UN grupo de piezas (los agentes
+# nuestros del caso grok): la asercion requerida falta y el drive cae en
+# FAIL/1 por omision.
+control_sano_hosts
+mut_omit_hosts omit_clasifica_pieza quitar_grok_dry_clasifica_agente \
+  'implementer|verifier|adversary' \
+  '/assert:quitar_grok_dry_clasifica_agente/,/assert:quitar_grok_dry_clasifica_agente_end/d'
+
+# Reescribe toda forma afirmativa `— se quitaria` por la negativa en la
+# salida observada ANTES de clasificar. Con el ancla de guion largo las
+# aserciones afirmativas caen en FAIL. CON LA SUBCADENA VIEJA
+# (`grep -q 'se quitaria'`, sin guion) ESTE MUTANTE SOBREVIVIA: la negativa
+# `— no se quitaria` contiene la subcadena pelada — ese era el hueco 20fix H1
+# (medido: drive rc=0 con clasifica en PASS contra el driver pre-H1).
+mut_inyecta_hosts se_por_no_se quitar_grok_dry_clasifica \
+  's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@out="${out//— se quitaria/— no se quitaria}"; &@'
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

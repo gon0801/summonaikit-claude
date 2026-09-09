@@ -55,6 +55,14 @@
       "required_assertions": ["lock_blocks", "lock_no_write"]
     },
     {
+      "id": "setup-lock-held",
+      "required_assertions": [
+        "lock_held_exit_3",
+        "lock_held_hint_ejecutable",
+        "lock_hint_ejecucion_inocua"
+      ]
+    },
+    {
       "id": "setup-with-ci",
       "required_assertions": ["with_ci_no_offer"]
     },

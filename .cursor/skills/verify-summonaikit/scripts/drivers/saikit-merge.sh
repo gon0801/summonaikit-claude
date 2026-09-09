@@ -175,6 +175,33 @@ run_merge() {
     bash "$MERGE" "$@"
 }
 
+# r1 (cross-review 20.x / 20.5): variante con cwd explicito y el gancho de
+# test SOSTENER (duerme con el lock tomado) para orquestar la contencion con
+# determinismo. Produccion intacta: sin la variable no duerme nada.
+run_merge_en() {
+  local cwd="$1" sostener="$2" gh_log_path="$3"
+  shift 3
+  runtime_exec "$cwd" \
+    env \
+      PATH="$SB/bin:$PATH" \
+      SAIKIT_GH_FIX="$SB/ghfix" \
+      SAIKIT_GH_LOG="$gh_log_path" \
+      SAIKIT_ESTADO_ROOT="$SB/estado" \
+      SAIKIT_MERGE_RETRY_SEG=0 \
+      SAIKIT_MERGE_SOSTENER_SEG="$sostener" \
+    bash "$MERGE" "$@"
+}
+
+esperar_lock() {  # $1=lock dir → 0 cuando aparece (hasta ~5s)
+  local i=0
+  while [ "$i" -lt 50 ]; do
+    [ -d "$1" ] && return 0
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 gh_log() { cat "$SB/gh.log" 2>/dev/null || true; }
 
 merge_called() { grep -q '^gh pr merge' "$SB/gh.log" 2>/dev/null; }
@@ -418,6 +445,186 @@ if fm_only revert-no-punta; then
   fi
   # assert:reject_no_punta_end
   assert_no_merge revert-no-punta no_merge_on_punta
+fi
+
+# ---------------------------------------------------------------------------
+# Lock de integracion (20.5): contencion dos procesos.
+# ---------------------------------------------------------------------------
+if fm_only merge-lock-contencion; then
+  sb_reset
+  lock="$WORK/.git/saikit-merge.lock"
+  ( run_merge_en "$WORK" 8 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  a_pid=$!
+  if esperar_lock "$lock"; then
+    set +e
+    out="$(run_merge --confirmado 2>&1)"
+    rc=$?
+    set -e
+    # El contender conserva su propio log: ninguna llamada valida del owner
+    # puede contaminar esta atribucion aunque termine antes de la foto.
+    gh_foto="$(gh_log)"
+    fm_action merge-lock-contencion act-lock "$rc" "$out" \
+      bash "$MERGE" --confirmado
+    # assert:lock_exit_3
+    if [ "$rc" -eq 3 ]; then
+      fm_pass merge-lock-contencion lock_exit_3 "exit 3" "exit 3 (lock ajeno)"
+    else
+      fm_fail merge-lock-contencion lock_exit_3 "exit 3" "rc=$rc $out"
+    fi
+    # assert:lock_reporta_hint
+    if printf '%s' "$out" | grep -q 'LOCK de integracion ocupado' \
+      && printf '%s' "$out" | grep -q -- '--liberar-lock'; then
+      fm_pass merge-lock-contencion lock_reporta_hint \
+        "LOCK ocupado + --liberar-lock" "reporta lock y via de recuperacion"
+    else
+      fm_fail merge-lock-contencion lock_reporta_hint \
+        "LOCK ocupado + --liberar-lock" "$out"
+    fi
+    # assert:no_merge_on_lock
+    if printf '%s' "$gh_foto" | grep -q '^gh pr merge'; then
+      fm_fail merge-lock-contencion no_merge_on_lock "gh pr merge ausente" \
+        "mergeo con lock ajeno: $gh_foto"
+    else
+      fm_pass merge-lock-contencion no_merge_on_lock "gh pr merge ausente" \
+        "el rechazado no llamo merge"
+    fi
+  else
+    fm_action merge-lock-contencion act-lock "" "" bash "$MERGE" --confirmado
+    fm_fail merge-lock-contencion lock_exit_3 "exit 3" \
+      "el proceso A no tomo el lock (timeout esperando $lock)"
+  fi
+  wait "$a_pid" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Lock: el dueno libera SOLO el propio; el ajeno sobrevive al rechazo.
+# ---------------------------------------------------------------------------
+if fm_only merge-lock-propio; then
+  sb_reset
+  lock="$WORK/.git/saikit-merge.lock"
+  ( run_merge_en "$WORK" 4 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  a_pid=$!
+  if esperar_lock "$lock"; then
+    set +e
+    out="$(run_merge --confirmado 2>&1)"
+    rc=$?
+    set -e
+    fm_action merge-lock-propio act-propio "$rc" "$out" bash "$MERGE" --confirmado
+    # assert:lock_ajeno_sobrevive
+    if [ -d "$lock" ]; then
+      fm_pass merge-lock-propio lock_ajeno_sobrevive "lock ajeno presente" \
+        "exit $rc del rechazado no borro el lock del dueno"
+    else
+      fm_fail merge-lock-propio lock_ajeno_sobrevive "lock ajeno presente" \
+        "el rechazado (rc=$rc) borro un lock ajeno"
+    fi
+    wait "$a_pid" 2>/dev/null || true
+    # assert:lock_propio_liberado
+    if [ ! -d "$lock" ]; then
+      fm_pass merge-lock-propio lock_propio_liberado "lock retirado" \
+        "el dueno libero su lock al salir (rc A: $(cat "$SB/lock-a.rc" 2>/dev/null || echo '?'))"
+    else
+      fm_fail merge-lock-propio lock_propio_liberado "lock retirado" \
+        "el dueno salio y su lock sobrevive: $(cat "$SB/lock-a.out" 2>/dev/null)"
+    fi
+  else
+    fm_action merge-lock-propio act-propio "" "" bash "$MERGE" --confirmado
+    fm_fail merge-lock-propio lock_ajeno_sobrevive "lock ajeno presente" \
+      "el proceso A no tomo el lock (timeout esperando $lock)"
+    fm_fail merge-lock-propio lock_propio_liberado "lock retirado" "sin dueno que liberar"
+    wait "$a_pid" 2>/dev/null || true
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Lock: dos worktrees del MISMO clone comparten el archivo (git-common-dir).
+# ---------------------------------------------------------------------------
+if fm_only merge-lock-worktrees; then
+  sb_reset
+  lock="$WORK/.git/saikit-merge.lock"
+  ( run_merge_en "$WORK" 8 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  a_pid=$!
+  if esperar_lock "$lock"; then
+    gitr worktree add -q "$SB/wt2" -b wt2 2>/dev/null || gitr worktree add "$SB/wt2" -b wt2
+    set +e
+    out="$(run_merge_en "$SB/wt2" 0 "$SB/gh.log" --confirmado 2>&1)"
+    rc=$?
+    set -e
+    gh_foto="$(gh_log)"
+    fm_action merge-lock-worktrees act-wt "$rc" "$out" \
+      bash "$MERGE" --confirmado "desde worktree wt2"
+    # assert:lock_comun_worktrees
+    # El tool canoniza el common-dir con pwd -P (macOS: /private/var/...):
+    # comparar contra la ruta canonica del lock del worktree principal.
+    lock_canon="$(cd "$WORK/.git" 2>/dev/null && pwd -P)/saikit-merge.lock"
+    if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -Fq "$lock_canon"; then
+      fm_pass merge-lock-worktrees lock_comun_worktrees "exit 3 con el lock del clone" \
+        "el worktree rechazo por el MISMO $lock"
+    else
+      fm_fail merge-lock-worktrees lock_comun_worktrees "exit 3 con el lock del clone" \
+        "rc=$rc $out"
+    fi
+    # assert:no_merge_on_lock_wt
+    if printf '%s' "$gh_foto" | grep -q '^gh pr merge'; then
+      fm_fail merge-lock-worktrees no_merge_on_lock_wt "gh pr merge ausente" \
+        "mergeo desde worktree con lock ajeno: $gh_foto"
+    else
+      fm_pass merge-lock-worktrees no_merge_on_lock_wt "gh pr merge ausente" \
+        "el worktree rechazado no llamo merge"
+    fi
+  else
+    fm_action merge-lock-worktrees act-wt "" "" bash "$MERGE" --confirmado
+    fm_fail merge-lock-worktrees lock_comun_worktrees "exit 3 con el lock del clone" \
+      "el proceso A no tomo el lock (timeout esperando $lock)"
+  fi
+  wait "$a_pid" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Lock: recuperacion EXPLICITA con --liberar-lock (unica via).
+# ---------------------------------------------------------------------------
+if fm_only merge-lock-recuperacion; then
+  sb_reset
+  lock="$WORK/.git/saikit-merge.lock"
+  mkdir -p "$lock"
+  printf '999999' > "$lock/pid"
+  printf 'host-muerto' > "$lock/host"
+  printf '2020-01-01T00:00:00Z' > "$lock/started_at"
+  printf 'merge' > "$lock/modo"
+  set +e
+  out="$(run_merge --liberar-lock 2>&1)"
+  rc=$?
+  set -e
+  fm_action merge-lock-recuperacion act-liberar "$rc" "$out" \
+    bash "$MERGE" --liberar-lock
+  # assert:liberar_quita_y_muestra
+  if [ "$rc" -eq 0 ] && [ ! -d "$lock" ] \
+    && printf '%s' "$out" | grep -q 'lock de integracion encontrado' \
+    && printf '%s' "$out" | grep -q 'pid: 999999' \
+    && printf '%s' "$out" | grep -q 'host: host-muerto' \
+    && printf '%s' "$out" | grep -q 'inicio: 2020-01-01T00:00:00Z' \
+    && printf '%s' "$out" | grep -q 'modo: merge' \
+    && printf '%s' "$out" | grep -q 'lock de integracion liberado'; then
+    fm_pass merge-lock-recuperacion liberar_quita_y_muestra \
+      "muestra contenido y quita" "muestra pid/host/fecha y quita el lock"
+  else
+    fm_fail merge-lock-recuperacion liberar_quita_y_muestra \
+      "muestra contenido y quita" "rc=$rc lock=$([ -d "$lock" ] && echo presente || echo ausente) $out"
+  fi
+  set +e
+  out2="$(run_merge --liberar-lock 2>&1)"
+  rc2=$?
+  set -e
+  fm_action merge-lock-recuperacion act-liberar-sin-lock "$rc2" "$out2" \
+    bash "$MERGE" --liberar-lock
+  # assert:liberar_sin_lock_verde
+  if [ "$rc2" -eq 0 ] && printf '%s' "$out2" | grep -q 'nada que liberar'; then
+    fm_pass merge-lock-recuperacion liberar_sin_lock_verde \
+      "exit 0 + nada que liberar" "sin lock es no-op en verde"
+  else
+    fm_fail merge-lock-recuperacion liberar_sin_lock_verde \
+      "exit 0 + nada que liberar" "rc=$rc2 $out2"
+  fi
 fi
 
 exit 0

@@ -1,0 +1,1 @@
+{"hecho":"El checker distingue tiempos ajenos y cubre rotulos Deploy normales, minusculas, llanos y con negrita cerrada","comando":"bash tests/test_deploy_log.sh && bash tools/check-deploy-log.sh","salida":"T43-T46 aceptados; T17 T42 T47 rechazados; mutantes scope-todos y cierre-negrita atrapados","nivel":4}

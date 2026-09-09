@@ -467,4 +467,134 @@ if fm_only ci-run-fixture; then
   # assert:not_live_actions_end
 fi
 
+# ---------------------------------------------------------------------------
+# bump-ci-pins --check: pin ilegible muere cerrado nombrando pin y campo.
+# r1 (cross-review 20.x): el marcador PIN_ILEGIBLE viaja con el campo que
+# falta y el lector lo procesa ANTES de descartar lineas cortas — un pin sin
+# OWNER/SHA/TAG nunca queda tapado por los sanos con «todos los pins al dia».
+# Espejo driver del producto pins_pin_incompleto_falla_cerrado_por_campo.
+# ---------------------------------------------------------------------------
+if fm_only ci-pins-ilegible; then
+  BUMP="$VERIFY_REPO/tools/bump-ci-pins.sh"
+  GEN_REAL="$VERIFY_REPO/tools/saikit-ci-minimo.sh"
+  work="$VERIFY_TMPDIR/ci-pins"
+  rm -rf "$work"
+  mkdir -p "$work"
+  # Fuente fixture «que sabe» construida de los pins ACTUALES del generador
+  # (misma forma que el fixture del producto: owner tag sha40 por linea).
+  awk '
+    /^PIN_[A-Z0-9_]+_(OWNER|SHA|TAG)=/ {
+      var=$0; sub(/=.*/, "", var)
+      val=$0; sub(/^[^=]*=/, "", val)
+      sub(/[[:space:]]+#.*$/, "", val); gsub(/\047/, "", val)
+      kind=var; sub(/^PIN_.*_/, "", kind)
+      base=var; sub(/^PIN_/, "", base); sub(/_(OWNER|SHA|TAG)$/, "", base)
+      pin[base "-" kind]=val; bases[base]=1
+    }
+    END {
+      for (b in bases)
+        printf "%s %s %s\n", pin[b "-OWNER"], pin[b "-TAG"], pin[b "-SHA"]
+    }
+  ' "$GEN_REAL" | sort > "$work/fuente.txt"
+  fallos=""
+  for campo in OWNER SHA TAG; do
+    sed "/^PIN_SETUP_NODE_$campo=/d" "$GEN_REAL" > "$work/gen-sin-$campo.sh"
+    set +e
+    out="$(runtime_exec "$work" \
+      bash "$BUMP" --check --fuente "$work/fuente.txt" \
+      --generador "$work/gen-sin-$campo.sh" 2>&1)"
+    rc=$?
+    set -e
+    fm_action ci-pins-ilegible "act-sin-$campo" "$rc" "$out" \
+      bash "$BUMP" --check --generador "gen-sin-$campo.sh"
+    [ "$rc" -eq 2 ] || fallos="$fallos sin-$campo:rc=$rc"
+    printf '%s' "$out" | grep -Fq 'PIN_SETUP_NODE' \
+      || fallos="$fallos sin-$campo:no-nombra-pin"
+    printf '%s' "$out" | grep -Fq "$campo" \
+      || fallos="$fallos sin-$campo:no-nombra-campo"
+    if printf '%s' "$out" | grep -Fq 'todos los pins al dia'; then
+      fallos="$fallos sin-$campo:declaro-al-dia"
+    fi
+  done
+  # assert:pins_ilegible_exit_2
+  case "$fallos" in
+    *rc=*) fm_fail ci-pins-ilegible pins_ilegible_exit_2 "exit 2" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-ilegible pins_ilegible_exit_2 "exit 2" "exit 2 por OWNER, SHA y TAG" ;;
+  esac
+  # assert:pins_ilegible_nombra_pin_y_campo
+  case "$fallos" in
+    *no-nombra*) fm_fail ci-pins-ilegible pins_ilegible_nombra_pin_y_campo \
+      "PIN_SETUP_NODE + campo" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-ilegible pins_ilegible_nombra_pin_y_campo \
+      "PIN_SETUP_NODE + campo" "nombra pin y campo faltante" ;;
+  esac
+  # assert:pins_ilegible_no_al_dia
+  case "$fallos" in
+    *declaro-al-dia*) fm_fail ci-pins-ilegible pins_ilegible_no_al_dia \
+      "sin «todos los pins al dia»" "declaro al dia con pin ilegible" ;;
+    *) fm_pass ci-pins-ilegible pins_ilegible_no_al_dia \
+      "sin «todos los pins al dia»" "jamas declara al dia lo ilegible" ;;
+  esac
+fi
+
+# ---------------------------------------------------------------------------
+# bump-ci-pins --proponer: propuesta REVISABLE resuelta sin red por el gancho
+# SAIKIT_BUMP_CI_PINS_API. r3 (cross-review hosts, Grok): --proponer tenia
+# gotcha pero no ficha — la instruccion del bloque exigia cubrir el
+# mantenimiento --check/--proponer. Espejo driver del producto
+# pins_proponer_api_simulada_revisable (tests/test_ci_minimo.sh).
+# ---------------------------------------------------------------------------
+if fm_only ci-pins-proponer; then
+  BUMP="$VERIFY_REPO/tools/bump-ci-pins.sh"
+  GEN_REAL="$VERIFY_REPO/tools/saikit-ci-minimo.sh"
+  work="$VERIFY_TMPDIR/ci-pins-prop"
+  rm -rf "$work"
+  mkdir -p "$work"
+  cat > "$work/api.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'actions/setup-node v4.5.0') printf '%s\n' 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'; exit 0 ;;
+esac
+exit 1
+EOF
+  chmod +x "$work/api.sh"
+  gen_ck="$(cksum < "$GEN_REAL")"
+  set +e
+  out="$(runtime_exec "$work" \
+    env SAIKIT_BUMP_CI_PINS_API="$work/api.sh" \
+    bash "$BUMP" --proponer actions/setup-node v4.5.0 2>&1)"
+  rc=$?
+  set -e
+  fm_action ci-pins-proponer "act-proponer" "$rc" "$out" \
+    env SAIKIT_BUMP_CI_PINS_API=api.sh bash bump-ci-pins.sh --proponer actions/setup-node v4.5.0
+  fallos=""
+  [ "$rc" -eq 0 ] || fallos="$fallos rc=$rc"
+  printf '%s' "$out" | grep -Eq '^---' || fallos="$fallos no-diff"
+  printf '%s' "$out" | grep -Fq 'NO aplicada' || fallos="$fallos sin-aviso"
+  printf '%s' "$out" | grep -Fq "+PIN_SETUP_NODE_SHA='eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'" \
+    || fallos="$fallos sin-sha-nuevo"
+  printf '%s' "$out" | grep -Eq 'uses:[[:space:]]*[^ @]+@v[0-9]' && fallos="$fallos tag-flotante"
+  [ "$(cksum < "$GEN_REAL")" = "$gen_ck" ] || fallos="$fallos escribio-generador"
+  # assert:proponer_resuelve_sin_red
+  case "$fallos" in
+    *rc=*|*sin-sha-nuevo*) fm_fail ci-pins-proponer proponer_resuelve_sin_red "rc 0 con sha del gancho" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-proponer proponer_resuelve_sin_red "rc 0 con sha del gancho" "sha 40hex via SAIKIT_BUMP_CI_PINS_API" ;;
+  esac
+  # assert:proponer_diff_revisable_no_aplicado
+  case "$fallos" in
+    *no-diff*|*sin-aviso*) fm_fail ci-pins-proponer proponer_diff_revisable_no_aplicado "diff --- + NO aplicada" "fallos:$fallos" ;;
+    *) fm_pass ci-pins-proponer proponer_diff_revisable_no_aplicado "diff --- + NO aplicada" "diff unificado con aviso de no aplicada" ;;
+  esac
+  # assert:proponer_cksum_intacto
+  case "$fallos" in
+    *escribio-generador*) fm_fail ci-pins-proponer proponer_cksum_intacto "generador intacto" "la propuesta escribio el generador" ;;
+    *) fm_pass ci-pins-proponer proponer_cksum_intacto "generador intacto" "cksum del generador sin cambios" ;;
+  esac
+  # assert:proponer_sin_tag_flotante
+  case "$fallos" in
+    *tag-flotante*) fm_fail ci-pins-proponer proponer_sin_tag_flotante "ningun uses @tag" "la propuesta adopto @vN" ;;
+    *) fm_pass ci-pins-proponer proponer_sin_tag_flotante "ningun uses @tag" "el pin queda owner@sha40" ;;
+  esac
+fi
+
 exit 0

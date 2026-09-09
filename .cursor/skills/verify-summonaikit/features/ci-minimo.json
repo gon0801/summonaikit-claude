@@ -1,72 +1,112 @@
 {
-  "schema_version": 1,
-  "id": "ci-minimo",
-  "card": "ci-minimo.md",
-  "executor": {
-    "kind": "driver",
-    "path": "scripts/drivers/ci-minimo.sh"
+ "schema_version": 1,
+ "id": "ci-minimo",
+ "card": "ci-minimo.md",
+ "executor": {
+  "kind": "driver",
+  "path": "scripts/drivers/ci-minimo.sh"
+ },
+ "execution_mode": "sandbox",
+ "surfaces": [
+  "tools/saikit-ci-minimo.sh",
+  "tools/bump-ci-pins.sh"
+ ],
+ "requirements": [
+  {
+   "kind": "pty",
+   "affects_cases": [
+    "ci-interactive",
+    "ci-reject"
+   ]
+  }
+ ],
+ "cases": [
+  {
+   "id": "ci-interactive",
+   "required_assertions": [
+    "accept_write",
+    "accept_offer"
+   ]
   },
-  "execution_mode": "sandbox",
-  "surfaces": ["tools/saikit-ci-minimo.sh"],
-  "requirements": [
-    {
-      "kind": "pty",
-      "affects_cases": ["ci-interactive", "ci-reject"]
-    }
-  ],
-  "cases": [
-    {
-      "id": "ci-interactive",
-      "required_assertions": ["accept_write", "accept_offer"]
-    },
-    {
-      "id": "ci-reject",
-      "required_assertions": ["reject_no_write", "reject_aviso"]
-    },
-    {
-      "id": "ci-flags",
-      "required_assertions": [
-        "flags_write",
-        "yaml_parses",
-        "pins_sha40",
-        "no_secrets",
-        "run_test",
-        "run_verify"
-      ]
-    },
-    {
-      "id": "ci-defaults",
-      "required_assertions": ["defaults_no_write", "defaults_aviso"]
-    },
-    {
-      "id": "ci-preserve-foreign",
-      "required_assertions": ["foreign_intact", "no_our_yml"]
-    },
-    {
-      "id": "ci-idempotent",
-      "required_assertions": ["second_same_hash"]
-    },
-    {
-      "id": "ci-runners",
-      "required_assertions": [
-        "runner_bash",
-        "runner_npm",
-        "runner_yarn",
-        "runner_pnpm",
-        "runner_pytest"
-      ]
-    },
-    {
-      "id": "ci-unsupported",
-      "required_assertions": ["unsupported_exit_2", "unsupported_no_write"]
-    },
-    {
-      "id": "ci-run-fixture",
-      "required_assertions": [
-        "fixture_ran_test",
-        "fixture_ran_verify",
-        "not_live_actions"
-      ]
-    }
-  ]
+  {
+   "id": "ci-reject",
+   "required_assertions": [
+    "reject_no_write",
+    "reject_aviso"
+   ]
+  },
+  {
+   "id": "ci-flags",
+   "required_assertions": [
+    "flags_write",
+    "yaml_parses",
+    "pins_sha40",
+    "no_secrets",
+    "run_test",
+    "run_verify"
+   ]
+  },
+  {
+   "id": "ci-defaults",
+   "required_assertions": [
+    "defaults_no_write",
+    "defaults_aviso"
+   ]
+  },
+  {
+   "id": "ci-preserve-foreign",
+   "required_assertions": [
+    "foreign_intact",
+    "no_our_yml"
+   ]
+  },
+  {
+   "id": "ci-idempotent",
+   "required_assertions": [
+    "second_same_hash"
+   ]
+  },
+  {
+   "id": "ci-runners",
+   "required_assertions": [
+    "runner_bash",
+    "runner_npm",
+    "runner_yarn",
+    "runner_pnpm",
+    "runner_pytest"
+   ]
+  },
+  {
+   "id": "ci-unsupported",
+   "required_assertions": [
+    "unsupported_exit_2",
+    "unsupported_no_write"
+   ]
+  },
+  {
+   "id": "ci-run-fixture",
+   "required_assertions": [
+    "fixture_ran_test",
+    "fixture_ran_verify",
+    "not_live_actions"
+   ]
+  },
+  {
+   "id": "ci-pins-ilegible",
+   "required_assertions": [
+    "pins_ilegible_exit_2",
+    "pins_ilegible_nombra_pin_y_campo",
+    "pins_ilegible_no_al_dia"
+   ]
+  },
+  {
+   "id": "ci-pins-proponer",
+   "required_assertions": [
+    "proponer_resuelve_sin_red",
+    "proponer_diff_revisable_no_aplicado",
+    "proponer_cksum_intacto",
+    "proponer_sin_tag_flotante"
+   ]
+  }
+ ]
 }

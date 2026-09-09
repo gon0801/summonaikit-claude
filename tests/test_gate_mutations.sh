@@ -134,6 +134,15 @@ G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo es
 G4|delegado_grok_sin_bg|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
 G4|delegado_grok_bg_degenerado|el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)
 G4|delegado_grok_bg_textual|la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)
+G4|delegado_grok_bg_solo_balance|el validador completo del documento vuelve a solo balance (sin gram_*) y las formas rotas cuya inval vive solo en gram_* ([1,], clave ajena rota, trailing, escapes) vuelven a habilitar la escotilla (r1; tabla medida en el comentario de la mutacion)
+G4|delegado_grok_bg_trailing|la basura tras el cierre del root deja de invalidar y un documento con trailing garbage vuelve a habilitar la escotilla (r1)
+G4|delegado_grok_bg_ignora_doc|la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)
+G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: "\q" habilita la escotilla (r3)
+G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
+G4|delegado_grok_bg_uhex_leniente|el veto de "\u"+4hex se quita y "\u12G34" (G colado entre hex) habilita la escotilla (r3)
+G4|delegado_grok_bg_escape_clave_sin_decodificar|la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)
+G4|delegado_parser_bg_usa_target|la invocacion del parser vuelve a decidir por TARGET en vez de HOST y falla ante identidades divergentes (review r3 PR #273)
+G4|delegado_grok_bg_decide_por_target|la exigencia fail-closed de backgroundTasks vuelve a decidir por TARGET en vez de HOST y Grok divergente puede salir sin trabajo en vuelo (review r3 PR #273)
 G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
 G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
 G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
@@ -827,6 +836,64 @@ mut_delegado_grok_sin_bg() { sed 's/grok_bg_en_vuelo=0/grok_bg_en_vuelo=1/'; }
 # (Una sola linea a proposito: el c\\ multilinea de otras mutaciones no
 # inserta texto en el sed BSD local.)
 mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cerro) { print "1" }/'; }
+# r1 (cross-review 20.x): la gramatica COMPLETA del documento entro al veredicto
+# del awk (gram_arr = validez de lo DENTRO del array buscado, gram_doc = validez
+# del documento entero). Tres mutaciones, una por proteccion nueva:
+#   solo_balance: el veredicto vuelve a "balance + primer token" (sin gram_*; el
+#     estado terminal st == "A" SIGUE en el veredicto). r3 (Grok, medido): NO
+#     son "las cuatro formas" — las que viven SOLO en gram_* reabren y las que
+#     mata la maquina abierta no. Tabla medida sano→mutante:
+#       [nul]=bloquea→bloquea (queda en st="L"≠"A" y eso no lo toca la mutacion)
+#       [1. ]=bloquea→bloquea (idem, st queda en subestado de numero incompleto)
+#       [1,]=bloquea→PERMITE    bad:oops=bloquea→PERMITE    trailing=bloquea→PERMITE
+#       (y desde r3, "\q"=bloquea→PERMITE: la inval del escape vive en gram_*)
+#   bg_trailing: la rama de basura tras el cierre del root (o separador invalido
+#     tras valor) deja de invalidar — el sub-caso del trailing garbage vuelve a
+#     PERMITIR.
+#   bg_ignora_doc: gram_doc sale del veredicto; solo cuenta lo de dentro del
+#     array — un valor roto en OTRA clave del documento vuelve a PERMITIR
+#     ([nul] y [1,] siguen rechazados por gram_arr: la mutacion aisla la
+#     validez FUERA de la clave).
+# r3 (cross-review hosts, hallazgo ALTA): dos mutaciones mas, una por mitad de
+# la estrictura de ESCAPES nueva:
+#   bg_escape_leniente: se quita la inval del caracter tras "\" — cualquier
+#     escape vuelve a valer y "\q" reabre la escotilla.
+#   bg_control_crudo: se quita la inval del char de control crudo en strings y
+#     el tab literal dentro de un string vuelve a valer.
+#   bg_uhex_leniente: se quita la inval del hex tras "\u" y "\u12G34" (una G
+#     colada entre hex) vuelve a valer; "\u12G"/"\u12GX" solas NO discriminan
+#     esta rama (sin la inval el string queda abierto y caen igual).
+mut_delegado_grok_bg_solo_balance() { sed 's/if (gram_arr && gram_doc && pila == ""/if (pila == ""/'; }
+mut_delegado_grok_bg_trailing()     { sed 's/else gram_doc = 0   # r1-trailing/else { }                # r1-trailing/'; }
+mut_delegado_grok_bg_ignora_doc()   { sed 's/if (gram_arr && gram_doc && pila/if (gram_arr \&\& pila/'; }
+mut_delegado_grok_bg_escape_leniente() { sed '/^            inval()   # r3-escape: tras/d'; }
+mut_delegado_grok_bg_control_crudo()   { sed '/^          if (c < " ") { inval(); continue }   # r3-control/d'; }
+mut_delegado_grok_bg_uhex_leniente()   { sed '/^            else inval()   # r3-uhex/d'; }
+# r4 (review r2 del PR #273, hallazgo P1): la decodificacion de escapes al
+# acumular la clave se quita — los escapes se VALIDAN pero su aporte vuelve a
+# descartarse (key_buf = key_buf, sin el char decodificado), asi que una clave
+# DISTINTA escrita con escapes ("back\ngroundTasks", "background\u0000Tasks",
+# "backgroundTasks\t") vuelve a colapsar sobre backgroundTasks y a habilitar
+# la escotilla sin trabajo en vuelo. OJO la forma: el `continue` se conserva
+# en su lugar — reescribir el bloque a `{ if (st == "SK") continue }` dejaria
+# caer los escapes VALIDOS de los strings de VALOR al inval() de abajo y el
+# caso multilinea (lastAssistantMessage con \n\n) se pondria rojo ANTES, por
+# la razon equivocada. Lo atrapa caso_g4_grok_delegado_bg_clave_escapada (las
+# tres contrapruebas esperan block y vuelve a salir allow).
+mut_delegado_grok_bg_escape_clave_sin_decodificar() {
+  sed -e 's/key_buf = key_buf c; continue/key_buf = key_buf; continue/' \
+      -e 's/key_buf = key_buf noascii; continue/key_buf = key_buf; continue/' \
+      -e '/key_buf = key_buf udec(uhex)/d'
+}
+# review r3 del PR #273: cada proteccion vuelve independientemente a la
+# identidad secundaria TARGET. La matriz divergente del caso dedicado exige
+# que ambas usen HOST, que ya incorpora las senales reales y su precedencia.
+mut_delegado_parser_bg_usa_target() {
+  sed 's/if \[ "$HOST" = "grok" \] \&\& \[ "$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/if [ "$TARGET" = "grok" ] \&\& [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then/'
+}
+mut_delegado_grok_bg_decide_por_target() {
+  sed 's/{ \[ "$HOST" != "grok" \] || \[ "$grok_bg_en_vuelo" = "1" \]; }/{ [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }/'
+}
 # 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
 # textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
 # siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un
@@ -834,8 +901,8 @@ mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cer
 # caso_g4_grok_delegado_bg_multilinea_permite. (c\\ de una linea, mismo
 # formato que mut_paused_sin_guardia_de_recibo; los \\[ del ERE doblados
 # porque el texto de c\ come un nivel de backslash.)
-mut_delegado_grok_bg_textual() { sed '/if \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
-  if printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
+mut_delegado_grok_bg_textual() { sed '/if \[ "$HOST" = "grok" \] && \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
+  if [ "$HOST" = "grok" ] \&\& printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
 # Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
 # !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
 # continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el

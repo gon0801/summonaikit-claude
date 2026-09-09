@@ -450,10 +450,18 @@ lab_payload_grok_autowake() {
 # $2 = reason, $3 = contenido crudo del array (default: un subagent en vuelo,
 # la forma medida del Stop que espera de verdad; para el array vacio alcanza
 # lab_payload_grok_stop, que ya lo trae).
+# r1 adversario (H3): el default ya no vive inline en la expansion ${3:-...}
+# — con llaves anidadas adentro del default, la segunda llave de cierre quedaba
+# LITERAL y el $3 EXPLICITO sala con una "}" espuria pegada ([1}] — documento
+# roto por la razon equivocada, medido). El default pasa por una variable en
+# simples: byte-identico para los casos existentes, limpio para el explicito.
 lab_payload_grok_stop_bg() {
+  local bg="${3:-}"
+  if [ -z "$bg" ]; then
+    bg='{"id":"01a0c0de-0040-7abc-8def-222222222240","type":"subagent","status":"running","description":"Implementar el cambio","agentType":"implementer"}'
+  fi
   printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"%s","stopHookActive":false,"lastAssistantMessage":"%s","promptId":"p-gk-bg","backgroundTasks":[%s],"sessionCrons":[]}' \
-    "${2:-end_turn}" "$1" \
-    "${3:-{\"id\":\"01a0c0de-0040-7abc-8def-222222222240\",\"type\":\"subagent\",\"status\":\"running\",\"description\":\"Implementar el cambio\",\"agentType\":\"implementer\"}}"
+    "${2:-end_turn}" "$1" "$bg"
 }
 
 # Task 5.4: un Stop realista de zcode trae SOLO hookEventName (camel), no

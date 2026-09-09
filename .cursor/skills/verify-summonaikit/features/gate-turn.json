@@ -22,6 +22,18 @@
     {
       "id": "gate-stop-no-receipt",
       "required_assertions": ["stop_rejected", "not_scenario_01_02"]
+    },
+    {
+      "id": "gate-grok-bg-doc-roto",
+      "required_assertions": ["grok_doc_roto_bloquea", "grok_bg_valido_permite"]
+    },
+    {
+      "id": "gate-advzona-teardown-seguro",
+      "required_assertions": ["teardown_fail_open", "teardown_diagnostico", "centinela_ajeno_intacto"]
+    },
+    {
+      "id": "gate-advzona-unknown-limpia",
+      "required_assertions": ["unknown_exit0_estado_limpio", "unknown_limpia_zona", "scratch_ajeno_intacto"]
     }
   ]
 }

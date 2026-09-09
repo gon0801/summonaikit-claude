@@ -21,6 +21,36 @@ SRC_SHA="$(fm_sha "$HOOK_SRC")"
 
 fm_unknown() { fm_assert "$1" "$2" unknown "$3" "$4"; }
 
+# Identidad de CONTENIDO y ARBOL de un directorio (20fix H1): toda entrada
+# del arbol — archivos con cksum, directorios (incluidos los vacios) y
+# symlinks con su destino — listada y ordenada (portable mac/linux). Comparar
+# el string completo detecta escrituras, borrados, reescrituras, backups
+# nuevos, archivos ajenos y directorios creados o borrados (un dir vacio no
+# es invisible) que un conteo de piezas o una lista de nombres no ven.
+# 20fix r5 (C4): la clasificacion NO sigue enlaces (primarias de find, no
+# `[ -f ]` que SIgue el enlace): reemplazar un archivo por un symlink a bytes
+# IDENTICOS conservaba el cksum y el swap pasaba inadvertido (medido). Ahora
+# la sustitucion cambia la linea `F <path> <cksum>` por `L <path> -> <destino>`
+# y rompe la identidad aunque los bytes sean los mismos.
+# r5 (adversario L1): el inodo entra en la linea F — un archivo reemplazado
+# por un HARDLINK a bytes identicos conserva el cksum y era invisible (la
+# sustitucion cambia el inodo y rompe la identidad; comparable porque el
+# snapshot se toma dos veces sobre el MISMO arbol).
+# LIMITES declarados: permisos y timestamps quedan fuera del snapshot; los
+# enlaces entran con su destino (readlink), no con el contenido apuntado.
+snapshot_tree() {
+  local tree="$1" f
+  find "$tree" -type f | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'F %s %s %s\n' "$f" "$(cksum < "$f")" "$(ls -i "$f" | awk '{print $1}')"
+  done
+  find "$tree" -type d | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'D %s\n' "$f"
+  done
+  find "$tree" -type l | LC_ALL=C sort | while IFS= read -r f; do
+    printf 'L %s -> %s\n' "$f" "$(readlink "$f")"
+  done
+}
+
 hook_path() {
   case "$1" in
     claude) printf '%s' "$VERIFY_DEST" ;;
@@ -438,6 +468,267 @@ if fm_only hosts-retirada; then
       fm_fail hosts-retirada neighbor_intact_after_retirada "intact" \
         "changed $n_before -> $n_after"
     fi
+  fi
+fi
+
+# 20.24: la retirada zcode respeta DRY_RUN — reporta y clasifica sin tocar
+# las piezas. 20fix H1 endurece el caso: se planta un agente DESCONOCIDO (sin
+# marca saikit_owned) para observar la clasificacion en AMBAS direcciones, un
+# archivo AJENO en el arbol, y se exige identidad de CONTENIDO y ARBOL del
+# arbol completo (find+cksum con dirs incluidos: config, agentes,
+# saikit-backups, vacios y ajenos) antes == despues.
+# La linea fm_action de abajo es la costura de los mutantes de escritura del
+# banco (tests/test_feature_map_hosts.sh): nada legitimo escribe entre el
+# dry-run y el snapshot de despues.
+if fm_only hosts-quitar-zcode-dry; then
+  plant_zcode_cfg
+  if ! has_jq; then
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+      "dry-run: --quitar-zcode no ejecuta la retirada" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+      "quitaria N entrada(s) 5.4" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_agente \
+      "AGENTE ZCODE nuestro — se quitaria" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_desconocido \
+      "DESCONOCIDO — no se quitaria" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_snapshot_igual \
+      "snapshot antes == despues" "jq ausente; zcode retirada no observada"
+    fm_unknown hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+      "piezas presentes" "jq ausente; zcode retirada no observada"
+  else
+    set +e
+    ins_out="$(run_install --host zcode --dest "$VERIFY_DEST" 2>&1)"
+    ins_rc=$?
+    set -e
+    user_cfg="$VERIFY_HOME/.zcode/cli/config.json"
+    zc_agents="$VERIFY_HOME/.zcode/agents"
+    zc_tree="$VERIFY_HOME/.zcode"
+    # AJENO: el snapshot debe probar que el dry-run ni lo toco.
+    printf 'AJENO-ZCODE-%s\n' "$$" > "$zc_tree/ajeno.txt"
+    # DESCONOCIDO: reviewer SIN marca saikit_owned — el clasificador debe
+    # decir de este rol "no se quitaria" y de los otros "se quitaria".
+    printf -- '---\nnombre: revisor ajeno\n---\ncuerpo ajeno sin marca saikit_owned\n' \
+      > "$zc_agents/reviewer.md"
+    # backups pre-creados: entran al snapshot aunque vayan vacios.
+    mkdir -p "$(dirname "$user_cfg")/saikit-backups"
+    zc_antes="$(snapshot_tree "$zc_tree")"
+    set +e
+    out="$(run_install --host zcode --quitar-zcode --dry-run 2>&1)"
+    rc=$?
+    set -e
+    fm_action hosts-quitar-zcode-dry act-quitar-zcode-dry "$rc" "$out" \
+      bash "$INSTALLER" --host zcode --quitar-zcode --dry-run
+    # assert:quitar_zcode_dry_reporta
+    if [ "$rc" -eq 0 ] \
+      && printf '%s' "$out" | grep -q 'dry-run: --quitar-zcode no ejecuta la retirada'; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+        "dry-run: --quitar-zcode no ejecuta la retirada" "reporta sin ejecutar (install rc=$ins_rc)"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_reporta \
+        "dry-run: --quitar-zcode no ejecuta la retirada" "rc=$rc $out"
+    fi
+    # assert:quitar_zcode_dry_reporta_end
+    # assert:quitar_zcode_dry_clasifica
+    # Ancla por pieza: `quitaria N entrada(s) saikit-harness-id 5.4` con N>=1
+    # es la linea del user-config (la N real cuenta las 4 fases 5.4).
+    if printf '%s' "$out" \
+      | grep -Eq 'quitaria [1-9][0-9]* entrada\(s\) saikit-harness-id 5[.]4'; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+        "quitaria N entrada(s) 5.4" "linea de config 5.4 clasificada"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_clasifica \
+        "quitaria N entrada(s) 5.4" "$out"
+    fi
+    # assert:quitar_zcode_dry_clasifica_end
+    # assert:quitar_zcode_dry_clasifica_agente
+    # Ancla con guion largo: `— se quitaria` NO es subcadena de `— no se
+    # quitaria` (la subcadena pelada 'se quitaria' si lo era — hueco 20fix H1).
+    zc_nuestras=0
+    zc_vistas=''
+    for rol in implementer verifier adversary; do
+      if printf '%s' "$out" | grep -F -q "AGENTE ZCODE nuestro: $rol — se quitaria"; then
+        zc_nuestras=$((zc_nuestras + 1))
+        zc_vistas="$zc_vistas $rol"
+      fi
+    done
+    if [ "$zc_nuestras" -eq 3 ]; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_agente \
+        "AGENTE ZCODE nuestro — se quitaria" "por pieza:$zc_vistas"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_agente \
+        "AGENTE ZCODE nuestro — se quitaria" "vistas$zc_vistas ($zc_nuestras/3)"
+    fi
+    # assert:quitar_zcode_dry_clasifica_agente_end
+    # assert:quitar_zcode_dry_clasifica_desconocido
+    if printf '%s' "$out" \
+      | grep -F -q "AGENTE ZCODE DESCONOCIDO: reviewer — no se quitaria"; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "reviewer ajeno clasificado no-se-quita"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "$out"
+    fi
+    # assert:quitar_zcode_dry_clasifica_desconocido_end
+    zc_despues="$(snapshot_tree "$zc_tree")"
+    # assert:quitar_zcode_dry_snapshot_igual
+    if [ "$zc_antes" = "$zc_despues" ]; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_snapshot_igual \
+        "snapshot antes == despues" "identidad de contenido y arbol .zcode (find+cksum, dirs incluidos)"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_snapshot_igual \
+        "snapshot antes == despues" "el arbol .zcode cambio tras el dry-run"
+    fi
+    # assert:quitar_zcode_dry_snapshot_igual_end
+    entradas_despues="$(jq '[(.hooks.events // {})[] | .[] | (.hooks // [])[]
+                 | select(((.command // "") | test("saikit-harness-id 5[.]4")))] | length' \
+              "$user_cfg" 2>/dev/null || printf '?')"
+    agentes_despues=''
+    for r in implementer verifier reviewer adversary; do
+      if [ -f "$zc_agents/$r.md" ]; then
+        agentes_despues="$agentes_despues $r"
+      fi
+    done
+    # assert:quitar_zcode_dry_preserva
+    if [ "$entradas_despues" != "?" ] && [ "$entradas_despues" -gt 0 ] \
+      && [ "${#agentes_despues}" -gt 0 ] \
+      && printf '%s' "$agentes_despues" | grep -q implementer \
+      && printf '%s' "$agentes_despues" | grep -q verifier \
+      && printf '%s' "$agentes_despues" | grep -q reviewer \
+      && printf '%s' "$agentes_despues" | grep -q adversary; then
+      fm_pass hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+        "piezas presentes" "entradas 5.4=$entradas_despues agentes=[$agentes_despues ]"
+    else
+      fm_fail hosts-quitar-zcode-dry quitar_zcode_dry_preserva \
+        "piezas presentes" \
+        "entradas=$entradas_despues agentes=[$agentes_despues ]"
+    fi
+    # assert:quitar_zcode_dry_preserva_end
+  fi
+fi
+
+# 20.24: la retirada grok respeta DRY_RUN — reporta y clasifica JSON/hook/
+# agentes sin archivar ni borrar nada. 20fix H1 endurece el caso: exige los
+# CUATRO perfiles presentes (no "al menos uno"), clasificacion por pieza con
+# ancla de guion largo, un agente DESCONOCIDO para la direccion negativa, un
+# archivo AJENO y snapshot de contenido y arbol (find+cksum con dirs
+# incluidos) del arbol .grok completo (hook, json, agentes y sus dirs de
+# backups). La linea fm_action de abajo es
+# la costura de los mutantes de escritura del banco.
+if fm_only hosts-quitar-grok-dry; then
+  if ! has_jq; then
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_reporta \
+      "dry-run: --quitar-grok no ejecuta la retirada" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+      "JSON/HOOK nuestro — se quitaria" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_clasifica_agente \
+      "AGENTE GROK nuestro — se quitaria" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_clasifica_desconocido \
+      "DESCONOCIDO — no se quitaria" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_snapshot_igual \
+      "snapshot antes == despues" "jq ausente; grok retirada no observada"
+    fm_unknown hosts-quitar-grok-dry quitar_grok_dry_preserva \
+      "piezas presentes" "jq ausente; grok retirada no observada"
+  else
+    set +e
+    ins_out="$(run_install --host grok 2>&1)"
+    ins_rc=$?
+    set -e
+    gdest="$(hook_path grok)"
+    gjson="$(dirname "$gdest")/summonaikit.json"
+    gagents="$VERIFY_HOME/.grok/agents"
+    gtree="$VERIFY_HOME/.grok"
+    # AJENO + DESCONOCIDO (reviewer sin marca) + backups pre-creados: todo
+    # entra al snapshot y a la clasificacion en ambas direcciones.
+    printf 'AJENO-GROK-%s\n' "$$" > "$gtree/ajeno.txt"
+    printf -- '---\nnombre: revisor ajeno\n---\ncuerpo ajeno sin marca saikit_owned\n' \
+      > "$gagents/reviewer.md"
+    mkdir -p "$(dirname "$gdest")/saikit-backups" "$gagents/saikit-backups"
+    g_antes="$(snapshot_tree "$gtree")"
+    set +e
+    out="$(run_install --host grok --quitar-grok --dry-run 2>&1)"
+    rc=$?
+    set -e
+    fm_action hosts-quitar-grok-dry act-quitar-grok-dry "$rc" "$out" \
+      bash "$INSTALLER" --host grok --quitar-grok --dry-run
+    # assert:quitar_grok_dry_reporta
+    if [ "$rc" -eq 0 ] \
+      && printf '%s' "$out" | grep -q 'dry-run: --quitar-grok no ejecuta la retirada'; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_reporta \
+        "dry-run: --quitar-grok no ejecuta la retirada" "reporta sin ejecutar (install rc=$ins_rc)"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_reporta \
+        "dry-run: --quitar-grok no ejecuta la retirada" "rc=$rc $out"
+    fi
+    # assert:quitar_grok_dry_reporta_end
+    # assert:quitar_grok_dry_clasifica
+    # Ancla por pieza con guion largo: `— se quitaria` NO es subcadena de
+    # `— no se quitaria`; la subcadena pelada casaba ambas (hueco 20fix H1).
+    if printf '%s' "$out" | grep -F -q 'JSON DE GROK nuestro — se quitaria' \
+      && printf '%s' "$out" | grep -F -q 'HOOK DE GROK nuestro — se quitaria'; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+        "JSON/HOOK nuestro — se quitaria" "JSON y HOOK clasificados por pieza"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_clasifica \
+        "JSON/HOOK nuestro — se quitaria" "$out"
+    fi
+    # assert:quitar_grok_dry_clasifica_end
+    # assert:quitar_grok_dry_clasifica_agente
+    gk_nuestras=0
+    gk_vistas=''
+    for rol in implementer verifier adversary; do
+      if printf '%s' "$out" | grep -F -q "AGENTE GROK nuestro: $rol — se quitaria"; then
+        gk_nuestras=$((gk_nuestras + 1))
+        gk_vistas="$gk_vistas $rol"
+      fi
+    done
+    if [ "$gk_nuestras" -eq 3 ]; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_clasifica_agente \
+        "AGENTE GROK nuestro — se quitaria" "por pieza:$gk_vistas"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_clasifica_agente \
+        "AGENTE GROK nuestro — se quitaria" "vistas$gk_vistas ($gk_nuestras/3)"
+    fi
+    # assert:quitar_grok_dry_clasifica_agente_end
+    # assert:quitar_grok_dry_clasifica_desconocido
+    if printf '%s' "$out" \
+      | grep -F -q "AGENTE GROK DESCONOCIDO: reviewer — no se quitaria"; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "reviewer ajeno clasificado no-se-quita"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "$out"
+    fi
+    # assert:quitar_grok_dry_clasifica_desconocido_end
+    g_despues="$(snapshot_tree "$gtree")"
+    # assert:quitar_grok_dry_snapshot_igual
+    if [ "$g_antes" = "$g_despues" ]; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_snapshot_igual \
+        "snapshot antes == despues" "identidad de contenido y arbol .grok (find+cksum, dirs incluidos)"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_snapshot_igual \
+        "snapshot antes == despues" "el arbol .grok cambio tras el dry-run"
+    fi
+    # assert:quitar_grok_dry_snapshot_igual_end
+    agentes_despues=''
+    for r in implementer verifier reviewer adversary; do
+      if [ -f "$gagents/$r.md" ]; then
+        agentes_despues="$agentes_despues $r"
+      fi
+    done
+    # assert:quitar_grok_dry_preserva
+    if [ -f "$gdest" ] && [ -f "$gjson" ] \
+      && printf '%s' "$agentes_despues" | grep -q implementer \
+      && printf '%s' "$agentes_despues" | grep -q verifier \
+      && printf '%s' "$agentes_despues" | grep -q reviewer \
+      && printf '%s' "$agentes_despues" | grep -q adversary; then
+      fm_pass hosts-quitar-grok-dry quitar_grok_dry_preserva \
+        "piezas presentes" "hook+json presentes, 4 perfiles:[$agentes_despues ]"
+    else
+      fm_fail hosts-quitar-grok-dry quitar_grok_dry_preserva \
+        "piezas presentes" \
+        "hook=$([ -f "$gdest" ] && echo si || echo no) json=$([ -f "$gjson" ] && echo si || echo no) perfiles=[$agentes_despues ]"
+    fi
+    # assert:quitar_grok_dry_preserva_end
   fi
 fi
 

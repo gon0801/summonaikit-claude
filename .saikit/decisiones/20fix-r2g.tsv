@@ -1,0 +1,3 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-09T00:11:43Z|implementacion|Clasificar Deploy por jerarquia y reconocer rotulos equivalentes con o sin negritas|El cross-review demostro que un Deploy explicito anidado escapaba y que dos formas contratadas carecian de prueba discriminante|T48 y T51 rojos antes; T48-T51 verdes despues; cinco mutantes nuevos producen flip|ok
+2026-09-09T00:21:50Z|cross-review|Rectificar el conteo de mutantes y alinear comentarios con el corte jerarquico|La segunda ronda conto cuatro mutantes nuevos y dos reescritos; la cabecera aun describia solo bullets sin sangria|Claude y Kimi APPROVE; A1 A3 A6 confirmados; T1-T53 verdes|ok

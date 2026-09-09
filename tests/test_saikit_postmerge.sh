@@ -272,14 +272,18 @@ c_revert_emision() {
   _contiene "argv capturado por el doble de gh" "$(cat "$SAIKIT_GH_LOG")" "repo view"
 }
 
-c_hints_unknown() {
-  # 20.2: los hints de UNKNOWN ("vuelve a mirar con: ...") emiten el mismo
-  # comando re-ejecutable; misma prueba contra scripts 100644. Cubre los DOS
-  # hints (sin run aun y CI pendiente).
+# r1 (cross-review 20.x): un caso POR hint. El caso combinado reiniciaba
+# CASO_ROJO entre emisor y emisor (CASO_ROJO=0; sb_reset al arrancar la mitad
+# del pendiente), asi que el fallo del PRIMER hint quedaba tapado por el
+# segundo: un mutante que quitaba `bash ` SOLO del hint de sin run pasaba el
+# driver en verde (medido). Cada mitad es ahora su propia funcion/caso, y la
+# mutacion de emision se partio en dos INDEPENDIENTES (una por hint).
+c_hint_unknown_sin_run() {
   CASO_ROJO=0; sb_reset
   printf '[]' > "$SB/ghfix/runs.json"
   correr
   [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  _contiene "el hint corresponde a sin run" "$OUT" "sin run"
   cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
   [ -n "$cmd" ] || _mal "no se pudo extraer el hint de sin run"
   instalar_tools_100644 "$POST"
@@ -287,11 +291,14 @@ c_hints_unknown() {
   [ "$RC2" -eq 3 ] || _mal "la forma emitida (sin run) fallo con scripts 100644 (rc=$RC2): $OUT2"
   _contiene "re-consulta y sigue UNKNOWN" "$OUT2" "UNKNOWN:"
   _no_contiene "sin denegacion de ejecucion (sin run)" "$OUT2" "denied"
+}
 
+c_hint_unknown_pendiente() {
   CASO_ROJO=0; sb_reset
   printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
   correr
   [ "$RC" -eq 3 ] || _mal "rc esperaba 3 (pendiente), dio $RC: $OUT"
+  _contiene "el hint corresponde a pendiente" "$OUT" "pendiente"
   cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
   [ -n "$cmd" ] || _mal "no se pudo extraer el hint de pendiente"
   instalar_tools_100644 "$POST"
@@ -379,14 +386,21 @@ caso "revert_emite_forma_ejecutable_con_scripts_100644"
 }
 fin_caso "revert_emite_forma_ejecutable_con_scripts_100644"
 
-caso "hints_unknown_emiten_forma_ejecutable_con_scripts_100644"
+caso "hint_unknown_sin_run_emite_forma_ejecutable_con_scripts_100644"
 {
-  # 20.2: los hints de UNKNOWN ("vuelve a mirar con: ...") emiten el mismo
-  # comando re-ejecutable; misma prueba contra scripts 100644. Cubre los DOS
-  # hints (sin run aun y CI pendiente).
-  c_hints_unknown
+  # 20.2: el hint de UNKNOWN sin run aun ("vuelve a mirar en unos minutos
+  # con: ...") emite el mismo comando re-ejecutable; misma prueba contra
+  # scripts 100644. Un caso POR hint (r1): ver c_hint_unknown_sin_run.
+  c_hint_unknown_sin_run
 }
-fin_caso "hints_unknown_emiten_forma_ejecutable_con_scripts_100644"
+fin_caso "hint_unknown_sin_run_emite_forma_ejecutable_con_scripts_100644"
+
+caso "hint_unknown_pendiente_emite_forma_ejecutable_con_scripts_100644"
+{
+  # 20.2: idem para el hint de CI pendiente ("vuelve a mirar con: ...").
+  c_hint_unknown_pendiente
+}
+fin_caso "hint_unknown_pendiente_emite_forma_ejecutable_con_scripts_100644"
 
 caso "sin_trailer_no_ofrece_revert"
 {
@@ -783,7 +797,10 @@ esquema_roto_sin_redactar	s|"\$(redactar "\$SALUD")"|"$SALUD"|	c_token_esquema
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_color_tty
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_color_force
 emision_revert_sin_bash	s|bash tools/saikit-merge.sh --revert-de|tools/saikit-merge.sh --revert-de|	c_revert_emision
-emision_hints_sin_bash	s|con: bash tools/saikit-postmerge.sh|con: tools/saikit-postmerge.sh|g	c_hints_unknown
+emision_hint_sin_run_sin_bash	s|en unos minutos con: bash tools/saikit-postmerge.sh|en unos minutos con: tools/saikit-postmerge.sh|	c_hint_unknown_sin_run
+emision_hint_pendiente_sin_bash	s|Vuelve a mirar con: bash tools/saikit-postmerge.sh|Vuelve a mirar con: tools/saikit-postmerge.sh|	c_hint_unknown_pendiente
+hint_sin_run_mal_rotulado	s|sin run aun para|CI pendiente para|	c_hint_unknown_sin_run
+hint_pendiente_mal_rotulado	s|CI pendiente para \$MC|sin run aun para \$MC|	c_hint_unknown_pendiente
 MUTS
 
 if [ "$fail" -ne 0 ]; then

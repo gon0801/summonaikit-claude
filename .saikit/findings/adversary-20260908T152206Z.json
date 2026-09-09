@@ -1,0 +1,60 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "regla evidencia de tools/check-deploy-log.sh: regex de hora, captura del bullet Deploy (grep -m1, linea de continuacion, segundo bullet), alcance de la evidencia (.bak/marcador en cualquier parte del cuerpo), cordones CORTE/HORA_CONTROL, delimitacion cuerpo_de con fences y EOF",
+    "snapshot_tree del driver install-hosts.sh contra mutaciones de permisos, dirs vacios, symlink swap y mtime (codigo real del driver, fuente byte-identica)",
+    "clasificacion por pieza del driver install-hosts.sh contra literales de salida de tools/install-hook.sh (satisfaccion cruzada, conteo de roles)",
+    "secuencia H3 setup-lock-held corrida real aislada: inocuidad de --liberar-lock contra la copia, resolucion git del lock, margen de tiempo vs ventana de 8s del holder",
+    "baterias: tests/test_deploy_log.sh completo (verde), tests/test_feature_map_hosts.sh completo (verde, mutantes nuevos rojos), caso setup-lock-held aislado del driver setup-autopilot (verde)"
+  ],
+  "findings": [
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:150",
+      "claim": "La regla evidencia solo inspecciona el PRIMER bullet Deploy de la entrada (grep -m1), asi que una hora sin evidencia en un segundo bullet Deploy pasa en verde.",
+      "trigger": "Entrada >= 2026-09-08 con dos bullets Deploy (convencion real del log: un bullet por host — tres entradas historicas del propio docs/deploy-log.md tienen 2 bullets): primero sin hora, segundo con hora y sin .bak ni marcador.",
+      "evidence": "fixture j_dos_bullets.md con '- **Deploy claude:** YA AL DIA (no-op)' y '- **Deploy grok:** instalado 10:05' (sin evidencia): bash tools/check-deploy-log.sh --log j_dos_bullets.md -> '[deploy-log] OK: 2 entradas juzgadas...' exit=0. El propio log real tiene 3 entradas con 2 bullets Deploy (medido con awk sobre docs/deploy-log.md: 2026-08-28, 2026-08-27, 2026-08-26).",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:150",
+      "claim": "La hora debe vivir en la PRIMERA linea del bullet Deploy: una hora en linea de continuacion del mismo bullet escapa a la regla.",
+      "trigger": "Bullet envuelto en dos lineas: '- **Deploy:**\\n  instalado a las 10:05' (markdown natural al envolver), entrada >= 2026-09-08, sin .bak ni marcador.",
+      "evidence": "fixture c_hora_segunda_linea.md: bash tools/check-deploy-log.sh --log c_hora_segunda_linea.md -> '[deploy-log] OK: 2 entradas juzgadas...' exit=0. grep -m1 devuelve solo la linea que casa '- **Deploy**', sin la hora; baseline a_hour_no_evid.md (hora en la primera linea) si da FAIL exit=1.",
+      "confirmed": true
+    },
+    {
+      "severity": "medium",
+      "location": "tools/check-deploy-log.sh:152-153",
+      "claim": "La evidencia se grepea en TODO el cuerpo de la entrada sin anclarla al deploy: una NEGACION del backup o el marcador dentro de otra clave acreditan la hora.",
+      "trigger": "Entrada >= 2026-09-08 con hora en el bullet Deploy y ademas: (a) '- **Nota:** no quedo ningun .bak en el perfil.' o (b) el texto 'hora medida en vivo' dentro del bullet de Merge.",
+      "evidence": "fixture d_bak_negacion.md ('no quedo ningun .bak') -> OK exit=0; fixture e_marcador_clave_ajena.md (marcador en el bullet **Merge**) -> OK exit=0. El checker tampoco verifica que un .bak citado exista (nunca toca el filesystem): cualquier mencion, incluso contradictoria, acredita.",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": "tools/check-deploy-log.sh:151",
+      "claim": "La regex '[0-2][0-9]:[0-5][0-9]' exige dos digitos antes y despues de los dos puntos: horas de un digito (1:05) o minutos de un digito (10:5) no casan y la regla no dispara.",
+      "trigger": "Bullet '- **Deploy:** instalado (1:05 PDT)' o '(10:5 PDT)' en entrada >= 2026-09-08 sin evidencia.",
+      "evidence": "b_1dig_hora.md ('(1:05 PDT)') -> OK exit=0; m_min_1dig.md ('(10:5 PDT)') -> OK exit=0. Formato a.m./p.m. ('10:05 a.m.') SI casan y da FAIL (n_am_pm.md).",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": "tools/check-deploy-log.sh:71",
+      "claim": "La extraccion de encabezados (grep -n '^## ') es ingenua a bloques de codigo cercados: una linea '## <fecha>' pegada dentro de un fence re-delimita cuerpo_de y la hora del Deploy de la entrada real escapa sin que nada falle.",
+      "trigger": "Entrada 2026-09-08 cuyo cuerpo incluye un bloque ``` con una linea '## 2026-09-07 — PR #N' (salida pegada del historial), y el bullet Deploy con hora DESPUES del fence: la hora queda estructuralmente dentro de la entrada fake pre-cordon.",
+      "evidence": "fixture h3_fence_precontrol.md: bash tools/check-deploy-log.sh --log h3_fence_precontrol.md -> '[deploy-log] OK: 2 entradas juzgadas...' exit=0, con un '- **Deploy:** instalado 10:05' sin evidencia perteneciente visualmente a la entrada 2026-09-08. Contrived (el log real hoy tiene 0 fences) pero estructural: cuerpo_de (lineas 103-111) solo conoce headers.",
+      "confirmed": true
+    },
+    {
+      "severity": "low",
+      "location": ".cursor/skills/verify-summonaikit/scripts/drivers/install-hosts.sh:30",
+      "claim": "snapshot_tree promete 'identidad EXACTA del arbol' pero es identidad de CONTENIDO: cambios de solo permisos, dirs nuevos vacios y reescrituras con el mismo contenido son invisibles (antes == despues).",
+      "trigger": "Un dry-run que solo chmod-ea un archivo del arbol .zcode/.grok, o que crea un directorio vacio en saikit-backups, pasa quitar_*_dry_snapshot_igual en PASS.",
+      "evidence": "Codigo real del driver (copia byte-identica en scratch, fuente con sed '/^exit 0$/d'): MUT chmod-only: ESCAPES (snapshots equal); MUT new-empty-dir: ESCAPES (snapshots equal); MUT mtime-only: ESCAPES. Honest counter-evidence: el swap archivo->symlink SI se detecta (MUT file->symlink: detected), y las mutantes de escritura de la bateria (append/.bak/borrado) tambien caen.",
+      "confirmed": true
+    }
+  ]
+}

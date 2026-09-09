@@ -636,27 +636,35 @@ json_top_level_string() {
 # (contenido en la linea siguiente a "[") y contaba como trabajo en vuelo un
 # eco de la clave citado en prosa o una clave anidada en otro objeto.
 #
-# Decide "1" SOLO si TODO esto cierra: clave == want a depth 1 (PRIMERA
-# ocurrencia, misma regla que json_top_level_string), valor que ARRANCA en
-# "[", "]" pareado con contenido no-blanco adentro cuyo PRIMER token es un
-# iniciador de valor JSON (" { [ - digito t/f/n — la basura balanceada no
-# cuenta: un backslash-n LITERAL, una letra que no abre valor o un + fuera
-# de string invalidan), y documento estructuralmente sano: brackets
-# balanceados y tipados, strings cerrados, sin escapes colgados. Fuera del
-# root SOLO invalidan los corchetes (un segundo root o un closer sin
-# apertura) y los caracteres sueltos; la puntuacion colgante (",", ":") y
-# los strings fuera del root NO invalidan — quedan en la clase del
-# residual de abajo. Todo lo demas — ausente, null, string/numero/objeto,
-# array vacio ([] / [ ] / multilinea real), JSON truncado o roto — calla
-# (fail-closed: sin evidencia de trabajo en vuelo).
+# r1 (cross-review 20.x): la validacion paso de "balance + primer token" a
+# GRAMATICA COMPLETA del documento. Un backgroundTasks poblado solo habilita
+# la escotilla si TODO el documento es JSON valido: la maquina de estados del
+# awk (V=espera valor, K/K1=clave, KC=dospuntos, A=tras valor, S/SK=string,
+# L=literal, N*=subestados de numero) valida strings cerrados con escapes
+# sanos, numeros completos (signo, enteros sin cero a la izquierda, fraccion,
+# exponente), literales true/false/null COMPLETOS, separadores correctos (coma
+# colgante invalida, valor sin clave, clave sin comillas) y NADA tras el
+# cierre del root. Cierra los residuales que la vuelta anterior declaraba:
+# [nul], [1,], valores rotos en OTRAS claves del documento y basura tras el
+# root (los cuatro medidos en rojo contra el lector viejo) ya no cuentan como
+# trabajo en vuelo — caen al gate normal (fail-closed).
+#
+# Decide "1" SOLO si TODO esto cierra: documento gramaticalmente valido (ver
+# arriba), clave == want a depth 1 (PRIMERA ocurrencia, misma regla que
+# json_top_level_string), valor que es un array "[...]" pareado con al menos
+# un elemento adentro. Todo lo demas — ausente, null, string/numero/objeto,
+# array vacio ([] / [ ] / multilinea real), JSON truncado o roto EN CUALQUIER
+# parte — calla (fail-closed: sin evidencia de trabajo en vuelo).
 # Dependencias: NINGUNA nueva: awk ya es dependencia dura del hook
 # (json_top_level_string, json_escape, task_hash).
 #
-# Residual declarado: la validacion es de BALANCE mas el PRIMER token del
-# array, no de gramatica completa — basura DESPUES de un inicio valido
-# dentro del array (p.ej. [nul] o [1,]), la puntuacion colgante o los
-# strings fuera del root, y un payload roto EN OTRA parte cuya porcion del
-# array esta bien formada y poblada siguen contando como en vuelo.
+# r3 (cross-review hosts Codex/Grok, PR #273): la gramatica de ESCAPES es
+# estricta — tras "\" solo se admiten " \ / b f n r t o "u" seguido de
+# EXACTAMENTE 4 hexadecimales, y los caracteres de control crudos (< 0x20)
+# dentro de strings invalidan. Antes cualquiera de esas formas dejaba pasar un
+# documento roto como trabajo en vuelo (medido en rojo: "\q", "\u12G4", tab
+# crudo). Con esto el residual declarado de la r1 sobre escapes QUEDA CERRADO:
+# la validacion de strings es de gramatica completa.
 #
 # PERFORMANCE (hallazgo MEDIA del adversario, PR 20.4, adjudicado): el
 # escaneo es cuadratico SOLO en el awk BSD de darwin (en el CI ubuntu es
@@ -671,84 +679,209 @@ json_top_level_string() {
 # con BOM UTF-8 + backgroundTasks poblado invalida el documento y BLOQUEA
 # la escotilla (regresion vs master en direccion deny/fail-closed). BOM
 # nunca fue medido en los dumps grok; cubierto por el presupuesto 18.27.
+#
+# r4 (review r2 del PR #273, hallazgo P1): la IDENTIDAD de la clave paso de
+# textual a semantica. El awk r3 validaba los escapes de la clave pero los
+# DESCARTABA al acumular key_buf, asi que claves DISTINTAS escritas con
+# escapes ("back\ngroundTasks", "background\u0000Tasks", "backgroundTasks\t")
+# colapsaban sobre backgroundTasks y habilitaban la escotilla DELEGATED sin
+# trabajo en vuelo (las tres medidas en rojo). Ahora los escapes validos se
+# decodifican al construir la clave: todo code point fuera del ASCII
+# imprimible [0x20,0x7E] entra como el byte marcador noascii (sprintf("%c",
+# 255)), que jamas puede aparecer en un want ASCII — una clave DISTINTA con
+# escapes ya no colisiona. Contracara: una grafia escapada EQUIVALENTE de la
+# clave real ("back\u0067roundTasks") SI cuenta; para que esa llegue al
+# parser, el pre-filter manda al awk cualquier documento con backslash.
+# Coste: los Stop GROK con backslash pagan la segunda pasada del awk (payloads
+# reales ~1KB ~= 15ms); el caller acota esta funcion a ese host porque el coste
+# cuadratico del awk BSD puede exceder el timeout con payloads grandes.
+# documentos grandes, ver PERFORMANCE de arriba).
 json_top_level_array_poblado() {
   field="$1"
   case "$INPUT" in
     *"\"$field\""*) ;;
+    *\\*) ;;   # r4: grafía escapada equivalente de la clave (p.ej. \u0067) también va al parser
     *) return 0 ;;
   esac
   printf '%s' "$INPUT" | awk -v want="$field" '
+    function inval() { if (en_array && length(pila) >= base) gram_arr = 0; gram_doc = 0 }
+    function cerrar(cc,  abre) {
+      abre = substr(pila, length(pila), 1)
+      if (pila == "" || (cc == "]" && abre != "[") || (cc == "}" && abre != "{")) { inval(); return }
+      if (en_array) {
+        if (length(pila) > base) contenido = 1
+        if (cc == "]" && length(pila) == base) { en_array = 0; cerro = 1 }
+      }
+      pila = substr(pila, 1, length(pila) - 1)
+      st = "A"
+    }
+    # r4: decodifica los 4 hex de un "\uXXXX" ya validado por la gramatica. Solo
+    # el ASCII imprimible entra tal cual; todo lo demas (NUL, controles, DEL,
+    # >=0x80 incluidas mitades de surrogate) entra como noascii, que jamas puede
+    # igualar a un want ASCII imprimible.
+    function udec(h,  j, lc, d, cp) {
+      cp = 0; lc = tolower(h)
+      for (j = 1; j <= 4; j++) { d = index("0123456789abcdef", substr(lc, j, 1)); cp = cp * 16 + d - 1 }
+      return (cp >= 32 && cp <= 126) ? sprintf("%c", cp) : noascii
+    }
     { buf = buf $0 "\n" }
     END {
       n = length(buf)
-      ins = 0; esc = 0; ini = 0
-      pila = ""; raiz = 0
-      candidata = 0; vista = 0; espera_valor = 0
-      en_array = 0; base = 0; contenido = 0; cerro = 0; ini_elem = 0
-      valido = 1
+      ins = 0; esc = 0; uesc = 0; uhex = ""
+      pila = ""; st = "V"
+      key_buf = ""; candidata = 0; pend = 0; vista = 0
+      en_array = 0; base = 0; contenido = 0; cerro = 0
+      gram_arr = 1; gram_doc = 1
+      lit = ""
+      # El escape octal es parte del lenguaje awk y evita el comportamiento
+      # indefinido de %c cuando 255 no representa un caracter en el locale.
+      # Si un awk hostil no conserva exactamente un control no imprimible,
+      # no se compara ninguna clave: ausencia de salida = fail closed.
+      noascii = "\034"
+      if (length(noascii) != 1 || noascii ~ /^[ -~]$/) exit
       for (i = 1; i <= n; i++) {
         c = substr(buf, i, 1)
+        rep = 1
+        while (rep) {
+          rep = 0
         if (ins) {
-          if (esc)            { esc = 0 }
-          else if (c == "\\") { esc = 1 }
-          else if (c == "\"") {
+          if (uesc > 0) {
+            if ((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F")) {
+              uesc--; uhex = uhex c
+              if (uesc == 0 && st == "SK") key_buf = key_buf udec(uhex)
+            }
+            else inval()   # r3-uhex: "\u" exige EXACTAMENTE 4 hex
+            continue
+          }
+          if (esc) {
+            esc = 0
+            if (c == "u") { uesc = 4; uhex = ""; continue }
+            if (c == "\"" || c == "\\" || c == "/") { if (st == "SK") key_buf = key_buf c; continue }
+            if (c == "b" || c == "f" || c == "n" || c == "r" || c == "t") { if (st == "SK") key_buf = key_buf noascii; continue }
+            inval()   # r3-escape: tras "\" JSON solo admite " \ / b f n r t u
+            continue
+          }
+          if (c == "\\") { esc = 1; continue }
+          if (c == "\"") {
             ins = 0
-            candidata = (length(pila) == 1 && substr(buf, ini, i - ini) == want)
+            if (st == "SK") { st = "KC"; candidata = (length(pila) == 1 && key_buf == want) }
+            else            { st = "A" }
+            continue
           }
+          if (c < " ") { inval(); continue }   # r3-control: char de control crudo prohibido en strings
+          if (st == "SK") { key_buf = key_buf c }
           continue
         }
-        if (c == "\"") {
-          if (en_array)     { contenido = 1; ini_elem = 0 }
-          if (espera_valor) { espera_valor = 0 }
-          ins = 1; ini = i + 1
-          continue
-        }
-        if (c == "{" || c == "[") {
-          if (en_array) { contenido = 1; ini_elem = 0 }
-          if (length(pila) == 0 && raiz) { valido = 0 }
-          if (espera_valor) {
-            espera_valor = 0
-            if (c == "[") { en_array = 1; base = length(pila) + 1; contenido = 0; ini_elem = 1 }
+          if (c == " " || c == "\t" || c == "\r" || c == "\n") {
+            # Solo los subestados de numero COMPLETO cierran en blanco (N0/NI
+            # entero, NF fraccion, NG exponente); los INCOMPLETOS (NS tras
+            # "-", ND tras ".", NE tras e/E, NX tras el signo del exponente) y
+            # un literal a medio escribir son JSON invalido: [1. ], [- ] y
+            # [1e ] no habilitan la escotilla (review r2, medido en rojo).
+            if (st == "N0" || st == "NI" || st == "NF" || st == "NG") st = "A"
+            else if (st == "NS" || st == "ND" || st == "NE" || st == "NX" || st == "L") inval()
+            continue
           }
-          pila = pila c; raiz = 1
-          continue
-        }
-        if (c == "}" || c == "]") {
-          abre = substr(pila, length(pila), 1)
-          if (pila == "" || (c == "}" && abre != "{") || (c == "]" && abre != "[")) {
-            valido = 0; continue
+          if (c == "\"" && (st == "V" || st == "A1" || st == "K" || st == "K1")) {
+            if (en_array && length(pila) >= base) contenido = 1
+            if (pend) pend = 0
+            ins = 1
+            key_buf = ""
+            st = (st == "K" || st == "K1") ? "SK" : "S"
+            continue
           }
-          pila = substr(pila, 1, length(pila) - 1)
-          if (en_array) {
-            if (c == "]" && length(pila) == base - 1) { en_array = 0; cerro = 1 }
-            else                                      { contenido = 1 }
+          if (st == "A1") {
+            if (c == "]") { cerrar(c); continue }
+            st = "V"
           }
-          continue
-        }
-        if (c == ":") {
-          if (espera_valor) { espera_valor = 0 }
-          else if (candidata && length(pila) == 1 && !vista) { espera_valor = 1; vista = 1 }
-          candidata = 0
-          continue
-        }
-        if (c == ",") {
-          if (en_array && ini_elem) { valido = 0 }
-          espera_valor = 0; candidata = 0
-          continue
-        }
-        if (c == " " || c == "\t" || c == "\r" || c == "\n") { continue }
-        if (length(pila) == 0) { valido = 0 }
-        if (en_array) {
-          if (ini_elem) {
-            if (c == "-" || (c >= "0" && c <= "9") || c == "t" || c == "f" || c == "n") { ini_elem = 0; contenido = 1 }
-            else { valido = 0 }
+          if (st == "V") {
+            if (c == "{") { pila = pila c; st = "K1" }
+            else if (c == "[") {
+              pila = pila c; st = "A1"
+              if (pend) { en_array = 1; base = length(pila); contenido = 0; cerro = 0; pend = 0 }
+            }
+            else if (c == "-") { st = "NS"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c == "0") { st = "N0"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c >= "1" && c <= "9") { st = "NI"; if (en_array && length(pila) >= base) contenido = 1 }
+            else if (c == "t" || c == "f" || c == "n") { st = "L"; lit = c; if (en_array && length(pila) >= base) contenido = 1 }
+            else inval()
+            continue
           }
-          else { contenido = 1 }
+          if (st == "K1") {
+            if (c == "}") cerrar(c)
+            else inval()
+            continue
+          }
+          if (st == "K") { inval(); continue }
+          if (st == "KC") {
+            if (c == ":") {
+              if (candidata && !vista) { vista = 1; pend = 1 }
+              candidata = 0; st = "V"
+            } else inval()
+            continue
+          }
+          if (st == "A") {
+            if (c == ",") {
+              if (pila == "") { gram_doc = 0 }
+              else if (substr(pila, length(pila), 1) == "[") st = "V"
+              else st = "K"
+            }
+            else if (c == "]" || c == "}") cerrar(c)
+            else gram_doc = 0   # r1-trailing: basura tras el cierre del root o separador invalido tras valor
+            continue
+          }
+          if (st == "L") {
+            if (c < "a" || c > "z") { inval(); continue }
+            lit = lit c
+            if (lit == "true" || lit == "false" || lit == "null") st = "A"
+            else if (substr("true", 1, length(lit)) != lit && substr("false", 1, length(lit)) != lit && substr("null", 1, length(lit)) != lit) inval()
+            continue
+          }
+          if (st == "NS") {
+            if (c == "0") st = "N0"
+            else if (c >= "1" && c <= "9") st = "NI"
+            else inval()
+            continue
+          }
+          if (st == "N0" || st == "NI") {
+            if (c >= "0" && c <= "9") { if (st == "N0") inval() }
+            else if (c == ".") st = "ND"
+            else if (c == "e" || c == "E") st = "NE"
+            else { st = "A"; rep = 1 }
+            continue
+          }
+          if (st == "ND") {
+            if (c >= "0" && c <= "9") st = "NF"
+            else inval()
+            continue
+          }
+          if (st == "NF") {
+            if (c >= "0" && c <= "9") ;
+            else if (c == "e" || c == "E") st = "NE"
+            else if (c == ".") inval()
+            else { st = "A"; rep = 1 }
+            continue
+          }
+          if (st == "NE") {
+            if (c >= "0" && c <= "9") st = "NG"
+            else if (c == "+" || c == "-") st = "NX"
+            else inval()
+            continue
+          }
+          if (st == "NX") {
+            if (c >= "0" && c <= "9") st = "NG"
+            else inval()
+            continue
+          }
+          if (st == "NG") {
+            if (c >= "0" && c <= "9") ;
+            else if (c == ".") inval()
+            else { st = "A"; rep = 1 }
+            continue
+          }
         }
-        if (espera_valor) { espera_valor = 0 }
-        candidata = 0
       }
-      if (valido && pila == "" && !ins && !esc && cerro && contenido) { print "1" }
+      if (gram_arr && gram_doc && pila == "" && !ins && !esc && st == "A" && cerro && contenido) { print "1" }
     }'
 }
 
@@ -2465,6 +2598,30 @@ adv_zona_dentro() {
 # llaveado), jamas rm a traves de un enlace, y los padres se podan solo si
 # quedaron vacios (misma higiene que podar_dir_sesion; .saikit nunca se toca:
 # findings/ y veredictos/ viven ahi).
+# r1 (cross-review 20.x): "jamas rm a traves de un enlace" se cumple comprobando
+# CADA ancestro uno por uno ANTES de rm/rmdir — el chequeo de solo el dir de
+# sesion no veia un .saikit/scratch/adversary enlazado, y el rm -rf del dir de
+# sesion resolvia el enlace y borraba FUERA del proyecto (medido: un centinela
+# ajeno bajo el destino del enlace moria con el desarme). Si cualquier ancestro
+# es symlink, la limpieza se OMITE con diagnostico: el hook es fail-open y el
+# Stop NO se bloquea por una limpieza omitida — lo que queda es una zona
+# huerfana que su owner declara, nunca un borrado externo.
+# r1 adversario (H1, ALTA): los chequeos -L y el rm por PATH son check-then-act
+# — un ancestro swappeado a symlink EN LA VENTANA entre chequeo y borrado
+# re-resuelve el nombre y borra fuera (medido: toggler concurrente sobre
+# .saikit/scratch, 6/15 lotes con centinela ajeno muerto). El borrado ahora va
+# ANCLADO AL INODO: cd fisico (-P) al padre de la zona, verificacion canonica
+# del lugar DONDE SE ATERRIZO (pwd -P), y rm/rmdir RELATIVOS a ese cwd — el
+# cwd es una referencia por inodo, un swap posterior del nombre del ancestro
+# no lo mueve (verificado en darwin: rm relativo borra el contenido real y el
+# centinela bajo el enlace sobrevive; cd -P .. sube por el ".." del inodo).
+# La poda de padres sube igual (cd -P .. + rmdir relativo): rmdir sobre un
+# nombre que se volvio symlink falla solo (ENOTDIR), nunca lo sigue. La
+# verificacion puede abortar por un swap EN curso (pwd -P re-resuelve el
+# string y muestra el destino del enlace): direccion segura — omite y declara,
+# no borra. Forma elegida: rm -rf -- ./<llave> en vez de rm -rf . porque POSIX
+# prohibe remover "."/.." (BSD y GNU rm lo rechazan) y en vez de find -depth
+# porque no agrega dependencia (rm/rmdir ya son dependencia dura del hook).
 adv_limpiar_zona() {
   if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
   advzl_dir="$(adv_zona_dir)" || return 0
@@ -2472,9 +2629,59 @@ adv_limpiar_zona() {
     "$ADV_SCRATCH_PARENT"/?*) ;;
     *) return 0 ;;
   esac
-  if [ -L "$advzl_dir" ]; then return 0; fi
-  rm -rf "$advzl_dir" 2>/dev/null || true
-  rmdir "$ADV_SCRATCH_PARENT" "${ADV_SCRATCH_PARENT%/adversary}" 2>/dev/null || true
+  for advzl_anc in \
+    "${ADV_PROJECT_CANON}/.saikit" \
+    "${ADV_PROJECT_CANON}/.saikit/scratch" \
+    "$ADV_SCRATCH_PARENT" \
+    "$advzl_dir"; do
+    if [ -L "$advzl_anc" ]; then
+      printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — %s es symlink; borrar a traves de un enlace tocaba fuera del proyecto (fail-open: el Stop no se bloquea por esto)\n' "$advzl_anc" >&2
+      return 0
+    fi
+  done
+  # ANCLAJE (H1): todo el borrado vive en este subshell, con cwd fijado por
+  # inodo al padre de la zona. cd fallido = no hay padre que recorrer (la zona
+  # ya no existe o nunca existio): salida SILENTE, es el caso normal de un
+  # turno sin adversary y no puede ensuciar el stderr de cada Stop.
+  (
+    # Gancho de test (r3, hallazgo Grok): pausa opcional ENTRE los chequeos -L
+    # de ancestros y el cd del ancla, para exponer esa ventana en la regresion
+    # del ancla exacta. Default 0 = cero efecto; mismo patron y misma seguridad
+    # que la pausa de abajo (el env viene del runner del host, nunca del
+    # adversary).
+    advzl_pausa_pre="${SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG:-0}"
+    case "$advzl_pausa_pre" in ''|*[!0-9]*) advzl_pausa_pre=0 ;; esac
+    [ "$advzl_pausa_pre" -gt 0 ] && sleep "$advzl_pausa_pre" 2>/dev/null
+    cd -P "$ADV_SCRATCH_PARENT" 2>/dev/null || exit 0
+    advzl_aqui="$(pwd -P)"
+    # r3 (hallazgo Grok): EXACTITUD del ancla — el lugar aterrizado tiene que
+    # ser EXACTAMENTE el scratch del adversary construido bajo el canon, no
+    # cualquier subruta del proyecto: un scratch swappeado a un symlink INTERNO
+    # (p.ej. .saikit/findings) en la ventana chequeos->cd aterrizaba adentro
+    # del prefijo "<canon>/?*" y el rm relativo borraba <llave> ahi dentro
+    # (medido en rojo). Exacto contra exacto: ambos lados vienen de pwd -P.
+    if [ "$advzl_aqui" != "$ADV_SCRATCH_PARENT" ]; then
+      printf 'summonaikit-harness: adversary: limpieza de zona OMITIDA — el ancla (%s) no es exactamente el scratch del adversary (%s); un swap de ancestro redirigio el borrado (fail-open: el Stop no se bloquea por esto)\n' "$advzl_aqui" "$ADV_SCRATCH_PARENT" >&2
+      exit 0
+    fi
+    # Gancho de test (H1): pausa opcional ENTRE la verificacion del ancla y el
+    # borrado para exponer la ventana check->act en la regresion de la carrera
+    # (sin esto, la ventana es de ~un fork y la carrera del toggler no es
+    # reproducible). Default 0 = cero efecto. El env del hook lo hereda del
+    # runner DEL HOST, nunca del adversary (corre en otro proceso): no es
+    # superficie de ataque. Mismo patron que SAIKIT_MERGE_SOSTENER_SEG en tools/.
+    advzl_pausa="${SAIKIT_ADV_TEARDOWN_PAUSA_SEG:-0}"
+    case "$advzl_pausa" in ''|*[!0-9]*) advzl_pausa=0 ;; esac
+    [ "$advzl_pausa" -gt 0 ] && sleep "$advzl_pausa" 2>/dev/null
+    rm -rf -- "./$SESSION_KEY" 2>/dev/null || true
+    # Poda de padres, nivel por nivel, ANCLADA: cd -P .. resuelve el ".." del
+    # INODO (no el nombre del ancestro, que pudo swappearse); rmdir relativo
+    # solo poda si quedo vacio y jamas sigue un enlace (ENOTDIR).
+    advzl_padre="${ADV_SCRATCH_PARENT##*/}"
+    advzl_abuelo="${ADV_SCRATCH_PARENT%/adversary}"; advzl_abuelo="${advzl_abuelo##*/}"
+    if cd -P .. 2>/dev/null; then rmdir -- "$advzl_padre" 2>/dev/null || true; fi
+    if cd -P .. 2>/dev/null; then rmdir -- "$advzl_abuelo" 2>/dev/null || true; fi
+  )
   return 0
 }
 
@@ -3515,15 +3722,22 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # vuelo. Fail-closed AMPLIADO (r1): JSON estructuralmente roto (truncado,
   # brackets sin parear, string sin cerrar) tampoco habilita, y la basura
   # BALANCEADA dentro del array (token que no abre un valor JSON) ya no
-  # cuenta como poblacion; los residuales que quedan quedan declarados alla
-  # (balance + primer token, no gramatica completa).
+  # cuenta como poblacion. r1 (cross-review 20.x): la exigencia subio a
+  # GRAMATICA COMPLETA del documento — basura tras el cierre del root, coma
+  # colgante y valores rotos en OTRAS claves tampoco habilitan; los
+  # residuales que quedan (escapes/chars de control dentro de strings) quedan
+  # declarados alla.
   grok_bg_en_vuelo=0
-  if [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
+  # review r3 del PR #273: el parser completo es exclusivo del HOST Grok que
+  # se midio arriba. HOST es la identidad autoritativa (incluye la senal real
+  # GROK_HOOK_EVENT); TARGET puede faltar o divergir. Claude/Codex/dsh/zcode no
+  # consultan backgroundTasks para esta escotilla, preservando costo y timeout.
+  if [ "$HOST" = "grok" ] && [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then
     grok_bg_en_vuelo=1
   fi
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE" \
-     && { [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
+     && { [ "$HOST" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
     emit_allow
   fi
 
@@ -3586,8 +3800,24 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # cierre borra el log de la sesion una linea mas abajo, asi que un append
   # seria evidencia efimera que no hace lo que declara. El presupuesto agotado
   # (A4) tampoco loguea; el diagnostico vivible es el stderr.
+  # r1 (cross-review 20.x): esta salida terminal tambien destruye el estado de
+  # la sesion, asi que tambien se lleva la zona de pruebas de ESTA ejecucion —
+  # sin esto la salida unknown dejaba la zona viva tras un cierre que ya no
+  # tiene dueno (medido); el teardown es el seguro de adv_limpiar_zona (no
+  # atraviesa enlaces, omite con diagnostico antes que borrar afuera).
+  # Residual declarado (H2, adversario 20fix-r1, BAJA): el desarme de la
+  # salida unknown honesto destruye estado y zona de la sesion que nombra el
+  # session_id del payload, sin chequeo de owner — un Stop con session_id
+  # ajeno y ambos canales de texto ciegos borra el scratch de esa sesion
+  # (medido; el rm del estado ya existia en master, el delta r1 es la zona).
+  # Explotarlo exige forjar el payload de Stop, que en este kit solo produce
+  # el host; la zona es scratch efimero del adversary (findings/ no se toca).
+  # El chequeo de owner (p.ej. anotar session_id contra transcript_path del
+  # propio payload) cambia el contrato fail-open de esta ruta y queda como
+  # fila propia del ledger.
   if [ "$canal_payload_observed" -eq 0 ] && [ "$transcript_observed" -eq 0 ]; then
     printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
+    adv_limpiar_zona   # r1: la zona de pruebas se va con el estado (teardown seguro)
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
     podar_dir_sesion
     emit_allow

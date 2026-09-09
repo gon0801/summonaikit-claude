@@ -10,6 +10,25 @@
 #   omit_revert_text   — omite el comando PARA REVERTIR / --revert-de
 #   omit_redact        — omite la redaccion del secreto sintético
 #   inherit_transport  — no antepone los dobles; usa PATH heredado
+# 20fix H2 (costura: la linea fm_action de cada caso; control sano antes):
+#   hint_pendiente_sin_bash    — strip del prefijo bash del hint pendiente
+#   hint_sin_run_sin_bash      — strip del prefijo bash del hint sin-run
+#   clicolor_ansi_inyectado    — ANSI inyectado en la salida observada
+# 20fix r4 (cuarta revision del PR #273):
+#   hint_pendiente_sin_sha     — borra el SHA del hint pendiente (B5)
+#   hint_sin_run_sin_sha       — borra el SHA del hint sin-run (B5)
+#   clicolor_unset_retirado    — copia del TOOL sin `unset CLICOLOR_FORCE`
+#                                (B4: retira la proteccion; el ANSI-inyectado
+#                                solo prueba el detector)
+# 20fix r5 (quinta revision del PR #273):
+#   hint_pendiente_flag        — sufijo --flag-inexistente en el hint
+#                                pendiente (C3: contains es subcadena)
+#   hint_sin_run_flag          — sufijo --flag-inexistente en el hint sin-run
+#                                (C3, one-hint-per-case)
+#   clicolor_unset_retirado    — ahora con LAYOUT COMPLETO del tool (tools/ +
+#                                lib/) y control sano de la copia (C1: la
+#                                copia suelta moria rc=2 por dependencias
+#                                ausentes y ese fallo se acreditaba)
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -241,6 +260,179 @@ then
   out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
   # Sin dobles del caso, el transporte heredado (stub fail-closed) impide VERDE.
   assert_missing_or_fail saikit-postmerge tool_exit_0 '^exit 0$' "$rc"
+fi
+
+# ---------------------------------------------------------------------------
+# Mutantes 20fix H2: hints ejecutables y asercion sin-ANSI. La costura es la
+# linea fm_action de cada caso (el codigo inyectado corre despues de la
+# corrida y antes de la asercion objetivo). Control sano inmediato antes de
+# cada mutante.
+# ---------------------------------------------------------------------------
+control_sano_pm() {
+  # Control sano: el drive SIN mutar en verde antes de cada mutante.
+  rm -f "$SANDBOX/baseline-ok-saikit-postmerge"
+  fm_mut_require_baseline saikit-postmerge "$SKILL/scripts/drivers/saikit-postmerge.sh" drive saikit-postmerge
+}
+
+caso "mutante hint_pendiente_sin_bash: hint pendiente sin bash se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-pend-sinbash.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-pendiente act-hint-pend@  OUT="$(printf %s "$OUT" | sed '"'"'s|bash tools/saikit-postmerge.sh|tools/saikit-postmerge.sh|g'"'"')"; &@' \
+  "hint_pendiente_sin_bash"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_pendiente_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+caso "mutante hint_sin_run_sin_bash: hint sin-run sin bash se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-sinrun-sinbash.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-sin-run act-hint-sinrun@  OUT="$(printf %s "$OUT" | sed '"'"'s|bash tools/saikit-postmerge.sh|tools/saikit-postmerge.sh|g'"'"')"; &@' \
+  "hint_sin_run_sin_bash"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_sin_run_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+# 20fix B5: borrar el SHA del comando del hint deja un prefijo que no es un
+# comando re-ejecutable — la asercion exige la forma COMPLETA
+# (`--merge-commit $MC --rama $RAMA`), no el prefijo. Un mutante por hint.
+caso "mutante hint_pendiente_sin_sha: hint pendiente sin SHA se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-pend-sinsha.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-pendiente act-hint-pend@  OUT="$(printf %s "$OUT" | sed '"'"'s|--merge-commit [0-9a-f]*|--merge-commit|g'"'"')"; &@' \
+  "hint_pendiente_sin_sha"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_pendiente_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+caso "mutante hint_sin_run_sin_sha: hint sin-run sin SHA se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-sinrun-sinsha.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-sin-run act-hint-sinrun@  OUT="$(printf %s "$OUT" | sed '"'"'s|--merge-commit [0-9a-f]*|--merge-commit|g'"'"')"; &@' \
+  "hint_sin_run_sin_sha"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_sin_run_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+# 20fix r5 (C3): un comando CORRECTO seguido de un sufijo que el tool no
+# acepta (` --flag-inexistente`: de ejecutarlo de verdad, rc=2 de uso) pasa
+# el contains como subcadena (medido rc=0 contra el driver pre-r5). La
+# asercion exige IGUALDAD EXACTA de linea extraida — el sufijo rompe la
+# igualdad. Un mutante por hint (disciplina one-hint-per-case).
+caso "mutante hint_pendiente_flag: sufijo invalido en el hint pendiente se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-pend-flag.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-pendiente act-hint-pend@  OUT="$(printf %s "$OUT" | sed '"'"'s|--rama master$|--rama master --flag-inexistente|'"'"')"; &@' \
+  "hint_pendiente_flag"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_pendiente_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+caso "mutante hint_sin_run_flag: sufijo invalido en el hint sin-run se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-hint-sinrun-flag.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-hint-sin-run act-hint-sinrun@  OUT="$(printf %s "$OUT" | sed '"'"'s|--rama master$|--rama master --flag-inexistente|'"'"')"; &@' \
+  "hint_sin_run_flag"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge hint_sin_run_ejecutable \
+    'bash tools/saikit-postmerge.sh --merge-commit' "$rc"
+fi
+
+# 20fix B4: DOS mutantes de color, cada uno prueba una cosa distinta.
+# - clicolor_ansi_inyectado prueba el DETECTOR: ANSI pegado a la salida
+#   observada tras la corrida; sin_ansi_salida debe verlo.
+# - clicolor_unset_retirado prueba la PROTECCION del tool: una copia del tool
+#   SIN `unset CLICOLOR_FORCE` bajo CLICOLOR_FORCE=1 heredado colorea al
+#   doble de gh, el parser estricto muere y el veredicto degrada — el
+#   ANSI-inyectado no toca el tool y no detectaria esa retirada (medido:
+#   drive rc=1 con verde_con_clicolor_force en FAIL).
+caso "mutante clicolor_ansi_inyectado: ANSI en la salida se pone rojo"
+reset_art
+control_sano_pm
+mut="$SANDBOX/postmerge-ansi.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+  's@  fm_action postmerge-no-color act-color@  OUT="$(printf %s "$OUT" | sed "s/VERDE/$(printf "\\033")[1;34mVERDE$(printf "\\033")[0m/g")"; &@' \
+  "clicolor_ansi_inyectado"
+then
+  out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail saikit-postmerge sin_ansi_salida 'sin ESC\[|sin bytes' "$rc"
+fi
+
+# 20fix r5 (C1): el mutante anterior copiaba SOLO tools/saikit-postmerge.sh al
+# sandbox; el tool carga lib/ RELATIVO a su ruta (`$HERE/lib/veredicto_contract.sh`,
+# `$HERE/lib/redactar.sh`), asi que la copia sana Y la mutada morian rc=2 por
+# dependencias ausentes y ese fallo se acreditaba como mutante atrapado
+# (falso positivo: el drive daba rc=1 con verde_con_clicolor_force en FAIL por
+# la copia rota, igual que la sana — medido). Arreglo: LAYOUT COMPLETO
+# (tools/saikit-postmerge.sh + tools/lib/ tal como el tool los resuelve) y
+# CONTROL SANO DE LA COPIA: el drive con POST apuntando a la copia SIN mutar
+# debe dar PASS; si la copia sana falla, FAIL de la bateria — no credito.
+# Sobre acreditacion rc=2: assert_missing_or_fail (tests/lib/feature_map_mut.sh)
+# NO acredita un drive rc=2 de uso — exige rc=1 exacto, summary FAIL/exit 1 y
+# la asercion OBJETIVO nombrada en FAIL; una muerte de infra (runtime.sh /
+# driver_exit) se rechaza explicitamente ahi. El control sano de la copia
+# cubre el caso que ese guard no puede ver: la muerte rc=2 del TOOL invocado
+# (el driver si carga y produce pasos).
+caso "mutante clicolor_unset_retirado: tool sin unset CLICOLOR_FORCE se pone rojo"
+reset_art
+control_sano_pm
+clicolor_root="$SANDBOX/clicolor-root"
+rm -rf "$clicolor_root"
+mkdir -p "$clicolor_root/tools"
+cp "$repo/tools/saikit-postmerge.sh" "$clicolor_root/tools/saikit-postmerge.sh"
+cp -R "$repo/tools/lib" "$clicolor_root/tools/lib"
+chmod +x "$clicolor_root/tools/saikit-postmerge.sh"
+post_copia_sana="$clicolor_root/tools/saikit-postmerge.sh"
+# CONTROL SANO DE LA COPIA: layout copiado, tool SIN mutar => PASS.
+mut_sana="$SANDBOX/postmerge-clicolor-copia-sana.sh"
+if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut_sana" \
+  "s|POST=\"\$VERIFY_REPO/tools/saikit-postmerge.sh\"|POST=\"$post_copia_sana\"|" \
+  "clicolor_copia_sana"
+then
+  out="$(ctrl_drv "$mut_sana" drive saikit-postmerge 2>&1)" && rc_sana=0 || rc_sana=$?
+  if [ "$rc_sana" -ne 0 ]; then
+    malo "clicolor_unset_retirado: la copia SANA del layout fallo (rc=$rc_sana) — el layout copiado no resuelve las dependencias del tool y el mutante seria vacuo: $out"
+  else
+    # Mutante: SOLO la linea `unset CLICOLOR_FORCE` retirada de la COPIA.
+    post_sin_unset="$clicolor_root/tools/saikit-postmerge-sin-unset.sh"
+    sed '/^unset CLICOLOR_FORCE$/d' "$post_copia_sana" > "$post_sin_unset"
+    if cmp -s "$post_copia_sana" "$post_sin_unset"; then
+      malo "clicolor_unset_retirado: el tool ya no tiene la linea unset CLICOLOR_FORCE — el sed quedo obsoleto"
+    else
+      chmod +x "$post_sin_unset"
+      mut="$SANDBOX/postmerge-unset-retirado.sh"
+      if sed_must_change "$SANDBOX/postmerge.src.sh" "$mut" \
+        "s|POST=\"\$VERIFY_REPO/tools/saikit-postmerge.sh\"|POST=\"$post_sin_unset\"|" \
+        "clicolor_unset_retirado"
+      then
+        out="$(ctrl_drv "$mut" drive saikit-postmerge 2>&1)" && rc=0 || rc=$?
+        assert_missing_or_fail saikit-postmerge verde_con_clicolor_force \
+          'VERDE|exit|CLICOLOR' "$rc"
+      fi
+    fi
+  fi
 fi
 
 if [ "$fail" -ne 0 ]; then

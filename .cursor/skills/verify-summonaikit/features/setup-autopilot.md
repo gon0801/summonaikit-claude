@@ -13,6 +13,7 @@ lock. A missing CI offer is a separate prompt, never question 6/5.
 - `setup-defaults` writes the safe defaults when stdin is not a terminal.
 - `setup-pipe-not-pty` treats a pipe as non-interactive (piped text is not a PTY).
 - `setup-lock` reports a stale lock and refuses to write.
+- `setup-lock-held` reports a LIVE held lock (exit 3), prints the recovery hint in executable form `bash tools/saikit-setup-autopilot.sh --liberar-lock`, and executes the EXTRACTED hint command against a COPY of the fixture: the command is pulled from the observed hint line, must match the full-line form exactly (a hint carrying an unknown extra flag fails the assertion — it is a substring, not the command), and the copy run resolves the hint's relative tool path to the real tool (exit 0, the copy's lock is released, the original stays held).
 - `setup-with-ci` skips the CI offer when workflows already exist.
 - `setup-without-ci` warns that the autopilot will not merge, without calling that warning 6/5.
 
@@ -37,6 +38,7 @@ Preconditions:
 - Case `setup-defaults`: action Run with no answers and no TTY; command `control-summonaikit drive setup-autopilot`; observable `merge=false` and `merge_despliega=unknown`.
 - Case `setup-pipe-not-pty`: action Pipe answers into the assistant; command `control-summonaikit drive setup-autopilot`; observable defaults (pipe is not a PTY).
 - Case `setup-lock`: action Run against a stale lock; command `control-summonaikit drive setup-autopilot`; observable exit 3 and no config write.
+- Case `setup-lock-held`: action Hold the lock with the tool's own SOSTENER test hook, run a second setup, then execute the hint from a COPY of the fixture repo; command `control-summonaikit drive setup-autopilot`; observable exit `3`, stderr carries the exact hint line `bash tools/saikit-setup-autopilot.sh --liberar-lock`, and the copy's lock is released while the original stays held (the run uses the extracted argv, never a handwritten one).
 - Case `setup-with-ci`: action Run flags on a repo that already has workflows; command `control-summonaikit drive setup-autopilot`; observable `ya hay workflows` / no offer.
 - Case `setup-without-ci`: action Run flags on a repo with no workflows; command `control-summonaikit drive setup-autopilot`; observable the no-CI warning is not labeled 6/5.
 
@@ -46,3 +48,9 @@ Preconditions:
 - Missing PTY is `unknown` for interactive cases only; flags and defaults stay observable.
 - The CI offer is not a sixth setup question and does not enter the JSON.
 - The lock lives in `git-common-dir`; do not point this drive at a live profile.
+- Recorded actions must carry the REAL argv (20fix H3): the tool has no
+  `--lock-held` flag, and the holder prep and the second run are registered
+  separately (`--pr 11` with `SAIKIT_SETUP_SOSTENER_SEG=60`, then the real
+  `--pr 12` invocation). If the holder never takes the lock, the second run
+  DID NOT happen: it is reported as absent with the true reason, never as an
+  action with an invented argv or empty output.

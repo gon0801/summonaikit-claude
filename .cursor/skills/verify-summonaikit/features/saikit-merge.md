@@ -13,6 +13,18 @@ tool uses and records argv. The mode is always `simulated`: no live GitHub.
   `merge-head-cambiado` reject and never call merge.
 - `revert-ok` merges an exact inverse of the fixture tip that carries the
   trailer; `revert-sin-trailer` and `revert-no-punta` refuse anything else.
+- `merge-lock-contencion`, `merge-lock-propio`, `merge-lock-worktrees` and
+  `merge-lock-recuperacion` drive the integration lock
+  (`<git-common-dir>/saikit-merge.lock`, 20.5): a second `--confirmado` while
+  another holds the lock exits 3 reporting the owner and the
+  `--liberar-lock` hint without merging; the owner releases only its own lock
+  on exit (an alien lock survives a rejected run); the lock is shared by every
+  worktree of the clone; and `--liberar-lock` is the only explicit recovery —
+  it prints the lock content, removes it, and is a green no-op without lock.
+  Anchored by the product cases `c_lock_dos_procesos`, `c_lock_exclusion`,
+  `c_lock_libera_propio`, `c_lock_dos_worktrees`, `c_lock_caida`,
+  `c_lock_reintento_revalida` and `c_lock_entre_clones`
+  (tests/test_saikit_merge.sh).
 
 ## How to get to it (user POV)
 
@@ -43,6 +55,10 @@ Preconditions:
 - Case `revert-ok`: action Confirm `--revert-de` of the fixture tip with trailer; command `control-summonaikit drive saikit-merge`; observable `MERGE-OK:` and `--match-head-commit` of the revert head.
 - Case `revert-sin-trailer`: action Confirm `--revert-de` of a tip without trailer; command `control-summonaikit drive saikit-merge`; observable `NO-MERGE: sin trailer` and no merge call.
 - Case `revert-no-punta`: action Confirm `--revert-de` of a commit that is no longer the tip; command `control-summonaikit drive saikit-merge`; observable `NO-MERGE: no es la punta` and no merge call.
+- Case `merge-lock-contencion`: action Hold the lock with a confirming run (`SAIKIT_MERGE_SOSTENER_SEG` test seam) and confirm from a second process; command `control-summonaikit drive saikit-merge`; observable exit 3 with `LOCK de integracion ocupado`, the `--liberar-lock` hint, and no `gh pr merge` from the rejected run.
+- Case `merge-lock-propio`: action Let the owner finish while a rejected contender exits 3; command `control-summonaikit drive saikit-merge`; observable the alien lock still present after the rejected run and gone once the owner exits.
+- Case `merge-lock-worktrees`: action Confirm from a second worktree of the same clone while the owner holds the lock; command `control-summonaikit drive saikit-merge`; observable exit 3 naming the SAME lock path of the main worktree and no merge call.
+- Case `merge-lock-recuperacion`: action Plant a leftover lock (dead owner) and run `--liberar-lock`, then again with no lock; command `control-summonaikit drive saikit-merge`; observable first run prints the lock fields and removes it (exit 0), second run is a green `nada que liberar`.
 
 - **Proof.** Keep the attempt under `artifacts/<run>/saikit-merge/<attempt>/`.
   Summary `mode` must be `simulated`. A `LISTO:` line alone is not proof: the
@@ -63,3 +79,11 @@ Preconditions:
 - 18.26: a child-session seal does not credit the parent. In the measured
   Grok path the merge stays manual; this simulated drive does not close that
   live gap.
+- The lock is per `git-common-dir`: it serializes every worktree of one clone
+  but promises nothing between independent clones or machines (there the
+  leader keeps integrating serially). Exit 3 (alien lock) is a different
+  channel from exit 1 (`NO-MERGE`); a `LISTO:`/dry-run run never takes it.
+- The lock never frees itself: a killed owner (kill -9, no trap) leaves it
+  behind on purpose, and only `--liberar-lock` removes it. Everything the
+  gate decides runs AFTER acquiring the lock, so a retry revalidates head,
+  CI and seal from scratch.

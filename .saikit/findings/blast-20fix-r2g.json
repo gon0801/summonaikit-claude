@@ -1,0 +1,1 @@
+{"hecho":"Todo bullet con rotulo Deploy se juzga en su nivel y las horas ajenas quedan fuera","comando":"bash tests/test_deploy_log.sh && bash tools/check-deploy-log.sh","salida":"T1-T53 OK; cuatro mutantes nuevos y dos reescritos atrapados; segundo cross-review Claude y Kimi APPROVE","nivel":4}
