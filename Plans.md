@@ -311,3 +311,21 @@ permanecer pendientes no equivale a PASS.
 - 事項: external-send opcional — `telegram-send` con el `Close:` redactado (≤4096 chars)
   理由: aviso al usuario sin mirar la terminal; solo si lo activa en el setup
   scope: Phase 18 / Task 18.5
+- 事項: external-send acotado al repo descartable `gon0801/saikit-descartable`
+  (privado; topic `saikit-descartable` + marcador `SAIKIT-ORIGEN.md`, verificados
+  read-only INMEDIATAMENTE antes de cada mutación remota): `git push` de ramas de
+  prueba, `gh pr create`, `gh pr merge --squash --match-head-commit` ÚNICAMENTE vía
+  `tools/saikit-merge.sh` del descartable (nunca `gh pr merge` directo), `gh api`
+  de hilos (comentarios/reviews) en PRs del descartable. FUERA: `gh repo delete`
+  (destructivo, solo manual por el operador); recrear el repo si desaparece o
+  diverge (se PARA y se re-aprueba un paquete nuevo); cualquier merge en repos
+  del usuario (esa autorización es por repo con `autopilot.json`, D15/D18).
+  Aprobado «tal cual» por el operador el 2026-09-09 (sesión Claude, lead);
+  paquete redactado en `docs/phase20-mediciones-runbook.md` §8 (PR #275).
+  Renueva el alcance D23 de Phase 18, expirado al cerrar 18.10
+  理由: 20.9–20.25 miden autopilot, cuidar-pr, canal Grok, cierre headless y
+  costo contra Actions reales; sin alcance vigente 20.8 queda abierta y ninguna
+  medición viva corre (DoD de 20.8). EXPIRA al cerrar la fila 20.26
+  scope: Phase 20 / Tasks 20.8–20.26 (mutación remota solo en 20.10, 20.11,
+  20.14, 20.21, 20.22 y 20.25; 20.9 es del lead sobre su perfil; el resto es
+  local aislado)
