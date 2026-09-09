@@ -10,3 +10,5 @@ hooks/state/
 .cursor/skills/verify-summonaikit/artifacts/
 .cursor/skills/verify-summonaikit/**/__pycache__/
 .cursor/skills/verify-summonaikit/**/*.pyc
+.harness/
+.qwen/
