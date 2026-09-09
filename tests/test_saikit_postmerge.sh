@@ -283,6 +283,7 @@ c_hint_unknown_sin_run() {
   printf '[]' > "$SB/ghfix/runs.json"
   correr
   [ "$RC" -eq 3 ] || _mal "rc esperaba 3, dio $RC: $OUT"
+  _contiene "el hint corresponde a sin run" "$OUT" "sin run"
   cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
   [ -n "$cmd" ] || _mal "no se pudo extraer el hint de sin run"
   instalar_tools_100644 "$POST"
@@ -297,6 +298,7 @@ c_hint_unknown_pendiente() {
   printf '[{"event":"push","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
   correr
   [ "$RC" -eq 3 ] || _mal "rc esperaba 3 (pendiente), dio $RC: $OUT"
+  _contiene "el hint corresponde a pendiente" "$OUT" "pendiente"
   cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-postmerge.sh --merge-commit' | head -1 | sed 's/^.*con: //')"
   [ -n "$cmd" ] || _mal "no se pudo extraer el hint de pendiente"
   instalar_tools_100644 "$POST"
@@ -797,6 +799,8 @@ sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_color_force
 emision_revert_sin_bash	s|bash tools/saikit-merge.sh --revert-de|tools/saikit-merge.sh --revert-de|	c_revert_emision
 emision_hint_sin_run_sin_bash	s|en unos minutos con: bash tools/saikit-postmerge.sh|en unos minutos con: tools/saikit-postmerge.sh|	c_hint_unknown_sin_run
 emision_hint_pendiente_sin_bash	s|Vuelve a mirar con: bash tools/saikit-postmerge.sh|Vuelve a mirar con: tools/saikit-postmerge.sh|	c_hint_unknown_pendiente
+hint_sin_run_mal_rotulado	s|sin run aun para|CI pendiente para|	c_hint_unknown_sin_run
+hint_pendiente_mal_rotulado	s|CI pendiente para \$MC|sin run aun para \$MC|	c_hint_unknown_pendiente
 MUTS
 
 if [ "$fail" -ne 0 ]; then

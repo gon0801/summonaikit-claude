@@ -399,7 +399,7 @@ for a in acts:
 holder = [a for a in acts if a.get("step_id") == "act-holder"]
 assert holder, "falta action act-holder (preparacion del sostenedor)"
 hcmd = cmd_of(holder[-1])
-assert "SAIKIT_SETUP_SOSTENER_SEG=8" in hcmd and "--pr 11" in hcmd, hcmd
+assert "SAIKIT_SETUP_SOSTENER_SEG=60" in hcmd and "--pr 11" in hcmd, hcmd
 held = [a for a in acts if a.get("step_id") == "act-lock-held"]
 assert held, "falta action act-lock-held"
 cmd = cmd_of(held[-1])

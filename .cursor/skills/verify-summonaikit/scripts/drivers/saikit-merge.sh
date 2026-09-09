@@ -179,13 +179,13 @@ run_merge() {
 # test SOSTENER (duerme con el lock tomado) para orquestar la contencion con
 # determinismo. Produccion intacta: sin la variable no duerme nada.
 run_merge_en() {
-  local cwd="$1" sostener="$2"
-  shift 2
+  local cwd="$1" sostener="$2" gh_log_path="$3"
+  shift 3
   runtime_exec "$cwd" \
     env \
       PATH="$SB/bin:$PATH" \
       SAIKIT_GH_FIX="$SB/ghfix" \
-      SAIKIT_GH_LOG="$SB/gh.log" \
+      SAIKIT_GH_LOG="$gh_log_path" \
       SAIKIT_ESTADO_ROOT="$SB/estado" \
       SAIKIT_MERGE_RETRY_SEG=0 \
       SAIKIT_MERGE_SOSTENER_SEG="$sostener" \
@@ -453,14 +453,15 @@ fi
 if fm_only merge-lock-contencion; then
   sb_reset
   lock="$WORK/.git/saikit-merge.lock"
-  ( run_merge_en "$WORK" 8 --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  ( run_merge_en "$WORK" 8 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
   a_pid=$!
   if esperar_lock "$lock"; then
     set +e
     out="$(run_merge --confirmado 2>&1)"
     rc=$?
     set -e
-    # foto del gh.log DURANTE la ventana de contencion (A mergea al despertar)
+    # El contender conserva su propio log: ninguna llamada valida del owner
+    # puede contaminar esta atribucion aunque termine antes de la foto.
     gh_foto="$(gh_log)"
     fm_action merge-lock-contencion act-lock "$rc" "$out" \
       bash "$MERGE" --confirmado
@@ -501,7 +502,7 @@ fi
 if fm_only merge-lock-propio; then
   sb_reset
   lock="$WORK/.git/saikit-merge.lock"
-  ( run_merge_en "$WORK" 4 --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  ( run_merge_en "$WORK" 4 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
   a_pid=$!
   if esperar_lock "$lock"; then
     set +e
@@ -541,12 +542,12 @@ fi
 if fm_only merge-lock-worktrees; then
   sb_reset
   lock="$WORK/.git/saikit-merge.lock"
-  ( run_merge_en "$WORK" 8 --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
+  ( run_merge_en "$WORK" 8 "$SB/gh-owner.log" --confirmado >"$SB/lock-a.out" 2>&1; echo $? >"$SB/lock-a.rc" ) &
   a_pid=$!
   if esperar_lock "$lock"; then
     gitr worktree add -q "$SB/wt2" -b wt2 2>/dev/null || gitr worktree add "$SB/wt2" -b wt2
     set +e
-    out="$(run_merge_en "$SB/wt2" 0 --confirmado 2>&1)"
+    out="$(run_merge_en "$SB/wt2" 0 "$SB/gh.log" --confirmado 2>&1)"
     rc=$?
     set -e
     gh_foto="$(gh_log)"
@@ -600,6 +601,9 @@ if fm_only merge-lock-recuperacion; then
   if [ "$rc" -eq 0 ] && [ ! -d "$lock" ] \
     && printf '%s' "$out" | grep -q 'lock de integracion encontrado' \
     && printf '%s' "$out" | grep -q 'pid: 999999' \
+    && printf '%s' "$out" | grep -q 'host: host-muerto' \
+    && printf '%s' "$out" | grep -q 'inicio: 2020-01-01T00:00:00Z' \
+    && printf '%s' "$out" | grep -q 'modo: merge' \
     && printf '%s' "$out" | grep -q 'lock de integracion liberado'; then
     fm_pass merge-lock-recuperacion liberar_quita_y_muestra \
       "muestra contenido y quita" "muestra pid/host/fecha y quita el lock"

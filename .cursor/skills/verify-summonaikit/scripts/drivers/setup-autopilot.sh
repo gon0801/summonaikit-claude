@@ -383,15 +383,15 @@ if fm_only setup-lock-held; then
   : > "$holder_rc"
   # Gancho de test del propio tool (produccion = 0): duerme CON el lock
   # tomado, igual que el driver de saikit-merge orquesta su contencion.
-  ( runtime_exec "$work" env SAIKIT_SETUP_SOSTENER_SEG=8 \
+  ( runtime_exec "$work" env SAIKIT_SETUP_SOSTENER_SEG=60 \
       bash "$SETUP" --merge no --despliega no --sin-verify-app no \
       --telegram no --ci-minimo no --pr 11 >/dev/null 2>&1 \
       ; echo $? > "$holder_rc" ) &
   holder_pid=$!
   # PREPARACION registrada con su argv real (20fix H3): el holder SI corrio.
   fm_action setup-lock-held act-holder "" \
-    "preparacion: holder en background sostiene el lock 8s" \
-    env SAIKIT_SETUP_SOSTENER_SEG=8 bash "$SETUP" --merge no --despliega no \
+    "preparacion: holder en background sostiene el lock hasta 60s" \
+    env SAIKIT_SETUP_SOSTENER_SEG=60 bash "$SETUP" --merge no --despliega no \
     --sin-verify-app no --telegram no --ci-minimo no --pr 11
   i=0
   while [ ! -d "$lock" ] && [ "$i" -lt 50 ]; do
@@ -490,6 +490,9 @@ if fm_only setup-lock-held; then
       "exit 0 + lock de la copia liberado + original intacto" \
       "sin ventana de contencion; no hubo lock que copiar ni hint que ejecutar"
   fi
+  # La ventana larga evita carreras, pero el driver no paga los 60s: una vez
+  # observadas las aserciones termina al holder y espera su cleanup del lock.
+  kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 fi
 

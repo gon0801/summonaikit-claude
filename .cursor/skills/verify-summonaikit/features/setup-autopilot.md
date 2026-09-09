@@ -50,7 +50,7 @@ Preconditions:
 - The lock lives in `git-common-dir`; do not point this drive at a live profile.
 - Recorded actions must carry the REAL argv (20fix H3): the tool has no
   `--lock-held` flag, and the holder prep and the second run are registered
-  separately (`--pr 11` with `SAIKIT_SETUP_SOSTENER_SEG=8`, then the real
+  separately (`--pr 11` with `SAIKIT_SETUP_SOSTENER_SEG=60`, then the real
   `--pr 12` invocation). If the holder never takes the lock, the second run
   DID NOT happen: it is reported as absent with the true reason, never as an
   action with an invented argv or empty output.

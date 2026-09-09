@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-09T01:11:46Z|verify|Cerrar los seis hilos vigentes de CodeRabbit antes del merge de PR 273|Cuatro drivers no atribuian evidencia con suficiente precision, el marcador awk dependia de comportamiento indefinido y un finding historico parecia vigente|Rojo medido para awk con c255 vacio; test_gate_behavior, test_saikit_postmerge y drives saikit-merge/setup-autopilot en PASS; mutantes de rotulo atrapados|ok

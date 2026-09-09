@@ -733,7 +733,12 @@ json_top_level_array_poblado() {
       en_array = 0; base = 0; contenido = 0; cerro = 0
       gram_arr = 1; gram_doc = 1
       lit = ""
-      noascii = sprintf("%c", 255)   # r4: marcador de code point no imprimible-ASCII
+      # El escape octal es parte del lenguaje awk y evita el comportamiento
+      # indefinido de %c cuando 255 no representa un caracter en el locale.
+      # Si un awk hostil no conserva exactamente un control no imprimible,
+      # no se compara ninguna clave: ausencia de salida = fail closed.
+      noascii = "\034"
+      if (length(noascii) != 1 || noascii ~ /^[ -~]$/) exit
       for (i = 1; i <= n; i++) {
         c = substr(buf, i, 1)
         rep = 1

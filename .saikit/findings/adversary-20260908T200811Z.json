@@ -15,7 +15,10 @@
       "claim": "Un `## ` falso dentro de un fence (o cualquier linea `## ` con fecha en [CORTE, HORA_CONTROL) que pase norma) parte la entrada en cuerpo_de y el bullet Deploy de la entrada 09-07 cae en un cuerpo que la regla de horas NO juzga: el log queda verde con una hora copiada.",
       "trigger": "Entrada `## 2026-09-07 — PR #901` cuyo cuerpo cita en un fence un encabezado viejo (`## 2026-09-06 — Deploy correctivo fuera de PR: notas`) y escribe el bullet Deploy con hora DESPUÉS del fence: fixture .saikit/scratch/adversary/adv-zcode-20260908T200324Z/f13_fence.md",
       "evidence": "bash tools/check-deploy-log.sh --log f13_fence.md => rc=0, '[deploy-log] OK: 2 entradas juzgadas desde 2026-09-04, ordenadas, con norma y sin PR duplicado' — la hora 21:12 sin evidencia del bullet Deploy de la entrada 09-07 no se reporta (el header falso 09-06 < HORA_CONTROL absorbe el bullet y la regla de la linea 195 no corre sobre ese cuerpo). El log real no tiene fences hoy (grep '^```' docs/deploy-log.md vacio, 113 headers), por eso medium y no high.",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "e1d74cd",
+      "evaluated_at": "475170f"
     },
     {
       "severity": "medium",
@@ -23,7 +26,10 @@
       "claim": "La hora puesta en un sub-bullet NEGRITA anidado del propio bullet Deploy (`  - **detalle:** hora 21:12`) escapa a la regla: el cierre `-[[:space:]]*\\*\\*` casa a cualquier indentacion y corta la seccion antes de esa linea, aunque sea continuacion del bullet.",
       "trigger": "fixture .saikit/scratch/adversary/adv-zcode-20260908T200324Z/f02_sub_bold.md: bullet `- **Deploy:** cuatro copias REPARADO.` con sub-bullet indentado `  - **detalle:** hora 21:12, sin backup citado.`",
       "evidence": "bash tools/check-deploy-log.sh --log f02_sub_bold.md => rc=0 OK. Control f02b_sub_plain.md (sub-item SIN negrita, `  - detalle: hora 21:12`) => rc=1 FAIL evidencia: la frontera es la negrita, no la indentacion. La forma existe en el log real (sub-bullets indentados bajo bullets `- **...**` en docs/deploy-log.md:842-850; 17 lineas `^  - ` en el log), y contradice el claim del encabezado del checker (lineas 12-13: 'con sus lineas de continuacion').",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "e1d74cd",
+      "evaluated_at": "475170f"
     },
     {
       "severity": "low",
@@ -31,7 +37,10 @@
       "claim": "Un bullet `- **deploy ...` en minúscula no es reconocido como bullet Deploy y su hora sin evidencia pasa en verde.",
       "trigger": "fixture f01_deploy_minus.md: `- **deploy (21:12 UTC):** cuatro copias REPARADO. Sin backup citado.` en entrada 2026-09-07",
       "evidence": "bash tools/check-deploy-log.sh --log f01_deploy_minus.md => rc=0 OK (la regex `\\*\\*Deploy` es case-sensitive). Misma clase que el límite declarado del backdating (líneas 36-37): un escritor mentiroso rompe forma y evade; los 81 bullets Deploy del log real son todos mayúscula.",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "e1d74cd",
+      "evaluated_at": "475170f"
     },
     {
       "severity": "low",
@@ -39,7 +48,10 @@
       "claim": "Una hora con espacio no rompible (U+00A0 u otro espacio fino) entre dígito y colon es invisible para `[0-9]{1,2}:[0-5][0-9]`: el bullet pasa sin evidencia — y el copy-paste de la web de GitHub (el modo de fallo que la regla dice perseguir) es justo lo que arrastra NBSP.",
       "trigger": "fixture f05_nbsp.md: `- **Deploy (21<U+00A0>:12 UTC):** sin backup citado.` en entrada 2026-09-07",
       "evidence": "bash tools/check-deploy-log.sh --log f05_nbsp.md => rc=0 OK (hora escrita con printf '21\\xc2\\xa0:12').",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "e1d74cd",
+      "evaluated_at": "475170f"
     },
     {
       "severity": "low",
@@ -47,7 +59,8 @@
       "claim": "La negación en prosa CON un token filename-shape acredita igual: `no quedo ningun harness.sh.bak` casa `[A-Za-z0-9._/-]+\\.bak` y valida la hora del propio bullet — el comentario del checker (líneas 14-16, 191-192) afirma que la negación en prosa no acredita.",
       "trigger": "fixture f15_negacion_filename.md: `- **Deploy (21:12 UTC):** no quedo ningun harness.sh.bak de esta corrida.`",
       "evidence": "bash tools/check-deploy-log.sh --log f15_negacion_filename.md => rc=0 OK. La negación solo se rechaza si el `.bak` va pelado (sin carácter de clase delante, caso T21), no si va pegado a un nombre.",
-      "confirmed": true
+      "confirmed": true,
+      "status": "open_residual"
     },
     {
       "severity": "low",
@@ -55,7 +68,10 @@
       "claim": "El marcador `hora medida en vivo` en el MISMO paréntesis pero ANTES de la hora (`(hora medida en vivo: 21:12)`) es rechazado: la regex exige hora-antes-que-marcador, mientras la regla documentada (líneas 16-17 y 193) solo exige 'dentro del MISMO paréntesis' — una entrada honesta con la forma invertida da CI rojo.",
       "trigger": "fixture f16_marcador_antes.md: `- **Deploy (hora medida en vivo: 21:12 UTC):** cuatro copias REPARADO.`",
       "evidence": "bash tools/check-deploy-log.sh --log f16_marcador_antes.md => rc=1 FAIL evidencia — falso positivo sobre evidencia semánticamente presente.",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "e1d74cd",
+      "evaluated_at": "475170f"
     },
     {
       "severity": "low",
@@ -63,7 +79,10 @@
       "claim": "La ejecución del hint extraído NO queda gated tras la igualdad exacta (línea 427 es solo assert): ejecutar_hint valida únicamente el prefijo $1/$2 (líneas 88-91) y corre el resto del argv tal cual contra la copia; además, a diferencia de run_setup (línea 66), NO redirige stdin con `< /dev/null`, así que un hint prefijo-válido que no sea `--liberar-lock` puede llevar al tool por su camino interactivo leyendo el stdin del runner.",
       "trigger": "Hint observado mutado a `bash tools/saikit-setup-autopilot.sh` (sin flag) o con flag conocido ajeno: pasa el chequeo de prefijo de ejecutar_hint, falla la igualdad de la 427 y AUN ASI se ejecuta en la línea 450.",
       "evidence": "Lectura de flujo confirmada por líneas (427 assert, 450 ejecución incondicional, 83-94 ejecutar_hint); mitigantes medidas: el objetivo es $copia (sandbox aislado del fixture) y el tool rechaza flags desconocidas con exit 2 ANTES de escribir (tools/saikit-setup-autopilot.sh:87, el loop de args precede a 'Repo y lock ANTES de todo'). El posible hang interactivo por stdin heredado queda unverified (no lo corrí con TTY real).",
-      "confirmed": true
+      "confirmed": true,
+      "status": "historical_fixed",
+      "fixed_in": "6c164f5",
+      "evaluated_at": "475170f"
     }
   ]
 }
