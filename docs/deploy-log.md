@@ -29,6 +29,27 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-09 — PRs #275, #277, #278, #279 y #280 (runbook 20.8, deploy-log del bloque anterior, cierre 20.27, preaprobación Phase 20, fila 20.28) — hooks NO-OP
+
+- **Merge (mergedAt de GitHub, UTC):** #277 `20ace40f72301798e386a36878e3401033d57144`
+  (03:39:27); #278 `d16ae5e5e531dd5ee2c2fbff3b0ac67adfc41da4` (03:39:42); #279
+  `f4a8dbe0eb5fbabf924b80519e98f68c40e0a3b6` (04:17:01); #280
+  `f83f77b0029c53aa71f89231cbbc7ba2bac38cf3` (04:45:09); #275
+  `b6218bcb33aef4bb2fc3662faded385397ac5fe1` (05:00:51). Los cinco son docs-only
+  (`Plans.md`, `docs/`, `.saikit/`); ninguno toca `hooks/`. Mergeados por el
+  operador con `--merge --match-head-commit`.
+- **Deploy (22:04 PDT / 05:04 UTC, hora medida en vivo):** no-op, sin backup;
+  master sincronizado en `b6218bcb`; `sucio=no`, `coincide_origin_master=si`.
+  `install-hook.sh --check` exit 0, `veredicto=ok`: las cuatro copias `al-dia`
+  con registro ok, sha256 sin cambios `d83947668d004b44…` (el desplegado en la
+  entrada del bloque anterior).
+- **Verificación:** `check-hook-registration.sh` exit 0; `audita-ledger.sh`
+  exit 0 antes del cierre de 20.8; `check-deploy-log.sh` exit 0 en la rama antes
+  del merge.
+- **Cierre:** 20.27 cerrada (#278); 20.8 cerrada en este mismo cambio; 20.28
+  abierta (#280); alcance external-send de Phase 20 registrado en el ledger
+  事前確認 (#279).
+
 ## 2026-09-09 — PRs #274, #273 y #276 (residuales Phase 20 + filas 21.x / harness-review r1 del bloque Phase 20 / higiene del repo) — deploy REAL de las 4 copias (solo el segundo toca el hook; los otros dos hooks NO-OP)
 
 - **Merge (mergedAt de GitHub, UTC):** #274 `f16901ff9545d7d2e831363dc12979f13505da0b`
