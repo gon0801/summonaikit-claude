@@ -29,6 +29,48 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-09 — PRs #274, #273 y #276 (residuales Phase 20 + filas 21.x / harness-review r1 del bloque Phase 20 / higiene del repo) — deploy REAL de las 4 copias (solo el segundo toca el hook; los otros dos hooks NO-OP)
+
+- **Merge (mergedAt de GitHub, UTC):** #274 `f16901ff9545d7d2e831363dc12979f13505da0b`
+  (02:54:48), gate SUCCESS en el
+  [run 34203415474](https://github.com/gon0801/summonaikit-claude/actions/runs/34203415474);
+  #273 `2d3ab14c99712bcac745847cc93305e245461619` (02:54:55), gate SUCCESS en el
+  [run 34300778352](https://github.com/gon0801/summonaikit-claude/actions/runs/34300778352);
+  #276 `861d884bab27446409df2efed1a2d32801798d7b` (02:55:02), gate SUCCESS en el
+  [run 34303313347](https://github.com/gon0801/summonaikit-claude/actions/runs/34303313347).
+  Los tres los mergeó el operador desde su terminal con
+  `--merge --match-head-commit` (el repo no tiene `.saikit/autopilot.json`;
+  el `--dry-run` de la tool de merge del kit responde `NO-MERGE: config
+  ausente`, estado declarado en 20.22). `master` == `861d884b…`.
+- **Deploy (2026-09-08 20:01–20:03 PDT / 2026-09-09 03:01–03:03 UTC):** master
+  sincronizado; `sucio=no`, `coincide_origin_master=si` (`sin_seguimiento=1`:
+  `.saikit/decisiones/20.8.tsv`, ajeno, de la sesión de 20.8). Solo #273 toca
+  `hooks/summonaikit-harness.sh` (+310/−80: teardown de zona anclado al inodo,
+  escapes JSON estrictos en `json_top_level_string`, `backgroundTasks` acotado a
+  grok); #274 y #276 son docs/chore. Instaladores exit 0, cuatro copias
+  `REPARADO`; backups: claude
+  `summonaikit-harness.sh.nuestro.20260908-200256.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260908-200130.bak`, dsh
+  `summonaikit-harness.sh.nuestro.20260908-200131.bak`, codex
+  `summonaikit-harness.sh.nuestro.20260908-200131.bak`. sha256 del hook instalado
+  `d83947668d004b44…` (antes `d3e2e33f0cd4e661…`). La primera pasada usó
+  `--host claude`, que solo repara agentes/recetas (verifier, reviewer,
+  adversary); la copia de claude se reparó en la segunda pasada (sin `--host`),
+  de ahí los dos minutos entre backups.
+- **Verificación:** `install-hook.sh --check` exit 0, `veredicto=ok` con
+  registro ok en los cuatro hosts; `check-hook-registration.sh` exit 0;
+  `audita-ledger.sh` exit 0 (ninguna fila `cc:TODO` con trabajo mergeado);
+  `check-deploy-log.sh` exit 0 en la rama antes del merge. Cuatro copias
+  `cmp` byte a byte idénticas a `hooks/summonaikit-harness.sh` de master.
+- **Cierre:** el golden de #273 cambió solo identidad (sha/bytes/líneas; 57
+  escenarios, 0 flips). La sesión zcode de 20.8 estaba en turno armado
+  (`agents_seen=implementer,verifier,reviewer`) durante el deploy; el instalador
+  escribe atómico (temporal + `bash -n` + `mv`) y no se observó fallo. 20.27
+  sigue `cc:TODO` en el ledger aunque #273 lleva sus commits (`4a49a757`,
+  `e1d74cd8`); cerrarla es decisión aparte del operador. Los perfiles vivos
+  previos (`d3e2e33f…`) corrían sin el fix del TOCTOU del teardown ni los
+  escapes estrictos desde el merge de #273 hasta este deploy (~7 min).
+
 ## 2026-09-07 — PR #272 (cierre de la tanda Phase 20: 20.1-20.7 + 20.24) — hooks NO-OP
 
 - **Merge (21:12 UTC — mergedAt de GitHub):** `b93e2c61528d6d0c8c0fa2a18efc00f7d5956c20`; gate SUCCESS en el
