@@ -27,6 +27,9 @@ malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 # una particion la ponen ellos, por comando. Misma leccion que ya aplica mas
 # abajo con SAIKIT_TESTS_SIN_EJECUTOR.
 unset SAIKIT_PARTICION
+# 20.29: misma leccion para el shard por archivo — el job `suite` lo pasa por
+# entorno; heredarlo aca convertiria cada corrida "completa" en un shard.
+unset SAIKIT_SHARD
 
 # ------------------------------------------------- 1) repo vacio de logica
 caso "repo sin hook y sin tests => exit 0"
@@ -305,6 +308,76 @@ out="$(SAIKIT_TESTS_SIN_EJECUTOR='test_nadie' SAIKIT_PARTICION=rapidos bash "$ru
 [ "$rc" -ne 0 ] || malo "una mitad con todo salteado cerro en verde: $out"
 printf '%s' "$out" | grep -qi 'ningun test' || malo "no dice que no corrio nada: $out"
 printf '%s' "$out" | grep -q 'SKIP (sin ejecutor): test_nadie' || malo "el skip se sigue listando: $out"
+
+# ------------------------------------- 20.29: shard por ARCHIVO de la particion
+# `suite` tardaba 22-26 min (60 archivos en serie, medido 2026-09-09 en los runs
+# 34310637856 y 34311050392) y la particion de 10.5 se diseno con ~2.7 min.
+# SAIKIT_SHARD=i/N reparte los ARCHIVOS de la particion en N jobs paralelos con
+# el mismo contrato que SAIKIT_MUT_SHARD: forma i/N, exit 2 por invalido /
+# fuera de rango / vacio, y la propiedad que vuelve seguro el reparto — la
+# union de 1..N es EXACTAMENTE la particion, sin repetidos. El reparto es
+# determinista (orden LC_ALL=C de los nombres, round-robin): dos corridas del
+# mismo shard listan lo mismo. Un shard vacio no es verde: es un job que no
+# probo nada, la misma falla que la guardia de "lista huerfana" ya cierra.
+mkdir -p "$SANDBOX/shard/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/shard/tests/test_gate_mutations.sh"
+for n in a b c d e; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/shard/tests/test_r_$n.sh"
+done
+# CON repetidos a proposito: la union se verifica por identidad y multiplicidad
+# (un archivo que corre en dos shards es tan falla como uno que no corre).
+nombres_con_repes() { printf '%s' "$1" | grep -oE '(PASS|FAIL|UNKNOWN): test_[a-z_]+' | sort; }
+
+caso "SAIKIT_SHARD=i/N: la union de 1..N es EXACTAMENTE la particion, sin repetidos"
+entera="$(nombres_con_repes "$(SAIKIT_PARTICION=rapidos bash "$run_sh" "$SANDBOX/shard" 2>&1)")"
+shards="$(nombres_con_repes "$( for i in 1 2 3; do
+  SAIKIT_PARTICION=rapidos SAIKIT_SHARD="$i/3" bash "$run_sh" "$SANDBOX/shard" 2>&1
+done )")"
+[ "$entera" = "$shards" ] || malo "la union de los shards no es la particion (o repite archivos): particion=[$entera] shards=[$shards]"
+printf '%s' "$shards" | grep -q 'test_gate_mutations' && malo "un shard de rapidos corrio el lento: $shards"
+
+caso "cada shard corre al menos un archivo y cierra OK"
+for i in 1 2 3; do
+  out="$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD="$i/3" bash "$run_sh" "$SANDBOX/shard" 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] || malo "shard $i/3 esperaba exit 0, dio $rc: $out"
+  printf '%s' "$out" | grep -q 'PASS: test_r_' || malo "shard $i/3 no corrio ningun archivo: $out"
+done
+
+caso "el reparto es determinista: dos corridas del mismo shard listan lo mismo"
+una="$(nombres_con_repes "$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=2/3 bash "$run_sh" "$SANDBOX/shard" 2>&1)")"
+otra="$(nombres_con_repes "$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=2/3 bash "$run_sh" "$SANDBOX/shard" 2>&1)")"
+[ "$una" = "$otra" ] || malo "el shard 2/3 cambio entre corridas: [$una] vs [$otra]"
+[ -n "$una" ] || malo "el shard 2/3 no listo nada"
+
+caso "SAIKIT_SHARD con forma invalida => exit 2 y NO corre nada"
+out="$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=dos-de-tres bash "$run_sh" "$SANDBOX/shard" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: $out"
+printf '%s' "$out" | grep -q 'SAIKIT_SHARD invalido' || malo "no nombra la razon: $out"
+printf '%s' "$out" | grep -q 'PASS: test_' && malo "corrio tests con un shard invalido: $out"
+
+caso "SAIKIT_SHARD fuera de rango (4/3) => exit 2 y NO corre nada"
+out="$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=4/3 bash "$run_sh" "$SANDBOX/shard" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "esperaba exit 2, dio $rc: $out"
+printf '%s' "$out" | grep -q 'fuera de rango' || malo "no nombra la razon: $out"
+printf '%s' "$out" | grep -q 'PASS: test_' && malo "corrio tests con un shard fuera de rango: $out"
+
+caso "un shard que queda VACIO (N mayor que los archivos) => exit 2, nunca verde"
+out="$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=6/6 bash "$run_sh" "$SANDBOX/shard" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "un shard vacio no puede cerrar en verde, dio $rc: $out"
+printf '%s' "$out" | grep -qi 'VACIO' || malo "no dice que el shard quedo vacio: $out"
+
+caso "el workflow reparte 'suite' en shards 1/N..N/N COMPLETOS y pasa SAIKIT_SHARD (mutante N-1)"
+# La union la canda el runner; que el CI la pida entera la canda esto: una matrix
+# con N-1 entradas es un archivo que deja de correr sin que nadie se entere.
+wf="$here/../.github/workflows/quality.yml"
+bloque="$(awk '/^  suite:$/{f=1; print; next} f && /^  [a-z-]+:$/{exit} f' "$wf")"
+n_wf="$(printf '%s' "$bloque" | grep -oE "'[0-9]+/[0-9]+'" | head -1 | grep -oE '/[0-9]+' | tr -d /)"
+[ -n "$n_wf" ] || malo "el job suite del workflow no declara una matrix de shards i/N"
+esperado_wf="$(seq 1 "${n_wf:-1}" | sed "s|^|'|; s|\$|/${n_wf:-1}'|" | tr '\n' ' ')"
+listado_wf="$(printf '%s' "$bloque" | grep -oE "'[0-9]+/[0-9]+'" | tr '\n' ' ')"
+[ "$listado_wf" = "$esperado_wf" ] || malo "la matrix de suite no es 1/N..N/N completa: [$listado_wf] vs [$esperado_wf]"
+printf '%s' "$bloque" | grep -qF 'SAIKIT_SHARD: ${{ matrix.shard }}' || malo "el job suite no pasa SAIKIT_SHARD desde la matrix"
+printf '%s' "$bloque" | grep -q 'fail-fast: false' || malo "suite sin 'fail-fast: false': un shard rojo taparia el resultado de los otros"
 
 # ============================ 18.19: canal de skip POR CASO (categoria aparte)
 # CONTRATO EJECUTABLE del canal (fila 18.19):

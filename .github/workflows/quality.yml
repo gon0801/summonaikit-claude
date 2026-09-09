@@ -113,10 +113,21 @@ jobs:
   #   2) `SAIKIT_MUT_SHARD=i/N` (en `tests/test_gate_mutations.sh`) reparte las
   #      111 mutaciones en 3 (37/37/37) — candado:
   #      `tests/test_gate_mutations_guards.sh`.
-  # Reloj esperado del PR: ~2.7 min (lo fija ahora la mitad rapida).
+  #   3) 20.29 — `SAIKIT_SHARD=i/N` (en `tests/run.sh`) reparte los ARCHIVOS de
+  #      la mitad rapida en 4 (round-robin, orden LC_ALL=C) — candado:
+  #      `tests/test_runner_guards.sh` (union exacta de los shards y esta
+  #      matrix completa: N-1 entradas es un archivo que deja de correr).
+  # Reloj medido ANTES de 20.29 (2026-09-09, runs 34310637856 y 34311050392):
+  # la mitad rapida sola tardaba 22-26 min — 60 archivos en serie, 8x los ~2.7
+  # con que se diseno (Phase 19 sumo los test_feature_map_*). Reloj esperado
+  # ahora: el archivo mas largo (`test_feature_map_merge`, 376 s), ~6-7 min.
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@v7
 
@@ -134,10 +145,11 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/gitleaks" version
 
-      - name: Run the gate suite — fast half (tests/run.sh)
+      - name: Run the gate suite — fast half, shard ${{ matrix.shard }} (tests/run.sh)
         env:
           SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
           SAIKIT_PARTICION: rapidos
+          SAIKIT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
 
   suite-lentos:

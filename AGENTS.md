@@ -43,8 +43,11 @@ La bateria completa corre en ubuntu en CADA push/PR, repartida en jobs
 PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
 bateria entera, y cada nivel tiene su candado.
 
-- `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), ~2.7 min. Candado:
-  `tests/test_runner_guards.sh`.
+- `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), repartida por ARCHIVO
+  en 4 shards (`SAIKIT_SHARD=i/4`, round-robin en orden LC_ALL=C; 20.29).
+  Medido 2026-09-09: sin shard tardaba 22-26 min (60 archivos en serie); con 4,
+  lo que dure el archivo mas largo (~6-7 min). Candado:
+  `tests/test_runner_guards.sh` (union exacta de los shards + matrix completa).
 - `suite-lentos` — `test_gate_mutations`, que solo se llevaba ~6 de los 6.9 min
   del job unico, repartido en 3 shards de 37 mutaciones
   (`SAIKIT_MUT_SHARD=i/3`), ~2 min cada uno. Candado:

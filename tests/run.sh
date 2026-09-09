@@ -77,6 +77,31 @@ case "$particion" in
     exit 2 ;;
 esac
 
+# ------------------------------------ 20.29: shard por ARCHIVO de la particion
+# Medido 2026-09-09 (runs 34310637856 y 34311050392): `suite` = 60 archivos en
+# serie = 22-26 min, contra los ~2.7 con que se diseno la particion de arriba.
+# SAIKIT_SHARD=i/N reparte los ARCHIVOS de la particion en N jobs paralelos con
+# el MISMO contrato que SAIKIT_MUT_SHARD (test_gate_mutations.sh): forma i/N,
+# exit 2 por invalido / fuera de rango / vacio — un shard que no corre nada no
+# es verde. El reparto es round-robin sobre los nombres en orden LC_ALL=C: el
+# glob depende del locale, y dos jobs con locale distinto repartirian distinto
+# (un archivo correria dos veces o ninguna). La union de 1..N es la particion
+# ENTERA; lo canda tests/test_runner_guards.sh, incluida la matrix del workflow.
+shard="${SAIKIT_SHARD:-}"
+shard_i=0
+shard_n=0
+if [ -n "$shard" ]; then
+  case "$shard" in
+    [1-9]/[1-9]|[1-9]/[1-9][0-9]|[1-9][0-9]/[1-9][0-9]) ;;
+    *) echo "tests/run.sh: SAIKIT_SHARD invalido: [$shard] — forma i/N" >&2; exit 2 ;;
+  esac
+  shard_i="${shard%%/*}"
+  shard_n="${shard##*/}"
+  if [ "$shard_i" -gt "$shard_n" ]; then
+    echo "tests/run.sh: SAIKIT_SHARD $shard fuera de rango (son $shard_n shards)" >&2; exit 2
+  fi
+fi
+
 # Huella del arbol: rutas + checksum. Detecta creado, borrado y modificado.
 #
 # Se podan los directorios que NO son contenido del repo: `.git` y los que el
@@ -118,7 +143,16 @@ trap 'rm -rf "$run_root"' EXIT
 hook_vivo="${SAIKIT_HOOK_VIVO:-$HOME/.claude/hooks/summonaikit-harness.sh}"
 
 shopt -s nullglob
-for t in "$repo_root"/tests/test_*.sh; do
+# 20.29: la lista va en orden LC_ALL=C (ver arriba). Sin arrays: /bin/bash de
+# macOS es 3.2 y con `set -u` un array vacio revienta. El bucle lee la lista por
+# el fd 9 para que el stdin de cada test siga siendo el del invocador (un test
+# que leyera stdin se comeria la lista) y para quedarse en ESTE shell: los
+# contadores tienen que verse al salir.
+lista_tests="$(for t in "$repo_root"/tests/test_*.sh; do printf '%s\n' "$t"; done | LC_ALL=C sort)"
+pos_particion=0
+asignados=0
+while IFS= read -r -u 9 t; do
+  [ -n "$t" ] || continue
   nombre="$(basename "$t" .sh)"
 
   # Reparto por particion. Va ANTES del skip por plataforma para que cada mitad
@@ -126,6 +160,15 @@ for t in "$repo_root"/tests/test_*.sh; do
   # con listado ahi, y no aparece como skip fantasma en la mitad lenta.
   if [ "$particion" = lentos ] && ! es_lento "$nombre"; then continue; fi
   if [ "$particion" = rapidos ] && es_lento "$nombre"; then continue; fi
+
+  # 20.29: reparto del shard, DESPUES del filtro de particion y ANTES del skip
+  # sin ejecutor: la posicion cuenta archivos de la particion, no del arbol, y
+  # un sin-ejecutor sigue contando como asignado (se lista en su shard).
+  if [ -n "$shard" ]; then
+    pos_particion=$((pos_particion + 1))
+    if [ $(( (pos_particion - 1) % shard_n )) -ne $((shard_i - 1)) ]; then continue; fi
+    asignados=$((asignados + 1))
+  fi
 
   # Task 18.16 — el skip de plataforma era una PROMESA muerta: "los corre
   # Windows" ya no lo cumple nadie (el operador dejo Windows). Un skip ya no
@@ -193,7 +236,15 @@ for t in "$repo_root"/tests/test_*.sh; do
     diff <(printf '%s\n' "$antes") <(printf '%s\n' "$despues") >&2 || true
     fail=1
   fi
-done
+done 9<<< "$lista_tests"
+
+# 20.29: un shard sin archivos asignados es un job verde que no probo nada —
+# la misma falla que la guardia de "lista huerfana" de abajo cierra para la
+# particion. Exit 2 (contrato de SAIKIT_MUT_SHARD), antes de cualquier resumen.
+if [ -n "$shard" ] && [ "$asignados" -eq 0 ]; then
+  echo "tests/run.sh: el shard $shard quedo VACIO — no se le asigno ningun archivo (la particion '${particion:-entera}' tiene $pos_particion)" >&2
+  exit 2
+fi
 
 # Task 10.5 / codex r1 (hallazgo 3), reencarnado para la semantica de 18.16:
 # el resumen de skips imprime SIEMPRE que haya skips, ANTES de ramificar la
