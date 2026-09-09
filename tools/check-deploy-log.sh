@@ -24,10 +24,10 @@
 #           es una hora medida en vivo)») no es etiqueta adyacente y no
 #           acredita; tampoco la negacion o el marcador en prosa, ni el
 #           .bak o el marcador de un bullet hermano. La seccion de un bullet
-#           Deploy la cierra CUALQUIER bullet sin sangria (`^-`, con o sin
-#           negritas: un `- Nota: ...config.bak` hermano no es continuacion);
-#           las continuaciones legitimas van indentadas (el sub-bullet
-#           `  - **detalle:**` SI es continuacion). Sin evidencia => FAIL: la
+#           Deploy la cierra cualquier bullet hermano con sangria menor o
+#           igual; un sub-bullet mas profundo sigue siendo continuacion. Esto
+#           vale tambien cuando el propio Deploy esta anidado. Sin evidencia
+#           => FAIL: la
 #           hora pudo ser copiada del minuto de mergedAt (que acredita el
 #           merge, NO el deploy; error historico rectificado 2026-09-07).
 #           `hora no recuperada` sin hora pasa (unknown honesto). NUNCA se
@@ -137,14 +137,12 @@ cuerpo_de() {
   fi
 }
 
-# Bullets Deploy de una entrada, UNO POR REGISTRO: cada `- **Deploy...` con
-# sus lineas de continuacion, separados por una linea centinela jamas
-# presente en el log. La seccion la cierra CUALQUIER bullet SIN SANGRIA
-# (`^-`, con o sin negritas — r5, revisor (a): el limite `^-[[:space:]]*\*\*`
-# dejaba que un bullet hermano sin negritas (`- Nota: backup ajeno
-# config.bak.`) siguiera DENTRO de la seccion y su .bak acreditara la hora
-# del Deploy; las continuaciones legitimas del log real van INDENTADAS, y un
-# sub-bullet indentado `  - **detalle:**` sigue siendo continuacion). r2c
+# Bullets Deploy de una entrada, UNO POR REGISTRO: cada rotulo Deploy con sus
+# lineas de continuacion, separados por una linea centinela jamas presente en
+# el log. Un bullet hermano de nivel menor o igual cierra la seccion; uno mas
+# profundo sigue siendo continuacion. r5 (revisor (a)) cerro el prestamo desde
+# un hermano sin negritas (`- Nota: backup ajeno config.bak.`); r2g conserva
+# ese corte por nivel tambien para Deploys anidados. r2c
 # (adversario M1/M2): el grep -m1 del primer corte dejaba pasar la hora de un
 # SEGUNDO bullet Deploy (convencion real: un bullet por host) y las horas en
 # lineas de continuacion del propio bullet. r4 (hallazgo B2): la evidencia se
@@ -153,22 +151,42 @@ cuerpo_de() {
 # hora de OTRO bullet sin respaldo propio.
 BULLET_SEP='@@SAIKIT-DEPLOY-BULLET@@'
 
-# Secciones JUZGABLES de una entrada: un rotulo Deploy (con o sin negritas) o
-# el rotulo llano «hora [final] del deploy» abre una seccion. CUALQUIER bullet sin
-# sangria la cierra, aunque no sea juzgable: asi un hermano `- Nota:` no puede
-# prestar su .bak o marcador. r5 conserva la forma real sin negritas
-# `- hora final del deploy: ...`; r6 evita tratar horas de Verificacion,
-# duraciones mm:ss y puertos como si fueran deployed_at.
+# Secciones JUZGABLES de una entrada: un rotulo Deploy o «hora [final] del
+# deploy», con o sin negritas, abre una seccion. Se reconoce a cualquier nivel:
+# un `  - **Deploy:**` bajo Notas sigue siendo una afirmacion de deploy. Un
+# bullet hermano con sangria menor o igual cierra la seccion; uno mas profundo
+# es continuacion legitima. Asi un hermano no puede prestar su .bak o marcador.
+# r6 evita tratar horas de Verificacion, duraciones mm:ss y puertos como si
+# fueran deployed_at. Otros rotulos libres no son inferibles: el checker juzga
+# estructura declarada, no la semantica de toda la prosa.
 secciones_deploy() {
   printf '%s' "$1" | awk '
     function es_deploy(linea, etiqueta) {
       linea = tolower(linea)
-      if (linea ~ /^-[[:space:]]*\*\*deploy([[:space:](]|:|\*)/) return 1
+      sub(/^[[:space:]]*-[[:space:]]*/, "", linea)
       etiqueta = linea
-      sub(/:[[:space:]].*$/, "", etiqueta)
-      return etiqueta ~ /^-[[:space:]]*(deploy|hora[[:space:]]+(final[[:space:]]+)?del[[:space:]]+deploy)([[:space:]]|:|$)/
+      if (etiqueta ~ /^\*\*/) {
+        sub(/^\*\*/, "", etiqueta)
+        sub(/\*\*.*/, "", etiqueta)
+      } else {
+        sub(/:[[:space:]].*$/, "", etiqueta)
+      }
+      return etiqueta ~ /^(deploy|hora[[:space:]]+(final[[:space:]]+)?del[[:space:]]+deploy)([[:space:](]|:|$)/
     }
-    /^-/ { dentro = es_deploy($0); if (dentro) print; next }
+    /^[[:space:]]*-/ {
+      prefijo = $0
+      sub(/-.*/, "", prefijo)
+      nivel = length(prefijo)
+      if (dentro && nivel <= nivel_deploy) dentro = 0
+      if (es_deploy($0)) {
+        dentro = 1
+        nivel_deploy = nivel
+        normalizada = $0
+        sub(/^[[:space:]]*/, "", normalizada)
+        print normalizada
+        next
+      }
+    }
     dentro { print }
   '
 }
@@ -188,9 +206,9 @@ seccion_bullets() {
 # (`,[[:space:]]*hora medida en vivo`); una NEGACION dentro del parentesis
 # («(21:12 UTC, no es una hora medida en vivo)») no es etiqueta adyacente y
 # quedaba acreditada por la regex laxa `[^)]*hora medida en vivo` (rc=0
-# medido). r4 (adversario M2/L1/L3/L4): solo un bullet SIN SANGRIA corta la
-# seccion (un sub-bullet `  - **detalle:**` indentado es continuacion del
-# Deploy — su hora cuenta); `deploy` en minuscula tambien es bullet Deploy;
+# medido). r4 (adversario M2/L1/L3/L4) fijo el corte entre bullets de nivel
+# cero; r2g lo generaliza por sangria: un hermano de nivel menor o igual corta
+# y un sub-bullet mas profundo es continuacion. `deploy` en minuscula tambien es bullet Deploy;
 # el NBSP (U+00A0) y el espacio fino (U+202F) se normalizan antes de matchear
 # (el copy-paste de la web de GitHub es justo lo que los arrastra); el
 # marcador cuenta antes o despues de la hora dentro del mismo parentesis.

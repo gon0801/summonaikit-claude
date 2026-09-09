@@ -705,6 +705,76 @@ EOF
 out="$(bash "$tool" --log "$tmp/t47.md" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "rotulo **Deploy** dio $rc, se esperaba 1: $out"
 
+caso "T48: Deploy explicito anidado tambien se juzga => 1"
+cat > "$tmp/t48.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #329 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- Notas de la corrida:
+  - **Deploy (21:12 UTC):** cuatro copias REPARADO, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t48.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "Deploy anidado dio $rc, se esperaba 1: $out"
+
+caso "T49: hora del deploy llana tambien se juzga => 1"
+cat > "$tmp/t49.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #332 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- hora del deploy: 21:12 UTC, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t49.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora del deploy dio $rc, se esperaba 1: $out"
+
+caso "T50: rotulo Deploy llano tambien se juzga => 1"
+cat > "$tmp/t50.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #333 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- Deploy: cuatro copias REPARADO a las 21:12 UTC, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t50.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "Deploy llano dio $rc, se esperaba 1: $out"
+
+caso "T51: hora final del deploy en negritas tambien se juzga => 1"
+cat > "$tmp/t51.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #334 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- **hora final del deploy:** 21:12 UTC, sin backup.
+EOF
+out="$(bash "$tool" --log "$tmp/t51.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hora final del deploy en negritas dio $rc, se esperaba 1: $out"
+
+caso "T52: Deploy anidado con evidencia propia => 0"
+cat > "$tmp/t52.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #335 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- Notas de la corrida:
+  - **Deploy (21:12 UTC):** backup propio `summonaikit-harness.sh.bak`.
+EOF
+out="$(bash "$tool" --log "$tmp/t52.md" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "Deploy anidado con evidencia dio $rc, se esperaba 0: $out"
+
+caso "T53: hermano anidado no presta evidencia al Deploy => 1"
+cat > "$tmp/t53.md" <<'EOF'
+# Deploy log — fixture
+## 2026-09-08 — PR #336 / Task X — deploy REAL
+
+- **Merge (21:12 UTC — mergedAt de GitHub):** `abc123def456`, gate SUCCESS.
+- Notas de la corrida:
+  - **Deploy (21:12 UTC):** cuatro copias REPARADO, sin backup.
+  - Nota: backup ajeno `summonaikit-harness.sh.bak`.
+EOF
+out="$(bash "$tool" --log "$tmp/t53.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "hermano anidado presto evidencia: rc=$rc, se esperaba 1: $out"
+
 # ------------------------------------------------------- bloque de mutaciones
 # Guarda anti-sed-obsoleto, patron de test_autopilot_config.sh: si el sed no
 # cambia bytes o el mutante no parsea, FAIL (ya no prueba nada).
@@ -856,9 +926,9 @@ else
   fi
 fi
 
-# r6: volver a juzgar TODOS los bullets reproduce el falso positivo que
-# confundia una hora de Verificacion, una duracion o un puerto con deployed_at.
-caso "mutacion: todos los bullets vuelven a ser juzgables => T43 la atrapa"
+# r6: volver a juzgar todos los bullets SALVO Merge reproduce fielmente el
+# falso positivo que confundia una hora de Verificacion con deployed_at.
+caso "mutacion: todos salvo Merge vuelven a ser juzgables => T43 la atrapa"
 out="$(bash "$tool" --log "$tmp/t43.md" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "control sano T43 dio $rc, se esperaba 0 (scope vivo)"
 mut_scope_base="$tmp/mut-base-scope.sh"; mut_scope="$tmp/mut-scope.sh"
@@ -866,8 +936,8 @@ cp "$tool" "$mut_scope_base"
 python3 - "$mut_scope_base" "$mut_scope" <<'PY_SCOPE'
 import sys
 src = open(sys.argv[1], encoding="utf-8").read()
-viejo = "    /^-/ { dentro = es_deploy($0); if (dentro) print; next }\n"
-nuevo = "    /^-/ { dentro = 1; print; next }\n"
+viejo = "      return etiqueta ~ /^(deploy|hora[[:space:]]+(final[[:space:]]+)?del[[:space:]]+deploy)([[:space:](]|:|$)/\n"
+nuevo = "      return etiqueta !~ /^merge([[:space:](]|:|$)/\n"
 assert src.count(viejo) == 1, src.count(viejo)
 open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
 PY_SCOPE
@@ -886,8 +956,8 @@ else
   fi
 fi
 
-# El cierre Markdown `**` tambien forma parte del rotulo; quitar esa variante
-# debe reabrir el bypass de T47.
+# El cierre Markdown `**` tambien forma parte del rotulo; dejarlo pegado al
+# texto debe reabrir el bypass de T47.
 caso "mutacion: cierre negrita de Deploy ignorado => T47 la atrapa"
 out="$(bash "$tool" --log "$tmp/t47.md" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] || malo "control sano T47 dio $rc, se esperaba 1 (rotulo vivo)"
@@ -896,8 +966,8 @@ cp "$tool" "$mut_bold_base"
 python3 - "$mut_bold_base" "$mut_bold" <<'PY_BOLD'
 import sys
 src = open(sys.argv[1], encoding="utf-8").read()
-viejo = "([[:space:](]|:|\\*)"
-nuevo = "([[:space:](]|:)"
+viejo = '        sub(/\\*\\*.*/, "", etiqueta)\n'
+nuevo = '        sub(/\\*\\*.*/, "**", etiqueta)\n'
 assert src.count(viejo) == 1, src.count(viejo)
 open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
 PY_BOLD
@@ -913,6 +983,106 @@ else
     malo "mutacion cierre-negrita SOBREVIVIO: **Deploy** siguio juzgado"
   else
     malo "mutacion cierre-negrita invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# Un Deploy anidado bajo un padre no-Deploy sigue siendo una afirmacion
+# propia. Volver a reconocer solo bullets en columna cero reabre A1.
+caso "mutacion: Deploy anidado ignorado => T48 la atrapa"
+out="$(bash "$tool" --log "$tmp/t48.md" 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || malo "control sano T48 dio $rc, se esperaba 1 (anidado vivo)"
+mut_nested_base="$tmp/mut-base-nested.sh"; mut_nested="$tmp/mut-nested.sh"
+cp "$tool" "$mut_nested_base"
+python3 - "$mut_nested_base" "$mut_nested" <<'PY_NESTED'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = "    /^[[:space:]]*-/ {\n"
+nuevo = "    /^-/ {\n"
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_NESTED
+if cmp -s "$mut_nested_base" "$mut_nested"; then
+  malo "mutacion anidado no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_nested" 2>/dev/null; then
+  malo "mutacion anidado no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_nested" --log "$tmp/t48.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion anidado atrapada (T48 en verde indebido)\n'
+  elif [ "$rc" -eq 1 ]; then
+    malo "mutacion anidado SOBREVIVIO: Deploy anidado siguio juzgado"
+  else
+    malo "mutacion anidado invalida (rc=$rc, se esperaba el flip 1->0)"
+  fi
+fi
+
+# Las dos ramas del rotulo llano son parte del contrato y deben tener poder
+# discriminante propio: `hora del deploy` y `Deploy:`.
+caso "mutacion: hora del deploy exige final => T49 la atrapa"
+mut_hora_base="$tmp/mut-base-hora.sh"; mut_hora="$tmp/mut-hora.sh"
+cp "$tool" "$mut_hora_base"
+sed 's/(final\[\[:space:\]\]+)?/final[[:space:]]+/' "$mut_hora_base" > "$mut_hora"
+if cmp -s "$mut_hora_base" "$mut_hora"; then
+  malo "mutacion hora-del no cambio nada — el sed quedo obsoleto"
+elif ! bash -n "$mut_hora" 2>/dev/null; then
+  malo "mutacion hora-del no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_hora" --log "$tmp/t49.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion hora-del atrapada (T49 en verde indebido)\n'
+  else
+    malo "mutacion hora-del no produjo flip 1->0 (rc=$rc)"
+  fi
+fi
+
+caso "mutacion: Deploy llano ignorado => T50 la atrapa"
+mut_plain_base="$tmp/mut-base-plain.sh"; mut_plain="$tmp/mut-plain.sh"
+cp "$tool" "$mut_plain_base"
+python3 - "$mut_plain_base" "$mut_plain" <<'PY_PLAIN'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = '      } else {\n        sub(/:[[:space:]].*$/, "", etiqueta)\n'
+nuevo = '      } else {\n        if (etiqueta ~ /^deploy/) etiqueta = "otro"\n        sub(/:[[:space:]].*$/, "", etiqueta)\n'
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_PLAIN
+if cmp -s "$mut_plain_base" "$mut_plain"; then
+  malo "mutacion Deploy-llano no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_plain" 2>/dev/null; then
+  malo "mutacion Deploy-llano no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_plain" --log "$tmp/t50.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion Deploy-llano atrapada (T50 en verde indebido)\n'
+  else
+    malo "mutacion Deploy-llano no produjo flip 1->0 (rc=$rc)"
+  fi
+fi
+
+# La variante en negritas de `hora final del deploy` usa la misma gramatica,
+# pero una mutacion exclusiva garantiza que no dependa solo de las formas
+# `**Deploy**`.
+caso "mutacion: hora del deploy en negritas ignorada => T51 la atrapa"
+mut_bhora_base="$tmp/mut-base-bhora.sh"; mut_bhora="$tmp/mut-bhora.sh"
+cp "$tool" "$mut_bhora_base"
+python3 - "$mut_bhora_base" "$mut_bhora" <<'PY_BHORA'
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+viejo = '        sub(/^\\*\\*/, "", etiqueta)\n'
+nuevo = '        sub(/^\\*\\*hora/, "horaXXX", etiqueta)\n        sub(/^\\*\\*/, "", etiqueta)\n'
+assert src.count(viejo) == 1, src.count(viejo)
+open(sys.argv[2], "w", encoding="utf-8").write(src.replace(viejo, nuevo))
+PY_BHORA
+if cmp -s "$mut_bhora_base" "$mut_bhora"; then
+  malo "mutacion hora-negrita no cambio nada — el reemplazo quedo obsoleto"
+elif ! bash -n "$mut_bhora" 2>/dev/null; then
+  malo "mutacion hora-negrita no parsea; asi no prueba nada"
+else
+  out="$(bash "$mut_bhora" --log "$tmp/t51.md" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf '    mutacion hora-negrita atrapada (T51 en verde indebido)\n'
+  else
+    malo "mutacion hora-negrita no produjo flip 1->0 (rc=$rc)"
   fi
 fi
 
