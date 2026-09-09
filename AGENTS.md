@@ -56,10 +56,21 @@ bateria entera, y cada nivel tiene su candado.
   `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
   shard vacio, invalido o fuera de rango corta con exit 2).
 
-El reloj del PR baja de ~7 min a ~2.7. Correr ademas la suite
-completa en local (~20 min por el fork de MSYS) es pagar dos veces lo mismo —
-medido 2026-08-15: dos sesiones paralelas gastaron ~2 h de pared en suites
-locales serializadas por el candado.
+El reloj del PR es ~7 min con el shard (2026-09-09; era ~2.7 en 2026-08-29 y
+llego a 22-26 antes de 20.29). Correr ademas la suite completa en local (~20
+min por el fork de MSYS; 28 min en macOS con los rojos de 20.28) es pagar dos
+veces lo mismo — medido 2026-08-15: dos sesiones paralelas gastaron ~2 h de
+pared en suites locales serializadas por el candado.
+
+**Un PR "solo docs" TAMBIEN paga la bateria** (decision 2026-09-09, medida): 8
+tests leen `Plans.md` — uno el ledger REAL (`test_adversary_artifact_contract`,
+rojo por un archivado legitimo en PR #95) —, 5 el deploy-log, 10 las fichas
+`.md`, 7 `.saikit/decisiones` y `findings`; el job `gate` solo agrega. Saltarse
+`suite` por tipo de cambio esconderia justo esos rojos. Mover esos checks a
+`gate` y saltar `suite` con candado se evaluo (propuesta 20.30) y quedo
+DESCARTADO por ahora: con el shard el PR de docs cuesta ~7 min. Lo que si es
+gratis: **los cierres de ledger de un bloque van en UN solo PR**, no uno por
+fila.
 
 1. **Local, por cambio: SOLO lo acotado.** Rojo/verde con el driver suelto
    (regla 1 de arriba) + la bateria de mutaciones ACOTADA a las lineas tocadas
@@ -162,6 +173,13 @@ Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
 - **Cross-review: tope 1 ronda.** Una segunda SOLO si la primera hallo severidad
   alta. Jamas una tercera; los residuales se declaran en el PR, no se
   re-revisan.
+- **Revision por carril, no por costumbre** (decision del operador 2026-09-09;
+  el tope de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
+  tres). docs / chore / cierre de ledger = carril `fast` (`-saikit:fast`): bots
+  (CodeRabbit) + lead. Codigo = carril `gate`: + reviewer del harness. Medicion
+  viva / release = + cross-review con otra IA. El carril lo fija la fila
+  (`[lane:...]`) y el lead al armar el turno; un implementador no lo sube ni lo
+  baja solo.
 
 ### Git
 
