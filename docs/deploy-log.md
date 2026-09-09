@@ -29,6 +29,26 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-09 — PRs #282 y #283 (fila 20.29 y su implementación: shard por archivo de `suite`) — hooks NO-OP
+
+- **Merge (mergedAt de GitHub, UTC):** #282 `558f27f773b0dd8ce45d3f705180492bbb836f9c`
+  (05:56:35); #283 `a644d2e1eecf8317beddc382ecb0579f08af5885` (06:11:01), CI
+  verde en el head `1ebbec84` con `suite (1/7)..(7/7)`
+  ([run 34317238570](https://github.com/gon0801/summonaikit-claude/actions/runs/34317238570),
+  reloj total 7m34s contra 22–26 min antes). Ninguno toca `hooks/`: #282 es
+  `Plans.md`; #283 toca `tests/run.sh`, `tests/test_runner_guards.sh`, el
+  workflow, `AGENTS.md`, el rastro y el blast de 20.29. Mergeados por el
+  operador con `--merge --match-head-commit`.
+- **Deploy (23:11 PDT / 06:11 UTC, hora medida en vivo):** no-op, sin backup;
+  master sincronizado en `a644d2e1`; `sucio=no`, `coincide_origin_master=si`.
+  `install-hook.sh --check` exit 0, `veredicto=ok`: cuatro copias `al-dia`,
+  sha256 sin cambios `d83947668d004b44…`.
+- **Verificación:** `check-hook-registration.sh` exit 0; `audita-ledger.sh`
+  exit 0 antes del cierre de 20.29; `check-deploy-log.sh` exit 0 en la rama
+  antes del merge.
+- **Cierre:** 20.29 cerrada en este mismo cambio (medición N=4 → N=7 citada
+  en la fila). Desde este merge cada PR paga ~7–8 min de CI en vez de 22–26.
+
 ## 2026-09-09 — PRs #275, #277, #278, #279 y #280 (runbook 20.8, deploy-log del bloque anterior, cierre 20.27, preaprobación Phase 20, fila 20.28) — hooks NO-OP
 
 - **Merge (mergedAt de GitHub, UTC):** #277 `20ace40f72301798e386a36878e3401033d57144`
