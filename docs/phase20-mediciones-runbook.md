@@ -23,7 +23,7 @@ Checkout previsto del kit: worktree limpio de `origin/master`, SHA al preparar
 este runbook:
 
 ```
-d16ae5e5e531dd5ee2c2fbff3b0ac67adfc41da4
+f4a8dbe0eb5fbabf924b80519e98f68c40e0a3b6
 ```
 
 Hook previsto: `hooks/summonaikit-harness.sh` de `origin/master`:
@@ -46,7 +46,7 @@ wc -l hooks/summonaikit-harness.sh
 
 Condición de paso: `git rev-parse HEAD` == `git rev-parse origin/master`
 (worktree actualizado) y árbol limpio. Si NO coinciden o `origin/master`
-avanzó respecto de d16ae5e…: **re-fijar y re-declarar** el
+avanzó respecto de f4a8dbe…: **re-fijar y re-declarar** el
 nuevo SHA del checkout y del hook en la evidencia de la medición. La evidencia
 20.x de una fila solo se reutiliza en otra si coincide checkout y hook SHA
 (misma regla que exige 20.25).
