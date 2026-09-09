@@ -23,27 +23,30 @@ Checkout previsto del kit: worktree limpio de `origin/master`, SHA al preparar
 este runbook:
 
 ```
-5764624aedb2b66b83fa71b1e3691b1a6fb021c4
+d16ae5e5e531dd5ee2c2fbff3b0ac67adfc41da4
 ```
 
 Hook previsto: `hooks/summonaikit-harness.sh` de `origin/master`:
 
 ```
-sha256 d3e2e33f0cd4e6613d63a6a85cdf9dc5627154d2666c8ef67824a1b5a414e930
-4030 líneas
+sha256 d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
+4260 líneas
 ```
 
 **Re-verificación OBLIGATORIA al ejecutar cada medición** (no vale la palabra de
 este documento si el repo avanzó):
 
 ```bash
-git fetch origin && git rev-parse origin/master
+git fetch origin
+git rev-parse HEAD; git rev-parse origin/master      # DEBEN coincidir
 git status --porcelain | wc -l                        # debe ser 0
 shasum -a 256 hooks/summonaikit-harness.sh
 wc -l hooks/summonaikit-harness.sh
 ```
 
-Si `origin/master` avanzó respecto de 5764624…: **re-fijar y re-declarar** el
+Condición de paso: `git rev-parse HEAD` == `git rev-parse origin/master`
+(worktree actualizado) y árbol limpio. Si NO coinciden o `origin/master`
+avanzó respecto de d16ae5e…: **re-fijar y re-declarar** el
 nuevo SHA del checkout y del hook en la evidencia de la medición. La evidencia
 20.x de una fila solo se reutiliza en otra si coincide checkout y hook SHA
 (misma regla que exige 20.25).
@@ -52,7 +55,7 @@ nuevo SHA del checkout y del hook en la evidencia de la medición. La evidencia
 
 ### 2.1 Repo descartable remoto: `gon0801/saikit-descartable` (privado)
 
-Verificado hoy 2026-09-08 en modo **read-only**: topic `saikit-descartable`
+Verificado el 2026-09-08 en modo **read-only**: topic `saikit-descartable`
 presente Y marcador `SAIKIT-ORIGEN.md` presente (contenido Phase 18). El plan
 de fase 18 decía borrarlo en 18.10; **sigue vivo y se reutiliza**.
 
@@ -140,7 +143,7 @@ Worktree limpio del kit en el SHA de la sección 1. Consumen: todas las filas
 
 | Recurso | Tope | Regla |
 |---|---|---|
-| Cuota gh API core | ≤60 llamadas por medición | Medir antes/después con `gh api rate_limit --jq '.resources.core'`. Cuota medida hoy 2026-09-08: 4904/5000 restantes (reset ~1h). |
+| Cuota gh API core | ≤60 llamadas por medición, INCLUSO las dos de `gh api rate_limit` (antes/después) | Medir antes/después con `gh api rate_limit --jq '.resources.core'`. Cuota medida el 2026-09-08: 4904/5000 restantes (reset ~1h). |
 | PRs/ramas de prueba en el descartable | ≤15 en TODA la fase | Contar `gh pr list --state all` + ramas antes de crear. |
 | Actions del descartable | 1 job bash (ci-minimo) | Sin jobs extra ni matrices. |
 | Tokens/tiempo por turno vivo | declarar n de turnos y tope por corrida en la evidencia de cada fila | Cada medición declara n y el tope con el que corrió; presupuesto excedido = corrida abortada. |
@@ -217,20 +220,19 @@ sin mutación, ninguna prueba viva acreditada"*:
 
 - [x] Runbook con operaciones/destino — este documento (secciones 2 y 6).
 - [x] Autorización de ejecución — paquete de la sección 8 listo para aprobar.
-- [x] topic+marcador verificados antes de mutar remoto — leídos hoy 2026-09-08
+- [x] topic+marcador verificados antes de mutar remoto — leídos el 2026-09-08
       read-only; verificación pre-mutación obligatoria en sección 2.1.
 - [x] HOME/cwd aislados — sección 3 (patrón tests/run.sh).
 - [x] "Sin autorización o cuota => bloqueado sin mutación" — secciones 4, 5 y 8.
 - [x] Versiones/ejecutables fijados (sección 1), SHAs fijados y con
-      re-verificación declarada, cuota gh medida hoy.
-- [ ] **Autorización de la sesión**: el alcance D23 de fase 18 EXPIRÓ al cerrar
-      18.10 y NO hay entrada de fase 20 en el ledger 事前確認 de Plans.md.
-      **Esta sesión no tiene autorización vigente para mutación remota**. Hasta
-      que el operador apruebe el paquete de la sección 8 y el lead lo registre,
-      ninguna fila 20.9+ corre medición viva con mutación remota.
-- [ ] Renovación del alcance (entrada ledger fase 20) — pendiente, la escribe
-      el lead al aprobar (Plans.md es prohibido para el implementador).
+      re-verificación declarada, cuota gh medida el 2026-09-08.
+- [x] **Autorización de la sesión** — aprobada por el operador el 2026-09-09;
+      entrada escrita por el lead en el ledger 事前確認 de Plans.md vía PR #279
+      (scope external-send fase 20; el paquete de la sección 8 se corresponde
+      con esa entrada).
+- [x] Renovación del alcance (entrada ledger fase 20) — la misma entrada del
+      PR #279 reemplaza el alcance D23 de fase 18, que expiró al cerrar 18.10.
 
 **Ninguna prueba viva corre ni se acredita en este documento**: es
-preparación. Lo ya verificado hoy (versiones, SHAs, topic+marcador read-only,
+preparación. Lo ya verificado el 2026-09-08 (versiones, SHAs, topic+marcador read-only,
 cuota) es evidencia de preparación, no de mediciones.
