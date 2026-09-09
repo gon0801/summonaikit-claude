@@ -61,7 +61,7 @@ mutación remota** (cualquier `git push`, `gh pr create`, `gh pr merge`,
 `gh api` con escritura):
 
 ```bash
-gh repo view gon0801/saikit-descartable --jq '.repositoryTopics[].name'
+gh repo view gon0801/saikit-descartable --json repositoryTopics --jq '.repositoryTopics[].name'
 gh api repos/gon0801/saikit-descartable/contents/SAIKIT-ORIGEN.md --jq '.content' | base64 -d
 ```
 
@@ -193,8 +193,6 @@ Texto para el operador (aprobar o rechazar explícitamente; sin aprobación,
 > `gon0801/saikit-descartable`** (privado, topic `saikit-descartable`, marcador
 > `SAIKIT-ORIGEN.md`), a favor de las filas 20.9–20.25 de Phase 20, para:
 >
-> - `gh repo create` — no aplica, el repo ya existe; incluido solo por si el
->   operador lo borra y lo recrea con los mismos topic+marcador.
 > - `git push` de ramas de prueba al descartable.
 > - `gh pr create` en el descartable.
 > - `gh pr merge --squash --match-head-commit` — **únicamente** vía
@@ -202,7 +200,8 @@ Texto para el operador (aprobar o rechazar explícitamente; sin aprobación,
 > - `gh api` de hilos (comentarios/reviews) en PRs del descartable.
 >
 > **EXPIRA** al cerrar la fila 20.26. `gh repo delete` queda FUERA: destructivo,
-> solo manual por el operador. NADA de merges en repos del usuario: esa
+> solo manual por el operador. Si el descartable desaparece o diverge, se PARA y
+> se re-aproba un paquete nuevo; nada queda pre-autorizado para recrearlo. NADA de merges en repos del usuario: esa
 > autorización es por-repo con `autopilot.json` (D15/D18), no este paquete.
 
 Registro de la aprobación: entrada en el ledger 事前確認 de `Plans.md` que hoy
