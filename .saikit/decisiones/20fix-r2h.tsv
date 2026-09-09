@@ -1,2 +1,3 @@
 cuando|etapa|decision|por_que|evidencia|resultado
 2026-09-09T01:11:46Z|verify|Cerrar los seis hilos vigentes de CodeRabbit antes del merge de PR 273|Cuatro drivers no atribuian evidencia con suficiente precision, el marcador awk dependia de comportamiento indefinido y un finding historico parecia vigente|Rojo medido para awk con c255 vacio; test_gate_behavior, test_saikit_postmerge y drives saikit-merge/setup-autopilot en PASS; mutantes de rotulo atrapados|ok
+2026-09-09T01:50:04Z|verify|Regenerar la baseline golden tras cambiar los bytes del hook|El CI completo detecto que test_golden_provenance seguia atado al hash anterior|golden-harness grabo 57 escenarios; test_golden_provenance OK y test_golden_baseline exit 0|ok
