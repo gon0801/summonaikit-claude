@@ -8,9 +8,9 @@
 # La comparacion de `--check` empieza en la primera linea `=== escenario `:
 # la identidad de aca abajo es informativa (ver decision 2 en el arnes).
 #
-# hook_sha256: d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
-# hook_bytes: 248436
-# hook_lineas: 4260
+# hook_sha256: 37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+# hook_bytes: 252356
+# hook_lineas: 4345
 # escenarios: 57
 #
 # Normalizaciones aplicadas (lo unico que cambia entre corridas):
@@ -3367,6 +3367,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0038-7abc-8def-000000000038/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0038-7abc-8def-222222222238
 estado_host: grok
 --- paso 04  phase=tool target=grok  payload=04.tool.grok.json
 exit 0
@@ -3393,6 +3394,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0038-7abc-8def-000000000038/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0038-7abc-8def-222222222238
 estado_host: grok
 --- paso 05  phase=stop target=grok  payload=05.stop.grok.json
 exit 0
@@ -3562,6 +3564,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0038-7abc-8def-000000000038/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0038-7abc-8def-222222222238
 estado_host: grok
 
 === escenario 39-grok-turno-completo
@@ -3640,6 +3643,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239
 estado_host: grok
 --- paso 04  phase=tool target=grok  payload=04.tool.grok.json
 exit 0
@@ -3666,6 +3670,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239
 estado_host: grok
 --- paso 05  phase=tool target=grok  payload=05.tool.grok.json
 exit 0
@@ -3693,6 +3698,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239,01a0c0de-0039-7abc-8def-333333333339
 estado_host: grok
 --- paso 06  phase=tool target=grok  payload=06.tool.grok.json
 exit 0
@@ -3721,6 +3727,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239,01a0c0de-0039-7abc-8def-333333333339
 estado_host: grok
 --- paso 07  phase=tool target=grok  payload=07.tool.grok.json
 exit 0
@@ -3750,6 +3757,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239,01a0c0de-0039-7abc-8def-333333333339,01a0c0de-0039-7abc-8def-444444444439
 estado_host: grok
 --- paso 08  phase=tool target=grok  payload=08.tool.grok.json
 exit 0
@@ -3780,6 +3788,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0039-7abc-8def-000000000039/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0039-7abc-8def-222222222239,01a0c0de-0039-7abc-8def-333333333339,01a0c0de-0039-7abc-8def-444444444439
 estado_host: grok
 --- paso 09  phase=stop target=grok  payload=09.stop.grok.json
 exit 0
@@ -3835,6 +3844,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0040-7abc-8def-000000000040/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0040-7abc-8def-222222222240
 estado_host: grok
 --- paso 03  phase=tool target=grok  payload=03.tool.grok.json
 exit 0
@@ -3860,6 +3870,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0040-7abc-8def-000000000040/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0040-7abc-8def-222222222240,01a0c0de-0040-7abc-8def-333333333340
 estado_host: grok
 --- paso 04  phase=tool target=grok  payload=04.tool.grok.json
 exit 0
@@ -3886,6 +3897,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0040-7abc-8def-000000000040/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0040-7abc-8def-222222222240,01a0c0de-0040-7abc-8def-333333333340,01a0c0de-0040-7abc-8def-444444444440
 estado_host: grok
 --- paso 05  phase=tool target=grok  payload=05.tool.grok.json
 exit 0
@@ -3913,6 +3925,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0040-7abc-8def-000000000040/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0040-7abc-8def-222222222240,01a0c0de-0040-7abc-8def-333333333340,01a0c0de-0040-7abc-8def-444444444440
 estado_host: grok
 --- paso 06  phase=stop target=grok  payload=06.stop.grok.json
 exit 0
@@ -4083,6 +4096,7 @@ hooks/state/<PROJECT_KEY>/01a0c0de-0040-7abc-8def-000000000040/harness-state.env
 | adv_paths=
 | adv_violation=
 | adv_violation_paths=
+| linked_children=01a0c0de-0040-7abc-8def-222222222240,01a0c0de-0040-7abc-8def-333333333340,01a0c0de-0040-7abc-8def-444444444440
 estado_host: grok
 
 === escenario 41-grok-presupuesto
