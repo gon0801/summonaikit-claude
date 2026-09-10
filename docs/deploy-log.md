@@ -29,6 +29,35 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-09 — PR #289 (20.13: consumo vinculado del sello Grok tras anuncio del host) — deploy REAL de las 4 copias
+
+- **Merge:** `16aea803e` a las 2026-09-10T03:22:13Z (20:22 PDT 09-09), verificado vía API.
+- **¿Cambió el hook? SÍ.** `hooks/summonaikit-harness.sh` (+85: `link_record_child` /
+  `link_consume_child_seal` / preservación de `linked_*` en `write_state`) y
+  `tools/saikit-merge.sh` (+35/−8: estados grok exigen `linked_seal_session`, linked
+  stale se ignora por hash del veredicto vigente). Pin del kit rotado dentro del PR
+  (`ddf32acc…`) y baseline dorada regrabada (57 escenarios, sha `37e55640…`).
+- **Deploy:** `install-hook.sh` REPARADO las cuatro copias con backup —
+  `~/.claude/…nuestro.20260909-202347.bak` (20:23 PDT),
+  `~/.grok/…20260909-202535.bak` (20:25 PDT),
+  `~/.dsh/…20260909-202536.bak` (20:25 PDT),
+  `~/.codex/…20260909-202536.bak` (20:25 PDT). Horas de backup en hora local PDT
+  (nombres del instalador), ~1-3 min posteriores al merge.
+- **`install-hook.sh --check`:** veredicto=ok, las cuatro al-día (fuente = bytes de
+  `origin/master`@`16aea803e`, sha256 `37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680`), registro=ok.
+- **Operador:** Gon (sesión claude, cierre de bloque 20.12/20.13 del lead).
+
+## 2026-09-09 — PRs #285, #286, #287 y #288 (carril por tipo en AGENTS.md / quality-kit CI paralelo / evidencia 20.9-20.11 bloqueada / evidencia 20.12 canal Grok) — hooks NO-OP
+
+- **Verificado contra el diff de cada merge:** ninguno toca `hooks/` ni `tools/`
+  (#285 `AGENTS.md`; #286 `.pre-commit-config.yaml`; #287 y #288 solo `docs/`).
+  Sin deploy que hacer; la última copia real instalada sigue siendo la de la
+  entrada anterior/superior cuando aplique.
+- **#287** además deja constancia explícita de que NINGUNA prueba viva corrió
+  (20.9 `unknown` por cuota; las corridas reales quedan apartadas para tras el
+  reset semanal).
+- **Operador:** Gon (sesión claude; #285/#286 mergeados en sesión previa).
+
 ## 2026-09-09 — PRs #282 y #283 (fila 20.29 y su implementación: shard por archivo de `suite`) — hooks NO-OP
 
 - **Merge (mergedAt de GitHub, UTC):** #282 `558f27f773b0dd8ce45d3f705180492bbb836f9c`
