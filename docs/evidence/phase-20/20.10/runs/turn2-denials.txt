@@ -1,0 +1,3 @@
+Bash | {'command': 'cd /tmp && rm -rf /tmp/rvw_probe && mkdir -p /tmp/rvw_probe/tests\n# Replica de run.sh con 3 tests para pro
+Bash | {'command': 'cd /private/tmp/saikit-20.10-20260909-223318/repo\necho "sha=$(git rev-parse HEAD)"\ngit push --force-with-
+Bash | {'command': 'cd /private/tmp/saikit-20.10-20260909-223318/repo\nTRAIL_COMMIT=f238b176d9e734e628b5e880b30f3ead98948918\ng
