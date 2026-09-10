@@ -29,6 +29,20 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-10 — PRs #293, #294 y #295 (evidencias 20.9 PreToolUse Claude / 20.10 autopilot Claude / 20.11 cuidar-pr vivo) — hooks NO-OP
+
+- **Merges:** #293 `d89a4ad…` (2026-09-10T05:39:25Z), #294 `60d1ee9…`
+  (2026-09-10T06:18:59Z), #295 `30bdbfe…` (2026-09-10T07:03:01Z), verificados
+  vía API.
+- **¿Cambió el hook? NO.** Los tres son solo `docs/evidence/phase-20/…`
+  (mediciones vivas del bloque 20.9-20.11). La mutación remota de las
+  mediciones fue sobre el descartable `gon0801/saikit-descartable`, dentro del
+  alcance §8; este repo no recibió cambios de código.
+- **Deploy corrido tras cada merge (regla de costumbre):** `install-hook.sh
+  --check` veredicto=ok, 4/4 al-día con la fuente de `origin/master` (hook
+  `37e55640…`, 4345 líneas); la última copia real sigue siendo la del PR #289.
+- **Operador:** Gon (sesión kimi; mediciones conducidas por el lead).
+
 ## 2026-09-09 — PR #291 (evidencia 20.14: autopilot completo en Grok con sello vinculado) — hooks NO-OP
 
 - **Merge:** `e8610e8ca` a las 2026-09-10T05:11:40Z (22:11 PDT 09-09), verificado vía API.
