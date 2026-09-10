@@ -1,0 +1,459 @@
+{
+  "n_payloads": 23,
+  "child_writes": [
+    {
+      "file": "PostToolUse-ptu-alias-HsgKS8.json",
+      "sessionId": "01a088ea-0016-7110-83bd-d95d3baeb314",
+      "subagentType": "implementer",
+      "path": "/private/tmp/saikit-2012-kSg38R/repo/child-marker-B1789003425Y2.txt",
+      "marker": "MARKER=B1789003425Y2",
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "top_keys": [
+        "cwd",
+        "durationMs",
+        "duration_ms",
+        "hookEventName",
+        "hook_event_name",
+        "isBackgrounded",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentType",
+        "timestamp",
+        "toolInput",
+        "toolInputTruncated",
+        "toolName",
+        "toolResult",
+        "toolResultTruncated",
+        "toolUseId",
+        "tool_input",
+        "tool_name",
+        "tool_response",
+        "tool_use_id",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentType"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-alias-bROP1f.json",
+      "sessionId": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+      "subagentType": "implementer",
+      "path": "/private/tmp/saikit-2012-kSg38R/repo/child-marker-A1789003425X2.txt",
+      "marker": "MARKER=A1789003425X2",
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "top_keys": [
+        "cwd",
+        "durationMs",
+        "duration_ms",
+        "hookEventName",
+        "hook_event_name",
+        "isBackgrounded",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentType",
+        "timestamp",
+        "toolInput",
+        "toolInputTruncated",
+        "toolName",
+        "toolResult",
+        "toolResultTruncated",
+        "toolUseId",
+        "tool_input",
+        "tool_name",
+        "tool_response",
+        "tool_use_id",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentType"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-all-eFZ0hu.json",
+      "sessionId": "01a088ea-0016-7110-83bd-d95d3baeb314",
+      "subagentType": "implementer",
+      "path": "/private/tmp/saikit-2012-kSg38R/repo/child-marker-B1789003425Y2.txt",
+      "marker": "MARKER=B1789003425Y2",
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "top_keys": [
+        "cwd",
+        "durationMs",
+        "duration_ms",
+        "hookEventName",
+        "hook_event_name",
+        "isBackgrounded",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentType",
+        "timestamp",
+        "toolInput",
+        "toolInputTruncated",
+        "toolName",
+        "toolResult",
+        "toolResultTruncated",
+        "toolUseId",
+        "tool_input",
+        "tool_name",
+        "tool_response",
+        "tool_use_id",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentType"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-all-w4HPHa.json",
+      "sessionId": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+      "subagentType": "implementer",
+      "path": "/private/tmp/saikit-2012-kSg38R/repo/child-marker-A1789003425X2.txt",
+      "marker": "MARKER=A1789003425X2",
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "top_keys": [
+        "cwd",
+        "durationMs",
+        "duration_ms",
+        "hookEventName",
+        "hook_event_name",
+        "isBackgrounded",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentType",
+        "timestamp",
+        "toolInput",
+        "toolInputTruncated",
+        "toolName",
+        "toolResult",
+        "toolResultTruncated",
+        "toolUseId",
+        "tool_input",
+        "tool_name",
+        "tool_response",
+        "tool_use_id",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentType"
+      ]
+    }
+  ],
+  "subagent_starts": [
+    {
+      "file": "SubagentStart-sub-5i8HBQ.json",
+      "sessionId": "01a088e9-e785-7162-9bc9-6c976112d92e",
+      "subagentType": "implementer",
+      "subagentId": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+      "description": "marker-A1789003425X2",
+      "top_keys": [
+        "cwd",
+        "description",
+        "hookEventName",
+        "hook_event_name",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentId",
+        "subagentType",
+        "timestamp",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentId",
+        "subagentType"
+      ],
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "raw_subset": {
+        "sessionId": "01a088e9-e785-7162-9bc9-6c976112d92e",
+        "subagentId": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+        "subagentType": "implementer",
+        "description": "marker-A1789003425X2",
+        "session_id": "01a088e9-e785-7162-9bc9-6c976112d92e"
+      }
+    },
+    {
+      "file": "SubagentStart-sub-g2u7X7.json",
+      "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+      "subagentType": "implementer",
+      "subagentId": "01a088ea-0016-7110-83bd-d95d3baeb314",
+      "description": "marker-B1789003425Y2",
+      "top_keys": [
+        "cwd",
+        "description",
+        "hookEventName",
+        "hook_event_name",
+        "permissionMode",
+        "permission_mode",
+        "sessionId",
+        "session_id",
+        "subagentId",
+        "subagentType",
+        "timestamp",
+        "transcriptPath",
+        "transcript_path",
+        "workspaceRoot"
+      ],
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "subagentId",
+        "subagentType"
+      ],
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "raw_subset": {
+        "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+        "subagentId": "01a088ea-0016-7110-83bd-d95d3baeb314",
+        "subagentType": "implementer",
+        "description": "marker-B1789003425Y2",
+        "session_id": "01a088e9-e721-7603-be57-c36de7066081"
+      }
+    }
+  ],
+  "spawns": [
+    {
+      "file": "PostToolUse-ptu-alias-ci8WIl.json",
+      "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+      "toolInput": {
+        "description": "marker-B1789003425Y2",
+        "prompt": "Use the write tool to create file child-marker-B1789003425Y2.txt containing exactly one line: MARKER=B1789003425Y2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Created `child-marker-B1789003425Y2.txt` with one line: `MARKER=B1789003425Y2`.",
+        "subagent_id": "01a088ea-0016-7110-83bd-d95d3baeb314",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 4243,
+        "worktree_path": null,
+        "resume_from_hint": "01a088ea-0016-7110-83bd-d95d3baeb314"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-alias-wfAdxR.json",
+      "sessionId": "01a088e9-e785-7162-9bc9-6c976112d92e",
+      "toolInput": {
+        "description": "marker-A1789003425X2",
+        "prompt": "Use the write tool to create file child-marker-A1789003425X2.txt containing exactly one line: MARKER=A1789003425X2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Wrote `child-marker-A1789003425X2.txt` with `MARKER=A1789003425X2`.",
+        "subagent_id": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 7735,
+        "worktree_path": null,
+        "resume_from_hint": "01a088e9-ffc1-7142-87bd-b3e26c741dfb"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-all-ls8MOe.json",
+      "sessionId": "01a088e9-e785-7162-9bc9-6c976112d92e",
+      "toolInput": {
+        "description": "marker-A1789003425X2",
+        "prompt": "Use the write tool to create file child-marker-A1789003425X2.txt containing exactly one line: MARKER=A1789003425X2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Wrote `child-marker-A1789003425X2.txt` with `MARKER=A1789003425X2`.",
+        "subagent_id": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 7735,
+        "worktree_path": null,
+        "resume_from_hint": "01a088e9-ffc1-7142-87bd-b3e26c741dfb"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-all-vmXmM0.json",
+      "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+      "toolInput": {
+        "description": "marker-B1789003425Y2",
+        "prompt": "Use the write tool to create file child-marker-B1789003425Y2.txt containing exactly one line: MARKER=B1789003425Y2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Created `child-marker-B1789003425Y2.txt` with one line: `MARKER=B1789003425Y2`.",
+        "subagent_id": "01a088ea-0016-7110-83bd-d95d3baeb314",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 4243,
+        "worktree_path": null,
+        "resume_from_hint": "01a088ea-0016-7110-83bd-d95d3baeb314"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-native-LkXR5d.json",
+      "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+      "toolInput": {
+        "description": "marker-B1789003425Y2",
+        "prompt": "Use the write tool to create file child-marker-B1789003425Y2.txt containing exactly one line: MARKER=B1789003425Y2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Created `child-marker-B1789003425Y2.txt` with one line: `MARKER=B1789003425Y2`.",
+        "subagent_id": "01a088ea-0016-7110-83bd-d95d3baeb314",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 4243,
+        "worktree_path": null,
+        "resume_from_hint": "01a088ea-0016-7110-83bd-d95d3baeb314"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    },
+    {
+      "file": "PostToolUse-ptu-native-MGmERr.json",
+      "sessionId": "01a088e9-e785-7162-9bc9-6c976112d92e",
+      "toolInput": {
+        "description": "marker-A1789003425X2",
+        "prompt": "Use the write tool to create file child-marker-A1789003425X2.txt containing exactly one line: MARKER=A1789003425X2",
+        "subagent_type": "implementer",
+        "background": false
+      },
+      "toolResult_type": "dict",
+      "toolResult": {
+        "type": "SubagentCompleted",
+        "output": "Wrote `child-marker-A1789003425X2.txt` with `MARKER=A1789003425X2`.",
+        "subagent_id": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+        "subagent_type": "implementer",
+        "tool_calls": 1,
+        "turns": 1,
+        "duration_ms": 7735,
+        "worktree_path": null,
+        "resume_from_hint": "01a088e9-ffc1-7142-87bd-b3e26c741dfb"
+      },
+      "has_parent_agent": false,
+      "has_parent_session": false,
+      "interesting_keys": [
+        "sessionId",
+        "session_id",
+        "toolInput.subagent_type",
+        "toolResult.subagent_id",
+        "toolResult.subagent_type",
+        "tool_input.subagent_type",
+        "tool_response.subagent_id",
+        "tool_response.subagent_type"
+      ]
+    }
+  ],
+  "stops_with_bg": [],
+  "stops_all_n": 7,
+  "autowake_ups": [],
+  "any_payload_with_parent_agent_substr": false,
+  "any_payload_with_parent_session_substr": false,
+  "any_payload_with_parent_id_substr": false
+}
