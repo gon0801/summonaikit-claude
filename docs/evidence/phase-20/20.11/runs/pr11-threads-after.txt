@@ -1,0 +1,4 @@
+3976073720 in_reply_to=- BOT-SIMULADO: esta linea deberia decir 'Linea de prueba del caso solo-hilos' (or
+3976073724 in_reply_to=- BOT-SIMULADO: que es 20.11? Falta contexto o link al ledger.
+3976199243 in_reply_to=3976073720 **dismiss** — no es un defecto, es una preferencia de redacción sin regla que la
+3976199567 in_reply_to=3976073724 **ask** — la pregunta es legítima y no se puede cerrar desde este repo; queda pa
