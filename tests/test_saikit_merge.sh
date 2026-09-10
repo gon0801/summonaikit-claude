@@ -769,6 +769,44 @@ caso "grok_dos_linked_seal_session_no_merguea"
 }
 fin_caso "grok_dos_linked_seal_session_no_merguea"
 
+# 20.13 corrección: linked viejo (sello de otro sha) no cuenta para ambigüedad;
+# el vigente del verdict actual deja LISTO. Sin el filtro por hash, n_linked=2
+# bloquearía merge para siempre tras la primera tarea del mismo repo.
+caso "grok_linked_viejo_mas_vigente_listo"
+{
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  hash_vigente="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  sd_viejo="$SB/estado/grok/$key/parent-tarea1-viejo"
+  mkdir -p "$sd_viejo"
+  {
+    printf 'task_hash=h2013-old\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+    printf 'linked_children=child-old\n'
+    printf 'linked_seal_session=child-old\n'
+  } > "$sd_viejo/harness-state.env"
+  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd_viejo/harness-evidence.log"
+  sd_nuevo="$SB/estado/grok/$key/parent-tarea2-vigente"
+  mkdir -p "$sd_nuevo"
+  {
+    printf 'task_hash=h2013-new\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=%s\n' "$hash_vigente"
+    printf 'linked_children=child-new\n'
+    printf 'linked_seal_session=child-new\n'
+  } > "$sd_nuevo/harness-state.env"
+  printf 'prompt task started: h2013-new\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd_nuevo/harness-evidence.log"
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "LISTO pese a linked viejo" "$OUT" "LISTO:"
+  _no_contiene "no declara ambiguo por linked viejo" "$OUT" "vinculo padre-hijo ambiguo"
+  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
+}
+fin_caso "grok_linked_viejo_mas_vigente_listo"
+
 caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
   # pre-receive del origin rechaza TODO push (incluido el --delete): el merge
@@ -1392,6 +1430,41 @@ c_grok_seal_boot_sin_vinculo() {
   if merge_disparado; then _mal "mergeo con seal_boot grok sin linked_seal_session"; fi
 }
 
+c_grok_linked_viejo_mas_vigente() {
+  # 20.13: mutacion grok_cuenta_linked_viejos vuelve a contar stale → ambiguo.
+  CASO_ROJO=0; sb_reset master
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  hash_vigente="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  sd_viejo="$SB/estado/grok/$key/parent-tarea1-viejo"
+  mkdir -p "$sd_viejo"
+  {
+    printf 'task_hash=h2013-old\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+    printf 'linked_children=child-old\n'
+    printf 'linked_seal_session=child-old\n'
+  } > "$sd_viejo/harness-state.env"
+  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd_viejo/harness-evidence.log"
+  sd_nuevo="$SB/estado/grok/$key/parent-tarea2-vigente"
+  mkdir -p "$sd_nuevo"
+  {
+    printf 'task_hash=h2013-new\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=%s\n' "$hash_vigente"
+    printf 'linked_children=child-new\n'
+    printf 'linked_seal_session=child-new\n'
+  } > "$sd_nuevo/harness-state.env"
+  printf 'prompt task started: h2013-new\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd_nuevo/harness-evidence.log"
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "LISTO pese a linked viejo" "$OUT" "LISTO:"
+  _no_contiene "no declara ambiguo por linked viejo" "$OUT" "vinculo padre-hijo ambiguo"
+  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
+}
+
 c_borrado() {
   CASO_ROJO=0; sb_reset master
   printf '#!/bin/sh\necho delete >> "%s/orden.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
@@ -1495,6 +1568,7 @@ rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
 email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
 estado_opcional	s|if \[ -z "\$ESTADO_FILE" \]; then|if false; then|	c_sin_estado
 grok_sin_exigir_vinculo	s|grep -q '^linked_seal_session=' "\$f" 2>/dev/null || continue|true|	c_grok_seal_boot_sin_vinculo
+grok_cuenta_linked_viejos	s|\[ -n "\$sello_f" \] && \[ "\$sello_f" = "\$hash_file" \] || continue|true|	c_grok_linked_viejo_mas_vigente
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
 verifier_flojo	s|\[ "\$V_VERIFIER" = "PASS" \]|true|	c_verifier_fail
 autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor

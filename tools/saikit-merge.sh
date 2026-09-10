@@ -49,17 +49,22 @@
 # veredicto_sha256; fuera de grok se toma el de mtime MAS RECIENTE. Bajo host
 # grok (20.13) la autoridad YA NO es mtime: solo un estado con
 # linked_seal_session (padre que consumio el sello tras anuncio host); un
-# seal_boot hijo suelto no basta; dos linked fallan cerrados. Es determinista
-# en la practica (la sesion viva acaba de sellar) y falla CERRADO en el caso
-# ambiguo: si elige la sesion equivocada, el veredicto_sha256 de esa sesion
-# no calza con el archivo actual y el gate rechaza. LIMITES DECLARADOS: (a)
-# dos sesiones vivas del MISMO proyecto con veredictos sellados a la vez se
-# resuelven por mtime (no-grok) y la perdedora no puede mergear hasta ser la
-# mas reciente; (b) el cksum se computa sobre `pwd -P` del toplevel, la misma
-# forma fisica que el hook canonicaliza — si el hook corrio desde una ruta
-# distinta (p.ej. C:\ en Windows vs /c/), el estado no se encuentra y el gate
-# falla cerrado con "sin estado del hook". Override para auditoria/tests:
-# SAIKIT_ESTADO_ROOT (default ~/.claude/hooks/state, el HOOK_DIR del perfil).
+# seal_boot hijo suelto no basta. Antes de contar ambigüedad, se DESCARTAN
+# los linked cuyo veredicto_sha256 no calce con el sha256sum del verdict
+# file actual ($VEREDICTO): estados viejos de tareas ya mergeadas no
+# bloquean. Dos linked VIGENTES (mismo sello que el archivo) fallan
+# cerrados. Es determinista en la practica (la sesion viva acaba de sellar)
+# y falla CERRADO en el caso ambiguo de dos padres vivos del mismo
+# verdict. LIMITES DECLARADOS: (a) dos sesiones vivas del MISMO proyecto
+# con veredictos sellados a la vez se resuelven por mtime (no-grok) y la
+# perdedora no puede mergear hasta ser la mas reciente; (b) el cksum se
+# computa sobre `pwd -P` del toplevel, la misma forma fisica que el hook
+# canonicaliza — si el hook corrio desde una ruta distinta (p.ej. C:\ en
+# Windows vs /c/), el estado no se encuentra y el gate falla cerrado con
+# "sin estado del hook"; (c) no hay cleanup post-merge de harness-state.env
+# — los linked stale se ignoran por hash, no se borran. Override para
+# auditoria/tests: SAIKIT_ESTADO_ROOT (default ~/.claude/hooks/state, el
+# HOOK_DIR del perfil).
 #
 # El delay del reintento de mergeable UNKNOWN es SAIKIT_MERGE_RETRY_SEG
 # (default 3; los tests lo ponen en 0).
@@ -473,17 +478,22 @@ fi
 # Regla del punto de diseño: ver cabecera. Fail-closed: sin estado, no merge.
 # 20.13: bajo host grok la autoridad YA NO es mtime. Solo se acepta un estado
 # padre que tenga linked_seal_session (consumo tras anuncio host). Un seal_boot
-# hijo suelto no basta. Fuera de grok se conserva el mtime declarado.
+# hijo suelto no basta. Linked cuyo sello no calza con $VEREDICTO se ignoran
+# (stale de tareas ya mergeadas) antes de contar ambigüedad. Fuera de grok se
+# conserva el mtime declarado.
 estado_encontrar() {
-  local key f m best_m=-1 host_seg n_linked=0 linked_pick=""
+  local key f m best_m=-1 host_seg n_linked=0 linked_pick="" sello_f hash_file
   ESTADO_FILE=""
   key="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d' ' -f 1)"
+  hash_file="$(sha256sum "$VEREDICTO" | cut -d' ' -f 1)"
   for f in "${SAIKIT_ESTADO_ROOT:-$HOME/.claude/hooks/state}"/*/"$key"/*/harness-state.env; do
     [ -f "$f" ] || continue
     grep -q '^veredicto_sha256=' "$f" 2>/dev/null || continue
     case "$f" in
       */grok/*)
         grep -q '^linked_seal_session=' "$f" 2>/dev/null || continue
+        sello_f="$(sed -n 's/^veredicto_sha256=//p' "$f" | tail -n 1)"
+        [ -n "$sello_f" ] && [ "$sello_f" = "$hash_file" ] || continue
         n_linked=$((n_linked + 1))
         linked_pick="$f"
         ;;
