@@ -1,0 +1,56 @@
+Internal error: {
+  "message": "reqwest error stream: error sending request for url (https://cli-chat-proxy.grok.com/v1/responses)",
+  "promptUsage": {
+    "inputTokens": 449218,
+    "outputTokens": 5029,
+    "totalTokens": 454247,
+    "cachedReadTokens": 348928,
+    "cacheCreationTokens": 0,
+    "reasoningTokens": 3357,
+    "modelCalls": 10,
+    "apiDurationMs": 352924,
+    "costUsdTicks": 688870600,
+    "modelUsage": {
+      "grok-4.6-build": {
+        "inputTokens": 449218,
+        "outputTokens": 5029,
+        "totalTokens": 454247,
+        "cachedReadTokens": 348928,
+        "cacheCreationTokens": 0,
+        "reasoningTokens": 3357,
+        "modelCalls": 10,
+        "apiDurationMs": 352924,
+        "costUsdTicks": 688870600
+      }
+    },
+    "numTurns": 10
+  }
+}
+Error: Internal error: {
+  "message": "reqwest error stream: error sending request for url (https://cli-chat-proxy.grok.com/v1/responses)",
+  "promptUsage": {
+    "inputTokens": 449218,
+    "outputTokens": 5029,
+    "totalTokens": 454247,
+    "cachedReadTokens": 348928,
+    "cacheCreationTokens": 0,
+    "reasoningTokens": 3357,
+    "modelCalls": 10,
+    "apiDurationMs": 352924,
+    "costUsdTicks": 688870600,
+    "modelUsage": {
+      "grok-4.6-build": {
+        "inputTokens": 449218,
+        "outputTokens": 5029,
+        "totalTokens": 454247,
+        "cachedReadTokens": 348928,
+        "cacheCreationTokens": 0,
+        "reasoningTokens": 3357,
+        "modelCalls": 10,
+        "apiDurationMs": 352924,
+        "costUsdTicks": 688870600
+      }
+    },
+    "numTurns": 10
+  }
+}

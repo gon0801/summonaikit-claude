@@ -24,9 +24,9 @@ Sello vía consumo vinculado (20.13); merge solo con `tools/saikit-merge.sh`.
 | Sello hijo | `states/child-seal_boot.env` sesión `01a0898c-…` | `lane=seal_boot` + `veredicto_sha256=fa339156…` |
 | Consumo padre | `states/parent-linked.env.observed` sesión `01a08985-…` | `linked_seal_session=01a0898c-…` + mismo hash + `agents_seen=reviewer` |
 | Veredicto | `b4cbe346….json` | sha HEAD `b4cbe346…`, PR 8, blast `bash tests/run.sh` |
-| LISTO | `out/merge-listo.txt` | `LISTO: … bash tools/saikit-merge.sh --confirmado` |
-| sí → merge | `out/merge-confirmado.txt` | `MERGE-OK: 6e095023…` vía tool; **no** `gh pr merge` a pelo |
-| postmerge | `out/postmerge.txt` | `VERDE` sobre merge commit; nada que deshacer |
+| LISTO | `runs/merge-listo.txt` | `LISTO: … bash tools/saikit-merge.sh --confirmado` |
+| sí → merge | `runs/merge-confirmado.txt` | `MERGE-OK: 6e095023…` vía tool; **no** `gh pr merge` a pelo |
+| postmerge | `runs/postmerge.txt` | `VERDE` sobre merge commit; nada que deshacer |
 | Sesión ajena | `states/foreign-no-consume.env` | spawn del hijo **sin** SubagentStart previo → sin `veredicto_sha256` / sin `linked_seal_session` |
 
 Head feature: `b4cbe34693a8ff40a6988b12afe91ddbb330bc09` (app 1.1.1 + tools kit).
@@ -36,7 +36,7 @@ Merge squash: `6e095023434c1245f5057252c83e878624cd752f`.
 
 - No se usó merge manual ni `gh pr merge` directo.
 - No se atribuyó sello por mtime / ruta / `task_hash`.
-- No se cerró nada como `unknown`: el run1 murió por error de red de la API Grok (`out/run1-api-fail.stderr.txt`); el run2 completó el sello vinculado y el gate.
+- No se cerró nada como `unknown`: el run1 murió por error de red de la API Grok (`runs/run1-api-fail.stderr.txt`); el run2 completó el sello vinculado y el gate.
 
 ## Residuales declarados
 
