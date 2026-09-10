@@ -1,0 +1,16 @@
+{
+  "hookEventName": "subagent_start",
+  "sessionId": "01a088e9-e721-7603-be57-c36de7066081",
+  "cwd": "/private/tmp/saikit-2012-kSg38R/repo",
+  "workspaceRoot": "/private/tmp/saikit-2012-kSg38R/repo/",
+  "timestamp": "2026-09-10T01:23:51.961838+00:00",
+  "transcriptPath": "__TRANSCRIPT__",
+  "permissionMode": "bypassPermissions",
+  "subagentId": "01a088ea-0016-7110-83bd-d95d3baeb314",
+  "subagentType": "implementer",
+  "description": "marker-B1789003425Y2",
+  "hook_event_name": "SubagentStart",
+  "session_id": "01a088e9-e721-7603-be57-c36de7066081",
+  "transcript_path": "__TRANSCRIPT__",
+  "permission_mode": "bypassPermissions"
+}

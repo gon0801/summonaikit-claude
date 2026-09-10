@@ -1,0 +1,18 @@
+[
+  {
+    "path": "/tmp/saikit-2012-kSg38R/home/.grok/sessions/%2Fprivate%2Ftmp%2Fsaikit-2012-kSg38R%2Frepo/01a088e9-e785-7162-9bc9-6c976112d92e/subagents/01a088e9-ffc1-7142-87bd-b3e26c741dfb/meta.json",
+    "parent_session_id": "01a088e9-e785-7162-9bc9-6c976112d92e",
+    "child_session_id": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+    "subagent_id": "01a088e9-ffc1-7142-87bd-b3e26c741dfb",
+    "description": "marker-A1789003425X2",
+    "status": "completed"
+  },
+  {
+    "path": "/tmp/saikit-2012-kSg38R/home/.grok/sessions/%2Fprivate%2Ftmp%2Fsaikit-2012-kSg38R%2Frepo/01a088e9-e721-7603-be57-c36de7066081/subagents/01a088ea-0016-7110-83bd-d95d3baeb314/meta.json",
+    "parent_session_id": "01a088e9-e721-7603-be57-c36de7066081",
+    "child_session_id": "01a088ea-0016-7110-83bd-d95d3baeb314",
+    "subagent_id": "01a088ea-0016-7110-83bd-d95d3baeb314",
+    "description": "marker-B1789003425Y2",
+    "status": "completed"
+  }
+]

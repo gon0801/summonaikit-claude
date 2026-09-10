@@ -1,0 +1,10 @@
+lab=/tmp/saikit-2012-kSg38R
+checkout_kit=71d31eb6e93c43aecf951005bcf1255cb7b078ab
+hook_source_sha256=d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
+hook_vivo_grok_sha256=d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
+grok_version=grok 1.0.24 (68e414c661e3) [stable]
+repo=/private/tmp/saikit-2012-kSg38R/repo
+nonce_a=A1789003258X
+nonce_b=B1789003258Y
+note=isolated_HOME_only; live_profile_not_written; gate_neutered_in_copy
+live_trust_cksum_unchanged=4294967295_0_bytes
