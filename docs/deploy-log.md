@@ -29,6 +29,19 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-09 — PR #291 (evidencia 20.14: autopilot completo en Grok con sello vinculado) — hooks NO-OP
+
+- **Merge:** `e8610e8ca` a las 2026-09-10T05:11:40Z (22:11 PDT 09-09), verificado vía API.
+- **¿Cambió el hook? NO.** Solo `docs/` (evidencia de la medición 20.14 + re-fijado del
+  pin del runbook §1 a `e0f7a25…`, hook sha256 `37e55640…`, 4345 líneas — la misma
+  identidad que la evidencia). CI del PR: 15/15 verde en head `b47141a`
+  (gate run 34439557634).
+- **Deploy corrido igual (regla de costumbre):** `install-hook.sh` YA AL DIA en las
+  cuatro copias (claude/grok/dsh/codex); la última copia real sigue siendo la del
+  PR #289 (20.13). `--check`: veredicto=ok, 4/4 al-día, registro=ok;
+  `check-hook-registration.sh` exit 0.
+- **Operador:** Gon (sesión kimi; cierre del bloque 20.14 por el lead).
+
 ## 2026-09-09 — PR #289 (20.13: consumo vinculado del sello Grok tras anuncio del host) — deploy REAL de las 4 copias
 
 - **Merge:** `16aea803e` a las 2026-09-10T03:22:13Z (20:22 PDT 09-09), verificado vía API.
