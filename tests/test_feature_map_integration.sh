@@ -591,14 +591,38 @@ printf '%s' "$estado_out" | grep -Eq '^(al_dia|desactualizado|viejo|unknown|sin_
   || malo "estado del mapa no cotejado: $estado_out"
 
 # Mutante 20.28: quitar el snapshot y volver a [ ! -e ] trata un
-# __pycache__ preexistente como fuga (falso rojo). Discriminante.
+# __pycache__ preexistente como fuga. Se ejecuta la guarda mutada y DEBE
+# salir distinta de 0; la guarda con snapshot (had=1) debe pasar.
 caso "mutante sin snapshot de fuga se pone rojo"
-mkdir -p "$repo/verify/__pycache__"
-naive_rc=0
-# Copia de la asercion vieja: falla si el dir existe (preexistente o no).
-[ ! -e "$repo/verify/__pycache__" ] || naive_rc=1
-[ "$naive_rc" -eq 1 ] \
-  || malo "mutante [ ! -e ] no se puso rojo ante __pycache__ preexistente"
+planted_pycache=0
+if [ ! -e "$repo/verify/__pycache__" ]; then
+  mkdir -p "$repo/verify/__pycache__"
+  planted_pycache=1
+fi
+had_pre=1
+# Guarda buena (snapshot): preexistente no es fuga.
+if [ "$had_pre" -eq 0 ] && [ -e "$repo/verify/__pycache__" ]; then
+  malo "guarda con snapshot rechazo __pycache__ preexistente"
+fi
+mut_leak="$SANDBOX/mut-leak-nosnapshot.sh"
+cat > "$mut_leak" <<'EOF'
+#!/usr/bin/env bash
+# MUTANT: asercion vieja sin snapshot.
+set -u
+repo="$1"
+[ ! -e "$repo/verify/__pycache__" ] \
+  || { echo "FAIL: fuga __pycache__"; exit 1; }
+[ ! -e "$repo/.pytest_cache" ] \
+  || { echo "FAIL: fuga .pytest_cache"; exit 1; }
+exit 0
+EOF
+chmod +x "$mut_leak"
+if bash "$mut_leak" "$repo" >/dev/null 2>&1; then
+  malo "mutante [ ! -e ] sobrevivio en verde con __pycache__ preexistente"
+fi
+if [ "$planted_pycache" -eq 1 ]; then
+  rmdir "$repo/verify/__pycache__" 2>/dev/null || true
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

@@ -1199,26 +1199,29 @@ fin_caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
 
 caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
 {
-  # Discriminante 20.28: si raw != canon, comparar contra raw (sin pwd -P)
-  # falla la igualdad exacta que la tool usa tras canonicalizar.
+  # Discriminante 20.28 (plataformas con o sin symlink): OUT con forma fisica
+  # /private/... vs esperado logico /tmp/.... Igualdad contra raw queda ROJA;
+  # relajar a basename saikit-merge.lock tambien queda ROJA. La guarda buena
+  # exige el path canon completo (lock_canon + pwd -P en c_lock_dos_worktrees).
   CASO_ROJO=0; sb_reset master
-  raw="$SB/work/.git/saikit-merge.lock"
-  canon="$(cd "$SB/work/.git" && pwd -P)/saikit-merge.lock"
-  if [ "$raw" = "$canon" ]; then
-    printf '    ok: raw==canon en esta plataforma; mutante no discrimina\n'
-  else
-    reported="$canon"
-    if [ "$reported" = "$raw" ]; then
-      _mal "mutante: raw y canon debian diferir"
-    fi
-    # La asercion mutante (igualdad/contiene exacto del raw contra reportado
-    # canonico) queda roja; no se relaja a «contiene saikit-merge.lock».
-    if [ "$reported" = "$raw" ] || [ "$reported" = "saikit-merge.lock" ]; then
-      _mal "mutante sin canonicalizar sobrevive"
-    fi
-    grep -E 'lock_canon=.*pwd -P' "$here/test_saikit_merge.sh" >/dev/null \
-      || _mal "falta lock_canon con pwd -P en c_lock_dos_worktrees"
+  fake_raw="/tmp/saikit-merge-fake/work/.git/saikit-merge.lock"
+  fake_canon="/private/tmp/saikit-merge-fake/work/.git/saikit-merge.lock"
+  OUT="$(printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n  lock: %s\n' \
+    "$fake_canon" "$fake_canon")"
+  reported="$(printf '%s' "$OUT" \
+    | sed -n 's/^saikit-merge: LOCK de integracion ocupado, no se sigue (\(.*\)):$/\1/p')"
+  [ -n "$reported" ] || _mal "no se extrajo el path del OUT sintetico"
+  [ "$reported" = "$fake_canon" ] || _mal "guarda canon: reportado != fake_canon"
+  # Mutante: igualdad contra el path logico (sin pwd -P).
+  if [ "$reported" = "$fake_raw" ]; then
+    _mal "mutante igualdad-raw sobrevivio (reportado==raw)"
   fi
+  # Mutante: relajar a basename.
+  if [ "$reported" = "saikit-merge.lock" ]; then
+    _mal "mutante basename-only sobrevivio"
+  fi
+  grep -E 'lock_canon=.*pwd -P' "$here/test_saikit_merge.sh" >/dev/null \
+    || _mal "falta lock_canon con pwd -P en c_lock_dos_worktrees"
 }
 fin_caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
 
