@@ -1,0 +1,11 @@
+8011fc2f9624c9d2390278631c6cbcf66d71eb50
+PR9 MERGED 8011fc2f9624c9d2390278631c6cbcf66d71eb50
+PR10 MERGED 9158e44c642a627d1c1d25ffd77b7f35a770d56d
+version="1.1.2"
+run.sh
+chore: bump app a 1.1.2 (#9)
+
+Saikit-Merge: 7397859db969c49b0dfb3114ce6130581e1e8eb5
+chore: tests/run.sh como entrypoint unico de la bateria (#10)
+
+Saikit-Merge: e03472746aaf3742fd72d5078de10dc7746232e8
