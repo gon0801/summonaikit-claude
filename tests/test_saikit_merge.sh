@@ -704,6 +704,71 @@ caso "reviewer_no_visto_en_el_estado_no_merguea"
 }
 fin_caso "reviewer_no_visto_en_el_estado_no_merguea"
 
+# 20.13: bajo grok, seal_boot sin linked_seal_session no es autoridad de merge.
+caso "grok_seal_boot_sin_vinculo_no_merguea"
+{
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  sd="$SB/estado/grok/$key/child-seal-boot"
+  mkdir -p "$sd"
+  {
+    printf 'task_hash=h2013\n'
+    printf 'agents_seen=reviewer\n'
+    printf 'lane=seal_boot\n'
+    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  } > "$sd/harness-state.env"
+  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  correr --confirmado
+  _contiene "razon seal_boot grok sin vinculo" "$OUT" "NO-MERGE: sin estado del hook"
+  if merge_disparado; then _mal "mergeo con seal_boot grok sin linked_seal_session"; fi
+}
+fin_caso "grok_seal_boot_sin_vinculo_no_merguea"
+
+caso "grok_padre_con_linked_seal_session_listo"
+{
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  sd="$SB/estado/grok/$key/parent-linked"
+  mkdir -p "$sd"
+  {
+    printf 'task_hash=h2013\n'
+    printf 'agents_seen=implementer,verifier,reviewer\n'
+    printf 'lane=full\n'
+    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+    printf 'linked_children=child-x\n'
+    printf 'linked_seal_session=child-x\n'
+  } > "$sd/harness-state.env"
+  printf 'prompt task started: h2013\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "LISTO con padre grok vinculado" "$OUT" "LISTO:"
+  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
+}
+fin_caso "grok_padre_con_linked_seal_session_listo"
+
+caso "grok_dos_linked_seal_session_no_merguea"
+{
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  hash="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  for sess in parent-a parent-b; do
+    sd="$SB/estado/grok/$key/$sess"
+    mkdir -p "$sd"
+    {
+      printf 'task_hash=h2013\n'
+      printf 'agents_seen=implementer,verifier,reviewer\n'
+      printf 'lane=full\n'
+      printf 'veredicto_sha256=%s\n' "$hash"
+      printf 'linked_seal_session=child-%s\n' "$sess"
+    } > "$sd/harness-state.env"
+    printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  done
+  correr --confirmado
+  _contiene "razon vinculo ambiguo" "$OUT" "NO-MERGE: vinculo padre-hijo ambiguo"
+  if merge_disparado; then _mal "mergeo con dos linked_seal_session grok"; fi
+}
+fin_caso "grok_dos_linked_seal_session_no_merguea"
+
 caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
   # pre-receive del origin rechaza TODO push (incluido el --delete): el merge
@@ -1308,6 +1373,25 @@ c_sin_estado() {
   if merge_disparado; then _mal "mergeo sin estado del hook"; fi
 }
 
+c_grok_seal_boot_sin_vinculo() {
+  # 20.13: mutacion grok_sin_exigir_vinculo acepta seal_boot y mergea.
+  CASO_ROJO=0; sb_reset master
+  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
+  rm -rf "$SB/estado"
+  sd="$SB/estado/grok/$key/child-seal-boot"
+  mkdir -p "$sd"
+  {
+    printf 'task_hash=h2013\n'
+    printf 'agents_seen=reviewer\n'
+    printf 'lane=seal_boot\n'
+    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
+  } > "$sd/harness-state.env"
+  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  correr --confirmado
+  _contiene "razon seal_boot grok sin vinculo" "$OUT" "NO-MERGE: sin estado del hook"
+  if merge_disparado; then _mal "mergeo con seal_boot grok sin linked_seal_session"; fi
+}
+
 c_borrado() {
   CASO_ROJO=0; sb_reset master
   printf '#!/bin/sh\necho delete >> "%s/orden.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
@@ -1410,6 +1494,7 @@ verify_ruta_floja	s|grep -q -- 'verify/'|true|	c_verify_ruta
 rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
 email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
 estado_opcional	s|if \[ -z "\$ESTADO_FILE" \]; then|if false; then|	c_sin_estado
+grok_sin_exigir_vinculo	s|grep -q '^linked_seal_session=' "\$f" 2>/dev/null || continue|true|	c_grok_seal_boot_sin_vinculo
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
 verifier_flojo	s|\[ "\$V_VERIFIER" = "PASS" \]|true|	c_verifier_fail
 autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor

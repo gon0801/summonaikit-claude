@@ -46,13 +46,16 @@
 # Este script corre como tool Bash y NO conoce su session_id (no viaja en el
 # entorno del proceso). REGLA EXPLICITA: se buscan TODOS los
 # harness-state.env del proyecto (hosts/*/<key>/*/) que tengan
-# veredicto_sha256 y se toma el de mtime MAS RECIENTE. Es determinista en la
-# practica (la sesion viva acaba de sellar) y falla CERRADO en el caso
+# veredicto_sha256; fuera de grok se toma el de mtime MAS RECIENTE. Bajo host
+# grok (20.13) la autoridad YA NO es mtime: solo un estado con
+# linked_seal_session (padre que consumio el sello tras anuncio host); un
+# seal_boot hijo suelto no basta; dos linked fallan cerrados. Es determinista
+# en la practica (la sesion viva acaba de sellar) y falla CERRADO en el caso
 # ambiguo: si elige la sesion equivocada, el veredicto_sha256 de esa sesion
 # no calza con el archivo actual y el gate rechaza. LIMITES DECLARADOS: (a)
 # dos sesiones vivas del MISMO proyecto con veredictos sellados a la vez se
-# resuelven por mtime y la perdedora no puede mergear hasta ser la mas
-# reciente; (b) el cksum se computa sobre `pwd -P` del toplevel, la misma
+# resuelven por mtime (no-grok) y la perdedora no puede mergear hasta ser la
+# mas reciente; (b) el cksum se computa sobre `pwd -P` del toplevel, la misma
 # forma fisica que el hook canonicaliza — si el hook corrio desde una ruta
 # distinta (p.ej. C:\ en Windows vs /c/), el estado no se encuentra y el gate
 # falla cerrado con "sin estado del hook". Override para auditoria/tests:
@@ -468,16 +471,34 @@ fi
 
 # --------------------------------------- cruce con el estado del hook (D18)
 # Regla del punto de diseño: ver cabecera. Fail-closed: sin estado, no merge.
+# 20.13: bajo host grok la autoridad YA NO es mtime. Solo se acepta un estado
+# padre que tenga linked_seal_session (consumo tras anuncio host). Un seal_boot
+# hijo suelto no basta. Fuera de grok se conserva el mtime declarado.
 estado_encontrar() {
-  local key f m best_m=-1
+  local key f m best_m=-1 host_seg n_linked=0 linked_pick=""
   ESTADO_FILE=""
   key="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d' ' -f 1)"
   for f in "${SAIKIT_ESTADO_ROOT:-$HOME/.claude/hooks/state}"/*/"$key"/*/harness-state.env; do
     [ -f "$f" ] || continue
     grep -q '^veredicto_sha256=' "$f" 2>/dev/null || continue
-    m="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || printf '0')"
-    if [ "$m" -gt "$best_m" ]; then best_m="$m"; ESTADO_FILE="$f"; fi
+    case "$f" in
+      */grok/*)
+        grep -q '^linked_seal_session=' "$f" 2>/dev/null || continue
+        n_linked=$((n_linked + 1))
+        linked_pick="$f"
+        ;;
+      *)
+        m="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || printf '0')"
+        if [ "$m" -gt "$best_m" ]; then best_m="$m"; ESTADO_FILE="$f"; fi
+        ;;
+    esac
   done
+  if [ "$n_linked" -gt 1 ]; then
+    no_merge "vinculo padre-hijo ambiguo: $n_linked estados grok con linked_seal_session para este proyecto"
+  fi
+  if [ "$n_linked" -eq 1 ]; then
+    ESTADO_FILE="$linked_pick"
+  fi
   if [ -z "$ESTADO_FILE" ]; then
     no_merge "sin estado del hook: no hay harness-state.env con veredicto_sha256 para este proyecto (¿corrio el sello en otra sesion o desde otra ruta?)"
   fi

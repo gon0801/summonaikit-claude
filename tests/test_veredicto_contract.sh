@@ -914,6 +914,76 @@ caso "verdict_unarmed_write_codigo_no_implementa"
 verdict_unarmed_write_codigo_no_implementa
 fin_caso "verdict_unarmed_write_codigo_no_implementa"
 
+# ---------------------- 20.13: consumo vinculado Grok (anuncio host)
+# Positivo: padre armado anuncia hijo → hijo sella → spawn done consume en padre.
+# Negativo: otro padre no recibe el sello; sin vínculo el hijo seal_boot no basta.
+verdict_link_positivo_padre_consume_sello_hijo() {
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"20.13\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+
+  LAB_SESSION_ID=parent-A-2013
+  lab_run prompt grok "$(lab_payload_prompt '-saikit trabajo padre A')"
+  ruta_A="$(find "$LAB/hooks/state/grok" -path '*/parent-A-2013/harness-state.env')"
+  [ -f "$ruta_A" ] || { _mal "falta estado padre A"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
+  lab_run tool grok "$(lab_payload_grok_subagent_start reviewer child-B-2013 'review A')"
+  _igual "padre anuncia hijo" "$(sed -n 's/^linked_children=//p' "$ruta_A")" "child-B-2013"
+
+  LAB_SESSION_ID=child-B-2013
+  lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/child-B-2013/harness-state.env')"
+  [ -f "$ruta_B" ] || { _mal "falta sello hijo B"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
+  _igual "sello en hijo" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+  _igual "hijo seal_boot" "$(sed -n 's/^lane=//p' "$ruta_B")" "seal_boot"
+  _vacio "padre aun sin sello antes del consume" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_A")"
+
+  LAB_SESSION_ID=parent-A-2013
+  lab_run tool grok "$(lab_payload_grok_spawn_done reviewer child-B-2013)"
+  _igual "padre consume sello" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_A")" "$want"
+  _igual "padre nombra linked_seal_session" "$(sed -n 's/^linked_seal_session=//p' "$ruta_A")" "child-B-2013"
+  _contiene "padre agents_seen reviewer" "$(sed -n 's/^agents_seen=//p' "$ruta_A")" "reviewer"
+  _igual "hijo conserva sello" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+  LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
+}
+caso "verdict_link_positivo_padre_consume_sello_hijo"
+verdict_link_positivo_padre_consume_sello_hijo
+fin_caso "verdict_link_positivo_padre_consume_sello_hijo"
+
+verdict_link_otro_padre_no_consume() {
+  LAB_GROK_HOOK_EVENT=post_tool_use
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"20.13\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
+
+  LAB_SESSION_ID=parent-A-2013b
+  lab_run prompt grok "$(lab_payload_prompt '-saikit padre A')"
+  lab_run tool grok "$(lab_payload_grok_subagent_start reviewer child-B-2013b 'rev')"
+  LAB_SESSION_ID=child-B-2013b
+  lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
+  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/child-B-2013b/harness-state.env')"
+  _igual "sello en B" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+
+  # Padre C: spawn_done SIN SubagentStart previo → no enrolla ni consume.
+  # Mutacion consume_sin_vinculo salta la guarda de linked_children y sella C.
+  LAB_SESSION_ID=parent-C-ajeno
+  lab_run prompt grok "$(lab_payload_prompt '-saikit padre C ajeno')"
+  ruta_C="$(find "$LAB/hooks/state/grok" -path '*/parent-C-ajeno/harness-state.env')"
+  [ -f "$ruta_C" ] || { _mal "falta padre C"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
+  lab_run tool grok "$(lab_payload_grok_spawn_done reviewer child-B-2013b)"
+  _vacio "C sin linked_children del hijo ajeno" "$(sed -n 's/^linked_children=//p' "$ruta_C")"
+  _vacio "C sin sello sin anuncio previo" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_C")"
+  _vacio "C sin linked_seal_session" "$(sed -n 's/^linked_seal_session=//p' "$ruta_C")"
+  LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
+}
+caso "verdict_link_otro_padre_no_consume"
+verdict_link_otro_padre_no_consume
+fin_caso "verdict_link_otro_padre_no_consume"
+
 # ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
 # agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
 # despacharte, asi que git rev-parse HEAD es el sha del arbol que estas
@@ -993,6 +1063,11 @@ mut_veredicto_sello_cruza_sesion() {
   '
 }
 
+# 20.13: consumir sello de cualquier hijo sin exigir linked_children.
+mut_veredicto_consume_sin_vinculo() {
+  sed '/case ",\$cur," in \*",\$child,"\*) ;; \*) return 0 ;; esac/d'
+}
+
 MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
 rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
 implemented_sin_guardia|verdict_write_no_acredita_implemented
@@ -1000,7 +1075,8 @@ lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
 close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
 sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella
 seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello
-sello_cruza_sesion|verdict_unarmed_no_toca_sesion_verificada"
+sello_cruza_sesion|verdict_unarmed_no_toca_sesion_verificada
+consume_sin_vinculo|verdict_link_otro_padre_no_consume"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

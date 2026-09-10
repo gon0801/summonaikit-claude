@@ -424,6 +424,18 @@ lab_payload_grok_spawn() {
   printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","toolName":"spawn_subagent","toolInput":{"prompt":"hace lo tuyo","description":"paso del harness","subagent_type":"%s","background":false},"toolResult":{"ok":true},"toolUseId":"tu-gk-03","isBackgrounded":false}' "$1"
 }
 
+# 20.12/20.13: SubagentStart en el padre — sessionId=padre, subagentId=hijo.
+# $1=subagentType $2=subagentId $3=description
+lab_payload_grok_subagent_start() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"SubagentStart","subagentId":"%s","subagentType":"%s","description":"%s"}' "$2" "$1" "${3:-paso}"
+}
+
+# 20.13: spawn_subagent completado con toolResult.subagent_id (forma medida).
+# $1=subagent_type $2=subagent_id
+lab_payload_grok_spawn_done() {
+  printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"post_tool_use","toolName":"spawn_subagent","toolInput":{"prompt":"hace lo tuyo","description":"paso del harness","subagent_type":"%s","background":false},"toolResult":{"type":"SubagentCompleted","subagent_id":"%s","subagent_type":"%s","output":"ok","tool_calls":1,"turns":1},"toolUseId":"tu-gk-03b","isBackgrounded":false}' "$1" "$2" "$1"
+}
+
 # Un evento INTERNO de un subagente de Grok: el rol viaja en subagentType de
 # PRIMER nivel (canal 3 medido en 7.1; el analogo Claude es agent_type/A9).
 lab_payload_grok_interno() {
