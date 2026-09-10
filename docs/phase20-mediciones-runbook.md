@@ -19,18 +19,19 @@ Versiones/ejecutables medidos el **2026-09-08** (macOS 26.6, arm64):
 | node | v26.8.1 |
 | zsh | 5.9 |
 
-Checkout previsto del kit: worktree limpio de `origin/master`, SHA al preparar
-este runbook:
+Checkout previsto del kit: worktree limpio de `origin/master`, SHA re-fijado
+el 2026-09-09 (tras el merge de 20.13, que tocó el hook; el pin original de
+preparación fue `f4a8dbe`):
 
 ```
-f4a8dbe0eb5fbabf924b80519e98f68c40e0a3b6
+e0f7a2518e6983025d0c19a501a01138c8a730d8
 ```
 
 Hook previsto: `hooks/summonaikit-harness.sh` de `origin/master`:
 
 ```
-sha256 d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
-4260 líneas
+sha256 37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+4345 líneas
 ```
 
 **Re-verificación OBLIGATORIA al ejecutar cada medición** (no vale la palabra de
@@ -46,7 +47,7 @@ wc -l hooks/summonaikit-harness.sh
 
 Condición de paso: `git rev-parse HEAD` == `git rev-parse origin/master`
 (worktree actualizado) y árbol limpio. Si NO coinciden o `origin/master`
-avanzó respecto de f4a8dbe…: **re-fijar y re-declarar** el
+avanzó respecto de e0f7a25…: **re-fijar y re-declarar** el
 nuevo SHA del checkout y del hook en la evidencia de la medición. La evidencia
 20.x de una fila solo se reutiliza en otra si coincide checkout y hook SHA
 (misma regla que exige 20.25).

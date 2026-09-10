@@ -1,0 +1,10 @@
+{
+  "sha": "b4cbe34693a8ff40a6988b12afe91ddbb330bc09",
+  "pr": 8,
+  "verifier": "PASS",
+  "verify_app": { "resultado": "n/a", "comando": null },
+  "blast": { "nivel": 4, "hecho": true, "comando": "bash tests/run.sh" },
+  "adversary": "n/a",
+  "reviewer": "clean",
+  "decisiones": "n/a"
+}

@@ -1,0 +1,2 @@
+BORRADO-OK: rama remota meas/20.14-autopilot-linked borrada (paso aparte)
+MERGE-OK: 6e095023434c1245f5057252c83e878624cd752f (registrado en .saikit/veredictos/b4cbe34693a8ff40a6988b12afe91ddbb330bc09.merge)

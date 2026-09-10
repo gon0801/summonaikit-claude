@@ -1,0 +1,2 @@
+LISTO: todas las condiciones del gate estan en verde para b4cbe34693a8ff40a6988b12afe91ddbb330bc09 (PR 8). El merge lo autoriza el operador:
+LISTO:   bash tools/saikit-merge.sh --confirmado

@@ -1,0 +1,5 @@
+# Repo descartable de medición — Phase 18 (summonaikit)
+
+Propósito: medir las FORMAS REALES de `gh pr checks`, `gh pr view --json mergeable`,
+`gh run list --commit` y `gh pr merge --squash --match-head-commit --body
+"Saikit-Merge: <sha>"` SIN `--delete-branch`, y el revert de un squash, contra
