@@ -1444,6 +1444,14 @@ write_state() {
   veredicto_sha256="${11:-}"
   autopilot="${12:-}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
+  # 20.13: leer vínculo ANTES de truncar el archivo (el redirect `>` lo borra).
+  _keep_lc=""; _keep_lss=""
+  if [ -f "$STATE_PATH" ]; then
+    _keep_lc="$(grep '^linked_children=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    _keep_lss="$(grep '^linked_seal_session=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  fi
+  if [ -n "${_LINK_CHILDREN_SET+x}" ]; then _keep_lc="$_LINK_CHILDREN_SET"; fi
+  if [ -n "${_LINK_SEAL_SET+x}" ]; then _keep_lss="$_LINK_SEAL_SET"; fi
   {
     printf 'task_hash=%s\n' "$task_hash"
     printf 'cycle=%s\n' "$cycle"
@@ -1466,7 +1474,66 @@ write_state() {
     # forma del estado de TODOS los turnos (linea base dejaria de ser
     # byte-identica); un sufijo typo cae a full con la linea AUSENTE.
     if [ "$autopilot" = "1" ]; then printf 'autopilot=%s\n' "$autopilot"; fi
+    # 20.13: vínculo padre→hijo (Grok). Ausentes sin anuncio host.
+    if [ -n "$_keep_lc" ]; then printf 'linked_children=%s\n' "$_keep_lc"; fi
+    if [ -n "$_keep_lss" ]; then printf 'linked_seal_session=%s\n' "$_keep_lss"; fi
   } > "$STATE_PATH" 2>/dev/null || true
+}
+
+# 20.13 — anuncio host padre→hijo (Grok). Autoridad: SubagentStart.subagentId /
+# spawn toolResult.subagent_id. No mtime, no ruta, no task_hash.
+link_session_key() {
+  printf '%s' "$1" | sed 's/[^A-Za-z0-9_-]/_/g' | cut -c1-64
+}
+
+link_record_child() {
+  local child="$1" cur new
+  [ "$HOST" = "grok" ] || return 0
+  [ -f "$STATE_PATH" ] || return 0
+  [ -n "$child" ] || return 0
+  case "$child" in *[!A-Za-z0-9._-]*) return 0 ;; esac
+  cur="$(read_state_value linked_children)"
+  case ",$cur," in *",$child,"*) return 0 ;; esac
+  if [ -n "$cur" ]; then new="$cur,$child"; else new="$child"; fi
+  _LINK_CHILDREN_SET="$new"
+  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+    "$(read_state_value implemented)" "$(read_state_value verified)" \
+    "$(read_state_value agents_seen)" "$(read_state_value lane)" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
+  unset _LINK_CHILDREN_SET
+  return 0
+}
+
+link_consume_child_seal() {
+  local child="$1" cur child_key child_state child_sha agents
+  [ "$HOST" = "grok" ] || return 0
+  [ -f "$STATE_PATH" ] || return 0
+  [ -n "$child" ] || return 0
+  cur="$(read_state_value linked_children)"
+  case ",$cur," in *",$child,"*) ;; *) return 0 ;; esac
+  child_key="$(link_session_key "$child")"
+  [ -n "$child_key" ] || return 0
+  child_state="$PROJECT_DIR/$child_key/harness-state.env"
+  [ -f "$child_state" ] || return 0
+  child_sha="$(grep '^veredicto_sha256=' "$child_state" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  [ -n "$child_sha" ] || return 0
+  agents="$(read_state_value agents_seen)"
+  case ",$agents," in *,reviewer,*) ;; *)
+    if [ -n "$agents" ]; then agents="$agents,reviewer"; else agents="reviewer"; fi
+    ;;
+  esac
+  _LINK_SEAL_SET="$child"
+  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+    "$(read_state_value implemented)" "$(read_state_value verified)" \
+    "$agents" "$(read_state_value lane)" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$child_sha" "$(read_state_value autopilot)"
+  unset _LINK_SEAL_SET
+  printf 'linked_seal_session: %s\n' "$child" >> "$LOG_PATH" 2>/dev/null || true
+  return 0
 }
 
 # 18.6: parrafo del contrato para el carril autopilot. Decision del 2026-08-30:
@@ -2991,6 +3058,24 @@ record_tool_evidence() {
   file_path="$(json_tool_input_string file_path)"
   [ -n "$file_path" ] || file_path="$(json_tool_input_string file_path toolInput)"
   combined="$event_name $tool_name $command_text $file_path $INPUT"
+
+  # 20.13: Grok parent — SubagentStart records host-announced child id;
+  # spawn_subagent PostToolUse consumes that child's seal only if already linked
+  # (no enroll+consume in one spawn event; foreign parents stay empty).
+  if [ "$HOST" = "grok" ]; then
+    _ann="$(json_top_level_string subagentId)"
+    [ -n "$_ann" ] || _ann="$(json_top_level_string subagent_id)"
+    if [ -n "$_ann" ]; then
+      link_record_child "$_ann"
+    fi
+    if printf '%s' "$tool_name" | grep -Eiq '^(spawn_subagent)$'; then
+      _spawn_id="$(json_tool_input_string subagent_id toolResult)"
+      [ -n "$_spawn_id" ] || _spawn_id="$(json_tool_input_string subagent_id tool_response)"
+      if [ -n "$_spawn_id" ]; then
+        link_consume_child_seal "$_spawn_id"
+      fi
+    fi
+  fi
 
   # Record harness subagent runs (the delegation tool carries a subagent_type in
   # its tool_input) so the Stop gate can enforce the implementer -> verifier ->
