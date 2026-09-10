@@ -1,0 +1,5 @@
+checkout_kit=e630aca86fe58d494d5b1264fff45ad851ef2dc7
+hook_sha256=d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
+hook_lines=4260
+2.1.267 (Claude Code)
+gh version 2.98.0 (2026-08-20)

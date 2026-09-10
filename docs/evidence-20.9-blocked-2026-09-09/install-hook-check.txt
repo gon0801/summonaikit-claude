@@ -1,0 +1,7 @@
+[summonaikit] procedencia: rama=master sha=e630aca86fe58d494d5b1264fff45ad851ef2dc7 sucio=no sin_seguimiento=1 coincide_origin_master=si edad_s=36189 origen=ref-mtime fuente=por-defecto fuente_sha256=d83947668d004b447ef64922b74f208ae649eb5c200c999a5ac6afcf28b34d42
+[summonaikit] procedencia: juicio contra el ref-local origin/master, sin fetch (corre 'git fetch' para actualizarlo).
+[summonaikit] check: host=claude dest=/Users/dn/.claude/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=grok dest=/Users/dn/.grok/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=dsh dest=/Users/dn/.dsh/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: host=codex dest=/Users/dn/.codex/hooks/summonaikit-harness.sh resultado=al-dia registro=ok
+[summonaikit] check: veredicto=ok (copias al dia; fuente = bytes de origin/master)
