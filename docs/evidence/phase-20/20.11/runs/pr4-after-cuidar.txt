@@ -1,0 +1,5 @@
+PR4 OPEN head=df8b9b19740b8faf1081eedcd6b34d32135ec90a mergeable=MERGEABLE
+CodeRabbit	pass	0		Review rate limited
+test	pass	6s	https://github.com/gon0801/saikit-descartable/actions/runs/34446791997/job/102773217457
+test	pass	3s	https://github.com/gon0801/saikit-descartable/actions/runs/34446794447/job/102773225209
+8011fc2f9624c9d2390278631c6cbcf66d71eb50

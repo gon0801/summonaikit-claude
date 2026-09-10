@@ -1,0 +1,1 @@
+DENIAL: {'command': 'echo "=== saikit-merge.sh @main"; rtk git show origin/main:tools/saikit-merge.sh; echo; echo "=== veredicto_contract.sh @main"; rtk git show origin/main:tools/lib/veredicto_contract.sh; e
