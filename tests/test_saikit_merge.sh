@@ -1030,21 +1030,24 @@ c_lock_dos_worktrees() {
   CASO_ROJO=0; sb_reset master
   git worktree add -q "$SB/otro" -b feat/otro 2>/dev/null \
     || { _mal "no se pudo crear el segundo worktree"; return; }
+  # Misma forma fisica que la tool (pwd -P). En macOS $SB puede ser /var/...
+  # mientras el common-dir canónico es /private/var/... (20.28).
+  lock_canon="$(cd "$SB/work/.git" && pwd -P)/saikit-merge.lock"
   SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
   a_pid=$!
-  esperar_lock "$SB/work/.git/saikit-merge.lock" \
+  esperar_lock "$lock_canon" \
     || { _mal "A no tomo el lock (worktree); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
   cd "$SB/otro" || { _mal "no se pudo entrar al worktree hermano"; return; }
   OUT="$(bash "$MERGE" --confirmado 2>&1)"; RC=$?
   [ "$RC" -eq 3 ] || _mal "desde el worktree hermano deberia bloquearse con 3, dio $RC: $OUT"
-  _contiene "reporta el lock COMPARTIDO (common-dir)" "$OUT" "$SB/work/.git/saikit-merge.lock"
+  _contiene "reporta el lock COMPARTIDO (common-dir)" "$OUT" "$lock_canon"
   _contiene "muestra como liberarlo" "$OUT" "--liberar-lock"
   if merge_disparado; then _mal "el worktree hermano llamo merge"; fi
   cd "$SB/work" || exit 1
   kill -9 "$a_pid" 2>/dev/null; wait "$a_pid" 2>/dev/null
   OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
   [ "$RC2" -eq 0 ] || _mal "liberar-lock fallo tras la caida del tenedor: $OUT2"
-  [ ! -d "$SB/work/.git/saikit-merge.lock" ] || _mal "liberar-lock no quito el lock"
+  [ ! -d "$lock_canon" ] || _mal "liberar-lock no quito el lock"
 }
 
 c_lock_caida() {
@@ -1193,6 +1196,31 @@ caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
   c_lock_dos_worktrees
 }
 fin_caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
+
+caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
+{
+  # Discriminante 20.28: si raw != canon, comparar contra raw (sin pwd -P)
+  # falla la igualdad exacta que la tool usa tras canonicalizar.
+  CASO_ROJO=0; sb_reset master
+  raw="$SB/work/.git/saikit-merge.lock"
+  canon="$(cd "$SB/work/.git" && pwd -P)/saikit-merge.lock"
+  if [ "$raw" = "$canon" ]; then
+    printf '    ok: raw==canon en esta plataforma; mutante no discrimina\n'
+  else
+    reported="$canon"
+    if [ "$reported" = "$raw" ]; then
+      _mal "mutante: raw y canon debian diferir"
+    fi
+    # La asercion mutante (igualdad/contiene exacto del raw contra reportado
+    # canonico) queda roja; no se relaja a «contiene saikit-merge.lock».
+    if [ "$reported" = "$raw" ] || [ "$reported" = "saikit-merge.lock" ]; then
+      _mal "mutante sin canonicalizar sobrevive"
+    fi
+    grep -E 'lock_canon=.*pwd -P' "$here/test_saikit_merge.sh" >/dev/null \
+      || _mal "falta lock_canon con pwd -P en c_lock_dos_worktrees"
+  fi
+}
+fin_caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
 
 caso "lock_caida_no_libera_ajeno_recuperacion_explicita"
 {

@@ -487,6 +487,10 @@ mkdir -p "$SANDBOX/drive-home" "$SANDBOX/drive-tmp"
 PYTEST_BIN="$(resolve_pytest)" || { malo "no se pudo provisionar pytest"; PYTEST_BIN=""; }
 DRIVE_LOG="$SANDBOX/verify-drive.log"
 DRIVE_RC=99
+# Snapshot pre-pytest (20.28): __pycache__ / .pytest_cache gitignored ya
+# presentes no son fuga del run.
+had_pycache=0; [ -e "$repo/verify/__pycache__" ] && had_pycache=1
+had_pytest_cache=0; [ -e "$repo/.pytest_cache" ] && had_pytest_cache=1
 if [ -n "$PYTEST_BIN" ]; then
   # Cache y bytecode fuera del checkout: run.sh trata cualquier escritura
   # en el repo como LEAK.
@@ -513,10 +517,13 @@ fi
 # El sello del checkout no se toca por correr el Drive.
 [ "$(cksum "$LEEME")" = "$seal_before" ] \
   || malo "correr pytest verify/ muto LEEME.md — no transferir sello"
-[ ! -e "$repo/verify/__pycache__" ] \
-  || malo "pytest verify/ dejo verify/__pycache__ (fuga en el checkout)"
-[ ! -e "$repo/.pytest_cache" ] \
-  || malo "pytest verify/ dejo .pytest_cache en la raiz (fuga)"
+# Fuga real = aparece DESPUES del pytest (had_* tomado antes).
+if [ "$had_pycache" -eq 0 ] && [ -e "$repo/verify/__pycache__" ]; then
+  malo "pytest verify/ dejo verify/__pycache__ (fuga en el checkout)"
+fi
+if [ "$had_pytest_cache" -eq 0 ] && [ -e "$repo/.pytest_cache" ]; then
+  malo "pytest verify/ dejo .pytest_cache en la raiz (fuga)"
+fi
 # Un PASS de skill (aliases/drives de arriba) no acredita el sello.
 python3 - "$DRIVE_LOG" "$DRIVE_RC" "$repo" <<'PY' || malo "cotejo verify/ deshonesto"
 import os, subprocess, sys
@@ -582,6 +589,16 @@ estado_out="$(
 printf '    estado verify/: %s\n' "$(printf '%s' "$estado_out" | head -1)"
 printf '%s' "$estado_out" | grep -Eq '^(al_dia|desactualizado|viejo|unknown|sin_mapa)' \
   || malo "estado del mapa no cotejado: $estado_out"
+
+# Mutante 20.28: quitar el snapshot y volver a [ ! -e ] trata un
+# __pycache__ preexistente como fuga (falso rojo). Discriminante.
+caso "mutante sin snapshot de fuga se pone rojo"
+mkdir -p "$repo/verify/__pycache__"
+naive_rc=0
+# Copia de la asercion vieja: falla si el dir existe (preexistente o no).
+[ ! -e "$repo/verify/__pycache__" ] || naive_rc=1
+[ "$naive_rc" -eq 1 ] \
+  || malo "mutante [ ! -e ] no se puso rojo ante __pycache__ preexistente"
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

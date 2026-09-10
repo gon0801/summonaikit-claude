@@ -17,7 +17,9 @@ HOOK="$VERIFY_REPO/hooks/summonaikit-harness.sh"
 CHECKOUT_VERIFY="$VERIFY_REPO/verify"
 
 checkout_tree() {
-  (cd "$CHECKOUT_VERIFY" && cksum *)
+  # Solo archivos regulares: un directorio en verify/ (p.ej. __pycache__) no
+  # debe matar cksum ni el drive entero (set -e). Medido 20.28 en macOS.
+  (cd "$CHECKOUT_VERIFY" && find . -type f -print0 | sort -z | xargs -0 cksum)
 }
 
 CHECKOUT_BEFORE="$(checkout_tree)"

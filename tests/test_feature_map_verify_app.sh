@@ -202,6 +202,18 @@ if ! git -C "$repo" diff --quiet -- verify/; then
 fi
 
 # ---------------------------------------------------------------------------
+# 20.28: un directorio en verify/ no tumba el hash (solo archivos regulares)
+# ---------------------------------------------------------------------------
+caso "directorio plantado en verify/ no tumba checkout_verify_intact"
+PLANT_DIR="$repo/verify/.saikit-planted-dir-20.28"
+mkdir -p "$PLANT_DIR"
+reset_art
+out="$(ctrl drive verify-app 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "drive verify-app con dir plantado rc=$rc: $out"
+assert_obs verify-app checkout_verify_intact 'checkout-verify-intact'
+rmdir "$PLANT_DIR" 2>/dev/null || rm -rf "$PLANT_DIR"
+
+# ---------------------------------------------------------------------------
 # Encabezado falso + rc 0 no acredita rechazo/sello/Drive
 # ---------------------------------------------------------------------------
 caso "encabezado falso con rc 0 no acredita rechazo ni sello ni Drive"
@@ -278,6 +290,22 @@ if [ -f "$DRV" ]; then
     '/assert:estado_desactualizado/,/assert:estado_desactualizado_end/d'
   mut_omit omit_drive_cmd drive_cmd_runner 'runner-re' \
     '/assert:drive_cmd_runner/,/assert:drive_cmd_runner_end/d'
+
+  caso "mutante cksum glob con directorios se pone rojo"
+  reset_art
+  PLANT_DIR="$repo/verify/.saikit-planted-dir-20.28-mut"
+  mkdir -p "$PLANT_DIR"
+  mut="$SANDBOX/va-cksum-star.sh"
+  # Restaura cksum * (incluye directorios) — debe morir con dir plantado.
+  if sed_must_change "$SANDBOX/va.src.sh" "$mut" \
+    's#find \. -type f -print0 | sort -z | xargs -0 cksum#cksum *#' \
+    "cksum_star"; then
+    out="$(ctrl_drv "$mut" drive verify-app 2>&1)" && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      malo "mutante cksum * sobrevivio en verde con directorio plantado"
+    fi
+  fi
+  rmdir "$PLANT_DIR" 2>/dev/null || rm -rf "$PLANT_DIR"
 fi
 
 if [ "$fail" -ne 0 ]; then
