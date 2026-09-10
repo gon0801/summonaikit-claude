@@ -81,6 +81,38 @@ can_force_fallback() {
   return 0
 }
 
+# Aceptacion del drive check-secrets (20.28).
+# $1=rc del drive, $2=1 si hay detector fuerte visible.
+# Exit: 0=PASS, 1=FAIL, 2=SKIP (sin instrumento; no es PASS).
+# SAIKIT_MUT_RC3_AS_PASS=1 reintroduce contar rc=3 como PASS (mutante).
+veredicto_check_secrets() {
+  local rc="$1" tiene_gl="$2"
+  if [ "$tiene_gl" -eq 0 ]; then
+    if [ "${SAIKIT_MUT_RC3_AS_PASS:-0}" = 1 ]; then
+      if [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ]; then
+        return 0
+      fi
+      return 1
+    fi
+    return 2
+  fi
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Costura: PATH sin gitleaks (ni SAIKIT_GITLEAKS). Vacio si no se puede forzar.
+path_sin_gitleaks() {
+  local p="/usr/bin:/bin"
+  if PATH="$p" command -v gitleaks >/dev/null 2>&1 \
+    || [ -x /usr/bin/gitleaks ] || [ -x /bin/gitleaks ]; then
+    return 1
+  fi
+  printf '%s\n' "$p"
+  return 0
+}
+
 assert_obs() {
   local fid="$1" asid="$2" pat="$3"
   local steps
@@ -428,23 +460,37 @@ mut_omit_capture omit_cwd cwd_filtered 'cwd|filtro|no escribio|absent' \
 mut_omit_capture omit_foreign foreign_intact 'intact|igual|unchanged|ajeno' \
   '/assert:foreign_intact/,/assert:foreign_intact_end/d'
 
-# Mutante 20.28: si la aceptacion vuelve a tratar rc=3 como PASS, este caso
-# lo detecta (rojo). Discriminante: fuente sin `|| [ "$rc" -eq 3 ]` en el
-# camino has_gitleaks, y skip obligatorio cuando no hay gitleaks.
+# Costura PATH (20.28): ejercita la aceptacion SIN detector aunque el host
+# tenga gitleaks. Debe ser SKIP declarado, nunca PASS. Ambos caminos
+# (con detector arriba / sin detector aqui) quedan medidos.
+caso "costura PATH sin gitleaks: SKIP declarado no PASS"
+PATH_NO_GL="$(path_sin_gitleaks)" && gl_ok=1 || gl_ok=0
+if [ "$gl_ok" -eq 0 ]; then
+  saikit_skip_caso 'costura PATH sin gitleaks' \
+    'gitleaks en /usr/bin|/bin; no se puede forzar ausencia'
+else
+  reset_art
+  out="$(
+    env -u SAIKIT_GITLEAKS PATH="$PATH_NO_GL" \
+      SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+      SAIKIT_FM_SYNTH_SECRET="$SYNTH" \
+      bash "$CTRL" drive check-secrets 2>&1
+  )" && rc=0 || rc=$?
+  [ "$rc" -eq 3 ] || malo "costura: drive sin gitleaks rc=$rc (esperaba 3): $out"
+  veredicto_check_secrets "$rc" 0
+  v=$?
+  [ "$v" -eq 2 ] || malo "costura: aceptacion sana dio $v (esperaba SKIP=2)"
+  [ "$v" -ne 0 ] || malo "costura: aceptacion sano conto rc=3 como PASS"
+  saikit_skip_caso 'drive check-secrets (costura PATH)' \
+    'sin gitleaks bajo PATH acotado; unknown/3 no es PASS'
+fi
+
+# Mutante 20.28: SAIKIT_MUT_RC3_AS_PASS=1 reintroduce contar rc=3 como PASS.
+# Bajo la costura, el mutante "sobrevive en verde" (acepta PASS) y la guarda
+# lo marca rojo por comportamiento — no por grep del archivo.
 caso "mutante contar rc=3 check-secrets como PASS se pone rojo"
-if grep -E '\[ "\$rc" -eq 0 \] \|\| \[ "\$rc" -eq 3 \]' \
-     "$here/test_feature_map_secrets_capture.sh" \
-  | grep -v 'mutante contar rc=3' >/dev/null; then
-  malo "mutante vivo: el test acepta rc=3 como PASS (debe ser SAIKIT_SKIP_CASO)"
-fi
-if ! grep -q "saikit_skip_caso 'drive check-secrets'" \
-     "$here/test_feature_map_secrets_capture.sh"; then
-  malo "sin saikit_skip_caso para check-secrets cuando falta gitleaks"
-fi
-# Runtime: sin gitleaks el drive da 3; la guarda correcta NO lo toma por PASS.
-PATH_NO_GL="/usr/bin:/bin"
-if PATH="$PATH_NO_GL" command -v gitleaks >/dev/null 2>&1 \
-  || [ -x /usr/bin/gitleaks ] || [ -x /bin/gitleaks ]; then
+PATH_NO_GL="$(path_sin_gitleaks)" && gl_ok=1 || gl_ok=0
+if [ "$gl_ok" -eq 0 ]; then
   saikit_skip_caso 'mutante rc=3 runtime' \
     'gitleaks en /usr/bin|/bin; no se puede forzar ausencia'
 else
@@ -455,11 +501,23 @@ else
       SAIKIT_FM_SYNTH_SECRET="$SYNTH" \
       bash "$CTRL" drive check-secrets 2>&1
   )" && rc=0 || rc=$?
-  [ "$rc" -eq 3 ] || [ "$rc" -eq 0 ] \
-    || malo "mutante rc=3: drive inesperado rc=$rc: $out"
-  # Contar rc=3 como PASS seria el mutante; aqui exigimos que NO sea exito.
-  if [ "$rc" -eq 3 ]; then
-    printf '    ok: rc=3 sin gitleaks no acredita PASS (skip es el camino)\n'
+  [ "$rc" -eq 3 ] || malo "mutante rc=3: drive inesperado rc=$rc: $out"
+  # Sana: SKIP, no PASS.
+  veredicto_check_secrets "$rc" 0
+  v_sana=$?
+  [ "$v_sana" -eq 2 ] || malo "guarda sana no dio SKIP (v=$v_sana)"
+  # Mutante: cuenta rc=3 como PASS — la guarda exige que ESO quede rojo
+  # (PASS sin detector esta prohibido).
+  SAIKIT_MUT_RC3_AS_PASS=1
+  veredicto_check_secrets "$rc" 0
+  v_mut=$?
+  unset SAIKIT_MUT_RC3_AS_PASS
+  if [ "$v_mut" -ne 0 ]; then
+    malo "mutante no conto rc=3 como PASS (no discrimina; v=$v_mut)"
+  fi
+  # Guarda: PASS sin detector = rojo del mutante.
+  if [ "$v_mut" -eq 0 ]; then
+    printf '    ok: mutante rc=3-as-PASS queda rojo ante guarda SKIP\n'
   fi
 fi
 

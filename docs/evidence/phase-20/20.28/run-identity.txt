@@ -1,0 +1,27 @@
+=== identity (evidence pack 20.28 review round) ===
+date: 2026-09-10T23:41:31Z
+platform: Darwin Davids-MacBook-Pro.local 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64
+ProductName:		macOS
+ProductVersion:		26.6
+BuildVersion:		25G72
+branch: fix/20.28-macos-rojos
+HEAD_at_measurement: 3df25481d943a604c22f637c3eef9f7e13f92cd3 (pre-commit of this round; worktree dirty with review fixes)
+origin/master: 7df49a7164319d87f2898c04a27e2f4d9f77e076
+hook_cksum: 3320838264 252356 hooks/summonaikit-harness.sh
+bash: GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
+gitleaks: 8.30.1 @ /opt/homebrew/bin/gitleaks
+python: Python 3.14.7
+
+=== exit codes (from log tails) ===
+merge-rojo: test_saikit_merge: FAIL (casos)
+merge-verde: test_saikit_merge: OK
+integration-rojo: FAIL: 1 aserciones
+integration-verde: OK: test_feature_map_integration
+secrets-rojo: FAIL: 3 aserciones
+secrets-verde: OK: test_feature_map_secrets_capture
+verify_app-rojo: FAIL: 20 aserciones
+verify_app-verde: OK: test_feature_map_verify_app
+
+=== paths measured ===
+with detector (secrets verde): drive check-secrets PASS (gitleaks present)
+without detector (costura PATH): SKIP declared in secrets-post-verde.log

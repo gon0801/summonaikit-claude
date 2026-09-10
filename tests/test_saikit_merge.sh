@@ -88,8 +88,19 @@ fin_caso() {
 sb_reset() {
   local rama_base="${1:-master}"
   BASE_RAMA="$rama_base"
-  [ -n "$SB" ] && rm -rf "$SB"
-  SB="$(mktemp -d "${TMPDIR:-/tmp}/saikit-merge-XXXXXX")" || exit 1
+  # 20.28 costura: SB siempre detras de un symlink deliberado para que la
+  # forma logica ($SB/...) difiera de pwd -P en CUALQUIER plataforma (tambien
+  # cuando /tmp es real, como en ubuntu-latest). Sin esto el fix del lock es
+  # inerte en CI.
+  if [ -n "${SB_LINK_ROOT:-}" ]; then
+    rm -rf "$SB_LINK_ROOT" "${SB_PHYS:-}"
+  elif [ -n "${SB:-}" ]; then
+    rm -rf "$SB"
+  fi
+  SB_PHYS="$(mktemp -d "${TMPDIR:-/tmp}/saikit-merge-phys-XXXXXX")" || exit 1
+  SB_LINK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/saikit-merge-link-XXXXXX")" || exit 1
+  ln -sfn "$SB_PHYS" "$SB_LINK_ROOT/logical"
+  SB="$SB_LINK_ROOT/logical"
   git init --bare -q "$SB/origin.git"
   git clone -q "$SB/origin.git" "$SB/work" 2>/dev/null
   cd "$SB/work" || exit 1
@@ -1030,24 +1041,29 @@ c_lock_dos_worktrees() {
   CASO_ROJO=0; sb_reset master
   git worktree add -q "$SB/otro" -b feat/otro 2>/dev/null \
     || { _mal "no se pudo crear el segundo worktree"; return; }
-  # Misma forma fisica que la tool (pwd -P). En macOS $SB puede ser /var/...
-  # mientras el common-dir canónico es /private/var/... (20.28).
-  lock_canon="$(cd "$SB/work/.git" && pwd -P)/saikit-merge.lock"
+  # Misma forma fisica que la tool (pwd -P). La costura de sb_reset hace que
+  # $SB/... (logico, via symlink) difiera de pwd -P en toda plataforma (20.28).
+  # SAIKIT_MUT_LOCK_SIN_CANON=1 fuerza el esperado logico (mutante).
+  if [ "${SAIKIT_MUT_LOCK_SIN_CANON:-0}" = 1 ]; then
+    lock_expect="$SB/work/.git/saikit-merge.lock"
+  else
+    lock_expect="$(cd "$SB/work/.git" && pwd -P)/saikit-merge.lock"
+  fi
   SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
   a_pid=$!
-  esperar_lock "$lock_canon" \
+  esperar_lock "$lock_expect" \
     || { _mal "A no tomo el lock (worktree); el caso no mide"; wait "$a_pid" 2>/dev/null; return; }
   cd "$SB/otro" || { _mal "no se pudo entrar al worktree hermano"; return; }
   OUT="$(bash "$MERGE" --confirmado 2>&1)"; RC=$?
   [ "$RC" -eq 3 ] || _mal "desde el worktree hermano deberia bloquearse con 3, dio $RC: $OUT"
-  _contiene "reporta el lock COMPARTIDO (common-dir)" "$OUT" "$lock_canon"
+  _contiene "reporta el lock COMPARTIDO (common-dir)" "$OUT" "$lock_expect"
   _contiene "muestra como liberarlo" "$OUT" "--liberar-lock"
   if merge_disparado; then _mal "el worktree hermano llamo merge"; fi
   cd "$SB/work" || exit 1
   kill -9 "$a_pid" 2>/dev/null; wait "$a_pid" 2>/dev/null
   OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
   [ "$RC2" -eq 0 ] || _mal "liberar-lock fallo tras la caida del tenedor: $OUT2"
-  [ ! -d "$lock_canon" ] || _mal "liberar-lock no quito el lock"
+  [ ! -d "$lock_expect" ] || _mal "liberar-lock no quito el lock"
 }
 
 c_lock_caida() {
@@ -1199,29 +1215,18 @@ fin_caso "lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea"
 
 caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
 {
-  # Discriminante 20.28 (plataformas con o sin symlink): OUT con forma fisica
-  # /private/... vs esperado logico /tmp/.... Igualdad contra raw queda ROJA;
-  # relajar a basename saikit-merge.lock tambien queda ROJA. La guarda buena
-  # exige el path canon completo (lock_canon + pwd -P en c_lock_dos_worktrees).
-  CASO_ROJO=0; sb_reset master
-  fake_raw="/tmp/saikit-merge-fake/work/.git/saikit-merge.lock"
-  fake_canon="/private/tmp/saikit-merge-fake/work/.git/saikit-merge.lock"
-  OUT="$(printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n  lock: %s\n' \
-    "$fake_canon" "$fake_canon")"
-  reported="$(printf '%s' "$OUT" \
-    | sed -n 's/^saikit-merge: LOCK de integracion ocupado, no se sigue (\(.*\)):$/\1/p')"
-  [ -n "$reported" ] || _mal "no se extrajo el path del OUT sintetico"
-  [ "$reported" = "$fake_canon" ] || _mal "guarda canon: reportado != fake_canon"
-  # Mutante: igualdad contra el path logico (sin pwd -P).
-  if [ "$reported" = "$fake_raw" ]; then
-    _mal "mutante igualdad-raw sobrevivio (reportado==raw)"
+  # Costura symlink de sb_reset + forzar esperado logico. Debe quedar ROJO
+  # (CASO_ROJO=1); si sobrevive en verde el mutante no discrimina.
+  CASO_ROJO=0
+  SAIKIT_MUT_LOCK_SIN_CANON=1
+  c_lock_dos_worktrees
+  unset SAIKIT_MUT_LOCK_SIN_CANON
+  if [ "$CASO_ROJO" -eq 0 ]; then
+    _mal "mutante sin canon sobrevivio en verde bajo costura symlink"
+  else
+    CASO_ROJO=0
+    printf '    ok: mutante sin canon queda rojo (costura symlink)\n'
   fi
-  # Mutante: relajar a basename.
-  if [ "$reported" = "saikit-merge.lock" ]; then
-    _mal "mutante basename-only sobrevivio"
-  fi
-  grep -E 'lock_canon=.*pwd -P' "$here/test_saikit_merge.sh" >/dev/null \
-    || _mal "falta lock_canon con pwd -P en c_lock_dos_worktrees"
 }
 fin_caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
 
@@ -1300,7 +1305,9 @@ mut_sed() {  # $1=sed-expr, aplica sobre el fuente y deja el mutado en $MUTADO
   # las mutaciones daban "atrapadas" por no poder correr (medido midiendo el
   # hallazgo MEDIO-1 de qwen: el motivo real del rojo era el source, no el
   # caso). Un mutado que no corre no prueba nada.
-  MUTADO="$SB-mutado-$$.sh"
+  # Fuera de SB_LINK_ROOT: sb_reset borra el arbol del symlink y $SB-mutado
+  # (hermano de logical/) moria con el reset (20.28 costura).
+  MUTADO="${TMPDIR:-/tmp}/saikit-merge-mutado-$$.sh"
   { sed "$1" "$MERGE"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
 }
 
@@ -1670,6 +1677,8 @@ rm -f "$meta_out"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_saikit_merge: FAIL" >&2
+  [ -n "${SB_LINK_ROOT:-}" ] && rm -rf "$SB_LINK_ROOT" "${SB_PHYS:-}"
   exit 1
 fi
+[ -n "${SB_LINK_ROOT:-}" ] && rm -rf "$SB_LINK_ROOT" "${SB_PHYS:-}"
 echo "test_saikit_merge: OK"
