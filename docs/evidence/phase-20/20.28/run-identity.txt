@@ -5,7 +5,7 @@ ProductName:		macOS
 ProductVersion:		26.6
 BuildVersion:		25G72
 branch: fix/20.28-macos-rojos
-HEAD_PLACEHOLDER
+HEAD: 4878997f77a13b43afd39d3f55f3a03b795aecf9
 origin/master: 7df49a7164319d87f2898c04a27e2f4d9f77e076
 hook_cksum: 3320838264 252356 hooks/summonaikit-harness.sh
 bash: GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
