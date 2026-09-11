@@ -21,13 +21,14 @@ headless_hook_dir() {
     printf '%s' "$SAIKIT_HOOK_DIR"
     return 0
   fi
-  printf '%s' "${HOME}/.claude/hooks"
+  local host="${1:-claude}"
+  printf '%s' "${HOME}/.${host}/hooks"
 }
 
 headless_state_path() {
   local host="${1:?}" project_root="${2:?}" session_id="${3:-}"
   local hook_dir project_key session_key
-  hook_dir="$(headless_hook_dir)"
+  hook_dir="$(headless_hook_dir "$host")"
   project_key="$(headless_project_key "$project_root")"
   session_key="$(headless_session_key "$session_id")"
   printf '%s/state/%s/%s/%s/harness-state.env' "$hook_dir" "$host" "$project_key" "$session_key"
