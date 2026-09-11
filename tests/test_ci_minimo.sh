@@ -11,6 +11,9 @@
 #   - Cada guarda tiene mutacion discriminante (pin, secrets, cableado,
 #     run solo en comentario).
 #
+#   - Rama pnpm: pin de version corepack prepare ANTES de pnpm install
+#     (corepack 0.33.0 del Node 20 del CI no corre pnpm >=11);
+#     caso hermetico real (node 20 descargado), rango del pin y mutacion.
 # INFRAESTRUCTURA: git REAL en sandbox (mismo patron que
 # tests/test_autopilot_config.sh). Sin acentos en este archivo.
 set -u
@@ -24,6 +27,7 @@ GEN="$GEN_REAL"
 BUMP_REAL="$repo/tools/bump-ci-pins.sh"
 BUMP="$BUMP_REAL"
 MERGE="$repo/tools/saikit-merge.sh"
+. "$repo/tests/lib/skip_caso.sh"
 
 fail=0
 CASO_ROJO=0
@@ -660,21 +664,148 @@ caso "pnpm_lock_emite_pnpm"
   printf '%s\n' "$yml" | grep -Fq "node-version: '20'" || _mal "falta node-version 20: $yml"
   printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*corepack enable[[:space:]]*$' \
     || _mal "falta corepack enable: $yml"
+  printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*corepack prepare pnpm@[0-9][0-9.]* --activate[[:space:]]*$' \
+    || _mal "falta pin corepack prepare pnpm@<ver> --activate: $yml"
   printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*pnpm install' \
     || _mal "falta pnpm install: $yml"
   node_line="$(printf '%s\n' "$yml" | grep -n 'uses:[[:space:]]*actions/setup-node' | head -1 | cut -d: -f1)"
   core_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*corepack enable' | head -1 | cut -d: -f1)"
+  pin_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*corepack prepare pnpm@' | head -1 | cut -d: -f1)"
   pnpm_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pnpm install' | head -1 | cut -d: -f1)"
   test_line="$(printf '%s\n' "$yml" | grep -n 'run:[[:space:]]*pnpm test' | head -1 | cut -d: -f1)"
-  [ -n "$node_line" ] && [ -n "$core_line" ] && [ -n "$pnpm_line" ] && [ -n "$test_line" ] \
-    && [ "$node_line" -lt "$core_line" ] && [ "$core_line" -lt "$pnpm_line" ] \
-    && [ "$pnpm_line" -lt "$test_line" ] \
-    || _mal "orden toolchain: setup-node < corepack < install < test ($node_line $core_line $pnpm_line $test_line)"
+  [ -n "$node_line" ] && [ -n "$core_line" ] && [ -n "$pin_line" ] && [ -n "$pnpm_line" ] \
+    && [ -n "$test_line" ] \
+    && [ "$node_line" -lt "$core_line" ] && [ "$core_line" -lt "$pin_line" ] \
+    && [ "$pin_line" -lt "$pnpm_line" ] && [ "$pnpm_line" -lt "$test_line" ] \
+    || _mal "orden toolchain: setup-node < corepack < pin < install < test ($node_line $core_line $pin_line $pnpm_line $test_line)"
   if printf '%s\n' "$yml" | grep -Eq '^[[:space:]]*run:[[:space:]]*npm '; then
     _mal "pnpm-lock.yaml no debe emitir npm: $yml"
   fi
 }
 fin_caso "pnpm_lock_emite_pnpm"
+
+caso "pnpm_pin_concreto_en_rango_corepack20"
+{
+  # El pin debe ser version concreta y estar en el rango que el corepack
+  # del Node 20 del CI (0.33.0) corre: >=11 no tiene bin/pnpm.cjs (medido
+  # 2026-09-11: 9.15.9 y 10.34.5 ok; 11.0.0 y 12.3.4 rojos). Afirmar el
+  # rango — no solo "hay pin" — mantiene la guarda discriminante incluso
+  # donde el corepack local (0.35) correria pnpm 12.
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  pin="$(printf '%s\n' "$yml" | sed -n 's/.*corepack prepare pnpm@\([0-9][0-9.]*\) --activate.*/\1/p' | head -1)"
+  [ -n "$pin" ] || _mal "falta corepack prepare pnpm@<ver> --activate: $yml"
+  printf '%s' "$pin" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || _mal "pin no es version concreta: [$pin]"
+  major="${pin%%.*}"
+  [ "$major" -le 10 ] || _mal "corepack 0.33.0 (Node 20 del CI) no corre pnpm >=11: pin=$pin"
+}
+fin_caso "pnpm_pin_concreto_en_rango_corepack20"
+
+caso "pnpm_quitar_pin_muta_a_rojo"
+{
+  # Mutacion discriminante: el generador deja de emitir el pin. La guarda
+  # que la atrapa es la misma asercion de pin del caso hermano; aqui se
+  # demuestra que sin pin esa asercion FALLA (la mutacion no sobrevive).
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
+  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  printf '%s\n' "$(cat "$(yml_dest)")" | grep -q 'corepack prepare pnpm@' \
+    || _mal "precondicion: el generador sin mutar no emite pin"
+  # Con workflow presente el generador declina escribir; fuera el previo
+  # para que el mutado emita el suyo.
+  rm -f "$(yml_dest)"
+  base="$SB/gen-base-pin.sh"; mutado="$SB/gen-mutado-pin.sh"
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$GEN_REAL" > "$base"
+  sed '/- name: Pin pnpm$/d; /corepack prepare pnpm@/d' "$base" > "$mutado"
+  OUT="$(bash "$mutado" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "generador mutado debia salir 0, dio $RC: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  if printf '%s\n' "$yml" | grep -q 'corepack prepare pnpm@'; then
+    _mal "la mutacion no quito el pin del YAML emitido: $yml"
+  fi
+  if printf '%s\n' "$yml" | sed -n 's/.*corepack prepare pnpm@\([0-9][0-9.]*\) --activate.*/\1/p' | grep -q .; then
+    _mal "la mutacion sobrevive: la asercion de pin pasa igual sin pin"
+  fi
+}
+fin_caso "pnpm_quitar_pin_muta_a_rojo"
+
+caso "pnpm_toolchain_hermetica_sin_packagemanager"
+{
+  # Ejecuta la toolchain pnpm EMITIDA por el YAML (enable, pin, install,
+  # test) en un fixture hermetico SIN campo packageManager: node 20 real
+  # descargado bajo $TMPDIR, HOME/COREPACK_HOME aislados. Sin curl o sin
+  # red declara SAIKIT_SKIP_CASO (no es PASS falso).
+  rm -f tests/run.sh
+  printf '%s\n' '{ "name": "saikit-fx-pnpm", "private": true, "scripts": { "test": "node --test test/" } }' > package.json
+  cat > pnpm-lock.yaml <<'LCK'
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+LCK
+  mkdir -p test verify
+  printf '%s\n' 'const { test } = require("node:test");' \
+    'const assert = require("node:assert");' \
+    'test("fixture vivo", () => assert.ok(true));' > test/fx.test.js
+  cp test/fx.test.js verify/fx.test.js
+  correr_gen --ci-minimo si
+  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
+  yml="$(cat "$(yml_dest)")"
+  pin_cmd="$(printf '%s\n' "$yml" | grep 'corepack prepare pnpm@' | head -1 | sed 's/^.*run: *//')"
+  inst_cmd="$(printf '%s\n' "$yml" | grep -E '^[[:space:]]*run: pnpm install' | head -1 | sed 's/^.*run: *//')"
+  test_cmd="$(printf '%s\n' "$yml" | grep -E '^[[:space:]]*run: pnpm test' | head -1 | sed 's/^.*run: *//')"
+  [ -n "$pin_cmd" ] && [ -n "$inst_cmd" ] && [ -n "$test_cmd" ] \
+    || _mal "yaml sin toolchain pnpm completa (pin/install/test): $yml"
+  # node 20 (corepack 0.33.0, el del CI) bajo $TMPDIR; cache por corrida.
+  n20="${TMPDIR:-/tmp}/saikit-node20-v20.19.5"
+  if [ ! -x "$n20/bin/corepack" ]; then
+    so="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arq="$(uname -m)"; [ "$arq" = "x86_64" ] && arq="x64"
+    url="https://nodejs.org/dist/v20.19.5/node-v20.19.5-$so-$arq.tar.xz"
+    tarb="${TMPDIR:-/tmp}/saikit-node20.tar.xz"
+    if ! command -v curl >/dev/null 2>&1 \
+       || ! curl -fsSL --max-time 240 -o "$tarb" "$url" \
+       || ! tar -xJf "$tarb" -C "${TMPDIR:-/tmp}" \
+       || ! mv "${TMPDIR:-/tmp}/node-v20.19.5-$so-$arq" "$n20"; then
+      saikit_skip_caso "pnpm_toolchain_hermetica_sin_packagemanager" \
+        "sin curl o sin red para descargar node 20 de nodejs.org"
+    fi
+  fi
+  if [ -n "$pin_cmd" ] && [ -n "$inst_cmd" ] && [ -n "$test_cmd" ] \
+     && [ -x "$n20/bin/corepack" ]; then
+    fx="$SB/fx-run"; mkdir -p "$fx/home" "$fx/ch"
+    cp package.json pnpm-lock.yaml "$fx/"
+    cp -R test verify "$fx/"
+    herm() {
+      env PATH="$n20/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOME="$fx/home" \
+        COREPACK_HOME="$fx/ch" sh -c "cd '$fx' && $*"
+    }
+    herm corepack enable > "$SB/herm.log" 2>&1 || _mal "corepack enable rojo: $(tail -2 "$SB/herm.log")"
+    herm "$pin_cmd" >> "$SB/herm.log" 2>&1 \
+      || _mal "pin rojo: $pin_cmd — $(tail -2 "$SB/herm.log")"
+    herm "$inst_cmd" >> "$SB/herm.log" 2>&1 \
+      || _mal "pnpm install rojo (defecto corepack/pnpm): $(tail -3 "$SB/herm.log")"
+    herm "$test_cmd" >> "$SB/herm.log" 2>&1 \
+      || _mal "pnpm test rojo: $(tail -3 "$SB/herm.log")"
+    if grep -q "Cannot find module.*pnpm.*bin/pnpm.cjs" "$SB/herm.log"; then
+      _mal "defecto corepack vivo: $(grep -m1 'Cannot find module' "$SB/herm.log")"
+    fi
+  fi
+}
+fin_caso "pnpm_toolchain_hermetica_sin_packagemanager"
 
 caso "setup_sin_runner_degrada"
 {
