@@ -34,3 +34,20 @@ HOME/COREPACK_HOME aislados por corrida.
 
 Comandos viejos no declarados actuales por analogia: toda la medicion de esta fila
 se corrio hoy contra v20.19.5/corepack 0.33.0 descargado; nada se infiere de corridas previas.
+
+## Ronda de correcciones (review del PR #300, 2026-09-11)
+
+El fix del generador quedo aprobado tal cual; los cambios son de test y proceso.
+
+| Par | Log | Salida |
+|---|---|---|
+| Rojo pre-fix: sin registro npm hace FALLAR el hermetico | r2-proxy-rojo-prefij.log | EXIT=1, "pin rojo" (era FAIL, no skip) |
+| Verde punto 2: misma falta de red ahora es SKIP con razon | r2-proxy-skip-postfij.log | EXIT=0, `SAIKIT_SKIP_CASO: ... -- sin red al registro npm`; 23 mutaciones atrapadas |
+| Verde normal completa | r2-bateria-verde.log | EXIT=0, 39 ok, 0 skips, `herm: pnpm 10.34.5 install+test ok`, 23 atrapadas |
+| Rojo punto 4: descarga rc=0 sin corepack ejecutable | r2-n20-roto-rojo.log | EXIT=1, "descarga rc=0 pero .../bin/corepack no quedo ejecutable" (antes era un ok falso) |
+
+- Punto 1: el pin entra al arnes de mutaciones del repo (`c_pnpm` extendida;
+  `sin_pin_pnpm` y `pin_pnpm_12` atrapadas por `c_pnpm`; el caso hecho a mano
+  se borro). La de rango (`pin_pnpm_12` -> major 12) es la que prueba la guarda.
+- Punto 3: aarch64 -> arm64 para el tarball de Linux ARM (hilo CodeRabbit).
+- Punto 5: `run-identity.txt` pasa a `uname -srm` (sin hostname, repo publico).
