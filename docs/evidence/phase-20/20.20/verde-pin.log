@@ -1,0 +1,33 @@
+Preparing pnpm@10.34.5 for immediate activation...
+Already up to date
+
+Done in 204ms using pnpm v10.34.5
+
+   ╭──────────────────────────────────────────────╮
+   │                                              │
+   │     Update available! 10.34.5 → 12.3.4.      │
+   │     Changelog: https://pnpm.io/v/12.3.4      │
+   │   To update, run: corepack use pnpm@12.3.4   │
+   │                                              │
+   ╰──────────────────────────────────────────────╯
+
+
+> saikit-fx-pnpm@ test /private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/fx-run
+> node --test test/
+
+TAP version 13
+# Subtest: fixture vivo
+ok 1 - fixture vivo
+  ---
+  duration_ms: 0.478208
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26.183416
+VERDE_RC=0

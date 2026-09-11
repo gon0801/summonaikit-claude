@@ -1,0 +1,13 @@
+Preparing pnpm@10.34.5 for immediate activation...
+Internal Error: Error when performing the request to https://registry.npmjs.org/pnpm/-/pnpm-10.34.5.tgz; for troubleshooting help, see https://github.com/nodejs/corepack#troubleshooting
+    at fetch (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:22051:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async fetchUrlStream (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:22081:20)
+    at async download (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:22208:18)
+    at async installVersion (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:22300:55)
+    at async Engine.ensurePackageManager (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:22851:32)
+    at async PrepareCommand.execute (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:23579:27)
+    at async PrepareCommand.validateAndExecute (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:20258:22)
+    at async _Cli.run (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:21195:18)
+    at async Object.runMain (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:23654:19)
+NORRED_RC=1

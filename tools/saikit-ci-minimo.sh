@@ -39,6 +39,12 @@ PIN_SETUP_NODE_OWNER='actions/setup-node'
 PIN_SETUP_NODE_SHA='49933ea5288caeca8642d1e84afbd3f7d6820020'
 PIN_SETUP_NODE_TAG='v4.4.0'
 
+# Corepack del Node 20 del CI (0.33.0) resuelve pnpm 'latest' (12.x) y ese
+# paquete ya no trae bin/pnpm.cjs: pnpm install nace rojo (medido
+# 2026-09-11: 9.15.9 y 10.34.5 corren; 11.0.0 y 12.3.4 no). Pin explicito
+# a la ultima major soportada; corepack prepare no toca package.json.
+PIN_PNPM_VERSION='10.34.5'
+
 # Refresh de pins (20.7): tools/bump-ci-pins.sh --check detecta pin obsoleto
 # contra una fuente (fixture o API de GitHub) y --proponer emite el diff a
 # revisar; nunca escribe ni adopta tag flotante. El tag vive en PIN_*_TAG
@@ -222,6 +228,8 @@ EOF
           node-version: '20'
       - name: Enable pnpm
         run: corepack enable
+      - name: Pin pnpm
+        run: corepack prepare pnpm@$PIN_PNPM_VERSION --activate
       - name: Install deps
         run: pnpm install --frozen-lockfile
 EOF

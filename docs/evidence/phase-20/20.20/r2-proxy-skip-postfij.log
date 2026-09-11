@@ -1,0 +1,151 @@
+  caso: setup_invoca_generador
+    ok: setup_invoca_generador
+  caso: acepta_escribe_workflow
+    ok: acepta_escribe_workflow
+  caso: run_reales_test_y_verify
+    ok: run_reales_test_y_verify
+  caso: comentario_no_cuenta_como_run
+    ok: comentario_no_cuenta_como_run
+  caso: sin_secrets
+    ok: sin_secrets
+  caso: uses_son_sha_40
+    ok: uses_son_sha_40
+  caso: guardas_discriminantes
+    ok: guardas_discriminantes
+  caso: default_no_sin_tty
+    ok: default_no_sin_tty
+  caso: presente_no_pisa
+    ok: presente_no_pisa
+  caso: flag_ci_minimo_exige_valor
+    ok: flag_ci_minimo_exige_valor
+  caso: generador_solo
+    ok: generador_solo
+  caso: idempotente_segunda_corrida
+    ok: idempotente_segunda_corrida
+  caso: npm_real_no_mira_fuera_de_scripts
+    ok: npm_real_no_mira_fuera_de_scripts
+  caso: npm_real_scripts_compacto_en_una_linea
+    ok: npm_real_scripts_compacto_en_una_linea
+  caso: npm_instala_antes_en_checkout_fresco
+    ok: npm_instala_antes_en_checkout_fresco
+  caso: permisos_minimos_y_sin_persist_credentials
+    ok: permisos_minimos_y_sin_persist_credentials
+  caso: carrera_no_pisa_workflow_aparecido
+    ok: carrera_no_pisa_workflow_aparecido
+  caso: pytest_toolchain_en_yaml
+    ok: pytest_toolchain_en_yaml
+  caso: verify_leeme_no_enciende_verde
+    ok: verify_leeme_no_enciende_verde
+  caso: verify_leeme_md_mayusculas_omite
+    ok: verify_leeme_md_mayusculas_omite
+  caso: verify_tiene_emite_mapa
+    ok: verify_tiene_emite_mapa
+  caso: sin_runner_exit_2
+    ok: sin_runner_exit_2
+  caso: job_amarrado
+    ok: job_amarrado
+  caso: yarn_lock_emite_yarn
+    ok: yarn_lock_emite_yarn
+  caso: pnpm_lock_emite_pnpm
+    ok: pnpm_lock_emite_pnpm
+  caso: pnpm_pin_concreto_en_rango_corepack20
+    ok: pnpm_pin_concreto_en_rango_corepack20
+  caso: pnpm_toolchain_hermetica_sin_packagemanager
+    SAIKIT_SKIP_CASO: pnpm_toolchain_hermetica_sin_packagemanager -- sin red al registro npm
+    ok: pnpm_toolchain_hermetica_sin_packagemanager
+  caso: setup_sin_runner_degrada
+    ok: setup_sin_runner_degrada
+  caso: escrito_cita_el_comando
+    ok: escrito_cita_el_comando
+  caso: merge_sin_checks_tras_declinar
+    ok: merge_sin_checks_tras_declinar
+  caso: pins_detector_al_dia_fixture
+    ok: pins_detector_al_dia_fixture
+  caso: pins_detector_obsoleto_fixture
+    ok: pins_detector_obsoleto_fixture
+  caso: pins_detector_falla_cerrado
+    ok: pins_detector_falla_cerrado
+  caso: pins_pin_incompleto_falla_cerrado_por_campo
+    ok: pins_pin_incompleto_falla_cerrado_por_campo
+  caso: pins_proponer_api_simulada_revisable
+    ok: pins_proponer_api_simulada_revisable
+  caso: pins_proponer_diff_revisable_sin_escribir
+    ok: pins_proponer_diff_revisable_sin_escribir
+  caso: pins_propuesta_aplicada_conserva_exigencias
+    ok: pins_propuesta_aplicada_conserva_exigencias
+  caso: pins_consulta_api_simulada
+    ok: pins_consulta_api_simulada
+  caso: pins_sin_red_falla_declarado
+    ok: pins_sin_red_falla_declarado
+      FAIL: el spy no fue invocado
+    mutacion no_invoca_desde_setup atrapada por c_wiring
+      FAIL: no escribio el workflow: saikit-ci-minimo: pin checkout no es sha de 40
+    mutacion escribe_tag_no_sha atrapada por c_uses_sha
+      FAIL: no escribio el workflow: saikit-ci-minimo: secrets prohibidos en el workflow
+    mutacion mete_secrets atrapada por c_sin_secrets
+      FAIL: faltan run: reales de test o verify
+    mutacion run_solo_en_comentario atrapada por c_run_reales
+      FAIL: escribio el workflow sin TTY
+      FAIL: no aviso que sin CI no mergea
+    mutacion default_no_escribe_igual atrapada por c_default_no
+      FAIL: falta permissions:
+    mutacion sin_permissions atrapada por c_permisos
+      FAIL: falta persist-credentials: false
+    mutacion persist_credentials_on atrapada por c_permisos
+      FAIL: piso el workflow de la carrera
+      FAIL: no preservo competidor
+    mutacion carrera_sin_guarda atrapada por c_carrera
+      FAIL: falta setup-python@40hex
+    mutacion sin_setup_python atrapada por c_pytest
+      FAIL: YAML tiene find verify
+      FAIL: no omitio SOLO_MD
+    mutacion verify_vuelve_a_find atrapada por c_verify_leeme
+      FAIL: rc=0 esperaba 2: saikit-ci-minimo: escrito .github/workflows/saikit-ci-minimo.yml (corre: bash tests/run.sh)
+      FAIL: escribio YAML sin runner
+    mutacion fallback_eterno atrapada por c_sin_runner
+      FAIL: no ubuntu-24.04
+      FAIL: ubuntu-latest
+    mutacion ubuntu_latest atrapada por c_job
+      FAIL: no yarn test
+      FAIL: emitio npm
+    mutacion yarn_emite_npm atrapada por c_yarn
+      FAIL: falta setup-node@40hex
+    mutacion sin_setup_node_pnpm atrapada por c_pnpm
+      FAIL: falta corepack prepare pnpm@<ver> --activate
+      FAIL: pin no es version concreta: []
+tests/test_ci_minimo.sh: line 1383: [: : integer expected
+      FAIL: corepack del Node 20 del CI no corre pnpm >=11: pin=
+      FAIL: orden toolchain: setup-node < enable < pin < install < test (18 22  24 26)
+    mutacion sin_pin_pnpm atrapada por c_pnpm
+      FAIL: corepack del Node 20 del CI no corre pnpm >=11: pin=12.3.4
+    mutacion pin_pnpm_12 atrapada por c_pnpm
+      FAIL: falta pip doble
+    mutacion pip_sin_pytest_extra atrapada por c_pytest_req
+      FAIL: falta paso verify
+      FAIL: falta mapa test_cmd
+    mutacion tiene_omite_verify atrapada por c_verify_tiene
+      FAIL: setup rc=2
+    mutacion setup_propaga_exit2 atrapada por c_setup_degrada
+      FAIL: no omitio LEEME.MD
+    mutacion leeme_md_case_sensitive atrapada por c_leeme_mayus
+      FAIL: obsoleto debia ser exit 1, dio 0: saikit-bump-ci-pins: al dia: actions/checkout v4.2.2 (11bd71901bbe5b1630ceea73d27597364c9af683)
+saikit-bump-ci-pins: al dia: actions/setup-node v4.4.0 (49933ea5288caeca8642d1e84afbd3f7d6820020)
+saikit-bump-ci-pins: al dia: actions/setup-python v5.6.0 (a26af69be951a213d495a4c3e4e4022e16d87065)
+saikit-bump-ci-pins: todos los pins al dia (3)
+      FAIL: no reporta OBSOLETO: saikit-bump-ci-pins: al dia: actions/checkout v4.2.2 (11bd71901bbe5b1630ceea73d27597364c9af683)
+saikit-bump-ci-pins: al dia: actions/setup-node v4.4.0 (49933ea5288caeca8642d1e84afbd3f7d6820020)
+saikit-bump-ci-pins: al dia: actions/setup-python v5.6.0 (a26af69be951a213d495a4c3e4e4022e16d87065)
+saikit-bump-ci-pins: todos los pins al dia (3)
+    mutacion detector_siempre_al_dia atrapada por c_pins_obsoleto
+      FAIL: no propuso el diff: saikit-bump-ci-pins: propuesta (NO aplicada) para actions/setup-node v4.5.0 -> eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+saikit-bump-ci-pins: revisa el diff y aplicalo a mano; este tool no escribe el generador ni ningun workflow
+      FAIL: la propuesta escribio el generador en vez de dejarlo revisable
+    mutacion proponer_escribe_directo atrapada por c_pins_propuesta_seca
+      FAIL: pin sin SHA debia ser exit 2, dio 0: saikit-bump-ci-pins: al dia: actions/checkout v4.2.2 (11bd71901bbe5b1630ceea73d27597364c9af683)
+saikit-bump-ci-pins: al dia: actions/setup-python v5.6.0 (a26af69be951a213d495a4c3e4e4022e16d87065)
+saikit-bump-ci-pins: todos los pins al dia (2)
+      FAIL: declaro el veredicto al dia con un pin ilegible: saikit-bump-ci-pins: al dia: actions/checkout v4.2.2 (11bd71901bbe5b1630ceea73d27597364c9af683)
+saikit-bump-ci-pins: al dia: actions/setup-python v5.6.0 (a26af69be951a213d495a4c3e4e4022e16d87065)
+saikit-bump-ci-pins: todos los pins al dia (2)
+    mutacion pin_ilegible_se_descarta atrapada por c_pins_ilegible
+test_ci_minimo: OK

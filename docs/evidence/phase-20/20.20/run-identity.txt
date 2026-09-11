@@ -1,0 +1,11 @@
+=== identity (20.20: pin pnpm para el corepack del Node 20 del CI) ===
+date: 2026-09-11T07:11:25Z
+platform: Darwin 25.6.0 arm64 arm64
+branch: fix/ci-pin-pnpm-corepack20
+HEAD: 6ef674e593f1a7d8a21d5e720ba77a8b1071dbc1
+origin/master: 703f27629bd3a59bd70bd7f9ef4f84411423020b
+hook real (drift declarado): 54ab74751a90ec9f9c4daa9d9e163e14726e4180df4187b045737005cce0d8a8       20 lineas (shim pre-commit.com; runbook citaba 37e55640/4345 lineas)
+node de medicion: v20.19.5 (corepack 0.33.0) descargado bajo $TMPDIR
+pnpm pin: 10.34.5
+bash: GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+nota: platform usa uname -srm (sin hostname) — repo publico (ronda 2)
