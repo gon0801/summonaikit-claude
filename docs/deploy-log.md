@@ -29,6 +29,25 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-11 — PR #298 (20.28: rojos falsos de macOS + costuras de la revisión) — hooks NO-OP
+
+- **Merge:** `4561716…` a las 2026-09-11T02:19:01Z, verificado vía API.
+- **¿Cambió el hook? NO.** El PR toca cuatro tests (`test_saikit_merge`,
+  `test_feature_map_verify_app`, `test_feature_map_integration`,
+  `test_feature_map_secrets_capture`), el driver `verify-app.sh` de la skill
+  `verify-summonaikit` y `docs/evidence/phase-20/20.28/`. CI del PR: 15/15 verde
+  en el head `44469bb` (run 34552620378), con los 7 shards de `suite` y los 3 de
+  `suite-lentos`.
+- **Deploy del driver: NO-OP, y no por costumbre sino porque no hay destino.**
+  `verify-app.sh` no tiene copia viva fuera del repo (buscado en el HOME del
+  operador y en `~/.cursor`) y `install-hook.sh` no despliega drivers: no hay
+  nada que instalar.
+- **Deploy corrido igual (regla de costumbre):** `install-hook.sh --check`
+  veredicto=ok, 4/4 al-día (claude/grok/dsh/codex) contra los bytes de
+  `origin/master`, hook `37e55640…`; `check-hook-registration.sh` exit 0. La
+  última copia real sigue siendo la del PR #289.
+- **Operador:** Gon (implementó Cursor; revisión en dos rondas y cierre del lead).
+
 ## 2026-09-10 — PRs #293, #294 y #295 (evidencias 20.9 PreToolUse Claude / 20.10 autopilot Claude / 20.11 cuidar-pr vivo) — hooks NO-OP
 
 - **Merges:** #293 `d89a4ad…` (2026-09-10T05:39:25Z), #294 `60d1ee9…`
