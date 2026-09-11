@@ -706,37 +706,6 @@ caso "pnpm_pin_concreto_en_rango_corepack20"
 }
 fin_caso "pnpm_pin_concreto_en_rango_corepack20"
 
-caso "pnpm_quitar_pin_muta_a_rojo"
-{
-  # Mutacion discriminante: el generador deja de emitir el pin. La guarda
-  # que la atrapa es la misma asercion de pin del caso hermano; aqui se
-  # demuestra que sin pin esa asercion FALLA (la mutacion no sobrevive).
-  rm -f tests/run.sh
-  printf '%s\n' '{ "name": "app", "scripts": { "test": "jest" } }' > package.json
-  printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
-  correr_gen --ci-minimo si
-  [ "$RC" -eq 0 ] || _mal "rc=$RC: $OUT"
-  printf '%s\n' "$(cat "$(yml_dest)")" | grep -q 'corepack prepare pnpm@' \
-    || _mal "precondicion: el generador sin mutar no emite pin"
-  # Con workflow presente el generador declina escribir; fuera el previo
-  # para que el mutado emita el suyo.
-  rm -f "$(yml_dest)"
-  base="$SB/gen-base-pin.sh"; mutado="$SB/gen-mutado-pin.sh"
-  sed "s|^HERE=.*$|HERE=$repo/tools|" "$GEN_REAL" > "$base"
-  sed '/- name: Pin pnpm$/d; /corepack prepare pnpm@/d' "$base" > "$mutado"
-  OUT="$(bash "$mutado" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
-  RC=$?
-  [ "$RC" -eq 0 ] || _mal "generador mutado debia salir 0, dio $RC: $OUT"
-  yml="$(cat "$(yml_dest)")"
-  if printf '%s\n' "$yml" | grep -q 'corepack prepare pnpm@'; then
-    _mal "la mutacion no quito el pin del YAML emitido: $yml"
-  fi
-  if printf '%s\n' "$yml" | sed -n 's/.*corepack prepare pnpm@\([0-9][0-9.]*\) --activate.*/\1/p' | grep -q .; then
-    _mal "la mutacion sobrevive: la asercion de pin pasa igual sin pin"
-  fi
-}
-fin_caso "pnpm_quitar_pin_muta_a_rojo"
-
 caso "pnpm_toolchain_hermetica_sin_packagemanager"
 {
   # Ejecuta la toolchain pnpm EMITIDA por el YAML (enable, pin, install,
@@ -770,10 +739,15 @@ LCK
   [ -n "$pin_cmd" ] && [ -n "$inst_cmd" ] && [ -n "$test_cmd" ] \
     || _mal "yaml sin toolchain pnpm completa (pin/install/test): $yml"
   # node 20 (corepack 0.33.0, el del CI) bajo $TMPDIR; cache por corrida.
+  # Linux ARM reporta aarch64 pero el tarball de nodejs.org se llama arm64
+  # (hilo CodeRabbit del PR #300); x86_64 -> x64 por la misma convencion.
   n20="${TMPDIR:-/tmp}/saikit-node20-v20.19.5"
+  skip_descarga=0
   if [ ! -x "$n20/bin/corepack" ]; then
     so="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    arq="$(uname -m)"; [ "$arq" = "x86_64" ] && arq="x64"
+    arq="$(uname -m)"
+    [ "$arq" = "x86_64" ] && arq="x64"
+    [ "$arq" = "aarch64" ] && arq="arm64"
     url="https://nodejs.org/dist/v20.19.5/node-v20.19.5-$so-$arq.tar.xz"
     tarb="${TMPDIR:-/tmp}/saikit-node20.tar.xz"
     if ! command -v curl >/dev/null 2>&1 \
@@ -781,7 +755,8 @@ LCK
        || ! tar -xJf "$tarb" -C "${TMPDIR:-/tmp}" \
        || ! mv "${TMPDIR:-/tmp}/node-v20.19.5-$so-$arq" "$n20"; then
       saikit_skip_caso "pnpm_toolchain_hermetica_sin_packagemanager" \
-        "sin curl o sin red para descargar node 20 de nodejs.org"
+        "sin curl o sin red para descargar node 20"
+      skip_descarga=1
     fi
   fi
   if [ -n "$pin_cmd" ] && [ -n "$inst_cmd" ] && [ -n "$test_cmd" ] \
@@ -793,16 +768,37 @@ LCK
       env PATH="$n20/bin:/usr/bin:/bin:/usr/sbin:/sbin" HOME="$fx/home" \
         COREPACK_HOME="$fx/ch" sh -c "cd '$fx' && $*"
     }
-    herm corepack enable > "$SB/herm.log" 2>&1 || _mal "corepack enable rojo: $(tail -2 "$SB/herm.log")"
-    herm "$pin_cmd" >> "$SB/herm.log" 2>&1 \
-      || _mal "pin rojo: $pin_cmd — $(tail -2 "$SB/herm.log")"
-    herm "$inst_cmd" >> "$SB/herm.log" 2>&1 \
-      || _mal "pnpm install rojo (defecto corepack/pnpm): $(tail -3 "$SB/herm.log")"
-    herm "$test_cmd" >> "$SB/herm.log" 2>&1 \
-      || _mal "pnpm test rojo: $(tail -3 "$SB/herm.log")"
-    if grep -q "Cannot find module.*pnpm.*bin/pnpm.cjs" "$SB/herm.log"; then
-      _mal "defecto corepack vivo: $(grep -m1 'Cannot find module' "$SB/herm.log")"
+    # Sin registro npm NO es fallo del caso: la firma de sin-red.log
+    # distingue falta de red del defecto; se declara skip con razon.
+    sin_red_npm() { grep -q "Error when performing the request to" "$SB/herm.log"; }
+    herm corepack enable > "$SB/herm.log" 2>&1 \
+      || _mal "corepack enable rojo: $(tail -2 "$SB/herm.log")"
+    if herm "$pin_cmd" >> "$SB/herm.log" 2>&1; then
+      if herm "$inst_cmd" >> "$SB/herm.log" 2>&1; then
+        herm "$test_cmd" >> "$SB/herm.log" 2>&1 \
+          || _mal "pnpm test rojo: $(tail -3 "$SB/herm.log")"
+        if grep -q "Cannot find module.*pnpm.*bin/pnpm.cjs" "$SB/herm.log"; then
+          _mal "defecto corepack vivo: $(grep -m1 'Cannot find module' "$SB/herm.log")"
+        fi
+        printf '    herm: pnpm %s install+test ok\n' \
+          "$(printf '%s' "$pin_cmd" | sed -n 's/.*pnpm@\([0-9][0-9.]*\).*/\1/p')"
+      elif sin_red_npm; then
+        saikit_skip_caso "pnpm_toolchain_hermetica_sin_packagemanager" \
+          "sin red al registro npm"
+      else
+        _mal "pnpm install rojo (defecto corepack/pnpm): $(tail -3 "$SB/herm.log")"
+      fi
+    elif sin_red_npm; then
+      saikit_skip_caso "pnpm_toolchain_hermetica_sin_packagemanager" \
+        "sin red al registro npm"
+    else
+      _mal "pin rojo: $pin_cmd - $(tail -2 "$SB/herm.log")"
     fi
+  elif [ "$skip_descarga" -eq 0 ] && [ -n "$pin_cmd" ] && [ -n "$inst_cmd" ] \
+     && [ -n "$test_cmd" ]; then
+    # Descarga rc=0 pero sin corepack ejecutable (p.ej. mv DENTRO de un
+    # $n20 preexistente): ni midio ni declaro skip; antes era un ok falso.
+    _mal "descarga rc=0 pero $n20/bin/corepack no quedo ejecutable"
   fi
 }
 fin_caso "pnpm_toolchain_hermetica_sin_packagemanager"
@@ -1372,9 +1368,30 @@ c_pnpm() {
   printf 'lockfileVersion: 9.0\n' > pnpm-lock.yaml
   OUT="$(bash "$GEN" --ofrecer --root "$SB/work" --ci-minimo si 2>&1)"
   [ -f "$(yml_dest)" ] || { _mal "no escribio: $OUT"; return; }
+  local yml nl_node nl_enable nl_pin nl_inst nl_test pin major
+  yml="$(cat "$(yml_dest)")"
   grep -Eq '^[[:space:]]*- uses:[[:space:]]*actions/setup-node@[0-9a-f]{40}' "$(yml_dest)" \
     || _mal "falta setup-node@40hex"
   grep -Eq 'corepack enable' "$(yml_dest)" || _mal "falta corepack enable"
+  # Pin: existe, version concreta, major <= 10 (el corepack 0.33.0 del
+  # Node 20 del CI no corre pnpm >= 11; medido 2026-09-11).
+  pin="$(printf '%s\n' "$yml" | sed -n 's/.*corepack prepare pnpm@\([0-9][0-9.]*\) --activate.*/\1/p' | head -1)"
+  [ -n "$pin" ] || _mal "falta corepack prepare pnpm@<ver> --activate"
+  printf '%s' "$pin" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || _mal "pin no es version concreta: [$pin]"
+  major="${pin%%.*}"
+  [ "$major" -le 10 ] || _mal "corepack del Node 20 del CI no corre pnpm >=11: pin=$pin"
+  # Orden de la toolchain: setup-node < enable < pin < install < test.
+  nl_node="$(printf '%s\n' "$yml" | grep -n 'uses:.*actions/setup-node' | head -1 | cut -d: -f1)"
+  nl_enable="$(printf '%s\n' "$yml" | grep -n 'run: corepack enable' | head -1 | cut -d: -f1)"
+  nl_pin="$(printf '%s\n' "$yml" | grep -n 'run: corepack prepare pnpm@' | head -1 | cut -d: -f1)"
+  nl_inst="$(printf '%s\n' "$yml" | grep -n 'run: pnpm install' | head -1 | cut -d: -f1)"
+  nl_test="$(printf '%s\n' "$yml" | grep -n 'run: pnpm test' | head -1 | cut -d: -f1)"
+  [ -n "$nl_node" ] && [ -n "$nl_enable" ] && [ -n "$nl_pin" ] && [ -n "$nl_inst" ] \
+    && [ -n "$nl_test" ] \
+    && [ "$nl_node" -lt "$nl_enable" ] && [ "$nl_enable" -lt "$nl_pin" ] \
+    && [ "$nl_pin" -lt "$nl_inst" ] && [ "$nl_inst" -lt "$nl_test" ] \
+    || _mal "orden toolchain: setup-node < enable < pin < install < test ($nl_node $nl_enable $nl_pin $nl_inst $nl_test)"
 }
 
 c_pytest_req() {
@@ -1473,6 +1490,8 @@ fallback_eterno	s/return 2/printf 'bash tests\/run.sh'; return 0/	c_sin_runner	g
 ubuntu_latest	s/ubuntu-24.04/ubuntu-latest/	c_job	gen
 yarn_emite_npm	s/printf 'yarn test'/printf 'npm test'/	c_yarn	gen
 sin_setup_node_pnpm	s/uses: \$PIN_SETUP_NODE_OWNER@\$PIN_SETUP_NODE_SHA/# uses: $PIN_SETUP_NODE_OWNER@$PIN_SETUP_NODE_SHA/	c_pnpm	gen
+sin_pin_pnpm	/- name: Pin pnpm$/d;/corepack prepare pnpm@/d	c_pnpm	gen
+pin_pnpm_12	s/^PIN_PNPM_VERSION=.*/PIN_PNPM_VERSION='12.3.4'/	c_pnpm	gen
 pip_sin_pytest_extra	s/pip install -r requirements.txt \&\& pip install pytest/pip install -r requirements.txt/	c_pytest_req	gen
 tiene_omite_verify	s/printf 'TIENE'/printf 'SOLO_MD'/	c_verify_tiene	gen
 setup_propaga_exit2	s|if ! bash "\$GEN" --ofrecer --root "\$ROOT".*|bash "$GEN" --ofrecer --root "$ROOT" \${ci_minimo_flag:+--ci-minimo "\$ci_minimo_flag"} \|\| exit 2\nif false; then|	c_setup_degrada	setup
