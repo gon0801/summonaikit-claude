@@ -147,7 +147,17 @@ agents_seen=implementer
 lane=full
 ENV
 
-  SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
+  local launcher_out
+  launcher_out="$(SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>&1)" || true
+  printf '  DEBUG test9: state_root=%s proj_key=%s td=%s
+' "$state_root" "$proj_key" "$td" >&2
+  printf '  DEBUG test9: launcher output:
+%s
+' "$launcher_out" >&2
+  printf '  DEBUG test9: HOST_STATE_DIR=%s/%s/%s
+' "$state_root" "claude" "$proj_key" >&2
+  ls -la "$state_root/claude/$proj_key/test-session/" 2>&1 >&2 || true
+  ls -la "$td/.saikit/close-receipts/" 2>&1 >&2 || true
 
   if [ -f ".saikit/close-receipts/test-session.json" ]; then
     if grep -q '"close_type"' ".saikit/close-receipts/test-session.json"; then
@@ -189,7 +199,17 @@ agents_seen=implementer,verifier,reviewer
 lane=full
 ENV
 
-  SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
+  local launcher_out
+  launcher_out="$(SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>&1)" || true
+  printf '  DEBUG test9: state_root=%s proj_key=%s td=%s
+' "$state_root" "$proj_key" "$td" >&2
+  printf '  DEBUG test9: launcher output:
+%s
+' "$launcher_out" >&2
+  printf '  DEBUG test9: HOST_STATE_DIR=%s/%s/%s
+' "$state_root" "claude" "$proj_key" >&2
+  ls -la "$state_root/claude/$proj_key/test-session/" 2>&1 >&2 || true
+  ls -la "$td/.saikit/close-receipts/" 2>&1 >&2 || true
 
   if [ -f ".saikit/close-receipts/test-session.json" ]; then
     if grep -q '"close_type": "clean"' ".saikit/close-receipts/test-session.json"; then

@@ -84,6 +84,11 @@ PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
 HOST_STATE_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"
 
 # Encontrar el harness-state.env más reciente para este proyecto+host
+echo "[headless-close] DEBUG: PROJECT_ROOT=$PROJECT_ROOT PROJECT_KEY=$PROJECT_KEY STATE_ROOT=$STATE_ROOT HOST_STATE_DIR=$HOST_STATE_DIR" >&2
+echo "[headless-close] DEBUG: SAIKIT_STATE_ROOT=${SAIKIT_STATE_ROOT:-UNSET}" >&2
+echo "[headless-close] DEBUG: dir_exists=$(test -d "$HOST_STATE_DIR" && echo YES || echo NO)" >&2
+ls -la "$HOST_STATE_DIR/" 2>&1 >&2 || echo "[headless-close] DEBUG: ls failed" >&2
+ls -la "$HOST_STATE_DIR"/*/harness-state.env 2>&1 >&2 || echo "[headless-close] DEBUG: glob failed" >&2
 STATE_FOUND=""
 if [ -d "$HOST_STATE_DIR" ]; then
   newest_mtime=0
