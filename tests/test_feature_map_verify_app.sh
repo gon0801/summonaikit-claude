@@ -205,7 +205,7 @@ fi
 # 20.28: un directorio en verify/ no tumba el hash (solo archivos regulares)
 # ---------------------------------------------------------------------------
 caso "directorio plantado en verify/ no tumba checkout_verify_intact"
-PLANT_DIR="$repo/verify/.saikit-planted-dir-20.28"
+PLANT_DIR="$repo/verify/saikit-planted-dir-20.28"
 mkdir -p "$PLANT_DIR"
 reset_art
 out="$(ctrl drive verify-app 2>&1)" && rc=0 || rc=$?
@@ -293,7 +293,7 @@ if [ -f "$DRV" ]; then
 
   caso "mutante cksum glob con directorios se pone rojo"
   reset_art
-  PLANT_DIR="$repo/verify/.saikit-planted-dir-20.28-mut"
+  PLANT_DIR="$repo/verify/saikit-planted-dir-20.28-mut"
   mkdir -p "$PLANT_DIR"
   mut="$SANDBOX/va-cksum-star.sh"
   # Restaura cksum * (incluye directorios) — debe morir con dir plantado.

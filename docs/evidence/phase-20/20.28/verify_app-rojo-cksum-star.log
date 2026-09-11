@@ -2,51 +2,20 @@
   caso: list-features declara verify-app active sandbox
   caso: launch aislado para drive verify-app
   caso: drive verify-app: generar, rechazo, estado, Drive, no product PASS
-    FAIL: drive verify-app rc=1: cksum: __pycache__: Is a directory
-result=FAIL
-exit_code=1
-Traceback (most recent call last):
-  File "<stdin>", line 3, in <module>
-AssertionError: {'schema_version': 1, 'version': 1, 'identity': {'run_id': '20260910T234019Z-11708', 'attempt_id': '20260910T234020334811Z-11795-d122925fd82ef8fa', 'feature_id': 'verify-app'}, 'run_id': '20260910T234019Z-11708', 'attempt_id': '20260910T234020334811Z-11795-d122925fd82ef8fa', 'feature_id': 'verify-app', 'cases': ['verify-generate', 'verify-reject-existing', 'verify-estado', 'verify-drive-cmd', 'verify-no-product-pass'], 'cases_requested': ['verify-generate', 'verify-reject-existing', 'verify-estado', 'verify-drive-cmd', 'verify-no-product-pass'], 'mode': 'sandbox', 'provenance': {'git_sha': '3df25481d943a604c22f637c3eef9f7e13f92cd3', 'dirty': True, 'file_hash': '37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680'}, 'started_at': '2026-09-10T23:40:20Z', 'finished_at': '2026-09-10T23:40:20Z', 'result': 'FAIL', 'exit_code': 1, 'reasons': ['aserción omitida: verify-generate:files_present,verify-generate:seal_real_sha,verify-reject-existing:reject_existing,verify-reject-existing:files_intact,verify-estado:estado_al_dia,verify-estado:estado_desactualizado,verify-drive-cmd:drive_cmd_verify,verify-drive-cmd:drive_cmd_runner,verify-no-product-pass:no_product_verify_pass,verify-no-product-pass:checkout_verify_intact'], 'required_assertions': ['verify-generate:files_present', 'verify-generate:seal_real_sha', 'verify-reject-existing:reject_existing', 'verify-reject-existing:files_intact', 'verify-estado:estado_al_dia', 'verify-estado:estado_desactualizado', 'verify-drive-cmd:drive_cmd_verify', 'verify-drive-cmd:drive_cmd_runner', 'verify-no-product-pass:no_product_verify_pass', 'verify-no-product-pass:checkout_verify_intact'], 'observed_assertions': ['verify-generate:driver_exit'], 'step_count': 2, 'assertion_count': 1, 'scope': 'full', 'declared_scope': 'full', 'scope_partial': False}
-    FAIL: verify-app summary incompleto
-falta aserción files_present
-    FAIL: verify-app: files_present no observa [LEEME.md]
-falta aserción seal_real_sha
-    FAIL: verify-app: seal_real_sha no observa [seal-sha=]
-falta aserción reject_existing
-    FAIL: verify-app: reject_existing no observa [reject-existing]
-falta aserción files_intact
-    FAIL: verify-app: files_intact no observa [files-intact]
-falta aserción estado_al_dia
-    FAIL: verify-app: estado_al_dia no observa [al_dia]
-falta aserción estado_desactualizado
-    FAIL: verify-app: estado_desactualizado no observa [desactualizado]
-falta aserción drive_cmd_verify
-    FAIL: verify-app: drive_cmd_verify no observa [verify/]
-falta aserción drive_cmd_runner
-    FAIL: verify-app: drive_cmd_runner no observa [runner-re]
-falta aserción no_product_verify_pass
-    FAIL: verify-app: no_product_verify_pass no observa [skill-pass-not-product-verify]
-falta aserción checkout_verify_intact
-    FAIL: verify-app: checkout_verify_intact no observa [checkout-verify-intact]
   caso: verify/ del checkout no se toco
   caso: directorio plantado en verify/ no tumba checkout_verify_intact
-    FAIL: drive verify-app con dir plantado rc=1: cksum: __pycache__: Is a directory
+    FAIL: drive verify-app con dir plantado rc=1: cksum: saikit-planted-dir-20.28: Is a directory
 result=FAIL
 exit_code=1
 falta aserción checkout_verify_intact
     FAIL: verify-app: checkout_verify_intact no observa [checkout-verify-intact]
   caso: encabezado falso con rc 0 no acredita rechazo ni sello ni Drive
   caso: F9: copia plana sin mutar de verify-app es muerte de carga
-    FAIL: verify-app: baseline de copia sana no cargo (0 pasos / runtime.sh) rc=1
   caso: mutante omit_reject_existing: omitir reject_existing se pone rojo
-    FAIL: verify-app: muerte de carga (runtime.sh / 0 aserciones) no es mutante de reject_existing
   caso: mutante omit_seal_compare: omitir estado_desactualizado se pone rojo
-    FAIL: verify-app: muerte de carga (runtime.sh / 0 aserciones) no es mutante de estado_desactualizado
   caso: mutante omit_drive_cmd: omitir drive_cmd_runner se pone rojo
-    FAIL: verify-app: muerte de carga (runtime.sh / 0 aserciones) no es mutante de drive_cmd_runner
   caso: mutante cksum glob con directorios se pone rojo
     FAIL: cksum_star: sed no cambio el archivo (patron obsoleto)
   caso: mutante checkout_tree sin podar caches se pone rojo
     FAIL: no_prune_cache: sed no cambio el archivo (patron obsoleto)
-FAIL: 20 aserciones
+FAIL: 4 aserciones

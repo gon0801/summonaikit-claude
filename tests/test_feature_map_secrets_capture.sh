@@ -259,20 +259,26 @@ printf '%s' "$out" | grep -q 'launched run_id=' || malo "launch sin run_id: $out
 # Drive check-secrets
 # ---------------------------------------------------------------------------
 caso "drive check-secrets: fuerte/fallback/redaccion"
-if ! has_gitleaks; then
+# Aceptacion via veredicto_check_secrets (20.28): el mutante SAIKIT_MUT_RC3_AS_PASS
+# conmuta ESTA ruta, no una guarda paralela.
+tiene_gl=0
+has_gitleaks && tiene_gl=1
+rc=3
+out=""
+if [ "$tiene_gl" -eq 1 ]; then
+  reset_art
+  out="$(ctrl drive check-secrets 2>&1)" && rc=0 || rc=$?
+fi
+veredicto_check_secrets "$rc" "$tiene_gl"
+v=$?
+if [ "$v" -eq 2 ]; then
   # Sin detector fuerte local el drive cierra unknown/3; contarlo PASS esconde
   # la falta de instrumento. Canal 18.19 (20.28).
   saikit_skip_caso 'drive check-secrets' \
     'sin gitleaks local; CI suite provisiona 8.30.1'
+elif [ "$v" -eq 1 ]; then
+  malo "drive check-secrets rc=$rc: $out"
 else
-reset_art
-out="$(ctrl drive check-secrets 2>&1)" && rc=0 || rc=$?
-if has_gitleaks && can_force_fallback; then
-  [ "$rc" -eq 0 ] || malo "drive check-secrets rc=$rc (gitleaks presente): $out"
-else
-  [ "$rc" -eq 0 ] \
-    || malo "drive check-secrets rc=$rc (con gitleaks se espera PASS/0): $out"
-fi
 sum="$(latest_summary check-secrets)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "check-secrets sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
@@ -310,7 +316,7 @@ if ! scan_art_for_synth; then
   malo "secreto sintetico aparecio en evidencia de check-secrets"
 fi
 fi
-# fin rama has_gitleaks
+# fin veredicto_check_secrets (0=PASS / 1=FAIL / 2=SKIP)
 # ---------------------------------------------------------------------------
 # Drive capture-payloads
 # ---------------------------------------------------------------------------
@@ -485,9 +491,10 @@ else
     'sin gitleaks bajo PATH acotado; unknown/3 no es PASS'
 fi
 
-# Mutante 20.28: SAIKIT_MUT_RC3_AS_PASS=1 reintroduce contar rc=3 como PASS.
-# Bajo la costura, el mutante "sobrevive en verde" (acepta PASS) y la guarda
-# lo marca rojo por comportamiento — no por grep del archivo.
+# Mutante 20.28: SAIKIT_MUT_RC3_AS_PASS=1 conmuta veredicto_check_secrets, que
+# es la aceptacion REAL del caso drive (:veredicto). Bajo costura PATH el
+# mutante hace que el camino de produccion tome PASS (v=0) en vez de SKIP —
+# eso queda rojo ante la guarda; no es un grep ni una funcion paralela.
 caso "mutante contar rc=3 check-secrets como PASS se pone rojo"
 PATH_NO_GL="$(path_sin_gitleaks)" && gl_ok=1 || gl_ok=0
 if [ "$gl_ok" -eq 0 ]; then
@@ -502,22 +509,25 @@ else
       bash "$CTRL" drive check-secrets 2>&1
   )" && rc=0 || rc=$?
   [ "$rc" -eq 3 ] || malo "mutante rc=3: drive inesperado rc=$rc: $out"
-  # Sana: SKIP, no PASS.
+  # Camino real sano (misma llamada que el caso drive): SKIP.
   veredicto_check_secrets "$rc" 0
   v_sana=$?
   [ "$v_sana" -eq 2 ] || malo "guarda sana no dio SKIP (v=$v_sana)"
-  # Mutante: cuenta rc=3 como PASS — la guarda exige que ESO quede rojo
-  # (PASS sin detector esta prohibido).
+  # Camino real bajo mutante: misma ramificacion que el caso drive.
   SAIKIT_MUT_RC3_AS_PASS=1
   veredicto_check_secrets "$rc" 0
   v_mut=$?
   unset SAIKIT_MUT_RC3_AS_PASS
-  if [ "$v_mut" -ne 0 ]; then
-    malo "mutante no conto rc=3 como PASS (no discrimina; v=$v_mut)"
-  fi
-  # Guarda: PASS sin detector = rojo del mutante.
-  if [ "$v_mut" -eq 0 ]; then
-    printf '    ok: mutante rc=3-as-PASS queda rojo ante guarda SKIP\n'
+  # Replica : if v==2 skip / v==1 malo / v==0 PASS — bajo mutante debe ser PASS.
+  if [ "$v_mut" -eq 2 ]; then
+    malo "mutante sobrevivio como SKIP (no conto rc=3 como PASS)"
+  elif [ "$v_mut" -eq 1 ]; then
+    malo "mutante dio FAIL en vez de PASS falso (v=1)"
+  elif [ "$v_mut" -eq 0 ]; then
+    # Produccion habria seguido como PASS sin detector — mutante atrapado.
+    printf '    ok: mutante rc=3-as-PASS queda rojo ante guarda SKIP (aceptacion real)\n'
+  else
+    malo "mutante: veredicto inesperado v=$v_mut"
   fi
 fi
 
