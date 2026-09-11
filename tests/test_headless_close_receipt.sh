@@ -119,18 +119,9 @@ else
   bad "campos requeridos: faltan campos"
 fi
 
-# --- Test 9: launcher integra recibo ---
+# --- Test 9: launcher integra recibo (layout real del hook) ---
 test_launcher_writes_receipt() {
   local td="$tmpdir/test9"
-  mkdir -p "$td/.saikit/test-session"
-  cat > "$td/.saikit/test-session/harness-state.env" << 'ENV'
-task_hash=xyz789
-cycle=1
-implemented=1
-verified=0
-agents_seen=implementer
-lane=full
-ENV
   mkdir -p "$td/bin"
   cat > "$td/bin/mock-claude" << 'MOCK'
 #!/bin/bash
@@ -140,7 +131,23 @@ MOCK
 
   cd "$td"
   git init -q
-  SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
+
+  # Use SAIKIT_STATE_ROOT to avoid $HOME mismatch between test and launcher
+  local state_root="$tmpdir/hook-state"
+  local proj_key
+  proj_key="$(printf '%s' "$td" | cksum | cut -d ' ' -f 1)"
+  local hook_state="$state_root/claude/$proj_key/test-session"
+  mkdir -p "$hook_state"
+  cat > "$hook_state/harness-state.env" << 'ENV'
+task_hash=xyz789
+cycle=1
+implemented=1
+verified=0
+agents_seen=implementer
+lane=full
+ENV
+
+  SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
 
   if [ -f ".saikit/close-receipts/test-session.json" ]; then
     if grep -q '"close_type"' ".saikit/close-receipts/test-session.json"; then
@@ -154,18 +161,9 @@ MOCK
 }
 test_launcher_writes_receipt
 
-# --- Test 10: launcher con Stop limpio → close_type=clean ---
+# --- Test 10: launcher con Stop limpio → close_type=clean (layout real) ---
 test_launcher_clean_close() {
   local td="$tmpdir/test10"
-  mkdir -p "$td/.saikit/test-session"
-  cat > "$td/.saikit/test-session/harness-state.env" << 'ENV'
-task_hash=abc
-cycle=2
-implemented=1
-verified=1
-agents_seen=implementer,verifier,reviewer
-lane=full
-ENV
   mkdir -p "$td/bin"
   cat > "$td/bin/mock-claude" << 'MOCK'
 #!/bin/bash
@@ -175,12 +173,32 @@ MOCK
 
   cd "$td"
   git init -q
-  SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
+
+  # Use SAIKIT_STATE_ROOT to avoid $HOME mismatch between test and launcher
+  local state_root="$tmpdir/hook-state"
+  local proj_key
+  proj_key="$(printf '%s' "$td" | cksum | cut -d ' ' -f 1)"
+  local hook_state="$state_root/claude/$proj_key/test-session"
+  mkdir -p "$hook_state"
+  cat > "$hook_state/harness-state.env" << 'ENV'
+task_hash=abc
+cycle=2
+implemented=1
+verified=1
+agents_seen=implementer,verifier,reviewer
+lane=full
+ENV
+
+  SAIKIT_STATE_ROOT="$state_root" SAIKIT_CLAUDE_BIN="$td/bin/mock-claude" "$LAUNCHER" --host claude -- "test" 2>/dev/null || true
 
   if [ -f ".saikit/close-receipts/test-session.json" ]; then
-    # El launcher escribe "forced" porque no tiene forma de saber si Stop disparó
-    # (eso es trabajo de20.16 — detectar el cierre limpio vs forzado)
-    ok "launcher escribe recibo (tipo: $(grep close_type .saikit/close-receipts/test-session.json | head -1))"
+    if grep -q '"close_type": "clean"' ".saikit/close-receipts/test-session.json"; then
+      ok "launcher escribe recibo clean (agents_seen=completo)"
+    else
+      local ct
+      ct="$(grep close_type .saikit/close-receipts/test-session.json | head -1)"
+      bad "launcher esperaba close_type=clean, obtuvo: $ct"
+    fi
   else
     bad "launcher no escribe recibo con recibo completo"
   fi

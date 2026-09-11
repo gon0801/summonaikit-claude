@@ -42,11 +42,8 @@ if ! command -v "$BIN" >/dev/null 2>&1; then
   exit 2
 fi
 
-# Encontrar el proyecto root (donde vive .saikit/)
+# Encontrar el proyecto root
 PROJECT_ROOT="$(pwd)"
-if [ ! -d "$PROJECT_ROOT/.saikit" ]; then
-  echo "aviso: no hay .saikit/ en $PROJECT_ROOT — el launcher no puede gestionar estado" >&2
-fi
 
 # Capturar SHA del checkout
 HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
@@ -59,14 +56,46 @@ RC=0
 
 echo "[headless-close] proceso terminó con RC=$RC" >&2
 
-# Buscar estado del harness en .saikit/
+# ═══════════════════════════════════════════════════════════════════
+# Buscar estado del harness en el DIRECTORIO REAL del hook.
+#
+# El hook guarda en:
+#   $HOOK_DIR/state/$HOST/$PROJECT_KEY/$SESSION_KEY/harness-state.env
+# donde:
+#   HOOK_DIR  = ~/.claude/hooks (claude) o ~/.grok/hooks (grok)
+#   PROJECT_KEY = cksum de la ruta del proyecto
+#   SESSION_KEY = session_id saneado (UUID → legible)
+#
+# Ver hooks/summonaikit-harness.sh:901-923.
+# ═══════════════════════════════════════════════════════════════════
+
+# SAIKIT_STATE_ROOT: override for tests to avoid $HOME mismatch
+if [ -n "${SAIKIT_STATE_ROOT:-}" ]; then
+  STATE_ROOT="$SAIKIT_STATE_ROOT"
+else
+  case "$HOST" in
+    claude) HOOK_DIR="${SAIKIT_CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}" ;;
+    grok)   HOOK_DIR="${SAIKIT_GROK_HOOKS_DIR:-$HOME/.grok/hooks}" ;;
+    *)      echo "host no soportado: $HOST" >&2; exit 2 ;;
+  esac
+  STATE_ROOT="$HOOK_DIR/state"
+fi
+PROJECT_KEY="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d ' ' -f 1)"
+HOST_STATE_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"
+
+# Encontrar el harness-state.env más reciente para este proyecto+host
 STATE_FOUND=""
-for state_file in "$PROJECT_ROOT"/.saikit/*/harness-state.env; do
-  [ -f "$state_file" ] || continue
-  # Solo procesar el estado de esta sesión (buscar por session_key)
-  STATE_FOUND="$state_file"
-  break
-done
+if [ -d "$HOST_STATE_DIR" ]; then
+  newest_mtime=0
+  for candidate in "$HOST_STATE_DIR"/*/harness-state.env; do
+    [ -f "$candidate" ] || continue
+    mtime="$(stat -f '%m' "$candidate" 2>/dev/null || stat -c '%Y' "$candidate" 2>/dev/null || echo 0)"
+    if [ "$mtime" -gt "$newest_mtime" ] 2>/dev/null; then
+      newest_mtime="$mtime"
+      STATE_FOUND="$candidate"
+    fi
+  done
+fi
 
 if [ -z "$STATE_FOUND" ]; then
   echo "[headless-close] sin estado de harness — no-op" >&2
@@ -93,14 +122,14 @@ case ",$AGENTS_SEEN," in
   *,implementer,*|*,verifier,*|*,reviewer,*) HAS_RECEIPT=1 ;;
 esac
 
-# Limpiar zona adversary si existe
+# Limpiar zona adversary si existe (en el proyecto, no en el hook)
 ADV_ZONE="$PROJECT_ROOT/.saikit/scratch/adversary/$SESSION_KEY"
 if [ -d "$ADV_ZONE" ] || [ -L "$ADV_ZONE" ]; then
   rm -rf "$ADV_ZONE" 2>/dev/null || true
   echo "[headless-close] zona adversary limpiada" >&2
 fi
 
-# Limpiar estado
+# Limpiar estado del harness (en el directorio del hook)
 if [ "$HAS_RECEIPT" = "1" ]; then
   echo "[headless-close] recibo detectado — limpieza normal" >&2
 else
@@ -121,7 +150,7 @@ if [ -x "$RECEIPT_SCRIPT" ] || [ -f "$RECEIPT_SCRIPT" ]; then
   CLOSE_TYPE="unknown"
   if [ -n "$STATE_FOUND" ]; then
     if [ "$HAS_RECEIPT" = "1" ]; then
-      CLOSE_TYPE="forced"
+      CLOSE_TYPE="clean"
     else
       CLOSE_TYPE="forced"
     fi
