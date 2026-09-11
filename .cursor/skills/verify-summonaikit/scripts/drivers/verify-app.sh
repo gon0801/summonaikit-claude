@@ -17,7 +17,15 @@ HOOK="$VERIFY_REPO/hooks/summonaikit-harness.sh"
 CHECKOUT_VERIFY="$VERIFY_REPO/verify"
 
 checkout_tree() {
-  (cd "$CHECKOUT_VERIFY" && cksum *)
+  # Solo archivos regulares: un directorio en verify/ (p.ej. __pycache__) no
+  # debe matar cksum ni el drive entero (set -e). Medido 20.28 en macOS.
+  # Alineado con manifiesto() de tests/run.sh (18.22 / lecciones del runner):
+  # -r en xargs (BSD/GNU), excluir .DS_Store (Finder reescribe → LEAK falso),
+  # podar caches de Python/pytest: su contenido depende del ultimo interprete
+  # y no es sello del checkout bajo prueba.
+  # Una sola linea de pipeline: los mutantes de test_feature_map_verify_app
+  # la reescriben con sed_must_change.
+  (cd "$CHECKOUT_VERIFY" && find . -type d \( -name __pycache__ -o -name .pytest_cache \) -prune -o -type f ! -name .DS_Store -print0 2>/dev/null | sort -z | xargs -0 -r cksum 2>/dev/null)
 }
 
 CHECKOUT_BEFORE="$(checkout_tree)"

@@ -1,0 +1,21 @@
+=== identity (20.28 finish: plant dir + veredicto on production) ===
+date: 2026-09-11T01:55:26Z
+platform: Darwin Davids-MacBook-Pro.local 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64
+ProductName:		macOS
+ProductVersion:		26.6
+BuildVersion:		25G72
+branch: fix/20.28-macos-rojos
+HEAD: 4878997f77a13b43afd39d3f55f3a03b795aecf9
+origin/master: 7df49a7164319d87f2898c04a27e2f4d9f77e076
+hook_cksum: 3320838264 252356 hooks/summonaikit-harness.sh
+bash: GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
+gitleaks: 8.30.1 @ /opt/homebrew/bin/gitleaks
+python: Python 3.14.7
+
+=== refreshed pairs (plant dir + production veredicto) ===
+verify_app-verde: OK: test_feature_map_verify_app
+verify_app-rojo:     FAIL: drive verify-app con dir plantado rc=1: cksum: saikit-planted-dir-20.28: Is a directory FAIL: 4 aserciones
+secrets-verde: OK: test_feature_map_secrets_capture
+secrets-rojo: FAIL: 7 aserciones
+plant_cksum_probe: cksum * → Is a directory on saikit-planted-dir-20.28-mut (no leading dot)
+merge/integration: not re-measured (prior + gate)

@@ -1,0 +1,41 @@
+  caso: lint real descubre el checkout y cierra OK
+  caso: catalogo real: cero pending, cero legacy, exclusiones con razon
+  caso: list-features enumera todas las fichas; ninguna pending
+  caso: pending de implementacion restante => 1
+  caso: mutacion accept_pending: leftover pending deja de atrapar
+  caso: legacy restante (kind=legacy en feature activa) => 1
+  caso: mutacion accept_legacy: leftover legacy deja de atrapar
+  caso: superficie publica nueva rompe el candado
+  caso: mutacion omit_discovery: superficie nueva deja de atrapar
+  caso: wrapper integration entra en rapidos; lentos sigue siendo solo mutations
+ok
+  caso: fichas integran 18.27, 18.26, 18.10; vivo inventariado no observado
+ok
+  caso: launch aislado para combo y aliases
+  caso: aliases reales: dry-run, gate parcial, ledger, deploy-log
+  caso: drive <id> local audit-ledger PASS/0
+  caso: drive merge-happy-path: unknown/BLOCKED (inventariado; no observado)
+  caso: evidencia FAIL/1 y unknown/3 (sintetica, no solo verde)
+  caso: launch y auditorias de fixtures no dependen de hook/installer
+  caso: combo doctor→drive→reintento→cleanup conserva intentos
+  caso: verify/ del checkout se conserva (sello no se infiere)
+  caso: pytest verify/ aislado (fuente/env propios); cotejo honesto
+    cotejo verify/: exit=0
+    | ============================= test session starts ==============================
+    | platform darwin -- Python 3.14.7, pytest-8.4.2, pluggy-1.6.0 -- /private/tmp/saikit-ev-tmp-vpKGxG/saikit-sandbox-H20EsE/drive-venv/bin/python3.14
+    | cachedir: /tmp/saikit-ev-tmp-vpKGxG/saikit-sandbox-H20EsE/pytest-cache
+    | rootdir: /Users/dn/dev/summonaikit-claude
+    | collecting ... collected 5 items
+    |
+    | verify/test_drive.py::test_el_gate_sin_armar_y_armado PASSED             [ 20%]
+    | verify/test_drive.py::test_instalar_en_seco_responde PASSED              [ 40%]
+    | verify/test_drive.py::test_la_libreta_de_tareas_esta_al_dia PASSED       [ 60%]
+    | verify/test_drive.py::test_el_registro_de_deploys_es_valido PASSED       [ 80%]
+    | verify/test_drive.py::test_el_estado_del_mapa_se_reporta PASSED          [100%]
+    |
+    | ============================== 5 passed in 1.42s ===============================
+Drive verify/: PASS observado (5/5). No se transfiere al sello.
+    estado verify/: desactualizado
+  caso: mutante sin snapshot de fuga se pone rojo
+fuga verify/__pycache__ (listado cambio)
+OK: test_feature_map_integration

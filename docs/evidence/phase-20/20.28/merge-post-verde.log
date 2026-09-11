@@ -1,0 +1,203 @@
+  caso: feliz_default_no_merguea_reporta_listo
+    ok: feliz_default_no_merguea_reporta_listo
+  caso: feliz_confirmado_merguea_con_trailer_y_match_head
+    ok: feliz_confirmado_merguea_con_trailer_y_match_head
+  caso: feliz_rama_main_funciona_igual
+    ok: feliz_rama_main_funciona_igual
+  caso: feliz_bajo_terminal_ansi_no_merguea_por_presentacion
+    ok: feliz_bajo_terminal_ansi_no_merguea_por_presentacion
+  caso: feliz_bajo_color_forzado_del_harness
+    ok: feliz_bajo_color_forzado_del_harness
+  caso: confirmado_repite_el_gate_base_movio_no_merguea
+    ok: confirmado_repite_el_gate_base_movio_no_merguea
+  caso: ci_rojo_no_merguea
+    ok: ci_rojo_no_merguea
+  caso: ci_skipped_es_rojo
+    ok: ci_skipped_es_rojo
+  caso: solo_push_success_es_verde
+    ok: solo_push_success_es_verde
+  caso: sin_checks_no_merguea
+    ok: sin_checks_no_merguea
+  caso: ci_pendiente_no_merguea
+    ok: ci_pendiente_no_merguea
+  caso: mergeable_unknown_dos_veces_no_merguea
+    ok: mergeable_unknown_dos_veces_no_merguea
+  caso: base_avanzada_no_merguea
+    ok: base_avanzada_no_merguea
+  caso: veredicto_de_otro_sha_no_merguea
+    ok: veredicto_de_otro_sha_no_merguea
+  caso: veredicto_reescrito_tras_el_sello_no_merguea
+    ok: veredicto_reescrito_tras_el_sello_no_merguea
+  caso: commits_despues_del_veredicto_no_merguea
+    ok: commits_despues_del_veredicto_no_merguea
+  caso: blast_nivel_menor_de_4_no_merguea
+    ok: blast_nivel_menor_de_4_no_merguea
+  caso: verifier_fail_no_merguea
+    ok: verifier_fail_no_merguea
+  caso: verify_app_na_sin_sin_verify_app_no_merguea
+    ok: verify_app_na_sin_sin_verify_app_no_merguea
+  caso: drive_fuera_de_verify_no_merguea
+    ok: drive_fuera_de_verify_no_merguea
+  caso: config_ausente_no_merguea
+    ok: config_ausente_no_merguea
+  caso: config_unknown_no_merguea
+    ok: config_unknown_no_merguea
+  caso: pr_toca_autopilot_json_no_merguea
+    ok: pr_toca_autopilot_json_no_merguea
+  caso: pr_de_otra_rama_base_no_merguea
+    ok: pr_de_otra_rama_base_no_merguea
+  caso: pr_numero_mal_no_merguea
+    ok: pr_numero_mal_no_merguea
+  caso: repo_distinto_no_merguea
+    ok: repo_distinto_no_merguea
+  caso: autor_distinto_de_la_cuenta_no_merguea
+    ok: autor_distinto_de_la_cuenta_no_merguea
+  caso: commit_de_otro_email_no_merguea
+    ok: commit_de_otro_email_no_merguea
+  caso: sin_estado_del_hook_no_merguea
+    ok: sin_estado_del_hook_no_merguea
+  caso: reviewer_no_visto_en_el_estado_no_merguea
+    ok: reviewer_no_visto_en_el_estado_no_merguea
+  caso: grok_seal_boot_sin_vinculo_no_merguea
+    ok: grok_seal_boot_sin_vinculo_no_merguea
+  caso: grok_padre_con_linked_seal_session_listo
+    ok: grok_padre_con_linked_seal_session_listo
+  caso: grok_dos_linked_seal_session_no_merguea
+    ok: grok_dos_linked_seal_session_no_merguea
+  caso: grok_linked_viejo_mas_vigente_listo
+    ok: grok_linked_viejo_mas_vigente_listo
+  caso: merge_ok_borrado_remoto_falla_reporta_sin_reintentar
+    ok: merge_ok_borrado_remoto_falla_reporta_sin_reintentar
+  caso: dry_run_dice_que_haria_sin_hacerlo
+    ok: dry_run_dice_que_haria_sin_hacerlo
+  caso: listo_emite_forma_ejecutable_con_scripts_100644
+    ok: listo_emite_forma_ejecutable_con_scripts_100644
+  caso: revert_inverso_exacto_merguea
+    ok: revert_inverso_exacto_merguea
+  caso: revert_arbol_distinto_por_whitespace_no_merguea
+    ok: revert_arbol_distinto_por_whitespace_no_merguea
+  caso: revert_commit_extra_no_merguea
+    ok: revert_commit_extra_no_merguea
+  caso: revert_sin_trailer_no_merguea
+    ok: revert_sin_trailer_no_merguea
+  caso: revert_no_es_la_punta_no_merguea
+    ok: revert_no_es_la_punta_no_merguea
+  caso: nunca_admin_en_el_fuente
+    ok: nunca_admin_en_el_fuente
+  caso: lock_segundo_proceso_no_llama_merge_exit_3
+    ok: lock_segundo_proceso_no_llama_merge_exit_3
+  caso: lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea
+    ok: lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea
+  caso: mutante_lock_path_sin_canonicalizar_se_pone_rojo
+      FAIL: reporta el lock COMPARTIDO (common-dir): no contiene [/tmp/saikit-ev-tmp-fxhduC/saikit-merge-link-qpFFrk/logical/work/.git/saikit-merge.lock]
+    ok: mutante sin canon queda rojo (costura symlink)
+    ok: mutante_lock_path_sin_canonicalizar_se_pone_rojo
+  caso: lock_caida_no_libera_ajeno_recuperacion_explicita
+    ok: lock_caida_no_libera_ajeno_recuperacion_explicita
+  caso: lock_reintento_tras_liberar_revalida_el_gate_normal
+    ok: lock_reintento_tras_liberar_revalida_el_gate_normal
+  caso: revert_lock_segundo_proceso_no_merguea
+    ok: revert_lock_segundo_proceso_no_merguea
+  caso: revert_lock_reintento_revalida_punta
+    ok: revert_lock_reintento_revalida_punta
+  caso: lock_no_excluye_entre_clones_declarado
+    ok: lock_no_excluye_entre_clones_declarado
+  caso: revert_ok_sin_dir_de_veredictos_registra_igual
+    ok: revert_ok_sin_dir_de_veredictos_registra_igual
+      FAIL: reporta LISTO: no contiene [LISTO:]
+      FAIL: mergeo sin --confirmado
+    mutacion confirmado_default_si atrapada por c_feliz
+      FAIL: pinea el head: no contiene [--match-head-commit 2c343ec5efecdd086aac60ec40fb37f912539fda]
+    mutacion sin_match_head_commit atrapada por c_confirmado
+      FAIL: razon sin checks: no contiene [NO-MERGE: sin checks]
+      FAIL: mergeo sin checks (no es verde)
+    mutacion sin_checks_n_opcional atrapada por c_sin_checks
+      FAIL: razon CI pendiente: no contiene [NO-MERGE: CI pendiente]
+    mutacion ci_pendiente_es_verde atrapada por c_ci_pendiente
+      FAIL: razon CI rojo: no contiene [NO-MERGE: CI rojo]
+      FAIL: mergeo con CI rojo
+    mutacion ci_rojo_es_verde atrapada por c_ci_rojo
+      FAIL: razon CI rojo: no contiene [NO-MERGE: CI rojo]
+      FAIL: nombra skipped: no contiene [skipped]
+      FAIL: mergeo con CI skipped
+    mutacion skipped_es_verde atrapada por c_ci_skipped
+      FAIL: rc esperaba 0, dio 1: NO-MERGE: exige pull_request
+      FAIL: merge ok: no contiene [MERGE-OK:]
+    mutacion solo_push_exige_pr atrapada por c_solo_push
+      FAIL: razon base avanzada: no contiene [NO-MERGE: base avanzada]
+      FAIL: mergeo con base vieja
+    mutacion base_vieja_pasa atrapada por c_base_avanzada
+      FAIL: razon veredicto reescrito: no contiene [NO-MERGE: veredicto reescrito tras el sello]
+      FAIL: mergeo con el veredicto reescrito
+    mutacion sello_no_se_compara atrapada por c_reescrito
+      FAIL: razon n/a sin permiso: no contiene [NO-MERGE: verify_app n/a sin sin_verify_app]
+    mutacion verify_na_flojo atrapada por c_verify_na
+      FAIL: razon drive fuera de verify/: no contiene [NO-MERGE: verify/ fuera de]
+    mutacion verify_ruta_floja atrapada por c_verify_ruta
+      FAIL: razon otra rama base: no contiene [NO-MERGE: otra rama base]
+      FAIL: mergeo un PR de otra rama base
+    mutacion rama_base_floja atrapada por c_rama_base
+      FAIL: razon email ajeno: no contiene [NO-MERGE: commit de otro email]
+      FAIL: mergeo con un commit de otro email
+    mutacion email_ajeno_pasa atrapada por c_email
+      FAIL: razon sin estado: no contiene [NO-MERGE: sin estado del hook]
+    mutacion estado_opcional atrapada por c_sin_estado
+sed: 1: "s|grep -q '^linked_seal ...": bad flag in substitute command: 'c'
+      FAIL: razon seal_boot grok sin vinculo: no contiene [NO-MERGE: sin estado del hook]
+    mutacion grok_sin_exigir_vinculo atrapada por c_grok_seal_boot_sin_vinculo
+sed: 1: "s|\[ -n "\$sello_f" \]  ...": bad flag in substitute command: 'c'
+      FAIL: LISTO pese a linked viejo: no contiene [LISTO:]
+    mutacion grok_cuenta_linked_viejos atrapada por c_grok_linked_viejo_mas_vigente
+      FAIL: intentos de borrado: esperaba 1, hubo 2
+    mutacion borrado_reintenta atrapada por c_borrado
+      FAIL: razon verifier: no contiene [NO-MERGE: verifier: FAIL]
+    mutacion verifier_flojo atrapada por c_verifier_fail
+      FAIL: razon autor: no contiene [NO-MERGE: autor del PR distinto de la cuenta]
+      FAIL: mergeo un PR de otro autor
+    mutacion autor_flojo atrapada por c_autor
+      FAIL: razon sin trailer: no contiene [NO-MERGE: sin trailer]
+      FAIL: mergeo un revert de un commit sin trailer
+    mutacion revert_trailer_opcional atrapada por c_revert_trailer
+To /tmp/saikit-ev-tmp-fxhduC/saikit-merge-link-18ebuB/logical/origin.git
+ ! [rejected]        revert/task -> revert/task (non-fast-forward)
+error: failed to push some refs to '/tmp/saikit-ev-tmp-fxhduC/saikit-merge-link-18ebuB/logical/origin.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+      FAIL: razon arbol distinto: no contiene [NO-MERGE: arbol distinto]
+      FAIL: mergeo un revert que no es el inverso exacto
+    mutacion revert_arbol_por_patchid atrapada por c_revert_arbol
+      FAIL: razon no es la punta: no contiene [NO-MERGE: no es la punta]
+      FAIL: mergeo un revert de un commit que ya no es la punta
+    mutacion revert_punta_floja atrapada por c_revert_punta
+      FAIL: no anuncia un registro que no hizo: contiene [SIN registrar] y no deberia
+      FAIL: registro escrito: no contiene [f000000000000000000000000000000000000000]
+    mutacion registro_sin_mkdir atrapada por c_revert_registro
+      FAIL: rc esperaba 0, dio 1: NO-MERGE: gh repo view devolvio algo inesperado (¿color forzado del terminal? nunca deberia verse con el entorno neutralizado): [1;37m{[m
+  [1;34m"nameWithOwner"[m[1;37m:[m [32m"op/sandbox"[m
+[1;37m}[m
+      FAIL: merge ok: no contiene [MERGE-OK:]
+    mutacion sin_neutralizar_gh atrapada por c_ansi
+      FAIL: rc esperaba 0, dio 1: NO-MERGE: gh repo view devolvio algo inesperado (¿color forzado del terminal? nunca deberia verse con el entorno neutralizado): [1;37m{[m
+  [1;34m"nameWithOwner"[m[1;37m:[m [32m"op/sandbox"[m
+[1;37m}[m
+      FAIL: merge ok: no contiene [MERGE-OK:]
+    mutacion sin_unset_color_force atrapada por c_ansi_force
+      FAIL: la forma emitida fallo con scripts 100644 (rc=126): tests/test_saikit_merge.sh: line 343: tools/saikit-merge.sh: Permission denied
+      FAIL: argv capturado: la forma emitida llega al merge: no contiene [pr merge 7 --squash --match-head-commit b5edc915f9b33f6c32291342cd6385f310b28235]
+      FAIL: la forma emitida no completo el flujo del merge
+    mutacion emision_listo_sin_bash atrapada por c_listo_emision
+      FAIL: A no tomo el lock; el caso no mide contencion
+    mutacion lock_sin_guard atrapada por c_lock_exclusion
+      FAIL: el segundo proceso deberia bloquearse con 3, dio 0: BORRADO-OK: rama remota feat/task borrada (paso aparte)
+MERGE-OK: f000000000000000000000000000000000000000 (registrado en .saikit/veredictos/9b383ae4182023f402423ce8931ce010bf59e6ed.merge)
+      FAIL: reporta el lock: no contiene [saikit-merge.lock]
+      FAIL: muestra como liberarlo: no contiene [--liberar-lock]
+      FAIL: el segundo proceso llamo merge pese al lock del primero
+    mutacion lock_mkdir_no_atomico atrapada por c_lock_exclusion
+      FAIL: el dueno no libero su lock al salir
+    mutacion trap_no_libera atrapada por c_lock_libera_propio
+    ok: banco rechaza caso siempre-rojo (control sano rojo => no acredita y FAIL)
+    ok: banco rechaza mutante superviviente (caso sano-verde que no detecta)
+test_saikit_merge: OK

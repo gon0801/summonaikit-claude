@@ -487,6 +487,19 @@ mkdir -p "$SANDBOX/drive-home" "$SANDBOX/drive-tmp"
 PYTEST_BIN="$(resolve_pytest)" || { malo "no se pudo provisionar pytest"; PYTEST_BIN=""; }
 DRIVE_LOG="$SANDBOX/verify-drive.log"
 DRIVE_RC=99
+# Snapshot de CONTENIDO (20.28): existencia sola no atrapa .pyc nuevos dentro
+# de un __pycache__ preexistente. Listado hasheado antes/despues.
+cache_listing() {
+  local root="$1"
+  if [ ! -d "$root" ]; then
+    printf 'ABSENT\n'
+    return 0
+  fi
+  (cd "$root" && find . -type f -print0 2>/dev/null | sort -z | xargs -0 -r cksum 2>/dev/null)
+  printf '\n'
+}
+snap_pycache_before="$(cache_listing "$repo/verify/__pycache__")"
+snap_pytest_before="$(cache_listing "$repo/.pytest_cache")"
 if [ -n "$PYTEST_BIN" ]; then
   # Cache y bytecode fuera del checkout: run.sh trata cualquier escritura
   # en el repo como LEAK.
@@ -513,10 +526,26 @@ fi
 # El sello del checkout no se toca por correr el Drive.
 [ "$(cksum "$LEEME")" = "$seal_before" ] \
   || malo "correr pytest verify/ muto LEEME.md — no transferir sello"
-[ ! -e "$repo/verify/__pycache__" ] \
-  || malo "pytest verify/ dejo verify/__pycache__ (fuga en el checkout)"
-[ ! -e "$repo/.pytest_cache" ] \
-  || malo "pytest verify/ dejo .pytest_cache en la raiz (fuga)"
+snap_pycache_after="$(cache_listing "$repo/verify/__pycache__")"
+snap_pytest_after="$(cache_listing "$repo/.pytest_cache")"
+# Guarda de fuga (respeta SAIKIT_MUT_LEAK_SIN_SNAPSHOT para el mutante).
+assert_verify_caches_intact() {
+  if [ "${SAIKIT_MUT_LEAK_SIN_SNAPSHOT:-0}" = 1 ]; then
+    # MUTANT: existencia sola con had forzado a 0 — preexistente o nuevo = fuga.
+    if [ -e "$repo/verify/__pycache__" ] || [ -e "$repo/.pytest_cache" ]; then
+      return 1
+    fi
+    return 0
+  fi
+  [ "$snap_pycache_before" = "$snap_pycache_after" ] \
+    || { printf 'fuga verify/__pycache__ (listado cambio)\n' >&2; return 1; }
+  [ "$snap_pytest_before" = "$snap_pytest_after" ] \
+    || { printf 'fuga .pytest_cache (listado cambio)\n' >&2; return 1; }
+  return 0
+}
+if ! assert_verify_caches_intact; then
+  malo "pytest verify/ dejo fuga en __pycache__/.pytest_cache del checkout"
+fi
 # Un PASS de skill (aliases/drives de arriba) no acredita el sello.
 python3 - "$DRIVE_LOG" "$DRIVE_RC" "$repo" <<'PY' || malo "cotejo verify/ deshonesto"
 import os, subprocess, sys
@@ -582,6 +611,41 @@ estado_out="$(
 printf '    estado verify/: %s\n' "$(printf '%s' "$estado_out" | head -1)"
 printf '%s' "$estado_out" | grep -Eq '^(al_dia|desactualizado|viejo|unknown|sin_mapa)' \
   || malo "estado del mapa no cotejado: $estado_out"
+
+# Mutante 20.28: SAIKIT_MUT_LEAK_SIN_SNAPSHOT=1 fuerza la guarda vieja
+# (existencia con had=0). Debe salir !=0 ante dir preexistente y ante archivo
+# nuevo dentro de dir preexistente; la guarda sana (listado) queda en 0.
+caso "mutante sin snapshot de fuga se pone rojo"
+planted_dir=0
+if [ ! -d "$repo/verify/__pycache__" ]; then
+  mkdir -p "$repo/verify/__pycache__"
+  planted_dir=1
+fi
+# Forma 1: directorio preexistente — mutante rojo, sana verde.
+snap_pycache_before="$(cache_listing "$repo/verify/__pycache__")"
+snap_pycache_after="$snap_pycache_before"
+snap_pytest_before="$(cache_listing "$repo/.pytest_cache")"
+snap_pytest_after="$snap_pytest_before"
+if ! SAIKIT_MUT_LEAK_SIN_SNAPSHOT=0 assert_verify_caches_intact; then
+  malo "guarda sana rechazo listado estable (dir preexistente)"
+fi
+if SAIKIT_MUT_LEAK_SIN_SNAPSHOT=1 assert_verify_caches_intact; then
+  malo "mutante sobrevivio en verde con __pycache__ preexistente"
+fi
+# Forma 2: archivo nuevo dentro del dir preexistente.
+probe="$repo/verify/__pycache__/saikit-leak-probe-20.28"
+printf 'leak\n' > "$probe"
+snap_pycache_after="$(cache_listing "$repo/verify/__pycache__")"
+if SAIKIT_MUT_LEAK_SIN_SNAPSHOT=0 assert_verify_caches_intact; then
+  malo "listado no detecto archivo nuevo en __pycache__ preexistente"
+fi
+if SAIKIT_MUT_LEAK_SIN_SNAPSHOT=1 assert_verify_caches_intact; then
+  malo "mutante sobrevivio en verde con archivo nuevo en dir preexistente"
+fi
+rm -f "$probe"
+if [ "$planted_dir" -eq 1 ]; then
+  rmdir "$repo/verify/__pycache__" 2>/dev/null || true
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

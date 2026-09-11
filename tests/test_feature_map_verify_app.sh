@@ -202,6 +202,18 @@ if ! git -C "$repo" diff --quiet -- verify/; then
 fi
 
 # ---------------------------------------------------------------------------
+# 20.28: un directorio en verify/ no tumba el hash (solo archivos regulares)
+# ---------------------------------------------------------------------------
+caso "directorio plantado en verify/ no tumba checkout_verify_intact"
+PLANT_DIR="$repo/verify/saikit-planted-dir-20.28"
+mkdir -p "$PLANT_DIR"
+reset_art
+out="$(ctrl drive verify-app 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || malo "drive verify-app con dir plantado rc=$rc: $out"
+assert_obs verify-app checkout_verify_intact 'checkout-verify-intact'
+rmdir "$PLANT_DIR" 2>/dev/null || rm -rf "$PLANT_DIR"
+
+# ---------------------------------------------------------------------------
 # Encabezado falso + rc 0 no acredita rechazo/sello/Drive
 # ---------------------------------------------------------------------------
 caso "encabezado falso con rc 0 no acredita rechazo ni sello ni Drive"
@@ -278,6 +290,50 @@ if [ -f "$DRV" ]; then
     '/assert:estado_desactualizado/,/assert:estado_desactualizado_end/d'
   mut_omit omit_drive_cmd drive_cmd_runner 'runner-re' \
     '/assert:drive_cmd_runner/,/assert:drive_cmd_runner_end/d'
+
+  caso "mutante cksum glob con directorios se pone rojo"
+  reset_art
+  PLANT_DIR="$repo/verify/saikit-planted-dir-20.28-mut"
+  mkdir -p "$PLANT_DIR"
+  mut="$SANDBOX/va-cksum-star.sh"
+  # Restaura cksum * (incluye directorios) — debe morir con dir plantado.
+  if sed_must_change "$SANDBOX/va.src.sh" "$mut" \
+    's#find \. -type d \\( -name __pycache__ -o -name .pytest_cache \\) -prune -o -type f ! -name .DS_Store -print0 2>/dev/null | sort -z | xargs -0 -r cksum 2>/dev/null#cksum *#' \
+    "cksum_star"; then
+    out="$(ctrl_drv "$mut" drive verify-app 2>&1)" && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      malo "mutante cksum * sobrevivio en verde con directorio plantado"
+    fi
+  fi
+  rmdir "$PLANT_DIR" 2>/dev/null || rm -rf "$PLANT_DIR"
+
+  caso "mutante checkout_tree sin podar caches se pone rojo"
+  reset_art
+  mut="$SANDBOX/va-no-prune-cache.sh"
+  # Quita el prune: el sello vuelve a ver __pycache__/*.pyc.
+  if sed_must_change "$SANDBOX/va.src.sh" "$mut" \
+    's#-type d \\( -name __pycache__ -o -name .pytest_cache \\) -prune -o ##' \
+    "no_prune_cache"; then
+    PLANT_PYC="$repo/verify/__pycache__"
+    mkdir -p "$PLANT_PYC"
+    probe="$PLANT_PYC/saikit-planted-20.28.pyc"
+    printf 'planted\n' > "$probe"
+    # Extrae y evalua el cuerpo de checkout_tree sano vs mutado.
+    tree_hash() {
+      local script="$1"
+      CHECKOUT_VERIFY="$repo/verify" bash -c '
+        eval "$(sed -n "/^checkout_tree()/,/^}/p" "$1")"
+        checkout_tree
+      ' bash "$script"
+    }
+    h_sana="$(tree_hash "$SANDBOX/va.src.sh")"
+    h_mut="$(tree_hash "$mut")"
+    if [ "$h_sana" = "$h_mut" ]; then
+      malo "mutante sin prune sobrevivio: sello igual al podado con .pyc plantado"
+    fi
+    rm -f "$probe"
+    rmdir "$PLANT_PYC" 2>/dev/null || true
+  fi
 fi
 
 if [ "$fail" -ne 0 ]; then

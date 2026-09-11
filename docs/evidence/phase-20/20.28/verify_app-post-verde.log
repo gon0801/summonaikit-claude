@@ -1,0 +1,14 @@
+  caso: catalogo activa verify-app y conserva las demas
+  caso: list-features declara verify-app active sandbox
+  caso: launch aislado para drive verify-app
+  caso: drive verify-app: generar, rechazo, estado, Drive, no product PASS
+  caso: verify/ del checkout no se toco
+  caso: directorio plantado en verify/ no tumba checkout_verify_intact
+  caso: encabezado falso con rc 0 no acredita rechazo ni sello ni Drive
+  caso: F9: copia plana sin mutar de verify-app es muerte de carga
+  caso: mutante omit_reject_existing: omitir reject_existing se pone rojo
+  caso: mutante omit_seal_compare: omitir estado_desactualizado se pone rojo
+  caso: mutante omit_drive_cmd: omitir drive_cmd_runner se pone rojo
+  caso: mutante cksum glob con directorios se pone rojo
+  caso: mutante checkout_tree sin podar caches se pone rojo
+OK: test_feature_map_verify_app

@@ -17,6 +17,7 @@ set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 . "$here/lib/sandbox.sh"; sandbox_init
+. "$here/lib/skip_caso.sh"
 fail=0
 caso() { printf '  caso: %s\n' "$1"; }
 malo() { printf '    FAIL: %s\n' "$1" >&2; fail=$((fail + 1)); }
@@ -77,6 +78,38 @@ can_force_fallback() {
   if [ -x /usr/bin/gitleaks ] || [ -x /bin/gitleaks ]; then
     return 1
   fi
+  return 0
+}
+
+# Aceptacion del drive check-secrets (20.28).
+# $1=rc del drive, $2=1 si hay detector fuerte visible.
+# Exit: 0=PASS, 1=FAIL, 2=SKIP (sin instrumento; no es PASS).
+# SAIKIT_MUT_RC3_AS_PASS=1 reintroduce contar rc=3 como PASS (mutante).
+veredicto_check_secrets() {
+  local rc="$1" tiene_gl="$2"
+  if [ "$tiene_gl" -eq 0 ]; then
+    if [ "${SAIKIT_MUT_RC3_AS_PASS:-0}" = 1 ]; then
+      if [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ]; then
+        return 0
+      fi
+      return 1
+    fi
+    return 2
+  fi
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Costura: PATH sin gitleaks (ni SAIKIT_GITLEAKS). Vacio si no se puede forzar.
+path_sin_gitleaks() {
+  local p="/usr/bin:/bin"
+  if PATH="$p" command -v gitleaks >/dev/null 2>&1 \
+    || [ -x /usr/bin/gitleaks ] || [ -x /bin/gitleaks ]; then
+    return 1
+  fi
+  printf '%s\n' "$p"
   return 0
 }
 
@@ -226,14 +259,26 @@ printf '%s' "$out" | grep -q 'launched run_id=' || malo "launch sin run_id: $out
 # Drive check-secrets
 # ---------------------------------------------------------------------------
 caso "drive check-secrets: fuerte/fallback/redaccion"
-reset_art
-out="$(ctrl drive check-secrets 2>&1)" && rc=0 || rc=$?
-if has_gitleaks && can_force_fallback; then
-  [ "$rc" -eq 0 ] || malo "drive check-secrets rc=$rc (gitleaks presente): $out"
-else
-  [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ] \
-    || malo "drive check-secrets rc=$rc (esperado 0 o unknown/3): $out"
+# Aceptacion via veredicto_check_secrets (20.28): el mutante SAIKIT_MUT_RC3_AS_PASS
+# conmuta ESTA ruta, no una guarda paralela.
+tiene_gl=0
+has_gitleaks && tiene_gl=1
+rc=3
+out=""
+if [ "$tiene_gl" -eq 1 ]; then
+  reset_art
+  out="$(ctrl drive check-secrets 2>&1)" && rc=0 || rc=$?
 fi
+veredicto_check_secrets "$rc" "$tiene_gl"
+v=$?
+if [ "$v" -eq 2 ]; then
+  # Sin detector fuerte local el drive cierra unknown/3; contarlo PASS esconde
+  # la falta de instrumento. Canal 18.19 (20.28).
+  saikit_skip_caso 'drive check-secrets' \
+    'sin gitleaks local; CI suite provisiona 8.30.1'
+elif [ "$v" -eq 1 ]; then
+  malo "drive check-secrets rc=$rc: $out"
+else
 sum="$(latest_summary check-secrets)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "check-secrets sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
@@ -270,7 +315,8 @@ assert_obs check-secrets evidence_no_secret 'cero|zero|ausente|sin coincidenc'
 if ! scan_art_for_synth; then
   malo "secreto sintetico aparecio en evidencia de check-secrets"
 fi
-
+fi
+# fin veredicto_check_secrets (0=PASS / 1=FAIL / 2=SKIP)
 # ---------------------------------------------------------------------------
 # Drive capture-payloads
 # ---------------------------------------------------------------------------
@@ -368,13 +414,22 @@ if [ -f "$DRV_CAPTURE" ]; then
   chmod +x "$SANDBOX/capture.src.sh"
 fi
 fm_mut_check_flat_infra check-secrets "$DRV_SECRETS" drive check-secrets
-fm_mut_require_baseline check-secrets "$DRV_SECRETS" drive check-secrets
+if has_gitleaks; then
+  fm_mut_require_baseline check-secrets "$DRV_SECRETS" drive check-secrets
+else
+  saikit_skip_caso 'baseline check-secrets' \
+    'sin gitleaks local; baseline PASS/0 no aplica (CI pin 8.30.1)'
+fi
 fm_mut_check_flat_infra capture-payloads "$DRV_CAPTURE" drive capture-payloads
 fm_mut_require_baseline capture-payloads "$DRV_CAPTURE" drive capture-payloads
 
 mut_omit_secrets() {
   local label="$1" asid="$2" signal="$3" expr="$4"
   caso "mutante $label: omitir $asid se pone rojo"
+  if ! has_gitleaks; then
+    saikit_skip_caso "mutante $label" 'sin gitleaks local; mutante de check-secrets no aplica'
+    return
+  fi
   reset_art
   local mut="$SANDBOX/secrets-$label.sh"
   if [ ! -f "$SANDBOX/secrets.src.sh" ]; then
@@ -410,6 +465,71 @@ mut_omit_capture omit_cwd cwd_filtered 'cwd|filtro|no escribio|absent' \
   '/assert:cwd_filtered/,/assert:cwd_filtered_end/d'
 mut_omit_capture omit_foreign foreign_intact 'intact|igual|unchanged|ajeno' \
   '/assert:foreign_intact/,/assert:foreign_intact_end/d'
+
+# Costura PATH (20.28): ejercita la aceptacion SIN detector aunque el host
+# tenga gitleaks. Debe ser SKIP declarado, nunca PASS. Ambos caminos
+# (con detector arriba / sin detector aqui) quedan medidos.
+caso "costura PATH sin gitleaks: SKIP declarado no PASS"
+PATH_NO_GL="$(path_sin_gitleaks)" && gl_ok=1 || gl_ok=0
+if [ "$gl_ok" -eq 0 ]; then
+  saikit_skip_caso 'costura PATH sin gitleaks' \
+    'gitleaks en /usr/bin|/bin; no se puede forzar ausencia'
+else
+  reset_art
+  out="$(
+    env -u SAIKIT_GITLEAKS PATH="$PATH_NO_GL" \
+      SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+      SAIKIT_FM_SYNTH_SECRET="$SYNTH" \
+      bash "$CTRL" drive check-secrets 2>&1
+  )" && rc=0 || rc=$?
+  [ "$rc" -eq 3 ] || malo "costura: drive sin gitleaks rc=$rc (esperaba 3): $out"
+  veredicto_check_secrets "$rc" 0
+  v=$?
+  [ "$v" -eq 2 ] || malo "costura: aceptacion sana dio $v (esperaba SKIP=2)"
+  [ "$v" -ne 0 ] || malo "costura: aceptacion sano conto rc=3 como PASS"
+  saikit_skip_caso 'drive check-secrets (costura PATH)' \
+    'sin gitleaks bajo PATH acotado; unknown/3 no es PASS'
+fi
+
+# Mutante 20.28: SAIKIT_MUT_RC3_AS_PASS=1 conmuta veredicto_check_secrets, que
+# es la aceptacion REAL del caso drive (:veredicto). Bajo costura PATH el
+# mutante hace que el camino de produccion tome PASS (v=0) en vez de SKIP —
+# eso queda rojo ante la guarda; no es un grep ni una funcion paralela.
+caso "mutante contar rc=3 check-secrets como PASS se pone rojo"
+PATH_NO_GL="$(path_sin_gitleaks)" && gl_ok=1 || gl_ok=0
+if [ "$gl_ok" -eq 0 ]; then
+  saikit_skip_caso 'mutante rc=3 runtime' \
+    'gitleaks en /usr/bin|/bin; no se puede forzar ausencia'
+else
+  reset_art
+  out="$(
+    env -u SAIKIT_GITLEAKS PATH="$PATH_NO_GL" \
+      SAIKIT_VERIFY_STATE="$STATE" SAIKIT_VERIFY_ARTIFACTS="$ART" \
+      SAIKIT_FM_SYNTH_SECRET="$SYNTH" \
+      bash "$CTRL" drive check-secrets 2>&1
+  )" && rc=0 || rc=$?
+  [ "$rc" -eq 3 ] || malo "mutante rc=3: drive inesperado rc=$rc: $out"
+  # Camino real sano (misma llamada que el caso drive): SKIP.
+  veredicto_check_secrets "$rc" 0
+  v_sana=$?
+  [ "$v_sana" -eq 2 ] || malo "guarda sana no dio SKIP (v=$v_sana)"
+  # Camino real bajo mutante: misma ramificacion que el caso drive.
+  SAIKIT_MUT_RC3_AS_PASS=1
+  veredicto_check_secrets "$rc" 0
+  v_mut=$?
+  unset SAIKIT_MUT_RC3_AS_PASS
+  # Replica : if v==2 skip / v==1 malo / v==0 PASS — bajo mutante debe ser PASS.
+  if [ "$v_mut" -eq 2 ]; then
+    malo "mutante sobrevivio como SKIP (no conto rc=3 como PASS)"
+  elif [ "$v_mut" -eq 1 ]; then
+    malo "mutante dio FAIL en vez de PASS falso (v=1)"
+  elif [ "$v_mut" -eq 0 ]; then
+    # Produccion habria seguido como PASS sin detector — mutante atrapado.
+    printf '    ok: mutante rc=3-as-PASS queda rojo ante guarda SKIP (aceptacion real)\n'
+  else
+    malo "mutante: veredicto inesperado v=$v_mut"
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2
