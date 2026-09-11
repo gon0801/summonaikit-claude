@@ -29,6 +29,24 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-11 — PR #300 (20.20: pin de pnpm para el corepack del Node 20 del CI) — hooks NO-OP
+
+- **Merge:** `844d0482a2c845be5c7c45f4c83a53a4ed016257` a las 2026-09-11T07:41:33Z, verificado vía API.
+- **¿Cambió el hook? NO.** El PR toca `tools/saikit-ci-minimo.sh`, `tests/test_ci_minimo.sh`,
+  `docs/evidence/phase-20/20.20/` y `.saikit/decisiones/20.20.tsv`. CI del PR: 14/14 verde
+  en el head `b041637` (run 34573250588), con los 7 shards de `suite` y los 3 de
+  `suite-lentos`.
+- **Deploy corrido igual (regla de costumbre):** `install-hook.sh` YA AL DIA en las
+  cuatro copias (claude/grok/dsh/codex) contra los bytes de `origin/master`, hook
+  `37e55640…`; `--check` veredicto=ok, 4/4 al-día, registro=ok;
+  `check-hook-registration.sh` exit 0. La última copia real sigue siendo la del PR #289.
+- **Nota del instalador (no es el hook):** `--host grok` reescribió
+  `~/.grok/hooks/summonaikit.json` porque el PATH del nodo OpenClaw resolvió bash a
+  `/bin/bash` en vez de `/opt/homebrew/bin/bash`. Restaurado al instante desde
+  `summonaikit.json.nuestro.20260911-005528.bak`; el vivo vuelve a homebrew. Las
+  copias del harness no se tocaron.
+- **Operador:** Gon (cierre post-merge; implementó Cursor).
+
 ## 2026-09-11 — PR #298 (20.28: rojos falsos de macOS + costuras de la revisión) — hooks NO-OP
 
 - **Merge:** `4561716…` a las 2026-09-11T02:19:01Z, verificado vía API.
