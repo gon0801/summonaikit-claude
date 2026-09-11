@@ -1,0 +1,17 @@
+node:internal/modules/esm/utils:272
+  throw new ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING();
+        ^
+
+TypeError [ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING]: A dynamic import callback was not specified.
+    at importModuleDynamicallyCallback (node:internal/modules/esm/utils:272:9)
+    at Object.<anonymous> (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/ch-f11/v1/pnpm/11.0.0/bin/pnpm.cjs:3:1)
+    at Module2._compile (/private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/node-v20.19.5-darwin-arm64/lib/node_modules/corepack/dist/lib/corepack.cjs:17340:34)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at executeUserEntryPoint (node:internal/modules/run_main:164:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:81:21) {
+  code: 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING'
+}
+
+Node.js v20.19.5

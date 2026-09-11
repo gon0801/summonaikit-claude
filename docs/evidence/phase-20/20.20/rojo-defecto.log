@@ -1,0 +1,16 @@
+! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-12.3.4.tgz
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-2020-medicion/ch-rojo/v1/pnpm/12.3.4/bin/pnpm.cjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at executeUserEntryPoint (node:internal/modules/run_main:164:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:81:21) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.19.5
+ROJO_RC=1
