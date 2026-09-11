@@ -51,6 +51,12 @@
     }
   },
   "exclusions": {
+    "tools/lib/headless_close_paths.sh": {
+      "reason": "biblioteca interna del launcher headless-close; cubierta por tests/test_headless_close.sh, no ejecutor público"
+    },
+    "tools/headless-close.sh": {
+      "reason": "launcher opt-in 20.15-20.17; cobertura en tests/test_headless_close.sh y test_headless_close_live.sh, fuera del feature-map de producto hasta que 20.15-17 mergeen"
+    },
     "tools/lib/redactar.sh": {
       "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
     },
