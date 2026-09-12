@@ -1,0 +1,58 @@
+# REFRESH-2026-09-12-1200EDT.log
+# Reproducción textual del flujo de verificación de este refresh.
+# Para auditoría del refresh (sin batería de prueba de mutación — sólo read-only).
+runner:        OpenClaw exec host=node, host=71a0f52874f309cbafeba63c072ea543f94fdf3e3725c2a2cdf9a5be0a39239f
+agente:        ingenieria on Windows
+host_mac:      David's MacBook Pro / dn / 2026-09-12 EDT 12:00 (PDT 09:01)
+
+# 1. Enumerar Terminal.app tabs (sin scripts; una sola osascript)
+$ /usr/bin/osascript <<EOS
+tell application "Terminal"
+  repeat with w in windows
+    set wId to id of w
+    set tabsCount to count of tabs of w
+    [..]
+    repeat with t in tabs of w
+      set tTitle to custom title of t
+      set tTty to tty of t
+      [..]
+    end repeat
+  end repeat
+end tell
+EOS
+# → WINDOW id=12282 tabs=1 / tab tty=/dev/ttys001 title=✳ Revisar pendientes
+#   WINDOW id=21579 tabs=1 / tab tty=/dev/ttys008 title=summonaikit-claude
+#   … (resto en REFRESH-2026-09-12-1200EDT.md §R1)
+
+# 2. Process foreground por tty
+$ for t in ttys000 ttys001 ttys003 ttys005 ttys006 ttys007 ttys008 ttys010 ttys012 ttys013 ttys014; do
+    ps -t "$t" -o pid,ppid,user,stat,start,etime,comm
+  done
+# → ttys001: PID 51322 (zsh) / 95447 (claude) — claude es foreground
+
+# 3. cwd verificable (lsof strict, -a -p -d cwd)
+$ /usr/sbin/lsof -a -p 51322 -d cwd -Fn | grep '^n'
+# n/Users/dn/dev/summonaikit-claude
+$ /usr/sbin/lsof -a -p 95447 -d cwd -Fn | grep '^n'
+# n/Users/dn/dev/summonaikit-claude
+# → confirmado, sin asumir por título
+
+# 4. Verificación on-disk hook (read-only) — sin relanzar batería
+$ sha256sum ~/.dsh/hooks/summonaikit-harness.sh
+# 37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+$ stat -f "size=%z" ~/.dsh/hooks/summonaikit-harness.sh
+# size=252356
+$ /opt/homebrew/bin/bash -n ~/.dsh/hooks/summonaikit-harness.sh && echo "exit 0 OK"
+$ /bin/bash -n ~/.dsh/hooks/summonaikit-harness.sh
+# /Users/dn/.dsh/hooks/summonaikit-harness.sh: line 1631: syntax error near unexpected token `('
+# exit 2 (esperado: bash 3.2 no parsea modern syntax del hook)
+# → /opt/homebrew/bin/bash sigue siendo el intérprete correcto;
+#   el cordis.patch.yml ya apunta a /opt/homebrew/bin/bash (post-fix 2026-09-11)
+
+# 5. Skill catalog search (read-only, sin instalación)
+$ ls -la ~/.claude/skills/ | wc -l    # 31 skills, 0 'mac-terminal-control'
+$ grep -rL mac-terminal-control \
+    ~/.claude/plugins/cache/*/scripts/ ~/.claude/plugins/marketplaces/*/*/ 2>/dev/null
+# → 0 hits
+$ /Users/dn/.local/bin/claude --help 2>&1 | grep -iE "mac-terminal|transcript"
+# → 0 hits (claude CLI no expone esos flags)
