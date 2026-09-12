@@ -1,0 +1,23 @@
+=== identidad de corrida (20.16: mutantes de fuente, solo mocks) ===
+fecha: 2026-09-12T00:40:00Z (medicion 2026-09-11T17:00-17:05 PDT aprox.)
+plataforma: Darwin Davids-MacBook-Pro.local 25.6.0 arm64, macOS 26.6 (25G72)
+bash: GNU bash 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
+python: Python 3.14.7
+rama: impl/20.16-20.17-mutantes-medicion (sin commits; trabajo en arbol)
+HEAD checkout: ad1333d331220209bb436981f911ad81ce57cffb (head del PR #308 abierto)
+origin/master: 5e05df29c3007c8e146f9db438f69d448f928a97 (anterior a #308)
+declaracion: HEAD != origin/master a proposito — la base del brief es el head
+  de #308 (ad1333d). El arbol trae SOLO el delta propio (4 archivos;
+  `git diff ad1333d --stat`): tools/headless-close.sh (fix argv grok, de
+  20.17), docs/spec/headless-close-contract.md, tests/test_headless_close.sh
+  (arnes + 3 mutantes + 2 argv), tests/test_headless_close_live.sh (20.17).
+hooks/: SIN CAMBIOS contra origin/master (`git diff origin/master -- hooks/`
+  vacio). Hook vivo claude/grok: cksum 3320838264 252356 ==
+  hooks/summonaikit-harness.sh del checkout; sha256
+  37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+  (coincide con el pin del runbook 20.8).
+turnos vivos: 0 (20.16 es mocks; SAIKIT_MOCK_*). Tope: n/a.
+comando: bash tests/test_headless_close.sh > suite-verde.log 2>&1
+resultado: 17 PASS / 0 FAIL (12 base + 2 argv + 3 mutantes atrapados).
+demo conductual: bash /tmp/mutdemo/demo.sh > mutantes-rojo.log 2>&1
+  (sano-vs-mutado con mocks bajo /tmp; el repo no se toca).

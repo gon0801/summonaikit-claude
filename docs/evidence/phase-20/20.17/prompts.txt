@@ -1,0 +1,9 @@
+sync: Task -saikit: reply with exactly the word pong on the first line. Then emit the harness receipt block exactly in this shape, one label per line, values brief: SUMMONAIKIT HARNESS RECEIPT / Understand: trivial echo request / Implement: no changes made / Verify: not run / Review: no findings / Close: pong delivered / Retro: none. Do not use any tools. Keep the whole reply under 15 lines.
+
+async: Task -saikit: use the Task tool to dispatch exactly one subagent to compute the product of 37 by 41 and report back just the number. Use Task only, do not compute it yourself. When the subagent answers, reply with exactly this first line: delegated:<the number it reported>. Then emit the harness receipt block exactly in this shape, one label per line, values brief: SUMMONAIKIT HARNESS RECEIPT / Understand: async delegation of a multiplication / Implement: dispatched one Task subagent, reported its answer / Verify: subagent answer matches delegated:<number> / Review: no findings / Close: async delegation complete / Retro: none. Keep the whole reply under 20 lines.
+
+teardown: Task -saikit: count from 1 to 3000, one number per line, nothing else. Do not use any tools.
+
+Notas: el sentinel va tras "Task " (medido: un prompt liderado por `-saikit:`
+lo trata claude como flag desconocido, rc=1 sin JSON). Ningun prompt usa
+herramientas salvo Task en async (prohibicion expresa de Bash).

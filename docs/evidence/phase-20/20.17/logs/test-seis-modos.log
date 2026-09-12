@@ -1,0 +1,40 @@
+  caso: mock positivo: leftover+recibo => 0 forced (cadena host/hook/supervisor/estado)
+  caso: mock falta de recibo: host rc=0 => close exit 1 (NO ok)
+  caso: replay determinista: leftover genuino-sin-recibo + session_id observada => 1 incomplete y limpia
+  caso: async no es un prompt bash: ni el launcher ni los prompts fingen delegacion
+  caso: invocacion directa del host queda fuera de garantia (documentada en contrato)
+  caso: vivo claude/sync (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-QtnnQe)
+    live claude/sync: host_rc=n/a (launcher) session=session=731a38fe-3c30-4ae8-9001-8c55b19bd299
+    live claude/sync: state=/Users/dn/.claude/hooks/state/claude/264636829 leftover=no close=close_type=clean exit=0 lanzamientos=1
+    ok: claude/sync cadena ok (close_type=clean)
+    subdir propio borrado: state/claude/264636829
+  caso: vivo claude/async (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-mOES8T)
+    live claude/async: host_rc=n/a (launcher) session=session=9354f6a4-511b-4bda-9393-072366e1c9c7
+    live claude/async: state=/Users/dn/.claude/hooks/state/claude/1020423023 leftover=no close=close_type=clean exit=0 lanzamientos=1
+    ok: claude/async cadena ok (close_type=clean)
+    subdir propio borrado: state/claude/1020423023
+  caso: vivo claude/teardown (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-EqZOsp)
+    teardown: SIGKILL al host (host_rc=137), session observada=444b6b56-4cd7-4f7e-9970-e223a8f1be32
+    live claude/teardown: host_rc=137 session=session=444b6b56-4cd7-4f7e-9970-e223a8f1be32
+    live claude/teardown: state=/Users/dn/.claude/hooks/state/claude/2393872852/444b6b56-4cd7-4f7e-9970-e223a8f1be32/harness-state.env leftover=si (fase A) close=close_type=incomplete exit=1 lanzamientos=1
+    subdir propio borrado: state/claude/2393872852
+  caso: vivo grok/sync (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-IBRT7S)
+    live grok/sync: host_rc=n/a (launcher) session=session=desconocida
+    live grok/sync: state=/Users/dn/.grok/hooks/state/grok/990966095 leftover=si close=close_type=unknown exit=3 lanzamientos=1
+    unknown declarado (salida literal):
+[headless-close] unknown: sin session_id en JSON del host (captura no observable)
+close_type=unknown
+    subdir propio borrado: state/grok/990966095
+  caso: vivo grok/async (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-I6CkJC)
+    live grok/async: host_rc=n/a (launcher) session=session=desconocida
+    live grok/async: state=/Users/dn/.grok/hooks/state/grok/602302625 leftover=si close=close_type=unknown exit=3 lanzamientos=1
+    unknown declarado (salida literal):
+[headless-close] unknown: sin session_id en JSON del host (captura no observable)
+close_type=unknown
+    subdir propio borrado: state/grok/602302625
+  caso: vivo grok/teardown (proyecto desechable /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-sandbox-N66U9l/tmp/saikit-live-HDzmS9)
+    teardown: SIGKILL al host (host_rc=1), session observada=01a0930a-da31-7cf3-9db2-3b5ddba8c4c9
+    live grok/teardown: host_rc=1 session=session=01a0930a-da31-7cf3-9db2-3b5ddba8c4c9
+    live grok/teardown: state=/Users/dn/.grok/hooks/state/grok/1430412547/01a0930a-da31-7cf3-9db2-3b5ddba8c4c9/harness-state.env leftover=si (fase A) close=close_type=incomplete exit=1 lanzamientos=1
+    subdir propio borrado: state/grok/1430412547
+test_headless_close_live: OK

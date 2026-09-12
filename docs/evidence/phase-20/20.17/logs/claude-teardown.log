@@ -1,0 +1,31 @@
+=== 20.17 claude/teardown ===
+fecha=2026-09-12T00:23:51.794323+00:00
+PROJECT_ROOT=/private/tmp/live17/r-claude-teardown3/proj
+PROJECT_KEY=2387758496
+STATE_SUBDIR=/Users/dn/.claude/hooks/state/claude/2387758496
+estado ANTES: ['(ausente)']
+prompt: Task -saikit: count from 1 to 3000, one number per line, nothing else. Do not use any tools.
+fase A: host pid=2964
+fase A: leftover a t+1.5s: /Users/dn/.claude/hooks/state/claude/2387758496/9e80456a-8c74-490d-a6c2-e8e8e869a7f0/harness-state.env
+fase A: SIGKILL al host (Stop no pudo disparar)
+fase A: host_rc=-9 (esperado -9/SIGKILL)
+fase A: bytes en stdout del host muerto: 163
+fase A: stdout (primeros 600b):
+Warning: claude.ai MCP servers blocked by enterprise policy: claude.ai Microsoft 365, claude.ai Notion, claude.ai Shopify, claude.ai Google Drive, claude.ai Gmail
+
+fase A: estado tras matar:
+  /Users/dn/.claude/hooks/state/claude/2387758496/9e80456a-8c74-490d-a6c2-e8e8e869a7f0/
+  /Users/dn/.claude/hooks/state/claude/2387758496/9e80456a-8c74-490d-a6c2-e8e8e869a7f0/harness-evidence.log (31b)
+  /Users/dn/.claude/hooks/state/claude/2387758496/9e80456a-8c74-490d-a6c2-e8e8e869a7f0/harness-state.env (154b)
+fase A: sesion observada en disco: 9e80456a-8c74-490d-a6c2-e8e8e869a7f0
+fase A: evidencia 31b, etiquetas ausentes: ['SUMMONAIKIT HARNESS RECEIPT', 'Understand:', 'Implement:', 'Verify:', 'Review:', 'Close:', 'Retro:']
+fase B: replay con session_id observada via launcher
+fase B: launcher_rc=1
+--- salida del launcher ---
+[headless-close] leftover sin recibo de 6 etiquetas (host_rc=143) — no exito
+close_type=incomplete
+
+launch-count fase B: 1
+fase B: estado despues:
+  (ausente)
+=== fin claude/teardown veredicto-supervisor=OK ===
