@@ -29,14 +29,15 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
-## 2026-09-12 — PRs #303, #304, #305, #306 y #308 (bloque 20.15-20.17 headless-close: diseño revertido, parche y redo) — hooks NO-OP
+## 2026-09-12 — PRs #303, #304, #305, #306 y #309 (bloque 20.15-20.17 headless-close: diseño revertido, parche y redo) — hooks NO-OP
 
 - **Merges:** #303 `2ed91ca1ad0dda2b5bb3977f14f06e7b1a63b056` (2026-09-11T09:46:57Z),
   #304 `6bbd4eeff0b40010e546bc4d04da522f6437a2c5` (2026-09-11T09:53:09Z),
   #305 `4157c4c740a04f4fb490bff041eb1af2b9c1da04` (2026-09-11T09:54:20Z),
   #306 `5e05df29c3007c8e146f9db438f69d448f928a97` (2026-09-11T23:05:48Z),
-  verificados vía API. #308 ABIERTO al escribir (head
-  `ad1333d331220209bb436981f911ad81ce57cffb`, merge pendiente); ninguno de
+  verificados vía API. **Corrección (2026-09-12):** #307 y #308 quedaron
+  CERRADOS SIN MERGE; sus commits entraron a master dentro de #309
+  (`744ca2848e1b619203623ea7c07f4980a9ec23ce`, merge 2026-09-12T01:18:53Z). Ninguno de
   los cinco tuvo entrada hasta esta.
 - **Historia real:** #303/#304 traían el launcher con resolución por glob y
   recibo laxo (borraba la sesión equivocada; el hueco que 20.16 documenta) y
@@ -56,8 +57,9 @@ describe el deploy original.
   declarado por el instalador); `check-hook-registration.sh` exit 0; las
   cuatro copias idénticas byte a byte al `hooks/` del checkout. La última
   copia real sigue siendo la del PR #289.
-- **Operador:** chequeos corridos por el implementador en la rama; el merge
-  (incluido #308) lo hace el operador a mano.
+- **Operador:** chequeos corridos por el implementador en la rama; los merges
+  los hizo el operador a mano (#309 el 2026-09-12; #307 y #308 cerrados sin
+  merge).
 
 ## 2026-09-11 — PR #300 (20.20: pin de pnpm para el corepack del Node 20 del CI) — hooks NO-OP
 
