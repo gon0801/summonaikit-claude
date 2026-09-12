@@ -100,3 +100,21 @@ modos (`logs/test-seis-modos.log`): mocks siempre, matriz viva con prereqs
 - `logs/test-seis-modos.log` — el test commiteado midiendo los seis.
 - `logs/state-*.log` — antes/despues de limpiezas (solo llaves propias).
 - `run-identity.txt` — identidad de la corrida.
+
+## Corrección (2026-09-12, revisión del lead)
+
+La línea de `run-identity.txt` que dice «borrados todos y verificado por diff»
+es **inexacta**: tres claves propias sobrevivieron a la limpieza —
+`grok/3128451532` (en los dos roots), `grok/2607673707` y `grok/2021696818`
+(root de claude, espejo del doble armado)—, con `cycle=0` y `agents_seen=`
+vacío: los armados de las corridas que murieron con 402. El propio
+`logs/state-despues-limpieza2.log` las lista y `logs/state-antes.log` no las
+tenía, así que la medición las creó y no las barrió.
+
+No las alcanza el TTL: `barrer_estado_viejo` solo borra por debajo de
+`$PROJECT_DIR` y solo cuando una sesión arma en ese mismo proyecto+host, y
+esos proyectos eran directorios `mktemp` que ya no existen. Quedan para
+borrado manual del operador.
+
+Lo que sí se sostiene de la declaración original: ninguna sesión ajena fue
+tocada.
