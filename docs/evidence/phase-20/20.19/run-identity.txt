@@ -1,0 +1,22 @@
+# run-identity.txt — Phase 20 / row 20.19 / preflight (gated by 20.18)
+agente:        ingenieria (OpenClaw) on Windows, operating via Mac node "David's MacBook Pro"
+runner:        OpenClaw exec host=node
+fecha:         2026-09-12T04:03 EDT
+branch:        work/20.18-20.19-preflight
+checkout_sha:  76e92bb7a757ae45f6faa5d242a0b3bcbbf2cba9 (= origin/master)
+
+# Gate por 20.18
+status:        cc:TODO  (gated by 20.18 repro FAIL atribuible al adaptador)
+gate_open_when: (a) 20.18 medición cierra un repro de defecto atribuible al
+                     adaptador dsh, y (b) el contrato del fix puede acotarse
+                     al evento observado
+gate_closed_when_not: (a) 20.18 cierra PASS sin defecto atribuible al adaptador
+                        (entonces 20.19 sigue TODO indefinidamente; fila
+                        declarada condicional descartada),
+                        (b) defecto atribuible al host (no al adaptador) ⇒
+                        20.19 sigue TODO con impedimento explícito, sin
+                        inventar fix per brief.
+
+# Verificaciones de la fase preflight que aplican también a 20.19
+identity:      MATCH con 20.18 (HEAD == origin/master clean, hook pin 37e55640, marcador OK, §8 vigente, presupuesto PR 11/15)
+saikit_origin_marker:  ef1e4ce51bf98056a70019326271572d15bbbb90  size=582  (verificado §3 20.18 PROFILE)
