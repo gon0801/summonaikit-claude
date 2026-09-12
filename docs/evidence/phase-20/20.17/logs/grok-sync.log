@@ -1,0 +1,19 @@
+=== 20.17 grok/sync (con watcher) ===
+fecha=2026-09-12T00:24:27.414701+00:00
+host_version=grok 1.0.25 (f7e67d6988e2) [stable]
+PROJECT_ROOT=/private/tmp/live17/r-grok-sync/proj
+PROJECT_KEY=346433644
+STATE_SUBDIR=/Users/dn/.grok/hooks/state/grok/346433644
+launcher_rc=3
+--- salida del launcher ---
+[headless-close] unknown: sin session_id en JSON del host (captura no observable)
+close_type=unknown
+
+launch-count=1
+--- watcher (muestreo 0.5s del subdir propio) ---
+00:24:27 :: (ausente)
+00:24:27 :: (ausente)
+00:24:28 :: /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f; /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-evidence.log (32b); /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-state.env (155b)
+00:24:28 :: /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f; /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-evidence.log (32b); /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-state.env (155b)
+00:24:29 :: /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f; /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-evidence.log (32b); /Users/dn/.grok/hooks/state/grok/346433644/01a09300-5572-76a1-97dc-e49f030e818f/harness-state.env (155b)
+=== fin grok/sync rc=3 ===

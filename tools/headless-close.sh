@@ -90,8 +90,14 @@ ERR_LOG="$(mktemp "$WORKDIR/saikit-headless-err.XXXXXX")"
 trap 'rm -f "$OUT_JSON" "$ERR_LOG"' EXIT
 
 run_host() {
-  # grok: -p/--single son el mismo flag; no pasar ambos.
-  "$BIN" -p --output-format json "$PROMPT"
+  # grok 1.0.25: -p/--single toman el prompt como VALOR (medido 20.17:
+  # `grok -p --output-format json "P"` muere en clap con rc=2 sin tocar la
+  # red). claude -p es boolean + prompt posicional. No unificar: son argv
+  # distintos y el de claude en grok ni parsea.
+  case "$HOST" in
+    grok) "$BIN" --single "$PROMPT" --output-format json ;;
+    *)    "$BIN" -p --output-format json "$PROMPT" ;;
+  esac
 }
 
 TIMED_OUT=0

@@ -13,8 +13,10 @@ La invocación directa de `claude -p` / `grok -p` queda **fuera de garantia**.
 - `session_id` vacío parseado ⇒ clave `UNKNOWN`, **nunca** `sin-session`, **nunca** glob.
 
 `session_id` sale del JSON del host (`claude -p --output-format json`;
-`grok -p --single --output-format json`). 20.10 `turn1.json` prueba `session_id`
-top-level en Claude.
+`grok --single "PROMPT" --output-format json`: en grok 1.0.25 `-p`/`--single`
+toman el prompt como valor — medido 20.17, `grok -p --output-format json "P"`
+muere en clap con rc=2). 20.10 `turn1.json` prueba `session_id` top-level en
+Claude.
 
 ## Recibo (seis etiquetas)
 

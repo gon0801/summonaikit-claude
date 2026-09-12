@@ -1,0 +1,31 @@
+=== identidad de corrida (20.17: medicion viva claude+grok) ===
+fecha: 2026-09-12 (ventana 2026-09-12T00:05-00:40Z; 2026-09-11T17:05-17:40 PDT)
+plataforma: Darwin Davids-MacBook-Pro.local 25.6.0 arm64, macOS 26.6 (25G72)
+bash: GNU bash 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
+python: Python 3.14.7
+rama: impl/20.16-20.17-mutantes-medicion (sin commits; trabajo en arbol)
+HEAD checkout: ad1333d331220209bb436981f911ad81ce57cffb (head del PR #308 abierto)
+origin/master: 5e05df29c3007c8e146f9db438f69d448f928a97 (anterior a #308)
+declaracion: HEAD != origin/master a proposito — la base del brief es el head
+  de #308. El arbol trae SOLO el delta propio (4 archivos). hooks/ SIN
+  CAMBIOS contra origin/master. Hook vivo claude y grok: cksum 3320838264
+  252356 == repo; sha256 37e55640… (pin del runbook 20.8).
+hosts medidos: claude 2.1.269 (/Users/dn/.local/bin/claude),
+  grok 1.0.25 f7e67d6988e2 (/opt/homebrew/bin/grok).
+launcher medido: tools/headless-close.sh cksum 3747505920 7796 (con fix argv
+  grok); lib cksum 614024512 1059.
+turnos vivos claude: 19 que llegaron al API + 2 muertas en parseo local
+  (prompt liderado por `-`, hallazgo documentado). Detalle: baseline 1,
+  sonda raw 1, sync 4 (2 launcher + 1 directa + 1 con watcher bis), canario 1,
+  async 2 (1 launcher + 1 directa), teardown-driver 3 (td1/td2 sin kill por
+  bug de filtro + td3 con SIGKILL), test-full 3 (sync/async/teardown-skip),
+  test-teardown-foco 1 (skip), test-full3 3 (sync/async/teardown-kill).
+turnos vivos grok: 10 con 402 + 1 muerta en clap (argv viejo). Detalle:
+  sondas 2, driver sync/async/teardown-directa 3, test-full 3, test-full3 3.
+tope operativo: max 2 intentos por modo; sin reintentos contra 402; timeouts
+  60-300 s por corrida; abortar ante cuota. Ningun tope se alcanzo.
+perfil del operador: solo subdirectorios propios state/<host>/<pk> (llave del
+  proyecto desechable de cada corrida); borrados todos y verificado por diff
+  (logs/state-*.log). Sin tocar sesiones ajenas (dirs con otras llaves y los
+  huerfanos grok preexistentes bajo state/grok intactos).
+evidencia: logs/ (archivo completo, > log 2>&1; jamas por pipe).

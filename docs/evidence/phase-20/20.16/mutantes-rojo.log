@@ -1,0 +1,11 @@
+===== M1: glob-mtime vs aislamiento (hermana mas nueva) =====
+[headless-close] leftover sin recibo de 6 etiquetas (host_rc=0) — no exito
+close_type=incomplete
+HC=headless-close.sh: rc=1 propia=gone hermana=live
+[headless-close] leftover sin recibo de 6 etiquetas (host_rc=0) — no exito
+close_type=incomplete
+HC=m1.sh: rc=1 propia=live hermana=gone
+===== M2/M3: leftover sin recibo, host rc=0 =====
+HC=headless-close.sh: rc=1 estado=gone :: close_type=incomplete
+HC=m2.sh: rc=0 estado=gone :: close_type=forced
+HC=m3.sh: rc=0 estado=gone :: close_type=forced

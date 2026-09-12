@@ -1,0 +1,19 @@
+  PASS: launcher ejecutable
+  PASS: sin args → 2
+  PASS: host fake → 2
+  PASS: binario ausente → 2
+  PASS: --close-type rechazado
+  PASS: leftover + 6 etiquetas → 0 y limpia
+  PASS: agents_seen no acredita → 1 y limpia
+  PASS: sin leftover → 0 clean
+  PASS: aislamiento: sibling intacta
+  PASS: json no observable → 3 y no glob
+  PASS: timeout → 1 (host rc0 no acredita)
+  PASS: STATE_PATH fórmula del hook
+  PASS: argv claude: -p booleano + prompt posicional
+  PASS: argv grok: prompt como valor de --single (1.0.25)
+  PASS: mutacion glob-mtime atrapada por mc_aislamiento
+  PASS: mutacion agents-seen atrapada por mc_leftover
+  PASS: mutacion host-rc0 atrapada por mc_leftover
+
+=== 17 PASS / 0 FAIL ===
