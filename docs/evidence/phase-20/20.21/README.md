@@ -19,7 +19,7 @@ ningún `unknown` equivale a PASS.
 
 ## Evidencias reutilizadas (con el checkout/hook SHA con el que SE MIDIERON)
 
-Regla del runbook (docs/phase20-mediciones-runbook.md L51-52), cita literal:
+Regla del runbook (docs/phase20-mediciones-runbook.md L51-53), cita literal:
 "La evidencia 20.x de una fila solo se reutiliza en otra si coincide
 checkout y hook SHA (misma regla que exige 20.25)". EXCEPCIÓN DECLARADA: el
 checkout NO coincide (cada evidencia se midió en su propio master:
@@ -101,8 +101,9 @@ es INTRA-fila, donde la tarea sí es comparable:
 - Intra-20.10 (turno 1 vs turno 2): 5.10 vs 7.30 USD; el turno 2 (dos merges
   + gate re-corrido ×2) costó más que el turno 1 (ceremonia de 61 turnos).
   El costo sigue al TRABAJO (merges, re-verificación), no a una etiqueta.
-- 20.9 confirma el piso: un comando aislado cuesta ~0.27–0.29 USD y ~10 s.
-  Todo lo demás es razonamiento sobre el caso, no sobrecarga del harness.
+- 20.9 observa un baseline (n = 1, sin repeticiones): un comando aislado
+  cuesta ~0.27–0.29 USD y ~10 s. Todo lo demás es razonamiento sobre el
+  caso, no sobrecarga del harness.
 
 Ninguna evidencia mide el MISMO caso en DOS tiers distintos: el delta
 costo/latencia atribuible al ruteo por receta es `unknown` (razón: no existe
@@ -123,9 +124,10 @@ o latencia atribuible al tier que pague la pieza (código + candado + ficha).
 Lo observado en 20.9/20.10/20.11:
 
 1. La dispersión de costo (0.27 → 12.40 USD) y latencia (8 s → 31.5 min)
-   se explica entera por el TAMAÑO DEL CASO (comando único vs PR atendido
-   vs autopilot con dos merges), no por el tier: todo corrió en el mismo
-   host y sin distinción de tier.
+   coincide con el tamaño del caso (comando único vs PR atendido vs
+   autopilot con dos merges): todo corrió en el mismo host y sin
+   distinción de tier. Como ninguna corrida distinguió tier, el aporte
+   del tier queda `unknown`, no descartado.
 2. Intra-receta (20.11, tres modos de `cuidar-pr`) el costo varía con spread
    máx-mín 14,3 % por contenido, sin que exista a dónde enrutar: un router
    no compra nada donde no hay dos destinos con precio distinto medido.
