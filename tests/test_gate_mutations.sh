@@ -222,6 +222,9 @@ G3|codex_flag_nativo_invertido|la guarda de codex_native_seen se invierte y el l
 G3|codex_cierre_sin_transcript|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
 G3|codex_rol_cambiado_acredita|la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)
 G3|codex_legado_ignora_flag|el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)
+G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
+G8|trail_raiz_sin_hash_disco|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
+G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1135,6 +1138,19 @@ mut_trail_tambien_en_fast() {
   '
 }
 mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "\$(trail_parrafo)")"/_gf="$_gf"/'; }
+# 21.4: la rama acreditada vuelve a resolver bajo el ambiente — el caso
+# "cwd de otra sesion" (raiz valida, proyecto limpio) vuelve a bloquear.
+# Lo atrapa caso_g8_full_raiz_acreditada_otro_cwd_cierra.
+mut_trail_raiz_vuelve_a_ambiental() { sed 's/_present="path_present_under_acreditada"/_present="path_present_under_root"/'; }
+# 21.4r2: sin la comparacion fisica disco/arbol, assume-unchanged y git
+# replace vuelven a enganar a status. Lo atrapan
+# caso_g8_full_raiz_assume_unchanged_bloquea y
+# caso_g8_full_raiz_replace_blob_bloquea.
+mut_trail_raiz_sin_hash_disco() { sed '/_blob_arbol=/d; /_blob_disco=/d; /\[ "\$_blob_arbol" = "\$_blob_disco" \]/d'; }
+# 21.4r2: sin el veredicto sellado, un repo ajeno autoconsistente con su
+# propio HEAD vuelve a acreditar. Lo atrapa
+# caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea.
+mut_trail_raiz_sin_veredicto_sellado() { sed '/\.saikit\/veredictos\/\$_shas\.json/d'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

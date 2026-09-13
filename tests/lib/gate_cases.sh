@@ -4715,6 +4715,8 @@ caso_g7_pretool_no_acredita() {
 # por un dedazo y nadie se enteraria.
 # shellcheck source=trail_gate_cases.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trail_gate_cases.sh"
+# shellcheck source=trail_acreditada_cases.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trail_acreditada_cases.sh"
 
 GATES="LAB G1 G2 G3 G4 G5 G6 G7 G8"
 

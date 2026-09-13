@@ -1,0 +1,15 @@
+{
+ "session_id": "01a09bbc-cd17-7ed0-b0d1-988e98cb2834",
+ "turn_id": "01a09bbc-cd6a-7530-96b3-240bed7b9989",
+ "transcript_path": "[LAB]/codexhome/sessions/2026/09/13/rollout-2026-09-13T10-07-16-01a09bbc-cd17-7ed0-b0d1-988e98cb2834.jsonl",
+ "cwd": "[LAB]/wt-B",
+ "hook_event_name": "PostToolUse",
+ "model": "gpt-6-astra",
+ "permission_mode": "bypassPermissions",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "printf '%s\\n' 'turno B' > TRAIL-B.txt"
+ },
+ "tool_response": "",
+ "tool_use_id": "exec-f7e43d80-352c-4dd6-a9b0-7991ae6a63c8"
+}
