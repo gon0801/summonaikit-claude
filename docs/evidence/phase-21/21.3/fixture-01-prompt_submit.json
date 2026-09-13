@@ -1,0 +1,10 @@
+{
+ "session_id": "01a09bbc-cd04-74b2-994b-5e7dfd801ef4",
+ "turn_id": "01a09bbc-cd6a-7471-aaaa-f85fd45c31ef",
+ "transcript_path": "[LAB]/codexhome/sessions/2026/09/13/rollout-2026-09-13T10-07-16-01a09bbc-cd04-74b2-994b-5e7dfd801ef4.jsonl",
+ "cwd": "[LAB]/wt-A",
+ "hook_event_name": "UserPromptSubmit",
+ "model": "gpt-6-astra",
+ "permission_mode": "bypassPermissions",
+ "prompt": "Write file TRAIL-A.txt in the current directory containing exactly the single line 'turno A'. Do not modify anything else."
+}
