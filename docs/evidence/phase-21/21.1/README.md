@@ -42,7 +42,7 @@ Claves de correlación observadas (IDs de sesión de laboratorio, descartable):
 | `Stop` | cierre | SIN identidad: no dice quién terminó ni con qué estado |
 | `session_id` | todos | estable (S), pero es la sesión PADRE: no discrimina agentes |
 
-## Veredicto: LIMITACIÓN demostrada (no hay señal autoritativa)
+## Veredicto: LIMITACIÓN demostrada (no hay señal autoritativa) — **SUPERSEDED** por la RE-CORRIDA 2026-09-13 (ver "Veredicto revisado"); se preserva como hecho histórico
 
 Tres huecos, cada uno suficiente para negar la señal:
 
@@ -150,6 +150,19 @@ estado. La única diferencia es la prosa de `last_assistant_message`
 Un gate no puede emitir veredictos de éxito desde el Stop; como máximo
 acredita rol + cierre + ruta de transcript auditable (`agent_transcript_path`).
 
+## Qué quedó unknown (re-corrida)
+
+- **R3 — fallo duro no observado.** Ninguna corrida produjo un abort,
+  timeout o kill del subagente: ese camino no se capturó y se desconoce
+  si emite `SubagentStop` (o algún otro evento). Postura del gate ante lo
+  unknown: **sin `SubagentStop` = running = no acreditado** — hasta no
+  observar lo contrario, un agente sin Stop se trata como en ejecución,
+  nunca como cerrado ni acreditado.
+- **Origen de `SubagentStart` sin negativo.** No se probó un escenario
+  que NO deba disparar `SubagentStart` (p. ej. una invocación que no sea
+  subagente de `collaboration.spawn_agent`): se desconoce si el evento
+  puede originarse fuera del despacho delegado.
+
 ## Matriz actualizada (solo filas nuevas/cambiadas)
 
 | Campo | Dónde aparece | Significado para el gate |
@@ -162,7 +175,7 @@ acredita rol + cierre + ruta de transcript auditable (`agent_transcript_path`).
 | `stop_hook_active:false` | SubagentStop + Stop | sin hook de continuación activo; no es señal de éxito |
 | `tool_use_id`/`task_name` del despacho | SOLO despacho | siguen sin reaparecer en Start/internos (R1) |
 
-## Veredicto revisado: SEÑAL CONFIRMADA (la limitación declarada CAE)
+## Veredicto revisado: SEÑAL CONFIRMADA (señal confirmada con residuales R1/R2/R3)
 
 El hallazgo del reviewer era real y la señal autoritativa EXISTE para
 **identidad + rol + cierre por agente** (Hechos 1–2): `agent_id` estable en la
