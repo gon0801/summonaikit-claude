@@ -6,6 +6,7 @@
 - lint: `feature-map: OK` (cubre el catálogo completo)
 - `list-features`: 17/17 features (ver `list-features-full.txt`)
 - log de corridas: `drives-primera-pasada.log` (+ re-drive check-secrets tras el fix)
+- re-conducción completa 20.25r2: `drives-redrive-completo.log` (17/17, captura a archivo sin pipes; ver sección al final)
 
 ## Matriz feature → fuente → modo → attempt/result → prerrequisito
 
@@ -59,6 +60,35 @@ verde). En esta Mac: instalador rehúsa (exit 5), 5 features con instancia en
 FAIL, `doctor` instancia en FAIL. Fix (reescribir el heredoc o el guard del
 instalador) toca `hooks/`+`tools/`: fuera del alcance skill/map/harness,
 requiere decisión de producto. No oculto; sin fila abierta.
+
+## Re-conducción completa 20.25r2 (2026-09-13, ronda fix-review-externa punto 1)
+
+Estrategia: re-conducir las 17 features (no solo las 12 faltantes) con las
+superficies existentes (`launch` + `drive <id>`), capturando TODO a archivo
+(`>> log 2>&1`, jamás por pipe). run `20260913T131809Z-30075`.
+Condiciones: checkout `ef013e8` (ronda r2: merge base #315 + fixes puntos
+2-6/8; el driver check-secrets lleva la costura del mutante nuevo, inerte
+sin `SAIKIT_VERIFY_MUTATE`), hook pin vigente `16aea80` sin cambio.
+Límite del entorno: el ejecutor compañero tumba comandos largos en
+primer plano; los drives lentos (saikit-merge ~4 min, setup-autopilot)
+corrieron detached con `nohup` + `RC=$?` al archivo. Declarado, no maquillado.
+
+Resultado: 10 PASS, 5 FAIL causa única R34, 2 unknown/3 — idéntico a la
+primera pasada. Conteos: saikit-merge 13, saikit-postmerge 9,
+setup-autopilot 10 (ver summaries en el attempt dir del run).
+check-secrets re-drive incluido inline: unknown/3 honesto (sin gitleaks).
+
+Deltas declarados (no maquillados):
+- Los 5 FAIL R34 salen con `RC=1` en el re-drive; el log original anotaba
+  `RC=0`. El mensaje (`hook-prepare exit 5`) es el mismo; cambia solo el
+  código registrado. Ningún FAIL convertido en PASS.
+- La línea `RC=0` de saikit-merge se anexó a mano tras verificar el
+  summary del último intento (PASS full 13): el drive corrió detached sin
+  la línea `RC=` en su comando. El resultado impreso
+  (`result=PASS/exit_code=0`) y el summary coinciden.
+- El attempt dir de saikit-merge trae 3 intentos: 2 parciales de
+  invocaciones que el ejecutor mató + el completo detached (el último,
+  PASS/13, es el válido). Solo el último cuenta.
 
 ## Veredicto global: `changed`
 

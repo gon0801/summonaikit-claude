@@ -1,0 +1,100 @@
+launched run_id=20260913T131809Z-30075
+VERIFY_HOME=/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-verify-20260913T131809Z-30075-l3bQOr
+DEST=/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-verify-20260913T131809Z-30075-l3bQOr/.claude/hooks/summonaikit-harness.sh
+log=/tmp/redrive2-art/launch-20260913T131809Z-30075.txt
+
+=== DRIVE install-guardian ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=1
+
+=== DRIVE gate-turn ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=1
+
+=== DRIVE audit-ledger ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE check-deploy-log ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE saikit-merge ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE saikit-postmerge ===
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+Squash commit -- not updating HEAD
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE setup-autopilot ===
+{"pty": true, "exit": 0, "timed_out": false, "killed": true, "reaped": true, "transcript": "1/5 Mergear solo con tu si explicito? (si/no) [no]: si\r\n2/5 Mergear a la rama publica la app? (si-publica/no/no-se) [no-se]: si-publica\r\n3/5 URL https para checar que la app sigue viva? (vacio = ninguna) []: https://pty.example.test/salud\r\n4/5 Sin prueba de la app, mergeo solo? (si/no) [no]: no\r\n5/5 Te aviso por Telegram cuando el post-merge mire el run? (si/no) [no]: si\r\nsaikit-ci-minimo: ya hay workflows, no se ofrece\r\nsaikit-setup-autopilot: listo: /private/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T/saikit-verify-20260913T131809Z-30075-l3bQOr/tmp/setup-interactive/.saikit/autopilot.json\r\n  merge=true despliega=publica rama=master pr=(sin pr)\r\n  commitea y pushea a origin/master: el merge lee la config (y el CI) de ahi, no de tu disco.\r\n", "reason": "PTY EOF before child exit", "answers_sent": 5}
+{"pty": true, "exit": 2, "timed_out": false, "killed": true, "reaped": true, "transcript": "1/5 Mergear solo con tu si explicito? (si/no) [no]: talvez\r\nsaikit-setup-autopilot: --merge exige si/no (llego: talvez)\r\n", "reason": "PTY EOF before child exit", "answers_sent": 1}
+{"pty": true, "exit": 143, "timed_out": true, "killed": true, "reaped": true, "transcript": "1/5 Mergear solo con tu si explicito? (si/no) [no]: ", "reason": "timeout", "answers_sent": 0}
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE ci-minimo ===
+{"pty": true, "exit": 0, "timed_out": false, "killed": true, "reaped": true, "transcript": "No hay workflows de GitHub Actions. Sin CI el autopilot no mergea (sin checks no es verde). Dejo un workflow minimo que corre «bash tests/run.sh» y verify/? [no]: si\r\nsaikit-ci-minimo: escrito .github/workflows/saikit-ci-minimo.yml (corre: bash tests/run.sh)\r\n", "reason": "PTY EOF before child exit", "answers_sent": 1}
+{"pty": true, "exit": 0, "timed_out": false, "killed": true, "reaped": true, "transcript": "No hay workflows de GitHub Actions. Sin CI el autopilot no mergea (sin checks no es verde). Dejo un workflow minimo que corre «bash tests/run.sh» y verify/? [no]: no\r\nsaikit-ci-minimo: sin CI el autopilot no mergea (sin checks no es verde)\r\n", "reason": "PTY EOF before child exit", "answers_sent": 1}
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE autopilot-contract ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=1
+
+=== DRIVE install-hosts ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=1
+
+=== DRIVE routing-recipes ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE check-secrets ===
+result=unknown
+exit_code=3
+RC=3
+
+=== DRIVE capture-payloads ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE decision-blast ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE verify-app ===
+result=PASS
+exit_code=0
+RC=0
+
+=== DRIVE stage-override ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=1
+
+=== DRIVE merge-happy-path ===
+result=unknown
+exit_code=3
+RC=3
+
+=== REDRIVE-FIN ===
