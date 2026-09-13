@@ -298,6 +298,12 @@ VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corr
 TRAIL_SKIP_LABEL='TRAIL SKIP'
 TRAIL_TSV_CITE_RE='(\./)?\.saikit/decisiones/[A-Za-z0-9._-]+\.tsv'
 TRAIL_BLAST_CITE_RE='(\./)?\.saikit/findings/blast-[A-Za-z0-9._-]+\.json'
+# 21.4 — raiz acreditada de la task: la unidad (raiz absoluta + sha del
+# commit/arbol revisado) citada en estilo lista dentro del span Close
+# ("... ; raiz: /abs/path ; sha: <40hex> ; ..."). La raiz solo cuenta tras
+# ";" o a inicio de linea: la prosa ("la raiz: ...") no acredita.
+TRAIL_RAIZ_CITE_RE='(^|[[:space:]];[[:space:]]*)raiz:[[:space:]]*/[^[:space:];]+'
+TRAIL_SHA_CITE_RE='(^|[[:space:]];[[:space:]]*)sha:[[:space:]]*[0-9a-fA-F]{40}([^0-9a-fA-F]|$)'
 
 # Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego). Via
 # ADICIONAL de credito de verificacion, SOLO en hosts donde el hook NO ve el
@@ -3389,21 +3395,90 @@ path_present_under_root() {
   return 1
 }
 
+# 21.4 — acredita la raiz citada en el span Close como la de la task.
+# Exit 0: TRAIL_RAIZ queda con la raiz canonica (toplevel exacto, HEAD == sha).
+# Exit 1: no se cito raiz (modo legacy, sin error). Exit 2: raiz citada pero
+# invalida (TRAIL_RAIZ_MOTIVO explica; fail-closed).
+trail_acreditar_raiz() {
+  local _span _raices _shas _canon _top _top_fisico _head
+  _span="$(close_span "$text_hatch")"
+  [ -n "$_span" ] || return 1
+  _raices="$(printf '%s' "$_span" | grep -Eo "$TRAIL_RAIZ_CITE_RE" | sed -E 's/.*raiz:[[:space:]]*//' | sort -u)"
+  [ -n "$_raices" ] || return 1
+  if [ "$(printf '%s\n' "$_raices" | grep -c .)" -ne 1 ]; then
+    TRAIL_RAIZ_MOTIVO="mas de una raiz distinta citada"; return 2
+  fi
+  _shas="$(printf '%s' "$_span" | grep -Eo "$TRAIL_SHA_CITE_RE" | sed -E 's/.*sha:[[:space:]]*([0-9a-fA-F]{40}).*/\1/' | tr 'A-F' 'a-f' | sort -u)"
+  if [ -z "$_shas" ]; then
+    TRAIL_RAIZ_MOTIVO="raiz sin sha no acredita (cita raiz: <abs> + sha: <40hex>)"; return 2
+  fi
+  if [ "$(printf '%s\n' "$_shas" | grep -c .)" -ne 1 ]; then
+    TRAIL_RAIZ_MOTIVO="mas de un sha distinto citado"; return 2
+  fi
+  case "$_raices" in
+    /*) ;;
+    *) TRAIL_RAIZ_MOTIVO="raiz no absoluta"; return 2 ;;
+  esac
+  _canon="$(cd "$_raices" 2>/dev/null && pwd -P)" || { TRAIL_RAIZ_MOTIVO="raiz inaccesible"; return 2; }
+  [ -n "$_canon" ] || { TRAIL_RAIZ_MOTIVO="raiz inaccesible"; return 2; }
+  command -v git >/dev/null 2>&1 || { TRAIL_RAIZ_MOTIVO="sin git para acreditar"; return 2; }
+  _top="$(git -C "$_canon" rev-parse --show-toplevel 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="raiz fuera de repo git"; return 2; }
+  _top_fisico="$(cd "$_top" 2>/dev/null && pwd -P)" || { TRAIL_RAIZ_MOTIVO="toplevel inaccesible"; return 2; }
+  [ "$_top_fisico" = "$_canon" ] || { TRAIL_RAIZ_MOTIVO="la raiz no es el toplevel del repo (prefijo parecido o subdirectorio)"; return 2; }
+  _head="$(git -C "$_canon" rev-parse HEAD 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="HEAD ilegible"; return 2; }
+  [ "$_head" = "$_shas" ] || { TRAIL_RAIZ_MOTIVO="HEAD distinto del sha citado (otro worktree, checkout ajeno u otro repo)"; return 2; }
+  TRAIL_RAIZ="$_canon"
+  return 0
+}
+
+# 21.4 — presencia del artefacto bajo la raiz acreditada (nunca el cwd
+# ambiental). Con HEAD == sha y estado git limpio, el archivo ES el del arbol
+# exacto revisado: untracked, dirty o escrito despues del review se rechazan.
+path_present_under_acreditada() {
+  local _joined _dir
+  case "$1" in
+    ''|/*|~*|*..*) return 1 ;;
+  esac
+  _joined="$TRAIL_RAIZ/$1"
+  [ -f "$_joined" ] || return 1
+  # Un enlace final no es el artefacto: no seguirlo fuera de la raiz.
+  [ ! -L "$_joined" ] || return 1
+  # Ambos lados FISICOS, igual que el guard legacy: el enlace al propio
+  # proyecto canoniza dentro y pasa; el que escapa, no.
+  _dir="$(cd "$(dirname "$_joined")" 2>/dev/null && pwd -P)" || return 1
+  case "$_dir" in
+    "$TRAIL_RAIZ"|"$TRAIL_RAIZ"/*) ;;
+    *) return 1 ;;
+  esac
+  [ -z "$(git -C "$TRAIL_RAIZ" status --porcelain -- "$1" 2>/dev/null)" ] || return 1
+  return 0
+}
+
 trail_cited_and_present() {
   _span="$(close_span "$text_hatch")"
   [ -n "$_span" ] || return 1
+  TRAIL_RAIZ_BLOQUEO=""
+  _present="path_present_under_root"
+  trail_acreditar_raiz
+  _acreditar_rc=$?
+  if [ "$_acreditar_rc" -eq 0 ]; then
+    _present="path_present_under_acreditada"
+  elif [ "$_acreditar_rc" -eq 2 ]; then
+    TRAIL_RAIZ_BLOQUEO="$TRAIL_RAIZ_MOTIVO"
+    return 1
+  fi
   _tsv=1
   _blast=1
   while IFS= read -r _p; do
     [ -z "$_p" ] && continue
-    path_present_under_root "$_p" || continue
+    "$_present" "$_p" || continue
     _tsv=0
   done <<EOF
 $(cited_relpaths "$_span" "$TRAIL_TSV_CITE_RE")
 EOF
   while IFS= read -r _p; do
     [ -z "$_p" ] && continue
-    path_present_under_root "$_p" || continue
+    "$_present" "$_p" || continue
     _blast=0
   done <<EOF
 $(cited_relpaths "$_span" "$TRAIL_BLAST_CITE_RE")
@@ -3986,6 +4061,9 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     if ! has_trail_skip "$text_hatch"; then
       if ! trail_cited_and_present; then
         missing="$missing- Missing trail/blast: Close: must cite concrete paths that exist under PROJECT_ROOT (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), or declare TRAIL SKIP: <reason> as its own receipt line. A leftover file you did not cite does not count.\n"
+        if [ -n "${TRAIL_RAIZ_BLOQUEO:-}" ]; then
+          missing="$missing- Missing trail/blast (raiz): ${TRAIL_RAIZ_BLOQUEO}.\n"
+        fi
       fi
     fi
   fi

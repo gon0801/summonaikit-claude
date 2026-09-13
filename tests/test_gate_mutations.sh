@@ -216,6 +216,7 @@ G8|trail_sin_limite_fisico|una carpeta de evidencia enlazada afuera se acredita
 G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acredita
 G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
 G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
+G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1121,6 +1122,10 @@ mut_trail_tambien_en_fast() {
   '
 }
 mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "\$(trail_parrafo)")"/_gf="$_gf"/'; }
+# 21.4: la rama acreditada vuelve a resolver bajo el ambiente — el caso
+# "cwd de otra sesion" (raiz valida, proyecto limpio) vuelve a bloquear.
+# Lo atrapa caso_g8_full_raiz_acreditada_otro_cwd_cierra.
+mut_trail_raiz_vuelve_a_ambiental() { sed 's/_present="path_present_under_acreditada"/_present="path_present_under_root"/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
