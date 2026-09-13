@@ -52,7 +52,17 @@ run_tool() {
   if [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "${SAIKIT_GITLEAKS}" ]; then
     extra+=(env "SAIKIT_GITLEAKS=$SAIKIT_GITLEAKS")
   fi
-  runtime_exec "$VERIFY_HOME" "${extra[@]}" bash "$TOOL" "$@"
+  # Mutante 20.25r2 `checksecrets_array_sin_guardia`: restaura la expansion
+  # sin guardia. En bash <=4.3 con `set -u` el llamado con extra vacio
+  # (SAIKIT_GITLEAKS ausente o no ejecutable) muere con
+  # `extra[@]: unbound variable` antes de llegar a runtime_exec.
+  # En bash >=4.4 el mutante es inerte (declarado, como 20.28 y como el
+  # gemelo doctor_array_sin_guardia en control-summonaikit).
+  if [ "${SAIKIT_VERIFY_MUTATE:-}" = "checksecrets_array_sin_guardia" ]; then
+    eval 'runtime_exec "$VERIFY_HOME" "${extra[@]}" bash "$TOOL" "$@"'
+    return $?
+  fi
+  runtime_exec "$VERIFY_HOME" ${extra[@]+"${extra[@]}"} bash "$TOOL" "$@"
 }
 
 run_fallback() {

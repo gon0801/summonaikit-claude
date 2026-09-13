@@ -1,0 +1,9 @@
+{
+ "session_id": "01a09b09-15c5-79d1-aefa-413b8e98621a",
+ "transcript_path": "[LAB]/home/sessions/2026/09/13/rollout-2026-09-13T06-50-59-01a09b09-15c5-79d1-aefa-413b8e98621a.jsonl",
+ "cwd": "[LAB]/lab",
+ "hook_event_name": "SessionStart",
+ "model": "gpt-5.6-sol",
+ "permission_mode": "bypassPermissions",
+ "source": "startup"
+}

@@ -186,6 +186,37 @@ Executable helper (invocation above):
 
 Read `features/README.md` before driving. Cover every entry point listed for
 the feature under test; one convenient path is incomplete when the map lists
-others. Phase 18 limits (18.26 seal isolation, 18.27 headless receipt,
-18.10 closeout) live on the cards. Live coverage stays inventariado; no
-observado.
+others. Per-feature limits live on the cards. Reconciled 2026-09-13 (20.23):
+the Phase 18 limits that Phase 20 measured are overcome — seal channel
+(20.12), linked consume (20.13) and the full Grok flow (20.14); headless
+design, surface and live measurement (20.15–20.17); the complete green path
+in Claude (20.10); the `PreToolUse` deny (20.9); all three `cuidar-pr` modes
+(20.11). What stays: `merge-happy-path` remains `blocked` (live scope per
+attempt, never simulated credit); dsh scenario2 remains `unknown`
+(20.18/20.19 open with a written decision, never PASS).
+
+## Maintenance runbook (20.23): source → reconcile → drive → triage
+
+One full pass per phase close, or when the catalog trigger fires. Vocabulary:
+`PASS`/`FAIL`/`unknown` per feature and attempt; `clean`/`changed`/`blocked`
+only for the whole pass verdict — never per feature.
+
+1. **Source.** `Plans.md` statuses and `docs/evidence/phase-20/` are
+   authoritative; `features/catalog.json` plus `list-features` and the lint
+   define the full inventory. No promise without a measurement.
+2. **Reconcile.** Every card maps to a source entry; every doc claim maps to
+   a measured run. A deferred case stays named, never implicitly PASS.
+3. **Drive.** Each feature once in its declared `execution_mode`, using the
+   existing surfaces only (`list-features`, `launch`, `doctor`, `drive`,
+   `cleanup`) — no parallel surface. Evidence v1 survives cleanup; the matrix
+   (feature → source → mode → attempt/result → prerequisite) is tied to the
+   checkout SHA and the hook SHA. Prior `20.x` evidence is reused only when
+   checkout SHA, hook SHA and required cases all match.
+4. **Triage.** Classify every deviation as doc drift, harness gap, or product
+   regression. Doc drift is fixed in the pass. Harness gaps are fixed in the
+   pass with regression plus discriminant mutant, then re-driven. Product
+   regressions are reported apart, never silently fixed here.
+5. **Edit scope of a pass.** Skill, map and harness only. A `changed` verdict
+   ships as ONE pull request with regression, mutant and re-drive; a product
+   gap ships as a separate report. Live driving requires the 20.8 scope alive;
+   without it, live stays blocked, not passed.

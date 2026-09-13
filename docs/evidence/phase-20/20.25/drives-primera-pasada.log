@@ -1,0 +1,15 @@
+=== DRIVE install-guardian ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=0
+=== DRIVE gate-turn ===
+control-summonaikit: preparación del hook falló (exit 5)
+RC=0
+=== DRIVE audit-ledger ===
+result=PASS
+exit_code=0
+RC=0
+=== DRIVE check-deploy-log ===
+result=PASS
+exit_code=0
+RC=0
+=== DRIVE saikit-merge ===
