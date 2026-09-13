@@ -4,7 +4,10 @@
 # test_gate_mutations.sh. La raiz citada es la unidad (raiz absoluta + sha
 # del commit/arbol revisado); sin sha no hay acreditacion.
 
-_wt_nuevo() {
+# 21.4r2: la acreditacion exige el veredicto sellado <sha>.json bajo la raiz
+# (anclaje al juicio de la sesion); $2=1 lo siembra, $2=0 arma el repo ajeno
+# autoconsistente SIN juicio.
+_repo_semillar() {
   rm -rf "$LAB/$1"
   mkdir -p "$LAB/$1/.saikit/decisiones" "$LAB/$1/.saikit/findings"
   printf 'cuando|etapa|decision|por_que|evidencia|resultado\n2026-09-13T00:00:00Z|tarea|hecho|porque|evidencia|ok %s %s %s\n' "$1" "$$" "$(date +%s%N)" > "$LAB/$1/.saikit/decisiones/21.4.tsv"
@@ -14,8 +17,16 @@ _wt_nuevo() {
   git -C "$LAB/$1" config user.name t21
   git -C "$LAB/$1" add -A
   git -C "$LAB/$1" commit -qm semilla
-  git -C "$LAB/$1" rev-parse HEAD
+  _h="$(git -C "$LAB/$1" rev-parse HEAD)"
+  if [ "$2" = "1" ]; then
+    mkdir -p "$LAB/$1/.saikit/veredictos"
+    printf '{"sha":"%s"}\n' "$_h" > "$LAB/$1/.saikit/veredictos/$_h.json"
+  fi
+  printf '%s\n' "$_h"
 }
+
+_wt_nuevo() { _repo_semillar "$1" 1; }
+_repo_sin_veredicto() { _repo_semillar "$1" 0; }
 
 _recibo_raiz() {
   _recibo_close "trail at .saikit/decisiones/21.4.tsv ; blast at .saikit/findings/blast-21.4.json ; raiz: $1 ; sha: $2 ; code after reviewer: no."
@@ -145,4 +156,42 @@ caso_g8_full_raiz_ignorada_bloquea() {
   _afirma_bloqueo_trail "artefactos ignorados no estan en el arbol"
 }
 
-CASOS_G8="$CASOS_G8 caso_g8_full_raiz_acreditada_otro_cwd_cierra caso_g8_full_raiz_untracked_bloquea caso_g8_full_raiz_dirty_bloquea caso_g8_full_raiz_post_review_bloquea caso_g8_full_raiz_ajena_bloquea caso_g8_full_raiz_otro_head_bloquea caso_g8_full_raiz_prefijo_bloquea caso_g8_full_raiz_puntos_cierra caso_g8_full_raiz_symlink_bloquea caso_g8_full_raiz_ignorada_bloquea caso_g8_full_raiz_sin_sha_bloquea caso_g8_full_sha_sin_raiz_legacy_cierra"
+# 21.4r2 (review externa r1 #1): assume-unchanged esconde el cambio a status,
+# pero el archivo en disco ya no es el blob del arbol citado.
+caso_g8_full_raiz_assume_unchanged_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  _sha="$(_wt_nuevo wt-tarea)"
+  git -C "$LAB/wt-tarea" update-index --assume-unchanged .saikit/decisiones/21.4.tsv
+  printf 'contenido fabricado %s %s\n' "$$" "$(date +%s%N)" > "$LAB/wt-tarea/.saikit/decisiones/21.4.tsv"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_raiz "$LAB/wt-tarea" "$_sha")")"
+  _afirma_bloqueo_trail "assume-unchanged esconde el cambio pero el disco no es el arbol"
+}
+
+# 21.4r2 (review externa r1 #1): `git replace` del blob fabrica el contenido
+# y deja status/HEAD limpios; solo la comparacion fisica lo ve.
+caso_g8_full_raiz_replace_blob_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  _sha="$(_wt_nuevo wt-tarea)"
+  _tsv="$LAB/wt-tarea/.saikit/decisiones/21.4.tsv"
+  _real="$(git -C "$LAB/wt-tarea" rev-parse "$_sha:.saikit/decisiones/21.4.tsv")"
+  printf 'fabricado para replace %s %s\n' "$$" "$(date +%s%N)" > "$_tsv"
+  _falso="$(git -C "$LAB/wt-tarea" hash-object -w -- "$_tsv")"
+  git -C "$LAB/wt-tarea" replace --force -- "$_real" "$_falso"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_raiz "$LAB/wt-tarea" "$_sha")")"
+  _afirma_bloqueo_trail "git replace fabrica el contenido con status limpio"
+}
+
+# 21.4r2 (review externa r1 #2): repo ajeno autoconsistente — raiz y su propio
+# HEAD correctos, artefactos versionados — pero sin veredicto sellado: no hay
+# juicio de sesion que ancle el sha.
+caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  _sha="$(_repo_sin_veredicto wt-ajeno-auto)"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_raiz "$LAB/wt-ajeno-auto" "$_sha")")"
+  _afirma_bloqueo_trail "repo ajeno autoconsistente sin veredicto sellado"
+}
+
+CASOS_G8="$CASOS_G8 caso_g8_full_raiz_acreditada_otro_cwd_cierra caso_g8_full_raiz_untracked_bloquea caso_g8_full_raiz_dirty_bloquea caso_g8_full_raiz_post_review_bloquea caso_g8_full_raiz_ajena_bloquea caso_g8_full_raiz_otro_head_bloquea caso_g8_full_raiz_prefijo_bloquea caso_g8_full_raiz_puntos_cierra caso_g8_full_raiz_symlink_bloquea caso_g8_full_raiz_ignorada_bloquea caso_g8_full_raiz_sin_sha_bloquea caso_g8_full_sha_sin_raiz_legacy_cierra caso_g8_full_raiz_assume_unchanged_bloquea caso_g8_full_raiz_replace_blob_bloquea caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea"

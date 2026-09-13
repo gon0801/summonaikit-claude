@@ -3400,7 +3400,7 @@ path_present_under_root() {
 # Exit 1: no se cito raiz (modo legacy, sin error). Exit 2: raiz citada pero
 # invalida (TRAIL_RAIZ_MOTIVO explica; fail-closed).
 trail_acreditar_raiz() {
-  local _span _raices _shas _canon _top _top_fisico _head
+  local _span _raices _shas _canon _top _top_fisico _head _gcd _gcd_abs _saikit_raiz
   _span="$(close_span "$text_hatch")"
   [ -n "$_span" ] || return 1
   _raices="$(printf '%s' "$_span" | grep -Eo "$TRAIL_RAIZ_CITE_RE" | sed -E 's/.*raiz:[[:space:]]*//' | sort -u)"
@@ -3427,7 +3427,20 @@ trail_acreditar_raiz() {
   [ "$_top_fisico" = "$_canon" ] || { TRAIL_RAIZ_MOTIVO="la raiz no es el toplevel del repo (prefijo parecido o subdirectorio)"; return 2; }
   _head="$(git -C "$_canon" rev-parse HEAD 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="HEAD ilegible"; return 2; }
   [ "$_head" = "$_shas" ] || { TRAIL_RAIZ_MOTIVO="HEAD distinto del sha citado (otro worktree, checkout ajeno u otro repo)"; return 2; }
+  # 21.4r2 (review externa r1 #2): HEAD==sha es solo plomeria git — un repo
+  # ajeno autoconsistente con su propio HEAD la pasa. El sha se ancla al
+  # JUICIO de la sesion: exige el veredicto sellado del commit citado.
+  # --git-common-dir es condicion NECESARIA adicional (resuelve donde vive
+  # .saikit/veredictos cuando la raiz es un worktree enlazado), no suficiente.
+  _gcd="$(git -C "$_canon" rev-parse --git-common-dir 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="git-common-dir ilegible"; return 2; }
+  [ -n "$_gcd" ] || { TRAIL_RAIZ_MOTIVO="git-common-dir vacio"; return 2; }
+  _gcd_abs="$(cd "$_canon" && cd "$_gcd" && pwd -P 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="git-common-dir inaccesible"; return 2; }
+  [ -n "$_gcd_abs" ] || { TRAIL_RAIZ_MOTIVO="git-common-dir inaccesible"; return 2; }
+  _saikit_raiz="$(dirname "$_gcd_abs")"
+  [ ! -L "$_canon/.saikit" ] && [ ! -L "$_saikit_raiz/.saikit" ] || { TRAIL_RAIZ_MOTIVO=".saikit enlazado no acredita veredicto"; return 2; }
+  { [ -f "$_canon/.saikit/veredictos/$_shas.json" ] || [ -f "$_saikit_raiz/.saikit/veredictos/$_shas.json" ]; } || { TRAIL_RAIZ_MOTIVO="sin veredicto sellado para el sha citado (repo autoconsistente sin juicio de sesion)"; return 2; }
   TRAIL_RAIZ="$_canon"
+  TRAIL_RAIZ_SHA="$_shas"
   return 0
 }
 
@@ -3435,7 +3448,7 @@ trail_acreditar_raiz() {
 # ambiental). Con HEAD == sha y estado git limpio, el archivo ES el del arbol
 # exacto revisado: untracked, dirty o escrito despues del review se rechazan.
 path_present_under_acreditada() {
-  local _joined _dir
+  local _joined _dir _blob_arbol _blob_disco
   case "$1" in
     ''|/*|~*|*..*) return 1 ;;
   esac
@@ -3453,8 +3466,15 @@ path_present_under_acreditada() {
   # 21.4r1 (CodeRabbit PR #318): `status --porcelain` omite los ignorados,
   # asi que un artefacto ignorado pasaba como limpio sin estar en el arbol.
   # La pertenencia rastreada lo ata al HEAD exacto revisado.
-  git -C "$TRAIL_RAIZ" ls-files --error-unmatch -- "$1" >/dev/null 2>&1 || return 1
   [ -z "$(git -C "$TRAIL_RAIZ" status --porcelain -- "$1" 2>/dev/null)" ] || return 1
+  # 21.4r2 (review externa r1 #1): assume-unchanged esconde el cambio a status
+  # y `git replace` del blob fabrica el contenido dejandolo limpio. La
+  # integridad va FISICO contra FISICO: hash del archivo en disco contra el
+  # blob del arbol exacto citado, con replace desactivado para leer el objeto
+  # real y no su suplantacion.
+  _blob_arbol="$(GIT_NO_REPLACE_OBJECTS=1 git -C "$TRAIL_RAIZ" rev-parse "$TRAIL_RAIZ_SHA:$1" 2>/dev/null)" || return 1
+  _blob_disco="$(git hash-object -- "$_joined")" || return 1
+  [ "$_blob_arbol" = "$_blob_disco" ] || return 1
   return 0
 }
 

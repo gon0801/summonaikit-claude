@@ -217,7 +217,8 @@ G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acre
 G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
 G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
-G8|trail_raiz_sin_membresia|la pertenencia rastreada se apaga y un artefacto ignorado ausente del arbol vuelve a acreditarse
+G8|trail_raiz_sin_hash_disco|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
+G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1127,9 +1128,15 @@ mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "
 # "cwd de otra sesion" (raiz valida, proyecto limpio) vuelve a bloquear.
 # Lo atrapa caso_g8_full_raiz_acreditada_otro_cwd_cierra.
 mut_trail_raiz_vuelve_a_ambiental() { sed 's/_present="path_present_under_acreditada"/_present="path_present_under_root"/'; }
-# 21.4r1: quitar la pertenencia rastreada reabre el hueco del ignorado.
-# Lo atrapa caso_g8_full_raiz_ignorada_bloquea.
-mut_trail_raiz_sin_membresia() { sed '/ls-files --error-unmatch/d'; }
+# 21.4r2: sin la comparacion fisica disco/arbol, assume-unchanged y git
+# replace vuelven a enganar a status. Lo atrapan
+# caso_g8_full_raiz_assume_unchanged_bloquea y
+# caso_g8_full_raiz_replace_blob_bloquea.
+mut_trail_raiz_sin_hash_disco() { sed '/_blob_arbol=/d; /_blob_disco=/d; /\[ "\$_blob_arbol" = "\$_blob_disco" \]/d'; }
+# 21.4r2: sin el veredicto sellado, un repo ajeno autoconsistente con su
+# propio HEAD vuelve a acreditar. Lo atrapa
+# caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea.
+mut_trail_raiz_sin_veredicto_sellado() { sed '/\.saikit\/veredictos\/\$_shas\.json/d'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
