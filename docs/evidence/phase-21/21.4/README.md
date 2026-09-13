@@ -18,9 +18,14 @@ ligado a `session_id`/`turn_id`, deriva por git (`toplevel`, `git-dir`,
   tras `;` o a inicio de línea).
 - `path_present_under_acreditada`: resuelve los paths citados con
   `git -C <raíz>` — nunca con el cwd ambiental —, con contención física,
-  rechazo de enlace final y `status --porcelain` vacío. Con HEAD == sha y
-  estado limpio, el archivo ES el del árbol exacto revisado: untracked, dirty
-  o escrito después del review se rechazan.
+  rechazo de enlace final, pertenencia rastreada
+  (`git -C <raíz> ls-files --error-unmatch -- <path>`) y
+  `status --porcelain` vacío. La pertenencia rastreada cierra el hueco de
+  los ignorados (21.4r1, hallazgo CodeRabbit PR #318): `status --porcelain`
+  OMITE los archivos ignorados, así que un artefacto ignorado pasaba como
+  limpio sin estar en el árbol revisado. Con HEAD == sha, pertenencia y
+  estado limpio, el archivo ES el del árbol exacto revisado: untracked,
+  ignorado, dirty o escrito después del review se rechazan.
 - Contrato de contenido vigente intacto fuera del vínculo SHA; otros hosts
   intactos (la rama nueva solo se ejerce con líneas `raiz:`/`sha:` citadas).
 
@@ -37,6 +42,7 @@ test_trail_gate.sh, test_gate_behavior.sh y test_gate_mutations.sh):
 | raiz_puntos_cierra | CIERRA (`..` que canoniza a la acreditada) |
 | raiz_symlink_bloquea (enlace versionado afuera) | BLOQUEA |
 | raiz_sin_sha_bloquea | BLOQUEA |
+| raiz_ignorada_bloquea (21.4r1) | BLOQUEA (ignorado: sin pertenencia rastreada) |
 | sha_sin_raiz_legacy_cierra | CIERRA (legacy intacto, sha ignorado) |
 
 Rojo previo medido: con el hook sin el cambio (deployed anterior, que la
@@ -51,21 +57,30 @@ contenido para que los SHAs siempre difieran.
 
 ## Mutantes
 
-- Nuevo `G8|trail_raiz_vuelve_a_ambiental`: la rama acreditada vuelve a
+- `G8|trail_raiz_vuelve_a_ambiental`: la rama acreditada vuelve a
   `path_present_under_root` → lo atrapa
   `caso_g8_full_raiz_acreditada_otro_cwd_cierra` (verificado en corrida
   dedicada: OK).
-- Batería completa de mutaciones: OK (175/175).
+- Nuevo `G8|trail_raiz_sin_membresia` (21.4r1): la pertenencia rastreada
+  (`ls-files --error-unmatch`) se apaga y un artefacto ignorado ausente del
+  árbol vuelve a acreditarse → lo atrapa
+  `caso_g8_full_raiz_ignorada_bloquea` (rojo medido en 8699286: exit 0 antes
+  del parche, block después).
+- Batería completa de mutaciones: OK (176/176).
 
-## Resultados de batería (contra la fuente del repo)
+## Resultados de batería (contra la fuente del repo; re-corrida 21.4r1)
 
-- test_trail_gate.sh: OK (33 casos).
-- test_gate_behavior.sh: OK (306 ok, 0 FAIL/ROJO).
-- test_gate_mutations.sh: OK — 175/175 atrapadas, incluida la nueva
+- test_trail_gate.sh: OK (34 casos: 12 nuevos 21.4, incl.
+  `caso_g8_full_raiz_ignorada_bloquea`).
+- test_gate_behavior.sh: OK (307 ok, 0 FAIL/ROJO).
+- test_gate_mutations.sh: OK — 176/176 atrapadas, incluidas
   `trail_raiz_vuelve_a_ambiental` (atrapada por
-  `caso_g8_full_raiz_acreditada_otro_cwd_cierra`).
+  `caso_g8_full_raiz_acreditada_otro_cwd_cierra`) y la nueva
+  `trail_raiz_sin_membresia` (atrapada por `caso_g8_full_raiz_ignorada_bloquea`).
 - Golden codex: sin deriva (golden-harness 57 escenarios + baseline OK);
   ninguna regrabación necesaria.
+- Cadena completa re-corrida tras el parche 8699286 con `SAIKIT_HOOK_VIVO`
+  apuntando a la fuente del repo: exit 0.
 
 ## Limitación declarada (no esconde nada)
 
