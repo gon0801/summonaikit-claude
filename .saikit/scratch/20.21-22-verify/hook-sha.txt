@@ -1,0 +1,1 @@
+37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680  hooks/summonaikit-harness.sh
