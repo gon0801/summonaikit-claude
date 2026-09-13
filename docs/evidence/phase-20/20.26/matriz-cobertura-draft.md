@@ -5,23 +5,24 @@ DRAFT del bloque 6: el cierre del ledger NO se aplica en este bloque
 20.26 quedan cc:TODO con su decisión escrita). Deploy y ledger, a cargo del
 líder al cerrar de verdad.
 
-## Required — observados y gate del PR verde
+## Required — observados y gate del PR verde (etiquetas según Plans.md, sin duplicados)
 
-20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7, 20.8, 20.9, 20.10, 20.11, 20.12,
-20.15, 20.16, 20.17, 20.20, 20.23, 20.24, 20.27: cc:完了 con PR y gate verde
+20.1, 20.2, 20.3, 20.4, 20.5, 20.8, 20.9, 20.10, 20.11, 20.12,
+20.15, 20.23, 20.24, 20.27: cc:完了 con PR y gate verde
 (ver Status en Plans.md). **20.18: ABIERTA** con decisión escrita (R35):
 escenario2 dsh sin medir = unknown pendiente, nunca PASS; no bloquea 20.25/20.26.
+(20.26 es esta misma fila: DRAFT, no cierra.)
 
 ## Recommended — ejecutados o retirados con decisión explícita
 
-Ejecutados: 20.20, 20.21, 20.28 (corrió: no hay que retirarla), 20.29.
+Ejecutados: 20.6, 20.7, 20.20, 20.21, 20.28 (corrió: no hay que retirarla), 20.29.
 **20.25: ejecutado parcial** — veredicto `changed` (matriz en
 `docs/evidence/phase-20/20.25/matriz.md`); gaps no ocultos (R34 + unknowns);
 fila queda cc:TODO con decisión escrita, no PASS.
 
 ## Conditional — habilitados ejecutados; descartados cancelados sin PASS
 
-Habilitados y ejecutados: 20.13 (canal 20.12 positivo), 20.14, 20.16.
+Habilitados y ejecutados: 20.13 (canal 20.12 positivo), 20.14, 20.16, 20.17.
 **20.19: descartado sin PASS** con decisión explícita: su activación exige
 repro FAIL atribuible al adaptador desde 20.18, que no existe (20.18 sin
 medir); sin activación no hay ejecución pendiente.
