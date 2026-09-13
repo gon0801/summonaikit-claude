@@ -1,0 +1,11 @@
+{
+ "session_id": "01a09bbc-cd04-74b2-994b-5e7dfd801ef4",
+ "turn_id": "01a09bbc-cd6a-7471-aaaa-f85fd45c31ef",
+ "transcript_path": "[LAB]/codexhome/sessions/2026/09/13/rollout-2026-09-13T10-07-16-01a09bbc-cd04-74b2-994b-5e7dfd801ef4.jsonl",
+ "cwd": "[LAB]/wt-A",
+ "hook_event_name": "Stop",
+ "model": "gpt-6-astra",
+ "permission_mode": "bypassPermissions",
+ "stop_hook_active": false,
+ "last_assistant_message": "Created `TRAIL-A.txt` containing exactly `turno A` on a single line. Nothing else was modified."
+}
