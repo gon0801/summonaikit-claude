@@ -217,7 +217,7 @@ G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acre
 G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
 G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 G3|codex_interno_credita|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
-G3|codex_cierre_sin_start|la guarda de huerfano se neutraliza y un Stop sin SubagentStart previo acredita el rol (21.2)
+G3|codex_huerfano_via_rolmatch|el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)
 G3|codex_cierre_sin_transcript|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
 G3|codex_rol_cambiado_acredita|la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)
 G3|codex_legado_ignora_flag|el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)
@@ -231,9 +231,9 @@ mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SE
 
 # 21.2 — tres condiciones del canal nativo de codex.
 mut_codex_interno_credita() { sed 's/saikit_codex_role_event "\$subagent"/record_agent "\$subagent"/'; }
-mut_codex_cierre_sin_start() { sed 's/\*) saikit_codex_stop_huerfano "\$cx_sid"; return 0 ;;/\*) : ;;/'; }
 mut_codex_cierre_sin_transcript() { sed 's/if \[ -z "\$cx_role" \] || \[ -z "\$cx_tr" \]; then/if false; then/'; }
 mut_codex_rol_cambiado_acredita() { sed 's/if \[ "\$cx_role" != "\$cx_entry_role" \]; then/if false; then/'; }
+mut_codex_huerfano_via_rolmatch() { sed 's/saikit_codex_stop_huerfano "\$cx_sid"; return 0/cx_entry_role="\$cx_role";/'; }
 mut_codex_legado_ignora_flag() { sed 's/\[ "\$cx_seen" = "1" \]/false/'; }
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
 
