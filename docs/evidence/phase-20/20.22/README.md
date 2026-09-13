@@ -58,7 +58,10 @@ explícita de ESTE proyecto, que NO ha sido dada.
 2. Revertir = borrar el archivo (o revertir el commit que lo publicó) vía
    PR normal; el merge tool lee SOLO de `origin/<rama>`, así que el rollback
    se verifica contra origin (`git show origin/master:.saikit/autopilot.json`
-   debe volver a no existir).
+   debe volver a no existir). OJO: el merge tool RECHAZA cualquier PR que
+   toque `.saikit/autopilot.json` (candado sobre la config), así que tanto
+   la habilitación como el rollback se mergen SIEMPRE A MANO por el
+   operador; el "PR normal" es el vehículo, no el mecanismo de merge.
 3. Lock: el setup toma lock atómico por `mkdir` en
    `$(git rev-parse --git-common-dir)/saikit-autopilot.lock`; un lock ajeno
    se REPORTA y BLOQUEA (exit 3), nunca se borra solo — solo
