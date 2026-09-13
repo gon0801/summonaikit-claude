@@ -13,7 +13,7 @@ Pregunta: ¿qué señal liga turno, repo, HEAD y worktree de la task
 | Lab | repo sintético `origen` + 2 worktrees concurrentes (`wt-A` rama-A, `wt-B` rama-B) + checkout ajeno (`alien`, clon separado); los 4 con HEAD distinto; CODEX_HOME temporal con auth copiada; hook shim grabador puro (sin gate, sin mutación) |
 | Turnos | 3 `codex exec` concurrentes: A escribe `TRAIL-A.txt` en wt-A, B escribe `TRAIL-B.txt` en wt-B, X escribe `TRAIL-X.txt` en alien |
 | Resultado funcional | EXIT=0 ×3; cada archivo con su línea exacta, nada más modificado |
-| Captura | 8 payloads (`fixture-00…07`; redactado: `/Users/dn/lab-21.3` → `[LAB]`) |
+| Captura | 8 payloads (`fixture-00…07`; rutas del lab redactadas a `[LAB]`) |
 | Incidente | el shim nombraba archivos por conteo de directorio y dos eventos (SessionStart/UserPromptSubmit de B y X) se sobrescribieron entre sesiones concurrentes; la cobertura del veredicto está completa (los 3 Stop + 1 PostToolUse por sesión, cada uno con `session_id`+`turn_id`+`cwd` nativos) |
 | Checkout principal | solo observación read-only (`git worktree list`): master ede1337 + wt-2018-19, wt-bloque6, wt-bloque7; ninguna escritura; los procesos `codex` ajenos de la Mac (probe en read-only) no se usaron ni se tocaron |
 
@@ -23,7 +23,7 @@ Claves de correlación observadas (IDs de sesión de laboratorio, descartable):
 |---|---|---|---|---|
 | A | `…801ef4` | `…31ef` | `[LAB]/wt-A` | `0bc5c74a` (rama-A) |
 | B | `…cb2834` | `…9989` | `[LAB]/wt-B` | `ed4a0103` (rama-B) |
-| X (ajeno) | `…f364e0`… | `…1b62` | `[LAB]/alien` | `03a5f795` |
+| X (ajeno) | `…692f8d6b` (`01a09bbc-cd30-7292-bee1-a7b3692f8d6b`, trazable en `fixture-02`/`fixture-05`) | `…1b62` | `[LAB]/alien` | `03a5f795` |
 
 Medición git por checkout (hook shim, verificable en fixtures):
 
