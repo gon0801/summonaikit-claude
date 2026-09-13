@@ -1,0 +1,3 @@
+76e92bb docs(plans): cierra 20.15-20.17 + corrige deploy-log y evidencia 20.17 (#311)
+744ca28 feat(20.16-20.17): mutantes de fuente + medicion viva + deploy-log del bloque (#309)
+5e05df2 fix(20.15-20.17): state lookup, close_type, test layout (review round 1) (#306)
