@@ -2450,6 +2450,8 @@ habilitar cruces de sello o nuevas superficies de supervisión.
 Lo que Phase 18 dejó como límite y Phase 20 midió en vivo (evidencia
 `docs/evidence/phase-20/<fila>/`, matriz de la primera pasada en
 `docs/evidence/phase-20/20.25/`):
+(La evidencia de 20.25 aterriza con el PR encadenado siguiente:
+#315 → #316 sobre su base; merge en cadena.)
 
 - **Verde ⇒ merge: OBSERVADO en claude (20.10) y en grok (20.14).**
   Claude: ceremonia completa, PR #9/#10, CI verde, veredicto sellado, LISTO

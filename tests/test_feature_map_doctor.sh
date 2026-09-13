@@ -7,6 +7,10 @@
 #   blocked_as_pass    — blocked-no-es-pass (BLOCKED se presenta como PASS)
 #   fake_gh_as_live    — gh-falso-no-es-vivo (un gh script acredita live)
 #   skip_isolation     — escape-bloquea-todo (un escape deja de tumbar drivers)
+#   doctor_array_sin_guardia       — 20.25 arreglo-vacio cmd_doctor (sin guardia
+#     muere en bash<=4.3; SKIP declarado en bash>=4.4)
+#   checksecrets_array_sin_guardia — 20.25r2 arreglo-vacio run_tool de
+#     check-secrets (mismo patron; SKIP declarado en bash>=4.4)
 #
 # Falta de dep = unknown/MISSING; corrupción observada = FAIL;
 # MISSING/BLOCKED nunca son resultado, quedan bajo unknown.
@@ -158,6 +162,66 @@ printf '%s' "$out" | grep -Eq 'MISSING|unknown|instancia|instance' \
   || malo "sin instancia sin motivo MISSING/unknown: $out"
 printf '%s' "$out" | grep -q 'doctor: PASS' \
   && malo "sin instancia no debe imprimir doctor: PASS: $out"
+
+# ---------------------------------------------------------------------------
+# 20.25: expansion de arreglo vacio bajo set -u (bash <=4.3, macOS sistema).
+# `cmd_doctor` sin argumento y `run_tool` de check-secrets sin SAIKIT_GITLEAKS
+# dejaban `extra` vacio y `"${extra[@]}"` moria con `unbound variable` antes
+# de llegar a doctor.py / runtime_exec. La guarda es el idiom portable
+# ${extra[@]+"${extra[@]}"}. Sin ella, en bash 3.2 este caso da rc=1.
+# ---------------------------------------------------------------------------
+caso "20.25 arreglo-vacio: doctor pelado nunca muere con unbound variable"
+reset_io
+out="$(ctrl doctor 2>&1)" && rc=0 || rc=$?
+printf '%s' "$out" | grep -q 'unbound variable' \
+  && malo "doctor pelado murio con unbound variable (bash+set -u): $out"
+[ "$rc" = 0 ] || [ "$rc" = 3 ] || malo "doctor pelado rc inesperado (got $rc): $out"
+
+caso "20.25 mutante doctor_array_sin_guardia: sin guardia muere en bash<=4.3"
+if bash -c 'set -u; a=(); : "${a[@]}"' >/dev/null 2>&1; then
+  printf '  SKIP: este bash acepta arreglo vacio (mutante inerte; rojo medido en bash 3.2)\n'
+else
+  out="$(ctrl_mut doctor_array_sin_guardia doctor 2>&1)" && rc=0 || rc=$?
+  printf '%s' "$out" | grep -q 'unbound variable' \
+    || malo "mutante no produjo unbound variable: $out"
+  [ "$rc" = 3 ] && malo "mutante debio enrojecer, salio unknown/3: $out"
+  [ "$rc" = 0 ] && malo "mutante debio enrojecer, salio 0: $out"
+fi
+
+# ---------------------------------------------------------------------------
+# 20.25r2: el fix G1 toco DOS sitios. Este caso ejercita el SEGUNDO
+# (run_tool del driver check-secrets con arreglo vacio: SAIKIT_GITLEAKS
+# ausente o no ejecutable). La funcion se extrae VERBATIM del driver real
+# en tiempo de test (no es replica); runtime_exec se sustituye por un stub
+# para no tocar disco ni red. Mismo patron: rojo sin la guardia, verde con
+# ella, SKIP declarado en bash>=4.4.
+# ---------------------------------------------------------------------------
+caso "20.25r2 arreglo-vacio run_tool/check-secrets: con guardia nunca muere"
+reset_io
+probe="$SANDBOX/cs-run-tool-probe.sh"
+{
+  printf 'set -u\n'
+  printf 'VERIFY_HOME=/tmp/stub-verify-home\n'
+  printf 'TOOL=/tmp/stub-tool\n'
+  printf 'runtime_exec() { printf "stub-runtime-exec %%s\\n" "$*"; return 0; }\n'
+  sed -n '/^run_tool() {/,/^}/p' "$SKILL/scripts/drivers/check-secrets.sh"
+  printf 'run_tool --probe-arg\n'
+} > "$probe"
+grep -q '^run_tool() {' "$probe" || malo "no se pudo extraer run_tool del driver real"
+out="$(env -u SAIKIT_GITLEAKS SAIKIT_VERIFY_MUTATE= bash "$probe" 2>&1)" && rc=0 || rc=$?
+printf '%s' "$out" | grep -q 'unbound variable' \
+  && malo "run_tool con guardia murio con unbound variable: $out"
+[ "$rc" = 0 ] || malo "run_tool con guardia rc inesperado (got $rc): $out"
+
+caso "20.25r2 mutante checksecrets_array_sin_guardia: sin guardia muere en bash<=4.3"
+if bash -c 'set -u; a=(); : "${a[@]}"' >/dev/null 2>&1; then
+  printf '  SKIP: este bash acepta arreglo vacio (mutante inerte; rojo medido en bash 3.2)\n'
+else
+  out="$(env -u SAIKIT_GITLEAKS SAIKIT_VERIFY_MUTATE=checksecrets_array_sin_guardia bash "$probe" 2>&1)" && rc=0 || rc=$?
+  printf '%s' "$out" | grep -q 'unbound variable' \
+    || malo "mutante no produjo unbound variable: $out"
+  [ "$rc" = 0 ] && malo "mutante debio enrojecer, salio 0: $out"
+fi
 
 # ---------------------------------------------------------------------------
 # falta gh solo afecta live
