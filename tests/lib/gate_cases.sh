@@ -2457,7 +2457,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -4724,4 +4724,230 @@ casos_de_gate() { eval "printf '%s' \"\${CASOS_$1}\""; }
 
 todos_los_casos() {
   for g in $GATES; do casos_de_gate "$g"; printf ' '; done
+}
+
+
+# ===================== Task 21.2 — canal nativo de roles delegados de Codex ====
+# 21.1 re-corrida midio la senal (codex-cli 0.154.0): SubagentStart/SubagentStop
+# con agent_id + agent_type de primer nivel y agent_transcript_path en el Stop.
+# Postura declarada en Plans 21.2: el CIERRE acredita rol+cierre+transcript por
+# agente; sin SubagentStop = running = NO acreditado; el despacho no correlaciona
+# (R1, no se exige) y el Stop no emite veredictos de exito (R2). Otros hosts
+# intactos: el credito por agent_type de eventos internos sigue vivo en claude
+# (caso_g3_agent_type_cuenta) y no cambia aca.
+# Malabar de ruta de estado (como caso_g3_ceremonia_se_exige_en_codex): los
+# helpers del lab apuntan a state/<host-descubierto>/ y el evento codex lee
+# state/codex/; cada caso alinea LAB_ESTADO_PATH y lo restaura.
+
+# Positivo con el payload observado: Start + Stop del MISMO agent_id acreditan
+# el rol al cierre, no antes.
+caso_g3_codex_nativo_cierre_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-verifier' 'verifier')"
+  _igual "running no acredita todavia" "$(lab_estado agents_seen)" ""
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-verifier' 'verifier' '/lab/transcript-verifier.jsonl')"
+  _igual "el cierre acredita el rol" "$(lab_estado agents_seen)" "verifier"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Agente EN CURSO (Start sin Stop): running no acredita (postura declarada).
+caso_g3_codex_en_curso_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-run' 'verifier')"
+  _igual "agents_seen tras Start sin Stop" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Los eventos INTERNOS del subagente (PostToolUse con agent_type de primer nivel,
+# la via que la 6.1 midio y la A9/3.7 abrio para claude) dejan de acreditar en
+# codex: corren en fase running. El credito de codex viaja solo por el cierre.
+caso_g3_codex_interno_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  # sesion con canal nativo ACTIVO: un implementer ya cerro (hay alta+cierre).
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-act' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-act' 'implementer' '/lab/t.jsonl')"
+  _igual "precondicion: el implementer cerro" "$(lab_estado agents_seen)" "implementer"
+  # el interno de otro subagente (fase running) NO acredita su rol.
+  lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
+  _igual "interno en codex no acredita" "$(lab_estado agents_seen)" "implementer"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Fallback LEGADO (6.1): en una sesion SIN senal nativa (hooks.json del host
+# sin SubagentStart/SubagentStop registrados), el credito historico por
+# agent_type de eventos internos sigue vivo — un deploy codex viejo no pierde
+# la ceremonia por el cambio. Pin de no-regresion del propio 21.2.
+caso_g3_codex_legacy_interno_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
+  _igual "legado: interno acredita sin senal nativa" "$(lab_estado agents_seen)" "verifier"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# ===================== 21.2 r2 — hallazgos de la revision externa =============
+# El verificador del revisor externo demostro dos huecos rojos y un caso menor
+# que faltaba; estos casos los pinan:
+
+# A) un Stop HUERFANO seguido de un interno: la sesion YA vio un evento nativo,
+#    asi que el fallback legado no puede encenderse a media sesion.
+caso_g3_codex_huerfano_luego_interno_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-or' 'verifier' '/lab/t.jsonl')"
+  lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
+  _igual "huerfano + interno: el legado no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# B) cambio de rol entre Start y Stop: contradice la identidad registrada del
+#    alta; el cierre no acredita el rol nuevo (ni el viejo).
+caso_g3_codex_stop_rol_cambiado_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-rc' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-rc' 'verifier' '/lab/t.jsonl')"
+  _igual "rol cambiado implementer->verifier no acredita" "$(lab_estado agents_seen)" ""
+  lab_limpiar_estado
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-rc2' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-rc2' 'implementer' '/lab/t.jsonl')"
+  _igual "rol cambiado verifier->implementer no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# R4 (revision externa): el estado nativo es POR SESION. Una sesion B del mismo
+# repo sin senal nativa conserva el legado aunque la sesion A ya vio el canal;
+# y la marca codex_native_seen de A no se filtra a B.
+# OJO: el estado vive en state/<host>/<proyecto>/<sesion>/ — al cambiar de
+# sesion NO sirve el truco sed del host: se re-descubre por componente.
+caso_g3_codex_nativo_cross_session() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_SESSION_ID="sesion-a-21-2"
+  lab_run prompt codex "$(lab_payload_prompt '-saikit sesion A con canal nativo')"
+  _estado_a="$(find "$LAB/hooks/state" -path '*sesion-a-21-2*' -name harness-state.env | head -n 1)"
+  [ -n "$_estado_a" ] || { _mal "la sesion A no dejo estado al armar"; LAB_SESSION_ID=""; LAB_ESTADO_PATH="$_cx_backup"; return 0; }
+  LAB_ESTADO_PATH="$_estado_a"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-sa' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-sa' 'verifier' '/lab/t.jsonl')"
+  _igual "sesion A acredito por cierre" "$(lab_estado agents_seen)" "verifier"
+  _igual "sesion A marco el canal nativo" "$(lab_estado codex_native_seen)" "1"
+  LAB_ESTADO_PATH="$_cx_backup"
+  LAB_SESSION_ID="sesion-b-21-2"
+  lab_run prompt codex "$(lab_payload_prompt '-saikit sesion B sin senal nativa')"
+  _estado_b="$(find "$LAB/hooks/state" -path '*sesion-b-21-2*' -name harness-state.env | head -n 1)"
+  [ -n "$_estado_b" ] || { _mal "la sesion B no dejo estado al armar"; LAB_SESSION_ID=""; LAB_ESTADO_PATH="$_cx_backup"; return 0; }
+  LAB_ESTADO_PATH="$_estado_b"
+  lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
+  _igual "sesion B: el legado sigue vivo (sin filtro de A)" "$(lab_estado agents_seen)" "verifier"
+  _igual "sesion B: sin marca nativa propia" "$(lab_estado codex_native_seen)" ""
+  LAB_SESSION_ID=""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Menor (revision externa): la ceremonia nativa fuera de orden bloquea — el
+# orden se exige sobre agents_seen y el canal nativo lo hereda.
+caso_g3_codex_nativo_fuera_de_orden_bloquea() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_run prompt codex "$(lab_payload_prompt '-saikit tarea fuera de orden')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-o1' 'reviewer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-o1' 'reviewer' '/lab/t1.jsonl')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-o2' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-o2' 'implementer' '/lab/t2.jsonl')"
+  lab_run tool codex "$(lab_payload_bash 'pytest -q')"
+  lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code (ceremonia fuera de orden)" "$LAB_RC" "0"
+  _contiene "bloqueo por orden" "$LAB_OUT" '"decision":"block"'
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Stop HUERFANO (sin SubagentStart previo del mismo agent_id): no acredita.
+# La respuesta del despacho es una ruta de tarea, no una identidad (R1): sin el
+# bracket nativo no hay identidad que acreditar.
+caso_g3_codex_stop_huerfano_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-orphan' 'verifier' '/lab/t.jsonl')"
+  _igual "stop huerfano no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# REPLAY: un segundo Stop del mismo agent_id no reabre ni duplica.
+caso_g3_codex_stop_replay_no_duplica() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-re' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-re' 'verifier' '/lab/t.jsonl')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-re' 'verifier' '/lab/t.jsonl')"
+  _igual "agents_seen sin duplicar tras replay" "$(lab_estado agents_seen)" "verifier"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# OTRO ROL: el cierre acredita el rol que el evento trae, nunca "todo worker es
+# verifier" — un implementer que cierra no satisface el slot del verifier.
+caso_g3_codex_stop_otro_rol() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-imp' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-imp' 'implementer' '/lab/t.jsonl')"
+  _igual "acredita el rol propio (implementer)" "$(lab_estado agents_seen)" "implementer"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# SIN TRANSCRIPT: el canal acredita rol+cierre+transcript; el Stop sin
+# agent_transcript_path es una forma no observada y no acredita.
+caso_g3_codex_stop_sin_transcript_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-nt' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-nt' 'verifier' '')"
+  _igual "cierre sin transcript no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# El cierre NO emite veredicto de exito (R2): verified sigue en 0 tras un ciclo
+# completo; la evidencia de verificacion sigue viniendo del carril de evento.
+caso_g3_codex_stop_no_emite_veredicto() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-nv' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-nv' 'verifier' '/lab/t.jsonl')"
+  _igual "verified sigue en 0 tras el cierre" "$(lab_estado verified)" "0"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# CEREMONIA completa por cierres nativos: implementer -> verifier -> reviewer
+# cierran en orden, un Bash con runner acredita la verificacion por el carril de
+# evento, y el Stop con recibo cierra limpio. Espejo codex de
+# caso_g3_turno_completo_por_eventos_permite.
+caso_g3_codex_nativo_ceremonia_cierra() {
+  lab_run prompt codex "$(lab_payload_prompt '-saikit tarea del canal nativo de codex')"
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-a' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-a' 'implementer' '/lab/ta.jsonl')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-b' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-b' 'verifier' '/lab/tb.jsonl')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-c' 'reviewer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-c' 'reviewer' '/lab/tc.jsonl')"
+  _igual "agents_seen por cierres" "$(lab_estado agents_seen)" "implementer,verifier,reviewer"
+  lab_run tool codex "$(lab_payload_bash 'pytest -q')"
+  lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  LAB_ESTADO_PATH="$_cx_backup"
 }

@@ -1,0 +1,6 @@
+      FAIL: rol cambiado implementer->verifier no acredita: esperaba [], dio [verifier]
+      FAIL: rol cambiado verifier->implementer no acredita: esperaba [], dio [implementer]
+  matado: mut_codex_rol_cambiado_acredita <- caso_g3_codex_stop_rol_cambiado_no_acredita
+      FAIL: huerfano + interno: el legado no acredita: esperaba [], dio [verifier]
+  matado: mut_codex_legado_ignora_flag <- caso_g3_codex_huerfano_luego_interno_no_acredita
+rc=0

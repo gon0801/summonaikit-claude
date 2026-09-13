@@ -1,0 +1,17 @@
+  ok: caso_g3_codex_nativo_cierre_acredita
+  ok: caso_g3_codex_en_curso_no_acredita
+  ok: caso_g3_codex_interno_no_acredita
+  ok: caso_g3_codex_stop_huerfano_no_acredita
+  ok: caso_g3_codex_stop_replay_no_duplica
+  ok: caso_g3_codex_stop_otro_rol
+  ok: caso_g3_codex_stop_sin_transcript_no_acredita
+  ok: caso_g3_codex_stop_no_emite_veredicto
+  ok: caso_g3_codex_nativo_ceremonia_cierra
+  ok: caso_g3_codex_legacy_interno_acredita
+      FAIL: huerfano + interno: el legado no acredita: esperaba [], dio [verifier]
+  ROJO: caso_g3_codex_huerfano_luego_interno_no_acredita
+      FAIL: rol cambiado implementer->verifier no acredita: esperaba [], dio [verifier]
+      FAIL: rol cambiado verifier->implementer no acredita: esperaba [], dio [implementer]
+  ROJO: caso_g3_codex_stop_rol_cambiado_no_acredita
+  ok: caso_g3_codex_nativo_fuera_de_orden_bloquea
+rojo-r2 rc=1

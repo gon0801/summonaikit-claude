@@ -563,3 +563,24 @@ lab_transcript_thinking_con_pausa() {
 lab_transcript_dos_bloques_recibo() {
   printf '%s' '{"parentUuid":"a1","type":"assistant","message":{"id":"msg_70","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"SUMMONAIKIT HARNESS RECEIPT"},{"type":"text","text":"Understand: pediste poder listar las sesiones abiertas.\nImplement: se agrego el endpoint y su ruta.\nVerify: se corrio la bateria completa, 12 en verde.\nReview: sin hallazgos.\nClose: entregado; no se toco codigo despues de la revision.\nRetro: none.\nTRAIL SKIP: golden fixture"}]},"uuid":"a2","timestamp":"2026-08-09T12:50:00.000Z"}'
 }
+
+
+# ------------------------------------------------- Task 21.2: canal nativo codex
+# Formas CALCADAS de los fixtures de la re-corrida 21.1
+# (docs/evidence/phase-21/21.1/, codex-cli 0.154.0): SubagentStart y SubagentStop
+# traen agent_id + agent_type de PRIMER nivel; el Stop ademas trae
+# agent_transcript_path. El despacho (collaborationspawn_agent) NO trae agent_id
+# (R1). El Stop de fallo blando tiene la misma forma que el de exito (R2): sin
+# estado maquina.
+lab_payload_codex_subagent_start() {
+  printf '{"session_id":"__SESSION_ID__","turn_id":"t-21-2-lab","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"SubagentStart","model":"gpt-5.6-sol","permission_mode":"bypassPermissions","agent_id":"%s","agent_type":"%s"}' "$1" "$2"
+}
+
+# $3 = transcript del agente; vacio lo OMITE (negativo sin transcript).
+lab_payload_codex_subagent_stop() {
+  if [ -n "${3:-}" ]; then
+    printf '{"session_id":"__SESSION_ID__","turn_id":"t-21-2-lab","transcript_path":"__TRANSCRIPT__","agent_transcript_path":"%s","cwd":"/proyecto","hook_event_name":"SubagentStop","model":"gpt-5.6-sol","permission_mode":"bypassPermissions","stop_hook_active":false,"agent_id":"%s","agent_type":"%s","last_assistant_message":"cierre del subagente"}' "$3" "$1" "$2"
+  else
+    printf '{"session_id":"__SESSION_ID__","turn_id":"t-21-2-lab","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"SubagentStop","model":"gpt-5.6-sol","permission_mode":"bypassPermissions","stop_hook_active":false,"agent_id":"%s","agent_type":"%s","last_assistant_message":"cierre del subagente"}' "$1" "$2"
+  fi
+}
