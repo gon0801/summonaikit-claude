@@ -29,6 +29,21 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-13 — PRs #312 + #313 (20.21: costo/latencia y decisión sobre 16.7; 20.22: adopción del autopilot preparada, sin activar) — hooks NO-OP
+
+- **Merges:** #312 `8ff315f6b06eab90c4274f48889464a88bb7c2d` y #313
+  `277b62fb1869fbfdbfc77c2a80fae5f7698b1bae`, ambos verificados contra la API/`git fetch`
+  (squash: los heads `65765b0`/`a1c9ad0` no son ancestros; el contenido está en master —
+  fix "baseline (n = 1)" y "SIEMPRE A MANO" verificados con `git show origin/master:...`).
+- **¿Cambió el hook? NO.** Docs-only (2 archivos de evidencia, uno por PR). CI de master
+  `277b62f`: 13 check-runs, única conclusión `success`; CI de los PRs 15/15 verde cada uno.
+- **Deploy corrido igual (regla de costumbre):** las cuatro copias vivas del hook
+  (claude/grok/dsh/codex) comparadas byte-a-byte contra los bytes de `origin/master` —
+  4/4 idénticas a `37e55640…`, `install-hook.sh` YA AL DIA, sin backups nuevos.
+- **Operador:** merge de Gon; cierre post-merge y ledger por el lead (lane -saikit
+  /harness-work 20.21-20.22, paralelismo 1).
+
+
 ## 2026-09-12 — PRs #303, #304, #305, #306 y #309 (bloque 20.15-20.17 headless-close: diseño revertido, parche y redo) — hooks NO-OP
 
 - **Merges:** #303 `2ed91ca1ad0dda2b5bb3977f14f06e7b1a63b056` (2026-09-11T09:46:57Z),
