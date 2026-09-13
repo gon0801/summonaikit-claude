@@ -2457,7 +2457,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -4787,6 +4787,56 @@ caso_g3_codex_legacy_interno_acredita() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
   _igual "legado: interno acredita sin senal nativa" "$(lab_estado agents_seen)" "verifier"
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# ===================== 21.2 r2 — hallazgos de la revision externa =============
+# El verificador del revisor externo demostro dos huecos rojos y un caso menor
+# que faltaba; estos casos los pinan:
+
+# A) un Stop HUERFANO seguido de un interno: la sesion YA vio un evento nativo,
+#    asi que el fallback legado no puede encenderse a media sesion.
+caso_g3_codex_huerfano_luego_interno_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-or' 'verifier' '/lab/t.jsonl')"
+  lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
+  _igual "huerfano + interno: el legado no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# B) cambio de rol entre Start y Stop: contradice la identidad registrada del
+#    alta; el cierre no acredita el rol nuevo (ni el viejo).
+caso_g3_codex_stop_rol_cambiado_no_acredita() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-rc' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-rc' 'verifier' '/lab/t.jsonl')"
+  _igual "rol cambiado implementer->verifier no acredita" "$(lab_estado agents_seen)" ""
+  lab_limpiar_estado
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-rc2' 'verifier')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-rc2' 'implementer' '/lab/t.jsonl')"
+  _igual "rol cambiado verifier->implementer no acredita" "$(lab_estado agents_seen)" ""
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# Menor (revision externa): la ceremonia nativa fuera de orden bloquea — el
+# orden se exige sobre agents_seen y el canal nativo lo hereda.
+caso_g3_codex_nativo_fuera_de_orden_bloquea() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  lab_run prompt codex "$(lab_payload_prompt '-saikit tarea fuera de orden')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-o1' 'reviewer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-o1' 'reviewer' '/lab/t1.jsonl')"
+  lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-o2' 'implementer')"
+  lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-o2' 'implementer' '/lab/t2.jsonl')"
+  lab_run tool codex "$(lab_payload_bash 'pytest -q')"
+  lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  _igual "exit code (ceremonia fuera de orden)" "$LAB_RC" "0"
+  _contiene "bloqueo por orden" "$LAB_OUT" '"decision":"block"'
   LAB_ESTADO_PATH="$_cx_backup"
 }
 
