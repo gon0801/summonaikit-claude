@@ -543,13 +543,21 @@ cmd_doctor() {
   if [ -n "${1:-}" ]; then
     extra+=(--feature-id "$1")
   fi
+  # Mutante 20.25 `doctor_array_sin_guardia`: restaura la expansion sin
+  # guardia. En bash <=4.3 con `set -u` el `doctor` pelado (extra vacio)
+  # muere con `extra[@]: unbound variable` antes de llegar a doctor.py.
+  # En bash >=4.4 el mutante es inerte (declarado, como 20.28).
+  if [ "${SAIKIT_VERIFY_MUTATE:-}" = "doctor_array_sin_guardia" ]; then
+    eval 'PYTHONDONTWRITEBYTECODE=1 python3 "$docpy" --skill "$skill_root" --repo "$repo" --state-dir "$STATE_DIR" --artifacts "$ARTIFACTS" --mutate "$(runtime_mutate)" "${extra[@]}"'
+    return $?
+  fi
   PYTHONDONTWRITEBYTECODE=1 python3 "$docpy" \
     --skill "$skill_root" \
     --repo "$repo" \
     --state-dir "$STATE_DIR" \
     --artifacts "$ARTIFACTS" \
     --mutate "$(runtime_mutate)" \
-    "${extra[@]}"
+    ${extra[@]+"${extra[@]}"}
 }
 
 cmd_cleanup() {

@@ -1,0 +1,1 @@
+{"hecho":"20.26 no genera codigo ni cierra nada: solo docs de estado (matriz draft + Status), asi que no puede romper comportamiento ni expirar la S8","comando":"git status --short (solo docs/evidence + Plans)","salida":"TRAIL SKIP no aplica: blast escrito nivel 2","nivel":2}

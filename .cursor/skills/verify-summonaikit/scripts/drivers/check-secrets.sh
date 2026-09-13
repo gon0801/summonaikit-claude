@@ -52,7 +52,7 @@ run_tool() {
   if [ -n "${SAIKIT_GITLEAKS:-}" ] && [ -x "${SAIKIT_GITLEAKS}" ]; then
     extra+=(env "SAIKIT_GITLEAKS=$SAIKIT_GITLEAKS")
   fi
-  runtime_exec "$VERIFY_HOME" "${extra[@]}" bash "$TOOL" "$@"
+  runtime_exec "$VERIFY_HOME" ${extra[@]+"${extra[@]}"} bash "$TOOL" "$@"
 }
 
 run_fallback() {

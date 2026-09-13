@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-13T09:07:39Z|understand|Matriz de cobertura en DRAFT con estado real por fila; ledger NO cerrado y S8 NO expirada (bloques 7-9 la necesitan); 20.19 descartado sin PASS; 20.18 abierta con decision|Decision orquestador+operador: 20.25/20.26 quedan cc:TODO con decision escrita; deploy y cierre real a cargo del lider|docs/evidence/phase-20/20.26/matriz-cobertura-draft.md|ok

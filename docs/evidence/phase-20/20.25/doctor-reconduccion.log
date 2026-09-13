@@ -1,0 +1,289 @@
+  caso: doctor.py, schema v1 y helper en catalogo
+  caso: doctor sin instancia escribe doctor.json y no es PASS de features con instance
+  caso: 20.25 arreglo-vacio: doctor pelado nunca muere con unbound variable
+  caso: 20.25 mutante doctor_array_sin_guardia: sin guardia muere en bash<=4.3
+  caso: falta-gh-solo-live: gh ausente no tumba gate ni simulated
+  caso: gh-falso-no-es-vivo: script en PATH no satisface live ni llama API
+  caso: falta-pty-solo-interactivo: flags/defaults siguen observables
+  caso: fixture-corrupto-es-fail: JSON de escenarios mal formado
+  caso: dep-ausente-es-unknown: deploy-log.md faltante
+  caso: escape-bloquea-todo: STATE symlink tumba todas las features
+  caso: doctor no lee perfiles vivos ni escribe en ellos
+  caso: doctor <id> reporta solo esa feature en el agregado
+  caso: mut-local-miss-global: local_miss_global pone gh en gate-turn
+  caso: mut-blocked-as-pass: blocked_as_pass presenta BLOCKED como PASS
+  caso: mut-fake-gh-as-live: fake_gh_as_live acepta script como vivo
+  caso: mut-skip-isolation: skip_isolation deja de tumbar drivers ante escape
+  caso: instancia propia: activas locales ready y doctor: PASS
+    FAIL: doctor con instancia propia debio 0: doctor: isolation=PASS
+doctor: install-guardian failed — bash -n failed
+doctor:   case install-dry-run failed — bash -n failed
+doctor:   case install-ownership failed — bash -n failed
+doctor:   case install-noop failed — bash -n failed
+doctor:   case install-foreign failed — bash -n failed
+doctor:   case install-restore failed — bash -n failed
+doctor: gate-turn failed — bash -n failed
+doctor:   case gate-unarmed failed — bash -n failed
+doctor:   case gate-armed failed — bash -n failed
+doctor:   case gate-stop-no-receipt failed — bash -n failed
+doctor:   case gate-grok-bg-doc-roto failed — bash -n failed
+doctor:   case gate-advzona-teardown-seguro failed — bash -n failed
+doctor:   case gate-advzona-unknown-limpia failed — bash -n failed
+doctor: audit-ledger ready
+doctor:   case ledger-ok ready
+doctor:   case ledger-stale ready
+doctor: check-deploy-log ready
+doctor:   case deploy-log-ok ready
+doctor:   case deploy-log-order ready
+doctor:   case deploy-log-dup ready
+doctor:   case deploy-log-hora-evidente ready
+doctor:   case deploy-log-hora-no-recuperada ready
+doctor:   case deploy-log-hora-sin-evidencia ready
+doctor: saikit-merge ready
+doctor:   case merge-listo ready
+doctor:   case merge-confirmado ready
+doctor:   case merge-ci-rojo ready
+doctor:   case merge-base-movida ready
+doctor:   case merge-sello-ajeno ready
+doctor:   case merge-head-cambiado ready
+doctor:   case revert-ok ready
+doctor:   case revert-sin-trailer ready
+doctor:   case revert-no-punta ready
+doctor:   case merge-lock-contencion ready
+doctor:   case merge-lock-propio ready
+doctor:   case merge-lock-worktrees ready
+doctor:   case merge-lock-recuperacion ready
+doctor: saikit-postmerge failed — bash -n failed
+doctor:   case postmerge-green failed — bash -n failed
+doctor:   case postmerge-red failed — bash -n failed
+doctor:   case postmerge-pending failed — bash -n failed
+doctor:   case postmerge-no-run failed — bash -n failed
+doctor:   case postmerge-hint-pendiente failed — bash -n failed
+doctor:   case postmerge-hint-sin-run failed — bash -n failed
+doctor:   case postmerge-no-color failed — bash -n failed
+doctor:   case postmerge-redacted failed — bash -n failed
+doctor:   case postmerge-transport failed — bash -n failed
+doctor: setup-autopilot ready
+doctor:   case setup-interactive ready
+doctor:   case setup-invalid ready
+doctor:   case setup-timeout ready
+doctor:   case setup-flags ready
+doctor:   case setup-defaults ready
+doctor:   case setup-pipe-not-pty ready
+doctor:   case setup-lock ready
+doctor:   case setup-lock-held ready
+doctor:   case setup-with-ci ready
+doctor:   case setup-without-ci ready
+doctor: ci-minimo ready
+doctor:   case ci-interactive ready
+doctor:   case ci-reject ready
+doctor:   case ci-flags ready
+doctor:   case ci-defaults ready
+doctor:   case ci-preserve-foreign ready
+doctor:   case ci-idempotent ready
+doctor:   case ci-runners ready
+doctor:   case ci-unsupported ready
+doctor:   case ci-run-fixture ready
+doctor:   case ci-pins-ilegible ready
+doctor:   case ci-pins-proponer ready
+doctor: autopilot-contract failed — bash -n failed
+doctor:   case autopilot-sentinel failed — bash -n failed
+doctor:   case autopilot-no-inherit failed — bash -n failed
+doctor:   case autopilot-paragraph failed — bash -n failed
+doctor:   case autopilot-persist failed — bash -n failed
+doctor: install-hosts failed — bash -n failed
+doctor:   case hosts-four-copies failed — bash -n failed
+doctor:   case hosts-zcode-reuses failed — bash -n failed
+doctor:   case hosts-kimi-profiles failed — bash -n failed
+doctor:   case hosts-identity failed — bash -n failed
+doctor:   case hosts-noop failed — bash -n failed
+doctor:   case hosts-retirada failed — bash -n failed
+doctor:   case hosts-quitar-zcode-dry failed — bash -n failed
+doctor:   case hosts-quitar-grok-dry failed — bash -n failed
+doctor:   case hosts-foreign failed — bash -n failed
+doctor:   case hosts-registration failed — bash -n failed
+doctor:   case hosts-os-unavailable failed — bash -n failed
+doctor:   case hosts-symlink failed — bash -n failed
+doctor:   case hosts-no-live failed — bash -n failed
+doctor: routing-recipes failed — bash -n failed
+doctor:   case routing-roles failed — bash -n failed
+doctor:   case routing-unknown failed — bash -n failed
+doctor:   case recipes-manifest-ok failed — bash -n failed
+doctor:   case recipes-manifest-altered failed — bash -n failed
+doctor:   case recipes-consume failed — bash -n failed
+doctor:   case routing-no-16.7 failed — bash -n failed
+doctor:   case routing-no-live failed — bash -n failed
+doctor: check-secrets failed — bash -n failed
+doctor:   case secrets-strong failed — bash -n failed
+doctor:   case secrets-fallback failed — bash -n failed
+doctor:   case secrets-redaction failed — bash -n failed
+doctor: capture-payloads failed — bash -n failed
+doctor:   case capture-lifecycle failed — bash -n failed
+doctor:   case capture-redaction failed — bash -n failed
+doctor: decision-blast failed — bash -n failed
+doctor:   case decision-valid failed — bash -n failed
+doctor:   case decision-reject failed — bash -n failed
+doctor:   case blast-valid failed — bash -n failed
+doctor:   case blast-reject failed — bash -n failed
+doctor:   case redact failed — bash -n failed
+doctor:   case output-location failed — bash -n failed
+doctor: verify-app failed — bash -n failed
+doctor:   case verify-generate failed — bash -n failed
+doctor:   case verify-reject-existing failed — bash -n failed
+doctor:   case verify-estado failed — bash -n failed
+doctor:   case verify-drive-cmd failed — bash -n failed
+doctor:   case verify-no-product-pass failed — bash -n failed
+doctor: stage-override failed — bash -n failed
+doctor:   case stage-prepare failed — bash -n failed
+doctor:   case stage-hook-hash failed — bash -n failed
+doctor:   case stage-state-lab failed — bash -n failed
+doctor:   case stage-profile-intact failed — bash -n failed
+doctor:   case stage-ownership failed — bash -n failed
+doctor:   case stage-cleanup failed — bash -n failed
+doctor:   case stage-no-live failed — bash -n failed
+doctor: merge-happy-path MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-blocked-no-auth MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-current-reasons MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-manual-procedure MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-no-sim-credit MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-no-seal-transfer MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor: FAIL
+    FAIL: doctor con instancia no dijo PASS: doctor: isolation=PASS
+doctor: install-guardian failed — bash -n failed
+doctor:   case install-dry-run failed — bash -n failed
+doctor:   case install-ownership failed — bash -n failed
+doctor:   case install-noop failed — bash -n failed
+doctor:   case install-foreign failed — bash -n failed
+doctor:   case install-restore failed — bash -n failed
+doctor: gate-turn failed — bash -n failed
+doctor:   case gate-unarmed failed — bash -n failed
+doctor:   case gate-armed failed — bash -n failed
+doctor:   case gate-stop-no-receipt failed — bash -n failed
+doctor:   case gate-grok-bg-doc-roto failed — bash -n failed
+doctor:   case gate-advzona-teardown-seguro failed — bash -n failed
+doctor:   case gate-advzona-unknown-limpia failed — bash -n failed
+doctor: audit-ledger ready
+doctor:   case ledger-ok ready
+doctor:   case ledger-stale ready
+doctor: check-deploy-log ready
+doctor:   case deploy-log-ok ready
+doctor:   case deploy-log-order ready
+doctor:   case deploy-log-dup ready
+doctor:   case deploy-log-hora-evidente ready
+doctor:   case deploy-log-hora-no-recuperada ready
+doctor:   case deploy-log-hora-sin-evidencia ready
+doctor: saikit-merge ready
+doctor:   case merge-listo ready
+doctor:   case merge-confirmado ready
+doctor:   case merge-ci-rojo ready
+doctor:   case merge-base-movida ready
+doctor:   case merge-sello-ajeno ready
+doctor:   case merge-head-cambiado ready
+doctor:   case revert-ok ready
+doctor:   case revert-sin-trailer ready
+doctor:   case revert-no-punta ready
+doctor:   case merge-lock-contencion ready
+doctor:   case merge-lock-propio ready
+doctor:   case merge-lock-worktrees ready
+doctor:   case merge-lock-recuperacion ready
+doctor: saikit-postmerge failed — bash -n failed
+doctor:   case postmerge-green failed — bash -n failed
+doctor:   case postmerge-red failed — bash -n failed
+doctor:   case postmerge-pending failed — bash -n failed
+doctor:   case postmerge-no-run failed — bash -n failed
+doctor:   case postmerge-hint-pendiente failed — bash -n failed
+doctor:   case postmerge-hint-sin-run failed — bash -n failed
+doctor:   case postmerge-no-color failed — bash -n failed
+doctor:   case postmerge-redacted failed — bash -n failed
+doctor:   case postmerge-transport failed — bash -n failed
+doctor: setup-autopilot ready
+doctor:   case setup-interactive ready
+doctor:   case setup-invalid ready
+doctor:   case setup-timeout ready
+doctor:   case setup-flags ready
+doctor:   case setup-defaults ready
+doctor:   case setup-pipe-not-pty ready
+doctor:   case setup-lock ready
+doctor:   case setup-lock-held ready
+doctor:   case setup-with-ci ready
+doctor:   case setup-without-ci ready
+doctor: ci-minimo ready
+doctor:   case ci-interactive ready
+doctor:   case ci-reject ready
+doctor:   case ci-flags ready
+doctor:   case ci-defaults ready
+doctor:   case ci-preserve-foreign ready
+doctor:   case ci-idempotent ready
+doctor:   case ci-runners ready
+doctor:   case ci-unsupported ready
+doctor:   case ci-run-fixture ready
+doctor:   case ci-pins-ilegible ready
+doctor:   case ci-pins-proponer ready
+doctor: autopilot-contract failed — bash -n failed
+doctor:   case autopilot-sentinel failed — bash -n failed
+doctor:   case autopilot-no-inherit failed — bash -n failed
+doctor:   case autopilot-paragraph failed — bash -n failed
+doctor:   case autopilot-persist failed — bash -n failed
+doctor: install-hosts failed — bash -n failed
+doctor:   case hosts-four-copies failed — bash -n failed
+doctor:   case hosts-zcode-reuses failed — bash -n failed
+doctor:   case hosts-kimi-profiles failed — bash -n failed
+doctor:   case hosts-identity failed — bash -n failed
+doctor:   case hosts-noop failed — bash -n failed
+doctor:   case hosts-retirada failed — bash -n failed
+doctor:   case hosts-quitar-zcode-dry failed — bash -n failed
+doctor:   case hosts-quitar-grok-dry failed — bash -n failed
+doctor:   case hosts-foreign failed — bash -n failed
+doctor:   case hosts-registration failed — bash -n failed
+doctor:   case hosts-os-unavailable failed — bash -n failed
+doctor:   case hosts-symlink failed — bash -n failed
+doctor:   case hosts-no-live failed — bash -n failed
+doctor: routing-recipes failed — bash -n failed
+doctor:   case routing-roles failed — bash -n failed
+doctor:   case routing-unknown failed — bash -n failed
+doctor:   case recipes-manifest-ok failed — bash -n failed
+doctor:   case recipes-manifest-altered failed — bash -n failed
+doctor:   case recipes-consume failed — bash -n failed
+doctor:   case routing-no-16.7 failed — bash -n failed
+doctor:   case routing-no-live failed — bash -n failed
+doctor: check-secrets failed — bash -n failed
+doctor:   case secrets-strong failed — bash -n failed
+doctor:   case secrets-fallback failed — bash -n failed
+doctor:   case secrets-redaction failed — bash -n failed
+doctor: capture-payloads failed — bash -n failed
+doctor:   case capture-lifecycle failed — bash -n failed
+doctor:   case capture-redaction failed — bash -n failed
+doctor: decision-blast failed — bash -n failed
+doctor:   case decision-valid failed — bash -n failed
+doctor:   case decision-reject failed — bash -n failed
+doctor:   case blast-valid failed — bash -n failed
+doctor:   case blast-reject failed — bash -n failed
+doctor:   case redact failed — bash -n failed
+doctor:   case output-location failed — bash -n failed
+doctor: verify-app failed — bash -n failed
+doctor:   case verify-generate failed — bash -n failed
+doctor:   case verify-reject-existing failed — bash -n failed
+doctor:   case verify-estado failed — bash -n failed
+doctor:   case verify-drive-cmd failed — bash -n failed
+doctor:   case verify-no-product-pass failed — bash -n failed
+doctor: stage-override failed — bash -n failed
+doctor:   case stage-prepare failed — bash -n failed
+doctor:   case stage-hook-hash failed — bash -n failed
+doctor:   case stage-state-lab failed — bash -n failed
+doctor:   case stage-profile-intact failed — bash -n failed
+doctor:   case stage-ownership failed — bash -n failed
+doctor:   case stage-cleanup failed — bash -n failed
+doctor:   case stage-no-live failed — bash -n failed
+doctor: merge-happy-path MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-blocked-no-auth MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-current-reasons MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-manual-procedure MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-no-sim-credit MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor:   case live-no-seal-transfer MISSING — gh ausente — solo afecta modo live; sin autorización viva; sin destino concreto (19.16)
+doctor: FAIL
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+AssertionError
+    FAIL: activas locales no quedaron ready
+FAIL: 1 aserciones
+EXIT=1

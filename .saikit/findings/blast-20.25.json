@@ -1,0 +1,1 @@
+{"hecho":"El fix toca dos expansiones de arreglo en la skill con el idiom portable validado en bash 3.2 y 5.2; la regresion lo clava y el mutante lo distingue; no toca hooks, tools de producto ni estados","comando":"bash tests/test_feature_map_doctor.sh (casos 20.25) + /bin/bash -n en los dos scripts","salida":"casos 20.25 verdes; mutante rojo en 3.2; parse OK","nivel":4}
