@@ -132,4 +132,17 @@ caso_g8_full_sha_sin_raiz_legacy_cierra() {
   _afirma_cierre "sha sin raiz se ignora (legacy intacto)"
 }
 
-CASOS_G8="$CASOS_G8 caso_g8_full_raiz_acreditada_otro_cwd_cierra caso_g8_full_raiz_untracked_bloquea caso_g8_full_raiz_dirty_bloquea caso_g8_full_raiz_post_review_bloquea caso_g8_full_raiz_ajena_bloquea caso_g8_full_raiz_otro_head_bloquea caso_g8_full_raiz_prefijo_bloquea caso_g8_full_raiz_puntos_cierra caso_g8_full_raiz_symlink_bloquea caso_g8_full_raiz_sin_sha_bloquea caso_g8_full_sha_sin_raiz_legacy_cierra"
+caso_g8_full_raiz_ignorada_bloquea() {
+  limpiar_saikit
+  _sembrar_turno_completo
+  _sha="$(_wt_nuevo wt-tarea)"
+  printf '.saikit/decisiones/21.4.tsv\n.saikit/findings/blast-21.4.json\n' > "$LAB/wt-tarea/.gitignore"
+  git -C "$LAB/wt-tarea" rm -q --cached .saikit/decisiones/21.4.tsv .saikit/findings/blast-21.4.json
+  git -C "$LAB/wt-tarea" add .gitignore
+  git -C "$LAB/wt-tarea" commit -qm ignora >/dev/null
+  _sha2="$(git -C "$LAB/wt-tarea" rev-parse HEAD)"
+  lab_run stop claude "$(lab_payload_stop "$(_recibo_raiz "$LAB/wt-tarea" "$_sha2")")"
+  _afirma_bloqueo_trail "artefactos ignorados no estan en el arbol"
+}
+
+CASOS_G8="$CASOS_G8 caso_g8_full_raiz_acreditada_otro_cwd_cierra caso_g8_full_raiz_untracked_bloquea caso_g8_full_raiz_dirty_bloquea caso_g8_full_raiz_post_review_bloquea caso_g8_full_raiz_ajena_bloquea caso_g8_full_raiz_otro_head_bloquea caso_g8_full_raiz_prefijo_bloquea caso_g8_full_raiz_puntos_cierra caso_g8_full_raiz_symlink_bloquea caso_g8_full_raiz_ignorada_bloquea caso_g8_full_raiz_sin_sha_bloquea caso_g8_full_sha_sin_raiz_legacy_cierra"

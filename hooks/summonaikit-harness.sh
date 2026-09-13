@@ -3450,6 +3450,10 @@ path_present_under_acreditada() {
     "$TRAIL_RAIZ"|"$TRAIL_RAIZ"/*) ;;
     *) return 1 ;;
   esac
+  # 21.4r1 (CodeRabbit PR #318): `status --porcelain` omite los ignorados,
+  # asi que un artefacto ignorado pasaba como limpio sin estar en el arbol.
+  # La pertenencia rastreada lo ata al HEAD exacto revisado.
+  git -C "$TRAIL_RAIZ" ls-files --error-unmatch -- "$1" >/dev/null 2>&1 || return 1
   [ -z "$(git -C "$TRAIL_RAIZ" status --porcelain -- "$1" 2>/dev/null)" ] || return 1
   return 0
 }
