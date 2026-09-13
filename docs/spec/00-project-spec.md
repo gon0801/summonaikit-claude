@@ -2445,6 +2445,88 @@ merge completo, vínculo de sesiones ni cierre headless por estar planificado.
 Conserva la confirmación por acto y requiere decisiones positivas antes de
 habilitar cruces de sello o nuevas superficies de supervisión.
 
+### Límites MEDIDOS de la Phase 20 (reconciliación 20.23, 2026-09-13)
+
+Lo que Phase 18 dejó como límite y Phase 20 midió en vivo (evidencia
+`docs/evidence/phase-20/<fila>/`, matriz de la primera pasada en
+`docs/evidence/phase-20/20.25/`):
+
+- **Verde ⇒ merge: OBSERVADO en claude (20.10) y en grok (20.14).**
+  Claude: ceremonia completa, PR #9/#10, CI verde, veredicto sellado, LISTO
+  sin publicar, sí explícito del operador, dos merges solo por
+  `saikit-merge.sh --confirmado` con el sha sellado, postmerge VERDE ×2. El
+  candado anti-force-push se ejerció y no se evadió. Grok: PR #8, sello del
+  hijo consumido por el padre vía vínculo 20.13, LISTO → sí → merge por la
+  tool, postmerge VERDE. En Grok el LISTO/`--confirmado` los corrió el
+  operador fuera del proceso (host colgado tras el sello); el contrato
+  sí→tool se cumplió y el lead lo aceptó, declarado.
+- **Deny `PreToolUse`: OBSERVADO en vivo (20.9).** Intento de merge directo
+  negado ANTES de ejecutar bajo `bypassPermissions`, con el mismo
+  `tool_use_id` del payload capturado; uso permitido (`--help`) llegó al
+  tool; remotos intactos. La fase se registra a mano en el `settings.json`
+  del perfil (operator-owned); sin ese registro el deny no dispara.
+- **`cuidar-pr`: tres modos MEDIDOS en vivo (20.11).** Revisar no modifica,
+  solo-hilos responde hilos sin tocar código, cuidar atiende
+  conflictos→hilos→CI y deja listo sin mergear. Cuidar nunca mergea.
+- **Cierre headless: diseño (20.15), superficie (20.16), medición viva
+  (20.17).** Contrato en `docs/spec/headless-close-contract.md`. Claude
+  sync/async cierra limpio con recibo; teardown sin Stop queda
+  `incomplete/1`; grok responde 402 y queda `unknown`, no éxito. Invocación
+  directa fuera de garantía, declarado.
+- **Canal padre-hijo en grok: MEDIDO (20.12) y consumido por vínculo
+  (20.13).** Autoridad = `SubagentStart.subagentId` + `spawn
+  toolResult.subagent_id`. El sello nace en la sesión emisora (18.26
+  preservado); sin canal, pendiente.
+- **Costo/latencia y 16.7: APLAZADA con criterio (20.21).** Recorridos
+  reutilizados, separación modelo/pared/CI/espera humana con unknowns
+  explícitos. Reactivación solo con medición pareada mismo-caso/dos-tiers.
+- **Adopción del autopilot: PREPARADA, SIN ACTIVAR (20.22).** Cinco
+  decisiones con propuesta y razón; rollback reversible; la ausencia de
+  `.saikit/autopilot.json` en este repo es estado, no bug.
+- **Rojos macOS del bloque 1: CORREGIDOS (20.28).** Cuatro pares rojo/verde
+  a archivo completo; `hooks/` sin tocar; raíl de EVENTO fuera de alcance
+  (candidato 21.5).
+- **Corepack/pnpm (20.20), dry-run zcode/grok (20.24), evidencia de deploy
+  del bloque 1 (20.27): cerrados** con su evidencia citada en `Plans.md`.
+- **Sigue sin medirse: escenario2 dsh en UI web (20.18/20.19).** Filas
+  abiertas con decisión escrita (bloque 6): pendiente declarado, nunca PASS.
+  La atribución dsh del perfil adversary sigue `unknown`.
+- **Rojos macOS de la primera pasada de mantenimiento (20.25):** el hook no
+  parsea con el bash 3.2 del sistema (`bash -n` falla por apóstrofes de la
+  prosa dentro del `$(cat <<'HARNESS_CONTEXT')`; bash ≥4 lo acepta;
+  pre-existente, verificado hasta HEAD~60; CI Linux verde). En macOS el
+  instalador rehúsa instalar (exit 5) y las features con instancia quedan
+  FAIL/MISSING. Reportado aparte como gap de producto/entorno, no corregido
+  en la pasada (fuera del alcance skill/map/harness).
+
+### Runbook de mantenimiento del feature map (20.23)
+
+Fuente → reconciliación → drive → triage. Una pasada completa por cierre de
+fase, o cuando el catálogo dispara mantenimiento. Vocabulario:
+`PASS`/`FAIL`/`unknown` por feature e intento; `clean`/`changed`/`blocked`
+solo para el veredicto global de la pasada, nunca por feature.
+
+1. **Fuente.** `Plans.md` y `docs/evidence/phase-20/` mandan; el inventario
+   es `features/catalog.json` con `list-features` y el lint cubriendo el
+   catálogo completo. Ninguna promesa sin medición.
+2. **Reconciliación.** Cada ficha con una entrada de fuente; cada afirmación
+   de guía/README/spec/perfil con una medición. El caso aplazado se nombra,
+   nunca es PASS implícito. No se reabren 18.26/18.27 ni se tocan estados
+   históricos de fase 19.
+3. **Drive.** Cada feature una vez en su `execution_mode` declarado, con las
+   superficies existentes (`list-features`, `launch`, `doctor`, `drive`,
+   `cleanup`); nada de superficie paralela. Evidencia v1 preservada; matriz
+   feature → fuente → modo → attempt/result → prerrequisito ligada al
+   checkout SHA y al hook SHA. Evidencia 20.x reutilizable solo con mismo
+   checkout SHA, hook SHA y casos requeridos.
+4. **Triage.** Deriva de docs (se corrige), gap del harness (se corrige con
+   regresión + mutante discriminante y se re-conduce), regresión de producto
+   (se reporta aparte, sin maquillar). Lo vivo exige alcance 20.8; sin él,
+   lo vivo queda bloqueado, no aprobado.
+5. **Alcance de edición de la pasada.** Skill, mapa y harness. `changed`
+   sale en UN solo PR con regresión, mutante y re-conducción; el gap de
+   producto va por reporte aparte. Cerrar 20.26 expira la autorización §8.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.
