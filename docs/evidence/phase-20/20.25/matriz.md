@@ -49,7 +49,7 @@ alcanzable sin gitleaks usable y sin fallback forzable). Fix: idiom portable
 + regresión en `tests/test_feature_map_doctor.sh` (2 casos nuevos, verdes aquí;
 mutante rojo medido en bash 3.2, SKIP declarado en bash ≥4.4).
 Re-conducción: `doctor` pelado RC=0; check-secrets re-drive unknown/3 honesto.
-Evidencia: `/tmp/bloque6-doctor-test.log` (16/17 casos; el restante es R34).
+Evidencia: `doctor-reconduccion.log` (mismo directorio; copia textual de /tmp/bloque6-doctor-test.log; 16/17 casos; el restante es R34).
 
 ## Gap reportado aparte (R34, sin fix en la pasada)
 
