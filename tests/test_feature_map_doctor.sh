@@ -160,6 +160,31 @@ printf '%s' "$out" | grep -q 'doctor: PASS' \
   && malo "sin instancia no debe imprimir doctor: PASS: $out"
 
 # ---------------------------------------------------------------------------
+# 20.25: expansion de arreglo vacio bajo set -u (bash <=4.3, macOS sistema).
+# `cmd_doctor` sin argumento y `run_tool` de check-secrets sin SAIKIT_GITLEAKS
+# dejaban `extra` vacio y `"${extra[@]}"` moria con `unbound variable` antes
+# de llegar a doctor.py / runtime_exec. La guarda es el idiom portable
+# ${extra[@]+"${extra[@]}"}. Sin ella, en bash 3.2 este caso da rc=1.
+# ---------------------------------------------------------------------------
+caso "20.25 arreglo-vacio: doctor pelado nunca muere con unbound variable"
+reset_io
+out="$(ctrl doctor 2>&1)" && rc=0 || rc=$?
+printf '%s' "$out" | grep -q 'unbound variable' \
+  && malo "doctor pelado murio con unbound variable (bash+set -u): $out"
+[ "$rc" = 0 ] || [ "$rc" = 3 ] || malo "doctor pelado rc inesperado (got $rc): $out"
+
+caso "20.25 mutante doctor_array_sin_guardia: sin guardia muere en bash<=4.3"
+if bash -c 'set -u; a=(); : "${a[@]}"' >/dev/null 2>&1; then
+  printf '  SKIP: este bash acepta arreglo vacio (mutante inerte; rojo medido en bash 3.2)\n'
+else
+  out="$(ctrl_mut doctor_array_sin_guardia doctor 2>&1)" && rc=0 || rc=$?
+  printf '%s' "$out" | grep -q 'unbound variable' \
+    || malo "mutante no produjo unbound variable: $out"
+  [ "$rc" = 3 ] && malo "mutante debio enrojecer, salio unknown/3: $out"
+  [ "$rc" = 0 ] && malo "mutante debio enrojecer, salio 0: $out"
+fi
+
+# ---------------------------------------------------------------------------
 # falta gh solo afecta live
 # ---------------------------------------------------------------------------
 caso "falta-gh-solo-live: gh ausente no tumba gate ni simulated"
