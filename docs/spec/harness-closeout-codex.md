@@ -41,6 +41,20 @@ implícitamente la validación actual del contenido de los artefactos.
 Si el host no expone una señal suficiente, la investigación termina con la
 limitación documentada y las implementaciones condicionales no se activan.
 
+## Implementación del canal nativo (21.2, 2026-09-13)
+
+La re-corrida de 21.1 midió señal suficiente y 21.2 se activó con alcance
+recortado. En Codex, el CIERRE nativo acredita rol: un `SubagentStop` con
+`agent_id` registrado por el `SubagentStart` previo y `agent_transcript_path`
+presente acredita el rol que el propio evento trae. En una sesión con canal
+nativo activo, los eventos internos y el despacho NO acreditan: sin
+`SubagentStop` el agente está running y no está acreditado. El cierre nunca
+emite veredicto de éxito ni de fallo (el Stop de fallo blando tiene la misma
+forma; el fallo duro no emite Stop). Ni `task_name`, ni prompt, ni prosa, ni
+ruta acreditan. En una sesión sin señal nativa queda el crédito histórico por
+`agent_type` de eventos internos (medido en 6.1). `VERIFIED BY SUBAGENT`
+conserva su contrato zcode: este canal no lo extiende a Codex.
+
 ## Preflight
 
 Una ayuda previa al cierre usa el mismo parser y juez estático que Stop. Puede

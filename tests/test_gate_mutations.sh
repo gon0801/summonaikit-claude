@@ -216,6 +216,9 @@ G8|trail_sin_limite_fisico|una carpeta de evidencia enlazada afuera se acredita
 G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acredita
 G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
 G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
+G3|codex_interno_credita|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
+G3|codex_cierre_sin_start|la guarda de huerfano se neutraliza y un Stop sin SubagentStart previo acredita el rol (21.2)
+G3|codex_cierre_sin_transcript|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -223,6 +226,11 @@ G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 # condicion invertida, y esta bateria existe para detectar exactamente eso.
 
 mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SENTINEL_RE='.*'/"; }
+
+# 21.2 — tres condiciones del canal nativo de codex.
+mut_codex_interno_credita() { sed 's/saikit_codex_role_event "\$subagent"/record_agent "\$subagent"/'; }
+mut_codex_cierre_sin_start() { sed 's/\*) saikit_codex_stop_huerfano "\$cx_sid"; return 0 ;;/\*) : ;;/'; }
+mut_codex_cierre_sin_transcript() { sed 's/if \[ -z "\$cx_role" \] || \[ -z "\$cx_tr" \]; then/if false; then/'; }
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
 
 # Las dos mutaciones del arreglo de A4 (Task 3.4, clausulas 1 y 2). Cada una

@@ -1452,6 +1452,13 @@ write_state() {
   fi
   if [ -n "${_LINK_CHILDREN_SET+x}" ]; then _keep_lc="$_LINK_CHILDREN_SET"; fi
   if [ -n "${_LINK_SEAL_SET+x}" ]; then _keep_lss="$_LINK_SEAL_SET"; fi
+  _keep_cx=""; _keep_cxd=""
+  if [ -f "$STATE_PATH" ]; then
+    _keep_cx="$(grep '^codex_children=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    _keep_cxd="$(grep '^codex_children_done=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  fi
+  if [ -n "${_CODEX_CHILDREN_SET+x}" ]; then _keep_cx="$_CODEX_CHILDREN_SET"; fi
+  if [ -n "${_CODEX_DONE_SET+x}" ]; then _keep_cxd="$_CODEX_DONE_SET"; fi
   {
     printf 'task_hash=%s\n' "$task_hash"
     printf 'cycle=%s\n' "$cycle"
@@ -1477,6 +1484,11 @@ write_state() {
     # 20.13: vínculo padre→hijo (Grok). Ausentes sin anuncio host.
     if [ -n "$_keep_lc" ]; then printf 'linked_children=%s\n' "$_keep_lc"; fi
     if [ -n "$_keep_lss" ]; then printf 'linked_seal_session=%s\n' "$_keep_lss"; fi
+    # 21.2: ciclo de vida nativo de codex (SubagentStart/SubagentStop con
+    # agent_id). Ausentes sin eventos nativos: la forma del estado de los
+    # demas hosts (y de los turnos sin subagentes nativos) no cambia.
+    if [ -n "$_keep_cx" ]; then printf 'codex_children=%s\n' "$_keep_cx"; fi
+    if [ -n "$_keep_cxd" ]; then printf 'codex_children_done=%s\n' "$_keep_cxd"; fi
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -1533,6 +1545,94 @@ link_consume_child_seal() {
     "$child_sha" "$(read_state_value autopilot)"
   unset _LINK_SEAL_SET
   printf 'linked_seal_session: %s\n' "$child" >> "$LOG_PATH" 2>/dev/null || true
+  return 0
+}
+
+# 21.2 — ciclo de vida nativo de roles delegados de Codex. Autoridad: la
+# re-corrida de 21.1 (docs/evidence/phase-21/21.1/, codex-cli 0.154.0) midio
+# SubagentStart/SubagentStop con agent_id + agent_type de PRIMER nivel, cadena
+# agent_id Start->internos->Stop, y agent_transcript_path en el Stop. Postura
+# declarada en Plans 21.2: el CIERRE acredita rol+cierre+transcript por agente;
+# sin SubagentStop = running = NO acreditado; el despacho no correlaciona (R1,
+# no se exige) y el Stop no emite veredictos de exito (R2: el Stop de fallo
+# blando tiene la misma forma, sin estado maquina; el fallo duro R3 no emite
+# Stop). El rol viaja en el PROPIO evento (agent_type top-level): ni task_name,
+# ni prompt, ni prosa, ni ruta acreditan. Otros hosts intactos.
+saikit_codex_children_write() { # $1 = en curso, $2 = cerrados
+  _CODEX_CHILDREN_SET="$1"
+  _CODEX_DONE_SET="$2"
+  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+    "$(read_state_value implemented)" "$(read_state_value verified)" \
+    "$(read_state_value agents_seen)" "$(read_state_value lane)" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
+  unset _CODEX_CHILDREN_SET _CODEX_DONE_SET
+  return 0
+}
+
+saikit_codex_stop_huerfano() {
+  printf 'codex native: stop huerfano %s ignorado (sin SubagentStart previo)\n' "$1" >> "$LOG_PATH" 2>/dev/null || true
+  return 0
+}
+
+saikit_codex_role_event() { # $1 = $subagent resuelto del evento actual
+  cx_role="$(canonical_agent_role "$1")"
+  cx_sid="$(json_top_level_string agent_id)"
+  # Charset del id medido (UUID): sin comas ni dos puntos — la lista de estado
+  # es texto plano separado por comas. Un id ajeno se ignora, no bloquea.
+  case "$cx_sid" in *[!A-Za-z0-9._-]*) return 0 ;; esac
+  [ -n "$cx_sid" ] || return 0
+  cx_running="$(read_state_value codex_children)"
+  cx_done="$(read_state_value codex_children_done)"
+  case "$event_name" in
+    SubagentStart)
+      [ -n "$cx_role" ] || return 0
+      case ",$cx_done," in *",$cx_sid,"*) return 0 ;; esac # Start tras cierre
+      case ",$cx_running," in *",$cx_sid,"*) return 0 ;; esac # ya en curso
+      saikit_codex_children_write "${cx_running:+$cx_running,}$cx_sid" "$cx_done"
+      printf 'codex native: start %s (%s)\n' "$cx_sid" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
+      ;;
+    SubagentStop)
+      cx_tr="$(json_top_level_string agent_transcript_path)"
+      case ",$cx_done," in
+        *",$cx_sid,"*)
+          printf 'codex native: stop replay %s ignorado\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
+          return 0 ;;
+      esac
+      case ",$cx_running," in
+        *",$cx_sid,"*) ;;
+        *) saikit_codex_stop_huerfano "$cx_sid"; return 0 ;; # 21.2: sin alta previa no hay identidad
+      esac
+      if [ -z "$cx_role" ] || [ -z "$cx_tr" ]; then
+        # Forma no observada (el Stop medido trae rol y transcript): no acredita.
+        printf 'codex native: stop de %s sin credito (rol o transcript ausentes)\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
+        return 0
+      fi
+      # Quitar de en curso: reconstruccion con IFS (sin sed/tr; el id no trae
+      # comas y el charset queda acotado arriba).
+      cx_old="$cx_running"
+      cx_running=""
+      cx_IFS="$IFS"; IFS=","
+      for cx_tok in $cx_old; do
+        [ "$cx_tok" = "$cx_sid" ] && continue
+        cx_running="${cx_running:+$cx_running,}$cx_tok"
+      done
+      IFS="$cx_IFS"
+      saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid"
+      record_agent "$cx_role"
+      printf 'codex native: cierre acreditado %s (%s, transcript presente)\n' "$cx_sid" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
+      ;;
+    *)
+      # Legado (6.1): en una sesion donde el canal nativo NO se observa
+      # (hooks.json sin SubagentStart/SubagentStop registrados), el credito
+      # historico por agent_type de eventos internos sigue vivo. En una sesion
+      # con canal nativo activo (hay Start o Stop vistos), los internos corren
+      # en fase running y NO acreditan (postura 21.2).
+      if [ -n "$cx_running" ] || [ -n "$cx_done" ]; then return 0; fi
+      record_agent "$cx_role"
+      ;;
+  esac
   return 0
 }
 
@@ -3102,7 +3202,19 @@ record_tool_evidence() {
   # marcar el ultimo evento interno del reviewer data cuando la revision corrio,
   # no cuando se pidio.
   if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
-  if [ -n "$subagent" ]; then record_agent "$subagent"; fi
+  if [ -n "$subagent" ]; then
+    # 21.2: en codex el credito de roles para la ceremonia viaja SOLO por el
+    # canal nativo de cierre (SubagentStop con agent_id acreditado; postura
+    # "sin Stop = running = no acreditado", con fallback legado si la sesion
+    # no muestra eventos nativos). Despacho, internos y Start siguen
+    # alimentando al candado adversary y al review-notice via $subagent, que
+    # NO cambia. Otros hosts intactos: record_agent directo.
+    if [ "$HOST" = "codex" ]; then
+      saikit_codex_role_event "$subagent"
+    else
+      record_agent "$subagent"
+    fi
+  fi
   # >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
   # El candado corre solo en sesiones armadas (el early-exit de arriba ya lo
   # acoto, A1) y solo para eventos que resuelvan a adversary por cualquiera de

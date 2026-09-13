@@ -1,0 +1,7 @@
+      FAIL: interno en codex no acredita: esperaba [implementer], dio [implementer,verifier]
+  matado: mut_codex_interno_credita <- caso_g3_codex_interno_no_acredita
+      FAIL: stop huerfano no acredita: esperaba [], dio [verifier]
+  matado: mut_codex_cierre_sin_start <- caso_g3_codex_stop_huerfano_no_acredita
+      FAIL: cierre sin transcript no acredita: esperaba [], dio [verifier]
+  matado: mut_codex_cierre_sin_transcript <- caso_g3_codex_stop_sin_transcript_no_acredita
+driver-mut rc=0
