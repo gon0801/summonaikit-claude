@@ -1,0 +1,1 @@
+{"hecho":"El cambio es solo docs y skill: ningun ejecutable, hook, test ni estado cambia, asi que no puede enrojecer la bateria por comportamiento","comando":"git status --short + python3 tools/check_context_docs.py --sweep","salida":"sweep limpio; solo README/guia/spec/adversary/SKILL/residuales + Plans status","nivel":4}

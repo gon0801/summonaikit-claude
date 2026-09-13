@@ -68,9 +68,18 @@ redaction rule below applies to fixtures too, on your discipline and the
 reviewer's. And the zone is scratch: it is deleted when the turn closes. Keep
 no evidence there — evidence lives in the artifact.
 
-How this is actually enforced — honestly, per host. No host offers a pre-write
-denial channel (no host registers `PreToolUse`): everywhere, the lock is
-post-hoc detection plus a block at the turn's Stop, not a preventive guard.
+How this is actually enforced — honestly, per host. Three different
+things, do not conflate them: (1) the **attribution of your edits** (dsh —
+by adapter design, **still not measured live**: 20.18/20.19 stay open with a
+written decision, so this is `unknown`, never PASS); (2) the harness's
+**`PreToolUse` deny against a direct merge** — measured live on claude in
+20.9 (deny before execution plus an allowed command, payload, decision and
+execution correlated by `tool_use_id`; evidence
+`docs/evidence/phase-20/20.9/`; the phase still has to be registered by hand
+in the profile's `settings.json`, and that guard belongs to the harness, not
+to this role); (3) **your own veto**, which is and stays post-hoc
+everywhere: detection plus a block at the turn's Stop, never a preventive
+guard. No host offers YOU a pre-write denial channel.
 
 - **Hosts where your inner tool events carry your identity** (measured in
   claude, grok, codex; dsh — by adapter design, **not yet measured live, see
