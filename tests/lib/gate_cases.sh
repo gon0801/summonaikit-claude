@@ -4828,20 +4828,23 @@ caso_g3_codex_stop_rol_cambiado_no_acredita() {
 # R4 (revision externa): el estado nativo es POR SESION. Una sesion B del mismo
 # repo sin senal nativa conserva el legado aunque la sesion A ya vio el canal;
 # y la marca codex_native_seen de A no se filtra a B.
+# OJO: el estado vive en state/<host>/<proyecto>/<sesion>/ — al cambiar de
+# sesion NO sirve el truco sed del host: se re-descubre por componente.
 caso_g3_codex_nativo_cross_session() {
   _cx_backup="$LAB_ESTADO_PATH"
   LAB_SESSION_ID="sesion-a-21-2"
   lab_run prompt codex "$(lab_payload_prompt '-saikit sesion A con canal nativo')"
-  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  _estado_a="$(find "$LAB/hooks/state" -path '*sesion-a-21-2*' -name harness-state.env | head -n 1)"
+  [ -n "$_estado_a" ] || { _mal "la sesion A no dejo estado al armar"; LAB_SESSION_ID=""; LAB_ESTADO_PATH="$_cx_backup"; return 0; }
+  LAB_ESTADO_PATH="$_estado_a"
   lab_run tool codex "$(lab_payload_codex_subagent_start 'ag-21-2-sa' 'verifier')"
   lab_run tool codex "$(lab_payload_codex_subagent_stop 'ag-21-2-sa' 'verifier' '/lab/t.jsonl')"
   _igual "sesion A acredito por cierre" "$(lab_estado agents_seen)" "verifier"
   _igual "sesion A marco el canal nativo" "$(lab_estado codex_native_seen)" "1"
-  _estado_a="$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$_cx_backup"
   LAB_SESSION_ID="sesion-b-21-2"
   lab_run prompt codex "$(lab_payload_prompt '-saikit sesion B sin senal nativa')"
-  _estado_b="$(find "$LAB/hooks/state" -name harness-state.env -newer "$_estado_a" | head -n 1)"
+  _estado_b="$(find "$LAB/hooks/state" -path '*sesion-b-21-2*' -name harness-state.env | head -n 1)"
   [ -n "$_estado_b" ] || { _mal "la sesion B no dejo estado al armar"; LAB_SESSION_ID=""; LAB_ESTADO_PATH="$_cx_backup"; return 0; }
   LAB_ESTADO_PATH="$_estado_b"
   lab_run tool codex "$(lab_payload_bash_en_subagente 'verifier' 'pytest -q')"
