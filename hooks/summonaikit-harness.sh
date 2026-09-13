@@ -1561,8 +1561,8 @@ link_consume_child_seal() {
 # declarada en Plans 21.2: el CIERRE acredita rol+cierre+transcript por agente;
 # sin SubagentStop = running = NO acreditado; el despacho no correlaciona (R1,
 # no se exige) y el Stop no emite veredictos de exito (R2: el Stop de fallo
-# blando tiene la misma forma, sin estado maquina; el fallo duro R3 no emite
-# Stop). El rol viaja en el PROPIO evento (agent_type top-level): ni task_name,
+# blando tiene la misma forma, sin estado maquina; del fallo duro R3 se
+# DESCONOCE si emite Stop — sin Stop = running = no acreditado). El rol viaja en el PROPIO evento (agent_type top-level): ni task_name,
 # ni prompt, ni prosa, ni ruta acreditan. Otros hosts intactos.
 saikit_codex_children_write() { # $1 = en curso, $2 = cerrados, $3 = flag nativo
   _CODEX_CHILDREN_SET="$1"
@@ -1583,8 +1583,11 @@ saikit_codex_stop_huerfano() {
   return 0
 }
 
-saikit_codex_role_event() { # $1 = $subagent resuelto del evento actual
-  cx_role="$(canonical_agent_role "$1")"
+saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
+# de PRIMER nivel (21.2 r2, revision externa: ni subagent_type de tool_input ni
+# ningun otro canal de $subagent alimenta el rol nativo; el despacho no trae
+# agent_type de primer nivel, asi que no registra — R1).
+  cx_role="$(canonical_agent_role "$(json_top_level_string agent_type)")"
   cx_sid="$(json_top_level_string agent_id)"
   # Charset del id medido (UUID): sin comas ni dos puntos — la lista de estado
   # es texto plano separado por comas. Un id ajeno se ignora, no bloquea.
@@ -3240,7 +3243,7 @@ record_tool_evidence() {
     # alimentando al candado adversary y al review-notice via $subagent, que
     # NO cambia. Otros hosts intactos: record_agent directo.
     if [ "$HOST" = "codex" ]; then
-      saikit_codex_role_event "$subagent"
+      saikit_codex_role_event
     else
       record_agent "$subagent"
     fi

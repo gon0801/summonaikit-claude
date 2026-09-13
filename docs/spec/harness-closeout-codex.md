@@ -50,9 +50,14 @@ presente acredita el rol que el propio evento trae. En una sesión con canal
 nativo activo, los eventos internos y el despacho NO acreditan: sin
 `SubagentStop` el agente está running y no está acreditado. El cierre nunca
 emite veredicto de éxito ni de fallo (el Stop de fallo blando tiene la misma
-forma; el fallo duro no emite Stop). Ni `task_name`, ni prompt, ni prosa, ni
+forma; del fallo duro R3 se desconoce si emite Stop — sin Stop = running =
+no acreditado). Ni `task_name`, ni prompt, ni prosa, ni
 ruta acreditan. En una sesión sin señal nativa queda el crédito histórico por
-`agent_type` de eventos internos (medido en 6.1). `VERIFIED BY SUBAGENT`
+`agent_type` de eventos internos (medido en 6.1). **R4 (revisión externa
+21.2 r2):** el legado rige hasta el PRIMER evento nativo de la sesión — el
+hook no distingue «host sin canal» de «canal aún mudo», así que la marca
+`codex_native_seen` apaga el legado desde el primer `SubagentStart`/`SubagentStop`
+aunque no acredite nada (huérfano, replay, rol cambiado). `VERIFIED BY SUBAGENT`
 conserva su contrato zcode: este canal no lo extiende a Codex.
 
 ## Preflight
