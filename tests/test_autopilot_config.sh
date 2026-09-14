@@ -333,6 +333,69 @@ caso "wrapper_default_no_sin_tty"
 }
 fin_caso "wrapper_default_no_sin_tty"
 
+caso "wrapper_run_sh_symlink_no_se_toca"
+{
+  # 22.1r1: tests/run.sh es un enlace (apunta a una bateria real) + hay
+  # candidata: no se reemplaza el enlace ni se escribe a traves.
+  mkdir -p tests real
+  printf '#!/bin/sh\nexit 0\n' > real/bateria.sh
+  ln -s ../real/bateria.sh tests/run.sh
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -L tests/run.sh ] || _mal "reemplazo o resolvio el enlace tests/run.sh"
+  [ "$(readlink tests/run.sh)" = "../real/bateria.sh" ] || _mal "retoco el enlace: $(readlink tests/run.sh)"
+  _contiene "nombra el enlace" "$OUT" "enlace simbolico"
+}
+fin_caso "wrapper_run_sh_symlink_no_se_toca"
+
+caso "wrapper_tests_symlink_no_se_sigue"
+{
+  # 22.1r1: tests/ es un enlace a un dir con bateria: el rastreo no lo
+  # sigue (ni descubre candidata adentro ni escribe en el destino).
+  mkdir -p real/tests
+  printf '#!/bin/sh\nexit 0\n' > real/tests/test_app.sh
+  ln -s real/tests tests
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e real/tests/run.sh ] || _mal "escribio el wrapper dentro del destino del enlace"
+  [ ! -e tests/run.sh ] || _mal "escribio a traves del enlace tests/"
+  _contiene "no descubre bateria tras el enlace" "$OUT" "sin bateria detectable"
+}
+fin_caso "wrapper_tests_symlink_no_se_sigue"
+
+caso "wrapper_nombres_peligrosos_se_vetan"
+{
+  # 22.1r1: $ expande en runtime a otro archivo; " rompe la linea exec
+  # (el veto avisa antes que el backstop bash -n); \ se lee como escape;
+  # salto crudo parte el script. Ninguno se envuelve.
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a$b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió bateria con \$ en el nombre"
+  _contiene "veta el \$" "$OUT" 'comillas, $, \ o controles'
+  rm -f 'tests/a$b.sh'
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a"b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió bateria con comilla en el nombre"
+  _contiene "veta la comilla" "$OUT" 'comillas, $, \ o controles'
+  rm -f 'tests/a"b.sh'
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a\b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió bateria con backslash en el nombre"
+  _contiene "veta el backslash" "$OUT" 'comillas, $, \ o controles'
+  rm -f 'tests/a\b.sh' tests/run.sh
+  printf '#!/bin/sh\nexit 0\n' > "$(printf 'tests/a\nb.sh')"
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió bateria con salto en el nombre"
+  _contiene "veta el salto" "$OUT" 'comillas, $, \ o controles'
+}
+fin_caso "wrapper_nombres_peligrosos_se_vetan"
+
 caso "contencion_dos_worktrees_el_segundo_reporta_y_no_escribe"
 {
   # El lock vive en el git-common-dir, COMPARTIDO entre worktrees (D20): dos
@@ -551,12 +614,60 @@ c_wrap() {
   _contiene "nombra el wrapper" "$OUT" "wrapper escrito"
 }
 
+c_wrap_symlink() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests real
+  printf '#!/bin/sh\nexit 0\n' > real/bateria.sh
+  ln -s ../real/bateria.sh tests/run.sh
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -L tests/run.sh ] || _mal "reemplazo o resolvio el enlace tests/run.sh"
+  _contiene "nombra el enlace" "$OUT" "enlace simbolico"
+}
+
+c_wrap_multi() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  : > tests/test_a.sh
+  : > tests/test_b.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "eligio entre varias baterias"
+  _contiene "no adivina" "$OUT" "no se adivina"
+}
+
+c_wrap_consent() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "escribio sin consentimiento"
+  _contiene "avisa" "$OUT" "sin wrapper"
+}
+
+c_wrap_nombre() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a$b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió nombre con dolar"
+  _contiene "veta" "$OUT" "o controles"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
 done <<'MUTS'
 despliega_default_false	s|despliega_default="no-se"|despliega_default="xxx"|	c_defaults
 wrap_nunca_instala	s|mv -f "$WRAP_TMP" "$WRAP"|true|	c_wrap
+wrap_symlink_run_sh	s|elif \[ -L "\$WRAP" \]; then|elif false; then|	c_wrap_symlink
+wrap_multi_elige	s|elif \[ "\$WRAP_N" -gt 1 \]; then|elif false; then|	c_wrap_multi
+wrap_sin_consentimiento	s|^              WRAP_VOL=NO$|              WRAP_VOL=SI|	c_wrap_consent
+wrap_nombres_peligrosos	s|case "\$WRAP_UNA" in|case "x-imposible" in|	c_wrap_nombre
+wrap_validacion_muerta	s|elif ! bash -n "\$WRAP_TMP" 2>/dev/null; then|elif true; then|	c_wrap
 lock_sin_mkdir	s|if mkdir "$LOCK_DIR" 2>/dev/null; then|if true; then|	c_contencion
 lock_se_autolimpia	s|# NUNCA se borra solo|rm -rf "$LOCK_DIR"; # NUNCA se borra solo|	c_lock_viejo
 flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor

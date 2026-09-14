@@ -343,8 +343,8 @@ else
     printf 'saikit-setup-autopilot: hay varias baterias candidatas (%s): no se adivina; crea tests/run.sh a mano apuntando a la real\n' "$WRAP_CANDS"
   else
     case "$WRAP_UNA" in
-      *\"*|*\$*|*\`*|*[[:cntrl:]]*)
-        printf 'saikit-setup-autopilot: la bateria candidata trae comillas, $ o controles (%s); no se envuelve sola (crea tests/run.sh a mano)\n' "$WRAP_UNA"
+      *\"*|*\$*|*\`*|*[[:cntrl:]]*|*\\*)
+        printf 'saikit-setup-autopilot: la bateria candidata trae comillas, $, \\ o controles (%s); no se envuelve sola (crea tests/run.sh a mano)\n' "$WRAP_UNA"
         ;;
       *)
         WRAP_VOL=""
