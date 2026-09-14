@@ -4588,6 +4588,14 @@ preflight_check() {
     printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo crear el scratch\n' >&2
     exit 2
   }
+  # 21.5r2: el scratch no queda huerfano si el preflight muere por senal
+  # (revision externa 21.5r2: SIGTERM entre mktemp y rm -rf dejaba la copia
+  # del estado en disco). EXIT limpia redundante con los rm explicitos de
+  # cada camino (medido: el subshell ( stop_gate ) no hereda/dispara el
+  # trap del padre, asi out/err siguen legibles); INT/TERM limpian y mueren
+  # (143) en vez de reanudar a mitad del preflight.
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true' EXIT
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true; exit 143' INT TERM
   if [ "${SAIKIT_MUT_PREFLIGHT_DIVERGE:-0}" = "1" ]; then
     printf 'SAIKIT PREFLIGHT (21.5): PASS\n'
     printf 'CAUSA: (costura SAIKIT_MUT_PREFLIGHT_DIVERGE: veredicto sin evaluar)\n'
@@ -4600,9 +4608,19 @@ preflight_check() {
     rm -rf "$_pf_box" 2>/dev/null || true
     exit 2
   }
-  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null || true; fi
-  if [ -f "$LOG_PATH" ]; then cp "$LOG_PATH" "$_pf_box/sesion/harness-evidence.log" 2>/dev/null || true; fi
-  if [ -f "$RN_ORDER_PATH" ]; then cp "$RN_ORDER_PATH" "$_pf_box/sesion/harness-state-review-notice.env" 2>/dev/null || true; fi
+  # 21.5r2: si la foto del estado falla (existe pero ilegible), evaluar
+  # sin ella MENTIRIA: el Stop real bloquea. Error de instrumento (exit 2),
+  # nunca un veredicto (revision externa 21.5r2 + CodeRabbit L4605).
+  _pf_foto() {
+    if [ -f "$1" ] && ! cp "$1" "$2" 2>/dev/null; then
+      printf 'SAIKIT PREFLIGHT (21.5): ERROR — foto del estado fallida (%s)\n' "$1" >&2
+      rm -rf "$_pf_box" 2>/dev/null || true
+      exit 2
+    fi
+  }
+  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"
+  _pf_foto "$LOG_PATH" "$_pf_box/sesion/harness-evidence.log"
+  _pf_foto "$RN_ORDER_PATH" "$_pf_box/sesion/harness-state-review-notice.env"
   (
     STATE_DIR="$_pf_box/sesion"
     STATE_PATH="$_pf_box/sesion/harness-state.env"

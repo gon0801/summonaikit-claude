@@ -183,4 +183,26 @@ caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos() {
   _pf_compara "etiqueta ausente (cursor)" 1 "$_RECIBO_SIN_RETRO" "Missing Retro gate summary" "cursor"
 }
 
-CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_bloquea_en_ambos caso_g9_etiqueta_malformada_bloquea_en_ambos caso_g9_evidencia_invalida_bloquea_en_ambos caso_g9_trail_inexistente_bloquea_en_ambos caso_g9_raiz_sin_sha_bloquea_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja caso_g9_cursor_recibo_valido_cierra_en_ambos caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos"
+caso_g9_estado_ilegible_bloquea_stop_error_preflight() {
+  limpiar_saikit
+  plantar_trail x
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  chmod 000 "$LAB_ESTADO_PATH"
+  lab_run stop claude "$(lab_payload_stop "$(_pf_base)")"
+  _pf_ei_stop_rc="$LAB_RC"; _pf_ei_stop_out="$LAB_OUT"
+  if [ "$_pf_ei_stop_rc" = "0" ]; then
+    case "$_pf_ei_stop_out" in
+      *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) ;;
+      *) _mal "estado ilegible: el Stop debia bloquear con estado ilegible" ;;
+    esac
+  fi
+  chmod 644 "$LAB_ESTADO_PATH"
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  chmod 000 "$LAB_ESTADO_PATH"
+  lab_run preflight claude "$(lab_payload_stop "$(_pf_base)")"
+  chmod 644 "$LAB_ESTADO_PATH"
+  _igual "estado ilegible exit" "$LAB_RC" "2"
+  _contiene "estado ilegible error" "$LAB_ERR" 'SAIKIT PREFLIGHT (21.5): ERROR'
+}
+
+CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_bloquea_en_ambos caso_g9_etiqueta_malformada_bloquea_en_ambos caso_g9_evidencia_invalida_bloquea_en_ambos caso_g9_trail_inexistente_bloquea_en_ambos caso_g9_raiz_sin_sha_bloquea_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja caso_g9_cursor_recibo_valido_cierra_en_ambos caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos caso_g9_estado_ilegible_bloquea_stop_error_preflight"

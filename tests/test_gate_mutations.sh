@@ -229,6 +229,7 @@ G9|preflight_sin_stop|el preflight deja de ejecutar el stop_gate compartido (cop
 G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
 G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
 G9|preflight_ignora_cursor|el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea
+G9|preflight_error_callado|la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1169,6 +1170,10 @@ mut_preflight_falla_callada() { sed 's/if \[ "\$_pf_v" = "FAIL" \]; then exit 1;
 # cursor (exit 0) vuelve a leerse como PASS. Lo atrapa
 # caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
 mut_preflight_ignora_cursor() { sed "s%|\*'"\"followup_message\""'\*%%"; }
+# 21.5r2: sin el ERROR por foto fallida, el preflight vuelve a evaluar sin
+# estado y reporta PASS donde el Stop bloquea. Lo atrapa
+# caso_g9_estado_ilegible_bloquea_stop_error_preflight (espera ERROR rc 2).
+mut_preflight_error_callado() { sed 's|^  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"$|  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null \|\| true; fi|'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
