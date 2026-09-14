@@ -11,9 +11,14 @@
 #
 # USO:
 #   tools/saikit-ci-minimo.sh --ofrecer [--root <dir>] [--ci-minimo si|no]
+#   tools/saikit-ci-minimo.sh --detectar-test-cmd [--root <dir>]
+#
+# --detectar-test-cmd (22.1): consulta pura para el setup — imprime el comando
+# de test detectado (misma detectar_test_cmd del ofrecer) o sale 2 sin runner.
+# El setup la usa para juzgar "runner reconocido" con una sola fuente.
 #
 # Exit: 0 resuelto (PRESENTE noop | ESCRITO | RECHAZADO con aviso);
-#       2 uso / validacion / no se pudo escribir.
+#       2 uso / validacion / no se pudo escribir / sin runner (detectar).
 #
 # Gancho SOLO de test: SAIKIT_CI_MINIMO (ruta que setup invoca).
 set -u
@@ -51,7 +56,7 @@ PIN_PNPM_VERSION='10.34.5'
 # porque el check lo compara. quality.yml de ESTE repo sigue en tags (los
 # workflows reales son ajenos a este mecanismo).
 
-uso() { sed -n '2,20p' "$0"; }
+uso() { sed -n '2,23p' "$0"; }
 
 die() { printf 'saikit-ci-minimo: %s\n' "$*" >&2; exit 2; }
 
@@ -402,6 +407,7 @@ modo=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ofrecer) modo=ofrecer; shift ;;
+    --detectar-test-cmd) modo=detectar; shift ;;
     --root|--ci-minimo)
       if [ $# -lt 2 ]; then die "$1 exige un valor"; fi
       case "$1" in
@@ -414,6 +420,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$modo" = ofrecer ] || { uso >&2; exit 2; }
-ofrecer
+case "$modo" in
+  ofrecer) ofrecer ;;
+  detectar)
+    root="${root_flag:-$(pwd)}"
+    [ -d "$root" ] || die "--root no es un directorio: $root"
+    detectar_test_cmd "$root" || die "sin runner: no tests/run.sh, no scripts.test real, no rastros pytest"
+    ;;
+  *) uso >&2; exit 2 ;;
+esac
 exit 0

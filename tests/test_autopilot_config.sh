@@ -259,6 +259,80 @@ caso "gitignore_de_veredictos_idempotente"
 }
 fin_caso "gitignore_de_veredictos_idempotente"
 
+caso "wrapper_bateria_no_reconocida_se_genera_y_corre"
+{
+  # 22.1 via (a): repo cuya bateria es tests/test_app.sh (medido 20.10).
+  mkdir -p tests
+  printf '#!/bin/sh\necho BATERIA-REAL-OK\n' > tests/test_app.sh
+  chmod +x tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -f tests/run.sh ] || _mal "no genero tests/run.sh: $OUT"
+  [ -x tests/run.sh ] || _mal "el wrapper no quedo ejecutable"
+  _contiene "nombra el wrapper" "$OUT" "wrapper escrito"
+  WOUT="$(bash tests/run.sh 2>&1)"; WRC=$?
+  [ "$WRC" -eq 0 ] || _mal "el wrapper fallo con rc=$WRC: $WOUT"
+  _contiene "el wrapper corre la bateria real" "$WOUT" "BATERIA-REAL-OK"
+}
+fin_caso "wrapper_bateria_no_reconocida_se_genera_y_corre"
+
+caso "wrapper_noop_con_run_sh_real"
+{
+  mkdir -p tests
+  printf '#!/bin/sh\necho MIO\n' > tests/run.sh
+  chmod +x tests/run.sh
+  antes="$(cksum < tests/run.sh)"
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$(cksum < tests/run.sh)" = "$antes" ] || _mal "piso un tests/run.sh real"
+  _contiene "verifica el runner" "$OUT" "runner reconocido"
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$(cksum < tests/run.sh)" = "$antes" ] || _mal "la segunda corrida toco tests/run.sh"
+}
+fin_caso "wrapper_noop_con_run_sh_real"
+
+caso "wrapper_sin_bateria_avisa_y_no_inventa"
+{
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "invento un wrapper sin bateria"
+  _contiene "avisa sin bateria" "$OUT" "sin bateria detectable"
+}
+fin_caso "wrapper_sin_bateria_avisa_y_no_inventa"
+
+caso "wrapper_multiples_candidatos_no_adivina"
+{
+  mkdir -p tests
+  : > tests/test_a.sh
+  : > tests/test_b.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "adivino entre varias baterias"
+  _contiene "nombra las candidatas" "$OUT" "no se adivina"
+}
+fin_caso "wrapper_multiples_candidatos_no_adivina"
+
+caso "wrapper_reconocido_npm_no_ofrece"
+{
+  printf '{"name":"x","scripts":{"test":"jest"}}' > package.json
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "genero wrapper con npm test reconocido"
+  _contiene "reconoce npm" "$OUT" "runner reconocido"
+}
+fin_caso "wrapper_reconocido_npm_no_ofrece"
+
+caso "wrapper_default_no_sin_tty"
+{
+  mkdir -p tests
+  printf '#!/bin/sh\necho X\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "genero wrapper sin consentimiento (sin TTY)"
+  _contiene "avisa que el gate lo exige" "$OUT" "sin wrapper"
+}
+fin_caso "wrapper_default_no_sin_tty"
+
 caso "contencion_dos_worktrees_el_segundo_reporta_y_no_escribe"
 {
   # El lock vive en el git-common-dir, COMPARTIDO entre worktrees (D20): dos
@@ -466,11 +540,23 @@ c_contencion() {
   cd "$SB/work" || exit 1
 }
 
+c_wrap() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\necho BATERIA-REAL-OK\n' > tests/test_app.sh
+  chmod +x tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -f tests/run.sh ] || _mal "no genero tests/run.sh: $OUT"
+  _contiene "nombra el wrapper" "$OUT" "wrapper escrito"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
 done <<'MUTS'
 despliega_default_false	s|despliega_default="no-se"|despliega_default="xxx"|	c_defaults
+wrap_nunca_instala	s|mv -f "$WRAP_TMP" "$WRAP"|true|	c_wrap
 lock_sin_mkdir	s|if mkdir "$LOCK_DIR" 2>/dev/null; then|if true; then|	c_contencion
 lock_se_autolimpia	s|# NUNCA se borra solo|rm -rf "$LOCK_DIR"; # NUNCA se borra solo|	c_lock_viejo
 flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor
