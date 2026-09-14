@@ -78,8 +78,8 @@ refix() {
   printf '%s\n' "$SHA" > "$SB/ghfix/expected-sha"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' \
     > "$SB/ghfix/pr-merge.json"
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' \
-    > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' \
+    "$SHA" > "$SB/ghfix/runs.json"
 
   mkdir -p "$WORK/.saikit/veredictos"
   printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.4.tsv"}' \
@@ -162,6 +162,9 @@ Saikit-Merge: $SHA"
     "$RHEAD" > "$SB/ghfix/pr.json"
   printf '8\n' > "$SB/ghfix/expected-pr"
   printf '%s\n' "$RHEAD" > "$SB/ghfix/expected-sha"
+  # 22.3r1: el verde del fixture es del HEAD del revert (presencia exigida).
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' \
+    "$RHEAD" > "$SB/ghfix/runs.json"
 }
 
 run_merge() {
