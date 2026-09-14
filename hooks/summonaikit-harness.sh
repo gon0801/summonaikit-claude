@@ -4616,14 +4616,21 @@ preflight_check() {
   _pf_out="$(cat "$_pf_box/out" 2>/dev/null)"
   _pf_err="$(cat "$_pf_box/err" 2>/dev/null)"
   rm -rf "$_pf_box" 2>/dev/null || true
+  # 21.5r1: el tercer canal de bloqueo del Stop es el de cursor —
+  # emit_gate_failure / emit_budget_exhausted emiten followup_message con
+  # exit 0 para TARGET=cursor, asi que ni el JSON de los otros hosts ni el
+  # exit distinguen el bloqueo. Se reconoce el canal (no se re-parsean reglas).
   case "$_pf_out" in
-    *'"decision":"block"'*|*'"continue":false'*) _pf_v="FAIL" ;;
+    *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) _pf_v="FAIL" ;;
     *)
       if [ "$_pf_rc" -ne 0 ]; then _pf_v="FAIL"; else _pf_v="PASS"; fi ;;
   esac
   printf 'SAIKIT PREFLIGHT (21.5): %s\n' "$_pf_v"
   if [ "$_pf_v" = "FAIL" ]; then
-    printf 'CAUSA:\n%s\n' "$_pf_err"
+    # 21.5r1: cursor bloquea solo por stdout (sin stderr); la causa se lee
+    # del err cuando lo hay y del out como respaldo (mismo texto medido).
+    if [ -n "$_pf_err" ]; then printf 'CAUSA:\n%s\n' "$_pf_err"
+    else printf 'CAUSA:\n%s\n' "$_pf_out"; fi
   else
     printf 'CAUSA: (cierre limpio — el Stop permitiria con este snapshot)\n'
   fi

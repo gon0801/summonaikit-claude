@@ -228,6 +228,7 @@ G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y u
 G9|preflight_sin_stop|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea
 G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
 G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
+G9|preflight_ignora_cursor|el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1164,6 +1165,10 @@ mut_preflight_consume_ciclo() { sed 's|^    STATE_PATH="\$_pf_box/sesion/harness
 # 21.5: el FAIL con exit 0 se lee como PASS. Lo atrapa
 # caso_g9_etiqueta_ausente_bloquea_en_ambos (espera exit 1 en FAIL).
 mut_preflight_falla_callada() { sed 's/if \[ "\$_pf_v" = "FAIL" \]; then exit 1; fi/if [ "$_pf_v" = "FAIL" ]; then exit 0; fi/'; }
+# 21.5r1: sin el canal followup_message en la extraccion, el bloqueo de
+# cursor (exit 0) vuelve a leerse como PASS. Lo atrapa
+# caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+mut_preflight_ignora_cursor() { sed "s%|\*'"\"followup_message\""'\*%%"; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
