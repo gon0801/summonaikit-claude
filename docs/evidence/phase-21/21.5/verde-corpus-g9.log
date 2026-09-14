@@ -10,4 +10,6 @@
     ok: caso_g9_sin_efectos
     ok: caso_g9_sin_gramatica_paralela
     ok: caso_g9_divergencia_queda_roja
+    ok: caso_g9_cursor_recibo_valido_cierra_en_ambos
+    ok: caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos
 test_preflight_21_5: OK

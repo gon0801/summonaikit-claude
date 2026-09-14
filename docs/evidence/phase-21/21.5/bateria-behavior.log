@@ -344,6 +344,8 @@
     ok: caso_g9_sin_efectos
     ok: caso_g9_sin_gramatica_paralela
     ok: caso_g9_divergencia_queda_roja
+    ok: caso_g9_cursor_recibo_valido_cierra_en_ambos
+    ok: caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos
     SAIKIT_SKIP_CASO: caso_g1_estado_no_se_acumula -- sin touch -t portable no se puede antedatar la hermana muerta; el barrido no se puede medir
 test_gate_behavior: OK
 EXIT_BEHAVIOR=0
