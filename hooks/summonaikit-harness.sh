@@ -4457,6 +4457,19 @@ pretool_es_lectura_hatch() {
   case "$_pt_lc" in
     *';'*|*'|'*|*'&'*|*'<'*|*'>'*|*'$('*|*'`'*) return 1 ;;
   esac
+  # 22.2r1 (review Codigo, CRITICO): ni saltos ni controles, CRUDOS o en
+  # escape: el hook lee tool_input.command SIN decodificar
+  # (json_tool_input_string deja los escapes crudos) pero el ejecutor SI
+  # decodifica — un `...sh \nbash ...` (2 chars) se ve como tokens exactos
+  # y ejecuta DOS comandos (bypass medido con pin incorrecto: RC=0). \r
+  # oculta contenido en terminales/logs; \uXXXX decodifica a lo mismo que
+  # \n. \t real separa legitimo (el troceo lo parte); el resto se veta.
+  _pt_nl='
+'
+  _pt_cr="$(printf '\r')"
+  _pt_tab="$(printf '\t')"
+  case "$_pt_lc" in *"$_pt_nl"*|*"$_pt_cr"*|*\\n*|*\\r*|*\\u*) return 1 ;; esac
+  if printf '%s' "$_pt_lc" | tr -d "$_pt_tab" | grep -q '[[:cntrl:]]'; then return 1; fi
   # Solo se leen v1..v3 contra cadenas fijas: un glob en el comando no puede
   # cambiar ese veredicto (expande en su posicion, no mueve v1/v2).
   _pt_n=0; _pt_v1=""; _pt_v2=""; _pt_v3=""

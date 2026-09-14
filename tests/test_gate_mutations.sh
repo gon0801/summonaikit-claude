@@ -200,6 +200,7 @@ G7|pretool_hatch_spoof_apagado|el spoof de sufijo (.bak) se apaga y saikit-merge
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
 G7|pretool_lectura_vuelve_ancho|el predicado de lectura simple se apaga y git show/cat/grep sobre el script vuelven a negar
+G7|pretool_lectura_sin_veto_controles|el veto de saltos/controles se quita (el de ;|&<> queda) y git show + salto + invocacion vuelve a pasar con pin incorrecto
 G8|trail_check_eliminado|el chequeo trail/blast del Stop se apaga y un full sin cita cierra
 G8|trail_vuelve_a_glob|cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra
 G8|trail_acepta_glob_token|el token glob en Close cuenta como cita
@@ -1074,6 +1075,12 @@ mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd";
 # y el token con `:` no resuelve).
 mut_pretool_lectura_vuelve_ancho() {
   sed 's/^pretool_es_lectura_hatch() {$/pretool_es_lectura_hatch() { return 1; }\npretool_es_lectura_hatch_OFF() {/'
+}
+# 22.2r1: quita SOLO el veto de saltos/controles (la linea case con _pt_nl y
+# la de tr+grep cntrl); el veto de ;|&<>/$()/backtick queda intacto. Lo mata
+# caso_g7_niega_lectura_multilinea_escape (sin veto, la 2da linea invoca).
+mut_pretool_lectura_sin_veto_controles() {
+  sed '/\$_pt_nl"/d; /_pt_tab" | grep -q/d'
 }
 
 mut_trail_sin_limite_fisico() { sed 's/"$ADV_PROJECT_CANON"|"$ADV_PROJECT_CANON"\/\*) return 0 ;;/\*) return 0 ;;/'; }

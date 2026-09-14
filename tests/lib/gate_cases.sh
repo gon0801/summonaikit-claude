@@ -4516,7 +4516,7 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 # $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
 # (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
 # (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_permite_git_show_hatch caso_g7_permite_rtk_git_show_hatch caso_g7_permite_grep_hatch caso_g7_niega_lectura_encadenada"
+CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_permite_git_show_hatch caso_g7_permite_rtk_git_show_hatch caso_g7_permite_grep_hatch caso_g7_niega_lectura_encadenada caso_g7_niega_lectura_multilinea_escape caso_g7_niega_lectura_multilinea_real caso_g7_niega_lectura_cr"
 
 _g7_plantar_hatch() {
   unset SAIKIT_KIT_MANIFEST
@@ -4721,6 +4721,28 @@ caso_g7_permite_grep_hatch() {
 caso_g7_niega_lectura_encadenada() {
   _g7_plantar_hatch match
   lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh | bash')"
+  _g7_assert_deny
+}
+# 22.2r1 (review Codigo, CRITICO): el hook lee command SIN decodificar
+# (json_tool_input_string deja escapes crudos) pero el ejecutor SI decodifica:
+# `...sh\nbash ...` (2 chars) se ve como UN token y ejecuta DOS comandos
+# (bypass medido con pin incorrecto: RC=0). \r y salto real, igual.
+caso_g7_niega_lectura_multilinea_escape() {
+  # Con espacio antes del escape: los tokens quedan exactos (spoof no ve
+  # sufijo) y sin el veto el predicado permite (bypass medido: RC=0).
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \nbash tools/saikit-merge.sh --confirmado')"
+  _g7_assert_deny
+}
+caso_g7_niega_lectura_multilinea_real() {
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh\nbash tools/saikit-merge.sh --confirmado')"
+  _g7_assert_deny
+}
+caso_g7_niega_lectura_cr() {
+  # Idem \n: con espacio, spoof no ve sufijo y el \r crudo pega comandos.
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \rbash tools/saikit-merge.sh --confirmado')"
   _g7_assert_deny
 }
 
