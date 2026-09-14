@@ -29,6 +29,31 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-13 — PRs #323 + #324 (20.18/20.19: medición viva escenario2 dsh UI web + cierre de filas; plan de implementación Phase 22) — hooks NO-OP
+
+- **Merges:** #324 `23874cf5e6ddeacd035a784163c1e1a5997b5922` (2026-09-14T04:09:09Z)
+  y #323 `e050964c2362205fd49ffa0957411f6828b1c654` (2026-09-14T05:09:13Z),
+  verificados contra la API/`git fetch` (squash: el contenido está en master).
+- **¿Cambió el hook? NO en ninguno.** #323 es evidencia+ledger (transcripts
+  `.zst`, `medicion-2026-09-13.md`, cierre de filas 20.18/20.19 y ajuste de
+  20.26 por review de CodeRabbit); #324 es un solo doc de plan.
+  `git diff 23874cf^..e050964 -- hooks/` vacío.
+- **Deploy corrido igual (regla de costumbre):** `install-hook.sh --check`
+  veredicto=ok, 4/4 copias al-día contra los bytes de `origin/master`
+  (`e050964`, fuente_sha256 `1dc9a75a…` — el hook no cambió desde #320).
+- **`check-hook-registration.sh`:** las tres fases que el gate necesita
+  (`UserPromptSubmit`, `PostToolUse`, `Stop`) registradas en los cuatro
+  hosts, sin hallazgos — salida vacía y exit 0, que en su contrato
+  fail-open significa las 3 fases OK.
+- **CI:** gate verde en ambos PRs (#323 run
+  [34805054991](https://github.com/gon0801/summonaikit-claude/actions/runs/34805054991);
+  #324 run
+  [34804911080](https://github.com/gon0801/summonaikit-claude/actions/runs/34804911080)).
+  Review de bots: #323 con 1 Major de CodeRabbit atendido en `87f726f`
+  (20.26 quedó con bloqueo obsoleto) y rerun rate-limited declarado;
+  #324 sin revisión (rate limited), docs-only.
+- **Operador:** merges de Gon; chequeos del lead (kimi) en la misma sesión.
+
 ## 2026-09-13 — PR #321 (cierre de ledger de los bloques 6–9: deploy-log de los seis merges, 20.25 cerrada, bloqueo explícito de 20.26) — hooks NO-OP
 
 - **Merge:** `79eab16ad09554929381df7720670956e60738bd` (2026-09-14T02:54:57Z),
