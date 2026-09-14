@@ -317,6 +317,7 @@ GEN="${SAIKIT_CI_MINIMO:-$HERE/saikit-ci-minimo.sh}"
 # --detectar-test-cmd): una sola fuente, sin duplicar el awk de npm.
 # Como el CI minimo: fallar aca no tumba el setup (el JSON ya esta escrito).
 WRAP="$ROOT/tests/run.sh"
+WRAP_ESCRITO=0
 if [ -f "$WRAP" ] && [ ! -L "$WRAP" ]; then
   printf 'saikit-setup-autopilot: runner reconocido: tests/run.sh (el gate lo acredita; sin wrapper)\n'
 elif [ -L "$WRAP" ]; then
@@ -375,13 +376,38 @@ else
             elif ! bash -n "$WRAP_TMP" 2>/dev/null; then
               rm -f "$WRAP_TMP"
               printf 'saikit-setup-autopilot: el wrapper no parsea; no se instala\n'
-            elif ! chmod 755 "$WRAP_TMP" 2>/dev/null || ! mv -f "$WRAP_TMP" "$WRAP" 2>/dev/null; then
+            elif ! chmod 755 "$WRAP_TMP" 2>/dev/null; then
               rm -f "$WRAP_TMP"
               printf 'saikit-setup-autopilot: no se pudo instalar tests/run.sh; sin wrapper\n'
-            elif [ ! -x "$WRAP" ]; then
-              printf 'saikit-setup-autopilot: tests/run.sh quedo sin bit de ejecucion; sin wrapper\n'
             else
-              printf 'saikit-setup-autopilot: wrapper escrito: tests/run.sh -> %s\n' "$WRAP_UNA"
+              # Ganchos SOLO de test: simulan que el destino aparece entre el
+              # consentimiento y el publish (carrera determinista).
+              if [ -n "${SAIKIT_SETUP_BEFORE_WRITE:-}" ]; then
+                ( cd "$ROOT" && eval "$SAIKIT_SETUP_BEFORE_WRITE" ) || true
+              fi
+              # Rechequeo de carrera (espejo de escribir_atomico en
+              # saikit-ci-minimo.sh): alguien pudo crear tests/run.sh mientras
+              # la oferta pendia; mv -f lo pisaria en silencio.
+              if [ -e "$WRAP" ] || [ -L "$WRAP" ]; then
+                rm -f "$WRAP_TMP"
+                printf 'saikit-setup-autopilot: carrera: ya hay tests/run.sh; no se pisa\n'
+              else
+                if [ -n "${SAIKIT_SETUP_BEFORE_MV:-}" ]; then
+                  ( cd "$ROOT" && eval "$SAIKIT_SETUP_BEFORE_MV" ) || true
+                fi
+                # mv -n no reemplaza; si el destino aparece entre el rechequeo
+                # y el mv (ventana TOCTOU), el temporal sigue ahi y lo
+                # tratamos como carrera.
+                if ! mv -n "$WRAP_TMP" "$WRAP" 2>/dev/null || [ -e "$WRAP_TMP" ]; then
+                  rm -f "$WRAP_TMP"
+                  printf 'saikit-setup-autopilot: carrera: tests/run.sh aparecio al publicar; no se pisa\n'
+                elif [ ! -x "$WRAP" ]; then
+                  printf 'saikit-setup-autopilot: tests/run.sh quedo sin bit de ejecucion; sin wrapper\n'
+                else
+                  WRAP_ESCRITO=1
+                  printf 'saikit-setup-autopilot: wrapper escrito: tests/run.sh -> %s\n' "$WRAP_UNA"
+                fi
+              fi
             fi
           fi
         else
@@ -405,6 +431,12 @@ printf '  merge=%s despliega=%s rama=%s pr=%s\n' "$merge_json" "$despliega_json"
 # untracked y el veto sin checks seguia).
 if [ -f "$ROOT/.github/workflows/saikit-ci-minimo.yml" ]; then
   printf '  incluye tambien .github/workflows/saikit-ci-minimo.yml en el commit.\n'
+fi
+# 22.1r2 P2(2): si se escribio el wrapper en esta corrida, hay que subirlo:
+# local no sirve — el gate no lo ve y el merge sigue bloqueado (el bloqueo
+# que 22.1 resuelve).
+if [ "$WRAP_ESCRITO" = 1 ]; then
+  printf '  incluye tambien tests/run.sh en el commit.\n'
 fi
 printf '  commitea y pushea a origin/%s: el merge lee la config (y el CI) de ahi, no de tu disco.\n' "$rama_resp"
 exit 0

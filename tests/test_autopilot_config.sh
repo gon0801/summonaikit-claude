@@ -333,6 +333,48 @@ caso "wrapper_default_no_sin_tty"
 }
 fin_caso "wrapper_default_no_sin_tty"
 
+caso "wrapper_carrera_pre_rechequeo_no_pisa"
+{
+  # 22.1r2 P2(1): tests/run.sh aparece entre consentimiento y publish — el
+  # rechequeo lo ve y no se pisa (espejo de escribir_atomico de ci-minimo).
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  export SAIKIT_SETUP_BEFORE_WRITE='printf "MIO" > tests/run.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  unset SAIKIT_SETUP_BEFORE_WRITE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$(cat tests/run.sh 2>/dev/null)" = "MIO" ] || _mal "piso el run.sh aparecido en carrera"
+  _contiene "reporta la carrera" "$OUT" "carrera: ya hay tests/run.sh; no se pisa"
+}
+fin_caso "wrapper_carrera_pre_rechequeo_no_pisa"
+
+caso "wrapper_carrera_post_rechequeo_no_pisa"
+{
+  # 22.1r2 P2(1): aparece DESPUES del rechequeo (ventana TOCTOU) — mv -n no
+  # reemplaza y se reporta (el temporal sobreviviente delata la carrera).
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  export SAIKIT_SETUP_BEFORE_MV='printf "MIO" > tests/run.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  unset SAIKIT_SETUP_BEFORE_MV
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$(cat tests/run.sh 2>/dev/null)" = "MIO" ] || _mal "piso el run.sh aparecido en la ventana TOCTOU"
+  _contiene "reporta la carrera tardia" "$OUT" "carrera: tests/run.sh aparecio al publicar; no se pisa"
+}
+fin_caso "wrapper_carrera_post_rechequeo_no_pisa"
+
+caso "wrapper_instrucciones_exigen_commitear_run_sh"
+{
+  # 22.1r2 P2(2): si se escribio el wrapper, las instrucciones finales exigen
+  # subirlo — local no sirve: el gate no lo ve y el merge sigue bloqueado.
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "exige commitear el wrapper" "$OUT" "incluye tambien tests/run.sh en el commit"
+}
+fin_caso "wrapper_instrucciones_exigen_commitear_run_sh"
+
 caso "wrapper_run_sh_symlink_no_se_toca"
 {
   # 22.1r1: tests/run.sh es un enlace (apunta a una bateria real) + hay
@@ -647,7 +689,7 @@ c_wrap_consent() {
   _contiene "avisa" "$OUT" "sin wrapper"
 }
 
-c_wrap_nombre() {
+c_wrap_dollar() {
   CASO_ROJO=0; sb_reset
   mkdir -p tests
   printf '#!/bin/sh\nexit 0\n' > 'tests/a$b.sh'
@@ -657,17 +699,99 @@ c_wrap_nombre() {
   _contiene "veta" "$OUT" "o controles"
 }
 
+c_wrap_dquote() {
+  # La comilla es el unico veto cuya caida cambia el MOTIVO (el backstop
+  # bash -n la ataja con "no parsea"): este helper pineado al mensaje del
+  # veto demuestra ambas guardas — si el veto cae, el motivo cambia.
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a"b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió nombre con comilla"
+  _contiene "veta por la guarda veto, no por -n" "$OUT" "comillas, $, \\ o controles"
+}
+
+c_wrap_backtick() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a`b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió nombre con backtick"
+  _contiene "veta" "$OUT" "o controles"
+}
+
+c_wrap_newline() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > "$(printf 'tests/a\nb.sh')"
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió nombre con salto"
+  _contiene "veta" "$OUT" "o controles"
+}
+
+c_wrap_backslash() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > 'tests/a\b.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e tests/run.sh ] || _mal "envolvió nombre con backslash"
+  _contiene "veta" "$OUT" "o controles"
+}
+
+c_race_recheck() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  export SAIKIT_SETUP_BEFORE_WRITE='printf "MIO" > tests/run.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  unset SAIKIT_SETUP_BEFORE_WRITE
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$(cat tests/run.sh 2>/dev/null)" = "MIO" ] || _mal "piso el run.sh aparecido en carrera"
+  _contiene "reporta la carrera" "$OUT" "carrera: ya hay tests/run.sh; no se pisa"
+}
+
+c_race_mv() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  export SAIKIT_SETUP_BEFORE_MV='printf "MIO" > tests/run.sh'
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  unset SAIKIT_SETUP_BEFORE_MV
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$(cat tests/run.sh 2>/dev/null)" = "MIO" ] || _mal "piso el run.sh aparecido en la ventana TOCTOU"
+  _contiene "reporta la carrera tardia" "$OUT" "carrera: tests/run.sh aparecio al publicar; no se pisa"
+}
+
+c_wrap_instr() {
+  CASO_ROJO=0; sb_reset
+  mkdir -p tests
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "exige commitear el wrapper" "$OUT" "incluye tambien tests/run.sh en el commit"
+}
+
 while IFS=$'\t' read -r nombre expr fun; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun"
 done <<'MUTS'
 despliega_default_false	s|despliega_default="no-se"|despliega_default="xxx"|	c_defaults
-wrap_nunca_instala	s|mv -f "$WRAP_TMP" "$WRAP"|true|	c_wrap
+wrap_nunca_instala	s|mv -n "$WRAP_TMP" "$WRAP"|true|	c_wrap
 wrap_symlink_run_sh	s|elif \[ -L "\$WRAP" \]; then|elif false; then|	c_wrap_symlink
 wrap_multi_elige	s|elif \[ "\$WRAP_N" -gt 1 \]; then|elif false; then|	c_wrap_multi
 wrap_sin_consentimiento	s|^              WRAP_VOL=NO$|              WRAP_VOL=SI|	c_wrap_consent
-wrap_nombres_peligrosos	s|case "\$WRAP_UNA" in|case "x-imposible" in|	c_wrap_nombre
-wrap_validacion_muerta	s|elif ! bash -n "\$WRAP_TMP" 2>/dev/null; then|elif true; then|	c_wrap
+wrap_veto_dollar	s#|\*\\\$\*##	c_wrap_dollar
+wrap_veto_dquote	s#\*\\"\*|\*\\\$\*#*\\$*#	c_wrap_dquote
+wrap_veto_backtick	s#|\*\\[`]\*##	c_wrap_backtick
+wrap_veto_cntrl	s#\*\\[`]\*|\*\[\[:cntrl:\]\]\*#*\\`*#	c_wrap_newline
+wrap_veto_backslash	s#|\*\\\\\*)#)#	c_wrap_backslash
+wrap_carrera_sin_recheck	s#if \[ -e "\$WRAP" \] || \[ -L "\$WRAP" \]; then#if false; then#	c_race_recheck
+wrap_carrera_mvf	s|mv -n "$WRAP_TMP" "$WRAP"|mv -f "$WRAP_TMP" "$WRAP"|	c_race_mv
+wrap_instr_sin_runsh	s|if \[ "\$WRAP_ESCRITO" = 1 \]; then|if false; then|	c_wrap_instr
 lock_sin_mkdir	s|if mkdir "$LOCK_DIR" 2>/dev/null; then|if true; then|	c_contencion
 lock_se_autolimpia	s|# NUNCA se borra solo|rm -rf "$LOCK_DIR"; # NUNCA se borra solo|	c_lock_viejo
 flag_sin_valor_pasa	s|if \[ \$# -lt 2 \]; then|if false; then|	c_flag_valor
