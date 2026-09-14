@@ -4516,7 +4516,7 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 # $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
 # (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
 # (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_permite_git_show_hatch caso_g7_permite_rtk_git_show_hatch caso_g7_permite_grep_hatch caso_g7_niega_lectura_encadenada caso_g7_niega_lectura_multilinea_escape caso_g7_niega_lectura_multilinea_real caso_g7_niega_lectura_cr"
+CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_permite_git_show_hatch caso_g7_permite_rtk_git_show_hatch caso_g7_permite_grep_hatch caso_g7_niega_lectura_encadenada caso_g7_niega_lectura_multilinea_escape caso_g7_niega_lectura_multilinea_real caso_g7_niega_lectura_cr caso_g7_niega_lectura_cr_real caso_g7_niega_lectura_u_crudo caso_g7_niega_lectura_c0_otro caso_g7_permite_lectura_tab"
 
 _g7_plantar_hatch() {
   unset SAIKIT_KIT_MANIFEST
@@ -4744,6 +4744,31 @@ caso_g7_niega_lectura_cr() {
   _g7_plantar_hatch mismatch
   lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \rbash tools/saikit-merge.sh --confirmado')"
   _g7_assert_deny
+}
+caso_g7_niega_lectura_cr_real() {
+  # 22.2r2: CR real 0x0D ($'' lo materializa): parte/oculta igual que \n.
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh \rbash tools/saikit-merge.sh --confirmado')"
+  _g7_assert_deny
+}
+caso_g7_niega_lectura_u_crudo() {
+  # 22.2r2: \u crudo (6 chars): el ejecutor lo decodifica igual que \n.
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \u000abash tools/saikit-merge.sh --confirmado')"
+  _g7_assert_deny
+}
+caso_g7_niega_lectura_c0_otro() {
+  # 22.2r2: otro C0 (0x01): la guarda grep lo veta aunque no parta comandos.
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh \x01bash tools/saikit-merge.sh --confirmado')"
+  _g7_assert_deny
+}
+caso_g7_permite_lectura_tab() {
+  # 22.2r2: tab real separa legitimo, no se veta. Mismatch a proposito: con
+  # match el hatch permitiria igual y el caso no mediria la guarda de lectura.
+  _g7_plantar_hatch mismatch
+  lab_run auto claude "$(lab_payload_pretool_bash $'cat\ttools/saikit-merge.sh')"
+  _g7_assert_allow
 }
 
 caso_g7_no_bash_permite() {
