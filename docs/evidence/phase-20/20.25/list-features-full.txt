@@ -1,0 +1,17 @@
+id=install-guardian card=features/install-guardian.md mode=sandbox scope=full cases=install-dry-run,install-ownership,install-noop,install-foreign,install-restore status=active
+id=gate-turn card=features/gate-turn.md mode=sandbox scope=full cases=gate-unarmed,gate-armed,gate-stop-no-receipt,gate-grok-bg-doc-roto,gate-advzona-teardown-seguro,gate-advzona-unknown-limpia status=active
+id=audit-ledger card=features/audit-ledger.md mode=sandbox scope=full cases=ledger-ok,ledger-stale status=active
+id=check-deploy-log card=features/check-deploy-log.md mode=sandbox scope=full cases=deploy-log-ok,deploy-log-order,deploy-log-dup,deploy-log-hora-evidente,deploy-log-hora-no-recuperada,deploy-log-hora-sin-evidencia status=active
+id=saikit-merge card=features/saikit-merge.md mode=simulated scope=full cases=merge-listo,merge-confirmado,merge-ci-rojo,merge-base-movida,merge-sello-ajeno,merge-head-cambiado,revert-ok,revert-sin-trailer,revert-no-punta,merge-lock-contencion,merge-lock-propio,merge-lock-worktrees,merge-lock-recuperacion status=active
+id=saikit-postmerge card=features/saikit-postmerge.md mode=simulated scope=full cases=postmerge-green,postmerge-red,postmerge-pending,postmerge-no-run,postmerge-hint-pendiente,postmerge-hint-sin-run,postmerge-no-color,postmerge-redacted,postmerge-transport status=active
+id=setup-autopilot card=features/setup-autopilot.md mode=sandbox scope=full cases=setup-interactive,setup-invalid,setup-timeout,setup-flags,setup-defaults,setup-pipe-not-pty,setup-lock,setup-lock-held,setup-with-ci,setup-without-ci status=active
+id=ci-minimo card=features/ci-minimo.md mode=sandbox scope=full cases=ci-interactive,ci-reject,ci-flags,ci-defaults,ci-preserve-foreign,ci-idempotent,ci-runners,ci-unsupported,ci-run-fixture,ci-pins-ilegible,ci-pins-proponer status=active
+id=autopilot-contract card=features/autopilot-contract.md mode=sandbox scope=full cases=autopilot-sentinel,autopilot-no-inherit,autopilot-paragraph,autopilot-persist status=active
+id=install-hosts card=features/install-hosts.md mode=sandbox scope=full cases=hosts-four-copies,hosts-zcode-reuses,hosts-kimi-profiles,hosts-identity,hosts-noop,hosts-retirada,hosts-quitar-zcode-dry,hosts-quitar-grok-dry,hosts-foreign,hosts-registration,hosts-os-unavailable,hosts-symlink,hosts-no-live status=active
+id=routing-recipes card=features/routing-recipes.md mode=sandbox scope=full cases=routing-roles,routing-unknown,recipes-manifest-ok,recipes-manifest-altered,recipes-consume,routing-no-16.7,routing-no-live status=active
+id=check-secrets card=features/check-secrets.md mode=sandbox scope=full cases=secrets-strong,secrets-fallback,secrets-redaction status=active
+id=capture-payloads card=features/capture-payloads.md mode=sandbox scope=full cases=capture-lifecycle,capture-redaction status=active
+id=decision-blast card=features/decision-blast.md mode=sandbox scope=full cases=decision-valid,decision-reject,blast-valid,blast-reject,redact,output-location status=active
+id=verify-app card=features/verify-app.md mode=sandbox scope=full cases=verify-generate,verify-reject-existing,verify-estado,verify-drive-cmd,verify-no-product-pass status=active
+id=stage-override card=features/stage-override.md mode=sandbox scope=full cases=stage-prepare,stage-hook-hash,stage-state-lab,stage-profile-intact,stage-ownership,stage-cleanup,stage-no-live status=active
+id=merge-happy-path card=features/merge-happy-path.md mode=live scope=full cases=live-blocked-no-auth,live-current-reasons,live-manual-procedure,live-no-sim-credit,live-no-seal-transfer status=blocked

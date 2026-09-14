@@ -1,0 +1,2 @@
+golden-harness: OK — 57 escenarios se comportan igual que la linea base
+EXIT_CHECK=0

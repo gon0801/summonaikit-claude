@@ -1,0 +1,9 @@
+{
+ "session_id": "01a09bbc-cd04-74b2-994b-5e7dfd801ef4",
+ "transcript_path": "[LAB]/codexhome/sessions/2026/09/13/rollout-2026-09-13T10-07-16-01a09bbc-cd04-74b2-994b-5e7dfd801ef4.jsonl",
+ "cwd": "[LAB]/wt-A",
+ "hook_event_name": "SessionStart",
+ "model": "gpt-6-astra",
+ "permission_mode": "bypassPermissions",
+ "source": "startup"
+}

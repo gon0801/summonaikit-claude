@@ -1,0 +1,142 @@
+test_gate_mutations: shard 3/4 — 46 mutaciones
+  G1  el estado se vuelve a llavear solo por proyecto (sin sesion)
+      lo atrapa: caso_g1_dos_sesiones_no_comparten_estado
+  G1  la regla permanente de la bateria deja de nombrar el lugar y vuelve a decir solo cuantas veces
+      lo atrapa: caso_g1_reglas_nombran_donde_correr_la_bateria
+  G1  el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
+      lo atrapa: caso_g1_notificacion_con_sentinel_no_rearma
+  G1  el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
+      lo atrapa: caso_g1_dos_hosts_mismo_repo_no_comparten_estado
+  G1  la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
+      lo atrapa: caso_g1_no_arma_sin_sentinel
+  G1  la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
+      lo atrapa: caso_g1_sentinel_con_frontera
+  G1  el alias -saikit:pregunta deja de bajar el carril
+      lo atrapa: caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1  autopilot deja de vaciar receta_alias y un turno -saikit:autopilot -saikit:pregunta queda con alias
+      lo atrapa: caso_g1_autopilot_gana_sobre_alias
+  G1  el alias baja el carril pero no nombra la receta
+      lo atrapa: caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1  el menu vuelve a recorrer el archivo entero para titulo/carril y una receta cuyo cuerpo documenta el formato filtra ese texto del cuerpo
+      lo atrapa: caso_g1_receta_menu_lee_solo_frontmatter
+  G2  AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
+      lo atrapa: caso_g2_runner_fallido_forma_real
+  G2  el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
+      lo atrapa: caso_g2_runner_fallido_cargo_no_marca
+  G2  un evento de herramienta crea estado sin turno armado
+      lo atrapa: caso_g2_sin_armar_no_crea_estado
+  G2  la regla de redaccion de ghp_ se neutraliza y un token ghp_ vuelve al log
+      lo atrapa: caso_g2_credenciales_token_nuevas_se_redactan
+  G2  'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+      lo atrapa: caso_g2_runner_fallido_dotnet_no_marca
+  G2  las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
+      lo atrapa: caso_g2_runner_bash_run_sh_marca
+  G2  el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
+      lo atrapa: caso_g2_zcode_verif_subagente_cero_passed_bloquea
+  G2  el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)
+      lo atrapa: caso_g2_zcode_verif_subagente_cmd_con_error_acredita
+  G2  el veto global del label se neutraliza y un fallo declarado en otro span ya no descalifica (18.18)
+      lo atrapa: caso_g2_zcode_verif_subagente_exit1_bloquea
+  G3  la secuencia se exige en cualquier host, no solo claude
+      lo atrapa: caso_g3_cursor_no_exige_secuencia
+  G3  el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
+      lo atrapa: caso_g3_target_por_claudecode_fallback
+  G4  la pausa declarada deja de reconocerse
+      lo atrapa: caso_g4_pausa_permite
+  G4  el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)
+      lo atrapa: caso_g4_grok_delegado_sin_bg_bloquea
+  G4  la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)
+      lo atrapa: caso_g4_grok_delegado_bg_clave_escapada
+  G4  la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
+      lo atrapa: caso_g4_pausa_permite
+  G4  el canal transcript se ignora y no devuelve texto del asistente
+      lo atrapa: caso_g4_recibo_dos_bloques_pasa
+  G4  la contencion compara la ruta cruda en vez de resolverla con cd+pwd
+      lo atrapa: caso_g4_pausa_en_resultado_bloquea
+  G5  el presupuesto pasa de 2 ciclos a 99
+      lo atrapa: caso_g5_autopilot_parrafo_en_budget_agotado
+  G4  la lectura de hookEventName se anula y un Stop camel-only cae a tool (stop_gate no corre)
+      lo atrapa: caso_g4_stop_camel_solo_bloquea
+  G1  la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
+      lo atrapa: caso_g1_dos_hosts_codex_y_claude_no_comparten_estado
+  G1  la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
+      lo atrapa: caso_g1_grok_senal_exportada_vacia_cuenta
+  G2  el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)
+      lo atrapa: caso_g2_grok_runner_fallido_no_marca
+  G1  la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
+      lo atrapa: caso_g1_grok_senal_exportada_vacia_cuenta
+  G3  la escotilla DELEGATED vuelve a no perdonar awaiting adversary y una delegacion viva quema un ciclo (D6, Task 13.5)
+      lo atrapa: caso_g3_delegated_adversary_permite
+  G1  el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
+      lo atrapa: caso_g1_contrato_nombra_adversary
+  G7  el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar
+      lo atrapa: caso_g7_niega_gh_api_merge
+  G7  el dest de git push vuelve a token-en-cualquier-lado y una URL con main niega un feature
+      lo atrapa: caso_g7_permite_git_push_url_main
+  G7  el spoof de sufijo (.bak) se apaga y saikit-merge.sh.bak con pin del real deja de negar
+      lo atrapa: caso_g7_niega_hatch_sufijo_bak
+  G8  cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra
+      lo atrapa: caso_g8_full_archivos_sin_cita_bloquea
+  G8  se deja de exigir la familia tsv
+      lo atrapa: caso_g8_full_cita_solo_blast_bloquea
+  G8  el skip se busca como subcadena sin ancla
+      lo atrapa: caso_g8_full_skip_en_prosa_bloquea
+  G8  una carpeta de evidencia enlazada afuera se acredita
+      lo atrapa: caso_g8_full_cita_directorio_externo_bloquea
+  G3  el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
+      lo atrapa: caso_g3_codex_nativo_cierre_acredita
+  G3  la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)
+      lo atrapa: caso_g3_codex_stop_rol_cambiado_no_acredita
+  G8  el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
+      lo atrapa: caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea
+
+  --- mutation-test declarado (gate | condicion rota | caso que la atrapa)
+  G1|el estado se vuelve a llavear solo por proyecto (sin sesion)|caso_g1_dos_sesiones_no_comparten_estado
+  G1|la regla permanente de la bateria deja de nombrar el lugar y vuelve a decir solo cuantas veces|caso_g1_reglas_nombran_donde_correr_la_bateria
+  G1|el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado|caso_g1_notificacion_con_sentinel_no_rearma
+  G1|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)|caso_g1_dos_hosts_mismo_repo_no_comparten_estado
+  G1|la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel|caso_g1_no_arma_sin_sentinel
+  G1|la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman|caso_g1_sentinel_con_frontera
+  G1|el alias -saikit:pregunta deja de bajar el carril|caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1|autopilot deja de vaciar receta_alias y un turno -saikit:autopilot -saikit:pregunta queda con alias|caso_g1_autopilot_gana_sobre_alias
+  G1|el alias baja el carril pero no nombra la receta|caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1|el menu vuelve a recorrer el archivo entero para titulo/carril y una receta cuyo cuerpo documenta el formato filtra ese texto del cuerpo|caso_g1_receta_menu_lee_solo_frontmatter
+  G2|AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse|caso_g2_runner_fallido_forma_real
+  G2|el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse|caso_g2_runner_fallido_cargo_no_marca
+  G2|un evento de herramienta crea estado sin turno armado|caso_g2_sin_armar_no_crea_estado
+  G2|la regla de redaccion de ghp_ se neutraliza y un token ghp_ vuelve al log|caso_g2_credenciales_token_nuevas_se_redactan
+  G2|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar|caso_g2_runner_fallido_dotnet_no_marca
+  G2|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)|caso_g2_runner_bash_run_sh_marca
+  G2|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)|caso_g2_zcode_verif_subagente_cero_passed_bloquea
+  G2|el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)|caso_g2_zcode_verif_subagente_cmd_con_error_acredita
+  G2|el veto global del label se neutraliza y un fallo declarado en otro span ya no descalifica (18.18)|caso_g2_zcode_verif_subagente_exit1_bloquea
+  G3|la secuencia se exige en cualquier host, no solo claude|caso_g3_cursor_no_exige_secuencia
+  G3|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion|caso_g3_target_por_claudecode_fallback
+  G4|la pausa declarada deja de reconocerse|caso_g4_pausa_permite
+  G4|el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)|caso_g4_grok_delegado_sin_bg_bloquea
+  G4|la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)|caso_g4_grok_delegado_bg_clave_escapada
+  G4|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)|caso_g4_pausa_permite
+  G4|el canal transcript se ignora y no devuelve texto del asistente|caso_g4_recibo_dos_bloques_pasa
+  G4|la contencion compara la ruta cruda en vez de resolverla con cd+pwd|caso_g4_pausa_en_resultado_bloquea
+  G5|el presupuesto pasa de 2 ciclos a 99|caso_g5_autopilot_parrafo_en_budget_agotado
+  G4|la lectura de hookEventName se anula y un Stop camel-only cae a tool (stop_gate no corre)|caso_g4_stop_camel_solo_bloquea
+  G1|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude|caso_g1_dos_hosts_codex_y_claude_no_comparten_estado
+  G1|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)|caso_g1_grok_senal_exportada_vacia_cuenta
+  G2|el veto de toolResult.exit_code != 0 se neutraliza y un runner rojo grok vuelve a acreditar verificacion (D5)|caso_g2_grok_runner_fallido_no_marca
+  G1|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)|caso_g1_grok_senal_exportada_vacia_cuenta
+  G3|la escotilla DELEGATED vuelve a no perdonar awaiting adversary y una delegacion viva quema un ciclo (D6, Task 13.5)|caso_g3_delegated_adversary_permite
+  G1|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)|caso_g1_contrato_nombra_adversary
+  G7|el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar|caso_g7_niega_gh_api_merge
+  G7|el dest de git push vuelve a token-en-cualquier-lado y una URL con main niega un feature|caso_g7_permite_git_push_url_main
+  G7|el spoof de sufijo (.bak) se apaga y saikit-merge.sh.bak con pin del real deja de negar|caso_g7_niega_hatch_sufijo_bak
+  G8|cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra|caso_g8_full_archivos_sin_cita_bloquea
+  G8|se deja de exigir la familia tsv|caso_g8_full_cita_solo_blast_bloquea
+  G8|el skip se busca como subcadena sin ancla|caso_g8_full_skip_en_prosa_bloquea
+  G8|una carpeta de evidencia enlazada afuera se acredita|caso_g8_full_cita_directorio_externo_bloquea
+  G3|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)|caso_g3_codex_nativo_cierre_acredita
+  G3|la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)|caso_g3_codex_stop_rol_cambiado_no_acredita
+  G8|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar|caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea
+test_gate_mutations: OK

@@ -178,16 +178,33 @@ leyendo la config de otro lado que `origin/<rama>`; revertir solo (el
 postmerge avisa con el comando listo y no ejecuta nada); `--admin`, force, ni
 `--delete-branch` (el borrado remoto es paso aparte).
 
-Límites medidos (detalle en el spec § Límites MEDIDOS de la Phase 18 y en
-`docs/smoke-autopilot-2026-09-05.md`): el camino verde completo no se ha
-observado en vivo; en el recorrido medido de Grok el merge es manual (el
-sello queda en la sesión emisora, 18.26); la guardia `PreToolUse` contra el
-merge a pelo nace inerte hasta que el operador la registra; el cierre
-headless quedó corregido con límites (18.27): el auto-wake conserva el
-estado y la espera delegada exige trabajo en vuelo. Se observaron 9/9
-bloqueos sostenidos; el teardown de la ronda del wake y el presupuesto de
-ciclos todavía permiten salidas sin recibo. Evidencia y alcance en
-[la medición de 18.27](docs/evidence/18.27-grok-headless/cadena-bloqueo-continuacion.md).
+Límites medidos (detalle en el spec §§ Límites MEDIDOS de la Phase 18 y
+Phase 20, y en `docs/smoke-autopilot-2026-09-05.md` para la línea base):
+Phase 20 midió en vivo lo que en Phase 18 era límite. El camino verde
+completo hasta publicar **sí se observó**: en Claude (20.10 — PR #9/#10, CI
+verde, LISTO sin publicar, sí explícito, merge solo por la tool con el sha
+sellado, postmerge VERDE ×2, evidencia `docs/evidence/phase-20/20.10/`) y en
+Grok (20.14 — PR #8, sello consumido por vínculo 20.13, merge por la tool
+tras el sí, postmerge VERDE, evidencia `docs/evidence/phase-20/20.14/`). La
+guardia `PreToolUse` contra el merge a pelo **negó en vivo** un merge
+directo antes de ejecutar y dejó pasar un uso permitido, con payload,
+decisión y ejecución correlacionados por `tool_use_id` (20.9, evidencia
+`docs/evidence/phase-20/20.9/`; la fase hay que registrarla a mano en el
+`settings.json` del perfil, eso no cambió). `cuidar-pr` se midió en sus tres
+modos — revisar no modifica, solo-hilos no cambia código, cuidar deja listo
+sin mergear (20.11, evidencia `docs/evidence/phase-20/20.11/`). El cierre
+headless tiene diseño (20.15), superficie (20.16) y medición viva sync/async
+(20.17): claude cierra limpio y el teardown sin Stop queda
+`incomplete/1`; grok responde 402 y queda `unknown`, no éxito. Costo y
+latencia se compararon con recorridos reutilizados y la receta→tier 16.7
+quedó **aplazada** con criterio de reactivación explícito (20.21). La
+adopción del autopilot por proyecto quedó **preparada, sin activar**
+(20.22). Sigue sin medirse: el escenario2 de bloqueo dsh en UI web
+(20.18/20.19 abiertas con decisión escrita, no PASS). Y siguen vigentes los
+residuales: el auto-wake conserva el estado y la espera delegada exige
+trabajo en vuelo; el teardown de la ronda del wake y el presupuesto de
+ciclos todavía permiten salidas sin recibo; que el proceso termine sin error
+no demuestra que haya completado el cierre.
 La versión para quien no lee código — qué hace solo, qué NUNCA hace y cómo deshacerlo —
 está en `docs/guia-usuario.html`, no acá.
 

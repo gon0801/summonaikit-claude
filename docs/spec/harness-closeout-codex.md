@@ -41,6 +41,25 @@ implícitamente la validación actual del contenido de los artefactos.
 Si el host no expone una señal suficiente, la investigación termina con la
 limitación documentada y las implementaciones condicionales no se activan.
 
+## Implementación del canal nativo (21.2, 2026-09-13)
+
+La re-corrida de 21.1 midió señal suficiente y 21.2 se activó con alcance
+recortado. En Codex, el CIERRE nativo acredita rol: un `SubagentStop` con
+`agent_id` registrado por el `SubagentStart` previo y `agent_transcript_path`
+presente acredita el rol que el propio evento trae. En una sesión con canal
+nativo activo, los eventos internos y el despacho NO acreditan: sin
+`SubagentStop` el agente está running y no está acreditado. El cierre nunca
+emite veredicto de éxito ni de fallo (el Stop de fallo blando tiene la misma
+forma; del fallo duro R3 se desconoce si emite Stop — sin Stop = running =
+no acreditado). Ni `task_name`, ni prompt, ni prosa, ni
+ruta acreditan. En una sesión sin señal nativa queda el crédito histórico por
+`agent_type` de eventos internos (medido en 6.1). **R4 (revisión externa
+21.2 r2):** el legado rige hasta el PRIMER evento nativo de la sesión — el
+hook no distingue «host sin canal» de «canal aún mudo», así que la marca
+`codex_native_seen` apaga el legado desde el primer `SubagentStart`/`SubagentStop`
+aunque no acredite nada (huérfano, replay, rol cambiado). `VERIFIED BY SUBAGENT`
+conserva su contrato zcode: este canal no lo extiende a Codex.
+
 ## Preflight
 
 Una ayuda previa al cierre usa el mismo parser y juez estático que Stop. Puede
@@ -48,3 +67,16 @@ mostrar requisitos dinámicos todavía no observables, pero no los acredita. Es
 solo lectura: no consume ciclos ni cambia estado, crea rastro o fabrica
 evidencia. El veredicto final sigue perteneciendo a Stop porque el estado puede
 cambiar después del preflight.
+
+**Implementación (21.5):** fase `preflight` del hook (`preflight_check()` en
+`hooks/summonaikit-harness.sh`, invocable con
+`SUMMONAIKIT_HOOK_PHASE=preflight`). Ejecuta literalmente `stop_gate` en un
+subshell con las rutas de escritura redirigidas a un scratch temporal (el
+único borrado fuera del scratch, `adv_limpiar_zona`, se redefine a no-op
+dentro del subshell); ninguna regex ni gramática paralela. Reporte por
+stdout: `SAIKIT PREFLIGHT (21.5): PASS|FAIL`, sección `CAUSA:` con el texto
+que el Stop emitiría, y sección `DINAMICOS` que nombra la foto del snapshot
+(ciclo, `agents_seen` con llegadas 21.2, tail del transcript,
+`backgroundTasks`, trail/blast y 21.4) sin darlos por buenos. Exit 0 en
+PASS, 1 en FAIL, 2 en error de instrumento. El preflight nunca bloquea:
+no es un evento de cierre, es una consulta.

@@ -1,0 +1,16 @@
+      FAIL: running no acredita todavia: esperaba [], dio [verifier]
+  ROJO: caso_g3_codex_nativo_cierre_acredita
+      FAIL: agents_seen tras Start sin Stop: esperaba [], dio [verifier]
+  ROJO: caso_g3_codex_en_curso_no_acredita
+      FAIL: interno en codex no acredita: esperaba [implementer], dio [implementer,verifier]
+  ROJO: caso_g3_codex_interno_no_acredita
+      FAIL: stop huerfano no acredita: esperaba [], dio [verifier]
+  ROJO: caso_g3_codex_stop_huerfano_no_acredita
+  ok: caso_g3_codex_stop_replay_no_duplica
+  ok: caso_g3_codex_stop_otro_rol
+      FAIL: cierre sin transcript no acredita: esperaba [], dio [verifier]
+  ROJO: caso_g3_codex_stop_sin_transcript_no_acredita
+  ok: caso_g3_codex_stop_no_emite_veredicto
+  ok: caso_g3_codex_nativo_ceremonia_cierra
+  ok: caso_g3_codex_legacy_interno_acredita
+rojo rc=1

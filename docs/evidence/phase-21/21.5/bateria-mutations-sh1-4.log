@@ -1,0 +1,145 @@
+test_gate_mutations: shard 1/4 — 47 mutaciones
+  G1  el sentinel pasa a matchear cualquier texto
+      lo atrapa: caso_g1_no_arma_sin_sentinel
+  G1  la clausula que impide desarmar con prompt vacio se neutraliza y un evento sin texto vuelve a borrar el estado armado
+      lo atrapa: caso_g1_prompt_vacio_no_desarma
+  G1  la forma laxa deja de exigir la marca de cierre y una mencion humana casual suprime el desarme
+      lo atrapa: caso_g1_mencion_humana_sin_sentinel_si_desarma
+  G1  la condicion de contenido del skip grok se neutraliza y un sobre de OTRO evento con sentinel deja de armar (18.27, review r2)
+      lo atrapa: caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma
+  G1  el lane fast deja de detectarse y todo arma full
+      lo atrapa: caso_g1_fast_arma_con_lane
+  G1  se agrega grok a la emision de reglas, el host que la medicion de la 10.9 descarto por ignorar additionalContext
+      lo atrapa: caso_g1_session_no_inyecta_en_grok
+  G1  el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
+      lo atrapa: caso_g1_estado_no_se_acumula
+  G1  el parrafo del contrato deja de emitirse en turnos autopilot
+      lo atrapa: caso_g1_autopilot_arma_full_con_flag
+  G1  mark_evidence vacia el arg autopilot al reescribir y el flag desaparece a mitad de turno
+      lo atrapa: caso_g1_autopilot_sobrevive_mark_evidence
+  G1  el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
+      lo atrapa: caso_g1_receta_titulo_hostil_no_se_inyecta
+  G2  pytest sale de la lista de runners de verificacion
+      lo atrapa: caso_g2_runner_marca_verificado
+  G2  el patron error TS[0-9] deja de detectar fracasos de tsc
+      lo atrapa: caso_g2_runner_fallido_tsc_no_marca
+  G2  la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
+      lo atrapa: caso_g2_runner_pasa_0_failed_sigue_acreditado
+  G2  un runner al final de una frase deja de contar
+      lo atrapa: caso_g2_excusa_con_punto_final_no_reclama
+  G2  command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
+      lo atrapa: caso_g2_comando_entrecomillado_marca_verificado
+  G2  la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
+      lo atrapa: caso_g2_runner_en_echo_no_marca
+  G2  la condicion de host ciego ($HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
+      lo atrapa: caso_g2_claude_verif_subagente_no_acredita
+  G2  el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
+      lo atrapa: caso_g2_zcode_verif_subagente_fallo_pelado_bloquea
+  G2  las dos ramas del runner propio (tests/run.sh) salen del vocabulario del label y 'VERIFIED BY SUBAGENT: bash tests/run.sh exit 0' vuelve a NO acreditar (18.18)
+      lo atrapa: caso_g2_zcode_verif_label_runner_propio_acredita
+  G3  el gate del reviewer nunca se reporta como faltante
+      lo atrapa: caso_g3_falta_reviewer_bloquea
+  G3  el escaner deja de exigir que la clave sea de tool_input
+      lo atrapa: caso_g3_eco_fuera_de_tool_input_no_cuenta
+  G4  el ancla de linea se quita y la etiqueta vuelve a aceptarse en cualquier posicion: un recibo pegado en un parrafo cierra (18.23)
+      lo atrapa: caso_g4_etiqueta_pegada_no_cuenta
+  G4  la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
+      lo atrapa: caso_g4_delegado_incidental_en_recibo_roto_bloquea
+  G4  el validador completo del documento vuelve a solo balance (sin gram_*) y las formas rotas cuya inval vive solo en gram_* ([1,], clave ajena rota, trailing, escapes) vuelven a habilitar la escotilla (r1; tabla medida en el comentario de la mutacion)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  la exigencia fail-closed de backgroundTasks vuelve a decidir por TARGET en vez de HOST y Grok divergente puede salir sin trabajo en vuelo (review r3 PR #273)
+      lo atrapa: caso_g4_parser_bg_solo_corre_en_grok
+  G4  el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente
+      lo atrapa: caso_g4_fuga_top_level_no_cierra
+  G4  el walker deja de exigir type:text y acepta thinking/tool_use
+      lo atrapa: caso_g4_pausa_en_thinking_no_cuenta
+  G4  la deteccion del canal payload se apaga (11.4) y el unknown honesto dispara tambien con last_assistant_message PRESENTE (ausencia observada deja de bloquear)
+      lo atrapa: caso_g4_delegado_sin_rol_bloquea
+  G6  cursor deja de tener contrato de salida propio
+      lo atrapa: caso_g6_bloqueo_por_target
+  G3  se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear
+      lo atrapa: caso_g3_ceremonia_se_exige_en_codex
+  G6  el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
+      lo atrapa: caso_g6_bloqueo_codex_exit_cero
+  G1  la rama TOOL_HINT de dsh se apaga y el contrato vuelve a nombrar Task tool (Phase 15, D4)
+      lo atrapa: caso_g1_dsh_contrato_nombra_subagent
+  G2  el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
+      lo atrapa: caso_g2_grok_runner_marca_verificado
+  G3  la rama de ceremonia vuelve a claude|codex|grok y el gate queda inerte en dsh (D1/D3, Phase 15)
+      lo atrapa: caso_g3_dsh_ceremonia_incompleta_bloquea
+  G3  la sustitucion ROLE FALLBACK: ADVERSARY deja de aceptarse y un adversary caido vuelve a bloquear el cierre (D4/D6, Task 13.5)
+      lo atrapa: caso_g3_role_fallback_adversary_cierra
+  G7  el patron gh pr merge se apaga y el merge a pelo vuelve a pasar
+      lo atrapa: caso_g7_niega_gh_pr_merge
+  G7  el regex de git push exige push pegado a git y git -C / --no-pager push a master|main pasa
+      lo atrapa: caso_g7_niega_git_dash_c_push
+  G7  el hatch rechaza el pin correcto (falso positivo del script canonico)
+      lo atrapa: caso_g7_hatch_hash_ok
+  G7  el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
+      lo atrapa: caso_g7_niega_gh_pr_merge_espaciado
+  G8  una cita sin archivo en disco cierra
+      lo atrapa: caso_g8_full_cita_inexistente_bloquea
+  G8  has_trail_skip acepta cualquier texto
+      lo atrapa: caso_g8_full_sin_cita_sin_skip_bloquea
+  G8  el guard lane!=fast se apaga y fast sin cita bloquea
+      lo atrapa: caso_g8_fast_sin_cita_sin_skip_cierra
+  G8  un skip anterior a la cabecera acredita el recibo
+      lo atrapa: caso_g8_full_skip_en_preambulo_bloquea
+  G3  la guarda de codex_native_seen se invierte y el legado acredita en una sesion que YA vio un evento nativo (21.2 r2, revision externa)
+      lo atrapa: caso_g3_codex_legacy_interno_acredita
+  G8  la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
+      lo atrapa: caso_g8_full_raiz_acreditada_otro_cwd_cierra
+  G9  el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
+      lo atrapa: caso_g9_sin_efectos
+
+  --- mutation-test declarado (gate | condicion rota | caso que la atrapa)
+  G1|el sentinel pasa a matchear cualquier texto|caso_g1_no_arma_sin_sentinel
+  G1|la clausula que impide desarmar con prompt vacio se neutraliza y un evento sin texto vuelve a borrar el estado armado|caso_g1_prompt_vacio_no_desarma
+  G1|la forma laxa deja de exigir la marca de cierre y una mencion humana casual suprime el desarme|caso_g1_mencion_humana_sin_sentinel_si_desarma
+  G1|la condicion de contenido del skip grok se neutraliza y un sobre de OTRO evento con sentinel deja de armar (18.27, review r2)|caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma
+  G1|el lane fast deja de detectarse y todo arma full|caso_g1_fast_arma_con_lane
+  G1|se agrega grok a la emision de reglas, el host que la medicion de la 10.9 descarto por ignorar additionalContext|caso_g1_session_no_inyecta_en_grok
+  G1|el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)|caso_g1_estado_no_se_acumula
+  G1|el parrafo del contrato deja de emitirse en turnos autopilot|caso_g1_autopilot_arma_full_con_flag
+  G1|mark_evidence vacia el arg autopilot al reescribir y el flag desaparece a mitad de turno|caso_g1_autopilot_sobrevive_mark_evidence
+  G1|el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato|caso_g1_receta_titulo_hostil_no_se_inyecta
+  G2|pytest sale de la lista de runners de verificacion|caso_g2_runner_marca_verificado
+  G2|el patron error TS[0-9] deja de detectar fracasos de tsc|caso_g2_runner_fallido_tsc_no_marca
+  G2|la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso|caso_g2_runner_pasa_0_failed_sigue_acreditado
+  G2|un runner al final de una frase deja de contar|caso_g2_excusa_con_punto_final_no_reclama
+  G2|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion|caso_g2_comando_entrecomillado_marca_verificado
+  G2|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion|caso_g2_runner_en_echo_no_marca
+  G2|la condicion de host ciego ($HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)|caso_g2_claude_verif_subagente_no_acredita
+  G2|el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)|caso_g2_zcode_verif_subagente_fallo_pelado_bloquea
+  G2|las dos ramas del runner propio (tests/run.sh) salen del vocabulario del label y 'VERIFIED BY SUBAGENT: bash tests/run.sh exit 0' vuelve a NO acreditar (18.18)|caso_g2_zcode_verif_label_runner_propio_acredita
+  G3|el gate del reviewer nunca se reporta como faltante|caso_g3_falta_reviewer_bloquea
+  G3|el escaner deja de exigir que la clave sea de tool_input|caso_g3_eco_fuera_de_tool_input_no_cuenta
+  G4|el ancla de linea se quita y la etiqueta vuelve a aceptarse en cualquier posicion: un recibo pegado en un parrafo cierra (18.23)|caso_g4_etiqueta_pegada_no_cuenta
+  G4|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)|caso_g4_delegado_incidental_en_recibo_roto_bloquea
+  G4|el validador completo del documento vuelve a solo balance (sin gram_*) y las formas rotas cuya inval vive solo en gram_* ([1,], clave ajena rota, trailing, escapes) vuelven a habilitar la escotilla (r1; tabla medida en el comentario de la mutacion)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|la exigencia fail-closed de backgroundTasks vuelve a decidir por TARGET en vez de HOST y Grok divergente puede salir sin trabajo en vuelo (review r3 PR #273)|caso_g4_parser_bg_solo_corre_en_grok
+  G4|el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente|caso_g4_fuga_top_level_no_cierra
+  G4|el walker deja de exigir type:text y acepta thinking/tool_use|caso_g4_pausa_en_thinking_no_cuenta
+  G4|la deteccion del canal payload se apaga (11.4) y el unknown honesto dispara tambien con last_assistant_message PRESENTE (ausencia observada deja de bloquear)|caso_g4_delegado_sin_rol_bloquea
+  G6|cursor deja de tener contrato de salida propio|caso_g6_bloqueo_por_target
+  G3|se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear|caso_g3_ceremonia_se_exige_en_codex
+  G6|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)|caso_g6_bloqueo_codex_exit_cero
+  G1|la rama TOOL_HINT de dsh se apaga y el contrato vuelve a nombrar Task tool (Phase 15, D4)|caso_g1_dsh_contrato_nombra_subagent
+  G2|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)|caso_g2_grok_runner_marca_verificado
+  G3|la rama de ceremonia vuelve a claude|codex|grok y el gate queda inerte en dsh (D1/D3, Phase 15)|caso_g3_dsh_ceremonia_incompleta_bloquea
+  G3|la sustitucion ROLE FALLBACK: ADVERSARY deja de aceptarse y un adversary caido vuelve a bloquear el cierre (D4/D6, Task 13.5)|caso_g3_role_fallback_adversary_cierra
+  G7|el patron gh pr merge se apaga y el merge a pelo vuelve a pasar|caso_g7_niega_gh_pr_merge
+  G7|el regex de git push exige push pegado a git y git -C / --no-pager push a master|main pasa|caso_g7_niega_git_dash_c_push
+  G7|el hatch rechaza el pin correcto (falso positivo del script canonico)|caso_g7_hatch_hash_ok
+  G7|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa|caso_g7_niega_gh_pr_merge_espaciado
+  G8|una cita sin archivo en disco cierra|caso_g8_full_cita_inexistente_bloquea
+  G8|has_trail_skip acepta cualquier texto|caso_g8_full_sin_cita_sin_skip_bloquea
+  G8|el guard lane!=fast se apaga y fast sin cita bloquea|caso_g8_fast_sin_cita_sin_skip_cierra
+  G8|un skip anterior a la cabecera acredita el recibo|caso_g8_full_skip_en_preambulo_bloquea
+  G3|la guarda de codex_native_seen se invierte y el legado acredita en una sesion que YA vio un evento nativo (21.2 r2, revision externa)|caso_g3_codex_legacy_interno_acredita
+  G8|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea|caso_g8_full_raiz_acreditada_otro_cwd_cierra
+  G9|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real|caso_g9_sin_efectos
+test_gate_mutations: OK

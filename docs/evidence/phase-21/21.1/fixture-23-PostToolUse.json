@@ -1,0 +1,15 @@
+{
+ "session_id": "01a09be2-d0f9-7542-ad5b-e3ddbbb68133",
+ "turn_id": "01a09be2-d123-7242-a95a-2b2d431bf8fd",
+ "transcript_path": "[LAB]/home/sessions/2026/09/13/rollout-2026-09-13T10-48-48-01a09be2-d0f9-7542-ad5b-e3ddbbb68133.jsonl",
+ "cwd": "[LAB]/lab",
+ "hook_event_name": "PostToolUse",
+ "model": "gpt-5.6-sol",
+ "permission_mode": "bypassPermissions",
+ "tool_name": "collaborationwait_agent",
+ "tool_input": {
+  "timeout_ms": 3600000
+ },
+ "tool_response": "{\"message\":\"Wait completed.\",\"timed_out\":false}",
+ "tool_use_id": "call_e6V0dWiyrczqDtNaVbptAuY4"
+}

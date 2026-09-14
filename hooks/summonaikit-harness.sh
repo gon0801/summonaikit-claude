@@ -298,6 +298,12 @@ VERIFY_SKIP_RE='not run|not executed|skipped|non eseguit|saltat|no corri|no corr
 TRAIL_SKIP_LABEL='TRAIL SKIP'
 TRAIL_TSV_CITE_RE='(\./)?\.saikit/decisiones/[A-Za-z0-9._-]+\.tsv'
 TRAIL_BLAST_CITE_RE='(\./)?\.saikit/findings/blast-[A-Za-z0-9._-]+\.json'
+# 21.4 — raiz acreditada de la task: la unidad (raiz absoluta + sha del
+# commit/arbol revisado) citada en estilo lista dentro del span Close
+# ("... ; raiz: /abs/path ; sha: <40hex> ; ..."). La raiz solo cuenta tras
+# ";" o a inicio de linea: la prosa ("la raiz: ...") no acredita.
+TRAIL_RAIZ_CITE_RE='(^|[[:space:]];[[:space:]]*)raiz:[[:space:]]*/[^[:space:];]+'
+TRAIL_SHA_CITE_RE='(^|[[:space:]];[[:space:]]*)sha:[[:space:]]*[0-9a-fA-F]{40}([^0-9a-fA-F]|$)'
 
 # Task 14.2 — label VERIFIED BY SUBAGENT (host con canal interno ciego). Via
 # ADICIONAL de credito de verificacion, SOLO en hosts donde el hook NO ve el
@@ -1452,6 +1458,18 @@ write_state() {
   fi
   if [ -n "${_LINK_CHILDREN_SET+x}" ]; then _keep_lc="$_LINK_CHILDREN_SET"; fi
   if [ -n "${_LINK_SEAL_SET+x}" ]; then _keep_lss="$_LINK_SEAL_SET"; fi
+  _keep_cx=""; _keep_cxd=""
+  if [ -f "$STATE_PATH" ]; then
+    _keep_cx="$(grep '^codex_children=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    _keep_cxd="$(grep '^codex_children_done=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  fi
+  if [ -n "${_CODEX_CHILDREN_SET+x}" ]; then _keep_cx="$_CODEX_CHILDREN_SET"; fi
+  if [ -n "${_CODEX_DONE_SET+x}" ]; then _keep_cxd="$_CODEX_DONE_SET"; fi
+  _keep_cxs=""
+  if [ -f "$STATE_PATH" ]; then
+    _keep_cxs="$(grep '^codex_native_seen=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  fi
+  if [ -n "${_CODEX_SEEN_SET+x}" ]; then _keep_cxs="$_CODEX_SEEN_SET"; fi
   {
     printf 'task_hash=%s\n' "$task_hash"
     printf 'cycle=%s\n' "$cycle"
@@ -1477,6 +1495,12 @@ write_state() {
     # 20.13: vínculo padre→hijo (Grok). Ausentes sin anuncio host.
     if [ -n "$_keep_lc" ]; then printf 'linked_children=%s\n' "$_keep_lc"; fi
     if [ -n "$_keep_lss" ]; then printf 'linked_seal_session=%s\n' "$_keep_lss"; fi
+    # 21.2: ciclo de vida nativo de codex (SubagentStart/SubagentStop con
+    # agent_id). Ausentes sin eventos nativos: la forma del estado de los
+    # demas hosts (y de los turnos sin subagentes nativos) no cambia.
+    if [ -n "$_keep_cx" ]; then printf 'codex_children=%s\n' "$_keep_cx"; fi
+    if [ -n "$_keep_cxd" ]; then printf 'codex_children_done=%s\n' "$_keep_cxd"; fi
+    if [ -n "$_keep_cxs" ]; then printf 'codex_native_seen=%s\n' "$_keep_cxs"; fi
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -1533,6 +1557,121 @@ link_consume_child_seal() {
     "$child_sha" "$(read_state_value autopilot)"
   unset _LINK_SEAL_SET
   printf 'linked_seal_session: %s\n' "$child" >> "$LOG_PATH" 2>/dev/null || true
+  return 0
+}
+
+# 21.2 — ciclo de vida nativo de roles delegados de Codex. Autoridad: la
+# re-corrida de 21.1 (docs/evidence/phase-21/21.1/, codex-cli 0.154.0) midio
+# SubagentStart/SubagentStop con agent_id + agent_type de PRIMER nivel, cadena
+# agent_id Start->internos->Stop, y agent_transcript_path en el Stop. Postura
+# declarada en Plans 21.2: el CIERRE acredita rol+cierre+transcript por agente;
+# sin SubagentStop = running = NO acreditado; el despacho no correlaciona (R1,
+# no se exige) y el Stop no emite veredictos de exito (R2: el Stop de fallo
+# blando tiene la misma forma, sin estado maquina; del fallo duro R3 se
+# DESCONOCE si emite Stop — sin Stop = running = no acreditado). El rol viaja en el PROPIO evento (agent_type top-level): ni task_name,
+# ni prompt, ni prosa, ni ruta acreditan. Otros hosts intactos.
+saikit_codex_children_write() { # $1 = en curso, $2 = cerrados, $3 = flag nativo
+  _CODEX_CHILDREN_SET="$1"
+  _CODEX_DONE_SET="$2"
+  _CODEX_SEEN_SET="${3:-}"
+  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+    "$(read_state_value implemented)" "$(read_state_value verified)" \
+    "$(read_state_value agents_seen)" "$(read_state_value lane)" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
+  unset _CODEX_CHILDREN_SET _CODEX_DONE_SET _CODEX_SEEN_SET
+  return 0
+}
+
+saikit_codex_stop_huerfano() {
+  printf 'codex native: stop huerfano %s ignorado (sin SubagentStart previo)\n' "$1" >> "$LOG_PATH" 2>/dev/null || true
+  return 0
+}
+
+saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
+# de PRIMER nivel (21.2 r2, revision externa: ni subagent_type de tool_input ni
+# ningun otro canal de $subagent alimenta el rol nativo; el despacho no trae
+# agent_type de primer nivel, asi que no registra — R1).
+  cx_role="$(canonical_agent_role "$(json_top_level_string agent_type)")"
+  cx_sid="$(json_top_level_string agent_id)"
+  # Charset del id medido (UUID): sin comas ni dos puntos — la lista de estado
+  # es texto plano separado por comas. Un id ajeno se ignora, no bloquea.
+  case "$cx_sid" in *[!A-Za-z0-9._-]*) return 0 ;; esac
+  [ -n "$cx_sid" ] || return 0
+  cx_running="$(read_state_value codex_children)"
+  cx_done="$(read_state_value codex_children_done)"
+  cx_seen="$(read_state_value codex_native_seen)"
+  case "$event_name" in
+    SubagentStart|SubagentStop)
+      # 21.2 r2 (revision externa): el canal nativo se marca VISTO en la sesion
+      # apenas llega un evento nativo con id medible, aunque no acredite nada
+      # (huerfano, replay, rol cambiado). Desde entonces el fallback legado de
+      # los internos queda apagado: un canal que emite Stops pero al que le
+      # faltan Starts no puede acreditar via 6.1 a media sesion.
+      if [ "$cx_seen" != "1" ]; then
+        saikit_codex_children_write "$cx_running" "$cx_done" "1"
+      fi
+      ;;
+  esac
+  case "$event_name" in
+    SubagentStart)
+      [ -n "$cx_role" ] || return 0
+      case ",$cx_done," in *",$cx_sid,"*) return 0 ;; esac # Start tras cierre
+      case ",$cx_running," in *",$cx_sid:"*) return 0 ;; esac # ya en curso
+      saikit_codex_children_write "${cx_running:+$cx_running,}$cx_sid:$cx_role" "$cx_done" "1"
+      printf 'codex native: start %s (%s)\n' "$cx_sid" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
+      ;;
+    SubagentStop)
+      cx_tr="$(json_top_level_string agent_transcript_path)"
+      case ",$cx_done," in
+        *",$cx_sid,"*)
+          printf 'codex native: stop replay %s ignorado\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
+          return 0 ;;
+      esac
+      # Quitar de en curso conservando el rol del ALTA: la entrada es id:rol.
+      cx_entry_role=""
+      cx_old="$cx_running"
+      cx_running=""
+      cx_IFS="$IFS"; IFS=","
+      for cx_tok in $cx_old; do
+        case "$cx_tok" in
+          "$cx_sid":*) cx_entry_role="${cx_tok#"$cx_sid":}" ;;
+          *) cx_running="${cx_running:+$cx_running,}$cx_tok" ;;
+        esac
+      done
+      IFS="$cx_IFS"
+      if [ -z "$cx_entry_role" ]; then
+        saikit_codex_stop_huerfano "$cx_sid"; return 0 # 21.2: sin alta previa no hay identidad
+      fi
+      # 21.2 r2 (revision externa): el rol del cierre debe ser el mismo que el
+      # del alta. Un cambio de rol entre Start y Stop contradice la identidad
+      # registrada: se consume el alta (el agente cerro) pero NO acredita.
+      if [ "$cx_role" != "$cx_entry_role" ]; then
+        printf 'codex native: stop de %s con rol cambiado (%s -> %s); no acredita\n' "$cx_sid" "$cx_entry_role" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
+        saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
+        return 0
+      fi
+      if [ -z "$cx_role" ] || [ -z "$cx_tr" ]; then
+        # Forma no observada (el Stop medido trae rol y transcript): no acredita.
+        printf 'codex native: stop de %s sin credito (rol o transcript ausentes)\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
+        saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
+        return 0
+      fi
+      saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
+      record_agent "$cx_role"
+      printf 'codex native: cierre acreditado %s (%s, transcript presente)\n' "$cx_sid" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
+      ;;
+    *)
+      # Legado (6.1): en una sesion donde el canal nativo NO se observa
+      # (hooks.json sin SubagentStart/SubagentStop registrados), el credito
+      # historico por agent_type de eventos internos sigue vivo. En una sesion
+      # con canal nativo activo (hay eventos nativos vistos, o altas vivas),
+      # los internos corren en fase running y NO acreditan (postura 21.2).
+      if [ -n "$cx_running" ] || [ -n "$cx_done" ] || [ "$cx_seen" = "1" ]; then return 0; fi
+      record_agent "$cx_role"
+      ;;
+  esac
   return 0
 }
 
@@ -3102,7 +3241,19 @@ record_tool_evidence() {
   # marcar el ultimo evento interno del reviewer data cuando la revision corrio,
   # no cuando se pidio.
   if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
-  if [ -n "$subagent" ]; then record_agent "$subagent"; fi
+  if [ -n "$subagent" ]; then
+    # 21.2: en codex el credito de roles para la ceremonia viaja SOLO por el
+    # canal nativo de cierre (SubagentStop con agent_id acreditado; postura
+    # "sin Stop = running = no acreditado", con fallback legado si la sesion
+    # no muestra eventos nativos). Despacho, internos y Start siguen
+    # alimentando al candado adversary y al review-notice via $subagent, que
+    # NO cambia. Otros hosts intactos: record_agent directo.
+    if [ "$HOST" = "codex" ]; then
+      saikit_codex_role_event
+    else
+      record_agent "$subagent"
+    fi
+  fi
   # >>> SAIKIT-ADVERSARY-LOCK v1 (Task 13.4) >>>
   # El candado corre solo en sesiones armadas (el early-exit de arriba ya lo
   # acoto, A1) y solo para eventos que resuelvan a adversary por cualquiera de
@@ -3389,21 +3540,114 @@ path_present_under_root() {
   return 1
 }
 
+# 21.4 — acredita la raiz citada en el span Close como la de la task.
+# Exit 0: TRAIL_RAIZ queda con la raiz canonica (toplevel exacto, HEAD == sha).
+# Exit 1: no se cito raiz (modo legacy, sin error). Exit 2: raiz citada pero
+# invalida (TRAIL_RAIZ_MOTIVO explica; fail-closed).
+trail_acreditar_raiz() {
+  local _span _raices _shas _canon _top _top_fisico _head _gcd _gcd_abs _saikit_raiz
+  _span="$(close_span "$text_hatch")"
+  [ -n "$_span" ] || return 1
+  _raices="$(printf '%s' "$_span" | grep -Eo "$TRAIL_RAIZ_CITE_RE" | sed -E 's/.*raiz:[[:space:]]*//' | sort -u)"
+  [ -n "$_raices" ] || return 1
+  if [ "$(printf '%s\n' "$_raices" | grep -c .)" -ne 1 ]; then
+    TRAIL_RAIZ_MOTIVO="mas de una raiz distinta citada"; return 2
+  fi
+  _shas="$(printf '%s' "$_span" | grep -Eo "$TRAIL_SHA_CITE_RE" | sed -E 's/.*sha:[[:space:]]*([0-9a-fA-F]{40}).*/\1/' | tr 'A-F' 'a-f' | sort -u)"
+  if [ -z "$_shas" ]; then
+    TRAIL_RAIZ_MOTIVO="raiz sin sha no acredita (cita raiz: <abs> + sha: <40hex>)"; return 2
+  fi
+  if [ "$(printf '%s\n' "$_shas" | grep -c .)" -ne 1 ]; then
+    TRAIL_RAIZ_MOTIVO="mas de un sha distinto citado"; return 2
+  fi
+  case "$_raices" in
+    /*) ;;
+    *) TRAIL_RAIZ_MOTIVO="raiz no absoluta"; return 2 ;;
+  esac
+  _canon="$(cd "$_raices" 2>/dev/null && pwd -P)" || { TRAIL_RAIZ_MOTIVO="raiz inaccesible"; return 2; }
+  [ -n "$_canon" ] || { TRAIL_RAIZ_MOTIVO="raiz inaccesible"; return 2; }
+  command -v git >/dev/null 2>&1 || { TRAIL_RAIZ_MOTIVO="sin git para acreditar"; return 2; }
+  _top="$(git -C "$_canon" rev-parse --show-toplevel 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="raiz fuera de repo git"; return 2; }
+  _top_fisico="$(cd "$_top" 2>/dev/null && pwd -P)" || { TRAIL_RAIZ_MOTIVO="toplevel inaccesible"; return 2; }
+  [ "$_top_fisico" = "$_canon" ] || { TRAIL_RAIZ_MOTIVO="la raiz no es el toplevel del repo (prefijo parecido o subdirectorio)"; return 2; }
+  _head="$(git -C "$_canon" rev-parse HEAD 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="HEAD ilegible"; return 2; }
+  [ "$_head" = "$_shas" ] || { TRAIL_RAIZ_MOTIVO="HEAD distinto del sha citado (otro worktree, checkout ajeno u otro repo)"; return 2; }
+  # 21.4r2 (review externa r1 #2): HEAD==sha es solo plomeria git — un repo
+  # ajeno autoconsistente con su propio HEAD la pasa. El sha se ancla al
+  # JUICIO de la sesion: exige el veredicto sellado del commit citado.
+  # --git-common-dir es condicion NECESARIA adicional (resuelve donde vive
+  # .saikit/veredictos cuando la raiz es un worktree enlazado), no suficiente.
+  _gcd="$(git -C "$_canon" rev-parse --git-common-dir 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="git-common-dir ilegible"; return 2; }
+  [ -n "$_gcd" ] || { TRAIL_RAIZ_MOTIVO="git-common-dir vacio"; return 2; }
+  _gcd_abs="$(cd "$_canon" && cd "$_gcd" && pwd -P 2>/dev/null)" || { TRAIL_RAIZ_MOTIVO="git-common-dir inaccesible"; return 2; }
+  [ -n "$_gcd_abs" ] || { TRAIL_RAIZ_MOTIVO="git-common-dir inaccesible"; return 2; }
+  _saikit_raiz="$(dirname "$_gcd_abs")"
+  [ ! -L "$_canon/.saikit" ] && [ ! -L "$_saikit_raiz/.saikit" ] || { TRAIL_RAIZ_MOTIVO=".saikit enlazado no acredita veredicto"; return 2; }
+  { [ -f "$_canon/.saikit/veredictos/$_shas.json" ] || [ -f "$_saikit_raiz/.saikit/veredictos/$_shas.json" ]; } || { TRAIL_RAIZ_MOTIVO="sin veredicto sellado para el sha citado (repo autoconsistente sin juicio de sesion)"; return 2; }
+  TRAIL_RAIZ="$_canon"
+  TRAIL_RAIZ_SHA="$_shas"
+  return 0
+}
+
+# 21.4 — presencia del artefacto bajo la raiz acreditada (nunca el cwd
+# ambiental). Con HEAD == sha y estado git limpio, el archivo ES el del arbol
+# exacto revisado: untracked, dirty o escrito despues del review se rechazan.
+path_present_under_acreditada() {
+  local _joined _dir _blob_arbol _blob_disco
+  case "$1" in
+    ''|/*|~*|*..*) return 1 ;;
+  esac
+  _joined="$TRAIL_RAIZ/$1"
+  [ -f "$_joined" ] || return 1
+  # Un enlace final no es el artefacto: no seguirlo fuera de la raiz.
+  [ ! -L "$_joined" ] || return 1
+  # Ambos lados FISICOS, igual que el guard legacy: el enlace al propio
+  # proyecto canoniza dentro y pasa; el que escapa, no.
+  _dir="$(cd "$(dirname "$_joined")" 2>/dev/null && pwd -P)" || return 1
+  case "$_dir" in
+    "$TRAIL_RAIZ"|"$TRAIL_RAIZ"/*) ;;
+    *) return 1 ;;
+  esac
+  # 21.4r1 (CodeRabbit PR #318): `status --porcelain` omite los ignorados,
+  # asi que un artefacto ignorado pasaba como limpio sin estar en el arbol.
+  # La pertenencia rastreada lo ata al HEAD exacto revisado.
+  [ -z "$(git -C "$TRAIL_RAIZ" status --porcelain -- "$1" 2>/dev/null)" ] || return 1
+  # 21.4r2 (review externa r1 #1): assume-unchanged esconde el cambio a status
+  # y `git replace` del blob fabrica el contenido dejandolo limpio. La
+  # integridad va FISICO contra FISICO: hash del archivo en disco contra el
+  # blob del arbol exacto citado, con replace desactivado para leer el objeto
+  # real y no su suplantacion.
+  _blob_arbol="$(GIT_NO_REPLACE_OBJECTS=1 git -C "$TRAIL_RAIZ" rev-parse "$TRAIL_RAIZ_SHA:$1" 2>/dev/null)" || return 1
+  _blob_disco="$(git hash-object -- "$_joined")" || return 1
+  [ "$_blob_arbol" = "$_blob_disco" ] || return 1
+  return 0
+}
+
 trail_cited_and_present() {
   _span="$(close_span "$text_hatch")"
   [ -n "$_span" ] || return 1
+  TRAIL_RAIZ_BLOQUEO=""
+  _present="path_present_under_root"
+  trail_acreditar_raiz
+  _acreditar_rc=$?
+  if [ "$_acreditar_rc" -eq 0 ]; then
+    _present="path_present_under_acreditada"
+  elif [ "$_acreditar_rc" -eq 2 ]; then
+    TRAIL_RAIZ_BLOQUEO="$TRAIL_RAIZ_MOTIVO"
+    return 1
+  fi
   _tsv=1
   _blast=1
   while IFS= read -r _p; do
     [ -z "$_p" ] && continue
-    path_present_under_root "$_p" || continue
+    "$_present" "$_p" || continue
     _tsv=0
   done <<EOF
 $(cited_relpaths "$_span" "$TRAIL_TSV_CITE_RE")
 EOF
   while IFS= read -r _p; do
     [ -z "$_p" ] && continue
-    path_present_under_root "$_p" || continue
+    "$_present" "$_p" || continue
     _blast=0
   done <<EOF
 $(cited_relpaths "$_span" "$TRAIL_BLAST_CITE_RE")
@@ -3986,6 +4230,9 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     if ! has_trail_skip "$text_hatch"; then
       if ! trail_cited_and_present; then
         missing="$missing- Missing trail/blast: Close: must cite concrete paths that exist under PROJECT_ROOT (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), or declare TRAIL SKIP: <reason> as its own receipt line. A leftover file you did not cite does not count.\n"
+        if [ -n "${TRAIL_RAIZ_BLOQUEO:-}" ]; then
+          missing="$missing- Missing trail/blast (raiz): ${TRAIL_RAIZ_BLOQUEO}.\n"
+        fi
       fi
     fi
   fi
@@ -4311,6 +4558,112 @@ pretool_merge_guard() {
   fi
   emit_allow
 }
+# >>> SAIKIT-PREFLIGHT v1 (21.5) >>>
+# Preflight canonico del recibo: la MISMA comprobacion que el Stop haria
+# sobre este payload y este estado, SIN EFECTOS. No es una segunda gramatica:
+# ejecuta literalmente stop_gate en un subshell con las rutas de escritura
+# redirigidas a un scratch temporal que se borra al salir.
+# - STATE_PATH/LOG_PATH/RN_ORDER_PATH/RN_PENDING_PATH apuntan al scratch
+#   (misma derivacion que el arranque): el ciclo no se consume, el estado
+#   real no se toca, no se escribe evidencia. El unico borrado fuera del
+#   scratch seria adv_limpiar_zona (zona scratch del adversary en el
+#   proyecto real): se redefine a no-op DENTRO del subshell — esa funcion
+#   solo borra y siempre devuelve 0, el veredicto no la consulta
+#   (adv_chequear_secretos lee estado+findings, que viajan intactos en la
+#   foto; path_present_under_root exige ADV_PROJECT_CANON no vacio, que se
+#   conserva tal cual).
+# - Veredicto: PASS si el Stop permitiria (exit 0 sin decision:block ni
+#   continue:false); FAIL si bloquearia o agotaria presupuesto. La causa es
+#   el texto que el Stop emitiria (stderr capturado del subshell).
+# - Requisitos dinamicos (llegadas 21.2 posteriores, ciclo, tail del
+#   transcript y backgroundTasks al momento del Stop, arbol/HEAD del
+#   cierre para 21.4): se NOMBRAN en la seccion DINAMICOS como foto del
+#   snapshot, no se dan por PASS — el veredicto final pertenece al Stop.
+# - Salida: exit 0 + PASS / exit 1 + FAIL / exit 2 error de instrumento.
+# - Costura de mutacion SAIKIT_MUT_PREFLIGHT_DIVERGE=1: reporta PASS sin
+#   evaluar (solo la usa el corpus para demostrar que distingue la
+#   divergencia; produccion nunca la fija).
+preflight_check() {
+  _pf_box="$(mktemp -d "${TMPDIR:-/tmp}/saikit-preflight-XXXXXX")" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo crear el scratch\n' >&2
+    exit 2
+  }
+  # 21.5r2: el scratch no queda huerfano si el preflight muere por senal
+  # (revision externa 21.5r2: SIGTERM entre mktemp y rm -rf dejaba la copia
+  # del estado en disco). EXIT limpia redundante con los rm explicitos de
+  # cada camino (medido: el subshell ( stop_gate ) no hereda/dispara el
+  # trap del padre, asi out/err siguen legibles); INT/TERM limpian y mueren
+  # (143) en vez de reanudar a mitad del preflight.
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true' EXIT
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true; exit 143' INT TERM
+  if [ "${SAIKIT_MUT_PREFLIGHT_DIVERGE:-0}" = "1" ]; then
+    printf 'SAIKIT PREFLIGHT (21.5): PASS\n'
+    printf 'CAUSA: (costura SAIKIT_MUT_PREFLIGHT_DIVERGE: veredicto sin evaluar)\n'
+    printf 'DINAMICOS: omitidos por la costura de mutacion\n'
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 0
+  fi
+  mkdir -p "$_pf_box/sesion" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo armar el scratch\n' >&2
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 2
+  }
+  # 21.5r2: si la foto del estado falla (existe pero ilegible), evaluar
+  # sin ella MENTIRIA: el Stop real bloquea. Error de instrumento (exit 2),
+  # nunca un veredicto (revision externa 21.5r2 + CodeRabbit L4605).
+  _pf_foto() {
+    if [ -f "$1" ] && ! cp "$1" "$2" 2>/dev/null; then
+      printf 'SAIKIT PREFLIGHT (21.5): ERROR — foto del estado fallida (%s)\n' "$1" >&2
+      rm -rf "$_pf_box" 2>/dev/null || true
+      exit 2
+    fi
+  }
+  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"
+  _pf_foto "$LOG_PATH" "$_pf_box/sesion/harness-evidence.log"
+  _pf_foto "$RN_ORDER_PATH" "$_pf_box/sesion/harness-state-review-notice.env"
+  (
+    STATE_DIR="$_pf_box/sesion"
+    STATE_PATH="$_pf_box/sesion/harness-state.env"
+    LOG_PATH="$_pf_box/sesion/harness-evidence.log"
+    RN_ORDER_PATH="${STATE_PATH%.env}-review-notice.env"
+    RN_PENDING_PATH="$_pf_box/review-notice-pending.log"
+    adv_limpiar_zona() { return 0; }
+    stop_gate # 21.5: la comprobacion ES el Stop — mismo parser, mismas reglas
+  ) >"$_pf_box/out" 2>"$_pf_box/err"
+  _pf_rc=$?
+  _pf_out="$(cat "$_pf_box/out" 2>/dev/null)"
+  _pf_err="$(cat "$_pf_box/err" 2>/dev/null)"
+  rm -rf "$_pf_box" 2>/dev/null || true
+  # 21.5r1: el tercer canal de bloqueo del Stop es el de cursor —
+  # emit_gate_failure / emit_budget_exhausted emiten followup_message con
+  # exit 0 para TARGET=cursor, asi que ni el JSON de los otros hosts ni el
+  # exit distinguen el bloqueo. Se reconoce el canal (no se re-parsean reglas).
+  case "$_pf_out" in
+    *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) _pf_v="FAIL" ;;
+    *)
+      if [ "$_pf_rc" -ne 0 ]; then _pf_v="FAIL"; else _pf_v="PASS"; fi ;;
+  esac
+  printf 'SAIKIT PREFLIGHT (21.5): %s\n' "$_pf_v"
+  if [ "$_pf_v" = "FAIL" ]; then
+    # 21.5r1: cursor bloquea solo por stdout (sin stderr); la causa se lee
+    # del err cuando lo hay y del out como respaldo (mismo texto medido).
+    if [ -n "$_pf_err" ]; then printf 'CAUSA:\n%s\n' "$_pf_err"
+    else printf 'CAUSA:\n%s\n' "$_pf_out"; fi
+  else
+    printf 'CAUSA: (cierre limpio — el Stop permitiria con este snapshot)\n'
+  fi
+  printf 'DINAMICOS (foto del snapshot — el Stop los re-evalua en vivo, no se dan por buenos):\n'
+  printf '  ciclo: %s (un bloqueo del Stop consume uno)\n' "$(read_state_value cycle)"
+  printf '  agents_seen: %s (llegadas 21.2 SubagentStart/SubagentStop posteriores cambian el rol acreditado)\n' "$(read_state_value agents_seen)"
+  printf '  transcript: el tail valido es el del momento del Stop, no el de ahora\n'
+  printf '  backgroundTasks: solo el Stop grok en vivo lo trae poblado\n'
+  printf '  trail/blast y 21.4 (raiz+sha+veredicto sellado): se re-resuelven contra el arbol y el HEAD del cierre\n'
+  printf '  snapshot: estado %s al evaluar\n' "$([ -f "$STATE_PATH" ] && printf presente || printf ausente)"
+  if [ "$_pf_v" = "FAIL" ]; then exit 1; fi
+  exit 0
+}
+# <<< SAIKIT-PREFLIGHT v1 <<<
+
 # <<< SAIKIT-PRETOOL-MERGE v1 <<<
 
 if [ -z "$PHASE" ]; then
@@ -4340,6 +4693,7 @@ case "$PHASE" in
   prompt|session) start_harness ;;
   tool) record_tool_evidence ;;
   stop|verify) stop_gate ;;
+  preflight) preflight_check ;;
   pretool) pretool_merge_guard ;;
   *) emit_allow ;;
 esac

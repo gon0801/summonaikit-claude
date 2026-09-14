@@ -216,6 +216,20 @@ G8|trail_sin_limite_fisico|una carpeta de evidencia enlazada afuera se acredita
 G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acredita
 G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
 G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
+G3|codex_interno_credita|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
+G3|codex_huerfano_via_rolmatch|el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)
+G3|codex_flag_nativo_invertido|la guarda de codex_native_seen se invierte y el legado acredita en una sesion que YA vio un evento nativo (21.2 r2, revision externa)
+G3|codex_cierre_sin_transcript|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
+G3|codex_rol_cambiado_acredita|la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)
+G3|codex_legado_ignora_flag|el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)
+G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
+G8|trail_raiz_sin_hash_disco|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
+G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
+G9|preflight_sin_stop|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea
+G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
+G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
+G9|preflight_ignora_cursor|el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea
+G9|preflight_error_callado|la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -223,6 +237,14 @@ G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 # condicion invertida, y esta bateria existe para detectar exactamente eso.
 
 mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SENTINEL_RE='.*'/"; }
+
+# 21.2 — tres condiciones del canal nativo de codex.
+mut_codex_interno_credita() { sed 's/^      saikit_codex_role_event$/      record_agent "\$subagent"/'; }
+mut_codex_cierre_sin_transcript() { sed 's/if \[ -z "\$cx_role" \] || \[ -z "\$cx_tr" \]; then/if false; then/'; }
+mut_codex_rol_cambiado_acredita() { sed 's/if \[ "\$cx_role" != "\$cx_entry_role" \]; then/if false; then/'; }
+mut_codex_huerfano_via_rolmatch() { sed 's/saikit_codex_stop_huerfano "\$cx_sid"; return 0/cx_entry_role="\$cx_role";/'; }
+mut_codex_flag_nativo_invertido() { sed 's/\[ "\$cx_seen" = "1" \]/[ "\$cx_seen" != "1" ]/'; }
+mut_codex_legado_ignora_flag() { sed 's/\[ "\$cx_seen" = "1" \]/false/'; }
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }
 
 # Las dos mutaciones del arreglo de A4 (Task 3.4, clausulas 1 y 2). Cada una
@@ -1121,6 +1143,37 @@ mut_trail_tambien_en_fast() {
   '
 }
 mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "\$(trail_parrafo)")"/_gf="$_gf"/'; }
+# 21.4: la rama acreditada vuelve a resolver bajo el ambiente — el caso
+# "cwd de otra sesion" (raiz valida, proyecto limpio) vuelve a bloquear.
+# Lo atrapa caso_g8_full_raiz_acreditada_otro_cwd_cierra.
+mut_trail_raiz_vuelve_a_ambiental() { sed 's/_present="path_present_under_acreditada"/_present="path_present_under_root"/'; }
+# 21.4r2: sin la comparacion fisica disco/arbol, assume-unchanged y git
+# replace vuelven a enganar a status. Lo atrapan
+# caso_g8_full_raiz_assume_unchanged_bloquea y
+# caso_g8_full_raiz_replace_blob_bloquea.
+mut_trail_raiz_sin_hash_disco() { sed '/_blob_arbol=/d; /_blob_disco=/d; /\[ "\$_blob_arbol" = "\$_blob_disco" \]/d'; }
+# 21.4r2: sin el veredicto sellado, un repo ajeno autoconsistente con su
+# propio HEAD vuelve a acreditar. Lo atrapa
+# caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea.
+mut_trail_raiz_sin_veredicto_sellado() { sed '/\.saikit\/veredictos\/\$_shas\.json/d'; }
+# 21.5: sin la llamada al stop_gate compartido, el subshell captura vacio
+# (rc 0) y todo preflight reporta PASS. Lo atrapa
+# caso_g9_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+mut_preflight_sin_stop() { sed 's/^    stop_gate # 21.5.*/    : # mutante preflight_sin_stop/'; }
+# 21.5: sin la redireccion del estado, el subshell escribe el ciclo real.
+# Lo atrapa caso_g9_sin_efectos (ciclo y estado intactos).
+mut_preflight_consume_ciclo() { sed 's|^    STATE_PATH="\$_pf_box/sesion/harness-state.env"|    : # mutante preflight_consume_ciclo|'; }
+# 21.5: el FAIL con exit 0 se lee como PASS. Lo atrapa
+# caso_g9_etiqueta_ausente_bloquea_en_ambos (espera exit 1 en FAIL).
+mut_preflight_falla_callada() { sed 's/if \[ "\$_pf_v" = "FAIL" \]; then exit 1; fi/if [ "$_pf_v" = "FAIL" ]; then exit 0; fi/'; }
+# 21.5r1: sin el canal followup_message en la extraccion, el bloqueo de
+# cursor (exit 0) vuelve a leerse como PASS. Lo atrapa
+# caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+mut_preflight_ignora_cursor() { sed "s%|\*'"\"followup_message\""'\*%%"; }
+# 21.5r2: sin el ERROR por foto fallida, el preflight vuelve a evaluar sin
+# estado y reporta PASS donde el Stop bloquea. Lo atrapa
+# caso_g9_estado_ilegible_bloquea_stop_error_preflight (espera ERROR rc 2).
+mut_preflight_error_callado() { sed 's|^  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"$|  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null \|\| true; fi|'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

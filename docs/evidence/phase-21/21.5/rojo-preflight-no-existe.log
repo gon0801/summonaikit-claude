@@ -1,0 +1,211 @@
+      FAIL: recibo valido: veredicto diverge (Stop=PASS rc=0, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_recibo_valido_cierra_en_ambos
+      FAIL: etiqueta ausente: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_etiqueta_ausente_bloquea_en_ambos
+      FAIL: etiqueta mal formada: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_etiqueta_malformada_bloquea_en_ambos
+      FAIL: evidencia invalida: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_evidencia_invalida_bloquea_en_ambos
+      FAIL: trail inexistente: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_trail_inexistente_bloquea_en_ambos
+      FAIL: raiz sin sha: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_raiz_sin_sha_bloquea_en_ambos
+      FAIL: raiz acreditada: veredicto diverge (Stop=FAIL rc=2, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_raiz_acreditada_cierra_en_ambos
+      FAIL: TRAIL SKIP: veredicto diverge (Stop=PASS rc=0, preflight=SIN-REPORTE rc=0)
+    ROJO: caso_g9_skip_con_razon_cierra_en_ambos
+      FAIL: dinamicos veredicto: no contiene [SAIKIT PREFLIGHT (21.5): PASS]
+      FAIL: dinamicos nombra 21.2: no contiene [21.2]
+      FAIL: dinamicos nombra backgroundTasks: no contiene [backgroundTasks]
+      FAIL: dinamicos nombra transcript: no contiene [transcript]
+      FAIL: dinamicos nombra ciclo: no contiene [ciclo]
+      FAIL: dinamicos nombra agents_seen: no contiene [agents_seen]
+      FAIL: dinamicos nombra snapshot: no contiene [snapshot]
+    ROJO: caso_g9_dinamicos_nombrados_no_pass
+      FAIL: sin efectos fs intacto: esperaba [./.err
+./.out
+./entrada/paso-1.json
+./entrada/paso-10.json
+./entrada/paso-11.json
+./entrada/paso-12.json
+./entrada/paso-13.json
+./entrada/paso-14.json
+./entrada/paso-15.json
+./entrada/paso-16.json
+./entrada/paso-17.json
+./entrada/paso-18.json
+./entrada/paso-2.json
+./entrada/paso-3.json
+./entrada/paso-4.json
+./entrada/paso-5.json
+./entrada/paso-6.json
+./entrada/paso-7.json
+./entrada/paso-8.json
+./entrada/paso-9.json
+./hooks/state/other/2905756727/c1a70000-1111-4222-8333-444455556666/harness-state.env
+./hooks/summonaikit-harness.sh
+./proyecto/.saikit/decisiones/x.tsv
+./proyecto/.saikit/findings/blast-x.json
+./wt-pf6/.git/COMMIT_EDITMSG
+./wt-pf6/.git/HEAD
+./wt-pf6/.git/config
+./wt-pf6/.git/description
+./wt-pf6/.git/hooks/applypatch-msg.sample
+./wt-pf6/.git/hooks/commit-msg.sample
+./wt-pf6/.git/hooks/fsmonitor-watchman.sample
+./wt-pf6/.git/hooks/post-update.sample
+./wt-pf6/.git/hooks/pre-applypatch.sample
+./wt-pf6/.git/hooks/pre-commit.sample
+./wt-pf6/.git/hooks/pre-merge-commit.sample
+./wt-pf6/.git/hooks/pre-push.sample
+./wt-pf6/.git/hooks/pre-rebase.sample
+./wt-pf6/.git/hooks/pre-receive.sample
+./wt-pf6/.git/hooks/prepare-commit-msg.sample
+./wt-pf6/.git/hooks/push-to-checkout.sample
+./wt-pf6/.git/hooks/sendemail-validate.sample
+./wt-pf6/.git/hooks/update.sample
+./wt-pf6/.git/index
+./wt-pf6/.git/info/exclude
+./wt-pf6/.git/logs/HEAD
+./wt-pf6/.git/logs/refs/heads/main
+./wt-pf6/.git/objects/0d/52ce0acb04479e02384ae2225597cba5fd12eb
+./wt-pf6/.git/objects/11/9bba4935d6a289719e7841f508b70671cc07ce
+./wt-pf6/.git/objects/49/23549355331a986491beab0649c29cdd2aea08
+./wt-pf6/.git/objects/49/6dda701b17adf9ade00c313780909fef674791
+./wt-pf6/.git/objects/54/d61af5cabbe9c7ea790f7423f3e9af48703f52
+./wt-pf6/.git/objects/57/0162d9408a837550abc0a206e9b7f21b85b52d
+./wt-pf6/.git/objects/98/984511c2ecec21a5a6dfd3d5b179ba47ed0132
+./wt-pf6/.git/refs/heads/main
+./wt-pf6/.saikit/decisiones/21.4.tsv
+./wt-pf6/.saikit/findings/blast-21.4.json
+./wt-pf6/.saikit/veredictos/570162d9408a837550abc0a206e9b7f21b85b52d.json
+./wt-pf7/.git/COMMIT_EDITMSG
+./wt-pf7/.git/HEAD
+./wt-pf7/.git/config
+./wt-pf7/.git/description
+./wt-pf7/.git/hooks/applypatch-msg.sample
+./wt-pf7/.git/hooks/commit-msg.sample
+./wt-pf7/.git/hooks/fsmonitor-watchman.sample
+./wt-pf7/.git/hooks/post-update.sample
+./wt-pf7/.git/hooks/pre-applypatch.sample
+./wt-pf7/.git/hooks/pre-commit.sample
+./wt-pf7/.git/hooks/pre-merge-commit.sample
+./wt-pf7/.git/hooks/pre-push.sample
+./wt-pf7/.git/hooks/pre-rebase.sample
+./wt-pf7/.git/hooks/pre-receive.sample
+./wt-pf7/.git/hooks/prepare-commit-msg.sample
+./wt-pf7/.git/hooks/push-to-checkout.sample
+./wt-pf7/.git/hooks/sendemail-validate.sample
+./wt-pf7/.git/hooks/update.sample
+./wt-pf7/.git/index
+./wt-pf7/.git/info/exclude
+./wt-pf7/.git/logs/HEAD
+./wt-pf7/.git/logs/refs/heads/main
+./wt-pf7/.git/objects/02/ea231fabab5502ebc339c205085af1f174c83a
+./wt-pf7/.git/objects/2d/12de9d0056bdd498f86d3fdd53b0216b61aad2
+./wt-pf7/.git/objects/43/4d2f563fe22ed1a3f209e858108da83926e36e
+./wt-pf7/.git/objects/96/f4d31c2e36967c79fd7d4ff933287899cd404a
+./wt-pf7/.git/objects/ae/ce22b1595e36910de059db3aa4784f79deec91
+./wt-pf7/.git/objects/bb/b272ad57202324c12d4844ecf1277643a0c02b
+./wt-pf7/.git/objects/d9/58e372cd88ac5c90ba6d5cdecbe2abb1a22eee
+./wt-pf7/.git/refs/heads/main
+./wt-pf7/.saikit/decisiones/21.4.tsv
+./wt-pf7/.saikit/findings/blast-21.4.json
+./wt-pf7/.saikit/veredictos/96f4d31c2e36967c79fd7d4ff933287899cd404a.json], dio [./.err
+./.out
+./entrada/paso-1.json
+./entrada/paso-10.json
+./entrada/paso-11.json
+./entrada/paso-12.json
+./entrada/paso-13.json
+./entrada/paso-14.json
+./entrada/paso-15.json
+./entrada/paso-16.json
+./entrada/paso-17.json
+./entrada/paso-18.json
+./entrada/paso-19.json
+./entrada/paso-2.json
+./entrada/paso-3.json
+./entrada/paso-4.json
+./entrada/paso-5.json
+./entrada/paso-6.json
+./entrada/paso-7.json
+./entrada/paso-8.json
+./entrada/paso-9.json
+./hooks/state/other/2905756727/c1a70000-1111-4222-8333-444455556666/harness-state.env
+./hooks/summonaikit-harness.sh
+./proyecto/.saikit/decisiones/x.tsv
+./proyecto/.saikit/findings/blast-x.json
+./wt-pf6/.git/COMMIT_EDITMSG
+./wt-pf6/.git/HEAD
+./wt-pf6/.git/config
+./wt-pf6/.git/description
+./wt-pf6/.git/hooks/applypatch-msg.sample
+./wt-pf6/.git/hooks/commit-msg.sample
+./wt-pf6/.git/hooks/fsmonitor-watchman.sample
+./wt-pf6/.git/hooks/post-update.sample
+./wt-pf6/.git/hooks/pre-applypatch.sample
+./wt-pf6/.git/hooks/pre-commit.sample
+./wt-pf6/.git/hooks/pre-merge-commit.sample
+./wt-pf6/.git/hooks/pre-push.sample
+./wt-pf6/.git/hooks/pre-rebase.sample
+./wt-pf6/.git/hooks/pre-receive.sample
+./wt-pf6/.git/hooks/prepare-commit-msg.sample
+./wt-pf6/.git/hooks/push-to-checkout.sample
+./wt-pf6/.git/hooks/sendemail-validate.sample
+./wt-pf6/.git/hooks/update.sample
+./wt-pf6/.git/index
+./wt-pf6/.git/info/exclude
+./wt-pf6/.git/logs/HEAD
+./wt-pf6/.git/logs/refs/heads/main
+./wt-pf6/.git/objects/0d/52ce0acb04479e02384ae2225597cba5fd12eb
+./wt-pf6/.git/objects/11/9bba4935d6a289719e7841f508b70671cc07ce
+./wt-pf6/.git/objects/49/23549355331a986491beab0649c29cdd2aea08
+./wt-pf6/.git/objects/49/6dda701b17adf9ade00c313780909fef674791
+./wt-pf6/.git/objects/54/d61af5cabbe9c7ea790f7423f3e9af48703f52
+./wt-pf6/.git/objects/57/0162d9408a837550abc0a206e9b7f21b85b52d
+./wt-pf6/.git/objects/98/984511c2ecec21a5a6dfd3d5b179ba47ed0132
+./wt-pf6/.git/refs/heads/main
+./wt-pf6/.saikit/decisiones/21.4.tsv
+./wt-pf6/.saikit/findings/blast-21.4.json
+./wt-pf6/.saikit/veredictos/570162d9408a837550abc0a206e9b7f21b85b52d.json
+./wt-pf7/.git/COMMIT_EDITMSG
+./wt-pf7/.git/HEAD
+./wt-pf7/.git/config
+./wt-pf7/.git/description
+./wt-pf7/.git/hooks/applypatch-msg.sample
+./wt-pf7/.git/hooks/commit-msg.sample
+./wt-pf7/.git/hooks/fsmonitor-watchman.sample
+./wt-pf7/.git/hooks/post-update.sample
+./wt-pf7/.git/hooks/pre-applypatch.sample
+./wt-pf7/.git/hooks/pre-commit.sample
+./wt-pf7/.git/hooks/pre-merge-commit.sample
+./wt-pf7/.git/hooks/pre-push.sample
+./wt-pf7/.git/hooks/pre-rebase.sample
+./wt-pf7/.git/hooks/pre-receive.sample
+./wt-pf7/.git/hooks/prepare-commit-msg.sample
+./wt-pf7/.git/hooks/push-to-checkout.sample
+./wt-pf7/.git/hooks/sendemail-validate.sample
+./wt-pf7/.git/hooks/update.sample
+./wt-pf7/.git/index
+./wt-pf7/.git/info/exclude
+./wt-pf7/.git/logs/HEAD
+./wt-pf7/.git/logs/refs/heads/main
+./wt-pf7/.git/objects/02/ea231fabab5502ebc339c205085af1f174c83a
+./wt-pf7/.git/objects/2d/12de9d0056bdd498f86d3fdd53b0216b61aad2
+./wt-pf7/.git/objects/43/4d2f563fe22ed1a3f209e858108da83926e36e
+./wt-pf7/.git/objects/96/f4d31c2e36967c79fd7d4ff933287899cd404a
+./wt-pf7/.git/objects/ae/ce22b1595e36910de059db3aa4784f79deec91
+./wt-pf7/.git/objects/bb/b272ad57202324c12d4844ecf1277643a0c02b
+./wt-pf7/.git/objects/d9/58e372cd88ac5c90ba6d5cdecbe2abb1a22eee
+./wt-pf7/.git/refs/heads/main
+./wt-pf7/.saikit/decisiones/21.4.tsv
+./wt-pf7/.saikit/findings/blast-21.4.json
+./wt-pf7/.saikit/veredictos/96f4d31c2e36967c79fd7d4ff933287899cd404a.json]
+      FAIL: sin efectos sin estado hay reporte: no contiene [SAIKIT PREFLIGHT (21.5):]
+    ROJO: caso_g9_sin_efectos
+      FAIL: sin gramatica paralela: preflight_check no existe en el hook bajo prueba
+    ROJO: caso_g9_sin_gramatica_paralela
+      FAIL: divergencia: el preflight mutado no reporta veredicto
+    ROJO: caso_g9_divergencia_queda_roja
+test_preflight_21_5: FAIL
