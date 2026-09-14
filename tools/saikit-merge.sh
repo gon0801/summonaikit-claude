@@ -301,8 +301,8 @@ ORIGEN="origin/$RAMA"
 # = verde: hay_pr=0 juzga todos los runs. Exigir pull_request seria
 # politica nueva. Ver .saikit/decisiones/18.24.tsv.
 ci_chequear() {
-  local raw flat i n hay_pr ev st conc
-  raw="$(gh run list --commit "$SHA" --json event,status,conclusion 2>/dev/null)" \
+  local raw flat i n hay_pr ev st conc head
+  raw="$(gh run list --commit "$SHA" --json event,status,conclusion,headSha 2>/dev/null)" \
     || no_merge "no se pudo leer el CI (gh run list fallo)"
   saikit_json_valido "$raw" || no_merge "gh run list devolvio algo que no es JSON"
   flat="$(saikit_json_flat "$raw")"
@@ -321,6 +321,16 @@ ci_chequear() {
     if [ "$st" != completed ]; then no_merge "CI pendiente: el run $i no concluyo (status $st)"; fi
     conc="$(jget "[$i].conclusion")"
     if [ "$conc" != success ]; then no_merge "CI rojo: el run $i concluyo $conc"; fi
+    # 22.3: frescura propia — el verde tiene que ser del sha exacto bajo gate,
+    # no de otro head (el --commit se pide pero gh podria traer de mas; el gh
+    # falso del test ignora flags, asi que la correspondencia local es la
+    # proteccion real).
+    # 22.3r1 (review Codigo): presencia exigida — un headSha ausente o null NO
+    # es fresco (not_observed != fresh): se rechaza con motivo explicito en
+    # vez de aceptar por silencio. El aplanador entrega null como <null>.
+    head="$(jget "[$i].headSha")"
+    if [ -z "$head" ] || [ "$head" = "<null>" ]; then no_merge "CI sin headSha: el run $i no trae el sha del head (no observado no es fresco)"; fi
+    if [ "$head" != "$SHA" ]; then no_merge "CI verde pero de otro sha ($head != $SHA)"; fi
     i=$((i + 1))
   done
 }
