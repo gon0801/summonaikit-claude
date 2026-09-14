@@ -1,0 +1,51 @@
+# run-identity.txt — Phase 20 / row 20.18 / preflight (no measurement yet)
+agente:        ingenieria (OpenClaw) on Windows, operating via Mac node "David's MacBook Pro"
+runner:        OpenClaw exec host=node, host=71a0f52874f309cbafeba63c072ea543f94fdf3e3725c2a2cdf9a5be0a39239f
+fecha:         2026-09-12T04:03 EDT
+cwd:           /Users/dn/dev/summonaikit-claude  (source repo)
+worktree:      /Users/dn/dev/summonaikit-claude-wt-2018-19  [work/20.18-20.19-preflight]
+branch:        work/20.18-20.19-preflight  (created 2026-09-12, base 76e92bb7 = origin/master)
+
+checkout_sha:  76e92bb7a757ae45f6faa5d242a0b3bcbbf2cba9
+HEAD == origin/master:  yes (clean starting point per summa-gate rule 2)
+ahead/behind origin/master:  0/0
+
+# Pin runbook §1 / e0f7a25 + hook 37e55640…
+pin_ref_e0f7a25_commit:    0e7f…  reachable in local log?  yes
+e0f7a25_commit_subject:    docs(plans): close 20.12 and 20.13 after PRs #288/#289 (#290)
+pin_ref_e0f7a25_drift:     HEAD > pin (76e92bb ahead of pin), declared non-blocking per brief
+
+hook_real_sha256:  37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+hook_real_bytes:   252356
+hook_real_path:    hooks/summonaikit-harness.sh
+hook_pin_sha256:   37e55640003afaff6d4a54cf6495afc73bec5799b86323fb7a317889fec78680
+hook_pin_lines:    4345
+hook_match:        MATCH (runbook citation = real on-disk)
+hook_drift_decl:   evidence/phase-20/20.20/run-identity.txt cites hook real
+                   54ab74751a90ec9f9c4daa9d9e163e14726e4180df4187b045737005cce0d8a8
+                   (20 lines, pre-commit.com shim). Drift declared non-blocking
+                   per brief. v2.1.267 host vs runbook pin v2.1.266: declared non-blocking.
+
+# Destination repo descartable
+descartable_repo:        gon0801/saikit-descartable
+descartable_topic:       saikit-descartable         verified @ topics API
+descartable_default_br:  main
+descartable_marker:      SAIKIT-ORIGEN.md size=582 sha=ef1e4ce51bf98056a70019326271572d15bbbb90
+                         verified @ contents API
+prs_in_descartable:      11 / 15 (≤15 phase budget — room for 4 more)
+authorizacion_§8:        vigente (runbook PR #279, expira al cierre 20.26, renueva D23)
+
+# Measurement status
+measurement_status:      PENDING — host impediment declared
+host_impediment_reason:  20.18 es medición en UI web del host dsh. La medición observacional
+                         requiere sesión Claude Code activa con cwd = /Users/dn/dev/summonaikit-claude
+                         ejecutando dsh UI web. Verificado vía lsof cwd: no existe tal sesión
+                         activa en la Mac en este momento (sesiones Claude activas están en
+                         goncloud-bridge-in-out y goncloud-Orbit). Por diseño de la fila,
+                         "falta de observación sigue abierta" — no se cierra sin observación.
+scenarios_1_y_3:         declarados ✅ desde 15.5 (transcript + suite del hook)
+scenario_2:              unknown desde 15.5 (no cubierto por suite; requiere UI web viva)
+
+# Skill catalog note
+skills_disponibles_op_claw: mac-node-ops (the cited mac-terminal-control y mac-agent-transcript
+                            no están en el catálogo de skills instalado en este agente)
