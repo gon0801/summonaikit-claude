@@ -29,6 +29,27 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-13 — PR #321 (cierre de ledger de los bloques 6–9: deploy-log de los seis merges, 20.25 cerrada, bloqueo explícito de 20.26) — hooks NO-OP
+
+- **Merge:** `79eab16ad09554929381df7720670956e60738bd` (2026-09-14T02:54:57Z),
+  verificado contra la API/`git fetch` (squash: el contenido está en master).
+- **¿Cambió el hook? NO.** Docs-only (`docs/deploy-log.md` + `Plans.md`).
+  CI del PR verde: `gate` pass en el run
+  [34800129981](https://github.com/gon0801/summonaikit-claude/actions/runs/34800129981).
+- **Deploy corrido igual (regla de costumbre):** `install-hook.sh` en las
+  cuatro copias (claude/grok/dsh/codex) → YA AL DIA byte a byte contra
+  `origin/master`, sin backups nuevos (el hook no cambió desde #320).
+  `install-hook.sh --check` veredicto=ok, 4/4 al-día.
+- **`check-hook-registration.sh`:** las tres fases que el gate necesita
+  (`UserPromptSubmit`, `PostToolUse`, `Stop`) registradas en los cuatro
+  hosts, sin hallazgos — salida vacía y exit 0, que en su contrato
+  fail-open significa las 3 fases OK.
+- **Review de bots atendida post-merge:** CodeRabbit dejó 1 Major en #321
+  (la entrada de #315–#320 registraba el verificador de registro solo como
+  «exit 0» sin las fases); corregido en este mismo PR completando esa
+  entrada con las tres fases. Contrato fail-open del checker intacto.
+- **Operador:** merge de Gon; deploy no-op y cierre por el lead (kimi).
+
 ## 2026-09-13 — PRs #315–#320 (bloques 6–9: 20.23, 20.25, 21.1, 21.2, 21.3–21.4, 21.5) — deploy ACTUALIZA las cuatro copias
 
 - **Merges:** #315 `b205dec4a5de84acad3b1519079ecde17e6e1999` (2026-09-13T19:52:43Z),
@@ -54,7 +75,11 @@ describe el deploy original.
 - **Verificación:** `install-hook.sh --check` veredicto=ok, 4/4 copias
   al-día contra los bytes de `origin/master` `9aeb9caca0376c334d778c97546bf3af72849f6f`
   (fuente_sha256 `1dc9a75af947a864ad8aa8b2067d3855c602f60269dfa507bdf066fdd165e405`);
-  `check-hook-registration.sh` exit 0.
+  `check-hook-registration.sh`: las tres fases que el gate necesita
+  (`UserPromptSubmit`, `PostToolUse`, `Stop`) registradas en los cuatro
+  hosts, sin hallazgos — salida vacía y exit 0, que en su contrato
+  fail-open significa las 3 fases OK (el verificador solo habla cuando
+  falta algo).
 - **CI de master:** verde en los seis pushes; el último (#320) run
   [34798738139](https://github.com/gon0801/summonaikit-claude/actions/runs/34798738139)
   `completed success` (suite 7/7 shards, suite-lentos 3/3, quality,
