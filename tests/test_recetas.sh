@@ -213,6 +213,12 @@ printf '(opt-in) usa `.saikit/falta.md` siempre.\n' >> "$SANDBOX/pre/bug.md"
 out="$(lint_receta "$SANDBOX/pre/bug.md")" && malo "acepto marca antepuesta"
 printf '%s' "$out" | grep -q "referencia rota" || malo "motivo sin 'referencia rota': $out"
 
+caso "referencia como argumento de comando => 1 con motivo"
+buena "$SANDBOX/cmd/bug.md"
+printf 'Revisa con `cat .saikit/no-existe.md` antes de seguir.\n' >> "$SANDBOX/cmd/bug.md"
+out="$(lint_receta "$SANDBOX/cmd/bug.md")" && malo "acepto referencia rota como argumento de comando"
+printf '%s' "$out" | grep -q "referencia rota: .saikit/no-existe.md" || malo "no nombra la rota en comando: $out"
+
 # ---------------------------------------------------------- el repo real
 caso "todas las recetas del repo pasan el linter"
 for f in "$repo"/recetas/*.md; do
@@ -281,6 +287,21 @@ elif ( . "$MUTLIB"
   printf '    mutante salto-de-linea ciego (tapo la mixta) — atrapado\n'
 else
   malo "el mutante salto-de-linea sigue rechazando (el caso mixto no discrimina)"
+fi
+
+caso "mutante: sin etapa de extraccion se acepta la rota en comando"
+mut_lib 's|while IFS= read -r span; do|while false; do|'
+if cmp -s "$repo/tests/lib/recetas_lint.sh" "$MUTLIB"; then
+  malo "mutante sin-extraccion no cambio nada — sed obsoleto"
+elif ! bash -n "$MUTLIB" 2>/dev/null; then
+  malo "mutante sin-extraccion no parsea; asi no prueba nada"
+elif ( . "$MUTLIB"
+  buena "$SANDBOX/mcmd/bug.md"
+  printf 'Revisa con `cat .saikit/no-existe.md` antes de seguir.\n' >> "$SANDBOX/mcmd/bug.md"
+  out="$(lint_receta "$SANDBOX/mcmd/bug.md")" ); then
+  printf '    mutante sin-extraccion ciego (acepto la rota en comando) — atrapado\n'
+else
+  malo "el mutante sin-extraccion sigue rechazando (el caso comando no discrimina)"
 fi
 
 [ "$fail" -eq 0 ] && echo "test_recetas: OK" || { echo "test_recetas: FAIL" >&2; exit 1; }

@@ -48,7 +48,7 @@ _rl_contenida() {  # $1=repo_root (fisica) $2=token → 0 si el candidato canoni
 }
 
 lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
-  local f="$1" rc=0 n tipo nombre carril titulo base repo_root linea linea_rev tok
+  local f="$1" rc=0 n tipo nombre carril titulo base repo_root linea linea_rev span tok
   n="$(_rl_lineas "$f")"
   [ "$n" -le "$RECETAS_TOPE_LINEAS" ] || { echo "supera $RECETAS_TOPE_LINEAS lineas ($n)"; rc=1; }
   _rl_frontmatter "$f" >/dev/null 2>&1 || { echo "sin frontmatter (--- en la linea 1 y cierre)"; return 1; }
@@ -104,19 +104,25 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   # por TOKEN (la marca va justo despues de la referencia): una rota no
   # marcada en la misma linea sigue roja. Placeholders <...> y rutas $...
   # (fuera del repo) se saltan por token.
+  # 22.4r2: extraccion en DOS etapas — primero los tramos entre backticks,
+  # luego las rutas con pinta de archivo DENTRO de cada tramo. Exigir que
+  # TODO el tramo sea una ruta dejaba escapar `cat .saikit/no-existe.md`
+  # (el tramo trae verbo + ruta y no matcheaba nada).
   repo_root="$(cd "$(dirname "$f")/.." 2>/dev/null && pwd -P)" || repo_root="$(dirname "$f")"
   while IFS= read -r linea || [ -n "$linea" ]; do
     # quitar pares `ref` (marca) — lo marcado no se revisa, lo demas si
     linea_rev="$(printf '%s' "$linea" | sed -e 's/`[^`]*`[[:space:]]*(opt-in)//g' -e 's/`[^`]*`[[:space:]]*(externa)//g')"
-    # word-splitting intencional: el regex excluye espacios, un token no los trae
-    for tok in $(printf '%s' "$linea_rev" | grep -Eo '`[A-Za-z0-9_.$-]+(/[A-Za-z0-9_.$-]+)+/?`' | tr -d '`'); do
-      case "$tok" in *"<"*|*">"*|'$'*) continue ;; esac
-      if [ ! -e "$repo_root/$tok" ]; then
-        echo "referencia rota: $tok"; rc=1
-      elif ! _rl_contenida "$repo_root" "$tok"; then
-        echo "referencia fuera del repo: $tok"; rc=1
-      fi
-    done
+    while IFS= read -r span; do
+      # word-splitting intencional: el regex excluye espacios, un token no los trae
+      for tok in $(printf '%s' "$span" | grep -Eo '[A-Za-z0-9_.$-]+(/[A-Za-z0-9_.$-]+)+/?'); do
+        case "$tok" in *"<"*|*">"*|'$'*) continue ;; esac
+        if [ ! -e "$repo_root/$tok" ]; then
+          echo "referencia rota: $tok"; rc=1
+        elif ! _rl_contenida "$repo_root" "$tok"; then
+          echo "referencia fuera del repo: $tok"; rc=1
+        fi
+      done
+    done < <(printf '%s' "$linea_rev" | grep -Eo '`[^`]*`' | tr -d '`')
   done < "$f"
   return $rc
 }
