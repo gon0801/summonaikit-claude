@@ -1,0 +1,6 @@
+[nota] el hook cambio de identidad desde la linea base:
+       grabado: d86500ec4999144b9b123d5919ddca83906eb26d03164420e26947161a772170
+       ahora:   3c77de4eb4b4edbd6adb8392c40dca03c337e49f6e51a993cbf612c8e9dfd02b
+       La comparacion de abajo es de COMPORTAMIENTO, no de bytes.
+golden-harness: OK — 57 escenarios se comportan igual que la linea base
+EXIT=0

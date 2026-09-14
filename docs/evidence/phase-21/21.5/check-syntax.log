@@ -1,0 +1,7 @@
+=== syntax (brew bash) ===
+OK: hooks/summonaikit-harness.sh
+OK: tests/lib/preflight_cases.sh
+OK: tests/test_preflight_21_5.sh
+OK: tests/lib/gate_cases.sh
+OK: tests/test_gate_mutations.sh
+EXIT_SYNTAX=0

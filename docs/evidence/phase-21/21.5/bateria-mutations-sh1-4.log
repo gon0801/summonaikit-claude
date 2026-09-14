@@ -1,0 +1,35 @@
+test_gate_mutations: shard 1/4 — 47 mutaciones
+  G1  el sentinel pasa a matchear cualquier texto
+      lo atrapa: caso_g1_no_arma_sin_sentinel
+  G1  la clausula que impide desarmar con prompt vacio se neutraliza y un evento sin texto vuelve a borrar el estado armado
+      lo atrapa: caso_g1_prompt_vacio_no_desarma
+  G1  la forma laxa deja de exigir la marca de cierre y una mencion humana casual suprime el desarme
+      lo atrapa: caso_g1_mencion_humana_sin_sentinel_si_desarma
+  G1  la condicion de contenido del skip grok se neutraliza y un sobre de OTRO evento con sentinel deja de armar (18.27, review r2)
+      lo atrapa: caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma
+  G1  el lane fast deja de detectarse y todo arma full
+      lo atrapa: caso_g1_fast_arma_con_lane
+  G1  se agrega grok a la emision de reglas, el host que la medicion de la 10.9 descarto por ignorar additionalContext
+      lo atrapa: caso_g1_session_no_inyecta_en_grok
+  G1  el barrido pierde el filtro de edad y se lleva tambien el estado de una sesion hermana VIVA (A4)
+      lo atrapa: caso_g1_estado_no_se_acumula
+  G1  el parrafo del contrato deja de emitirse en turnos autopilot
+      lo atrapa: caso_g1_autopilot_arma_full_con_flag
+  G1  mark_evidence vacia el arg autopilot al reescribir y el flag desaparece a mitad de turno
+      lo atrapa: caso_g1_autopilot_sobrevive_mark_evidence
+  G1  el runtime vuelve a leer el titulo/carril del manifiesto y un titulo hostil con hash valido vuelve al contrato
+      lo atrapa: caso_g1_receta_titulo_hostil_no_se_inyecta
+  G2  pytest sale de la lista de runners de verificacion
+      lo atrapa: caso_g2_runner_marca_verificado
+  G2  el patron error TS[0-9] deja de detectar fracasos de tsc
+      lo atrapa: caso_g2_runner_fallido_tsc_no_marca
+  G2  la frontera [1-9] se afloja a [0-9] y 0 failed se toma como fracaso
+      lo atrapa: caso_g2_runner_pasa_0_failed_sigue_acreditado
+  G2  un runner al final de una frase deja de contar
+      lo atrapa: caso_g2_excusa_con_punto_final_no_reclama
+  G2  command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
+      lo atrapa: caso_g2_comando_entrecomillado_marca_verificado
+  G2  la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
+      lo atrapa: caso_g2_runner_en_echo_no_marca
+  G2  la condicion de host ciego ($HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
+      lo atrapa: caso_g2_claude_verif_subagente_no_acredita

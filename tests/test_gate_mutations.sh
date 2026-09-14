@@ -225,6 +225,9 @@ G3|codex_legado_ignora_flag|el fallback legado ignora la marca de canal nativo v
 G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
 G8|trail_raiz_sin_hash_disco|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
 G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
+G9|preflight_sin_stop|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea
+G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
+G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -1151,6 +1154,16 @@ mut_trail_raiz_sin_hash_disco() { sed '/_blob_arbol=/d; /_blob_disco=/d; /\[ "\$
 # propio HEAD vuelve a acreditar. Lo atrapa
 # caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea.
 mut_trail_raiz_sin_veredicto_sellado() { sed '/\.saikit\/veredictos\/\$_shas\.json/d'; }
+# 21.5: sin la llamada al stop_gate compartido, el subshell captura vacio
+# (rc 0) y todo preflight reporta PASS. Lo atrapa
+# caso_g9_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+mut_preflight_sin_stop() { sed 's/^    stop_gate # 21.5.*/    : # mutante preflight_sin_stop/'; }
+# 21.5: sin la redireccion del estado, el subshell escribe el ciclo real.
+# Lo atrapa caso_g9_sin_efectos (ciclo y estado intactos).
+mut_preflight_consume_ciclo() { sed 's|^    STATE_PATH="\$_pf_box/sesion/harness-state.env"|    : # mutante preflight_consume_ciclo|'; }
+# 21.5: el FAIL con exit 0 se lee como PASS. Lo atrapa
+# caso_g9_etiqueta_ausente_bloquea_en_ambos (espera exit 1 en FAIL).
+mut_preflight_falla_callada() { sed 's/if \[ "\$_pf_v" = "FAIL" \]; then exit 1; fi/if [ "$_pf_v" = "FAIL" ]; then exit 0; fi/'; }
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

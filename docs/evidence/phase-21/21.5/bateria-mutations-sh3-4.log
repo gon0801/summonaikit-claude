@@ -1,0 +1,35 @@
+test_gate_mutations: shard 3/4 — 46 mutaciones
+  G1  el estado se vuelve a llavear solo por proyecto (sin sesion)
+      lo atrapa: caso_g1_dos_sesiones_no_comparten_estado
+  G1  la regla permanente de la bateria deja de nombrar el lugar y vuelve a decir solo cuantas veces
+      lo atrapa: caso_g1_reglas_nombran_donde_correr_la_bateria
+  G1  el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
+      lo atrapa: caso_g1_notificacion_con_sentinel_no_rearma
+  G1  el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
+      lo atrapa: caso_g1_dos_hosts_mismo_repo_no_comparten_estado
+  G1  la emision de reglas deja de acotarse a session y tambien dispara en prompt sin sentinel
+      lo atrapa: caso_g1_no_arma_sin_sentinel
+  G1  la frontera izquierda del sentinel vuelve a aceptar / y -, y una ruta o un flag citado arman
+      lo atrapa: caso_g1_sentinel_con_frontera
+  G1  el alias -saikit:pregunta deja de bajar el carril
+      lo atrapa: caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1  autopilot deja de vaciar receta_alias y un turno -saikit:autopilot -saikit:pregunta queda con alias
+      lo atrapa: caso_g1_autopilot_gana_sobre_alias
+  G1  el alias baja el carril pero no nombra la receta
+      lo atrapa: caso_g1_alias_pregunta_arma_fast_y_nombra_receta
+  G1  el menu vuelve a recorrer el archivo entero para titulo/carril y una receta cuyo cuerpo documenta el formato filtra ese texto del cuerpo
+      lo atrapa: caso_g1_receta_menu_lee_solo_frontmatter
+  G2  AssertionError deja de matchear y un runner que revento por asercion vuelve a acreditarse
+      lo atrapa: caso_g2_runner_fallido_forma_real
+  G2  el grep case-sensitive de fallas se desactiva y cargo/go vuelven a acreditarse
+      lo atrapa: caso_g2_runner_fallido_cargo_no_marca
+  G2  un evento de herramienta crea estado sin turno armado
+      lo atrapa: caso_g2_sin_armar_no_crea_estado
+  G2  la regla de redaccion de ghp_ se neutraliza y un token ghp_ vuelve al log
+      lo atrapa: caso_g2_credenciales_token_nuevas_se_redactan
+  G2  'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
+      lo atrapa: caso_g2_runner_fallido_dotnet_no_marca
+  G2  las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
+      lo atrapa: caso_g2_runner_bash_run_sh_marca
+  G2  el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
+      lo atrapa: caso_g2_zcode_verif_subagente_cero_passed_bloquea

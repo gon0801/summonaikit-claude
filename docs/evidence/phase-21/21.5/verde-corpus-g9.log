@@ -1,0 +1,13 @@
+    ok: caso_g9_recibo_valido_cierra_en_ambos
+    ok: caso_g9_etiqueta_ausente_bloquea_en_ambos
+    ok: caso_g9_etiqueta_malformada_bloquea_en_ambos
+    ok: caso_g9_evidencia_invalida_bloquea_en_ambos
+    ok: caso_g9_trail_inexistente_bloquea_en_ambos
+    ok: caso_g9_raiz_sin_sha_bloquea_en_ambos
+    ok: caso_g9_raiz_acreditada_cierra_en_ambos
+    ok: caso_g9_skip_con_razon_cierra_en_ambos
+    ok: caso_g9_dinamicos_nombrados_no_pass
+    ok: caso_g9_sin_efectos
+    ok: caso_g9_sin_gramatica_paralela
+    ok: caso_g9_divergencia_queda_roja
+test_preflight_21_5: OK

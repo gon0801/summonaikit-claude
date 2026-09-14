@@ -1,0 +1,33 @@
+test_gate_mutations: shard 4/4 — 46 mutaciones
+  G1  el desarme deja de borrar el estado en prompt sin sentinel
+      lo atrapa: caso_g1_prompt_sin_sentinel_desarma
+  G1  el bullet de higiene de base de rama desaparece de las reglas permanentes y una rama cortada de un master local vuelve a colar commits ajenos al PR
+      lo atrapa: caso_g1_reglas_exigen_base_de_rama_limpia
+  G1  el skip estricto del auto-wake grok se neutraliza y un wake con sentinel en la descripcion del subagente vuelve a re-armar (18.27)
+      lo atrapa: caso_g1_grok_autowake_no_desarma
+  G1  el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
+      lo atrapa: caso_g1_arma_con_comillas_antes_del_sentinel
+  G1  se saca codex de la emision de reglas, el host que la medicion de la 10.9 habilito
+      lo atrapa: caso_g1_session_inyecta_reglas_codex
+  G1  la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre
+      lo atrapa: caso_g1_estado_no_se_acumula
+  G1  el carril autopilot deja de detectarse y el flag desaparece del estado y del contrato
+      lo atrapa: caso_g1_autopilot_arma_full_con_flag
+  G1  build_gate_feedback vuelve a agregar el parrafo en grok, donde harness_context adosado ya lo trae (dos veces en el reason)
+      lo atrapa: caso_g1_autopilot_parrafo_una_vez_en_grok
+  G1  la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal
+      lo atrapa: caso_g1_alias_desarme_limpia_estado
+  G1  el alias vuelve a bajar el carril y a nombrar la receta aunque la receta no exista en el recetario
+      lo atrapa: caso_g1_alias_sin_receta_no_baja_el_carril
+  G2  la vía A de failure_signal (digito no-cero antes de failed/failing/failures/errors) se neutraliza
+      lo atrapa: caso_g2_runner_fallido_pytest_summary_no_marca
+  G2  la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)
+      lo atrapa: caso_g2_runner_fallido_go_no_marca
+  G2  las fronteras de palabra del runner se quitan
+      lo atrapa: caso_g2_runner_en_path_no_marca
+  G2  un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
+      lo atrapa: caso_g2_excusa_espanol_no_reclama
+  G2  los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
+      lo atrapa: caso_g2_runner_fallido_gradle_no_marca
+  G2  el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
+      lo atrapa: caso_g2_zcode_verif_subagente_acredita

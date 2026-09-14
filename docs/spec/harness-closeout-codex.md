@@ -67,3 +67,16 @@ mostrar requisitos dinámicos todavía no observables, pero no los acredita. Es
 solo lectura: no consume ciclos ni cambia estado, crea rastro o fabrica
 evidencia. El veredicto final sigue perteneciendo a Stop porque el estado puede
 cambiar después del preflight.
+
+**Implementación (21.5):** fase `preflight` del hook (`preflight_check()` en
+`hooks/summonaikit-harness.sh`, invocable con
+`SUMMONAIKIT_HOOK_PHASE=preflight`). Ejecuta literalmente `stop_gate` en un
+subshell con las rutas de escritura redirigidas a un scratch temporal (el
+único borrado fuera del scratch, `adv_limpiar_zona`, se redefine a no-op
+dentro del subshell); ninguna regex ni gramática paralela. Reporte por
+stdout: `SAIKIT PREFLIGHT (21.5): PASS|FAIL`, sección `CAUSA:` con el texto
+que el Stop emitiría, y sección `DINAMICOS` que nombra la foto del snapshot
+(ciclo, `agents_seen` con llegadas 21.2, tail del transcript,
+`backgroundTasks`, trail/blast y 21.4) sin darlos por buenos. Exit 0 en
+PASS, 1 en FAIL, 2 en error de instrumento. El preflight nunca bloquea:
+no es un evento de cierre, es una consulta.

@@ -4558,6 +4558,87 @@ pretool_merge_guard() {
   fi
   emit_allow
 }
+# >>> SAIKIT-PREFLIGHT v1 (21.5) >>>
+# Preflight canonico del recibo: la MISMA comprobacion que el Stop haria
+# sobre este payload y este estado, SIN EFECTOS. No es una segunda gramatica:
+# ejecuta literalmente stop_gate en un subshell con las rutas de escritura
+# redirigidas a un scratch temporal que se borra al salir.
+# - STATE_PATH/LOG_PATH/RN_ORDER_PATH/RN_PENDING_PATH apuntan al scratch
+#   (misma derivacion que el arranque): el ciclo no se consume, el estado
+#   real no se toca, no se escribe evidencia. El unico borrado fuera del
+#   scratch seria adv_limpiar_zona (zona scratch del adversary en el
+#   proyecto real): se redefine a no-op DENTRO del subshell — esa funcion
+#   solo borra y siempre devuelve 0, el veredicto no la consulta
+#   (adv_chequear_secretos lee estado+findings, que viajan intactos en la
+#   foto; path_present_under_root exige ADV_PROJECT_CANON no vacio, que se
+#   conserva tal cual).
+# - Veredicto: PASS si el Stop permitiria (exit 0 sin decision:block ni
+#   continue:false); FAIL si bloquearia o agotaria presupuesto. La causa es
+#   el texto que el Stop emitiria (stderr capturado del subshell).
+# - Requisitos dinamicos (llegadas 21.2 posteriores, ciclo, tail del
+#   transcript y backgroundTasks al momento del Stop, arbol/HEAD del
+#   cierre para 21.4): se NOMBRAN en la seccion DINAMICOS como foto del
+#   snapshot, no se dan por PASS — el veredicto final pertenece al Stop.
+# - Salida: exit 0 + PASS / exit 1 + FAIL / exit 2 error de instrumento.
+# - Costura de mutacion SAIKIT_MUT_PREFLIGHT_DIVERGE=1: reporta PASS sin
+#   evaluar (solo la usa el corpus para demostrar que distingue la
+#   divergencia; produccion nunca la fija).
+preflight_check() {
+  _pf_box="$(mktemp -d "${TMPDIR:-/tmp}/saikit-preflight-XXXXXX")" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo crear el scratch\n' >&2
+    exit 2
+  }
+  if [ "${SAIKIT_MUT_PREFLIGHT_DIVERGE:-0}" = "1" ]; then
+    printf 'SAIKIT PREFLIGHT (21.5): PASS\n'
+    printf 'CAUSA: (costura SAIKIT_MUT_PREFLIGHT_DIVERGE: veredicto sin evaluar)\n'
+    printf 'DINAMICOS: omitidos por la costura de mutacion\n'
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 0
+  fi
+  mkdir -p "$_pf_box/sesion" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo armar el scratch\n' >&2
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 2
+  }
+  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null || true; fi
+  if [ -f "$LOG_PATH" ]; then cp "$LOG_PATH" "$_pf_box/sesion/harness-evidence.log" 2>/dev/null || true; fi
+  if [ -f "$RN_ORDER_PATH" ]; then cp "$RN_ORDER_PATH" "$_pf_box/sesion/harness-state-review-notice.env" 2>/dev/null || true; fi
+  (
+    STATE_DIR="$_pf_box/sesion"
+    STATE_PATH="$_pf_box/sesion/harness-state.env"
+    LOG_PATH="$_pf_box/sesion/harness-evidence.log"
+    RN_ORDER_PATH="${STATE_PATH%.env}-review-notice.env"
+    RN_PENDING_PATH="$_pf_box/review-notice-pending.log"
+    adv_limpiar_zona() { return 0; }
+    stop_gate # 21.5: la comprobacion ES el Stop — mismo parser, mismas reglas
+  ) >"$_pf_box/out" 2>"$_pf_box/err"
+  _pf_rc=$?
+  _pf_out="$(cat "$_pf_box/out" 2>/dev/null)"
+  _pf_err="$(cat "$_pf_box/err" 2>/dev/null)"
+  rm -rf "$_pf_box" 2>/dev/null || true
+  case "$_pf_out" in
+    *'"decision":"block"'*|*'"continue":false'*) _pf_v="FAIL" ;;
+    *)
+      if [ "$_pf_rc" -ne 0 ]; then _pf_v="FAIL"; else _pf_v="PASS"; fi ;;
+  esac
+  printf 'SAIKIT PREFLIGHT (21.5): %s\n' "$_pf_v"
+  if [ "$_pf_v" = "FAIL" ]; then
+    printf 'CAUSA:\n%s\n' "$_pf_err"
+  else
+    printf 'CAUSA: (cierre limpio — el Stop permitiria con este snapshot)\n'
+  fi
+  printf 'DINAMICOS (foto del snapshot — el Stop los re-evalua en vivo, no se dan por buenos):\n'
+  printf '  ciclo: %s (un bloqueo del Stop consume uno)\n' "$(read_state_value cycle)"
+  printf '  agents_seen: %s (llegadas 21.2 SubagentStart/SubagentStop posteriores cambian el rol acreditado)\n' "$(read_state_value agents_seen)"
+  printf '  transcript: el tail valido es el del momento del Stop, no el de ahora\n'
+  printf '  backgroundTasks: solo el Stop grok en vivo lo trae poblado\n'
+  printf '  trail/blast y 21.4 (raiz+sha+veredicto sellado): se re-resuelven contra el arbol y el HEAD del cierre\n'
+  printf '  snapshot: estado %s al evaluar\n' "$([ -f "$STATE_PATH" ] && printf presente || printf ausente)"
+  if [ "$_pf_v" = "FAIL" ]; then exit 1; fi
+  exit 0
+}
+# <<< SAIKIT-PREFLIGHT v1 <<<
+
 # <<< SAIKIT-PRETOOL-MERGE v1 <<<
 
 if [ -z "$PHASE" ]; then
@@ -4587,6 +4668,7 @@ case "$PHASE" in
   prompt|session) start_harness ;;
   tool) record_tool_evidence ;;
   stop|verify) stop_gate ;;
+  preflight) preflight_check ;;
   pretool) pretool_merge_guard ;;
   *) emit_allow ;;
 esac

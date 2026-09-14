@@ -1,0 +1,10 @@
+=== identity (21.5: preflight canonico del recibo) ===
+date: 2026-09-14T00:29:57Z
+platform: Darwin Mac.lan 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64
+ProductName:		macOS ProductVersion:		26.6 BuildVersion:		25G72
+branch: work/bloque9-21.5
+base: 5c3ac969e53a5b741add198be21a33cf5e177684 (origin/master 5c3ac96 + WIP 21.5)
+hook_sha256: 3c77de4eb4b4edbd6adb8392c40dca03c337e49f6e51a993cbf612c8e9dfd02b
+bash: 5.3.15(1)-release
+hook_vivo_para_corpus: SAIKIT_HOOK_VIVO=$PWD/hooks/summonaikit-harness.sh (la fuente del repo; el desplegado en ~/.claude/hooks no trae preflight)
+nota_syntax: bash 3.2 del sistema no parsea el hook ni en master (preexistente); el gate de sintaxis se corrio con brew bash 5.3 (check-syntax.log)

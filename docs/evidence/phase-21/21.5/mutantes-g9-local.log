@@ -1,0 +1,5 @@
+G9|preflight_sin_stop -> lo atrapa: caso_g9_etiqueta_ausente_bloquea_en_ambos
+G9|preflight_consume_ciclo -> lo atrapa: caso_g9_sin_efectos
+G9|preflight_falla_callada -> lo atrapa: caso_g9_etiqueta_ausente_bloquea_en_ambos
+mutantes-g9-local: OK (3/3 atrapados)
+EXIT=0

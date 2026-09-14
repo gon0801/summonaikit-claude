@@ -1,0 +1,37 @@
+test_gate_mutations: shard 2/4 — 47 mutaciones
+  G1  se arma sin llegar a consultar el sentinel
+      lo atrapa: caso_g1_no_arma_sin_sentinel
+  G1  la marca de notificacion vuelve a la forma laxa (contiene) y un prompt humano que la menciona se queda sin gate
+      lo atrapa: caso_g1_mencion_humana_de_la_marca_sigue_armando
+  G2  el guard del despacho en background se neutraliza y un job recien lanzado vuelve a acreditar verificacion sin resultado
+      lo atrapa: caso_g2_runner_en_background_no_acredita
+  G1  session_id se vuelve a leer con el lector greedy del payload crudo
+      lo atrapa: caso_g1_session_id_anidado_no_reescribe_ruta
+  G1  la fase session vuelve a salir muda y las reglas permanentes no se inyectan
+      lo atrapa: caso_g1_session_inyecta_reglas
+  G1  el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar
+      lo atrapa: caso_g1_prompt_vacio_no_desarma
+  G1  el menu del recetario se apaga y el contrato deja de ofrecer recetas aun con manifiesto valido
+      lo atrapa: caso_g1_contrato_nombra_recetario
+  G5  el parrafo autopilot deja de emitirse tambien en el tercer emisor (presupuesto agotado)
+      lo atrapa: caso_g5_autopilot_parrafo_en_budget_agotado
+  G1  record_agent vacia el arg autopilot al reescribir y el flag desaparece a mitad de turno
+      lo atrapa: caso_g1_autopilot_sobrevive_record_agent
+  G1  el menu vuelve a pedir el todolist, una herramienta de UN host que la 16.8 midio con 0 usos en 6 de 6 turnos
+      lo atrapa: caso_g1_contrato_nombra_recetario
+  G2  un runner que fallo tambien acredita verificacion
+      lo atrapa: caso_g2_runner_no_encontrado_no_marca
+  G2  la vía B (failures/errors: N) deja de matchear
+      lo atrapa: caso_g2_runner_fallido_phpunit_no_marca
+  G2  se quita el ':' despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
+      lo atrapa: caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado
+  G2  la redaccion de credenciales se desactiva y el secreto vuelve al log
+      lo atrapa: caso_g2_credenciales_en_comando_se_redactan
+  G2  las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
+      lo atrapa: caso_g2_runner_bash_run_sh_marca
+  G2  el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
+      lo atrapa: caso_g2_tool_name_runner_con_comando_ajeno_no_marca
+  G2  el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
+      lo atrapa: caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
+  G2  el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
+      lo atrapa: caso_g2_zcode_verif_subagente_cero_failed_acredita
