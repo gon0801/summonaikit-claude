@@ -668,6 +668,21 @@ c_wrap_symlink() {
   _contiene "nombra el enlace" "$OUT" "enlace simbolico"
 }
 
+c_wrap_tests_symlink() {
+  # Espejo de wrapper_tests_symlink_no_se_sigue para la mutacion
+  # wrap_symlink_tests_dir: sin el guard del dir, el rastreo descubre la
+  # bateria tras el enlace y el motivo cambia a "enlace simbolico".
+  CASO_ROJO=0; sb_reset
+  mkdir -p real/tests
+  printf '#!/bin/sh\nexit 0\n' > real/tests/test_app.sh
+  ln -s real/tests tests
+  correr --merge no --despliega no --sin-verify-app no --telegram no --wrap-runner si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ ! -e real/tests/run.sh ] || _mal "escribio el wrapper dentro del destino del enlace"
+  [ ! -e tests/run.sh ] || _mal "escribio a traves del enlace tests/"
+  _contiene "no descubre bateria tras el enlace" "$OUT" "sin bateria detectable"
+}
+
 c_wrap_multi() {
   CASO_ROJO=0; sb_reset
   mkdir -p tests
@@ -782,6 +797,7 @@ done <<'MUTS'
 despliega_default_false	s|despliega_default="no-se"|despliega_default="xxx"|	c_defaults
 wrap_nunca_instala	s|mv -n "$WRAP_TMP" "$WRAP"|true|	c_wrap
 wrap_symlink_run_sh	s|elif \[ -L "\$WRAP" \]; then|elif false; then|	c_wrap_symlink
+wrap_symlink_tests_dir	s# && \[ ! -L "\$ROOT/\$WRAP_D" \]##	c_wrap_tests_symlink
 wrap_multi_elige	s|elif \[ "\$WRAP_N" -gt 1 \]; then|elif false; then|	c_wrap_multi
 wrap_sin_consentimiento	s|^              WRAP_VOL=NO$|              WRAP_VOL=SI|	c_wrap_consent
 wrap_veto_dollar	s#|\*\\\$\*##	c_wrap_dollar
