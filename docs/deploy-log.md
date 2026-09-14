@@ -29,6 +29,39 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-13 — PRs #315–#320 (bloques 6–9: 20.23, 20.25, 21.1, 21.2, 21.3–21.4, 21.5) — deploy ACTUALIZA las cuatro copias
+
+- **Merges:** #315 `b205dec4a5de84acad3b1519079ecde17e6e1999` (2026-09-13T19:52:43Z),
+  #316 `eed6a8096f256a549a2da85b06e6f157ad062045` (2026-09-13T20:05:46Z),
+  #317 `30b341815b8b51cbaae94e24afd526aa32db83b7` (2026-09-13T20:06:27Z),
+  #318 `970d07972e88ccfce1e5b29269c0090791154161` (2026-09-13T23:21:47Z),
+  #319 `5c3ac969e53a5b741add198be21a33cf5e177684` (2026-09-13T23:50:08Z) y
+  #320 `9aeb9caca0376c334d778c97546bf3af72849f6f` (2026-09-14T02:17:46Z),
+  verificados contra la API de GitHub. **Las entradas individuales de estos
+  seis merges no se hicieron en su momento; este registro único las cubre.**
+- **¿Cambió el hook? SÍ en tres:** #318 (+104/-2: identidad del worktree
+  revisado y rastro/blast ligados a la raíz acreditada), #319 (+146/-1: canal
+  nativo de roles delegados de Codex) y #320 (+107: fase `preflight` del
+  recibo). #315, #316 y #317 fueron docs/evidencia/ledger (hook intacto).
+- **Deploy único post-#320 (hora medida en vivo, backups del instalador):**
+  `install-hook.sh` sin `--host` REPARADO con backup
+  `~/.claude/hooks/saikit-backups/summonaikit-harness.sh.nuestro.20260913-192555.bak`;
+  `--host grok`, `--host dsh` y `--host codex` REPARADOS con backup
+  `…nuestro.20260913-192603.bak` en cada perfil. De paso el instalador
+  replantó el agente `adversary.md` de grok, `cordis.patch.yml` de dsh y el
+  wrap POSIX de codex (el `hooks.json` de codex se registra en una fase
+  posterior, declarado por el propio instalador).
+- **Verificación:** `install-hook.sh --check` veredicto=ok, 4/4 copias
+  al-día contra los bytes de `origin/master` `9aeb9caca0376c334d778c97546bf3af72849f6f`
+  (fuente_sha256 `1dc9a75af947a864ad8aa8b2067d3855c602f60269dfa507bdf066fdd165e405`);
+  `check-hook-registration.sh` exit 0.
+- **CI de master:** verde en los seis pushes; el último (#320) run
+  [34798738139](https://github.com/gon0801/summonaikit-claude/actions/runs/34798738139)
+  `completed success` (suite 7/7 shards, suite-lentos 3/3, quality,
+  node-adapter, secrets).
+- **Operador:** deploy corrido por el lead (kimi) con autorización expresa de
+  Gon en la misma sesión.
+
 ## 2026-09-13 — PRs #312 + #313 (20.21: costo/latencia y decisión sobre 16.7; 20.22: adopción del autopilot preparada, sin activar) — hooks NO-OP
 
 - **Merges:** #312 `8ff315f6b06eab90c4274f48889464a88bb7c2d` y #313
