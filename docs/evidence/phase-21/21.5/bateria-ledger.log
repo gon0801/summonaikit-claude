@@ -1,0 +1,11 @@
+  caso: una fila de tarea completa en una sola linea => sin violaciones
+  caso: una fila de tarea partida en dos lineas (el bug real) => se detectan ambas mitades
+  caso: la misma fila ya arreglada (una sola linea) => sin violaciones
+  caso: encabezado y separador de tabla no son filas de tarea => sin violaciones
+  caso: fila de 5 celdas con pipes escapados adentro => sin violaciones
+  caso: fila con un | sin escapar adentro de un code span => se detecta (el bug de la 17.3)
+  caso: encabezado, separador y prosa no son filas de tarea => sin violaciones de columnas
+  caso: archivo sin ninguna fila de tarea => sin violaciones (no es lo mismo que cobertura cero)
+  caso: el Plans.md real del repo no tiene ninguna fila de tarea partida
+  caso: el Plans.md real del repo: toda fila de tarea tiene 5 celdas
+test_plans_ledger: OK

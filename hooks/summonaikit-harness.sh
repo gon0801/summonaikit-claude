@@ -4558,6 +4558,112 @@ pretool_merge_guard() {
   fi
   emit_allow
 }
+# >>> SAIKIT-PREFLIGHT v1 (21.5) >>>
+# Preflight canonico del recibo: la MISMA comprobacion que el Stop haria
+# sobre este payload y este estado, SIN EFECTOS. No es una segunda gramatica:
+# ejecuta literalmente stop_gate en un subshell con las rutas de escritura
+# redirigidas a un scratch temporal que se borra al salir.
+# - STATE_PATH/LOG_PATH/RN_ORDER_PATH/RN_PENDING_PATH apuntan al scratch
+#   (misma derivacion que el arranque): el ciclo no se consume, el estado
+#   real no se toca, no se escribe evidencia. El unico borrado fuera del
+#   scratch seria adv_limpiar_zona (zona scratch del adversary en el
+#   proyecto real): se redefine a no-op DENTRO del subshell — esa funcion
+#   solo borra y siempre devuelve 0, el veredicto no la consulta
+#   (adv_chequear_secretos lee estado+findings, que viajan intactos en la
+#   foto; path_present_under_root exige ADV_PROJECT_CANON no vacio, que se
+#   conserva tal cual).
+# - Veredicto: PASS si el Stop permitiria (exit 0 sin decision:block ni
+#   continue:false); FAIL si bloquearia o agotaria presupuesto. La causa es
+#   el texto que el Stop emitiria (stderr capturado del subshell).
+# - Requisitos dinamicos (llegadas 21.2 posteriores, ciclo, tail del
+#   transcript y backgroundTasks al momento del Stop, arbol/HEAD del
+#   cierre para 21.4): se NOMBRAN en la seccion DINAMICOS como foto del
+#   snapshot, no se dan por PASS — el veredicto final pertenece al Stop.
+# - Salida: exit 0 + PASS / exit 1 + FAIL / exit 2 error de instrumento.
+# - Costura de mutacion SAIKIT_MUT_PREFLIGHT_DIVERGE=1: reporta PASS sin
+#   evaluar (solo la usa el corpus para demostrar que distingue la
+#   divergencia; produccion nunca la fija).
+preflight_check() {
+  _pf_box="$(mktemp -d "${TMPDIR:-/tmp}/saikit-preflight-XXXXXX")" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo crear el scratch\n' >&2
+    exit 2
+  }
+  # 21.5r2: el scratch no queda huerfano si el preflight muere por senal
+  # (revision externa 21.5r2: SIGTERM entre mktemp y rm -rf dejaba la copia
+  # del estado en disco). EXIT limpia redundante con los rm explicitos de
+  # cada camino (medido: el subshell ( stop_gate ) no hereda/dispara el
+  # trap del padre, asi out/err siguen legibles); INT/TERM limpian y mueren
+  # (143) en vez de reanudar a mitad del preflight.
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true' EXIT
+  trap 'rm -rf "$_pf_box" 2>/dev/null || true; exit 143' INT TERM
+  if [ "${SAIKIT_MUT_PREFLIGHT_DIVERGE:-0}" = "1" ]; then
+    printf 'SAIKIT PREFLIGHT (21.5): PASS\n'
+    printf 'CAUSA: (costura SAIKIT_MUT_PREFLIGHT_DIVERGE: veredicto sin evaluar)\n'
+    printf 'DINAMICOS: omitidos por la costura de mutacion\n'
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 0
+  fi
+  mkdir -p "$_pf_box/sesion" || {
+    printf 'SAIKIT PREFLIGHT (21.5): ERROR — no se pudo armar el scratch\n' >&2
+    rm -rf "$_pf_box" 2>/dev/null || true
+    exit 2
+  }
+  # 21.5r2: si la foto del estado falla (existe pero ilegible), evaluar
+  # sin ella MENTIRIA: el Stop real bloquea. Error de instrumento (exit 2),
+  # nunca un veredicto (revision externa 21.5r2 + CodeRabbit L4605).
+  _pf_foto() {
+    if [ -f "$1" ] && ! cp "$1" "$2" 2>/dev/null; then
+      printf 'SAIKIT PREFLIGHT (21.5): ERROR — foto del estado fallida (%s)\n' "$1" >&2
+      rm -rf "$_pf_box" 2>/dev/null || true
+      exit 2
+    fi
+  }
+  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"
+  _pf_foto "$LOG_PATH" "$_pf_box/sesion/harness-evidence.log"
+  _pf_foto "$RN_ORDER_PATH" "$_pf_box/sesion/harness-state-review-notice.env"
+  (
+    STATE_DIR="$_pf_box/sesion"
+    STATE_PATH="$_pf_box/sesion/harness-state.env"
+    LOG_PATH="$_pf_box/sesion/harness-evidence.log"
+    RN_ORDER_PATH="${STATE_PATH%.env}-review-notice.env"
+    RN_PENDING_PATH="$_pf_box/review-notice-pending.log"
+    adv_limpiar_zona() { return 0; }
+    stop_gate # 21.5: la comprobacion ES el Stop — mismo parser, mismas reglas
+  ) >"$_pf_box/out" 2>"$_pf_box/err"
+  _pf_rc=$?
+  _pf_out="$(cat "$_pf_box/out" 2>/dev/null)"
+  _pf_err="$(cat "$_pf_box/err" 2>/dev/null)"
+  rm -rf "$_pf_box" 2>/dev/null || true
+  # 21.5r1: el tercer canal de bloqueo del Stop es el de cursor —
+  # emit_gate_failure / emit_budget_exhausted emiten followup_message con
+  # exit 0 para TARGET=cursor, asi que ni el JSON de los otros hosts ni el
+  # exit distinguen el bloqueo. Se reconoce el canal (no se re-parsean reglas).
+  case "$_pf_out" in
+    *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) _pf_v="FAIL" ;;
+    *)
+      if [ "$_pf_rc" -ne 0 ]; then _pf_v="FAIL"; else _pf_v="PASS"; fi ;;
+  esac
+  printf 'SAIKIT PREFLIGHT (21.5): %s\n' "$_pf_v"
+  if [ "$_pf_v" = "FAIL" ]; then
+    # 21.5r1: cursor bloquea solo por stdout (sin stderr); la causa se lee
+    # del err cuando lo hay y del out como respaldo (mismo texto medido).
+    if [ -n "$_pf_err" ]; then printf 'CAUSA:\n%s\n' "$_pf_err"
+    else printf 'CAUSA:\n%s\n' "$_pf_out"; fi
+  else
+    printf 'CAUSA: (cierre limpio — el Stop permitiria con este snapshot)\n'
+  fi
+  printf 'DINAMICOS (foto del snapshot — el Stop los re-evalua en vivo, no se dan por buenos):\n'
+  printf '  ciclo: %s (un bloqueo del Stop consume uno)\n' "$(read_state_value cycle)"
+  printf '  agents_seen: %s (llegadas 21.2 SubagentStart/SubagentStop posteriores cambian el rol acreditado)\n' "$(read_state_value agents_seen)"
+  printf '  transcript: el tail valido es el del momento del Stop, no el de ahora\n'
+  printf '  backgroundTasks: solo el Stop grok en vivo lo trae poblado\n'
+  printf '  trail/blast y 21.4 (raiz+sha+veredicto sellado): se re-resuelven contra el arbol y el HEAD del cierre\n'
+  printf '  snapshot: estado %s al evaluar\n' "$([ -f "$STATE_PATH" ] && printf presente || printf ausente)"
+  if [ "$_pf_v" = "FAIL" ]; then exit 1; fi
+  exit 0
+}
+# <<< SAIKIT-PREFLIGHT v1 <<<
+
 # <<< SAIKIT-PRETOOL-MERGE v1 <<<
 
 if [ -z "$PHASE" ]; then
@@ -4587,6 +4693,7 @@ case "$PHASE" in
   prompt|session) start_harness ;;
   tool) record_tool_evidence ;;
   stop|verify) stop_gate ;;
+  preflight) preflight_check ;;
   pretool) pretool_merge_guard ;;
   *) emit_allow ;;
 esac
