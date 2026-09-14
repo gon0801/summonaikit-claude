@@ -194,6 +194,25 @@ buena "$SANDBOX/p4/bug.md"
 printf 'Sigue los patrones de `.saikit/existe.md` siempre.\n' >> "$SANDBOX/p4/bug.md"
 out="$(lint_receta "$SANDBOX/p4/bug.md")" || malo "rechazo referencia existente: $out"
 
+caso "escape con .. existente afuera => 1 fuera del repo"
+buena "$SANDBOX/esc/r/recetas/bug.md"
+: > "$SANDBOX/esc/hermano.md"
+printf 'Mira `../hermano.md` (existe, pero fuera de la raiz).\n' >> "$SANDBOX/esc/r/recetas/bug.md"
+out="$(lint_receta "$SANDBOX/esc/r/recetas/bug.md")" && malo "acepto escape con .. fuera del repo"
+printf '%s' "$out" | grep -q "fuera del repo" || malo "motivo sin 'fuera del repo': $out"
+
+caso "linea mixta: la rota no marcada sigue roja aunque haya opt-in"
+buena "$SANDBOX/mix/bug.md"
+printf 'Mira `.saikit/falta.md` y tambien `.saikit/triage-patrones.md` (opt-in).\n' >> "$SANDBOX/mix/bug.md"
+out="$(lint_receta "$SANDBOX/mix/bug.md")" && malo "la marca opt-in tapo una rota no marcada"
+printf '%s' "$out" | grep -q "referencia rota: .saikit/falta.md" || malo "no nombra la rota no marcada: $out"
+
+caso "marca antepuesta no exceptua (la marca va justo despues)"
+buena "$SANDBOX/pre/bug.md"
+printf '(opt-in) usa `.saikit/falta.md` siempre.\n' >> "$SANDBOX/pre/bug.md"
+out="$(lint_receta "$SANDBOX/pre/bug.md")" && malo "acepto marca antepuesta"
+printf '%s' "$out" | grep -q "referencia rota" || malo "motivo sin 'referencia rota': $out"
+
 # ---------------------------------------------------------- el repo real
 caso "todas las recetas del repo pasan el linter"
 for f in "$repo"/recetas/*.md; do
@@ -222,5 +241,46 @@ fi
 
 caso "el manifiesto esta al dia (gen --check)"
 bash "$repo/tools/gen-recetas-manifest.sh" --check >/dev/null || malo "MANIFEST.sha256 desactualizado: corre tools/gen-recetas-manifest.sh"
+
+# ------------------------------------------------------- mutantes (22.4r1)
+# Sin banco separado: cada mutacion puntual tiene que dejar CIEGO al caso que
+# la nombra (el mutante acepta lo que el sano rechaza). Corren en subshell
+# contra una COPIA mutada de la lib, para no envenenar la corrida; si el sed
+# no cambia bytes, la mutacion quedo obsoleta y falla (guarda anti-sed).
+mut_lib() {  # $1=sed-expr → prepara $MUTLIB mutada desde la lib real
+  MUTLIB="$SANDBOX/mut-recetas-lint.sh"
+  sed "$1" "$repo/tests/lib/recetas_lint.sh" > "$MUTLIB"
+}
+
+caso "mutante: sin contencion canonica se acepta el escape"
+mut_lib 's|elif ! _rl_contenida "\$repo_root" "\$tok"; then|elif false; then|'
+if cmp -s "$repo/tests/lib/recetas_lint.sh" "$MUTLIB"; then
+  malo "mutante sin-contencion no cambio nada — sed obsoleto"
+elif ! bash -n "$MUTLIB" 2>/dev/null; then
+  malo "mutante sin-contencion no parsea; asi no prueba nada"
+elif ( . "$MUTLIB"
+  buena "$SANDBOX/mesc/r/recetas/bug.md"
+  : > "$SANDBOX/mesc/hermano.md"
+  printf 'Mira `../hermano.md`.\n' >> "$SANDBOX/mesc/r/recetas/bug.md"
+  out="$(lint_receta "$SANDBOX/mesc/r/recetas/bug.md")" ); then
+  printf '    mutante sin-contencion ciego (acepto el escape) — atrapado\n'
+else
+  malo "el mutante sin-contencion sigue rechazando (el caso escape no discrimina)"
+fi
+
+caso "mutante: con salto de linea completa se tapa la mixta"
+mut_lib 's#linea_rev="$(printf#linea_rev=""; case "$linea" in *"(opt-in)"*|*"(externa)"*) continue ;; esac; _ign="$(printf#'
+if cmp -s "$repo/tests/lib/recetas_lint.sh" "$MUTLIB"; then
+  malo "mutante salto-de-linea no cambio nada — sed obsoleto"
+elif ! bash -n "$MUTLIB" 2>/dev/null; then
+  malo "mutante salto-de-linea no parsea; asi no prueba nada"
+elif ( . "$MUTLIB"
+  buena "$SANDBOX/mmix/bug.md"
+  printf 'Mira `.saikit/falta.md` y `.saikit/t.md` (opt-in).\n' >> "$SANDBOX/mmix/bug.md"
+  out="$(lint_receta "$SANDBOX/mmix/bug.md")" ); then
+  printf '    mutante salto-de-linea ciego (tapo la mixta) — atrapado\n'
+else
+  malo "el mutante salto-de-linea sigue rechazando (el caso mixto no discrimina)"
+fi
 
 [ "$fail" -eq 0 ] && echo "test_recetas: OK" || { echo "test_recetas: FAIL" >&2; exit 1; }

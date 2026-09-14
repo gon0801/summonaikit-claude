@@ -19,8 +19,36 @@ _rl_campo() {  # $1=archivo $2=clave → valor (sin comillas) o vacio
   _rl_frontmatter "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -n1 | sed 's/^"\(.*\)"$/\1/'
 }
 
+_rl_canon() {  # $1=ruta existente → stdout ruta fisica; rc 1 si no resuelve
+  # Sigue enlaces (tope 10, portable: readlink sin -f existe en BSD y GNU)
+  # y normaliza .. por construccion (cd + pwd -P).
+  local _r="$1" _t _i=0
+  while [ -L "$_r" ] && [ "$_i" -lt 10 ]; do
+    _t="$(readlink "$_r")" || return 1
+    case "$_t" in
+      /*) _r="$_t" ;;
+      *) _r="$(dirname "$_r")/$_t" ;;
+    esac
+    _i=$((_i + 1))
+  done
+  [ -L "$_r" ] && return 1
+  if [ -d "$_r" ]; then
+    (cd "$_r" 2>/dev/null && pwd -P) || return 1
+  else
+    _t="$(cd "$(dirname "$_r")" 2>/dev/null && pwd -P)" || return 1
+    printf '%s/%s\n' "$_t" "$(basename "$_r")"
+  fi
+}
+
+_rl_contenida() {  # $1=repo_root (fisica) $2=token → 0 si el candidato canonico cae dentro
+  local _c
+  [ -e "$1/$2" ] || return 1
+  _c="$(_rl_canon "$1/$2")" || return 1
+  case "$_c" in "$1"|"$1"/*) return 0 ;; *) return 1 ;; esac
+}
+
 lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
-  local f="$1" rc=0 n tipo nombre carril titulo base repo_root linea tok
+  local f="$1" rc=0 n tipo nombre carril titulo base repo_root linea linea_rev tok
   n="$(_rl_lineas "$f")"
   [ "$n" -le "$RECETAS_TOPE_LINEAS" ] || { echo "supera $RECETAS_TOPE_LINEAS lineas ($n)"; rc=1; }
   _rl_frontmatter "$f" >/dev/null 2>&1 || { echo "sin frontmatter (--- en la linea 1 y cierre)"; return 1; }
@@ -69,15 +97,25 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   # 22.4: rutas en prosa/backticks tienen que existir relativo a la RAIZ del
   # repo, no relativo a la receta: las referencias son `.saikit/...` y
   # `tools/...`. Raiz = padre del dir que contiene la receta (recetas/ en el
-  # repo real; el dir sembrado en sandbox). Se saltan: lineas marcadas
-  # (opt-in)/(externa), placeholders con <...> y rutas $... (fuera del repo).
-  repo_root="$(cd "$(dirname "$f")/.." 2>/dev/null && pwd)" || repo_root="$(dirname "$f")"
+  # repo real; el dir sembrado en sandbox), en forma FISICA (pwd -P) para que
+  # la comparacion de contencion sea sana.
+  # 22.4r1: contencion canonica — un `..` que escape del repo y exista afuera
+  # se rechaza ("fuera del repo"), no pasa por sano. Marcas (opt-in)/(externa)
+  # por TOKEN (la marca va justo despues de la referencia): una rota no
+  # marcada en la misma linea sigue roja. Placeholders <...> y rutas $...
+  # (fuera del repo) se saltan por token.
+  repo_root="$(cd "$(dirname "$f")/.." 2>/dev/null && pwd -P)" || repo_root="$(dirname "$f")"
   while IFS= read -r linea || [ -n "$linea" ]; do
-    case "$linea" in *"(opt-in)"*|*"(externa)"*) continue ;; esac
+    # quitar pares `ref` (marca) — lo marcado no se revisa, lo demas si
+    linea_rev="$(printf '%s' "$linea" | sed -e 's/`[^`]*`[[:space:]]*(opt-in)//g' -e 's/`[^`]*`[[:space:]]*(externa)//g')"
     # word-splitting intencional: el regex excluye espacios, un token no los trae
-    for tok in $(printf '%s' "$linea" | grep -Eo '`[A-Za-z0-9_.$-]+(/[A-Za-z0-9_.$-]+)+/?`' | tr -d '`'); do
+    for tok in $(printf '%s' "$linea_rev" | grep -Eo '`[A-Za-z0-9_.$-]+(/[A-Za-z0-9_.$-]+)+/?`' | tr -d '`'); do
       case "$tok" in *"<"*|*">"*|'$'*) continue ;; esac
-      [ -e "$repo_root/$tok" ] || { echo "referencia rota: $tok"; rc=1; }
+      if [ ! -e "$repo_root/$tok" ]; then
+        echo "referencia rota: $tok"; rc=1
+      elif ! _rl_contenida "$repo_root" "$tok"; then
+        echo "referencia fuera del repo: $tok"; rc=1
+      fi
     done
   done < "$f"
   return $rc
