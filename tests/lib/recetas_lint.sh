@@ -20,7 +20,7 @@ _rl_campo() {  # $1=archivo $2=clave → valor (sin comillas) o vacio
 }
 
 lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
-  local f="$1" rc=0 n tipo nombre carril titulo base
+  local f="$1" rc=0 n tipo nombre carril titulo base repo_root linea tok
   n="$(_rl_lineas "$f")"
   [ "$n" -le "$RECETAS_TOPE_LINEAS" ] || { echo "supera $RECETAS_TOPE_LINEAS lineas ($n)"; rc=1; }
   _rl_frontmatter "$f" >/dev/null 2>&1 || { echo "sin frontmatter (--- en la linea 1 y cierre)"; return 1; }
@@ -66,6 +66,20 @@ lint_receta() {  # $1=archivo → 0 ok; 1 con motivo(s) en stdout
   while IFS= read -r l; do
     [ -e "$(dirname "$f")/$l" ] || { echo "link roto: $l"; rc=1; }
   done < <(grep -Eo '\]\([^)#]+' "$f" | sed 's/^](//' | grep -Ev '^(https?:|mailto:)')
+  # 22.4: rutas en prosa/backticks tienen que existir relativo a la RAIZ del
+  # repo, no relativo a la receta: las referencias son `.saikit/...` y
+  # `tools/...`. Raiz = padre del dir que contiene la receta (recetas/ en el
+  # repo real; el dir sembrado en sandbox). Se saltan: lineas marcadas
+  # (opt-in)/(externa), placeholders con <...> y rutas $... (fuera del repo).
+  repo_root="$(cd "$(dirname "$f")/.." 2>/dev/null && pwd)" || repo_root="$(dirname "$f")"
+  while IFS= read -r linea || [ -n "$linea" ]; do
+    case "$linea" in *"(opt-in)"*|*"(externa)"*) continue ;; esac
+    # word-splitting intencional: el regex excluye espacios, un token no los trae
+    for tok in $(printf '%s' "$linea" | grep -Eo '`[A-Za-z0-9_.$-]+(/[A-Za-z0-9_.$-]+)+/?`' | tr -d '`'); do
+      case "$tok" in *"<"*|*">"*|'$'*) continue ;; esac
+      [ -e "$repo_root/$tok" ] || { echo "referencia rota: $tok"; rc=1; }
+    done
+  done < "$f"
   return $rc
 }
 

@@ -171,6 +171,29 @@ sed_i 's/^titulo: .*/titulo: Otro/' "$gen_dir/bug.md"
 bash "$repo/tools/gen-recetas-manifest.sh" --dir "$gen_dir" --check >/dev/null; rc=$?
 [ "$rc" -eq 1 ] || malo "--check con manifiesto STALE devolvio $rc (esperado 1)"
 
+caso "referencia rota en prosa => 1 con motivo"
+buena "$SANDBOX/p/bug.md"
+printf 'Sigue los patrones de `.saikit/no-existe.md` siempre.\n' >> "$SANDBOX/p/bug.md"
+out="$(lint_receta "$SANDBOX/p/bug.md")" && malo "acepto referencia rota"
+printf '%s' "$out" | grep -q "referencia rota" || malo "motivo sin 'referencia rota': $out"
+
+caso "referencia opt-in marcada => pasa"
+buena "$SANDBOX/p2/bug.md"
+printf 'Si existe `.saikit/triage-patrones.md` (opt-in), aplicalo.\n' >> "$SANDBOX/p2/bug.md"
+out="$(lint_receta "$SANDBOX/p2/bug.md")" || malo "rechazo referencia opt-in: $out"
+
+caso "placeholder y ruta externa => pasa"
+buena "$SANDBOX/p3/bug.md"
+printf 'Hace `git fetch origin <base>` y mira `$HOME/.claude/saikit-tools/x.sh` (externa).\n' >> "$SANDBOX/p3/bug.md"
+out="$(lint_receta "$SANDBOX/p3/bug.md")" || malo "rechazo placeholder/externa: $out"
+
+caso "referencia existente => pasa"
+mkdir -p "$SANDBOX/.saikit"
+: > "$SANDBOX/.saikit/existe.md"
+buena "$SANDBOX/p4/bug.md"
+printf 'Sigue los patrones de `.saikit/existe.md` siempre.\n' >> "$SANDBOX/p4/bug.md"
+out="$(lint_receta "$SANDBOX/p4/bug.md")" || malo "rechazo referencia existente: $out"
+
 # ---------------------------------------------------------- el repo real
 caso "todas las recetas del repo pasan el linter"
 for f in "$repo"/recetas/*.md; do
