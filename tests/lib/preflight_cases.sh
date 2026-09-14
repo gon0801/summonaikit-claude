@@ -17,19 +17,19 @@
 
 # Compara Stop vs preflight sobre el mismo recibo y el mismo estado.
 # $1 = nombre; $2 = verified a sembrar (0/1); $3 = recibo; $4 = causa
-# ("" = ambos PASS). El Stop que cierra limpio BORRA el estado, asi que se
-# re-siembra antes del preflight.
+# ("" = ambos PASS); $5 = target (defecto claude). El Stop que cierra limpio
+# BORRA el estado, asi que se re-siembra antes del preflight.
 _pf_compara() {
-  _pf_nombre="$1"; _pf_verified="$2"; _pf_recibo="$3"; _pf_causa="$4"
+  _pf_nombre="$1"; _pf_verified="$2"; _pf_recibo="$3"; _pf_causa="$4"; _pf_target="${5:-claude}"
   lab_sembrar 123456 0 1 "$_pf_verified" "implementer,verifier,reviewer"
-  lab_run stop claude "$(lab_payload_stop "$_pf_recibo")"
+  lab_run stop "$_pf_target" "$(lab_payload_stop "$_pf_recibo")"
   _pf_stop_rc="$LAB_RC"; _pf_stop_out="$LAB_OUT"
   lab_sembrar 123456 0 1 "$_pf_verified" "implementer,verifier,reviewer"
-  lab_run preflight claude "$(lab_payload_stop "$_pf_recibo")"
+  lab_run preflight "$_pf_target" "$(lab_payload_stop "$_pf_recibo")"
   _pf_pre_rc="$LAB_RC"; _pf_pre_out="$LAB_OUT"
   if [ "$_pf_stop_rc" = "0" ]; then
     case "$_pf_stop_out" in
-      *'"decision":"block"'*|*'"continue":false'*) _pf_stop_v="FAIL" ;;
+      *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) _pf_stop_v="FAIL" ;;
       *) _pf_stop_v="PASS" ;;
     esac
   else
@@ -171,4 +171,16 @@ caso_g9_divergencia_queda_roja() {
   if [ "$_pf_div_pre_rc" = "$_pf_div_stop_rc" ]; then _mal "divergencia: mutante indistinguible del Stop"; fi
 }
 
-CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_bloquea_en_ambos caso_g9_etiqueta_malformada_bloquea_en_ambos caso_g9_evidencia_invalida_bloquea_en_ambos caso_g9_trail_inexistente_bloquea_en_ambos caso_g9_raiz_sin_sha_bloquea_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja"
+caso_g9_cursor_recibo_valido_cierra_en_ambos() {
+  limpiar_saikit
+  plantar_trail x
+  _pf_compara "recibo valido (cursor)" 1 "$(_pf_base)" "" "cursor"
+}
+
+caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos() {
+  limpiar_saikit
+  plantar_trail x
+  _pf_compara "etiqueta ausente (cursor)" 1 "$_RECIBO_SIN_RETRO" "Missing Retro gate summary" "cursor"
+}
+
+CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_bloquea_en_ambos caso_g9_etiqueta_malformada_bloquea_en_ambos caso_g9_evidencia_invalida_bloquea_en_ambos caso_g9_trail_inexistente_bloquea_en_ambos caso_g9_raiz_sin_sha_bloquea_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja caso_g9_cursor_recibo_valido_cierra_en_ambos caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos"
