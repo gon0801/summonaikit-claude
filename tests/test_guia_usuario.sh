@@ -46,14 +46,16 @@ malo() { printf '    FAIL: %s\n' "$1" >&2; fail=1; }
 DEBEN_ESTAR='limites: la guia se declara ayudante y no candado|ayudante disciplinado, no un candado
 limites: dice que ante lo que no puede ver deja pasar|deja pasar en vez de bloquear
 adversary: se declara que no siempre entra|no siempre entra
-autopilot: el postmerge avisa y no revierte solo|no revierte solo'
+autopilot: el postmerge avisa y no revierte solo|no revierte solo
+setup-autopilot: enumera runners habituales reconocidos|runners habituales como <code>pytest</code>, <code>jest</code>, <code>npm test</code>, <code>yarn test</code> y <code>pnpm test</code>'
 
 # Frases que NO pueden volver. Formato: etiqueta|frase literal|que se corrigio
 NO_PUEDEN_ESTAR='autopilot promete deshacer cualquier fallo|se deshace solo|el postmerge reducido solo avisa, nunca ejecuta
 autopilot promete que el sistema deshace solo|intenta deshacerlo|D19 reducida: el postmerge solo avisa con el comando listo
 el flujo afirma que siempre entran los cuatro roles|Los cuatro de arriba|el adversary es el cuarto y es opt-in
 garantia absoluta de pruebas verdes|nada se publica sin|el gate deja cerrar un turno que declara que no corrio pruebas
-el gate presentado como bloqueo de cierre|el turno no cierra|el gate es fail-open: ante lo que no observa, deja pasar'
+el gate presentado como bloqueo de cierre|el turno no cierra|el gate es fail-open: ante lo que no observa, deja pasar
+setup-autopilot reduce runners a tres formas|solo reconoce las pruebas corridas así (o con pytest o jest)|el gate reconoce mas runners; el wrapper cubre nombres propios fuera del vocabulario'
 
 # chequear_guia ARCHIVO -> imprime una linea por violacion, nada si esta bien.
 chequear_guia() {
@@ -79,27 +81,27 @@ chequear_guia() {
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/saikit-guia-XXXXXX")" || exit 1
 trap 'rm -rf "$sandbox"' EXIT
 
-caso "un archivo sin ninguna clausula => se reportan las 4 que faltan"
+caso "un archivo sin ninguna clausula => se reportan las 5 que faltan"
 printf '<p>Una guia que no dice nada de sus limites.</p>\n' > "$sandbox/pelado.html"
 out="$(chequear_guia "$sandbox/pelado.html")"
 n="$(printf '%s\n' "$out" | grep -c 'falta la clausula')"
-[ "$n" = 4 ] || malo "esperaba 4 clausulas faltantes, hubo $n: $out"
+[ "$n" = 5 ] || malo "esperaba 5 clausulas faltantes, hubo $n: $out"
 
-caso "un archivo con las promesas absolutas => se reportan las 5 que volvieron"
+caso "un archivo con las promesas absolutas => se reportan las 6 que volvieron"
 {
   printf 'ayudante disciplinado, no un candado / deja pasar en vez de bloquear\n'
-  printf 'no siempre entra / no revierte solo\n'
-  printf 'se deshace solo. intenta deshacerlo. Los cuatro de arriba. nada se publica sin pruebas. el turno no cierra.\n'
+  printf 'no siempre entra / no revierte solo / runners habituales como <code>pytest</code>, <code>jest</code>, <code>npm test</code>, <code>yarn test</code> y <code>pnpm test</code>\n'
+  printf 'se deshace solo. intenta deshacerlo. Los cuatro de arriba. nada se publica sin pruebas. el turno no cierra. solo reconoce las pruebas corridas así (o con pytest o jest).\n'
 } > "$sandbox/promete.html"
 out="$(chequear_guia "$sandbox/promete.html")"
 n="$(printf '%s\n' "$out" | grep -c 'volvio la promesa')"
-[ "$n" = 5 ] || malo "esperaba 5 promesas detectadas, hubo $n: $out"
+[ "$n" = 6 ] || malo "esperaba 6 promesas detectadas, hubo $n: $out"
 printf '%s\n' "$out" | grep -q 'falta la clausula' && malo "reporto clausulas faltantes que si estaban: $out"
 
 caso "un archivo que cumple las dos mitades => sin violaciones"
 {
   printf 'ayudante disciplinado, no un candado; deja pasar en vez de bloquear\n'
-  printf 'el adversary no siempre entra; el autopilot no revierte solo y avisa\n'
+  printf 'el adversary no siempre entra; el autopilot no revierte solo y avisa; runners habituales como <code>pytest</code>, <code>jest</code>, <code>npm test</code>, <code>yarn test</code> y <code>pnpm test</code>\n'
 } > "$sandbox/ok.html"
 out="$(chequear_guia "$sandbox/ok.html")"
 [ -z "$out" ] || malo "archivo correcto marcado como violacion: $out"

@@ -29,6 +29,49 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-14 — PRs #326–#329 (Phase 22: referencias de recetas, frescura CI, lecturas del merge guard y wrapper de batería) — deploy ACTUALIZA las cuatro copias
+
+- **Merges:** #326 `338e440b02cabe90c659aa783737ce0e6ac03c98`
+  (2026-09-14T17:47:26Z), #327
+  `e7efc69b4a2c599354419ca7815cdd2c15fcfe9d`
+  (2026-09-14T17:47:43Z), #328
+  `3d689e317ed5a094423b91e6a0a63263d732b405`
+  (2026-09-14T17:47:58Z) y #329
+  `3582f5e5c06804e114dcc9cd2cf4d600bcfd67f6`
+  (2026-09-14T17:48:50Z), verificados contra la API de GitHub y
+  `origin/master` (squash; el contenido está en master).
+- **¿Cambió el hook? SÍ, en #328.** El guard distingue lecturas simples de
+  `tools/saikit-merge.sh` de su invocación, sin abrir las formas de merge
+  directo. #326 cambió recetas/linter, #327 la herramienta de merge y #329 el
+  setup/CI mínimo/guía; ninguno de esos tres cambió `hooks/`.
+- **Deploy (11:19–11:20 PDT / 18:19–18:20 UTC, hora medida en vivo):** desde
+  `master` limpio y sincronizado en `3582f5e`, las cuatro copias dieron
+  REPARADO. Backups: claude
+  `summonaikit-harness.sh.nuestro.20260914-111938.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260914-111958.bak`, dsh
+  `summonaikit-harness.sh.nuestro.20260914-112012.bak` y codex
+  `summonaikit-harness.sh.nuestro.20260914-112013.bak`. El instalador de
+  claude también sincronizó las recetas de #326 y la skill setup-autopilot de
+  #329.
+- **Verificación:** `install-hook.sh --check` informó para claude/grok/dsh/codex
+  `resultado=al-dia registro=ok` y cerró `veredicto=ok (copias al dia; fuente =
+  bytes de origin/master)`, exit 0, con `fuente_sha256=c2d3d2d9…`.
+  `check-hook-registration.sh` quedó sin hallazgos, salida vacía y exit 0: las
+  tres fases (`UserPromptSubmit`, `PostToolUse`, `Stop`) siguen registradas.
+- **CI:** `gate` verde en los cuatro heads: #326 run
+  [34859218799](https://github.com/gon0801/summonaikit-claude/actions/runs/34859218799),
+  #327 run
+  [34825345188](https://github.com/gon0801/summonaikit-claude/actions/runs/34825345188),
+  #328 run
+  [34861474007](https://github.com/gon0801/summonaikit-claude/actions/runs/34861474007)
+  y #329 run
+  [34872672638](https://github.com/gon0801/summonaikit-claude/actions/runs/34872672638).
+- **Limpieza:** borradas las cuatro ramas locales de Phase 22 y la última
+  remota `fix/merge-ci-frescura-sha`; tras `git fetch --prune`, no queda
+  ninguna rama de trabajo de la fase.
+- **Operador:** cierre y deploy autorizados por David; ejecución del lead
+  Codex en esta sesión.
+
 ## 2026-09-13 — PRs #323 + #324 (20.18/20.19: medición viva escenario2 dsh UI web + cierre de filas; plan de implementación Phase 22) — hooks NO-OP
 
 - **Merges:** #324 `23874cf5e6ddeacd035a784163c1e1a5997b5922` (2026-09-14T04:09:09Z)
