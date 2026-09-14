@@ -12,7 +12,7 @@ adversary: opcional
 1. Declara el modo **revisar** (leer y opinar, sin tocar) · **cuidar** (arreglar y dejar listo, pero nunca mergear) · **solo-hilos** (responder a los bots, no tocar código). En **cuidar** y **solo-hilos** la regla madre no cambia: dejar listo no es publicar.
 2. Orden fijo: **conflictos → hilos de bots → CI**. No saltes a CI si hay conflictos de merge sin resolver.
 3. **Conflictos**: si la rama quedó atrás de la base, haz `git fetch origin <base>` primero, confirma con `git merge-base --is-ancestor origin/<base> <rama>` (rc **1** ⇒ quedó atrás ⇒ mergea `origin/<base>`; rc **0** ⇒ al día ⇒ no toques la rama), y recién entonces mergea `origin/<base>` en la rama — nunca rebases a ciegas — y deja que CI corra de nuevo. Un conflicto real se resuelve a mano, no forzando.
-4. **Hilos de bots** (Greptile, CodeRabbit y similares): evalúa cada hallazgo con la rúbrica **fix / dismiss / ask** y los patrones aprendidos en `.saikit/triage-patrones.md`:
+4. **Hilos de bots** (Greptile, CodeRabbit y similares): evalúa cada hallazgo con la rúbrica **fix / dismiss / ask**; si el repo trae `.saikit/triage-patrones.md` (opt-in), aplica también los patrones aprendidos ahí (si no existe, la rúbrica de este paso alcanza):
    - **fix**: el hallazgo es válido y toca lo que se está construyendo → lo arreglas.
    - **dismiss**: el hallazgo es inválido (lo refutaste midiendo) → lo descartas y explicas por qué, con la evidencia pegada.
    - **ask**: no alcanza a decidir → preguntas al operador. Ni arreglas ni descartas a ciegas.
