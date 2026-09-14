@@ -342,6 +342,41 @@ caso "generador_solo"
 }
 fin_caso "generador_solo"
 
+caso "detectar_con_run_sh_emite_bash_run_sh"
+{
+  # 22.1: modo consulta para el setup (misma detectar_test_cmd del ofrecer).
+  OUT="$(bash "$GEN" --detectar-test-cmd --root "$SB/work" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$OUT" = "bash tests/run.sh" ] || _mal "esperaba [bash tests/run.sh], dio [$OUT]"
+}
+fin_caso "detectar_con_run_sh_emite_bash_run_sh"
+
+caso "detectar_sin_runner_sale_2"
+{
+  rm -f tests/run.sh
+  OUT="$(bash "$GEN" --detectar-test-cmd --root "$SB/work" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 2 ] || _mal "rc esperaba 2, dio $RC: $OUT"
+}
+fin_caso "detectar_sin_runner_sale_2"
+
+caso "wrapper_generado_alimenta_workflow"
+{
+  # 22.1: repo con solo tests/test_app.sh; el setup genera el wrapper y el
+  # workflow ofrecido despues ya corre bash tests/run.sh.
+  rm -f tests/run.sh
+  printf '#!/bin/sh\nexit 0\n' > tests/test_app.sh
+  correr_setup --wrap-runner si --ci-minimo si < /dev/null
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ -f tests/run.sh ] || _mal "el setup no genero el wrapper: $OUT"
+  [ -f "$(yml_dest)" ] || _mal "no escribio el workflow tras el wrapper: $OUT"
+  if [ -f "$(yml_dest)" ]; then
+    _contiene "el workflow corre el wrapper" "$(cat "$(yml_dest)")" "run: bash tests/run.sh"
+  fi
+}
+fin_caso "wrapper_generado_alimenta_workflow"
+
 caso "idempotente_segunda_corrida"
 {
   correr_gen --ci-minimo si
@@ -1472,6 +1507,14 @@ c_pins_ilegible() {
   fi
 }
 
+c_detectar() {
+  CASO_ROJO=0; sb_reset
+  OUT="$(bash "$GEN" --detectar-test-cmd --root "$SB/work" 2>&1)"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  [ "$OUT" = "bash tests/run.sh" ] || _mal "esperaba [bash tests/run.sh], dio [$OUT]"
+}
+
 while IFS=$'\t' read -r nombre expr fun sobre; do
   [ -n "$nombre" ] || continue
   correr_mutacion "$nombre" "$expr" "$fun" "$sobre"
@@ -1499,6 +1542,7 @@ leeme_md_case_sensitive	s/-iname '\*\.md'/-name '*.md'/	c_leeme_mayus	gen
 detector_siempre_al_dia	s/\[ "\$1" = "\$2" \]/return 0/	c_pins_obsoleto	bump
 proponer_escribe_directo	s|diff -u -L "\$generador" -L "\$generador (propuesta)" "\$generador" "\$tmp" \|\| true|cp "$tmp" "$generador"; diff -u -L "$generador" -L "$generador" "$generador" "$tmp" \|\| true|	c_pins_propuesta_seca	bump
 pin_ilegible_se_descarta	s/\[ -n "\$owner" \] || continue/[ -n "$base" ] || continue/	c_pins_ilegible	bump
+detectar_modo_roto	s/detectar)/detectarNUNCA)/	c_detectar	gen
 MUTS
 
 if [ "$fail" -ne 0 ]; then

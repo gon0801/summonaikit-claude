@@ -36,10 +36,15 @@
 # USO:
 #   tools/saikit-setup-autopilot.sh [--merge si|no] [--despliega publica|no|no-se]
 #     [--salud-url <url|->] [--sin-verify-app si|no] [--telegram si|no]
-#     [--rama <nombre>] [--pr <n>] [--ci-minimo si|no] [--liberar-lock]
+#     [--rama <nombre>] [--pr <n>] [--ci-minimo si|no] [--wrap-runner si|no]
+#     [--liberar-lock]
 #
 # Tras escribir el JSON, si no hay workflows, ofrece un CI minimo
 # (tools/saikit-ci-minimo.sh --ofrecer). No es la pregunta 6/6 del JSON.
+#
+# Antes del CI minimo, si el runner del repo no es reconocido (22.1, via a),
+# ofrece generar tests/run.sh como wrapper de la bateria real (--wrap-runner
+# si|no; sin terminal asume no y avisa). Con tests/run.sh real es no-op.
 #
 # Exit: 0 ok; 2 uso o validacion; 3 lock ajeno (reporta y bloquea).
 set -u
@@ -53,17 +58,17 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOSTENER="${SAIKIT_SETUP_SOSTENER_SEG:-0}"
 
 merge_flag=""; despliega_flag=""; salud_flag="__sin_dato__"; sve_flag=""
-telegram_flag=""; rama_flag=""; pr_flag=""; ci_minimo_flag=""; liberar=0
+telegram_flag=""; rama_flag=""; pr_flag=""; ci_minimo_flag=""; wrap_flag=""; liberar=0
 
 # Defaults seguros cuando no hay terminal que pregunte.
 merge_default="no"; despliega_default="no-se"; rama_default="master"
 sve_default="no"; telegram_default="no"
 
-uso() { sed -n '2,44p' "$0"; }
+uso() { sed -n '2,49p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --merge|--despliega|--salud-url|--sin-verify-app|--telegram|--rama|--pr|--ci-minimo)
+    --merge|--despliega|--salud-url|--sin-verify-app|--telegram|--rama|--pr|--ci-minimo|--wrap-runner)
       # El bug de la Task 0.4, que este repo ya pago dos veces (decision.sh y
       # el cross-review de esta fila): `shift 2` con un solo argumento no
       # consume nada y el while gira para siempre (rc=124 por timeout). Un
@@ -80,6 +85,7 @@ while [ $# -gt 0 ]; do
         --rama)           rama_flag="$2" ;;
         --pr)             pr_flag="$2" ;;
         --ci-minimo)      ci_minimo_flag="$2" ;;
+        --wrap-runner)    wrap_flag="$2" ;;
       esac
       shift 2 ;;
     --liberar-lock)   liberar=1; shift ;;
@@ -87,6 +93,13 @@ while [ $# -gt 0 ]; do
     *) printf 'saikit-setup-autopilot: opcion desconocida: %s\n' "$1" >&2; uso >&2; exit 2 ;;
   esac
 done
+
+# --wrap-runner se valida temprano (antes del lock y del JSON): un valor
+# que no es si/no es error de uso, no una oferta que se declina.
+case "$wrap_flag" in
+  ""|si|SI|Si|s|S|no|NO|No|n|N) ;;
+  *) printf 'saikit-setup-autopilot: --wrap-runner exige si/no (llego: %s)\n' "$wrap_flag" >&2; exit 2 ;;
+esac
 
 # Repo y lock ANTES de todo (hasta --liberar-lock los necesita).
 INVOC="$(pwd -P 2>/dev/null)" \
@@ -293,6 +306,118 @@ if ! grep -q -x -F '*' "$SAIKIT_DIR/veredictos/.gitignore" 2>/dev/null; then
 fi
 
 GEN="${SAIKIT_CI_MINIMO:-$HERE/saikit-ci-minimo.sh}"
+
+# ------------------------------------------- wrapper tests/run.sh (22.1, via a)
+# El gate solo acredita runners reconocidos (tests/run.sh o pytest/jest/...);
+# un repo cuya bateria tiene otro nombre (tests/test_app.sh, medido 20.10) no
+# puede mergear NUNCA. Si el runner no es reconocido y hay UNA bateria
+# candidata, se ofrece generar tests/run.sh como wrapper. Va ANTES del CI
+# minimo para que el workflow, si se acepta, ya corra el wrapper.
+# "Reconocido" se juzga con la MISMA detectar_test_cmd del generador (modo
+# --detectar-test-cmd): una sola fuente, sin duplicar el awk de npm.
+# Como el CI minimo: fallar aca no tumba el setup (el JSON ya esta escrito).
+WRAP="$ROOT/tests/run.sh"
+WRAP_ESCRITO=0
+if [ -f "$WRAP" ] && [ ! -L "$WRAP" ]; then
+  printf 'saikit-setup-autopilot: runner reconocido: tests/run.sh (el gate lo acredita; sin wrapper)\n'
+elif [ -L "$WRAP" ]; then
+  printf 'saikit-setup-autopilot: tests/run.sh es un enlace simbolico; no se escribe a traves (quitalo a mano si es tuyo)\n'
+elif WRAP_DET="$(bash "$GEN" --detectar-test-cmd --root "$ROOT" 2>/dev/null)" && [ -n "$WRAP_DET" ]; then
+  printf 'saikit-setup-autopilot: runner reconocido: %s (el gate lo acredita; sin wrapper)\n' "$WRAP_DET"
+else
+  WRAP_CANDS=""
+  WRAP_UNA=""
+  WRAP_N=0
+  for WRAP_D in tests test; do
+    [ -d "$ROOT/$WRAP_D" ] && [ ! -L "$ROOT/$WRAP_D" ] || continue
+    for WRAP_F in "$ROOT/$WRAP_D"/*.sh; do
+      [ -f "$WRAP_F" ] && [ ! -L "$WRAP_F" ] || continue
+      [ "$(basename "$WRAP_F")" = "run.sh" ] && continue
+      WRAP_CANDS="$WRAP_CANDS $WRAP_D/$(basename "$WRAP_F")"
+      [ -z "$WRAP_UNA" ] && WRAP_UNA="$WRAP_D/$(basename "$WRAP_F")"
+      WRAP_N=$((WRAP_N + 1))
+    done
+  done
+  if [ "$WRAP_N" -eq 0 ]; then
+    printf 'saikit-setup-autopilot: sin bateria detectable (no tests/run.sh, no scripts.test, no pytest, no tests/*.sh): el gate solo acredita tests/run.sh o pytest/jest/...; sin eso el merge no cierra\n'
+  elif [ "$WRAP_N" -gt 1 ]; then
+    printf 'saikit-setup-autopilot: hay varias baterias candidatas (%s): no se adivina; crea tests/run.sh a mano apuntando a la real\n' "$WRAP_CANDS"
+  else
+    case "$WRAP_UNA" in
+      *\"*|*\$*|*\`*|*[[:cntrl:]]*|*\\*)
+        printf 'saikit-setup-autopilot: la bateria candidata trae comillas, $, \\ o controles (%s); no se envuelve sola (crea tests/run.sh a mano)\n' "$WRAP_UNA"
+        ;;
+      *)
+        WRAP_VOL=""
+        case "$wrap_flag" in
+          si|SI|Si|s|S) WRAP_VOL=SI ;;
+          no|NO|No|n|N) WRAP_VOL=NO ;;
+          "")
+            if [ -t 0 ]; then
+              WRAP_R="$(preguntar "La bateria ($WRAP_UNA) no es un runner reconocido por el gate (tests/run.sh, pytest, jest...). Genero tests/run.sh como wrapper? (si/no)" "no")"
+              case "$WRAP_R" in si|SI|Si|s|S) WRAP_VOL=SI ;; *) WRAP_VOL=NO ;; esac
+            else
+              WRAP_VOL=NO
+            fi
+            ;;
+        esac
+        if [ "$WRAP_VOL" = SI ]; then
+          if [ -L "$ROOT/tests" ]; then
+            printf 'saikit-setup-autopilot: tests/ es un enlace simbolico; no se escribe a traves\n'
+          elif ! mkdir -p "$ROOT/tests" 2>/dev/null; then
+            printf 'saikit-setup-autopilot: no se pudo crear tests/; sin wrapper\n'
+          else
+            WRAP_TMP="$(mktemp "$ROOT/tests/.run.sh.XXXXXX" 2>/dev/null)" || WRAP_TMP=""
+            if [ -z "$WRAP_TMP" ]; then
+              printf 'saikit-setup-autopilot: no se pudo crear el temporal para tests/run.sh; sin wrapper\n'
+            elif ! printf '#!/bin/sh\n# Generado por saikit-setup-autopilot: wrapper de bateria para el gate saikit (22.1).\n# El gate solo acredita runners reconocidos; este wrapper expone la bateria real.\nexec bash "%s" "$@"\n' "$WRAP_UNA" > "$WRAP_TMP"; then
+              rm -f "$WRAP_TMP"
+              printf 'saikit-setup-autopilot: no se pudo escribir tests/run.sh; sin wrapper\n'
+            elif ! bash -n "$WRAP_TMP" 2>/dev/null; then
+              rm -f "$WRAP_TMP"
+              printf 'saikit-setup-autopilot: el wrapper no parsea; no se instala\n'
+            elif ! chmod 755 "$WRAP_TMP" 2>/dev/null; then
+              rm -f "$WRAP_TMP"
+              printf 'saikit-setup-autopilot: no se pudo instalar tests/run.sh; sin wrapper\n'
+            else
+              # Ganchos SOLO de test: simulan que el destino aparece entre el
+              # consentimiento y el publish (carrera determinista).
+              if [ -n "${SAIKIT_SETUP_BEFORE_WRITE:-}" ]; then
+                ( cd "$ROOT" && eval "$SAIKIT_SETUP_BEFORE_WRITE" ) || true
+              fi
+              # Rechequeo de carrera (espejo de escribir_atomico en
+              # saikit-ci-minimo.sh): alguien pudo crear tests/run.sh mientras
+              # la oferta pendia; mv -f lo pisaria en silencio.
+              if [ -e "$WRAP" ] || [ -L "$WRAP" ]; then
+                rm -f "$WRAP_TMP"
+                printf 'saikit-setup-autopilot: carrera: ya hay tests/run.sh; no se pisa\n'
+              else
+                if [ -n "${SAIKIT_SETUP_BEFORE_MV:-}" ]; then
+                  ( cd "$ROOT" && eval "$SAIKIT_SETUP_BEFORE_MV" ) || true
+                fi
+                # mv -n no reemplaza; si el destino aparece entre el rechequeo
+                # y el mv (ventana TOCTOU), el temporal sigue ahi y lo
+                # tratamos como carrera.
+                if ! mv -n "$WRAP_TMP" "$WRAP" 2>/dev/null || [ -e "$WRAP_TMP" ]; then
+                  rm -f "$WRAP_TMP"
+                  printf 'saikit-setup-autopilot: carrera: tests/run.sh aparecio al publicar; no se pisa\n'
+                elif [ ! -x "$WRAP" ]; then
+                  printf 'saikit-setup-autopilot: tests/run.sh quedo sin bit de ejecucion; sin wrapper\n'
+                else
+                  WRAP_ESCRITO=1
+                  printf 'saikit-setup-autopilot: wrapper escrito: tests/run.sh -> %s\n' "$WRAP_UNA"
+                fi
+              fi
+            fi
+          fi
+        else
+          printf 'saikit-setup-autopilot: sin wrapper: %s no es un runner reconocido y el merge necesita tests/run.sh (re-corre con --wrap-runner si para generarlo)\n' "$WRAP_UNA"
+        fi
+        ;;
+    esac
+  fi
+fi
+
 # Exit 2 del generador (sin runner, validacion) no tumba el setup: el JSON ya
 # esta escrito. Sin degradar, --ci-minimo si + repo vacio deja config sin YAML.
 if ! bash "$GEN" --ofrecer --root "$ROOT" ${ci_minimo_flag:+--ci-minimo "$ci_minimo_flag"}; then
@@ -306,6 +431,12 @@ printf '  merge=%s despliega=%s rama=%s pr=%s\n' "$merge_json" "$despliega_json"
 # untracked y el veto sin checks seguia).
 if [ -f "$ROOT/.github/workflows/saikit-ci-minimo.yml" ]; then
   printf '  incluye tambien .github/workflows/saikit-ci-minimo.yml en el commit.\n'
+fi
+# 22.1r2 P2(2): si se escribio el wrapper en esta corrida, hay que subirlo:
+# local no sirve — el gate no lo ve y el merge sigue bloqueado (el bloqueo
+# que 22.1 resuelve).
+if [ "$WRAP_ESCRITO" = 1 ]; then
+  printf '  incluye tambien tests/run.sh en el commit.\n'
 fi
 printf '  commitea y pushea a origin/%s: el merge lee la config (y el CI) de ahi, no de tu disco.\n' "$rama_resp"
 exit 0

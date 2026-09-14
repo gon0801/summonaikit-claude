@@ -23,6 +23,13 @@ que corre el test del repo y `verify/`. Sin terminal asume `no` y avisa
 que sin CI el autopilot no mergea. Quien ya sabe que lo quiere pasa
 `--ci-minimo si`.
 
+Antes del CI mínimo, si la batería del repo no corre con un runner que el
+gate reconozca (`tests/run.sh`, pytest, jest, ...), ofrece generar
+`tests/run.sh` como wrapper del comando real (el gate exige que la batería
+se corra como `tests/run.sh`, pytest o jest; si tu batería tiene otro
+nombre, el setup la expone por esa convención). Con `tests/run.sh` real es
+no-op; sin batería no inventa nada. Flag: `--wrap-runner si|no`.
+
 ## Actualizar los pins de las actions
 
 El workflow mínimo usa actions pineadas por SHA de commit (el tag vive al
@@ -52,5 +59,6 @@ siendo SHA — un tag flotante (`@v4`) no se adopta jamás.
   libera con `--liberar-lock` o reintenta cuando el otro termine.
 - Cada respuesta también llega por flag (`--merge si`, `--despliega no`,
   `--salud-url -`, `--sin-verify-app no`, `--telegram no`, `--rama master`,
-  `--pr 7`, `--ci-minimo si|no`); con las 5 de config por flag no pregunta
-  esas. El offer de CI es aparte: `--ci-minimo` no entra al JSON.
+  `--pr 7`, `--ci-minimo si|no`, `--wrap-runner si|no`); con las 5 de config
+  por flag no pregunta esas. Los offers de CI y wrapper son aparte:
+  `--ci-minimo` y `--wrap-runner` no entran al JSON.
