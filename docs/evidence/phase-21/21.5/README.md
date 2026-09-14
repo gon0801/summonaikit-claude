@@ -27,3 +27,17 @@ sin esa variable ejercitó el hook desplegado en `~/.claude/hooks` (sin
 preflight) y dio rojo espurio por instrumento, no por el cambio; diagnosticado
 por `caso_g9_sin_gramatica_paralela` (`preflight_check no existe en el hook
 bajo prueba`). Los logs rojo/verde del árbol final se conservan tal cual.
+
+## 21.5r2 (2026-09-14Z)
+
+Revisión externa r2 + CodeRabbit L4605. Logs del árbol pre-r2 no describen
+este cierre; se regeneraron:
+
+- `rojo-estado-ilegible-preflight.log` — ROJO TDD a archivo completo
+  (`tests/test_preflight_21_5.sh`) contra el hook de `f071bfc` (pre-fix):
+  14/15 ok y `caso_g9_estado_ilegible_bloquea_stop_error_preflight` ROJO
+  (preflight exit 0 sin ERROR; Stop bloquea). EXIT=1.
+- `verde-corpus-g9.log` — VERDE post-fix: 15/15 (EXIT=0) contra el hook r2.
+- `mutantes-g9-local.log` — 5/5 G9 atrapados, incluido `preflight_error_callado`
+  (restaura `|| true`; lo atrapa el caso ilegible). EXIT=0.
+- `golden-check-pre.log` / `golden-record.log` — identidad regrabada (sha/bytes/líneas del hook r2); 57 escenarios sin deriva de comportamiento.

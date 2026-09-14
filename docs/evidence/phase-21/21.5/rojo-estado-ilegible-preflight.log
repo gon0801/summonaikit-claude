@@ -12,6 +12,8 @@
     ok: caso_g9_divergencia_queda_roja
     ok: caso_g9_cursor_recibo_valido_cierra_en_ambos
     ok: caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos
-    ok: caso_g9_estado_ilegible_bloquea_stop_error_preflight
-test_preflight_21_5: OK
-EXIT=0
+      FAIL: estado ilegible exit: esperaba [2], dio [0]
+      FAIL: estado ilegible error: no contiene [SAIKIT PREFLIGHT (21.5): ERROR]
+    ROJO: caso_g9_estado_ilegible_bloquea_stop_error_preflight
+test_preflight_21_5: FAIL
+EXIT=1

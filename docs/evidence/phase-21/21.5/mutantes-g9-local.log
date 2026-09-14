@@ -6,10 +6,14 @@
       lo atrapa: caso_g9_etiqueta_ausente_bloquea_en_ambos
   G9  el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea
       lo atrapa: caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos
+  G9  la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea
+      lo atrapa: caso_g9_estado_ilegible_bloquea_stop_error_preflight
 
   --- mutation-test declarado (gate | condicion rota | caso que la atrapa)
   G9|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea|caso_g9_etiqueta_ausente_bloquea_en_ambos
   G9|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real|caso_g9_sin_efectos
   G9|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS|caso_g9_etiqueta_ausente_bloquea_en_ambos
   G9|el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea|caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos
+  G9|la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea|caso_g9_estado_ilegible_bloquea_stop_error_preflight
 test_gate_mutations: OK
+EXIT=0
