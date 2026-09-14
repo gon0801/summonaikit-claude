@@ -464,6 +464,24 @@ caso "ci_verde_de_otro_sha_no_merguea"
 }
 fin_caso "ci_verde_de_otro_sha_no_merguea"
 
+caso "ci_sin_headSha_no_merguea"
+{
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
+  if merge_disparado; then _mal "mergeo con verde sin headSha"; fi
+}
+fin_caso "ci_sin_headSha_no_merguea"
+
+caso "ci_headSha_null_no_merguea"
+{
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":null}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
+  if merge_disparado; then _mal "mergeo con verde y headSha null"; fi
+}
+fin_caso "ci_headSha_null_no_merguea"
+
 c_ci_skipped() {
   CASO_ROJO=0; sb_reset master
   printf '[{"event":"pull_request","status":"completed","conclusion":"skipped","workflow":"ci"}]' > "$SB/ghfix/runs.json"
@@ -475,7 +493,7 @@ c_ci_skipped() {
 
 c_solo_push() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
   correr --confirmado
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
   _contiene "merge ok" "$OUT" "MERGE-OK:"
@@ -1404,6 +1422,14 @@ c_ci_sha_ajeno() {
   if merge_disparado; then _mal "mergeo con verde de otro sha"; fi
 }
 
+c_ci_sha_ausente() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
+  if merge_disparado; then _mal "mergeo con verde sin headSha"; fi
+}
+
 c_base_avanzada() {
   CASO_ROJO=0; sb_reset master
   avanzar_base
@@ -1616,7 +1642,8 @@ sin_match_head_commit	s/ --match-head-commit "\$SHA"//	c_confirmado
 sin_checks_n_opcional	s/\[ "\$n" -gt 0 \]/true/	c_sin_checks
 ci_pendiente_es_verde	s/\[ "\$st" != completed \]/false/	c_ci_pendiente
 ci_rojo_es_verde	s/\[ "\$conc" != success \]/false/	c_ci_rojo
-ci_sin_chequeo_sha	s|\[ -n "\$head" \] && \[ "\$head" != "\$SHA" \]|false|	c_ci_sha_ajeno
+ci_sin_chequeo_sha	s#\[ "\$head" != "\$SHA" \]#false#	c_ci_sha_ajeno
+ci_sin_presence_sha	s#if \[ -z "\$head" \] || \[ "\$head" = "<null>" \]; then#if false; then#	c_ci_sha_ausente
 skipped_es_verde	s/\[ "\$conc" != success \]/[ "$conc" != success ] \&\& [ "$conc" != skipped ]/	c_ci_skipped
 solo_push_exige_pr	s/\[ "\$n" -gt 0 \] || no_merge "sin checks/[ "$hay_pr" = 0 ] \&\& no_merge "exige pull_request"; [ "$n" -gt 0 ] || no_merge "sin checks/	c_solo_push
 base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avanzada

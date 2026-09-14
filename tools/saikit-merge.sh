@@ -324,9 +324,13 @@ ci_chequear() {
     # 22.3: frescura propia — el verde tiene que ser del sha exacto bajo gate,
     # no de otro head (el --commit se pide pero gh podria traer de mas; el gh
     # falso del test ignora flags, asi que la correspondencia local es la
-    # proteccion real). Si el campo no viene, no hay nada que cotejar.
+    # proteccion real).
+    # 22.3r1 (review Codigo): presencia exigida — un headSha ausente o null NO
+    # es fresco (not_observed != fresh): se rechaza con motivo explicito en
+    # vez de aceptar por silencio. El aplanador entrega null como <null>.
     head="$(jget "[$i].headSha")"
-    if [ -n "$head" ] && [ "$head" != "$SHA" ]; then no_merge "CI verde pero de otro sha ($head != $SHA)"; fi
+    if [ -z "$head" ] || [ "$head" = "<null>" ]; then no_merge "CI sin headSha: el run $i no trae el sha del head (no observado no es fresco)"; fi
+    if [ "$head" != "$SHA" ]; then no_merge "CI verde pero de otro sha ($head != $SHA)"; fi
     i=$((i + 1))
   done
 }
