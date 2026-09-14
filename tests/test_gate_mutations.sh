@@ -199,6 +199,13 @@ G7|pretool_hatch_sin_strip_comillas|el hatch deja de pelar comillas envolventes 
 G7|pretool_hatch_spoof_apagado|el spoof de sufijo (.bak) se apaga y saikit-merge.sh.bak con pin del real deja de negar
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
 G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
+G7|pretool_lectura_vuelve_ancho|el predicado de lectura simple se apaga y git show/cat/grep sobre el script vuelven a negar
+G7|pretool_lectura_sin_nl_real|el veto de salto real se quita y git show + 0x0A + invocacion pasa con pin incorrecto
+G7|pretool_lectura_sin_n_crudo|el veto de \n crudo se quita y git show + escape + invocacion pasa con pin incorrecto
+G7|pretool_lectura_sin_r_crudo|el veto de \r crudo se quita y git show + escape + invocacion pasa con pin incorrecto
+G7|pretool_lectura_sin_u_crudo|el veto de \u crudo se quita y git show + escape + invocacion pasa con pin incorrecto
+G7|pretool_lectura_sin_cntrl|el veto grep de controles se quita y un C0 distinto de tab pasa con pin incorrecto
+G7|pretool_lectura_veta_tab|el tab deja de exceptuarse y la lectura simple con tab se niega con pin incorrecto
 G8|trail_check_eliminado|el chequeo trail/blast del Stop se apaga y un full sin cita cierra
 G8|trail_vuelve_a_glob|cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra
 G8|trail_acepta_glob_token|el token glob en Close cuenta como cita
@@ -1068,6 +1075,34 @@ mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pre
 # Restaura el short-circuit hatch-primero: hash ok => allow aunque el
 # mismo comando tambien traiga gh pr merge / gh api /merge / git push.
 mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd"; then/if pretool_es_hatch "$_pt_cmd"; then if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then emit_allow; fi; emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"; fi; if pretool_es_gh_pr_merge "$_pt_cmd"; then/'; }
+# 22.2: apaga el predicado de lectura simple; lo atrapa
+# caso_g7_permite_git_show_hatch (sin el predicado, la lectura cae al hatch
+# y el token con `:` no resuelve).
+mut_pretool_lectura_vuelve_ancho() {
+  sed 's/^pretool_es_lectura_hatch() {$/pretool_es_lectura_hatch() { return 1; }\npretool_es_lectura_hatch_OFF() {/'
+}
+# 22.2r2: un mutante por rama del veto (AGENTS.md 168: por cada proteccion,
+# una mutacion que muestre que caso se pone rojo). Cada uno quita UNA
+# alternativa/guarda; el killer esperado es su propio caso (verificado en
+# banco: primer rojo en orden G7).
+mut_pretool_lectura_sin_nl_real() {
+  sed 's#\*"\$_pt_nl"\*|##'
+}
+mut_pretool_lectura_sin_n_crudo() {
+  sed 's#|\*\\\\n\*##'
+}
+mut_pretool_lectura_sin_r_crudo() {
+  sed 's#|\*\\\\r\*##'
+}
+mut_pretool_lectura_sin_u_crudo() {
+  sed 's#|\*\\\\u\*##'
+}
+mut_pretool_lectura_sin_cntrl() {
+  sed '/_pt_tab" | grep -q/d'
+}
+mut_pretool_lectura_veta_tab() {
+  sed 's# | tr -d "\$_pt_tab" | grep# | grep#'
+}
 
 mut_trail_sin_limite_fisico() { sed 's/"$ADV_PROJECT_CANON"|"$ADV_PROJECT_CANON"\/\*) return 0 ;;/\*) return 0 ;;/'; }
 mut_trail_skip_preambulo() { sed '/^has_trail_skip()/,/^}/s/trail_receipt="$(trail_receipt_block "$1")"/trail_receipt="$1"/'; }

@@ -4446,6 +4446,56 @@ pretool_es_git_push_protegida() {
 pretool_es_hatch() {
   printf '%s' "$1" | grep -Eq '(^|[^[:alnum:]._-])saikit-merge\.sh([^[:alnum:]._-]|$)'
 }
+# 22.2: el comando COMPLETO es una lectura simple que menciona el script
+# (git show/log/diff, cat, grep...). NO es invocacion: el guard la permite
+# sin pasar por el pin. Lista de verbos CERRADA a proposito: un verbo de mas
+# abre ejecucion encadenada, uno de menos deja viva la queja (rtk git show
+# denegado, 20.11). Formas estrictas: verbo pelado (sin ruta, sin sudo),
+# `git` sin flags antes del subcomando, prefijo `rtk` opcional.
+pretool_es_lectura_hatch() {
+  _pt_lc="$1"
+  case "$_pt_lc" in
+    *';'*|*'|'*|*'&'*|*'<'*|*'>'*|*'$('*|*'`'*) return 1 ;;
+  esac
+  # 22.2r1 (review Codigo, CRITICO): ni saltos ni controles, CRUDOS o en
+  # escape: el hook lee tool_input.command SIN decodificar
+  # (json_tool_input_string deja los escapes crudos) pero el ejecutor SI
+  # decodifica — un `...sh \nbash ...` (2 chars) se ve como tokens exactos
+  # y ejecuta DOS comandos (bypass medido con pin incorrecto: RC=0).
+  # \r crudo y \uXXXX decodifican a lo mismo que \n. Reparto 22.2r2: el
+  # case veta el salto real (grep no lo ve: es separador de linea) y los
+  # escapes crudos; el grep veta TODO C0 real salvo tab (incluido CR real
+  # 0x0D — una alternativa case para el CR seria redundancia intesteable).
+  # \t real separa legitimo (el troceo lo parte).
+  _pt_nl='
+'
+  _pt_tab="$(printf '\t')"
+  case "$_pt_lc" in *"$_pt_nl"*|*\\n*|*\\r*|*\\u*) return 1 ;; esac
+  if printf '%s' "$_pt_lc" | tr -d "$_pt_tab" | grep -q '[[:cntrl:]]'; then return 1; fi
+  # Solo se leen v1..v3 contra cadenas fijas: un glob en el comando no puede
+  # cambiar ese veredicto (expande en su posicion, no mueve v1/v2).
+  _pt_n=0; _pt_v1=""; _pt_v2=""; _pt_v3=""
+  for _pt_w in $_pt_lc; do
+    _pt_n=$((_pt_n + 1))
+    if [ "$_pt_n" = 1 ]; then _pt_v1="$_pt_w"; fi
+    if [ "$_pt_n" = 2 ]; then _pt_v2="$_pt_w"; fi
+    if [ "$_pt_n" = 3 ]; then _pt_v3="$_pt_w"; fi
+  done
+  if [ "$_pt_v1" = "rtk" ]; then _pt_v1="$_pt_v2"; _pt_v2="$_pt_v3"; fi
+  # El script no va en posicion de comando (eso es invocacion: al hatch).
+  case "$_pt_v1" in *saikit-merge.sh*) return 1 ;; esac
+  if [ "$_pt_v1" = "git" ]; then
+    case "$_pt_v2" in show|log|diff) ;; *) return 1 ;; esac
+  else
+    case "$_pt_v1" in
+      cat|grep|head|tail|less|file|stat|wc|sha256sum|shasum) ;;
+      *) return 1 ;;
+    esac
+  fi
+  # Tiene que mencionar el script (borde del hatch): si no, este predicado
+  # no pinta nada y el comando sigue su camino normal.
+  pretool_es_hatch "$_pt_lc"
+}
 # json_tool_input_string leaves \" raw, so a quoted hatch arrives as \"path
 # or "path". Peel one wrapping layer (JSON-raw or plain).
 pretool_strip_comillas_hatch() {
@@ -4549,6 +4599,12 @@ pretool_merge_guard() {
   fi
   if pretool_es_hatch_spoof "$_pt_cmd"; then
     emit_pretool_deny "merge denied: saikit-merge.sh path must end exactly at .sh"
+  fi
+  # 22.2: lectura simple que menciona el script (no invocacion): se permite
+  # sin pasar por el pin. Va DESPUES de los patrones a pelo y del spoof
+  # (esos mandan) y ANTES del hatch.
+  if pretool_es_lectura_hatch "$_pt_cmd"; then
+    emit_allow
   fi
   if pretool_es_hatch "$_pt_cmd"; then
     if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then
