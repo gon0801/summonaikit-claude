@@ -33,3 +33,110 @@ test_gate_mutations: shard 4/4 — 46 mutaciones
       lo atrapa: caso_g2_zcode_verif_subagente_acredita
   G2  la via del label se juzga sobre $text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
       lo atrapa: caso_g2_zcode_verif_label_de_turno_anterior_no_acredita
+  G2  la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)
+      lo atrapa: caso_g2_zcode_verif_subagente_fallo_pegado_bloquea
+  G2  el motivo especifico del label deja de llegar al missing y el reclamo vuelve al mensaje generico (18.18)
+      lo atrapa: caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita
+  G3  el rol se vuelve a leer con el lector greedy del payload crudo
+      lo atrapa: caso_g3_gana_el_de_tool_input_no_el_ultimo
+  G4  la etiqueta Retro deja de pedirse
+      lo atrapa: caso_g4_delegado_incidental_en_recibo_roto_bloquea
+  G4  la escotilla de subagente delegado deja de reconocerse (arreglo 1)
+      lo atrapa: caso_g4_delegado_permite
+  G4  la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)
+      lo atrapa: caso_g4_grok_delegado_bg_multilinea_permite
+  G4  la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: q habilita la escotilla (r3)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  la invocacion del parser vuelve a decidir por TARGET en vez de HOST y falla ante identidades divergentes (review r3 PR #273)
+      lo atrapa: caso_g4_parser_bg_solo_corre_en_grok
+  G4  las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
+      lo atrapa: caso_g4_pausa_vieja_solo_en_transcript_bloquea
+  G4  el walker deja de exigir role:assistant y acepta mensajes user
+      lo atrapa: caso_g4_pausa_en_resultado_bloquea
+  G4  el cierre unknown honesto (11.4) se neutraliza y un Stop con ambos canales de texto ciegos vuelve a bloquear exigiendo evidencia no observable
+      lo atrapa: caso_g4_ambos_canales_ciegos_cierra_unknown
+  G5  el presupuesto agotado deja de limpiar el estado
+      lo atrapa: caso_g5_agotado_limpia_estado
+  G5  el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
+      lo atrapa: caso_g5_presupuesto_zcode_exit2
+  G3  la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
+      lo atrapa: caso_g3_ceremonia_se_exige_en_codex
+  G1  la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)
+      lo atrapa: caso_g1_dsh_arma_y_aisla_estado
+  G2  la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)
+      lo atrapa: caso_g2_grok_nomatchesfound_no_marca
+  G3  la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
+      lo atrapa: caso_g3_grok_ceremonia_incompleta_bloquea
+  G3  la linea ADVERSARY del recibo deja de exigirse y un turno fast con adversary cierra sin reporte (D4/B1, Task 13.5)
+      lo atrapa: caso_g3_adversary_turno_completo_cierra
+  G1  la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
+      lo atrapa: caso_g1_contrato_nombra_adversary
+  G7  el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar
+      lo atrapa: caso_g7_niega_git_push_master
+  G7  el hatch acepta cualquier hash y un pin distinto deja de negar
+      lo atrapa: caso_g7_hatch_hash_distinto
+  G7  PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
+      lo atrapa: caso_g7_niega_gh_pr_merge
+  G8  el token glob en Close cuenta como cita
+      lo atrapa: caso_g8_full_cita_glob_bloquea
+  G8  las citas se leen del recibo entero, no del span Close
+      lo atrapa: caso_g8_full_cita_fuera_de_close_bloquea
+  G8  skip/cita se leen de $text (tail) no de text_hatch
+      lo atrapa: caso_g8_full_skip_en_tail_no_cuenta
+  G8  un archivo de evidencia enlazado afuera se acredita
+      lo atrapa: caso_g8_full_cita_archivo_externo_bloquea
+  G3  el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)
+      lo atrapa: caso_g3_codex_stop_huerfano_no_acredita
+  G3  el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)
+      lo atrapa: caso_g3_codex_huerfano_luego_interno_no_acredita
+  G9  el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea
+      lo atrapa: caso_g9_etiqueta_ausente_bloquea_en_ambos
+
+  --- mutation-test declarado (gate | condicion rota | caso que la atrapa)
+  G1|el desarme deja de borrar el estado en prompt sin sentinel|caso_g1_prompt_sin_sentinel_desarma
+  G1|el bullet de higiene de base de rama desaparece de las reglas permanentes y una rama cortada de un master local vuelve a colar commits ajenos al PR|caso_g1_reglas_exigen_base_de_rama_limpia
+  G1|el skip estricto del auto-wake grok se neutraliza y un wake con sentinel en la descripcion del subagente vuelve a re-armar (18.27)|caso_g1_grok_autowake_no_desarma
+  G1|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)|caso_g1_arma_con_comillas_antes_del_sentinel
+  G1|se saca codex de la emision de reglas, el host que la medicion de la 10.9 habilito|caso_g1_session_inyecta_reglas_codex
+  G1|la poda del dir de sesion se neutraliza y cada limpieza vuelve a dejar un directorio vacio para siempre|caso_g1_estado_no_se_acumula
+  G1|el carril autopilot deja de detectarse y el flag desaparece del estado y del contrato|caso_g1_autopilot_arma_full_con_flag
+  G1|build_gate_feedback vuelve a agregar el parrafo en grok, donde harness_context adosado ya lo trae (dos veces en el reason)|caso_g1_autopilot_parrafo_una_vez_en_grok
+  G1|la limpieza C13 deja de borrar receta_alias en podar_dir_sesion y el directorio de sesion tras un alias queda inmortal|caso_g1_alias_desarme_limpia_estado
+  G1|el alias vuelve a bajar el carril y a nombrar la receta aunque la receta no exista en el recetario|caso_g1_alias_sin_receta_no_baja_el_carril
+  G2|la vía A de failure_signal (digito no-cero antes de failed/failing/failures/errors) se neutraliza|caso_g2_runner_fallido_pytest_summary_no_marca
+  G2|la rama FAIL[^a-zA-Z] del CS se neutraliza y go vuelve a acreditarse (cargo sigue detectado por test result: FAILED)|caso_g2_runner_fallido_go_no_marca
+  G2|las fronteras de palabra del runner se quitan|caso_g2_runner_en_path_no_marca
+  G2|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear|caso_g2_excusa_espanol_no_reclama
+  G2|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar|caso_g2_runner_fallido_gradle_no_marca
+  G2|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)|caso_g2_zcode_verif_subagente_acredita
+  G2|la via del label se juzga sobre $text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)|caso_g2_zcode_verif_label_de_turno_anterior_no_acredita
+  G2|la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)|caso_g2_zcode_verif_subagente_fallo_pegado_bloquea
+  G2|el motivo especifico del label deja de llegar al missing y el reclamo vuelve al mensaje generico (18.18)|caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita
+  G3|el rol se vuelve a leer con el lector greedy del payload crudo|caso_g3_gana_el_de_tool_input_no_el_ultimo
+  G4|la etiqueta Retro deja de pedirse|caso_g4_delegado_incidental_en_recibo_roto_bloquea
+  G4|la escotilla de subagente delegado deja de reconocerse (arreglo 1)|caso_g4_delegado_permite
+  G4|la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)|caso_g4_grok_delegado_bg_multilinea_permite
+  G4|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: q habilita la escotilla (r3)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|la invocacion del parser vuelve a decidir por TARGET en vez de HOST y falla ante identidades divergentes (review r3 PR #273)|caso_g4_parser_bg_solo_corre_en_grok
+  G4|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)|caso_g4_pausa_vieja_solo_en_transcript_bloquea
+  G4|el walker deja de exigir role:assistant y acepta mensajes user|caso_g4_pausa_en_resultado_bloquea
+  G4|el cierre unknown honesto (11.4) se neutraliza y un Stop con ambos canales de texto ciegos vuelve a bloquear exigiendo evidencia no observable|caso_g4_ambos_canales_ciegos_cierra_unknown
+  G5|el presupuesto agotado deja de limpiar el estado|caso_g5_agotado_limpia_estado
+  G5|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)|caso_g5_presupuesto_zcode_exit2
+  G3|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)|caso_g3_ceremonia_se_exige_en_codex
+  G1|la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)|caso_g1_dsh_arma_y_aisla_estado
+  G2|la deteccion de FileNotFound/NoMatchesFound en toolResult se neutraliza (D5, variante)|caso_g2_grok_nomatchesfound_no_marca
+  G3|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)|caso_g3_grok_ceremonia_incompleta_bloquea
+  G3|la linea ADVERSARY del recibo deja de exigirse y un turno fast con adversary cierra sin reporte (D4/B1, Task 13.5)|caso_g3_adversary_turno_completo_cierra
+  G1|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)|caso_g1_contrato_nombra_adversary
+  G7|el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar|caso_g7_niega_git_push_master
+  G7|el hatch acepta cualquier hash y un pin distinto deja de negar|caso_g7_hatch_hash_distinto
+  G7|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido|caso_g7_niega_gh_pr_merge
+  G8|el token glob en Close cuenta como cita|caso_g8_full_cita_glob_bloquea
+  G8|las citas se leen del recibo entero, no del span Close|caso_g8_full_cita_fuera_de_close_bloquea
+  G8|skip/cita se leen de $text (tail) no de text_hatch|caso_g8_full_skip_en_tail_no_cuenta
+  G8|un archivo de evidencia enlazado afuera se acredita|caso_g8_full_cita_archivo_externo_bloquea
+  G3|el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)|caso_g3_codex_stop_huerfano_no_acredita
+  G3|el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)|caso_g3_codex_huerfano_luego_interno_no_acredita
+  G9|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea|caso_g9_etiqueta_ausente_bloquea_en_ambos
+test_gate_mutations: OK

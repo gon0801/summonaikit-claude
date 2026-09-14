@@ -37,3 +37,109 @@ test_gate_mutations: shard 2/4 — 47 mutaciones
       lo atrapa: caso_g2_zcode_verif_subagente_cero_failed_acredita
   G2  la guarda de resultado en el MISMO span se quita y un label con comando del vocabulario pero sin resultado acredita (18.18)
       lo atrapa: caso_g2_zcode_verif_subagente_sin_resultado_bloquea
+  G3  la secuencia deja de exigir el orden entre los tres roles
+      lo atrapa: caso_g3_fuera_de_orden_bloquea
+  G3  el rol de los eventos internos (agent_type) deja de leerse
+      lo atrapa: caso_g3_agent_type_cuenta
+  G4  la alternativa markdown bold se quita y un recibo **Label**: vuelve a bloquear
+      lo atrapa: caso_g4_recibo_vineta_asterisco_pasa
+  G4  la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
+      lo atrapa: caso_g4_grok_delegado_sin_bg_bloquea
+  G4  la basura tras el cierre del root deja de invalidar y un documento con trailing garbage vuelve a habilitar la escotilla (r1)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  el veto de u+4hex se quita y u12G34 (G colado entre hex) habilita la escotilla (r3)
+      lo atrapa: caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4  la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
+      lo atrapa: caso_g4_pausa_permite
+  G4  el canal payload vuelve al lector greedy del vendor sin decodificar
+      lo atrapa: caso_g4_grok_turno_completo_camel_cierra
+  G4  la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
+      lo atrapa: caso_g4_transcript_fuera_de_perfil_se_ignora
+  G5  tool_name vuelve al lector greedy y un eco en tool_response se lee como la herramienta del evento (marca una edicion que no ocurrio)
+      lo atrapa: caso_g5_tool_name_eco_no_marca_edicion
+  G3  el fallback ZCODE_* se anula y TARGET queda vacio en zcode (la secuencia no se exige)
+      lo atrapa: caso_g3_target_por_zcode_fallback
+  G3  lane=fast deja de eximir la secuencia (el carril no sirve)
+      lo atrapa: caso_g3_fast_cierra_sin_subagentes
+  G5  el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
+      lo atrapa: caso_g5_stop_fallido_no_borra_aviso_ajeno
+  G1  el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a tool: nunca arma (D4)
+      lo atrapa: caso_g1_grok_senal_exportada_vacia_cuenta
+  G1  el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
+      lo atrapa: caso_g1_grok_stop_shutdown_no_toca_estado
+  G3  la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)
+      lo atrapa: caso_g3_adversarial_audit_no_acredita_reviewer
+  G3  el chequeo de orden con adversary deja de correr y un adversary fuera de posicion cierra igual (D4, Task 13.5)
+      lo atrapa: caso_g3_adversary_fuera_de_orden_bloquea
+  G7  el patron gh pr merge vuelve al literal -Fq y gh  pr  merge / mayusculas pasan
+      lo atrapa: caso_g7_niega_gh_pr_merge_espaciado
+  G7  el dest de git push pierde + y : inicial y un force-push o delete-ref a master|main pasa
+      lo atrapa: caso_g7_niega_git_push_force_y_delete
+  G7  el hatch deja de pelar comillas envolventes y un pin correcto entre comillas niega
+      lo atrapa: caso_g7_hatch_comillas_ok
+  G8  el chequeo trail/blast del Stop se apaga y un full sin cita cierra
+      lo atrapa: caso_g8_full_sin_cita_sin_skip_bloquea
+  G8  se deja de exigir la familia blast
+      lo atrapa: caso_g8_full_cita_solo_tsv_bloquea
+  G8  TRAIL SKIP: vacio cuenta
+      lo atrapa: caso_g8_full_skip_sin_razon_bloquea
+  G8  build_gate_feedback deja de adosar trail_parrafo
+      lo atrapa: caso_g8_full_otro_gate_recuerda_trail
+  G8  un Close anterior a la cabecera acredita el recibo
+      lo atrapa: caso_g8_full_close_en_preambulo_bloquea
+  G3  la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
+      lo atrapa: caso_g3_codex_stop_sin_transcript_no_acredita
+  G8  la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
+      lo atrapa: caso_g8_full_raiz_assume_unchanged_bloquea
+  G9  el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
+      lo atrapa: caso_g9_etiqueta_ausente_bloquea_en_ambos
+
+  --- mutation-test declarado (gate | condicion rota | caso que la atrapa)
+  G1|se arma sin llegar a consultar el sentinel|caso_g1_no_arma_sin_sentinel
+  G1|la marca de notificacion vuelve a la forma laxa (contiene) y un prompt humano que la menciona se queda sin gate|caso_g1_mencion_humana_de_la_marca_sigue_armando
+  G2|el guard del despacho en background se neutraliza y un job recien lanzado vuelve a acreditar verificacion sin resultado|caso_g2_runner_en_background_no_acredita
+  G1|session_id se vuelve a leer con el lector greedy del payload crudo|caso_g1_session_id_anidado_no_reescribe_ruta
+  G1|la fase session vuelve a salir muda y las reglas permanentes no se inyectan|caso_g1_session_inyecta_reglas
+  G1|el fallback al payload crudo deja de acotarse a session y un -saikit en cualquier campo vuelve a armar|caso_g1_prompt_vacio_no_desarma
+  G1|el menu del recetario se apaga y el contrato deja de ofrecer recetas aun con manifiesto valido|caso_g1_contrato_nombra_recetario
+  G5|el parrafo autopilot deja de emitirse tambien en el tercer emisor (presupuesto agotado)|caso_g5_autopilot_parrafo_en_budget_agotado
+  G1|record_agent vacia el arg autopilot al reescribir y el flag desaparece a mitad de turno|caso_g1_autopilot_sobrevive_record_agent
+  G1|el menu vuelve a pedir el todolist, una herramienta de UN host que la 16.8 midio con 0 usos en 6 de 6 turnos|caso_g1_contrato_nombra_recetario
+  G2|un runner que fallo tambien acredita verificacion|caso_g2_runner_no_encontrado_no_marca
+  G2|la vía B (failures/errors: N) deja de matchear|caso_g2_runner_fallido_phpunit_no_marca
+  G2|se quita el ':' despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar|caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado
+  G2|la redaccion de credenciales se desactiva y el secreto vuelve al log|caso_g2_credenciales_en_comando_se_redactan
+  G2|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar|caso_g2_runner_bash_run_sh_marca
+  G2|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada|caso_g2_tool_name_runner_con_comando_ajeno_no_marca
+  G2|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)|caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
+  G2|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR|caso_g2_zcode_verif_subagente_cero_failed_acredita
+  G2|la guarda de resultado en el MISMO span se quita y un label con comando del vocabulario pero sin resultado acredita (18.18)|caso_g2_zcode_verif_subagente_sin_resultado_bloquea
+  G3|la secuencia deja de exigir el orden entre los tres roles|caso_g3_fuera_de_orden_bloquea
+  G3|el rol de los eventos internos (agent_type) deja de leerse|caso_g3_agent_type_cuenta
+  G4|la alternativa markdown bold se quita y un recibo **Label**: vuelve a bloquear|caso_g4_recibo_vineta_asterisco_pasa
+  G4|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)|caso_g4_grok_delegado_sin_bg_bloquea
+  G4|la basura tras el cierre del root deja de invalidar y un documento con trailing garbage vuelve a habilitar la escotilla (r1)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|el veto de u+4hex se quita y u12G34 (G colado entre hex) habilita la escotilla (r3)|caso_g4_grok_delegado_bg_doc_roto_bloquea
+  G4|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)|caso_g4_pausa_permite
+  G4|el canal payload vuelve al lector greedy del vendor sin decodificar|caso_g4_grok_turno_completo_camel_cierra
+  G4|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta|caso_g4_transcript_fuera_de_perfil_se_ignora
+  G5|tool_name vuelve al lector greedy y un eco en tool_response se lee como la herramienta del evento (marca una edicion que no ocurrio)|caso_g5_tool_name_eco_no_marca_edicion
+  G3|el fallback ZCODE_* se anula y TARGET queda vacio en zcode (la secuencia no se exige)|caso_g3_target_por_zcode_fallback
+  G3|lane=fast deja de eximir la secuencia (el carril no sirve)|caso_g3_fast_cierra_sin_subagentes
+  G5|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno|caso_g5_stop_fallido_no_borra_aviso_ajeno
+  G1|el literal user_prompt_submit sale del case de PHASE y un envelope real de Grok cae a tool: nunca arma (D4)|caso_g1_grok_senal_exportada_vacia_cuenta
+  G1|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)|caso_g1_grok_stop_shutdown_no_toca_estado
+  G3|la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)|caso_g3_adversarial_audit_no_acredita_reviewer
+  G3|el chequeo de orden con adversary deja de correr y un adversary fuera de posicion cierra igual (D4, Task 13.5)|caso_g3_adversary_fuera_de_orden_bloquea
+  G7|el patron gh pr merge vuelve al literal -Fq y gh  pr  merge / mayusculas pasan|caso_g7_niega_gh_pr_merge_espaciado
+  G7|el dest de git push pierde + y : inicial y un force-push o delete-ref a master|main pasa|caso_g7_niega_git_push_force_y_delete
+  G7|el hatch deja de pelar comillas envolventes y un pin correcto entre comillas niega|caso_g7_hatch_comillas_ok
+  G8|el chequeo trail/blast del Stop se apaga y un full sin cita cierra|caso_g8_full_sin_cita_sin_skip_bloquea
+  G8|se deja de exigir la familia blast|caso_g8_full_cita_solo_tsv_bloquea
+  G8|TRAIL SKIP: vacio cuenta|caso_g8_full_skip_sin_razon_bloquea
+  G8|build_gate_feedback deja de adosar trail_parrafo|caso_g8_full_otro_gate_recuerda_trail
+  G8|un Close anterior a la cabecera acredita el recibo|caso_g8_full_close_en_preambulo_bloquea
+  G3|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)|caso_g3_codex_stop_sin_transcript_no_acredita
+  G8|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status|caso_g8_full_raiz_assume_unchanged_bloquea
+  G9|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS|caso_g9_etiqueta_ausente_bloquea_en_ambos
+test_gate_mutations: OK
