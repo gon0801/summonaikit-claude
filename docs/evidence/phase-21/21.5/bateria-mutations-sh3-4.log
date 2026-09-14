@@ -33,3 +33,5 @@ test_gate_mutations: shard 3/4 — 46 mutaciones
       lo atrapa: caso_g2_runner_bash_run_sh_marca
   G2  el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
       lo atrapa: caso_g2_zcode_verif_subagente_cero_passed_bloquea
+  G2  el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)
+      lo atrapa: caso_g2_zcode_verif_subagente_cmd_con_error_acredita

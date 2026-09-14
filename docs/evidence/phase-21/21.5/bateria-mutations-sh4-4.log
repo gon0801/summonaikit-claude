@@ -31,3 +31,5 @@ test_gate_mutations: shard 4/4 — 46 mutaciones
       lo atrapa: caso_g2_runner_fallido_gradle_no_marca
   G2  el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
       lo atrapa: caso_g2_zcode_verif_subagente_acredita
+  G2  la via del label se juzga sobre $text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
+      lo atrapa: caso_g2_zcode_verif_label_de_turno_anterior_no_acredita

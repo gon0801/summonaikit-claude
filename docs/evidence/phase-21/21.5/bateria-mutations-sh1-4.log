@@ -33,3 +33,5 @@ test_gate_mutations: shard 1/4 — 47 mutaciones
       lo atrapa: caso_g2_runner_en_echo_no_marca
   G2  la condicion de host ciego ($HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
       lo atrapa: caso_g2_claude_verif_subagente_no_acredita
+  G2  el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
+      lo atrapa: caso_g2_zcode_verif_subagente_fallo_pelado_bloquea

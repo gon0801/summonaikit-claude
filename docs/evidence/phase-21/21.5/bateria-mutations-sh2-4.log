@@ -35,3 +35,5 @@ test_gate_mutations: shard 2/4 — 47 mutaciones
       lo atrapa: caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
   G2  el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
       lo atrapa: caso_g2_zcode_verif_subagente_cero_failed_acredita
+  G2  la guarda de resultado en el MISMO span se quita y un label con comando del vocabulario pero sin resultado acredita (18.18)
+      lo atrapa: caso_g2_zcode_verif_subagente_sin_resultado_bloquea
