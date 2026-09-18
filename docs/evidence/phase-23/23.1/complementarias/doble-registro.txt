@@ -10,3 +10,18 @@ fire=1 ev=UserPromptSubmit argv=proyecto
 comando identico en los dos registros:
 fire=1 ev=UserPromptSubmit argv=
 fire=1 ev=UserPromptSubmit argv=
+
+Condicion de la corrida: con --trust-workspace. El registro de proyecto
+(.muse/hooks.json) solo carga con el workspace confiado; el de usuario carga
+con y sin confianza. La doble ejecucion vale para el workspace confiado.
+
+Prueba temporal del solapamiento (2026-09-18 UTC, Muse aislado, proveedor
+echo, --trust-workspace): cada registro corre un hook que anota PID e inicio,
+duerme 2 s y anota fin. En serie el turno tardaria al menos 4 s.
+usuario pid=64219 fin=1789709536.333142000
+usuario pid=64219 inicio=1789709534.323413000
+proyecto pid=64220 fin=1789709536.329313000
+proyecto pid=64220 inicio=1789709534.323412000
+duracion total del turno: 2.6 s
+Los dos PIDs arrancan en el mismo microsegundo y terminan 2 s despues:
+corren en paralelo.

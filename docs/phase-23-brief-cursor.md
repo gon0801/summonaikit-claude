@@ -155,9 +155,9 @@ de entrega y este brief no lo repite.
    para que los dos ids coincidan; en sesión armada y sin pendiente no
    acredita. Su mutación es "sin pendiente, acredita `canonical_agent_role`
    del `subagent_id`", y este caso la tiene que matar; (c) un `PreToolUse` de `bash` con
-   `tool_name` `bash` y otro con `bash_input`; (d) un `PostToolUse
-   subagent_read_result` con `jq '.tool_name="subagent_read_result"'` sobre el
-   fixture 15 (su forma real no está medida: `unknown`, corrida del lead); (e)
+   `tool_name` `bash` y otro con `bash_input`; (d) NO hay derivado de
+   `subagent_read_result`: su forma real no está medida y no acredita (no se
+   arma renombrando el fixture 15); (e)
    los fixtures 17 y 18 con `jq '.tool_input.path="src/app.py"'`, porque el
    hook clasifica `notas.txt` como no-código (`rn_is_noncode_path`,
    hook:1390-1395) y con esa ruta la detección de edición no puede pasar de
@@ -226,8 +226,9 @@ BY SUBAGENT:` que ya existe.
 sesión del padre: un `PostToolUse subagent_spawn` con `status: accepted` en
 sesión armada deja pendiente `subagent_id → rol` (el rol de
 `tool_input.subagent_type`) en el estado de esa sesión. Se acredita el rol
-cuando un `PostToolUse subagent_wait` o `subagent_read_result` de ESA sesión
-devuelve `status: ready` con un `subagent_id` pendiente. De dónde sale cada
+cuando un `PostToolUse subagent_wait` de ESA sesión devuelve `status: ready`
+con un `subagent_id` pendiente. `subagent_read_result` NO acredita hasta que se
+mida su forma real (corrida del lead en la 23.6). De dónde sale cada
 id: en el despacho, del `subagent_id` de nivel 1 del `tool_response` (el
 `tool_input` de `subagent_spawn` no lo trae); en el cierre, de
 `tool_input.subagent_id`, y si el `tool_response` trae `subagent_id` de nivel
@@ -254,8 +255,8 @@ de la primera clave por `tr -d '\\' | grep -q '"status":"ready"'` sobre todo el
   `tool_response` como texto JSON: `status` vale `accepted` (fixture 10, trae
   `subagent_id`) o `rejected` (fixture 06, NO trae `subagent_id`). El cierre
   medido es `PostToolUse subagent_wait` con `status: ready` y el mismo
-  `subagent_id` (fixture 15). `subagent_read_result` se acredita igual por
-  diseño, pero su forma no está medida (derivado d).
+  `subagent_id` (fixture 15). `subagent_read_result` no acredita: su forma no
+  está medida (`unknown`, corrida del lead en la 23.6).
 - En `Stop`, el camino actual de claude bloquea en Muse: JSON, motivo a
   stderr y `exit 2`. No inviertas el exit como en codex o grok. Evidencia:
   `complementarias/stop-semantica.txt`.
@@ -267,9 +268,9 @@ de la primera clave por `tr -d '\\' | grep -q '"status":"ready"'` sobre todo el
 para hijos de Muse (los eventos del hijo no traen rol). Con Muse como host
 ciego, se declaran igual que en zcode.
 
-**`unknown` que este PR declara:** un resultado auto-entregado sin
-`subagent_wait` ni `subagent_read_result` (queda `unknown`, corrida del lead
-en la 23.6); un spawn en workspace NO confiado (Muse avisa "Agent delegation:
+**`unknown` que este PR declara:** un cierre sin `subagent_wait`, sea un
+resultado auto-entregado o uno leído con `subagent_read_result` (no acredita;
+corrida del lead en la 23.6); un spawn en workspace NO confiado (Muse avisa "Agent delegation:
 auto unavailable: workspace is untrusted"); dos hooks de la misma sesión
 corriendo en paralelo sobre el mismo estado (Muse corre hooks en paralelo,
 ver `doble-registro.txt`); `SessionStart`; Windows.
@@ -354,8 +355,8 @@ orden de despliegue lo controla el lead.
 - Cinco eventos, `SubagentStart` ya NO se registra: `SessionStart` (fase
   `session`), `UserPromptSubmit` (fase `prompt`), `PreToolUse` (matcher
   `bash`, sin fase), `PostToolUse` (matcher `bash`, `edit_file`,
-  `write_file`, `subagent_spawn`, `subagent_wait` y `subagent_read_result`
-  separados por barra vertical, fase `tool`), `Stop` (fase `stop`). `timeout`
+  `write_file`, `subagent_spawn` y `subagent_wait` separados por barra
+  vertical, fase `tool`), `Stop` (fase `stop`). `timeout`
   30 segundos en todos salvo `Stop`, que lleva 600 como en grok
   (install-hook.sh:981 y 1045). Medido: el corte por timeout en Muse es
   SILENCIOSO y el host falla abierto, así que un `Stop` cortado deja pasar el
@@ -381,6 +382,12 @@ orden de despliegue lo controla el lead.
   `SAIKIT_MUSE_BIN`: puesta, no se busca en disco. Puesta y vacía, o apuntando
   a un archivo que no existe, equivale a sin binario. Sin binario, `unknown`
   (`exit 4`) sin tocar nada, también en `--dry-run`.
+- **Estructura exacta antes de validar.** El instalador comprueba en el
+  candidato nuestras cinco entradas: evento, `matcher`, fase, comando canónico
+  con `--saikit-harness-id 23.3` y `timeout`, tal como la lista de arriba. Es
+  la única prueba positiva de `PreToolUse` y `PostToolUse`: un turno `echo` no
+  los dispara, así que no dejan marca. Casos: un candidato sin `PreToolUse`, y
+  otro con un `matcher` de `PostToolUse` distinto, no instalan.
 - **Validación DIFERENCIAL y POSITIVA**, en la caja de la regla 2 con las
   cinco variables aisladas y cwd `mktemp` no-git verificado: (1) se valida el
   settings ACTUAL y el CANDIDATO con los mismos reemplazos; (2) en ambas
@@ -498,7 +505,7 @@ si el diseño del `--check` de este PR ya la resuelve.
 | El brief contradice la fila de `Plans.md` | Sigue la fila y anótalo en el PR |
 | Un punto de la DoD solo se mide con Muse real o con el perfil del operador | No lo midas. Márcalo `unknown` con la razón "corrida del lead" y sigue con el resto |
 | Un test falla en local y no tocaste nada relacionado | Córrelo igual sobre `origin/master` en un worktree aparte. Si también falla ahí, es previo: decláralo en el PR y sigue |
-| El CI falla en un job que tu cambio no toca | Mira si `master` está rojo con `gh run list --branch master --limit 3`. Si lo está, decláralo en el PR; si no, es tuyo y se arregla |
+| El CI falla en un job que tu cambio no toca | Mira si `master` está rojo con `gh run list --branch master --limit 3`. Si lo está, repórtalo en el PR y para ahí: la entrega exige el job `gate` verde, y arreglar un rojo previo no es de este PR (lo decide el lead). Si `master` está verde, el rojo es tuyo y se arregla |
 | La golden difiere en más de las tres líneas de cabecera, o un test de otro host cambia | Es una regresión tuya. Se arregla el código; la golden no se regraba |
 | Una mutación dice "la mutación no cambió nada" | Casi siempre se corrió fuera de la caja aislada, sin `SAIKIT_HOOK_VIVO`: revisa el comando y corre de nuevo dentro de la caja |
 | El settings actual del operador ya trae avisos previos al validar | Se reportan, no bloquean: si el candidato no agrega avisos nuevos, instala |
