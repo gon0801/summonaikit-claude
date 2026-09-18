@@ -1,0 +1,103 @@
+{
+  "fuente": "muse export --session <id> del turno probe (proveedor echo)",
+  "eventos": [
+    {
+      "kind": "hook_run_started",
+      "run_id": "<repo>/.muse/hooks.json:user_prompt_submit:def-bb362e831e6ea2d5:1",
+      "hook_key": "<repo>/.muse/hooks.json:user_prompt_submit:def-bb362e831e6ea2d5",
+      "event": "UserPromptSubmit",
+      "display_order": 0
+    },
+    {
+      "kind": "hook_run_terminal",
+      "run_id": "<repo>/.muse/hooks.json:user_prompt_submit:def-bb362e831e6ea2d5:1",
+      "hook_key": "<repo>/.muse/hooks.json:user_prompt_submit:def-bb362e831e6ea2d5",
+      "event": "UserPromptSubmit",
+      "display_order": 0,
+      "status": "completed",
+      "duration_ms": 235,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "error": null,
+      "effects": [
+        "context"
+      ]
+    },
+    {
+      "kind": "context_block_updated",
+      "id": "hook:user_prompt_submit:prompt:0",
+      "role": "developer",
+      "source": "runtime_hook",
+      "lifecycle": "user_prompt_submit",
+      "order": 900000,
+      "text": "CTXMARK-7731 responde con la palabra PAPAYA",
+      "reason": "hook:user_prompt_submit"
+    },
+    {
+      "kind": "assistant_message_committed",
+      "message_id": "ea750744-cd73-4a49-bf7c-37bae9b06fac",
+      "response_id": "muse-tui-echo",
+      "text": "echo: hola"
+    },
+    {
+      "kind": "hook_run_started",
+      "run_id": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd:2",
+      "hook_key": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd",
+      "event": "Stop",
+      "display_order": 1
+    },
+    {
+      "kind": "hook_run_terminal",
+      "run_id": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd:2",
+      "hook_key": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd",
+      "event": "Stop",
+      "display_order": 1,
+      "status": "blocked",
+      "duration_ms": 37,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "error": null,
+      "effects": [
+        "blocked"
+      ]
+    },
+    {
+      "kind": "context_block_updated",
+      "id": "hook:stop:stop:0",
+      "role": "developer",
+      "source": "runtime_hook",
+      "lifecycle": "stop",
+      "order": 900000,
+      "text": "STOPMARK-4412 falta el recibo",
+      "reason": "hook:stop"
+    },
+    {
+      "kind": "assistant_message_committed",
+      "message_id": "39bd4855-27af-4749-9c5b-dbeb9afa0009",
+      "response_id": "muse-tui-echo",
+      "text": "echo: hola"
+    },
+    {
+      "kind": "hook_run_started",
+      "run_id": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd:3",
+      "hook_key": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd",
+      "event": "Stop",
+      "display_order": 1
+    },
+    {
+      "kind": "hook_run_terminal",
+      "run_id": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd:3",
+      "hook_key": "<repo>/.muse/hooks.json:stop:def-bb992d3b762874fd",
+      "event": "Stop",
+      "display_order": 1,
+      "status": "completed",
+      "duration_ms": 32,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+argv: UserPromptSubmit
+pwd: <repo>
+_ HOME LANG LOGNAME PATH PWD SHELL SHLVL TERM TMPDIR USER
