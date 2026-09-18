@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-18T17:59:15Z|implement|Crear suma.py y test_suma.py sin dependencias|Pedido directo del usuario|bash tests/run.sh exit 0|ok

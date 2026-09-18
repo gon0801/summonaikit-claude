@@ -1,0 +1,1 @@
+{"hecho":"Cambio aditivo: solo agrega suma.py y test_suma.py, no modifica codigo existente","comando":"bash tests/run.sh","salida":"OK","nivel":5}

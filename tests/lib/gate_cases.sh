@@ -2488,7 +2488,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_bloquea caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_spawn_solo_role_acredita caso_g3_muse_role_gana_a_subagent_type caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_keep_pendiente_sobrevive_write caso_g3_muse_status_no_primera_no_acredita caso_g3_muse_rejected_con_id_no_pendiente caso_g3_muse_wait_id_distinto_no_acredita caso_g3_muse_wait_summary_grande_acredita caso_g3_muse_recordatorios_no_acreditan caso_g3_muse_write_file_notas_no_marca caso_g3_muse_edit_file_notas_no_marca caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_bloquea caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_spawn_solo_role_acredita caso_g3_muse_solo_cuenta_role caso_g3_muse_spawn_solo_subagent_type_no_acredita caso_g3_muse_role_invalido_no_acredita caso_g3_muse_revision_se_marca_al_esperar caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_keep_pendiente_sobrevive_write caso_g3_muse_status_no_primera_no_acredita caso_g3_muse_rejected_con_id_no_pendiente caso_g3_muse_wait_id_distinto_no_acredita caso_g3_muse_wait_summary_grande_acredita caso_g3_muse_recordatorios_no_acreditan caso_g3_muse_write_file_notas_no_marca caso_g3_muse_edit_file_notas_no_marca caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -5094,7 +5094,8 @@ caso_g1_muse_contrato_nombra_subagent_spawn() {
 
 # Task 23.9 — medido en el vivo 23.6: el contrato decia que VERIFIED BY
 # SUBAGENT solo vale en hosts ciegos y nombraba solo a zcode. En Muse el
-# verificador corre en otra sesion, asi que el label es la unica via.
+# verificador corre en otra sesion: el label es la via para acreditar lo que
+# corrio el verifier.
 caso_g1_muse_contrato_se_declara_ciego() {
   lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
   _contiene "el contrato de muse nombra a Muse como host ciego" "$LAB_OUT" '(zcode and Muse today; kimi once measured)'
@@ -5250,13 +5251,49 @@ caso_g3_muse_spawn_solo_role_acredita() {
   LAB_ESTADO_PATH="$_mu_backup"
 }
 
-caso_g3_muse_role_gana_a_subagent_type() {
+caso_g3_muse_solo_cuenta_role() {
   _mu_backup="$LAB_ESTADO_PATH"
   lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
   _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
   lab_run tool muse "$(lab_payload_muse_derivado spawn-role-difiere.json)"
   lab_run tool muse "$(lab_payload_muse_derivado wait-implementer.json)"
   _igual "Muse lanza el rol de role, no el de subagent_type" "$(lab_estado agents_seen)" "implementer"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_spawn_solo_subagent_type_no_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_derivado spawn-solo-subagent-type.json)"
+  _vacio "sin role no queda pendiente" "$(lab_estado muse_pending)"
+  lab_run tool muse "$(lab_payload_muse_derivado wait-implementer.json)"
+  _vacio "sin role no se acredita" "$(lab_estado agents_seen)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_role_invalido_no_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_derivado spawn-role-invalido.json)"
+  lab_run tool muse "$(lab_payload_muse_derivado wait-implementer.json)"
+  _vacio "un role que no es del kit no se acredita por subagent_type" "$(lab_estado agents_seen)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+# Task 23.9 — el aviso de revision cuenta la revision cuando el reviewer
+# termino (wait ready acreditado), no al despacharlo: un despacho puede
+# rechazarse o no terminar.
+caso_g3_muse_revision_se_marca_al_esperar() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  rn_file="$(dirname "$LAB_ESTADO_PATH")/harness-state-review-notice.env"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  _vacio "el despacho del reviewer no marca la revision" "$(grep '^last_review=.' "$rn_file" 2>/dev/null)"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-15-real2-delegacion-PostToolUse-subagent_wait.json)"
+  _no_vacio "el wait ready del reviewer marca la revision" "$(grep '^last_review=.' "$rn_file" 2>/dev/null)"
   LAB_ESTADO_PATH="$_mu_backup"
 }
 

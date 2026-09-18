@@ -46,12 +46,16 @@ que no esta en el esquema de `subagent_spawn`. En la captura de la 23.1 aparecio
 porque aquel prompt pidio "subagent_type reviewer" y el modelo mando los dos
 campos.
 
-2. Reproduccion de los 14 eventos del vivo contra dos hooks, en directorios
-aislados (HOME y state propios, entorno limpio como Muse, cwd = el repo del
-turno). Los payloads se armaron con los fixtures reales de la 23.1 como molde y
-los datos del vivo (argumentos de cada herramienta, respuesta textual de Muse y
-mensaje final del modelo). Solo entran las herramientas del matcher con
-resultado exitoso, igual que en el vivo: 10 PostToolUse y 3 Stop.
+2. Reproduccion de los 14 eventos del vivo contra dos hooks, en una caja
+aislada (HOME y state propios, entorno limpio como Muse, cwd = una copia del
+repo del turno). Los payloads se armaron con los fixtures reales de la 23.1
+como molde y los datos del vivo (argumentos de cada herramienta, respuesta
+textual de Muse y mensaje final del modelo). Solo entran las herramientas del
+matcher con resultado exitoso, igual que en el vivo: 10 PostToolUse y 3 Stop.
+Los eventos (rutas locales redactadas), la semilla del repo y el script estan
+en `reproduccion/`:
+
+  bash docs/evidence/phase-23/23.9/reproduccion/reproducir.sh <hook>
 
 hook de master (b82780f):
 01-prompt rc=0 agents_seen= pending=
@@ -107,14 +111,16 @@ presupuesto agotado, mismos cuatro faltantes). Con la rama se acreditan los
 tres roles con los datos reales y solo queda la evidencia de verificacion: el
 recibo no traia `VERIFIED BY SUBAGENT:` y el padre corrio
 `cat ...; bash tests/run.sh; echo EXIT:$?`, que no acredita porque el runner va
-seguido de `;` (limite declarado del lado estricto: el exit del ultimo comando
-tapa el del runner).
+pegado al `;`: el limite de forma declarado en el hook exige un espacio o el fin
+de linea despues del runner (con `bash tests/run.sh ; echo` si acredita).
 
 3. El mismo primer recibo con una linea `VERIFIED BY SUBAGENT: bash tests/run.sh
-OK, exit 0` antes de Review, contra la rama:
+OK, exit 0` antes de Review, contra la rama (`reproducir.sh <hook> --con-label`):
 
 11-tool rc=0 agents_seen=implementer,verifier,reviewer pending=
 12-stop rc=0 agents_seen= pending=
 
 El Stop pasa. El contrato decia que ese label solo vale en hosts ciegos y
-nombraba solo a zcode; ahora nombra tambien a Muse.
+nombraba solo a zcode; ahora nombra tambien a Muse. En muse cuenta solo
+`role`: sin `role`, o con un `role` que no es del kit, no se acredita nada
+aunque llegue `subagent_type`, porque Muse lanza el perfil que nombra `role`.

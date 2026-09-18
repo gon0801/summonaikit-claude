@@ -1794,7 +1794,7 @@ saikit_muse_pending_take() {
 }
 
 saikit_muse_role_event() {
-  unset _MUSE_TR_RAW _MUSE_TR_RAW_SET
+  unset _MUSE_TR_RAW _MUSE_TR_RAW_SET MUSE_REVISION_ACREDITADA
   case "$tool_name" in
     subagent_spawn)
       _st="$(json_muse_first_status)"
@@ -1821,6 +1821,8 @@ saikit_muse_role_event() {
       [ -n "$_role" ] || return 0
       # saikit-23.2-muse-wait-credit
       record_agent "$_role"
+      # saikit-23.9-muse-rn-wait: la revision cuenta cuando el reviewer termino, no al despacharlo.
+      [ "$_role" != "reviewer" ] || MUSE_REVISION_ACREDITADA=1
       return 0
       ;;
     *)
@@ -3492,7 +3494,10 @@ record_tool_evidence() {
   # <<< SAIKIT-ADVERSARY-LOCK v1 <<<
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   rn_order_now="$(rn_bump_counter)"
-  if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ]; then
+  if [ "$HOST" = "muse" ]; then
+    # saikit-23.9-muse-rn-solo-wait
+    [ "${MUSE_REVISION_ACREDITADA:-}" != "1" ] || rn_mark_review "$rn_order_now"
+  elif [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ]; then
     rn_mark_review "$rn_order_now"
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<

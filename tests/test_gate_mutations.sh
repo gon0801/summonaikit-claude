@@ -112,7 +112,7 @@ G1|muse_recorte_sin_ancla|el recorte de muse vuelve a cortar en la primera apari
 G1|muse_minimo_sin_aviso|el contrato minimo de muse vuelve a descartar el aviso de revision, que ya se consumio y se pierde
 G1|muse_contrato_sin_recorte|el contrato de muse vuelve a mandar las secciones genericas completas y, con el recetario real, solo llega el contrato minimo en vez del normal
 G1|muse_contrato_sin_tope|el tope duro de muse se quita y un contrato que no cabe en 16384 bytes llega entero, y Muse lo descarta en silencio
-G1|muse_contrato_sin_host_ciego|el contrato vuelve a nombrar solo a zcode como host ciego y el modelo de Muse no sabe que VERIFIED BY SUBAGENT es su via
+G1|muse_contrato_sin_host_ciego|el contrato vuelve a nombrar solo a zcode como host ciego y el modelo de Muse no sabe que VERIFIED BY SUBAGENT es la via para acreditar lo que corrio su verifier
 G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
 G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
@@ -259,6 +259,9 @@ G3|muse_status_sin_first|json_muse_first_status deja de exigir que status sea la
 G3|muse_spawn_sin_accepted|el despacho deja de exigir status accepted y un rejected con subagent_id deja pendiente
 G3|muse_wait_ignora_id|el wait deja de exigir que el subagent_id de la respuesta coincida y un id distinto acredita
 G3|muse_rol_de_subagent_type|en muse el rol se vuelve a leer de subagent_type y un despacho real, que solo trae role, no acredita nada
+G3|muse_rol_cae_a_subagent_type|sin role el rol se toma de subagent_type y se acredita un perfil que Muse no lanzo
+G3|muse_revision_al_despachar|el aviso de revision vuelve a marcar la revision al despachar al reviewer, aunque el despacho no termine
+G3|muse_revision_sin_wait|el wait ready del reviewer deja de marcar la revision y el aviso de codigo editado despues de revisar se apaga en muse
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 "
@@ -1300,6 +1303,15 @@ mut_muse_pretool_solo_Bash() {
 }
 mut_muse_rol_de_subagent_type() {
   sed '/saikit-23.9-muse-role/,+2s/then subagent="$(json_tool_input_string role)"; fi/then :; fi/'
+}
+mut_muse_rol_cae_a_subagent_type() {
+  sed '/saikit-23.9-muse-role/,+2s/then subagent="$(json_tool_input_string role)"; fi/then subagent="$(json_tool_input_string role)"; [ -n "$subagent" ] || subagent="$(json_tool_input_string subagent_type)"; fi/'
+}
+mut_muse_revision_al_despachar() {
+  sed '/saikit-23.9-muse-rn-solo-wait/,+1s/\[ "${MUSE_REVISION_ACREDITADA:-}" != "1" \]/[ "$(canonical_agent_role "$subagent")" != "reviewer" ]/'
+}
+mut_muse_revision_sin_wait() {
+  sed 's/\[ "\$_role" != "reviewer" \] || MUSE_REVISION_ACREDITADA=1/:/'
 }
 mut_muse_pretool_trata_bash_input() {
   sed 's/!= "bash" \]; then/!= "bash" ] \&\& [ "$_pt_tool" != "bash_input" ]; then/'
