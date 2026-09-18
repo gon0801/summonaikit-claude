@@ -1,0 +1,11 @@
+{
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "echo: hola -saikit:fast",
+  "session_id": "01a0b274-38f2-7ba1-b612-3cc2d6f3a2d8",
+  "turn_id": "27bc31bb-4c84-4ad8-8917-34590161bb45",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "unknown",
+  "permission_mode": "default"
+}

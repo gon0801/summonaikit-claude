@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "session_id": "01a0b274-38f2-7ba1-b612-3cc2d6f3a2d8",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "unknown",
+  "permission_mode": "default"
+}
