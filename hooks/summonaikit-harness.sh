@@ -64,6 +64,7 @@ TOOL_HINT="the Task tool"
 if [ "$TARGET" = "grok" ]; then TOOL_HINT="the spawn_subagent tool"; fi
 # Phase 15: en dsh la tool model-facing de delegacion es `subagent` (no Task).
 if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the subagent tool"; fi
+if [ "$TARGET" = "muse" ]; then TOOL_HINT="the subagent_spawn tool (then wait on each with subagent_wait)"; fi
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Task 16.4 (D1): recetario. El manifiesto se lee en runtime (un cat +
 # sha256sum por receta) como indice de "que recetas hay y cual es su sha
@@ -210,6 +211,11 @@ elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "codex" ]; then
 # dsh sin el adaptador no se cree dsh.
 elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "dsh" ]; then
   HOST=dsh
+# Muse no exporta MUSE_*. Misma senal que dsh/codex (setness+valor exacto),
+# ANTES de CLAUDECODE=1 y de zcode: un Muse lanzado desde Claude heredaria
+# CLAUDECODE=1 y si esta rama va despues, HOST=claude robaria la identidad.
+elif [ "${SUMMONAIKIT_HOOK_TARGET:-}" = "muse" ]; then
+  HOST=muse
 elif [ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" ]; then
   HOST=zcode
 elif [ "${CLAUDECODE:-}" = "1" ]; then
@@ -392,7 +398,7 @@ saikit_verif_fallo_pelado() {
 # mida. La condicion estaba escrita DOS veces (predicado + ruteo de la
 # evidencia): con dos copias, el dia que se mida otro host una se actualiza y la
 # otra no, y el sintoma seria un host medio-ciego imposible de razonar.
-saikit_host_ciego() { [ "$HOST" = "zcode" ]; }
+saikit_host_ciego() { [ "$HOST" = "zcode" ] || [ "$HOST" = "muse" ]; }
 
 # Task 14.2 — extrae el SPAN del label: desde 'VERIFIED BY SUBAGENT:' hasta el
 # fin de ESA linea. El predicado (§4.3) evalua comando/resultado/veto SOLO sobre
@@ -1106,6 +1112,69 @@ json_tool_input_string() {
     }'
 }
 
+# Muse tool_response is a TEXT string containing JSON. json_tool_input_string
+# cannot see JSON inside a string. Unescape once, then read keys of the inner
+# object. status is the FIRST key; never grep the whole text (summary is the
+# child model).
+json_muse_tool_response_raw() {
+  json_top_level_string tool_response
+}
+
+json_muse_inner_unescape_scan() {
+  want="$1"
+  first_only="${2:-}"
+  json_muse_tool_response_raw | awk -v want="$want" -v first_only="$first_only" '
+    {
+      s = ""; esc = 0; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (esc) { s = s c; esc = 0; continue }
+        if (c == "\\") { esc = 1; continue }
+        s = s c
+      }
+      n = length(s); depth = 0; ins = 0; esc = 0; espera = 0
+      ini = 0; ultima = ""; clave = ""; first = 1
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") {
+            ins = 0
+            txt = substr(s, ini, i - ini)
+            if (espera) {
+              if (depth == 1) {
+                if (first_only == "first") {
+                  if (first && clave == want) print txt
+                  exit
+                }
+                if (clave == want) { print txt; exit }
+              }
+              espera = 0
+            }
+            ultima = txt
+          }
+          continue
+        }
+        if (c == "\"")                 { ins = 1; ini = i + 1 }
+        else if (c == ":")             { clave = ultima; espera = 1 }
+        else if (c == "{" || c == "[") { depth++; espera = 0 }
+        else if (c == "}" || c == "]") { depth--; espera = 0 }
+        else if (c == ",")             { espera = 0; if (depth == 1) first = 0 }
+      }
+    }'
+}
+
+json_muse_first_status() {
+  json_muse_inner_unescape_scan status first
+}
+
+json_muse_inner_string() {
+  json_muse_inner_unescape_scan "$1"
+}
+
+json_muse_status_es() { [ "$(json_muse_first_status)" = "$1" ]; }  # saikit-23.2-muse-status
+
 # Extrae el texto decodificado del asistente para el gate del Stop (Task 3.2).
 # Cierra A2 (la pausa/recibo se busca en el tail crudo, que incluye tool_result)
 # y A8 (los saltos escapados del JSONL rompen la frontera [^[:alpha:]] de las
@@ -1470,6 +1539,11 @@ write_state() {
     _keep_cxs="$(grep '^codex_native_seen=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
   fi
   if [ -n "${_CODEX_SEEN_SET+x}" ]; then _keep_cxs="$_CODEX_SEEN_SET"; fi
+  _keep_mp=""
+  if [ -f "$STATE_PATH" ]; then
+    _keep_mp="$(grep '^muse_pending=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+  fi
+  if [ -n "${_MUSE_PENDING_SET+x}" ]; then _keep_mp="$_MUSE_PENDING_SET"; fi
   {
     printf 'task_hash=%s\n' "$task_hash"
     printf 'cycle=%s\n' "$cycle"
@@ -1501,6 +1575,7 @@ write_state() {
     if [ -n "$_keep_cx" ]; then printf 'codex_children=%s\n' "$_keep_cx"; fi
     if [ -n "$_keep_cxd" ]; then printf 'codex_children_done=%s\n' "$_keep_cxd"; fi
     if [ -n "$_keep_cxs" ]; then printf 'codex_native_seen=%s\n' "$_keep_cxs"; fi
+    if [ -n "$_keep_mp" ]; then printf 'muse_pending=%s\n' "$_keep_mp"; fi
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
@@ -1673,6 +1748,75 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
       ;;
   esac
   return 0
+}
+
+saikit_muse_pending_write() {
+  _MUSE_PENDING_SET="$1"
+  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
+    "$(read_state_value implemented)" "$(read_state_value verified)" \
+    "$(read_state_value agents_seen)" "$(read_state_value lane)" \
+    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
+    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
+    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
+  unset _MUSE_PENDING_SET
+  return 0
+}
+
+saikit_muse_pending_add() {
+  case "$1" in *[!A-Za-z0-9._-]*|'') return 0 ;; esac
+  [ -n "$2" ] || return 0
+  mp_cur="$(read_state_value muse_pending)"
+  case ",$mp_cur," in *",$1:"*) return 0 ;; esac
+  saikit_muse_pending_write "${mp_cur:+$mp_cur,}$1:$2"
+}
+
+saikit_muse_pending_take() {
+  mp_cur="$(read_state_value muse_pending)"
+  mp_role=""; mp_new=""
+  mp_IFS="$IFS"; IFS=","
+  for mp_tok in $mp_cur; do
+    case "$mp_tok" in
+      "$1":*) mp_role="${mp_tok#"$1":}" ;;
+      *) mp_new="${mp_new:+$mp_new,}$mp_tok" ;;
+    esac
+  done
+  IFS="$mp_IFS"
+  [ -n "$mp_role" ] || return 1
+  saikit_muse_pending_write "$mp_new"
+  printf '%s' "$mp_role"
+}
+
+saikit_muse_role_event() {
+  case "$tool_name" in
+    subagent_spawn)
+      _st="$(json_muse_first_status)"
+      _id="$(json_muse_inner_string subagent_id)"
+      case "$_id" in *[!A-Za-z0-9._-]*|'') _id="" ;; esac
+      if [ "$_st" = "accepted" ] && [ -n "$_id" ]; then
+        _role="$(canonical_agent_role "$subagent")"
+        [ -n "$_role" ] || return 0
+        # saikit-23.2-muse-spawn-pending
+        saikit_muse_pending_add "$_id" "$_role"
+      fi
+      return 0
+      ;;
+    subagent_wait)
+      _wait_id="$(json_tool_input_string subagent_id)"
+      case "$_wait_id" in *[!A-Za-z0-9._-]*|'') return 0 ;; esac
+      _rsp_id="$(json_muse_inner_string subagent_id)"
+      if [ -n "$_rsp_id" ] && [ "$_rsp_id" != "$_wait_id" ]; then return 0; fi
+      json_muse_status_es ready || return 0
+      # saikit-23.2-muse-pending
+      _role="$(saikit_muse_pending_take "$_wait_id")" || return 0
+      [ -n "$_role" ] || return 0
+      # saikit-23.2-muse-wait-credit
+      record_agent "$_role"
+      return 0
+      ;;
+    *)
+      return 0
+      ;;
+  esac
 }
 
 # 18.6: parrafo del contrato para el carril autopilot. Decision del 2026-08-30:
@@ -2895,9 +3039,11 @@ adv_limpiar_zona() {
 # el MISMO que usa la senal de orden del review-notice (Task 7.3 D5): una sola
 # definicion de "que es una edicion" en el hook. La escritura PERMITIDA tambien
 # se registra (adv_paths): es el alcance explicito del escaneo de secretos.
+# saikit-23.2-edit-vocab
+SAIKIT_EDIT_TOOLS_RE='^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file|search_replace|write_file)$'
 adv_guard_edit() {
   [ -n "$2" ] || return 0
-  printf '%s' "$1" | grep -Eiq '^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file|search_replace)$' || return 0
+  printf '%s' "$1" | grep -Eiq "$SAIKIT_EDIT_TOOLS_RE" || return 0
   advg_canon="$(adv_canon_path "$2")"
   if [ -z "$advg_canon" ]; then
     printf 'summonaikit-harness: adversary: ruta no canonicalizable (%s); candado fail-open para ese evento\n' "$2" >&2
@@ -3196,6 +3342,14 @@ record_tool_evidence() {
   [ -n "$command_text" ] || command_text="$(json_tool_input_string command toolInput)"
   file_path="$(json_tool_input_string file_path)"
   [ -n "$file_path" ] || file_path="$(json_tool_input_string file_path toolInput)"
+  # saikit-23.2-muse-path
+  if [ "$HOST" = "muse" ]; then
+    case "$tool_name" in
+      write_file|edit_file)
+        [ -n "$file_path" ] || file_path="$(json_tool_input_string path)"
+        ;;
+    esac
+  fi
   combined="$event_name $tool_name $command_text $file_path $INPUT"
 
   # 20.13: Grok parent — SubagentStart records host-announced child id;
@@ -3241,7 +3395,9 @@ record_tool_evidence() {
   # marcar el ultimo evento interno del reviewer data cuando la revision corrio,
   # no cuando se pidio.
   if [ -z "$subagent" ]; then subagent="$(json_top_level_string agent_type)"; fi
-  if [ -n "$subagent" ]; then
+  if [ "$HOST" = "muse" ]; then
+    saikit_muse_role_event
+  elif [ -n "$subagent" ]; then
     # 21.2: en codex el credito de roles para la ceremonia viaja SOLO por el
     # canal nativo de cierre (SubagentStop con agent_id acreditado; postura
     # "sin Stop = running = no acreditado", con fallback legado si la sesion
@@ -3326,7 +3482,7 @@ record_tool_evidence() {
   # es solo el nombre de la herramienta del evento que el hook ya recibe.
   # Task 7.3 (D5): search_replace es la tool de edicion nativa de Grok (write
   # ya estaba en la lista); ambas traen toolInput.file_path (medido 7.1).
-  if [ -n "$file_path" ] && printf '%s' "$tool_name" | grep -Eiq '^(edit|write|multiedit|notebookedit|apply_patch|str_replace_editor|create_file|edit_file|search_replace)$'; then
+  if [ -n "$file_path" ] && printf '%s' "$tool_name" | grep -Eiq "$SAIKIT_EDIT_TOOLS_RE"; then
     if ! rn_is_noncode_path "$file_path"; then
       rn_mark_code_edit "$rn_order_now"
     fi
@@ -4260,7 +4416,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # Phase 15 (D3): dsh entra — 15.1 midio el rol por tools/* (no ciego, D7), y el
   # adaptador @summonaikit/dsh-gate traduce la tool `subagent` a un PostToolUse
   # con subagent_type (D4), asi que la ceremonia se exige como en claude.
-  case "$TARGET" in claude|codex|grok|dsh)
+  case "$TARGET" in claude|codex|grok|dsh|muse)
     # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
     # kit -- un subagente caido por infraestructura (429, limite de uso, error
     # de herramienta) trababa el turno sin salida. La declaracion en el recibo
@@ -4582,7 +4738,8 @@ pretool_hatch_verifica() {
 pretool_merge_guard() {
   _pt_tool="$(json_top_level_string tool_name)"
   [ -n "$_pt_tool" ] || _pt_tool="$(json_top_level_string toolName)"
-  if [ "$_pt_tool" != "Bash" ]; then
+  # saikit-23.2-pretool-bash
+  if [ "$_pt_tool" != "Bash" ] && [ "$_pt_tool" != "bash" ]; then
     emit_allow
   fi
   _pt_cmd="$(json_tool_input_string command)"
