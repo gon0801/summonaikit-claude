@@ -156,13 +156,19 @@ jobs:
           SAIKIT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
 
+  # Reloj medido 2026-09-18 (run 35383094744, Phase 23): 222 mutaciones y
+  # 70.6 min en total; los 3 shards tardaban 22-25 min y uno llego al tope de
+  # 30 en la corrida siguiente (run 35391214986, +20% de runner). Simulado con
+  # la duracion de cada mutacion sacada de los logs y el mismo round-robin por
+  # posicion: N=8 da 11.2 min el peor, N=10 da 7.8. Por eso 10. Si el reloj
+  # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar mutaciones.
   suite-lentos:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
       matrix:
-        shard: ['1/3', '2/3', '3/3']
+        shard: ['1/10', '2/10', '3/10', '4/10', '5/10', '6/10', '7/10', '8/10', '9/10', '10/10']
     steps:
       - uses: actions/checkout@v7
 
