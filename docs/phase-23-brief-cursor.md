@@ -148,17 +148,24 @@ de entrega y este brief no lo repite.
    `tests/fixtures/muse/`, nunca de `docs/`. Se permiten payloads DERIVADOS en
    `tests/fixtures/muse/derivados/`, con un `README.md` que da el comando `jq`
    de cada uno: (a) un `UserPromptSubmit` con `-saikit` con el `session_id`
-   del fixture 07 y otro con el del 06, para armar esas sesiones; (b)
-   `SubagentStart`/`SubagentStop` de `verify-reminder` y `goal-reminder` a
-   partir de los fixtures 04 y 05; (c) un `PreToolUse` de `bash` con
+   del fixture 07, otro con el del 06 y otro con el del 17, para armar esas
+   sesiones; (b) un `PostToolUse subagent_wait` con
+   `tool_input.subagent_id` `verify-reminder` y status `ready`, en sesión
+   armada y sin pendiente: no acredita, y lo mata la mutación "acredita sin
+   pendiente"; (c) un `PreToolUse` de `bash` con
    `tool_name` `bash` y otro con `bash_input`; (d) un `PostToolUse
    subagent_read_result` con `jq '.tool_name="subagent_read_result"'` sobre el
-   fixture 15 (su forma real no está medida: `unknown`, corrida del lead). Todo
-   caso negativo afirma
+   fixture 15 (su forma real no está medida: `unknown`, corrida del lead); (e)
+   los fixtures 17 y 18 con `jq '.tool_input.path="src/app.py"'`, porque el
+   hook clasifica `notas.txt` como no-código (`rn_is_noncode_path`,
+   hook:1390-1395) y con esa ruta la detección de edición no puede pasar de
+   rojo a verde. Todo caso negativo afirma
    PRIMERO que existe el `harness-state.env` de la sesión armada; si no
    existe, el caso pasa en vacío. Nota: `canonical_agent_role verify-reminder`
-   hoy devuelve `verifier`, y el caso del recordatorio interno lo prueba (los
-   recordatorios de Muse nunca acreditan aunque el mapeo exista).
+   hoy devuelve `verifier`; por eso el caso (b) usa ese id. Los fixtures
+   copiados y `derivados/` son del PR A; el PR B solo agrega
+   `tests/fixtures/muse/muse-falso.sh` y `tests/fixtures/muse/herramientas-muse.txt`,
+   para que los dos PRs no choquen al agregar el mismo archivo.
 
 6. **Commits.** El scope es el área, jamás el número de fila:
    `feat(hook): …`, `feat(install): …`, `test(install): …`. Mensajes en
@@ -206,7 +213,7 @@ BY SUBAGENT:` que ya existe.
 | Resolución de `HOST` | el `if/elif` que termina en `HOST=other`, cerca de la línea 218. Muse no deja variables propias en el entorno: la señal es `SUMMONAIKIT_HOOK_TARGET=muse`, como codex y dsh |
 | `TOOL_HINT` | líneas 63 a 66. Para Muse: "the subagent_spawn tool (then wait on each with subagent_wait)" |
 | Rama de la ceremonia | `case "$TARGET" in claude\|codex\|grok\|dsh)`, línea 4263 |
-| Detección de edición | regex en las líneas 2900 y 3329, que ya tienen `edit_file` pero no `write_file`: agrégalo a las dos (ningún otro host lo emite, así que la golden no cambia). Con `HOST=muse` y solo para `write_file`/`edit_file`, la ruta sale de `tool_input.path` cuando no hay `file_path`. El rojo se mide en `last_code_edit` de `harness-state-review-notice.env` y en la ruta del log (`implemented: notas.txt`), no en `implemented`, que en master ya vale 1 con el fixture 17 |
+| Detección de edición | agrega `write_file` SOLO a la regex de la línea 3329 (ya tiene `edit_file`; ningún otro host emite `write_file`, así que la golden no cambia). La de la línea 2900 es del candado del adversary, inalcanzable en Muse y fuera de alcance. Con `HOST=muse` y solo para `write_file`/`edit_file`, la ruta sale de `tool_input.path` cuando no hay `file_path`. Con los fixtures 17 y 18 tal cual solo se prueba la ruta del log (`implemented: notas.txt` contra `implemented: file edit` en master). El rojo de `last_code_edit` en `harness-state-review-notice.env`, y la mutación que quita `write_file`, se prueban con el derivado (e), porque `notas.txt` es no-código. No midas en `implemented`: en master ya vale 1 |
 | Registro del rol | `subagent="$(json_tool_input_string subagent_type)"`, línea 3223, y `record_agent` |
 | Crédito al cerrar | precedente en codex: `saikit_codex_role_event`, línea 1592 |
 | Veto de `PreToolUse` | `pretool_merge_guard`, línea 4582; la comparación con `Bash` exacto está en la 4585. Acepta `tool_name` exacto `Bash` o `bash`. `bash_input` es OTRA herramienta de Muse (escribe en un bash ya corriendo), no una clave de `tool_input`: un `PreToolUse` con `tool_name` `bash_input` sale `emit_allow` aunque traiga `gh pr merge`, y eso se declara como límite en el PR |
@@ -242,10 +249,11 @@ de la primera clave por `tr -d '\\' | grep -q '"status":"ready"'` sobre todo el
 **Datos medidos que fijan el diseño:**
 
 - El `PostToolUse` de `subagent_spawn` llega al aceptar la tarea, con
-  `tool_response` como texto JSON: `status` vale `accepted` o `rejected` y
-  trae `subagent_id`. El cierre es `PostToolUse subagent_wait` (o
-  `subagent_read_result`) con `status: ready` y el mismo `subagent_id`.
-  Fixtures 06, 10 y 15.
+  `tool_response` como texto JSON: `status` vale `accepted` (fixture 10, trae
+  `subagent_id`) o `rejected` (fixture 06, NO trae `subagent_id`). El cierre
+  medido es `PostToolUse subagent_wait` con `status: ready` y el mismo
+  `subagent_id` (fixture 15). `subagent_read_result` se acredita igual por
+  diseño, pero su forma no está medida (derivado d).
 - En `Stop`, el camino actual de claude bloquea en Muse: JSON, motivo a
   stderr y `exit 2`. No inviertas el exit como en codex o grok. Evidencia:
   `complementarias/stop-semantica.txt`.
@@ -288,7 +296,7 @@ la golden.
 | `tests/lib/gate_cases.sh`, `tests/lib/hook_lab.sh` | `agents/`, `recetas/`, `skills/` |
 | `tests/test_gate_mutations.sh` | `Plans.md`, `docs/` |
 | `tests/test_host_muse.sh` (nuevo, opcional) | |
-| `tests/fixtures/muse/` (nuevo) | |
+| `tests/fixtures/muse/` (nuevo), salvo `muse-falso.sh` y `herramientas-muse.txt`, que son del PR B | |
 | `tests/golden/baseline.txt` (SOLO las tres líneas de cabecera) | |
 
 ## PR B: 23.3 y 23.4 juntas, el instalador y los perfiles
@@ -302,13 +310,23 @@ dos tocan `tools/install-hook.sh`: un PR apilado contradice `AGENTS.md`
 **Qué verá un usuario:** `bash tools/install-hook.sh --host muse --dry-run`
 dice qué registraría y dónde, y el catálogo de agentes lista `implementer`,
 `verifier`, `reviewer` y `adversary`. El dry-run se corre en la caja aislada
-de la regla 2, en dos pasos: primero `bash tools/install-hook.sh` sin
-`--host`, para dejar la copia de claude en `$caja/home/.claude/hooks` (el
-preflight la exige idéntica); después
-`SAIKIT_MUSE_BIN="$MUSE" bash tools/install-hook.sh --host muse --dry-run`,
-con `$MUSE` resuelto antes de aislar `HOME`, porque en la caja no existe
-`$HOME/.local/bin`. El gate completo en Muse requiere además el hook de
-la 23.2 desplegado en `~/.claude/hooks` por el lead: esa corrida es del lead.
+de la regla 2, con estos comandos literales desde la raíz del repo:
+
+```bash
+mkdir -p "$caja/xdg/muse"
+aislado() { env HOME="$caja/home" XDG_CONFIG_HOME="$caja/xdg" XDG_DATA_HOME="$caja/data" \
+  XDG_STATE_HOME="$caja/state" XDG_CACHE_HOME="$caja/cache" "$@"; }
+aislado /opt/homebrew/bin/bash tools/install-hook.sh          # copia de claude en la caja; el preflight la exige idéntica
+aislado env SAIKIT_MUSE_BIN="$MUSE" /opt/homebrew/bin/bash tools/install-hook.sh --host muse --dry-run
+```
+
+`$MUSE` se resuelve antes de aislar `HOME`, porque en la caja no existe
+`$HOME/.local/bin`. El gate completo en Muse requiere además el hook de la
+23.2 desplegado en `~/.claude/hooks`. El preflight de este PR no comprueba que
+la copia de claude ya reconozca muse: si el PR B se instalara en un perfil
+real antes de desplegar el PR A, Muse quedaría registrado contra un hook que
+lo trata como host `other`, sin ceremonia. Declara ese límite en el PR; el
+orden de despliegue lo controla el lead.
 
 **Contrato:** las filas 23.3 y 23.4 de `Plans.md`. Puntos de entrada en
 `tools/install-hook.sh`:
@@ -318,7 +336,7 @@ la 23.2 desplegado en `~/.claude/hooks` por el lead: esa corrida es del lead.
 | Patrón a copiar: host que reusa la copia de claude y escribe un JSON de usuario | `zcode_instalar` (línea 694), `zcode_quitar` (847), `zcode_harness_cmd` (478) |
 | Resolvedor de bash POSIX | la rama de Task 18.15 dentro de `zcode_bash_win` (línea 441) |
 | Validación de `--host` y guardas de `--dest` | el `if` de la línea 165 y los bloques que le siguen |
-| Conjunto autoritativo de `--check` | comentario de la línea 2142; el `if [ "$HOST" = "kimi" ] ... ]` de la línea 281 a 291 |
+| Conjunto autoritativo de `--check` | comentario de la línea 2142; la guarda que rechaza `--check --host` en hosts sin copia propia está en las líneas 288 a 291 (bloque de la 278 a la 292) |
 | Verificador de registro | `tools/check-hook-registration.sh`, con sus modos zcode y codex como patrón |
 | Traducción de un perfil por host | `agente_traducido`, línea 1083 |
 | Máquina de estados de perfiles | `instalar_agentes_con_vendor`, línea 2519 |
@@ -335,9 +353,11 @@ la 23.2 desplegado en `~/.claude/hooks` por el lead: esa corrida es del lead.
   `session`), `UserPromptSubmit` (fase `prompt`), `PreToolUse` (matcher
   `bash`, sin fase), `PostToolUse` (matcher `bash`, `edit_file`,
   `write_file`, `subagent_spawn`, `subagent_wait` y `subagent_read_result`
-  separados por barra vertical, fase `tool`), `Stop` (fase `stop`). Todos con
-  `timeout` 30 segundos: es medido que el corte por timeout en Muse es
-  SILENCIOSO, el host falla abierto.
+  separados por barra vertical, fase `tool`), `Stop` (fase `stop`). `timeout`
+  30 segundos en todos salvo `Stop`, que lleva 600 como en grok
+  (install-hook.sh:981 y 1045). Medido: el corte por timeout en Muse es
+  SILENCIOSO y el host falla abierto, así que un `Stop` cortado deja pasar el
+  turno sin gate; por eso el margen.
 - Comando:
   `SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=<fase> "<bash>" "<DEST>" --saikit-harness-id 23.3`
   (sin el prefijo de fase donde no hay fase). `<DEST>` es la copia de claude,
@@ -366,31 +386,41 @@ la 23.2 desplegado en `~/.claude/hooks` por el lead: esa corrida es del lead.
   comandos ajenos pasan a `/usr/bin/true` y NUESTROS comandos pasan a
   `touch <caja>/<Evento>`; (3) `exec --no-session-log --provider echo "ping"`;
   (4) válido si rc 0, sin `malformed settings`, las líneas de DETALLE de avisos
-  del candidato son un subconjunto de las del actual (los previos se
-  reportan, no bloquean), y EXISTEN las marcas `<caja>/UserPromptSubmit` y
-  `<caja>/Stop`. Las líneas de detalle son las que empiezan con
-  `muse:   settings.json:` (tres espacios). La línea resumen
-  `muse: Hooks: N runnable · M warning` NO se compara: su conteo `runnable`
-  cambia siempre que el candidato agrega hooks. Medido en 1.3.0: con un evento
-  ajeno inválido, actual y candidato comparten la línea de detalle
-  `UnsupportedEvent` y solo difieren en el resumen. El aviso
+  del candidato son un subconjunto de las del actual, el conteo `M` de avisos
+  es igual en los dos (sin línea resumen, `M` es 0), y EXISTEN las marcas
+  `<caja>/SessionStart`, `<caja>/UserPromptSubmit` y `<caja>/Stop`. Los avisos
+  previos se reportan y no bloquean. Las líneas de detalle son las que
+  empiezan con `muse:   settings.json:` (tres espacios). De la línea resumen
+  `muse: Hooks: N runnable · M warning` solo se compara `M`: `N` cambia
+  siempre que el candidato agrega hooks. Medido en 1.3.0, stderr crudo en
+  `complementarias/validacion-pareada.txt`: cada aviso trae su línea de
+  detalle; con un aviso ajeno previo, actual y candidato comparten la línea
+  de detalle y el mismo `M`, y solo cambia `N`; un grupo NUESTRO sin `hooks`
+  agrega la línea de detalle `MalformedConfig: hook matcher group must declare
+  hooks` y además apaga todas las marcas. El aviso
   `Agent delegation: auto unavailable: workspace is untrusted` sale en toda
-  validación aislada: es esperado y no cuenta como aviso. Casos: un aviso ajeno previo sí instala; un aviso nuevo
-  nuestro no instala; un bloque escrito `Hooks` (mayúscula) se rechaza por
-  falta de marcas; un JSON roto se rechaza. `--quitar-muse` solo exige que el
+  validación aislada: es esperado y no cuenta como aviso. Casos: un aviso
+  ajeno previo sí instala; un grupo nuestro de `PreToolUse` sin `hooks` no
+  instala; un bloque escrito `Hooks` (mayúscula) se rechaza por falta de
+  marcas; un JSON roto se rechaza. `--quitar-muse` solo exige que el
   resultado parsee y no necesita binario. `--dry-run` también valida (no
   escribe en el perfil).
 - **Muse falso para el CI.** El CI corre en `ubuntu-latest` y no tiene Muse.
   En los tests, `SAIKIT_MUSE_BIN` apunta a `tests/fixtures/muse/muse-falso.sh`,
-  un script bash que imita lo medido en `validacion-settings.txt`: lee
-  `$XDG_CONFIG_HOME/muse/settings.json` con `jq`; con JSON roto, sin
-  `schema_version` o con `schema_version` distinto de 1, escribe
-  `malformed settings …` a stderr y sale 1; por cada evento no soportado bajo
-  `hooks` imprime el resumen y la línea de detalle
-  `muse:   settings.json: UnsupportedEvent: …`; ejecuta los `command` de
-  `.hooks.UserPromptSubmit` y `.hooks.Stop` (solo la clave `hooks` en
-  minúscula) y sale 0. Una mutación que haga que el instalador ignore la falta
-  de marcas debe ponerse roja con el caso `Hooks`. Los mismos cuatro casos de
+  un script bash que imita lo medido en `validacion-settings.txt` y
+  `validacion-pareada.txt`: lee `$XDG_CONFIG_HOME/muse/settings.json` con
+  `jq`; con JSON roto, sin `schema_version` o con `schema_version` distinto de
+  1, escribe `malformed settings …` a stderr y sale 1; por cada evento no
+  soportado bajo `hooks` imprime la línea de detalle
+  `muse:   settings.json: UnsupportedEvent: …`, y por cada grupo sin `hooks`
+  la de `MalformedConfig: …`; si hay avisos imprime además el resumen
+  `muse: Hooks: N runnable · M warning`; si algún grupo carece de `hooks` no
+  ejecuta ningún comando; si no, ejecuta los `command` de
+  `.hooks.SessionStart`, `.hooks.UserPromptSubmit` y `.hooks.Stop` (solo la
+  clave `hooks` en minúscula) y sale 0. Dos mutaciones tienen que ponerse
+  rojas: la que hace que el instalador ignore la falta de marcas (la mata el
+  caso `Hooks`) y la que quita la comparación de detalle y de `M` (la mata el
+  caso del grupo nuestro sin `hooks`). Los mismos cuatro casos de
   validación se corren además una vez con el binario real en la Mac, en la
   caja de la regla 2, y su salida se pega en el PR.
 - Settings ausente: si no existe el directorio
@@ -402,7 +432,10 @@ la 23.2 desplegado en `~/.claude/hooks` por el lead: esa corrida es del lead.
   `.muse/hooks.json` de proyecto: doble registro es doble ejecución en
   paralelo, medido en `doble-registro.txt`.
 - `--check`: `--check --host muse` sale `exit 2` igual que zcode (sin copia
-  propia, reusa la de claude). `--check` sin host suma una fila de REGISTRO
+  propia, reusa la de claude). Hoy ya sale 2, pero por otra razón: la guarda
+  de la línea 165 no conoce `muse`. El caso afirma el mensaje de la guarda de
+  `--check` de las líneas 288 a 291 nombrando `muse`, no solo el código de
+  salida, y la mutación que saca `muse` de esa condición lo pone rojo. `--check` sin host suma una fila de REGISTRO
   `muse` (cinco eventos apuntando a la copia de claude), exigida solo si
   existe `${XDG_CONFIG_HOME:-$HOME/.config}/muse/`.
 
@@ -443,7 +476,7 @@ si el diseño del `--check` de este PR ya la resuelve.
 | `tools/model-routing.sh` | `recetas/`, `skills/` |
 | `tests/test_install_hook.sh`, `tests/test_hook_registration.sh`, `tests/test_install_provenance.sh`, `tests/test_model_routing.sh` | `Plans.md`, `docs/`, `README.md`, `AGENTS.md` (los actualiza la 23.7) |
 | `tests/test_install_muse_mutations.sh` (nuevo) | |
-| `tests/fixtures/muse/` | |
+| `tests/fixtures/muse/muse-falso.sh` y `tests/fixtures/muse/herramientas-muse.txt` (solo esos dos) | el resto de `tests/fixtures/muse/`, que es del PR A |
 | `.cursor/skills/verify-summonaikit/` solo si un test del feature map falla por el host nuevo | |
 
 ## Cuando algo se atora

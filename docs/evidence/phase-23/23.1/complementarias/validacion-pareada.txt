@@ -1,0 +1,65 @@
+Muse 1.3.0-R3401.1, proveedor echo, 2026-09-18 UTC. Muse totalmente aislado (HOME y los cuatro XDG_* temporales, cwd no-git).
+Script: los cinco eventos nuestros dejan una marca con touch; se lista que marcas quedaron. Stderr filtrado a las lineas de Muse relevantes (muse: Hooks, las de detalle muse:   settings.json:, muse: Agent delegation, malformed y tbh:). Se omiten local session messaging disabled y workspace root, que no son avisos; la segunda cambia en cada caja.
+
+== M1: validacion pareada actual contra candidato (stderr crudo filtrado a lineas de Muse) ==
+### inventado: ACTUAL
+rc=0 marcas=[]
+muse: Hooks: 0 runnable · 1 warning
+muse:   settings.json: UnsupportedEvent: unsupported hook event `NoExiste`
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### inventado: CANDIDATO (actual + nuestros cinco eventos)
+rc=0 marcas=[SessionStart Stop UserPromptSubmit ]
+muse: Hooks: 5 runnable · 1 warning
+muse:   settings.json: UnsupportedEvent: unsupported hook event `NoExiste`
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### ajeno_valido_mas_inventado: ACTUAL
+rc=0 marcas=[]
+muse: Hooks: 1 runnable · 1 warning
+muse:   settings.json: UnsupportedEvent: unsupported hook event `NoExiste`
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### ajeno_valido_mas_inventado: CANDIDATO (actual + nuestros cinco eventos)
+rc=0 marcas=[SessionStart Stop UserPromptSubmit ]
+muse: Hooks: 6 runnable · 1 warning
+muse:   settings.json: UnsupportedEvent: unsupported hook event `NoExiste`
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### grupo_sin_hooks: ACTUAL
+rc=0 marcas=[]
+muse: Hooks: 0 runnable · 1 warning
+muse:   settings.json: UnsupportedHandler: D66: unknown matcher-group field `command` may narrow execution, so this group is skipped
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### grupo_sin_hooks: CANDIDATO (actual + nuestros cinco eventos)
+rc=0 marcas=[SessionStart Stop UserPromptSubmit ]
+muse: Hooks: 5 runnable · 1 warning
+muse:   settings.json: UnsupportedHandler: D66: unknown matcher-group field `command` may narrow execution, so this group is skipped
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### candidato con NUESTRO grupo PreToolUse sin hooks (sobre actual vacio)
+rc=0 marcas=[]
+muse: Hooks: 0 runnable · 1 warning
+muse:   settings.json: MalformedConfig: hook matcher group must declare `hooks`
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+== M2: la validacion ejecuta mcpServers? ==
+### settings con un mcpServers stdio que deja marca
+rc=0 marcas=[MCP_EJECUTADO ]
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+== M3: Muse ejecuta los hooks de ~/.claude/settings.json? ==
+### HOME con .claude/settings.json que registra UserPromptSubmit y Stop
+rc=0 marcas=[]
+muse: Agent delegation: auto unavailable: workspace is untrusted.
+
+### mismo, ademas con <repo>/.claude/settings.json y workspace confiado
+rc=0 marcas=[]
+
+== M4: el proveedor echo no detecta tools con nombres de Claude ==
+### perfil con tools: Read, Bash en $XDG_CONFIG_HOME/muse/agents
+Use an exact listed id:\n- general-purpose\n- tools-claude\n- workflow-subagent
+menciones de unknown_tool en el export: 0
+
+fin

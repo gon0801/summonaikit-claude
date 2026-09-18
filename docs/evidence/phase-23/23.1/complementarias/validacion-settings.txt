@@ -14,9 +14,13 @@ clave desconocida en la raiz        0  (sin linea Hooks:)
 JSON roto                           1  malformed settings file at …/muse/settings.json: …
 clave desconocida dentro de "agents" 1  malformed settings file … unknown field … (medido en 23.1)
 
-Regla: el candidato es valido solo si rc=0, no aparece "malformed settings" y
-no aparece ninguna linea "muse: Hooks: … warning". La linea "Hooks:" solo se
-imprime cuando hay advertencias.
+Regla de la primera pasada, REEMPLAZADA: decia que el candidato es valido
+solo si rc=0, sin "malformed settings" y sin ninguna linea "muse: Hooks: …
+warning". La regla vigente es diferencial y positiva (fila 23.3 de Plans.md).
+Nota: en esta tabla la columna stderr muestra solo la primera linea; cada
+aviso trae ademas su linea de detalle "muse:   settings.json: …", como se ve
+crudo en validacion-pareada.txt. La linea "Hooks:" solo se imprime cuando
+hay advertencias.
 `muse config validate` NO sirve: valida documentos empresariales, no el settings.json del usuario.
 
 
