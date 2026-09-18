@@ -982,6 +982,53 @@ printf '%s' "$out_sh" | grep -q 'unknown' \
 printf '%s' "$out_sh" | grep -qi 'hash distinto\|ausente o con hash' \
   && malo "sin binario de hash NO debe acusar integridad rota: $out_sh"
 
+# -------------------------------- 23.3 — modo muse (forma Claude hooks.<Evento>)
+escribir_muse_completo() {
+  cat > "$1" <<'JSON'
+{
+  "schema_version": 1,
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=session bash \"/tmp/claude/hooks/summonaikit-harness.sh\" --saikit-harness-id 23.3", "timeout": 30 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=prompt bash \"/tmp/claude/hooks/summonaikit-harness.sh\" --saikit-harness-id 23.3", "timeout": 30 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "bash", "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=muse bash \"/tmp/claude/hooks/summonaikit-harness.sh\" --saikit-harness-id 23.3", "timeout": 30 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "bash|edit_file|write_file|subagent_spawn|subagent_wait",
+        "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=tool bash \"/tmp/claude/hooks/summonaikit-harness.sh\" --saikit-harness-id 23.3", "timeout": 30 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=stop bash \"/tmp/claude/hooks/summonaikit-harness.sh\" --saikit-harness-id 23.3", "timeout": 600 } ] }
+    ]
+  }
+}
+JSON
+}
+
+caso "muse: registro completo (--muse-settings) => SILENCIO y exit 0"
+escribir_muse_completo "$tmp/muse-completo.json"
+out="$(bash "$tool" --muse-settings "$tmp/muse-completo.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "muse completo: esperaba exit 0, dio $rc"
+[ -z "$out" ] || malo "muse completo debe callar, dijo: $out"
+
+caso "muse: forma zcode hooks.events pasado como --muse-settings => INCOMPLETO"
+escribir_zcode_completo "$tmp/muse-como-zcode.json"
+out="$(bash "$tool" --muse-settings "$tmp/muse-como-zcode.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'INCOMPLETO\|falt' \
+  || malo "muse no debe interpretar hooks.events: $out"
+
+caso "muse: --muse-settings + --settings juntos => unknown"
+escribir_muse_completo "$tmp/muse-mix.json"
+escribir_settings_completo "$tmp/cl-mix-muse.json"
+out="$(bash "$tool" --muse-settings "$tmp/muse-mix.json" --settings "$tmp/cl-mix-muse.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "mezclar muse+claude => unknown: $out"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_hook_registration: FAIL" >&2
   exit 1

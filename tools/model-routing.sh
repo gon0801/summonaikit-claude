@@ -31,7 +31,7 @@ decir() { printf '%s\n' "$*" >&2; }
 uso() {
   cat <<'EOF'
 Uso:
-  tools/model-routing.sh --host claude|zcode|grok|kimi|dsh
+  tools/model-routing.sh --host claude|zcode|grok|kimi|dsh|muse
                          (--role implementer|verifier|reviewer|adversary | --tier standard|verify|review)
                          [--field model|effort|effort-key|tier]
                          [--format json|frontmatter]
@@ -181,8 +181,11 @@ case "$HOST" in
     esac
     ;;
   kimi)
-    # Fila VACIA DEFINITIVA, no pendiente (medido en la Task 12.3): el host
-    # no acepta model: ni effort: por agente. Ver tests/test_model_routing.sh.
+    # Fila VACIA DEFINITIVA (Task 12.3): el host no acepta model ni effort
+    # por agente.
+    : ;;
+  muse)
+    # Fila VACIA como kimi (23.1/23.4): model concreto = KnownFieldInactive.
     : ;;
   dsh)
     # Phase 15 (D6): fila VACIA A PROPOSITO. dsh declara que el subagente

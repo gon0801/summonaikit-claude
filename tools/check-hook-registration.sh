@@ -57,6 +57,9 @@ VIO_GROK=0
 DSH_HOME=''
 DSH_BASH=''
 VIO_DSH=0
+# 23.3: forma Claude (hooks.<Evento>) en el settings de Muse.
+MUSE_SETTINGS=''
+VIO_MUSE=0
 
 reportar() { printf '%s\n' "$*"; }
 
@@ -70,7 +73,7 @@ reportar() { printf '%s\n' "$*"; }
 # exactamente `unknown`: no se miro nada, y no se afirma nada.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper|--grok-hooks-dir|--dsh-home|--bash)
+    --settings|--local-settings|--hook-name|--zcode-config|--codex-hooks-json|--codex-wrapper|--grok-hooks-dir|--dsh-home|--bash|--muse-settings)
       if [ $# -lt 2 ]; then
         reportar "[summonaikit] REGISTRO DEL HOOK: unknown — falta el valor de $1; no se verifico nada."
         reportar "              No se afirma que el registro falte: no se pudo mirar."
@@ -86,6 +89,7 @@ while [ $# -gt 0 ]; do
         --grok-hooks-dir)  GROK_HOOKS_DIR="$2"; VIO_GROK=1 ;;
         --dsh-home)        DSH_HOME="$2"; VIO_DSH=1 ;;
         --bash)            DSH_BASH="$2" ;;
+        --muse-settings)   MUSE_SETTINGS="$2"; VIO_MUSE=1 ;;
       esac
       shift 2
       ;;
@@ -98,8 +102,8 @@ done
 # registra en su propio archivo). Mezclarlos no tiene sentido y leer la forma
 # equivocada daria silencio o INCOMPLETO falsos. Fail-open: unknown, exit 0.
 # Task 7.5: --grok-hooks-dir entra en la misma regla. Phase 15: --dsh-home igual.
-if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX + VIO_GROK + VIO_DSH)) -gt 1 ]; then
-  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config, --codex-hooks-json, --grok-hooks-dir y --dsh-home son mutuamente excluyentes."
+if [ $((VIO_CLAUDE + VIO_ZCODE + VIO_CODEX + VIO_GROK + VIO_DSH + VIO_MUSE)) -gt 1 ]; then
+  reportar "[summonaikit] REGISTRO DEL HOOK: unknown — --settings, --zcode-config, --codex-hooks-json, --grok-hooks-dir, --dsh-home y --muse-settings son mutuamente excluyentes."
   reportar "              Cada host registra en su propio archivo; no se verifico nada."
   reportar "              No se afirma que el registro falte: no se pudo mirar."
   exit 0
@@ -129,6 +133,11 @@ if [ "$VIO_GROK" -gt 0 ]; then
   MODO="grok"
   [ -n "$GROK_HOOKS_DIR" ] || GROK_HOOKS_DIR="${HOME:-}/.grok/hooks"
   SETTINGS="$GROK_HOOKS_DIR/summonaikit.json"
+  LOCAL_SETTINGS=''
+fi
+if [ "$VIO_MUSE" -gt 0 ]; then
+  MODO="muse"
+  SETTINGS="$MUSE_SETTINGS"
   LOCAL_SETTINGS=''
 fi
 
@@ -310,6 +319,8 @@ def _segmento_ejecuta(segmento, hook):
 # Las fases que el gate necesita para funcionar. Si falta cualquiera, el hook
 # existe pero deja de correr en ese punto del turno.
 ESPERADAS = ["UserPromptSubmit", "PostToolUse", "Stop"]
+if modo == "muse":
+    ESPERADAS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
 
 # Matcher de PostToolUse (Task 3.7 / CORRECCION 2): un subagente que solo use
 # herramientas fuera del matcher (Read/Grep/Glob) no genera ningun evento para
@@ -331,6 +342,10 @@ def _matcher_cubre(m, modo):
     # PostToolUse y ptu-alias='...|Task' disparo). Cubre cualquiera de las dos.
     if modo == "grok":
         if rx.search("spawn_subagent") is not None or rx.search("Task") is not None:
+            return (True, True)
+        return (False, True)
+    if modo == "muse":
+        if rx.search("subagent_spawn") is not None:
             return (True, True)
         return (False, True)
     if rx.search("Agent") is not None:
