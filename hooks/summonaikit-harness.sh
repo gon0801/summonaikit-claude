@@ -1984,7 +1984,7 @@ Review: ...
 Close: ...
 Retro: ...
 ADVERSARY: N findings, highest severity X — required ONLY in receipts of turns where an adversary actually ran (any lane); presence only, the numbers are never checked. ROLE FALLBACK: ADVERSARY (reason) substitutes the line when the dispatched adversary died without reporting.
-VERIFIED BY SUBAGENT: <comando y resultado> — declaration ONLY for a receipt on a host whose INTERNAL channel is blind, i.e. the harness cannot see a delegated subagent's tool events (zcode today; kimi once measured). When you delegated verification to a verifier subagent and its evidence never reached the harness, name the exact command and its SUCCESS result here, on the SAME line as the label (e.g. `VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0`); the harness reads the command and result only from the label's own line, so a command placed on the next line is not seen. A human re-runs the named command. Invalid on hosts that DO surface those events — there keep the real evidence; a declared failure (failed / exit non-zero) never counts. Golden: the 2026-08-25 zcode live turn (already documented in the smoke doc).
+VERIFIED BY SUBAGENT: <comando y resultado> — declaration ONLY for a receipt on a host whose INTERNAL channel is blind, i.e. the harness cannot see a delegated subagent's tool events (zcode and Muse today; kimi once measured). When you delegated verification to a verifier subagent and its evidence never reached the harness, name the exact command and its SUCCESS result here, on the SAME line as the label (e.g. `VERIFIED BY SUBAGENT: python -m py_compile app.py exit 0`); the harness reads the command and result only from the label's own line, so a command placed on the next line is not seen. A human re-runs the named command. Invalid on hosts that DO surface those events — there keep the real evidence; a declared failure (failed / exit non-zero) never counts. Golden: the 2026-08-25 zcode live turn (already documented in the smoke doc).
 
 Final receipt required before stopping (write every line in plain, clear language):
 SUMMONAIKIT HARNESS RECEIPT
@@ -3436,6 +3436,9 @@ record_tool_evidence() {
   # reviewer sequence. Se lee SOLO de `tool_input` de primer nivel: el resto del
   # payload trae el resultado de la herramienta, que el turno no escribio (A1).
   subagent="$(json_tool_input_string subagent_type)"
+  # saikit-23.9-muse-role: Muse lanza el hijo con `role` (agent_path main/<role>/N);
+  # subagent_type no esta en su esquema y el modelo no lo manda (vivo 23.6).
+  if [ "$HOST" = "muse" ]; then subagent="$(json_tool_input_string role)"; fi
   # Task 7.3 (D4): tres canales medidos en Grok (7.1 ronda 5) — el despacho
   # spawn_subagent SI emite post_tool_use con toolInput.subagent_type (a
   # diferencia de Codex), y los eventos SubagentStart/internos del hijo traen

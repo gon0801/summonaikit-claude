@@ -112,6 +112,7 @@ G1|muse_recorte_sin_ancla|el recorte de muse vuelve a cortar en la primera apari
 G1|muse_minimo_sin_aviso|el contrato minimo de muse vuelve a descartar el aviso de revision, que ya se consumio y se pierde
 G1|muse_contrato_sin_recorte|el contrato de muse vuelve a mandar las secciones genericas completas y, con el recetario real, solo llega el contrato minimo en vez del normal
 G1|muse_contrato_sin_tope|el tope duro de muse se quita y un contrato que no cabe en 16384 bytes llega entero, y Muse lo descarta en silencio
+G1|muse_contrato_sin_host_ciego|el contrato vuelve a nombrar solo a zcode como host ciego y el modelo de Muse no sabe que VERIFIED BY SUBAGENT es su via
 G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
 G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
@@ -257,6 +258,7 @@ G3|muse_keep_pendiente_vacio|write_state deja de conservar muse_pending y un wri
 G3|muse_status_sin_first|json_muse_first_status deja de exigir que status sea la primera clave y un tool_response reordenado acredita
 G3|muse_spawn_sin_accepted|el despacho deja de exigir status accepted y un rejected con subagent_id deja pendiente
 G3|muse_wait_ignora_id|el wait deja de exigir que el subagent_id de la respuesta coincida y un id distinto acredita
+G3|muse_rol_de_subagent_type|en muse el rol se vuelve a leer de subagent_type y un despacho real, que solo trae role, no acredita nada
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 "
@@ -599,6 +601,7 @@ mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/';
 mut_muse_tope_borde_ge() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \]/if [ "$_mt_bytes" -ge "$MUSE_HOOK_STDOUT_MAX" ]/'; }
 mut_muse_recorte_sin_ancla() { sed "s/cab=\"\${1%%\$'\\\\n\\\\n'\"Capability-first contract (\"\*}\"/cab=\"\${1%%\"Capability-first contract (\"*}\"/"; }
 mut_muse_minimo_sin_aviso() { sed 's|/^SAIKIT REVIEW NOTICE:/ \|\| ||'; }
+mut_muse_contrato_sin_host_ciego() { sed 's/(zcode and Muse today; kimi once measured)/(zcode today; kimi once measured)/'; }
 mut_muse_contrato_sin_recorte() { sed '/saikit-23.8-muse-contrato-corto/,+2s/_hc="$(muse_contrato_corto "$_hc")"/_hc="$_hc"/'; }
 mut_muse_contrato_sin_tope() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \] 2>\/dev\/null; then/if false; then/'; }
 mut_muse_no_es_ciego() { sed '/saikit-23.2-muse-ciego/s/ || \[ "$HOST" = "muse" \]//'; }
@@ -1294,6 +1297,9 @@ mut_muse_wait_ignora_id() {
 }
 mut_muse_pretool_solo_Bash() {
   sed 's/if \[ "\$_pt_tool" != "Bash" \] && \[ "\$_pt_tool" != "bash" \]; then/if [ "$_pt_tool" != "Bash" ]; then/'
+}
+mut_muse_rol_de_subagent_type() {
+  sed '/saikit-23.9-muse-role/,+2s/then subagent="$(json_tool_input_string role)"; fi/then :; fi/'
 }
 mut_muse_pretool_trata_bash_input() {
   sed 's/!= "bash" \]; then/!= "bash" ] \&\& [ "$_pt_tool" != "bash_input" ]; then/'
