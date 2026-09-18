@@ -79,35 +79,47 @@ Leído en `hooks/summonaikit-harness.sh` contra los fixtures de arriba.
    ya usa en grok: `SubagentStart` anuncia `subagent_id` y `child_session_id`,
    y el `PostToolUse` del despacho en el padre trae el mismo `subagent_id`.
 
+## Mediciones complementarias (2026-09-18, antes del brief)
+
+Cerraron seis de los `unknown` de la primera pasada. Evidencia en
+`docs/evidence/phase-23/23.1/complementarias/`. Todo con el proveedor `echo`
+salvo el turno real que midió `matcher`, veto y `tools:`.
+
+| Pregunta | Medido | Evidencia |
+|---|---|---|
+| ¿Bloquea `Stop` con `exit 2`? | Sí, **si stderr trae texto**: ese texto entra al modelo y el JSON del stdout se ignora. `exit 2` sin stderr no bloquea. `exit 0` con `{"decision":"block",…}` también bloquea. El camino de Claude del hook (JSON, `$feedback` a stderr y `exit 2`) bloquea en Muse sin cambios | `stop-semantica.txt` |
+| ¿Tope de continuaciones de `Stop`? | 8 seguidas; el noveno `Stop` cierra el turno. El `MAX_CYCLES=2` del hook corta antes | `stop-semantica.txt` |
+| ¿`continue:false`? | Termina el turno en el primer `Stop` | `stop-semantica.txt` |
+| ¿Filtra el `matcher` por `tool_name`? | Sí. `bash\|write_file\|subagent_spawn` atrapó `bash` y `subagent_spawn` y no las otras. `Bash\|Write\|Edit` también atrapó `bash`: no se distinguió si es por mayúsculas o por un alias de Claude, así que el registro usa los nombres de Muse | `turno-real-log-hooks.txt` |
+| ¿`PreToolUse` con `permissionDecision: deny`? | Bloquea: el comando no corre y el modelo recibe `tool blocked by hook: <permissionDecisionReason>` | `turno-real-resultados.txt` |
+| ¿`tools:` con nombres de Claude? | El perfil entra al catálogo, pero **el despacho se rechaza**: `` `tools-claude` tools: unknown_tool ``. Con nombres de Muse (`[read_file, bash]`) el hijo arranca con exactamente esas herramientas más las de control de subagentes. El proveedor `echo` NO detecta este rechazo | `turno-real-resultados.txt` |
+| ¿Doble registro, proyecto y usuario? | El hook corre **dos veces y en paralelo**, aunque el comando sea idéntico | `doble-registro.txt` |
+| ¿Cómo validar un settings sin efectos? | `muse config validate` no sirve (valida documentos empresariales). Arrancar Muse aislado con las cinco variables (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`) y `exec --no-session-log --provider echo "ping"` en un directorio no-git, con los `command` reemplazados por `/usr/bin/true`. JSON roto sale 1; `schema_version` ausente o distinto de `1` sale 1; un hook mal formado sale **0** y solo avisa `muse: Hooks: N runnable · M warning`. Válido = rc 0, sin `malformed settings` y sin línea `Hooks: … warning` | `validacion-settings.txt` |
+| ¿Un hook colgado se corta? | Sí, por `timeout` en segundos y en silencio: un hook que duerme 3 s con `"timeout": 1` no termina, Muse lo corta al segundo sin avisar y el turno sigue como si nada, es decir el host falla abierto | `validacion-settings.txt` |
+| ¿Un bloque mal escrito (`Hooks` en vez de `hooks`) se detecta? | No: rc 0, sin ningún error ni aviso, y ningún hook queda registrado. La validación necesita una prueba POSITIVA de que los hooks disparan, no solo la ausencia de errores | `validacion-settings.txt` |
+
+Nombres de herramienta de Muse medidos: `herramientas-muse.txt`.
+
 ## Lo que queda `unknown`
 
-- **Semántica del `matcher`.** No se midió si filtra por `tool_name` con regex
-  como en Claude. Sin matcher el hook corre en cada herramienta, incluidos los
-  recordatorios internos.
-- **`PreToolUse` con `permissionDecision: deny`.** El binario valida esa forma
-  y exige `permissionDecisionReason` no vacío, pero no se midió en vivo.
-- **`exit 2`.** No se midió en ningún evento.
-- **Tope de continuaciones de `Stop`.** Existe
-  `max_consecutive_stop_hook_continuations` en settings. No se midió su valor
-  por defecto contra el `MAX_CYCLES=2` del hook.
-- **`tools:` del perfil con nombres de Claude.** El perfil con
-  `tools: Read, Edit, Write, Glob, Grep, Bash` entra al catálogo, pero no se
-  midió si el hijo queda con esas herramientas mapeadas o sin ninguna.
-- **Doble registro.** No se midió qué pasa si un repo trae `.muse/hooks.json`
-  y el usuario tiene el mismo hook en `settings.json`.
+- **Mecanismo del `matcher` con nombres de Claude.** `Bash` atrapó `bash`,
+  pero no se midió si `Write` atrapa `write_file`. El registro usa los
+  nombres de Muse y no depende de eso.
+- **`SubagentStop` que pide continuación.** Existe en el binario; no se midió.
 - **Windows.** Solo se midió macOS. Las formas de comando de Windows no se
   infieren de estas.
-- **Lectura de `CLAUDE.md` como reglas del proyecto.** La documenta Meta; no
-  se midió acá.
+- **Reglas personales de Claude.** Muse anuncia al arrancar
+  `Including your Claude Code and Codex personal rules and N skills`. No se
+  midió qué archivos lee ni si eso cambia el contrato del gate.
 
 ## Riesgos que fijan el diseño del instalador
 
 - **Un `settings.json` mal escrito deja a Muse sin arrancar.** Salida textual
   con un campo inválido:
   `malformed settings file at …/muse/settings.json: unknown field \`ag-set\`, expected \`safe_mode\``.
-  El instalador tiene que validar el candidato antes de reemplazar. La
-  palanca existe y es gratis: `XDG_CONFIG_HOME=<temporal> muse exec --provider echo "ping"`
-  sale 1 con un settings inválido y 0 con uno válido (medido).
+  El instalador tiene que validar el candidato antes de reemplazar. El
+  código de salida no alcanza: un hook mal formado arranca con 0 y queda
+  apagado en silencio. La regla completa está en Mediciones complementarias.
 - **Muse se actualiza solo.** El contrato puede cambiar sin que nadie lo
   decida. El proveedor `echo` permite re-medirlo sin costo ni red.
 

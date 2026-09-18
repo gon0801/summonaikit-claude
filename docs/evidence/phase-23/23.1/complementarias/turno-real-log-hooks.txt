@@ -1,0 +1,12 @@
+DENY PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+C-sin PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+A-claude PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+B-muse PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+B-muse PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+C-sin PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+POST PostToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+B-muse PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+C-sin PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+POST PostToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+C-sin PreToolUse subagent_wait 01a0b29f-4b72 {"command_id": "wait-hijo2-001", "subagent_id": "01a0b29f-6853-7ff3-8796-8fbaf64e4254", "t
+POST PostToolUse subagent_wait 01a0b29f-4b72 {"command_id": "wait-hijo2-001", "subagent_id": "01a0b29f-6853-7ff3-8796-8fbaf64e4254", "t

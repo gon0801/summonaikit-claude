@@ -1,0 +1,12 @@
+Muse 1.3.0-R3401.1, proveedor echo, 2026-09-18. El mismo hook de
+UserPromptSubmit registrado en <repo>/.muse/hooks.json y en el bloque hooks
+del settings de usuario (XDG aislado). El log cuenta con un contador en disco;
+las dos lineas con fire=1 muestran que las dos corridas leyeron el contador a la
+vez: corrieron en paralelo.
+
+comando distinto (argumento proyecto / usuario):
+fire=1 ev=UserPromptSubmit argv=usuario
+fire=1 ev=UserPromptSubmit argv=proyecto
+comando identico en los dos registros:
+fire=1 ev=UserPromptSubmit argv=
+fire=1 ev=UserPromptSubmit argv=
