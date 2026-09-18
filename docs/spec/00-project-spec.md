@@ -2566,8 +2566,10 @@ premisas en `docs/task-23.1-captura-muse.md`.
   llega al aceptar, no al terminar: un `status accepted` deja el
   `subagent_id` pendiente con su rol, y el crédito llega con
   `subagent_wait` en `status ready` para ese mismo id. El rol se lee de
-  `tool_input.role`, el parámetro con el que Muse lanza al hijo;
-  `subagent_type` no está en su esquema (23.9, medido en el vivo de la 23.6).
+  `tool_input.role`, el parámetro con el que Muse lanza al hijo, y solo de
+  ahí: `subagent_type` no está en su esquema (23.9, medido en el vivo de la
+  23.6). El aviso de revisión cuenta la revisión cuando el `subagent_wait` del
+  reviewer se acredita, no al despacharlo.
 - **Contrato ≤16 KB (23.8).** Muse corta la salida de un hook en 16384 bytes y,
   si se pasa, no parsea nada (`output_too_large`). Para muse las secciones
   genéricas se recortan a reglas cortas y, si aun así no cabe, va un contrato
@@ -2588,8 +2590,11 @@ premisas en `docs/task-23.1-captura-muse.md`.
   continuación; si el `matcher` con nombres de Claude (`Write`) atrapa
   `write_file`; qué reglas personales de Claude lee Muse al arrancar.
 - **Límites declarados.** `bash tests/run.sh; echo EXIT:$?` no acredita
-  verificación en ningún host (el exit del último comando tapa el del
-  runner); `bash_input` no pasa por el veto de `PreToolUse`;
+  verificación en ningún host: el runner pegado al `;` queda fuera del límite
+  de forma del hook, que exige un espacio o el fin de línea después del runner.
+  Con `bash tests/run.sh ; echo EXIT:$?` sí acredita aunque el exit del último
+  comando tape el del runner, un hueco anterior a esta fase que queda en la
+  23.11. `bash_input` no pasa por el veto de `PreToolUse`;
   `subagent_read_result` no acredita. Muse se autoactualiza al arrancar: el
   contrato puede cambiar sin aviso, y el probe de la 23.5 sigue pendiente.
 
