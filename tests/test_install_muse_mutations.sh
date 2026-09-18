@@ -19,14 +19,19 @@ cp "$source_tool" "$mutant"
 run_driver > "$SANDBOX/control.log" 2>&1 || { cat "$SANDBOX/control.log"; exit 1; }
 
 fail=0
-for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos omitir_target_muse omitir_schema_muse omitir_dest_meta omitir_settings_dir omitir_git_ceiling; do
+for mutation in \
+  omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos omitir_target_muse \
+  omitir_schema_muse omitir_dest_meta omitir_settings_dir omitir_git_ceiling \
+  omitir_del_mcpservers omitir_true_ajeno omitir_bash_vacio omitir_bash_ge4 \
+  omitir_bash_n omitir_bin_inexistente omitir_backup omitir_quitar_agentes \
+  omitir_check_token omitir_dry_run_mudo omitir_purga_todos
+do
   case "$mutation" in
     omitir_muse_check_host)
       sed 's/ || \[ "$HOST" = "muse" \]; then/; then/' \
         "$source_tool" > "$mutant"
       expected='--check --host muse salio' ;;
     ignorar_marcas)
-      # Si las tres pruebas de marca se invierten, un Muse mudo instala.
       sed \
         -e 's/\[ ! -f "$marcas_cand\/SessionStart" \]/[ -f "$marcas_cand\/SessionStart" ]/' \
         -e 's/\[ ! -f "$marcas_cand\/UserPromptSubmit" \]/[ -f "$marcas_cand\/UserPromptSubmit" ]/' \
@@ -44,7 +49,7 @@ for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos 
     omitir_schema_muse)
       sed 's/muse_settings_aceptable "$settings" || exit 2/true/' \
         "$source_tool" > "$mutant"
-      expected='schema_version 2 debia rechazar' ;;
+      expected='debe nombrar schema_version' ;;
     omitir_dest_meta)
       sed 's/muse_dest_sin_meta || {/true || {/' \
         "$source_tool" > "$mutant"
@@ -54,9 +59,53 @@ for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos 
         "$source_tool" > "$mutant"
       expected='settings directorio debia rechazar' ;;
     omitir_git_ceiling)
-      sed 's/GIT_CEILING_DIRECTORIES="$caja" git -C/git -C/' \
+      sed '/saikit-23.3-muse-git-retry/,+10d' \
         "$source_tool" > "$mutant"
-      expected='TMPDIR bajo el clone debia instalar' ;;
+      expected='Muse no debe ver git' ;;
+    omitir_del_mcpservers)
+      sed 's/del(\.mcpServers)/./' \
+        "$source_tool" > "$mutant"
+      expected='mcpServers.command no debe ejecutarse' ;;
+    omitir_true_ajeno)
+      sed 's/then .command = "\/usr\/bin\/true"/then .command = .command/' \
+        "$source_tool" > "$mutant"
+      expected='el hook ajeno no debe ejecutarse' ;;
+    omitir_bash_vacio)
+      sed 's/if \[ "\${SAIKIT_MUSE_BASH+set}" = "set" \]; then/if [ -n "${SAIKIT_MUSE_BASH:-}" ]; then/' \
+        "$source_tool" > "$mutant"
+      expected='SAIKIT_MUSE_BASH vacia salio' ;;
+    omitir_bash_ge4)
+      sed 's/"\$bash_bin" -c '\''\[ "\${BASH_VERSINFO\[0\]}" -ge 4 \]'\'' >\/dev\/null 2>\&1 || {/true || {/' \
+        "$source_tool" > "$mutant"
+      expected='bash menor a 4 salio' ;;
+    omitir_bash_n)
+      sed 's/"\$bash_bin" -n "\$DEST" >\/dev\/null 2>\&1 || {/true || {/' \
+        "$source_tool" > "$mutant"
+      expected='bash -n fallido salio' ;;
+    omitir_bin_inexistente)
+      sed 's/\[ -n "\$SAIKIT_MUSE_BIN" \] \&\& \[ -f "\$SAIKIT_MUSE_BIN" \]/true/' \
+        "$source_tool" > "$mutant"
+      expected='BIN inexistente salio' ;;
+    omitir_backup)
+      sed 's/if ! mkdir -p "$(dirname "$bak")" || ! cp "$settings" "$bak"; then/if false; then/' \
+        "$source_tool" > "$mutant"
+      expected='no dejo backup del settings' ;;
+    omitir_quitar_agentes)
+      sed 's/^  muse_quitar_agentes$/  true/' \
+        "$source_tool" > "$mutant"
+      expected='quitar dejo el perfil' ;;
+    omitir_check_token)
+      sed "s/_mreg='falta-registro'/_mreg='ok'/" \
+        "$source_tool" > "$mutant"
+      expected='sin settings, --check debe decir falta-registro' ;;
+    omitir_dry_run_mudo)
+      sed 's/if \[ ! -f "$marcas_cand\/SessionStart" \] || \[ ! -f "$marcas_cand\/UserPromptSubmit" \] \\/if [ "$DRY_RUN" -eq 1 ]; then false; elif [ ! -f "$marcas_cand\/SessionStart" ] || [ ! -f "$marcas_cand\/UserPromptSubmit" ] \\/' \
+        "$source_tool" > "$mutant"
+      expected='dry-run mudo debia rechazar' ;;
+    omitir_purga_todos)
+      sed 's/| purgar_todos$/| ./' \
+        "$source_tool" > "$mutant"
+      expected='SubagentStart debia quedar en 0' ;;
   esac
   if cmp -s "$source_tool" "$mutant" || ! bash -n "$mutant"; then
     printf 'FAIL: mutacion %s no aplico o no parsea\n' "$mutation"; fail=1; continue
@@ -70,4 +119,4 @@ for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos 
   fi
 done
 [ "$fail" -eq 0 ] || exit 1
-printf 'test_install_muse_mutations: OK (8 mutaciones)\n'
+printf 'test_install_muse_mutations: OK (19 mutaciones)\n'

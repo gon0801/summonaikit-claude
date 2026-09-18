@@ -100,6 +100,15 @@ if [ "$m_warning" -gt 0 ]; then
 fi
 printf 'muse: Agent delegation: auto unavailable: workspace is untrusted.\n' >&2
 
+# El binario real ejecuta .mcpServers[].command al arrancar. El falso tambien,
+# para que un candidato que no borre mcpServers deje marcas y el caso lo vea.
+if jq -e '.mcpServers | type == "object"' "$settings" >/dev/null 2>&1; then
+  while IFS= read -r mcp_cmd; do
+    [ -n "$mcp_cmd" ] || continue
+    bash -c "$mcp_cmd" >/dev/null 2>&1 || true
+  done < <(jq -r '.mcpServers[]?.command // empty' "$settings")
+fi
+
 if [ "$abortar_todo" -eq 1 ]; then
   exit 0
 fi

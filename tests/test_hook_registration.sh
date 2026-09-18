@@ -1015,6 +1015,24 @@ out="$(bash "$tool" --muse-settings "$tmp/muse-completo.json" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "muse completo: esperaba exit 0, dio $rc"
 [ -z "$out" ] || malo "muse completo debe callar, dijo: $out"
 
+caso "muse: matcher sin subagent_wait nombra herramientas de Muse"
+escribir_muse_completo "$tmp/muse-sin-wait.json"
+"$py_bin" - "$tmp/muse-sin-wait.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["hooks"]["PostToolUse"][0]["matcher"] = "bash|edit_file|write_file|subagent_spawn"
+json.dump(d, open(p, "w"))
+PY
+out="$(bash "$tool" --muse-settings "$tmp/muse-sin-wait.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -Fq "subagent_spawn" \
+  || malo "el aviso muse debe nombrar subagent_spawn: $out"
+printf '%s' "$out" | grep -Fq "subagent_wait" \
+  || malo "el aviso muse debe nombrar subagent_wait: $out"
+printf '%s' "$out" | grep -Fq "'Agent'" \
+  && malo "el aviso muse no debe nombrar Agent: $out"
+
 caso "muse: forma zcode hooks.events pasado como --muse-settings => INCOMPLETO"
 escribir_zcode_completo "$tmp/muse-como-zcode.json"
 out="$(bash "$tool" --muse-settings "$tmp/muse-como-zcode.json" 2>&1)"; rc=$?

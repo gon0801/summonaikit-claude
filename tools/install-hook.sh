@@ -974,26 +974,18 @@ muse_binario() {
 }
 
 muse_bash() {
-  local cand b
+  local b
   if [ "${SAIKIT_MUSE_BASH+set}" = "set" ]; then
-    if [ -n "$SAIKIT_MUSE_BASH" ] && [ -f "$SAIKIT_MUSE_BASH" ]; then
+    if [ -n "$SAIKIT_MUSE_BASH" ] && [ -x "$SAIKIT_MUSE_BASH" ]; then
       printf '%s' "$SAIKIT_MUSE_BASH"; return 0
     fi
     return 1
   fi
-  if ! command -v cygpath >/dev/null 2>&1; then
-    if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
-      case "$b" in
-        /*) printf '%s' "$b"; return 0 ;;
-      esac
-    fi
+  if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
+    case "$b" in
+      /*) printf '%s' "$b"; return 0 ;;
+    esac
   fi
-  for cand in \
-    "C:/Program Files/Git/bin/bash.exe" \
-    "C:/Program Files (x86)/Git/bin/bash.exe" \
-    "C:/Program Files/Git/usr/bin/bash.exe"; do
-    if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
-  done
   return 1
 }
 
@@ -1035,17 +1027,6 @@ muse_settings_aceptable() {  # $1=settings existente
     return 1
   fi
   return 0
-}
-
-muse_tool_map() {
-  case "$1" in
-    Read) printf 'read_file' ;;
-    Edit) printf 'edit_file' ;;
-    Write) printf 'write_file' ;;
-    Bash) printf 'bash' ;;
-    Glob|Grep) printf 'search' ;;
-    *) printf '%s' "$1" ;;
-  esac
 }
 
 muse_ajustar_frontmatter() {
@@ -1155,6 +1136,7 @@ muse_parsear_validacion() {  # $1=stderr -> MUSE_VAL_M MUSE_VAL_DETALLE
   m=''
   MUSE_VAL_DETALLE=''
   MUSE_VAL_M=0
+  MUSE_VAL_M_MAL=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       'muse: Hooks:'*)
@@ -1166,7 +1148,12 @@ muse_parsear_validacion() {  # $1=stderr -> MUSE_VAL_M MUSE_VAL_DETALLE
         ;;
     esac
   done <<< "$1"
-  if [ -n "$m" ]; then MUSE_VAL_M="$m"; fi
+  if [ -n "$m" ]; then
+    case "$m" in
+      *[!0-9]*) MUSE_VAL_M_MAL=1; MUSE_VAL_M=0 ;;
+      *) MUSE_VAL_M="$m" ;;
+    esac
+  fi
 }
 
 muse_transformar_para_validar() {  # $1=settings $2=marcas_dir -> stdout
@@ -1180,7 +1167,7 @@ muse_transformar_para_validar() {  # $1=settings $2=marcas_dir -> stdout
               .hooks |= (if type == "array" then map(
                 if type == "object" then
                   if ((.command // "") | test("saikit-harness-id 23[.]3"))
-                  then .command = ("touch " + $marcas + "/" + $ev)
+                  then .command = ("touch " + (($marcas + "/" + $ev) | @sh))
                   elif (.command | type) == "string"
                   then .command = "/usr/bin/true"
                   else . end
@@ -1193,20 +1180,29 @@ muse_transformar_para_validar() {  # $1=settings $2=marcas_dir -> stdout
 }
 
 muse_correr_validacion() {  # $1=settings_src $2=bin -> rc; marcas en $3
-  local src="$1" bin="$2" marcas="$3" caja work xdg stderr rc
+  local src="$1" bin="$2" marcas="$3" caja work xdg stderr rc retried
   MUSE_VAL_RC=0
   MUSE_VAL_M=0
+  MUSE_VAL_M_MAL=0
   MUSE_VAL_DETALLE=''
   MUSE_VAL_STDERR=''
   caja="$(mktemp -d "${TMPDIR:-/tmp}/saikit-muse-val-XXXXXX")" || return 4
   work="$caja/work"
   xdg="$caja/xdg"
+  retried=0
   mkdir -p "$work" "$xdg/muse" "$caja/home" "$caja/data" "$caja/state" "$caja/cache" "$marcas" \
     || { rm -rf "$caja"; return 4; }
-  if GIT_CEILING_DIRECTORIES="$caja" git -C "$work" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # saikit-23.3-muse-git-retry
+  while git -C "$work" rev-parse --is-inside-work-tree >/dev/null 2>&1; do
     rm -rf "$caja"
-    return 4
-  fi
+    if [ "$retried" -eq 1 ]; then return 4; fi
+    retried=1
+    caja="$(mktemp -d "/tmp/saikit-muse-val-XXXXXX")" || return 4
+    work="$caja/work"
+    xdg="$caja/xdg"
+    mkdir -p "$work" "$xdg/muse" "$caja/home" "$caja/data" "$caja/state" "$caja/cache" "$marcas" \
+      || { rm -rf "$caja"; return 4; }
+  done
   muse_transformar_para_validar "$src" "$marcas" > "$xdg/muse/settings.json" || {
     rm -rf "$caja"; return 4
   }
@@ -1218,6 +1214,10 @@ muse_correr_validacion() {  # $1=settings_src $2=bin -> rc; marcas en $3
   )"
   rc=$?
   muse_parsear_validacion "${stderr:-}"
+  if [ "${MUSE_VAL_M_MAL:-0}" -eq 1 ]; then
+    rm -rf "$caja"
+    return 4
+  fi
   MUSE_VAL_RC="$rc"
   MUSE_VAL_STDERR="${stderr:-}"
   rm -rf "$caja"
@@ -1253,13 +1253,21 @@ muse_candidato_jq() {  # $1=src $2=bash -> stdout
     def grupo_ok(g; matcher):
       ((g | keys | map(select(. != "matcher" and . != "hooks")) | length) == 0)
       and (matcher == "" or ((g.matcher // "") == matcher));
-    def limpiar(arr; cmd; to; matcher):
-      [ (arr // [])[] | select(type=="object")
+    def es_nuestra:
+      ((.command // "") | test("saikit-harness-id 23[.]3"));
+    def purgar_arr:
+      [ .[]?
+        | select(type == "object")
         | . as $g
-        | . + {hooks: [ ((.hooks // [])[] | select(
-            ((.command // "") | test("saikit-harness-id 23[.]3") | not)
-            or (es_canon(.; cmd; to) and grupo_ok($g; matcher)) )) ]} ]
-      | map(select((.hooks // []) | length > 0));
+        | (($g.hooks // []) | map(select(es_nuestra | not))) as $kept
+        | (($g.hooks // []) | map(select(es_nuestra))) as $ours
+        | if ($ours | length) > 0 and ($kept | length) == 0 then empty
+          else $g + {hooks: $kept}
+          end ];
+    def purgar_todos:
+      if (.hooks | type) != "object" then .
+      else .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
+      end;
     def tiene(fase; cmd; to; matcher):
       any((.hooks[fase] // [])[];
         grupo_ok(.; matcher) and any((.hooks // [])[]; es_canon(.; cmd; to)));
@@ -1267,13 +1275,8 @@ muse_candidato_jq() {  # $1=src $2=bash -> stdout
       if tiene(fase; cmd; to; matcher) then .
       else .hooks[fase] = ((.hooks[fase] // []) + [grupo(cmd; to; matcher)])
       end;
-    if (.schema_version | tostring) != "1" then .schema_version = 1 else . end
-    | if (.hooks | type) != "object" then .hooks = {} else . end
-    | .hooks.SessionStart = limpiar(.hooks.SessionStart; $ss; 30; "")
-    | .hooks.UserPromptSubmit = limpiar(.hooks.UserPromptSubmit; $ups; 30; "")
-    | .hooks.PreToolUse = limpiar(.hooks.PreToolUse; $pre; 30; "bash")
-    | .hooks.PostToolUse = limpiar(.hooks.PostToolUse; $ptu; 30; "bash|edit_file|write_file|subagent_spawn|subagent_wait")
-    | .hooks.Stop = limpiar(.hooks.Stop; $stop; 600; "")
+    if (.hooks | type) != "object" then .hooks = {} else . end
+    | purgar_todos
     | asegurar("SessionStart"; $ss; 30; "")
     | asegurar("UserPromptSubmit"; $ups; 30; "")
     | asegurar("PreToolUse"; $pre; 30; "bash")
@@ -1457,6 +1460,10 @@ muse_instalar() {
     decir "[summonaikit] instalador: jq fallo al armar el candidato muse."; exit 5
   fi
   if [ -n "${SAIKIT_MUSE_PATCH_CANDIDATE:-}" ]; then
+    # Costura de test (no contrato): SAIKIT_MUSE_PATCH_CANDIDATE es un filtro jq
+    # que sucia el candidato ANTES de validar, para afirmar rechazos. Nunca se
+    # documenta como API; si llega en una corrida real, tambien sucia lo que se
+    # escribiria en el settings — limite declarado, no un atajo de instalacion.
     if ! jq "$SAIKIT_MUSE_PATCH_CANDIDATE" "$tmp_cand" > "${tmp_cand}.p"; then
       rm -f "$tmp_cand" "${tmp_cand}.p"
       [ "$actual" = "$settings" ] || rm -f "$actual"
@@ -1519,7 +1526,7 @@ muse_instalar() {
   # saikit-23.3-muse-settings-file
   muse_abortar_si_settings_dir
   muse_instalar_agentes
-  local uc_dir bak
+  local uc_dir bak local_atom
   uc_dir="$(dirname "$settings")"
   umask 077
   mkdir -p "$uc_dir" || { rm -f "$tmp_cand"; exit 5; }
@@ -1537,23 +1544,25 @@ muse_instalar() {
     decir "[summonaikit] instalador: el candidato muse no es JSON valido; settings intacto."; exit 5
   fi
   muse_abortar_si_settings_dir
-  if ! mv -f "$tmp_cand" "$settings"; then
+  local_atom="$(mktemp "$uc_dir/.saikit-muse-XXXXXX")" || {
     rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: no se pudo crear el temporal atomico en $uc_dir."; exit 5
+  }
+  if ! cp "$tmp_cand" "$local_atom" || ! mv -f "$local_atom" "$settings"; then
+    rm -f "$tmp_cand" "$local_atom"
     [ "$actual" = "$settings" ] || rm -f "$actual"
     decir "[summonaikit] instalador: el mv final fallo; settings intacto."; exit 5
   fi
+  rm -f "$tmp_cand"
   [ "$actual" = "$settings" ] || rm -f "$actual"
+  if [ ! -f "$settings" ]; then
+    decir "[summonaikit] instalador: el settings no quedo como archivo tras el mv."; exit 5
+  fi
   decir "[summonaikit] REGISTRADO: harness en el settings de muse (5 eventos, id 23.3)."
   decir "              settings: $settings"
   [ -f "${bak:-}" ] && decir "              backup:  $bak"
-  case "$(basename "$muse_bin")" in
-    muse-bin-*)
-      decir "[summonaikit] unknown — catalogo muse: la aceptacion del despacho con modelo real la mide el lead."
-      ;;
-    *)
-      decir "[summonaikit] unknown — catalogo muse: sin binario real (echo no lista unknown_tool)."
-      ;;
-  esac
+  decir "[summonaikit] unknown — catalogo muse: la aceptacion del despacho con modelo real la mide el lead."
 }
 
 muse_quitar() {
@@ -1594,13 +1603,19 @@ muse_quitar() {
   if ! cp "$settings" "$bak"; then
     rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo respaldar el settings."; exit 5; fi
   if ! jq '
-    def quitar_grupos(arr):
-      [ (arr // [])[] | select(. | type == "object")
-        | . + {hooks: [ ((.hooks // [])[] | select(
-            ((.command // "") | test("saikit-harness-id 23[.]3") | not) )) ]} ]
-      | map(select((.hooks | length) > 0));
+    def es_nuestra:
+      ((.command // "") | test("saikit-harness-id 23[.]3"));
+    def purgar_arr:
+      [ .[]?
+        | select(type == "object")
+        | . as $g
+        | (($g.hooks // []) | map(select(es_nuestra | not))) as $kept
+        | (($g.hooks // []) | map(select(es_nuestra))) as $ours
+        | if ($ours | length) > 0 and ($kept | length) == 0 then empty
+          else $g + {hooks: $kept}
+          end ];
     if (.hooks | type) == "object"
-    then .hooks = (.hooks | with_entries(.value |= quitar_grupos(.)))
+    then .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
     else . end
   ' "$settings" > "$tmp_new"; then
     rm -f "$tmp_new"

@@ -345,7 +345,8 @@ def _matcher_cubre(m, modo):
             return (True, True)
         return (False, True)
     if modo == "muse":
-        if rx.search("subagent_spawn") is not None:
+        if (rx.search("subagent_spawn") is not None
+                and rx.search("subagent_wait") is not None):
             return (True, True)
         return (False, True)
     if rx.search("Agent") is not None:
@@ -635,6 +636,14 @@ reportar_matcher() {
       reportar "              Efecto: la delegacion de subagentes no genera eventos para el gate"
       reportar "              y el rol no se registra, aunque el subagente haya corrido."
       reportar "              Se arregla en summonaikit.json: agregar spawn_subagent o Task al matcher."
+      return 0
+    fi
+    if [ "$MODO" = "muse" ]; then
+      reportar "[summonaikit] REGISTRO DEL HOOK: el matcher de PostToolUse no cubre 'subagent_spawn' y 'subagent_wait'."
+      reportar "              matcher observado: ${matchers_obs:-(sin matcher)}"
+      reportar "              Efecto: la delegacion de subagentes de Muse no genera eventos para el gate"
+      reportar "              y el rol no se registra, aunque el subagente haya corrido."
+      reportar "              Se arregla en settings.json: agregar subagent_spawn y subagent_wait al matcher."
       return 0
     fi
     reportar "[summonaikit] REGISTRO DEL HOOK: el matcher de PostToolUse no cubre 'Agent'."
