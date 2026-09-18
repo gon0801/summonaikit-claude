@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Imita Muse 1.3.0-R3401.1 contra settings.json (validacion-settings.txt /
 # validacion-pareada.txt). SAIKIT_MUSE_BIN apunta aca en CI.
+# Medido el 2026-09-18 con el binario real: evento no arreglo, grupo no objeto,
+# .hooks no arreglo y handler no objeto dan MalformedConfig y apagan TODOS los
+# hooks (0 runnable, ninguna marca), igual que un grupo sin hooks.
 set -u
 
 settings="${XDG_CONFIG_HOME:-${HOME:-}/.config}/muse/settings.json"
@@ -57,11 +60,25 @@ while [ "$idx" -lt "$n_eventos" ]; do
     m_warning=$((m_warning + 1))
     continue
   fi
+  ev_tipo="$(jq -r --arg ev "$evento" '.hooks[$ev] | type' "$settings")"
+  if [ "$ev_tipo" != "array" ]; then
+    detalle+=("muse:   settings.json: MalformedConfig: hook event \`$evento\` must be an array")
+    m_warning=$((m_warning + 1))
+    abortar_todo=1
+    continue
+  fi
   n_grupos="$(jq -r --arg ev "$evento" '(.hooks[$ev] // []) | length' "$settings")"
   g=0
   while [ "$g" -lt "$n_grupos" ]; do
     grupo_json="$(jq -c --arg ev "$evento" --argjson gi "$g" '(.hooks[$ev] // [])[$gi]' "$settings")"
     g=$((g + 1))
+    g_tipo="$(printf '%s' "$grupo_json" | jq -r 'type')"
+    if [ "$g_tipo" != "object" ]; then
+      detalle+=("muse:   settings.json: MalformedConfig: hook matcher group must be an object, found a $g_tipo")
+      m_warning=$((m_warning + 1))
+      abortar_todo=1
+      continue
+    fi
     extra="$(printf '%s' "$grupo_json" | jq -r 'keys[] | select(. != "matcher" and . != "hooks")' 2>/dev/null || true)"
     if [ -n "$extra" ]; then
       campo="$(printf '%s' "$extra" | head -1)"
@@ -72,6 +89,20 @@ while [ "$idx" -lt "$n_eventos" ]; do
     tiene_hooks="$(printf '%s' "$grupo_json" | jq -r 'has("hooks")')"
     if [ "$tiene_hooks" != "true" ]; then
       detalle+=("muse:   settings.json: MalformedConfig: hook matcher group must declare \`hooks\`")
+      m_warning=$((m_warning + 1))
+      abortar_todo=1
+      continue
+    fi
+    h_tipo="$(printf '%s' "$grupo_json" | jq -r '.hooks | type')"
+    if [ "$h_tipo" != "array" ]; then
+      detalle+=("muse:   settings.json: MalformedConfig: hook matcher group \`hooks\` must be an array, found a $h_tipo")
+      m_warning=$((m_warning + 1))
+      abortar_todo=1
+      continue
+    fi
+    malo_h="$(printf '%s' "$grupo_json" | jq -r '[.hooks[] | select(type != "object") | type][0] // empty')"
+    if [ -n "$malo_h" ]; then
+      detalle+=("muse:   settings.json: MalformedConfig: hook handler must be an object, found a $malo_h")
       m_warning=$((m_warning + 1))
       abortar_todo=1
       continue

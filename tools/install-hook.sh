@@ -1014,8 +1014,45 @@ muse_abortar_si_settings_dir() {
   exit 5
 }
 
+# Una sola definicion de la purga para instalar y para --quitar-muse. Solo
+# reescribe un grupo objeto con .hooks arreglo que contiene una entrada nuestra;
+# todo lo demas (escalares, grupos sin hooks, .hooks no arreglo) queda igual:
+# el instalador no pisa nada ajeno.
+MUSE_JQ_PURGA='
+    def es_nuestra_h:
+      (type == "object") and ((.command | type) == "string")
+      and (.command | test("saikit-harness-id 23[.]3"));
+    def purgar_arr:
+      [ .[]
+        | if (type == "object") and ((.hooks | type) == "array") and any(.hooks[]; es_nuestra_h)
+          then (.hooks | map(select(es_nuestra_h | not))) as $kept
+            | if ($kept | length) == 0 then empty else .hooks = $kept end
+          else . end ];
+    def purgar_todos:
+      if (.hooks | type) != "object" then .
+      else .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
+      end;
+'
+
+# Formas que Muse 1.3.0 rechaza con MalformedConfig, apagando TODOS los hooks
+# (medido): evento no arreglo, grupo no objeto, grupo sin hooks, hooks no
+# arreglo y handler no objeto. Una linea por forma encontrada.
+muse_hooks_mal_formados() {  # $1=settings -> stdout
+  jq -r '
+    (.hooks // {}) | to_entries[] as $e
+    | if ($e.value | type) != "array" then "hooks.\($e.key) no es un arreglo"
+      else $e.value | to_entries[] as $g
+        | if ($g.value | type) != "object" then "hooks.\($e.key)[\($g.key)] no es un objeto"
+          elif ($g.value | has("hooks") | not) then "hooks.\($e.key)[\($g.key)] no declara hooks"
+          elif ($g.value.hooks | type) != "array" then "hooks.\($e.key)[\($g.key)].hooks no es un arreglo"
+          else ($g.value.hooks | to_entries[] | select((.value | type) != "object")
+            | "hooks.\($e.key)[\($g.key)].hooks[\(.key)] no es un objeto")
+          end
+      end' "$1" 2>/dev/null
+}
+
 muse_settings_aceptable() {  # $1=settings existente
-  local sv
+  local sv mal
   # saikit-23.3-muse-schema
   sv="$(jq -r '.schema_version // empty' "$1" 2>/dev/null || true)"
   if [ "$sv" != "1" ]; then
@@ -1024,6 +1061,15 @@ muse_settings_aceptable() {  # $1=settings existente
   fi
   if jq -e 'has("hooks") and ((.hooks | type) != "object")' "$1" >/dev/null 2>&1; then
     decir "[summonaikit] instalador: hooks de muse debe ser un objeto, no un array."
+    return 1
+  fi
+  # saikit-23.3-muse-mal-formados
+  mal="$(muse_hooks_mal_formados "$1")"
+  if [ -n "$mal" ]; then
+    decir "[summonaikit] instalador: el settings de muse trae hooks mal formados; Muse los apaga todos,"
+    decir "              tambien los del kit (MalformedConfig, medido en 1.3.0). No se toco nada:"
+    decir "              corrigelos a mano y vuelve a correr."
+    printf '%s\n' "$mal" | while IFS= read -r l; do decir "              $l"; done
     return 1
   fi
   return 0
@@ -1242,7 +1288,7 @@ muse_candidato_jq() {  # $1=src $2=bash -> stdout
   cmd_ptu="$(muse_harness_cmd "$2" tool)"
   cmd_stop="$(muse_harness_cmd "$2" stop)"
   jq --arg ss "$cmd_ss" --arg ups "$cmd_ups" --arg pre "$cmd_pre" \
-     --arg ptu "$cmd_ptu" --arg stop "$cmd_stop" '
+     --arg ptu "$cmd_ptu" --arg stop "$cmd_stop" "$MUSE_JQ_PURGA"'
     def entrada(cmd; to): {type:"command", command:cmd, timeout:to};
     def grupo(cmd; to; matcher):
       (if matcher == "" then {} else {matcher: matcher} end)
@@ -1253,21 +1299,6 @@ muse_candidato_jq() {  # $1=src $2=bash -> stdout
     def grupo_ok(g; matcher):
       ((g | keys | map(select(. != "matcher" and . != "hooks")) | length) == 0)
       and (matcher == "" or ((g.matcher // "") == matcher));
-    def es_nuestra:
-      ((.command // "") | test("saikit-harness-id 23[.]3"));
-    def purgar_arr:
-      [ .[]?
-        | select(type == "object")
-        | . as $g
-        | (($g.hooks // []) | map(select(es_nuestra | not))) as $kept
-        | (($g.hooks // []) | map(select(es_nuestra))) as $ours
-        | if ($ours | length) > 0 and ($kept | length) == 0 then empty
-          else $g + {hooks: $kept}
-          end ];
-    def purgar_todos:
-      if (.hooks | type) != "object" then .
-      else .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
-      end;
     def tiene(fase; cmd; to; matcher):
       any((.hooks[fase] // [])[];
         grupo_ok(.; matcher) and any((.hooks // [])[]; es_canon(.; cmd; to)));
@@ -1602,22 +1633,8 @@ muse_quitar() {
     rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo crear el dir de backups."; exit 5; fi
   if ! cp "$settings" "$bak"; then
     rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo respaldar el settings."; exit 5; fi
-  if ! jq '
-    def es_nuestra:
-      ((.command // "") | test("saikit-harness-id 23[.]3"));
-    def purgar_arr:
-      [ .[]?
-        | select(type == "object")
-        | . as $g
-        | (($g.hooks // []) | map(select(es_nuestra | not))) as $kept
-        | (($g.hooks // []) | map(select(es_nuestra))) as $ours
-        | if ($ours | length) > 0 and ($kept | length) == 0 then empty
-          else $g + {hooks: $kept}
-          end ];
-    if (.hooks | type) == "object"
-    then .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
-    else . end
-  ' "$settings" > "$tmp_new"; then
+  # saikit-23.3-muse-purga-quitar
+  if ! jq "$MUSE_JQ_PURGA"' purgar_todos' "$settings" > "$tmp_new"; then
     rm -f "$tmp_new"
     decir "[summonaikit] instalador: jq fallo al quitar; settings intacto."; exit 5; fi
   if ! jq -e . "$tmp_new" >/dev/null 2>&1; then

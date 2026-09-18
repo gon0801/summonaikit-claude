@@ -24,7 +24,8 @@ for mutation in \
   omitir_schema_muse omitir_dest_meta omitir_settings_dir omitir_git_ceiling \
   omitir_del_mcpservers omitir_true_ajeno omitir_bash_vacio omitir_bash_ge4 \
   omitir_bash_n omitir_bin_inexistente omitir_backup omitir_quitar_agentes \
-  omitir_check_token omitir_dry_run_mudo omitir_purga_todos
+  omitir_check_token omitir_dry_run_mudo omitir_purga_todos \
+  omitir_mal_formados purga_borra_escalares purga_reescribe_ajenos
 do
   case "$mutation" in
     omitir_muse_check_host)
@@ -106,6 +107,18 @@ do
       sed 's/| purgar_todos$/| ./' \
         "$source_tool" > "$mutant"
       expected='SubagentStart debia quedar en 0' ;;
+    omitir_mal_formados)
+      sed 's/mal="$(muse_hooks_mal_formados "$1")"/mal=""/' \
+        "$source_tool" > "$mutant"
+      expected='el mensaje debe decir mal formado' ;;
+    purga_borra_escalares)
+      sed 's/        | if (type == "object") and ((.hooks | type) == "array")/        | select(type == "object") | if ((.hooks | type) == "array")/' \
+        "$source_tool" > "$mutant"
+      expected='quitar altero los ajenos mal formados' ;;
+    purga_reescribe_ajenos)
+      sed 's/ and any(\.hooks\[\]; es_nuestra_h)$//' \
+        "$source_tool" > "$mutant"
+      expected='no debe borrar el grupo ajeno vacio' ;;
   esac
   if cmp -s "$source_tool" "$mutant" || ! bash -n "$mutant"; then
     printf 'FAIL: mutacion %s no aplico o no parsea\n' "$mutation"; fail=1; continue
@@ -119,4 +132,4 @@ do
   fi
 done
 [ "$fail" -eq 0 ] || exit 1
-printf 'test_install_muse_mutations: OK (19 mutaciones)\n'
+printf 'test_install_muse_mutations: OK (22 mutaciones)\n'

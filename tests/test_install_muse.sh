@@ -561,6 +561,48 @@ out="$(SAIKIT_MUSE_BIN="$mudo" SAIKIT_MUSE_BASH="$muse_bash" bash "$tool" --host
 [ "$rc" -eq 2 ] || malo "dry-run mudo debia rechazar con exit 2, salio $rc: $out"
 [ ! -f "$settings" ] || malo "dry-run mudo no debe escribir settings"
 
+# Medido con Muse 1.3.0: estas cinco formas dan MalformedConfig y Muse apaga
+# TODOS los hooks, tambien los nuestros. El instalador no las arregla por su
+# cuenta (no pisa nada ajeno): se niega con exit 2 y el settings queda igual.
+caso "hooks ajenos mal formados: instalar se niega y no toca el settings"
+for ajeno in \
+  '{"PreToolUse":[{"matcher":"ajeno"}]}' \
+  '{"Notification":["x"]}' \
+  '{"PreToolUse":[{"matcher":"bash","hooks":"str"}]}' \
+  '{"Notification":{"hooks":[]}}' \
+  '{"Notification":[{"hooks":["x"]}]}'
+do
+  reset_muse
+  printf '{"schema_version":1,"hooks":%s}\n' "$ajeno" > "$settings"
+  cp "$settings" "$SANDBOX/mal-formado-antes.json"
+  out="$(host_muse 2>&1)"; rc=$?
+  [ "$rc" -eq 2 ] || malo "mal formado $ajeno debia salir 2, salio $rc: $out"
+  cmp -s "$settings" "$SANDBOX/mal-formado-antes.json" \
+    || malo "mal formado $ajeno: el settings cambio: $(cat "$settings")"
+  printf '%s' "$out" | grep -q 'mal formad' \
+    || malo "mal formado $ajeno: el mensaje debe decir mal formado: $out"
+done
+
+caso "--quitar-muse deja byte a byte los hooks ajenos mal formados"
+reset_muse
+host_muse >/dev/null 2>&1
+"$SAIKIT_PY" - "$settings" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["hooks"]["Notification"] = ["x", {"matcher": "sin-hooks"}, {"matcher": "m", "hooks": "str"}, {"hooks": ["y"]}]
+d["hooks"]["PreToolUse"].append("z")
+json.dump(d, open(p, "w"), indent=2)
+PY
+notif_antes="$(jq -c '.hooks.Notification' "$settings")"
+out="$(SAIKIT_MUSE_BASH="$muse_bash" bash "$tool" --host muse --quitar-muse 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "--quitar-muse con ajenos mal formados salio $rc: $out"
+grep -q 'saikit-harness-id 23.3' "$settings" && malo "quitar dejo entradas 23.3 con ajenos mal formados"
+[ "$(jq -c '.hooks.Notification' "$settings")" = "$notif_antes" ] \
+  || malo "quitar altero los ajenos mal formados: $(jq -c '.hooks.Notification' "$settings")"
+jq -e '.hooks.PreToolUse == ["z"]' "$settings" >/dev/null \
+  || malo "quitar debe dejar solo la entrada ajena z en PreToolUse: $(jq -c '.hooks.PreToolUse' "$settings")"
+
 if [ "$fail" -ne 0 ]; then
   echo "test_install_muse: FAIL" >&2
   exit 1
