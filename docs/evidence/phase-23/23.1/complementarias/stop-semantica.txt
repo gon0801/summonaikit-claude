@@ -1,0 +1,10 @@
+Muse 1.3.0-R3401.1, proveedor echo, hook de Stop en .muse/hooks.json, 2026-09-18.
+Cada fila es un turno "hola". stops = veces que disparo Stop. salidas = pasadas
+del modelo. ctx = texto que entro al contexto del modelo como bloque developer.
+
+modo                         stops salidas ctx
+JSON block + stderr + exit 2   2     2     MARK-ERR2 (el stderr; el JSON se ignora)
+solo stderr + exit 2           2     2     MARK-STDERR2
+continue:false + exit 0        1     1     (nada; el turno termina)
+JSON block + exit 0, siempre   9     9     MARK-ALWAYS x8 (tope: 8 continuaciones)
+JSON block + exit 2, sin stderr 1    1     (nada; exit 2 sin stderr no bloquea)

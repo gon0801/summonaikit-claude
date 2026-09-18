@@ -1,0 +1,21 @@
+Muse 1.3.0-R3401.1, muse-spark-1.3, 2026-09-18 UTC. Registro del turno:
+etiqueta   evento       matcher
+DENY       PreToolUse   bash (ademas niega si el comando trae DENYME)
+A-claude   PreToolUse   Bash|Write|Edit
+B-muse     PreToolUse   bash|write_file|subagent_spawn
+C-sin      PreToolUse   ninguno
+POST       PostToolUse  ninguno
+Columnas del log: etiqueta, evento, tool_name, sesion (13 caracteres), tool_input recortado.
+
+DENY PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+C-sin PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+A-claude PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+B-muse PreToolUse bash 01a0b29f-4b72 {"command": "echo DENYME", "description": "Run echo deny test command", "workdir": "/priva
+B-muse PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+C-sin PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+POST PostToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo1-001", "objective": "crea el archivo hijo1.txt con el texto a usando
+B-muse PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+C-sin PreToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+POST PostToolUse subagent_spawn 01a0b29f-4b72 {"command_id": "hijo2-001", "objective": "crea el archivo hijo2.txt con el texto b usando
+C-sin PreToolUse subagent_wait 01a0b29f-4b72 {"command_id": "wait-hijo2-001", "subagent_id": "01a0b29f-6853-7ff3-8796-8fbaf64e4254", "t
+POST PostToolUse subagent_wait 01a0b29f-4b72 {"command_id": "wait-hijo2-001", "subagent_id": "01a0b29f-6853-7ff3-8796-8fbaf64e4254", "t

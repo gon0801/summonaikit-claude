@@ -34,7 +34,7 @@ experimental. En la 1.3.0 los dos registros por archivo disparan.
 |---|---|---|
 | Registro de proyecto en `<repo>/.muse/hooks.json`, forma de Claude (`{"hooks":{"<Evento>":[{"hooks":[{"type":"command","command":…,"timeout":…}]}]}}`) | Dispara, solo con el workspace confiado (`--trust-workspace`) | fixtures 00 a 05 |
 | Registro de usuario en el bloque `hooks` de `~/.config/muse/settings.json` | Dispara **con y sin** confianza del workspace. Es el canal global | medido con XDG aislado, ver Reproducir |
-| `settings.json` se valida de forma estricta | Una clave desconocida aborta **todo** comando al arrancar: `malformed settings file at …: unknown field …` | salida textual en la sección Riesgos |
+| `settings.json` se valida de forma estricta | Una clave desconocida dentro de `agents` (medido) aborta todo comando al arrancar: `malformed settings file at …: unknown field …`. Dentro de `hooks`, un campo de grupo desconocido sale con rc 0 y solo avisa `UnsupportedHandler` (`validacion-pareada.txt`). En la raíz se ignora con `tbh: ignoring unknown top-level member` | sección Riesgos y `complementarias/validacion-settings.txt` |
 | Eventos que disparan | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd` | fixtures 00 a 19 |
 | Forma del payload | snake_case con el vocabulario de Claude: `hook_event_name`, `session_id`, `turn_id`, `cwd`, `prompt`, `tool_name`, `tool_input`, `tool_response`, `tool_use_id`, `stop_hook_active`, `last_assistant_message`, `model`, `model_provider`, `permission_mode`. `transcript_path` llega `null` | fixtures 01, 02, 08, 10 |
 | Entorno del hook | Limpio: solo `_ HOME LANG LOGNAME PATH PWD SHELL SHLVL TERM TMPDIR USER`. **Ninguna** variable `MUSE_*`, así que el hook no puede detectar el host solo. `PATH` se hereda de quien lanza Muse | `entorno-del-hook.txt` |
@@ -42,7 +42,7 @@ experimental. En la 1.3.0 los dos registros por archivo disparan.
 | `UserPromptSubmit` con `hookSpecificOutput.additionalContext` | Entra al contexto del modelo como bloque `developer` (`hook:user_prompt_submit:prompt:0`) | `salida-contexto-inyectado.json` |
 | `Stop` con `{"decision":"block","reason":…}` | Fuerza otra pasada del modelo. La razón entra como bloque `developer` (`hook:stop:stop:0`). La segunda llamada trae `stop_hook_active` | `salida-contexto-inyectado.json`; el `Stop` disparó dos veces |
 | Herramienta de delegación | `subagent_spawn`, con `tool_input = {command_id, objective, role, subagent_type}`. El rol viaja en `tool_input.subagent_type` | fixture 08 |
-| Cuándo llega el `PostToolUse` del despacho | Al **aceptar** la tarea, no al terminarla. `tool_response` es un JSON en texto con `status` (`accepted` o `rejected`), `subagent_id` y `agent_path` (`main/reviewer/1`) | fixtures 06 y 10 |
+| Cuándo llega el `PostToolUse` del despacho | Al **aceptar** la tarea, no al terminarla. `tool_response` es un JSON en texto. `accepted` trae `status`, `subagent_id` y `agent_path` (`main/reviewer/1`), fixture 10; `rejected` trae `status`, `reason`, `cause` y `hint`, sin `subagent_id`, fixture 06 | fixtures 06 y 10 |
 | Fin del subagente | `subagent_wait` devuelve `status: ready` con `summary`. `SubagentStop` llega con la sesión del hijo y `subagent_id`, **sin rol** | fixtures 14 y 15 |
 | Eventos internos del hijo | Llegan con el `session_id` **del hijo** y sin campo de rol | fixtures 12 y 13 |
 | Orden medido | `PreToolUse subagent_spawn` (padre), `SubagentStart` (hijo), `PostToolUse subagent_spawn` (padre, trae `subagent_id`), internos del hijo, `SubagentStop`, `PostToolUse subagent_wait` | fixtures 08 a 15, por nombre de archivo |
@@ -78,36 +78,58 @@ Leído en `hooks/summonaikit-harness.sh` contra los fixtures de arriba.
    llega a la sesión del padre. El orden medido permite el vínculo que 20.13
    ya usa en grok: `SubagentStart` anuncia `subagent_id` y `child_session_id`,
    y el `PostToolUse` del despacho en el padre trae el mismo `subagent_id`.
+   **Descartado** en la fila 23.2 de `Plans.md`: ese mecanismo asume otra
+   dirección y no transfiere evidencia; Muse queda como host ciego y
+   `SubagentStart` no se registra.
+
+## Mediciones complementarias (2026-09-18 UTC)
+
+Se hicieron antes del brief y durante su revisión; las tres filas de
+`validacion-pareada.txt` son de la revisión. Cerraron seis de los `unknown`
+de la primera pasada. Evidencia en
+`docs/evidence/phase-23/23.1/complementarias/`. Todo con el proveedor `echo`
+salvo el turno real que midió `matcher`, veto y `tools:`.
+
+| Pregunta | Medido | Evidencia |
+|---|---|---|
+| ¿Bloquea `Stop` con `exit 2`? | Sí, **si stderr trae texto**: ese texto entra al modelo y el JSON del stdout se ignora. `exit 2` sin stderr no bloquea. `exit 0` con `{"decision":"block",…}` también bloquea. El camino de Claude del hook (JSON, `$feedback` a stderr y `exit 2`) bloquea en Muse sin cambios | `stop-semantica.txt` |
+| ¿Tope de continuaciones de `Stop`? | 8 seguidas; el noveno `Stop` cierra el turno. El `MAX_CYCLES=2` del hook corta antes | `stop-semantica.txt` |
+| ¿`continue:false`? | Termina el turno en el primer `Stop` | `stop-semantica.txt` |
+| ¿Filtra el `matcher` por `tool_name`? | Sí. `bash\|write_file\|subagent_spawn` atrapó `bash` y `subagent_spawn` y no las otras. `Bash\|Write\|Edit` también atrapó `bash`: no se distinguió si es por mayúsculas o por un alias de Claude, así que el registro usa los nombres de Muse | `turno-real-log-hooks.txt` |
+| ¿`PreToolUse` con `permissionDecision: deny`? | Bloquea: el comando no corre y el modelo recibe `tool blocked by hook: <permissionDecisionReason>` | `turno-real-resultados.txt` |
+| ¿`tools:` con nombres de Claude? | El perfil entra al catálogo, pero **el despacho se rechaza**: `` `tools-claude` tools: unknown_tool ``. Con nombres de Muse (`[read_file, bash]`) el hijo arranca con exactamente esas herramientas más las de control de subagentes. El proveedor `echo` NO detecta este rechazo | `turno-real-resultados.txt` |
+| ¿Doble registro, proyecto y usuario? | Con el workspace confiado (sin confianza el de proyecto no carga), el hook corre **dos veces y en paralelo**, aunque el comando sea idéntico: dos PIDs arrancan en el mismo microsegundo y el turno dura 2.6 s con hooks de 2 s | `doble-registro.txt` |
+| ¿Cómo validar un settings sin efectos? | `muse config validate` no sirve (valida documentos empresariales). Arrancar Muse aislado con las cinco variables (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`) y `exec --no-session-log --provider echo "ping"` en un directorio no-git, con los `command` reemplazados por `/usr/bin/true`. JSON roto sale 1; `schema_version` ausente o distinto de `1` sale 1; un hook mal formado sale **0** y avisa con una línea resumen `muse: Hooks: N runnable · M warning` más una línea de detalle por aviso. La regla de validación del instalador es diferencial y positiva, y está en la fila 23.3 de `Plans.md` | `validacion-settings.txt`, `validacion-pareada.txt` |
+| ¿Un hook colgado se corta? | Sí, por `timeout` en segundos y en silencio: un hook que duerme 3 s con `"timeout": 1` no termina, Muse lo corta al segundo sin avisar y el turno sigue como si nada, es decir el host falla abierto | `validacion-settings.txt` |
+| ¿La validación ejecuta los `mcpServers` del settings? | Sí: un servidor stdio que deja una marca la dejó. La copia de validación tiene que quitarlos | `validacion-pareada.txt` |
+| ¿Muse ejecuta los hooks de `~/.claude/settings.json`? | No: ni los de `$HOME/.claude/settings.json` ni los de `<repo>/.claude/settings.json` con el workspace confiado. El gate no correría doble por el registro de Claude | `validacion-pareada.txt` |
+| ¿El proveedor `echo` detecta `tools:` con nombres de Claude? | No: el perfil aparece en el catálogo y el export no menciona `unknown_tool`. Solo el despacho con modelo real lo rechaza | `validacion-pareada.txt` |
+| ¿Un bloque mal escrito (`Hooks` en vez de `hooks`) se detecta? | No: rc 0, solo `tbh: ignoring unknown top-level member`, y ningún hook queda registrado. La validación necesita una prueba POSITIVA de que los hooks disparan, no solo la ausencia de errores | `validacion-settings.txt` |
+
+Nombres de herramienta de Muse medidos: `herramientas-muse.txt`.
 
 ## Lo que queda `unknown`
 
-- **Semántica del `matcher`.** No se midió si filtra por `tool_name` con regex
-  como en Claude. Sin matcher el hook corre en cada herramienta, incluidos los
-  recordatorios internos.
-- **`PreToolUse` con `permissionDecision: deny`.** El binario valida esa forma
-  y exige `permissionDecisionReason` no vacío, pero no se midió en vivo.
-- **`exit 2`.** No se midió en ningún evento.
-- **Tope de continuaciones de `Stop`.** Existe
-  `max_consecutive_stop_hook_continuations` en settings. No se midió su valor
-  por defecto contra el `MAX_CYCLES=2` del hook.
-- **`tools:` del perfil con nombres de Claude.** El perfil con
-  `tools: Read, Edit, Write, Glob, Grep, Bash` entra al catálogo, pero no se
-  midió si el hijo queda con esas herramientas mapeadas o sin ninguna.
-- **Doble registro.** No se midió qué pasa si un repo trae `.muse/hooks.json`
-  y el usuario tiene el mismo hook en `settings.json`.
+- **Mecanismo del `matcher` con nombres de Claude.** `Bash` atrapó `bash`,
+  pero no se midió si `Write` atrapa `write_file`. El registro usa los
+  nombres de Muse y no depende de eso.
+- **`SubagentStop` que pide continuación.** Existe en el binario; no se midió.
 - **Windows.** Solo se midió macOS. Las formas de comando de Windows no se
   infieren de estas.
-- **Lectura de `CLAUDE.md` como reglas del proyecto.** La documenta Meta; no
-  se midió acá.
+- **Lectura de `CLAUDE.md` como reglas del proyecto.** La documenta Meta;
+  no se midió acá.
+- **Reglas personales de Claude.** Muse anuncia al arrancar
+  `Including your Claude Code and Codex personal rules and N skills`. No se
+  midió qué archivos lee ni si eso cambia el contrato del gate.
 
 ## Riesgos que fijan el diseño del instalador
 
 - **Un `settings.json` mal escrito deja a Muse sin arrancar.** Salida textual
   con un campo inválido:
   `malformed settings file at …/muse/settings.json: unknown field \`ag-set\`, expected \`safe_mode\``.
-  El instalador tiene que validar el candidato antes de reemplazar. La
-  palanca existe y es gratis: `XDG_CONFIG_HOME=<temporal> muse exec --provider echo "ping"`
-  sale 1 con un settings inválido y 0 con uno válido (medido).
+  El instalador tiene que validar el candidato antes de reemplazar. El
+  código de salida no alcanza: un hook mal formado arranca con 0 y queda
+  apagado en silencio. La regla completa está en la fila 23.3 de `Plans.md`.
 - **Muse se actualiza solo.** El contrato puede cambiar sin que nadie lo
   decida. El proveedor `echo` permite re-medirlo sin costo ni red.
 
