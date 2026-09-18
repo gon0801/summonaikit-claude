@@ -4,7 +4,7 @@ Registro de cada deploy (post-merge) del gate hook al perfil vivo. Ver
 `AGENTS.md` § "Deploy tras merge".
 
 El deploy verifica las cuatro copias del hook en `~/.claude/hooks/`
-(tambien usada por zcode), `~/.grok/hooks/`, `~/.dsh/hooks/` y
+(tambien usada por zcode y muse), `~/.grok/hooks/`, `~/.dsh/hooks/` y
 `~/.codex/hooks/`: bytes de `master` y registro de cada host.
 
 **Rectificación histórica (2026-09-07, rama fix/phase20-harness-review-r1):**
@@ -28,6 +28,72 @@ registrada como NO recuperada; la hora de merge se conserva por separado en
 el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
+
+## 2026-09-18 — PRs #331–#337 (Phase 23: Muse Code como quinto host) — deploy ACTUALIZA las cuatro copias y registra muse
+
+- **Merges:** #331 `a35164700968c5af65d3e1f9530b84f8dd4d9888`
+  (2026-09-18T03:22:31Z), #332 `eefc09ad9e07f40d55769b4cae20cf244abbd4c1`
+  (2026-09-18T03:29:29Z), #333 `b8c00464eb76143db202eeb6940791204c4751c7`
+  (2026-09-18T05:44:43Z), #335 `31c99f93d078a05d5fe1b16e40f62b2994cf03e6`
+  (2026-09-18T14:53:00Z), #334 `6b9da2cc2aa703d31a3f4f35b6184b94c48aadce`
+  (2026-09-18T15:42:59Z), #336 `b82780f57624d734c25462f41b89746241758c7d`
+  (2026-09-18T17:54:11Z) y #337 `60235b55f19d9ba2c46bb51d5d93523b2f00e9cd`
+  (2026-09-18T19:37:38Z), verificados contra la API de GitHub y
+  `origin/master` (merge commits).
+- **¿Cambió el hook? SÍ, en #335, #336 y #337.** #335 agrega muse como host
+  ciego con crédito al `subagent_wait`; #336 hace que el contrato de muse quepa
+  en los 16384 bytes que Muse acepta de un hook; #337 lee el rol de `role` y
+  marca la revisión al esperar. #334 cambió el instalador (`--host muse`), el
+  verificador de registro y el ruteo de modelos, no `hooks/`. #331, #332 y
+  #333 son documentos, evidencia y la skill `verify`: sin cambios en `hooks/`,
+  `tools/`, `agents/` ni `recetas/`, cubiertos por los deploys de abajo.
+- **Deploy tras #335 (08:29 PDT / 15:29 UTC):** desde `master` en `31c99f9`,
+  las cuatro copias dieron REPARADO. Backups: claude
+  `summonaikit-harness.sh.nuestro.20260918-082939.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260918-082940.bak`, dsh
+  `summonaikit-harness.sh.nuestro.20260918-082941.bak` y codex
+  `summonaikit-harness.sh.nuestro.20260918-082941.bak`.
+- **Deploy tras #334 (08:45 PDT / 15:45 UTC):** las cuatro copias YA AL DIA;
+  `--host muse` registró los cinco eventos en `~/.config/muse/settings.json`
+  y los cuatro perfiles en `~/.config/muse/agents/`. Backup del settings
+  previo: `settings.json.muse.20260918-084507.bak`. El 事前確認 de la 23.6 lo
+  aprobó el operador en la sesión.
+- **Deploy tras #336 (10:57 PDT / 17:57 UTC):** las cuatro copias dieron
+  REPARADO y muse quedó registrado. Backups: claude
+  `summonaikit-harness.sh.nuestro.20260918-105702.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260918-105703.bak`, dsh
+  `summonaikit-harness.sh.nuestro.20260918-105703.bak`, codex
+  `summonaikit-harness.sh.nuestro.20260918-105704.bak` y settings de muse
+  `settings.json.muse.20260918-105705.bak`.
+- **Deploy tras #337 (12:38 PDT / 19:38 UTC):** desde `master` limpio en
+  `60235b5`, las cuatro copias dieron REPARADO; el settings de muse se
+  registró de nuevo con contenido idéntico a su backup. Backups: claude
+  `summonaikit-harness.sh.nuestro.20260918-123803.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260918-123803.bak`, dsh
+  `summonaikit-harness.sh.nuestro.20260918-123804.bak`, codex
+  `summonaikit-harness.sh.nuestro.20260918-123804.bak` y settings de muse
+  `settings.json.muse.20260918-123805.bak`.
+- **Verificación:** después de cada deploy, `install-hook.sh --check` cerró
+  `veredicto=ok (copias al dia; fuente = bytes de origin/master)`, exit 0; desde
+  el de las 08:45 incluye la fila `host=muse ... resultado=reusa-claude
+  registro=ok`. `check-hook-registration.sh` quedó sin salida y exit 0, y
+  `audita-ledger.sh` dio OK. Los turnos vivos en Muse (fila 23.6) corrieron
+  contra estos deploys: evidencia en `docs/evidence/phase-23/23.6/` y
+  `docs/evidence/phase-23/23.9/`.
+- **CI:** gate verde en el head de cada PR: #331
+  [35302433029](https://github.com/gon0801/summonaikit-claude/actions/runs/35302433029),
+  #332 [35302682204](https://github.com/gon0801/summonaikit-claude/actions/runs/35302682204),
+  #333 [35311268686](https://github.com/gon0801/summonaikit-claude/actions/runs/35311268686),
+  #334 [35362681212](https://github.com/gon0801/summonaikit-claude/actions/runs/35362681212),
+  #335 [35323933512](https://github.com/gon0801/summonaikit-claude/actions/runs/35323933512),
+  #336 [35374212068](https://github.com/gon0801/summonaikit-claude/actions/runs/35374212068)
+  y #337 [35383094744](https://github.com/gon0801/summonaikit-claude/actions/runs/35383094744).
+- **Limpieza:** ninguna rama remota de #331–#337 sigue viva. Quedan los dos
+  worktrees locales de Cursor, `summonaikit-muse-hook` y
+  `summonaikit-muse-instalador`, limpios y con su trabajo mergeado; no se
+  borraron porque pueden estar abiertos en Cursor.
+- **Operador:** mergeó los siete PRs a mano en GitHub y aprobó la medición viva
+  sobre su perfil de Muse.
 
 ## 2026-09-14 — PRs #326–#329 (Phase 22: referencias de recetas, frescura CI, lecturas del merge guard y wrapper de batería) — deploy ACTUALIZA las cuatro copias
 

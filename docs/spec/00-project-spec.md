@@ -2577,14 +2577,16 @@ premisas en `docs/task-23.1-captura-muse.md`.
 
 ### Límites MEDIDOS de la Phase 23 (cierre, 2026-09-18)
 
+La evidencia vive bajo `docs/evidence/phase-23/`.
+
 | Qué | Medido | Evidencia |
 |---|---|---|
-| `Stop` bloquea | `exit 2` con texto en stderr bloquea y ese texto entra al modelo; `exit 0` con `decision:block` también. Tope de continuaciones de Muse: 8; el `MAX_CYCLES=2` del hook corta antes | `23.1/complementarias/stop-semantica.txt` |
-| Contrato inyectado | 12380 bytes en el turno rápido real, después de la 23.8. Antes de la 23.8 medía 17193 (completo) y 16592 (rápido) y Muse lo descartaba | `23.6/`, `23.8` en `Plans.md` |
-| Turno rápido real | Contrato inyectado, sin ceremonia, el primer `Stop` pasa. 19 s y 135122 tokens de entrada (97220 en caché) | `23.6/` |
-| Turno completo real | __VIVO_FULL__ | `23.6/`, `23.9/` |
-| Prompt sin el token de armado | 0 bytes inyectados, 0.06 s de hook | `23.6/` |
-| Recordatorios internos de Muse | Cada turno corre subagentes propios (`skill-reminder`, `goal-reminder`, `verify-reminder`, `todo-reminder`) con el mismo modelo; no pasan por nuestros matchers y no acreditan roles | `23.6/` |
+| `Stop` bloquea | `exit 2` con texto en stderr bloquea y ese texto entra al modelo; `exit 0` con `decision:block` también. Tope de continuaciones de Muse: 8; el `MAX_CYCLES=2` del hook corta antes. En vivo, los turnos completos 1 y 2 bloquearon dos veces y cortaron por presupuesto | `23.1/complementarias/stop-semantica.txt`, `23.6/turno-completo.txt` |
+| Contrato inyectado | 12380 bytes en el turno rápido real y 12984 en el completo, después de la 23.8. Antes de la 23.8 medía 17193 (completo) y 16592 (rápido) y Muse lo descartaba | `23.6/`, `23.8` en `Plans.md` |
+| Turno rápido real | Contrato inyectado, sin ceremonia, el primer `Stop` pasa. 19 s y 135122 tokens de entrada (97220 en caché) | `23.6/turno-rapido.txt` |
+| Turno completo real | Con el esfuerzo del perfil (`max`): implementer, verifier y reviewer por `subagent_spawn`, los tres acreditados al esperar, recibo con `VERIFIED BY SUBAGENT:` y el primer `Stop` pasa. 231 s y 1026950 tokens de entrada (879098 en caché). Con esfuerzo `low` los roles se acreditan pero el modelo no escribió la línea de verificación en dos bloqueos seguidos y el turno cortó por presupuesto | `23.6/turno-completo.txt`, `23.9/` |
+| Prompt sin el token de armado | 0 bytes inyectados, a lo más 0.058 s de hook en cinco corridas | `23.6/turno-completo.txt` |
+| Recordatorios internos de Muse | Cada turno corre subagentes propios (`skill-reminder`, `goal-reminder`, `verify-reminder`, `todo-reminder`) con el mismo modelo; no pasan por nuestros matchers y no acreditan roles | `23.6/turno-rapido.txt`, `23.6/turno-completo.txt` |
 
 - **`unknown`.** Windows (solo se midió macOS); `SubagentStop` que pide
   continuación; si el `matcher` con nombres de Claude (`Write`) atrapa
