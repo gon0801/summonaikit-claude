@@ -107,6 +107,7 @@ G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamad
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
 G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
+G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
 G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
 G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
@@ -237,6 +238,22 @@ G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y
 G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
 G9|preflight_ignora_cursor|el veredicto del preflight deja de reconocer el canal de bloqueo de cursor (followup_message con exit 0) y un recibo roto en cursor pasa el preflight mientras el Stop bloquea
 G9|preflight_error_callado|la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea
+G1|host_muse_no_reconocido|la rama HOST=muse se apaga y un turno muse cae en other — no crea state/muse/
+G1|tool_hint_sin_muse|la rama TOOL_HINT de muse se apaga y el contrato vuelve a nombrar Task tool
+G3|ceremonia_sin_muse|la rama de ceremonia vuelve a claude|codex|grok|dsh y el gate queda inerte en muse
+G3|muse_acredita_al_aceptar|el spawn accepted acredita record_agent en vez de dejar pendiente
+G3|muse_sin_pendiente_acredita|un wait sin pendiente acredita canonical_agent_role del subagent_id
+G3|muse_status_grep_laxo|el status ready se lee con grep sobre todo tool_response y un summary hostil acredita
+G3|muse_write_file_quitada|write_file sale del vocabulario de edicion y last_code_edit no se marca
+G3|muse_path_sin_fallback|el fallback de tool_input.path en muse se borra y write_file no marca last_code_edit
+G3|muse_wait_ready_no_acredita|el wait ready con pendiente deja de llamar record_agent
+G3|muse_rearm_conserva_pendiente|el armado deja de vaciar muse_pending y un wait del ciclo anterior acredita
+G3|muse_keep_pendiente_vacio|write_state deja de conservar muse_pending y un write_file del padre borra el pendiente antes del wait
+G3|muse_status_sin_first|json_muse_first_status deja de exigir que status sea la primera clave y un tool_response reordenado acredita
+G3|muse_spawn_sin_accepted|el despacho deja de exigir status accepted y un rejected con subagent_id deja pendiente
+G3|muse_wait_ignora_id|el wait deja de exigir que el subagent_id de la respuesta coincida y un id distinto acredita
+G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
+G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -574,6 +591,7 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 # caso que espera BLOQUEO en host no ciego se pone rojo).
 mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
 mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
+mut_muse_no_es_ciego() { sed '/saikit-23.2-muse-ciego/s/ || \[ "$HOST" = "muse" \]//'; }
 # solo_primer_span (Greptile P1, PR #72) vuelve a recortar los spans del label a
 # `| head -n1`: el veto deja de ver un segundo label con fallo y un recibo
 # exito-luego-fallo acredita — lo atrapa caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
@@ -705,7 +723,7 @@ mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'
 # mutacion no cambio nada") reventaria la bateria entera.
 # Phase 15 (PR #85) sumo dsh al case: el ancla sigue al literal nuevo (misma
 # guardia 2 que atrapo ceremonia_sin_grok/sin_codex en CI).
-mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in *)/'; }
+mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in *)/'; }
 # Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
@@ -735,7 +753,7 @@ mut_host_codex_sin_rama()    { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "codex" \]/S
 # Task 6.4 (D3): revierte la ceremonia a claude-only — el gate vuelve a ser
 # inerte en codex. Lo atrapa caso_g3_ceremonia_se_exige_en_codex (el bloqueo
 # que reclama al implementer desaparece y el turno cierra limpio).
-mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|grok|dsh)/'; }
+mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|grok|dsh|muse)/'; }
 # Task 6.4 (medido 6.2): devuelve el exit 2 al bloqueo de codex. Codex descarta
 # el stdout con exit != 0, o sea gate decorativo — lo atrapa
 # caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
@@ -754,7 +772,7 @@ mut_host_dsh_no_reconocido() { sed 's/= "dsh" \]; then/= "NUNCA_dsh" ]; then/'; 
 # Phase 15 (D1/D3): revierte la ceremonia a claude|codex|grok — el gate vuelve a
 # quedar inerte en dsh. Lo atrapa caso_g2_dsh_ceremonia_incompleta_bloquea (el
 # turno sin verifier pasa a cerrar en vez de bloquear).
-mut_ceremonia_sin_dsh()      { sed 's/case "\$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|codex|grok)/'; }
+mut_ceremonia_sin_dsh()      { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|grok|muse)/'; }
 # Phase 15 (D4): vuelve la tool model-facing de dsh a "Task tool". Lo atrapa
 # caso_g1_dsh_contrato_nombra_subagent.
 mut_tool_hint_sin_dsh()      { sed 's|if \[ "\$TARGET" = "dsh" \]; then TOOL_HINT="the subagent tool"|if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the Task tool"|'; }
@@ -765,7 +783,7 @@ mut_tool_hint_sin_dsh()      { sed 's|if \[ "\$TARGET" = "dsh" \]; then TOOL_HIN
 # OBSOLETO: la guardia 2 ("la mutacion no cambio nada del hook") lo atrapo en CI
 # y master quedo rojo desde ese merge. El ancla sigue al literal nuevo; se
 # quita SOLO grok (dsh queda) — mismo efecto que antes: el gate inerte en grok.
-mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok|dsh)/case "$TARGET" in claude|codex|dsh)/'; }
+mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|dsh|muse)/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa
@@ -1209,6 +1227,67 @@ mut_preflight_ignora_cursor() { sed "s%|\*'"\"followup_message\""'\*%%"; }
 # estado y reporta PASS donde el Stop bloquea. Lo atrapa
 # caso_g9_estado_ilegible_bloquea_stop_error_preflight (espera ERROR rc 2).
 mut_preflight_error_callado() { sed 's|^  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"$|  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null \|\| true; fi|'; }
+
+mut_host_muse_no_reconocido() { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "muse" \]/SUMMONAIKIT_HOOK_TARGET:-}" = "NUNCA_muse" ]/'; }
+mut_tool_hint_sin_muse() {
+  sed 's|if \[ "\$TARGET" = "muse" \]; then TOOL_HINT="the subagent_spawn tool (then wait on each with subagent_wait)"|if [ "$TARGET" = "muse" ]; then TOOL_HINT="the Task tool"|'
+}
+mut_ceremonia_sin_muse() { sed 's/case "$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|grok|dsh)/'; }
+mut_muse_acredita_al_aceptar() {
+  sed '/saikit-23.2-muse-spawn-pending/{
+    n
+    s/.*/        record_agent "$subagent"/
+  }'
+}
+mut_muse_sin_pendiente_acredita() {
+  sed 's/saikit_muse_pending_take "\$_wait_id")" || return 0/saikit_muse_pending_take "$_wait_id")"; [ -n "$_role" ] || _role="$(canonical_agent_role "$_wait_id")"/'
+}
+mut_muse_status_grep_laxo() {
+  sed 's/json_muse_status_es() { \[ "\$(json_muse_first_status)" = "\$1" \]; }/json_muse_status_es() { json_muse_tool_response_raw | tr -d '"'"'\\'"'"' | grep -q '"'"'"status":"ready"'"'"'; }/'
+}
+mut_muse_write_file_quitada() { sed '/SAIKIT_EDIT_TOOLS_RE=/s/|write_file//'; }
+mut_muse_path_sin_fallback() {
+  sed '/saikit-23.2-muse-path/,+7d'
+}
+mut_muse_wait_ready_no_acredita() {
+  sed '/saikit-23.2-muse-wait-credit/{
+    n
+    s/.*/      :/
+  }'
+}
+mut_muse_rearm_conserva_pendiente() {
+  sed '/saikit-23.2-muse-rearm-clear/{
+    n
+    s/.*/  :/
+  }'
+}
+mut_muse_keep_pendiente_vacio() {
+  sed 's/_keep_mp="$(grep '\''^muse_pending='\'' "$STATE_PATH" 2>\/dev\/null | tail -n 1 | cut -d= -f2-)"/_keep_mp=""/'
+}
+mut_muse_status_sin_first() {
+  sed '/saikit-23.2-muse-first/{
+    n
+    s/json_muse_inner_unescape_scan status first/json_muse_inner_unescape_scan status/
+  }'
+}
+mut_muse_spawn_sin_accepted() {
+  sed '/saikit-23.2-muse-accepted/{
+    n
+    s/if \[ "\$_st" = "accepted" \] && \[ -n "\$_id" \]; then/if [ -n "$_id" ]; then/
+  }'
+}
+mut_muse_wait_ignora_id() {
+  sed '/saikit-23.2-muse-wait-id/{
+    n
+    s/.*/      :/
+  }'
+}
+mut_muse_pretool_solo_Bash() {
+  sed 's/if \[ "\$_pt_tool" != "Bash" \] && \[ "\$_pt_tool" != "bash" \]; then/if [ "$_pt_tool" != "Bash" ]; then/'
+}
+mut_muse_pretool_trata_bash_input() {
+  sed 's/!= "bash" \]; then/!= "bash" ] \&\& [ "$_pt_tool" != "bash_input" ]; then/'
+}
 
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para

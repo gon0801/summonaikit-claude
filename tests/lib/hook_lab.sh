@@ -584,3 +584,18 @@ lab_payload_codex_subagent_stop() {
     printf '{"session_id":"__SESSION_ID__","turn_id":"t-21-2-lab","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"SubagentStop","model":"gpt-5.6-sol","permission_mode":"bypassPermissions","stop_hook_active":false,"agent_id":"%s","agent_type":"%s","last_assistant_message":"cierre del subagente"}' "$1" "$2"
   fi
 }
+
+# 23.2 — payloads de Muse. Los fixtures viven en tests/fixtures/muse/ (copia
+# de docs/evidence/phase-23/23.1/, no se leen de docs/ en runtime). Los
+# derivados documentan su jq en tests/fixtures/muse/derivados/README.md.
+_lab_muse_dir() {
+  printf '%s' "$(cd "$(dirname "${BASH_SOURCE[0]}")/../fixtures/muse" && pwd)"
+}
+
+lab_payload_muse_fixture() {
+  cat "$(_lab_muse_dir)/$1"
+}
+
+lab_payload_muse_derivado() {
+  cat "$(_lab_muse_dir)/derivados/$1"
+}
