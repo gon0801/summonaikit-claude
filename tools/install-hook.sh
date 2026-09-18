@@ -1006,6 +1006,37 @@ muse_harness_cmd() {  # $1=bash $2=fase (vacia = sin PHASE)
   fi
 }
 
+muse_dest_sin_meta() {
+  # saikit-23.3-muse-dest-meta
+  case "$DEST" in
+    *\$*|*\`*|*\"*|*$'\n'*) return 1 ;;
+  esac
+  return 0
+}
+
+muse_abortar_si_settings_dir() {
+  [ -d "$settings" ] || return 0
+  rm -f "$tmp_cand"
+  [ "$actual" = "$settings" ] || rm -f "$actual"
+  decir "[summonaikit] instalador: $settings es un directorio; no se escribe encima."
+  exit 5
+}
+
+muse_settings_aceptable() {  # $1=settings existente
+  local sv
+  # saikit-23.3-muse-schema
+  sv="$(jq -r '.schema_version // empty' "$1" 2>/dev/null || true)"
+  if [ "$sv" != "1" ]; then
+    decir "[summonaikit] instalador: schema_version de muse no soportado (${sv:-vacio}); se exige 1."
+    return 1
+  fi
+  if jq -e 'has("hooks") and ((.hooks | type) != "object")' "$1" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: hooks de muse debe ser un objeto, no un array."
+    return 1
+  fi
+  return 0
+}
+
 muse_tool_map() {
   case "$1" in
     Read) printf 'read_file' ;;
@@ -1172,7 +1203,7 @@ muse_correr_validacion() {  # $1=settings_src $2=bin -> rc; marcas en $3
   xdg="$caja/xdg"
   mkdir -p "$work" "$xdg/muse" "$caja/home" "$caja/data" "$caja/state" "$caja/cache" "$marcas" \
     || { rm -rf "$caja"; return 4; }
-  if git -C "$work" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if GIT_CEILING_DIRECTORIES="$caja" git -C "$work" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     rm -rf "$caja"
     return 4
   fi
@@ -1390,6 +1421,9 @@ muse_instalar() {
       decir "              --host muse NO instala el archivo: instalalo primero (sin --host)."
       decir "              No se cablea un dest que no se controla."; exit 2 ;;
   esac
+  muse_dest_sin_meta || {
+    decir "[summonaikit] instalador: --dest contiene metacaracteres de shell; rechazado."
+    exit 2; }
   if ! grep -q 'PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"' "$DEST" 2>/dev/null; then
     decir "[summonaikit] instalador: el DEST no tiene el aislamiento por host de 5.3."
     decir '              Falta: PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY" en '"$DEST"
@@ -1410,6 +1444,7 @@ muse_instalar() {
     if ! jq -e . "$settings" >/dev/null 2>&1; then
       decir "[summonaikit] instalador: el settings de muse no es JSON valido ($settings)."; exit 2
     fi
+    muse_settings_aceptable "$settings" || exit 2
     actual="$settings"
   else
     actual="$(mktemp "${TMPDIR:-/tmp}/saikit-muse-empty-XXXXXX")" || exit 5
@@ -1481,6 +1516,8 @@ muse_instalar() {
     [ "$actual" = "$settings" ] || rm -f "$actual"
     return 0
   fi
+  # saikit-23.3-muse-settings-file
+  muse_abortar_si_settings_dir
   muse_instalar_agentes
   local uc_dir bak
   uc_dir="$(dirname "$settings")"
@@ -1499,6 +1536,7 @@ muse_instalar() {
     [ "$actual" = "$settings" ] || rm -f "$actual"
     decir "[summonaikit] instalador: el candidato muse no es JSON valido; settings intacto."; exit 5
   fi
+  muse_abortar_si_settings_dir
   if ! mv -f "$tmp_cand" "$settings"; then
     rm -f "$tmp_cand"
     [ "$actual" = "$settings" ] || rm -f "$actual"

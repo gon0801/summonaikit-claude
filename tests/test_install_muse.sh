@@ -186,7 +186,7 @@ out="$(host_muse 2>&1)"; rc=$?
 printf '%s' "$out" | grep -qi 'DESCONOCIDO' \
   && malo "segunda corrida no debe clasificar DESCONOCIDO: $out"
 printf '%s' "$out" | grep -qi 'ya al dia\|AL DIA\|identico' \
-  || true
+  || malo "segunda corrida debe afirmar ya al dia: $out"
 
 # --- aviso ajeno previo si instala ---
 caso "aviso ajeno previo (evento inventado) si instala"
@@ -366,6 +366,75 @@ out="$(host_muse --dry-run 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "dry-run salio $rc: $out"
 [ ! -f "$settings" ] || malo "dry-run escribio settings"
 [ ! -e "$agents/implementer.md" ] || malo "dry-run escribio perfiles"
+
+caso "schema_version 2 no se soporta y no se escribe"
+reset_muse
+printf '%s\n' '{"schema_version":2,"hooks":{"Notification":[{"hooks":[{"type":"command","command":"/usr/bin/true"}]}]}}' > "$settings"
+out="$(host_muse 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "schema_version 2 debia rechazar: $out"
+printf '%s' "$out" | grep -qi 'schema_version' || malo "debe nombrar schema_version: $out"
+sv="$(jq -r '.schema_version' "$settings")"
+[ "$sv" = "2" ] || malo "no debe reescribir schema_version=$sv"
+jq -e '.hooks.SessionStart' "$settings" >/dev/null \
+  && malo "schema_version 2 no debe instalar SessionStart"
+
+caso "hooks como array no se tira ni se instala"
+reset_muse
+printf '%s\n' '{"schema_version":1,"hooks":[{"type":"command","command":"/usr/bin/true","note":"USER_DATA"}]}' > "$settings"
+out="$(host_muse 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "hooks array debia rechazar: $out"
+grep -q 'USER_DATA' "$settings" || malo "no debe tirar el array del usuario"
+
+caso "--dest con metacaracteres de shell se rechaza y no queda en el command"
+reset_muse
+pwned="$SANDBOX/PWNED_DEST"
+evil_dir="$SANDBOX/tmp/foo\$(touch $pwned)bar"
+mkdir -p "$evil_dir"
+cp "$fuente" "$evil_dir/summonaikit-harness.sh"
+out="$(host_muse --dest "$evil_dir/summonaikit-harness.sh" 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "DEST con \$() debia rechazar: $out"
+[ ! -f "$pwned" ] || malo "no debe expandir DEST durante el install"
+[ ! -f "$settings" ] || malo "DEST hostil no debe escribir settings"
+
+caso "settings.json convertido en directorio antes del mv no reporta REGISTRADO"
+reset_muse
+printf '%s\n' '{"schema_version":1,"hooks":{}}' > "$settings"
+trap_bin="$SANDBOX/muse-trap-dir.sh"
+cat > "$trap_bin" <<TRAP
+#!/usr/bin/env bash
+nfile="$SANDBOX/val-count"
+n=0
+[ -f "\$nfile" ] && n=\$(cat "\$nfile")
+n=\$((n+1))
+printf '%s' "\$n" > "\$nfile"
+if [ "\$n" -ge 2 ]; then
+  rm -f "$settings"
+  mkdir "$settings"
+fi
+exec bash "$falso" "\$@"
+TRAP
+chmod +x "$trap_bin"
+out="$(SAIKIT_MUSE_BIN="$trap_bin" SAIKIT_MUSE_BASH="$muse_bash" bash "$tool" --host muse 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "settings directorio debia rechazar, salio 0: $out"
+printf '%s' "$out" | grep -qi 'REGISTRADO' && malo "no debe imprimir REGISTRADO si settings es directorio: $out"
+if [ -d "$settings" ]; then
+  nested="$(find "$settings" -maxdepth 1 -type f -name 'saikit-muse-cand-*' 2>/dev/null | head -n 1)"
+  [ -z "$nested" ] || malo "mv anido el candidato dentro del directorio: $nested"
+fi
+
+caso "TMPDIR dentro de un clone git no hace unknown 4"
+reset_muse
+git_tmp="$(mktemp -d "$repo/tests/.saikit-muse-tmpdir-XXXXXX")" || exit 1
+out="$(TMPDIR="$git_tmp" TMP="$git_tmp" TEMP="$git_tmp" host_muse 2>&1)"; rc=$?
+rm -rf "$git_tmp"
+[ "$rc" -eq 0 ] || malo "TMPDIR bajo el clone debia instalar, salio $rc: $out"
+printf '%s' "$out" | grep -Fq 'REGISTRADO' || malo "TMPDIR bajo clone debe registrar: $out"
+
+caso "candidato con eventos bajo Hooks (mayuscula) no instala"
+reset_muse
+out="$(SAIKIT_MUSE_PATCH_CANDIDATE='.Hooks = .hooks | del(.hooks)' host_muse 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] || malo "candidato Hooks debia rechazar: $out"
+[ ! -f "$settings" ] || malo "candidato Hooks no debe escribir settings"
 
 caso "catalogo sin binario real se declara unknown"
 # El Muse falso no exporta session log. El instalador no debe fingir catalogo.

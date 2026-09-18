@@ -19,7 +19,7 @@ cp "$source_tool" "$mutant"
 run_driver > "$SANDBOX/control.log" 2>&1 || { cat "$SANDBOX/control.log"; exit 1; }
 
 fail=0
-for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos omitir_target_muse; do
+for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos omitir_target_muse omitir_schema_muse omitir_dest_meta omitir_settings_dir omitir_git_ceiling; do
   case "$mutation" in
     omitir_muse_check_host)
       sed 's/ || \[ "$HOST" = "muse" \]; then/; then/' \
@@ -41,6 +41,22 @@ for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos 
       sed 's/SUMMONAIKIT_HOOK_TARGET=muse /SUMMONAIKIT_HOOK_TARGET=other /g' \
         "$source_tool" > "$mutant"
       expected='cada comando debe setear TARGET=muse' ;;
+    omitir_schema_muse)
+      sed 's/muse_settings_aceptable "$settings" || exit 2/true/' \
+        "$source_tool" > "$mutant"
+      expected='schema_version 2 debia rechazar' ;;
+    omitir_dest_meta)
+      sed 's/muse_dest_sin_meta || {/true || {/' \
+        "$source_tool" > "$mutant"
+      expected='DEST con $() debia rechazar' ;;
+    omitir_settings_dir)
+      sed 's/^  muse_abortar_si_settings_dir$/#  muse_abortar_si_settings_dir/' \
+        "$source_tool" > "$mutant"
+      expected='settings directorio debia rechazar' ;;
+    omitir_git_ceiling)
+      sed 's/GIT_CEILING_DIRECTORIES="$caja" git -C/git -C/' \
+        "$source_tool" > "$mutant"
+      expected='TMPDIR bajo el clone debia instalar' ;;
   esac
   if cmp -s "$source_tool" "$mutant" || ! bash -n "$mutant"; then
     printf 'FAIL: mutacion %s no aplico o no parsea\n' "$mutation"; fail=1; continue
@@ -54,4 +70,4 @@ for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos 
   fi
 done
 [ "$fail" -eq 0 ] || exit 1
-printf 'test_install_muse_mutations: OK (4 mutaciones)\n'
+printf 'test_install_muse_mutations: OK (8 mutaciones)\n'
