@@ -1,7 +1,10 @@
 sandbox/
 out/
 *.bak
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/verify/
 .zcode/
 .harness-mem/
 node_modules/
