@@ -2013,7 +2013,43 @@ HARNESS_CONTEXT
   if [ "$(read_state_value lane)" != "fast" ]; then
     _hc="$(printf '%s\n\n%s' "$_hc" "$(trail_parrafo)")"
   fi
+  # saikit-23.8-muse-contrato-corto
+  if [ "$TARGET" = "muse" ]; then
+    _hc="$(muse_contrato_corto "$_hc")"
+  fi
   printf '%s' "$_hc"
+}
+
+# Task 23.8 — medido en vivo en la 23.6: Muse corta la salida de un hook en
+# 16384 bytes y, si se pasa, mata el proceso y no parsea NADA
+# (output_too_large). El contrato completo pesaba 17193 bytes en carril
+# completo, asi que nunca llegaba al modelo. Para muse, las cuatro secciones de
+# guia generica (capacidades, fuente de datos, informacion faltante, superficie
+# de usuario) van en forma corta: lo que el Stop verifica queda completo.
+MUSE_HOOK_STDOUT_MAX=16384
+MUSE_REGLAS_CORTAS='Quality rules (short form; Muse accepts at most 16 KB from a hook): prefer what the platform or an installed library already provides over a new dependency or a hand-rolled mechanism, and state the failure stance (fail-open or fail-closed) of every guard; before building over existing data, confirm the data source exists or write the assumption into the code; decide technical and reversible questions from the repo, and ask the user only product, preference or irreversible ones; for a user-facing surface cover loading, empty, error and success, with an accessibility baseline.'
+muse_contrato_corto() {  # $1=contrato -> stdout
+  case "$1" in
+    *"Capability-first contract ("*"Receipt line shape"*) ;;
+    *) printf '%s' "$1"; return 0 ;;
+  esac
+  printf '%s%s\n\nReceipt line shape%s' \
+    "${1%%"Capability-first contract ("*}" "$MUSE_REGLAS_CORTAS" "${1#*"Receipt line shape"}"
+}
+
+# Tope duro: si aun corto el contrato de muse no cabe (recetario grande, aviso
+# de revision, parrafo autopilot), se manda solo lo que el Stop verifica. Sin
+# esto Muse descartaria el contrato entero en silencio.
+muse_contrato_minimo() {  # $1=contrato -> stdout
+  printf '%s\n' "$1" | awk -v RS= '
+    NR == 1 {
+      print "SUMMONAIKIT HARNESS REQUIRED\nContract shortened for Muse: the full contract does not fit in the 16 KB that Muse accepts from a hook, so only the rules the gate checks are here.\n"
+      next
+    }
+    /^Asking is not failing:/ || /^Delegation rule:/ || /^Fast lane \(-saikit:fast\):/ \
+      || /^Receipt line shape/ || /^Final receipt required/ || /^Full lane \(-saikit\):/ {
+      print $0 "\n"
+    }'
 }
 
 # Task 10.1: los clasificadores del vendor (is_engineering_task,
@@ -2403,6 +2439,13 @@ $context"
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
   escaped="$(json_escape "$context")"
+  # saikit-23.8-muse-tope
+  if [ "$TARGET" = "muse" ]; then
+    _mt_bytes="$(printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' "$escaped" | LC_ALL=C wc -c | tr -d ' ')"
+    if [ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" ] 2>/dev/null; then
+      escaped="$(json_escape "$(muse_contrato_minimo "$context")")"
+    fi
+  fi
 
   if [ "$TARGET" = "cursor" ]; then
     if [ "$PHASE" = "session" ]; then
