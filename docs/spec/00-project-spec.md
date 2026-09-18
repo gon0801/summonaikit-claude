@@ -2529,6 +2529,70 @@ solo para el veredicto global de la pasada, nunca por feature.
    sale en UN solo PR con regresión, mutante y re-conducción; el gap de
    producto va por reporte aparte. Cerrar 20.26 expira la autorización §8.
 
+## Host muse (Phase 23) — Muse Code
+
+Muse Code (Meta, medido en `1.3.0-R3401.1` sobre macOS) implementa el
+contrato de hooks de Claude Code casi al pie de la letra: mismos eventos,
+payload en snake_case con el vocabulario de Claude, `additionalContext` y
+`decision:block`. El gate corre sin adaptador, con el mismo hook. Captura y
+premisas en `docs/task-23.1-captura-muse.md`.
+
+- **Registro.** Bloque `hooks` del settings de usuario
+  `${XDG_CONFIG_HOME:-$HOME/.config}/muse/settings.json`, que dispara con y sin
+  confianza del workspace. Muse reusa la copia de `~/.claude/hooks/`, como
+  zcode. El entorno del hook llega limpio, sin variables `MUSE_*`, así que el
+  comando lleva `SUMMONAIKIT_HOOK_TARGET=muse` delante; el prefijo sí llega.
+  Cinco eventos: `SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher
+  `bash`), `PostToolUse` (matcher
+  `bash|edit_file|write_file|subagent_spawn|subagent_wait`) y `Stop`, con
+  timeout de 30 s y de 600 s en `Stop`.
+- **Instalador (`--host muse`, 23.3).** Valida el settings candidato con un
+  Muse aislado (cinco variables de entorno propias, proveedor `echo`, sin
+  `mcpServers`, comandos ajenos cambiados por `/usr/bin/true`) y exige que
+  nuestros hooks disparen: un hook mal formado arranca con código 0 y queda
+  apagado en silencio. La purga solo reescribe grupos que son objeto, con
+  `.hooks` arreglo y una entrada nuestra; si hay hooks ajenos mal formados,
+  reporta y no escribe. Backup en `~/.config/muse/saikit-backups/`.
+- **Perfiles (23.4).** `~/.config/muse/agents/<rol>.md`, con `skills` como
+  lista YAML, sin `model` ni effort (`KnownFieldInactive`), `tools` con los
+  nombres de Muse y la marca `# saikit_owned: summonaikit-claude` como
+  comentario YAML: una clave desconocida tumba el perfil entero.
+- **Host ciego (23.2).** Los eventos internos del hijo llegan con el
+  `session_id` del hijo y sin rol, así que lo que corre el verificador no
+  llega a la sesión del padre. `saikit_host_ciego` incluye a muse y el recibo
+  declara `VERIFIED BY SUBAGENT: <comando> <resultado>`, que solo vale si un
+  verifier corrió en el turno.
+- **Crédito de roles (23.2 y 23.9).** El `PostToolUse` de `subagent_spawn`
+  llega al aceptar, no al terminar: un `status accepted` deja el
+  `subagent_id` pendiente con su rol, y el crédito llega con
+  `subagent_wait` en `status ready` para ese mismo id. El rol se lee de
+  `tool_input.role`, el parámetro con el que Muse lanza al hijo;
+  `subagent_type` no está en su esquema (23.9, medido en el vivo de la 23.6).
+- **Contrato ≤16 KB (23.8).** Muse corta la salida de un hook en 16384 bytes y,
+  si se pasa, no parsea nada (`output_too_large`). Para muse las secciones
+  genéricas se recortan a reglas cortas y, si aun así no cabe, va un contrato
+  mínimo que conserva el aviso de revisión y los párrafos de espera.
+
+### Límites MEDIDOS de la Phase 23 (cierre, 2026-09-18)
+
+| Qué | Medido | Evidencia |
+|---|---|---|
+| `Stop` bloquea | `exit 2` con texto en stderr bloquea y ese texto entra al modelo; `exit 0` con `decision:block` también. Tope de continuaciones de Muse: 8; el `MAX_CYCLES=2` del hook corta antes | `23.1/complementarias/stop-semantica.txt` |
+| Contrato inyectado | 12380 bytes en el turno rápido real, después de la 23.8. Antes de la 23.8 medía 17193 (completo) y 16592 (rápido) y Muse lo descartaba | `23.6/`, `23.8` en `Plans.md` |
+| Turno rápido real | Contrato inyectado, sin ceremonia, el primer `Stop` pasa. 19 s y 135122 tokens de entrada (97220 en caché) | `23.6/` |
+| Turno completo real | __VIVO_FULL__ | `23.6/`, `23.9/` |
+| Prompt sin el token de armado | 0 bytes inyectados, 0.06 s de hook | `23.6/` |
+| Recordatorios internos de Muse | Cada turno corre subagentes propios (`skill-reminder`, `goal-reminder`, `verify-reminder`, `todo-reminder`) con el mismo modelo; no pasan por nuestros matchers y no acreditan roles | `23.6/` |
+
+- **`unknown`.** Windows (solo se midió macOS); `SubagentStop` que pide
+  continuación; si el `matcher` con nombres de Claude (`Write`) atrapa
+  `write_file`; qué reglas personales de Claude lee Muse al arrancar.
+- **Límites declarados.** `bash tests/run.sh; echo EXIT:$?` no acredita
+  verificación en ningún host (el exit del último comando tapa el del
+  runner); `bash_input` no pasa por el veto de `PreToolUse`;
+  `subagent_read_result` no acredita. Muse se autoactualiza al arrancar: el
+  contrato puede cambiar sin aviso, y el probe de la 23.5 sigue pendiente.
+
 ## Non-Goals
 
 - **No se actualiza al kit v5.** Verificado: mismos bugs, mismo contrato.

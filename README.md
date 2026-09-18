@@ -59,6 +59,8 @@ bash tools/install-hook.sh --host claude --dry-run   # dice que HARIA por rol; n
 bash tools/install-hook.sh --host kimi --dry-run     # idem, sobre ~/.agents/agents
 bash tools/install-hook.sh --host dsh       # gate en el DeepSeek Harness (Phase 15)
 bash tools/install-hook.sh --host dsh --dry-run --quitar-dsh   # dice que HARIA al quitar
+bash tools/install-hook.sh --host muse      # gate en Muse Code (Phase 23)
+bash tools/install-hook.sh --host muse --quitar-muse   # retira solo lo nuestro
 ```
 
 `--host dsh` publica el gate en el **DeepSeek Harness** (`@deepseek-ai/dsh`),
@@ -86,7 +88,21 @@ contenido ajeno fuera de marcas). El verificador de ese host es
 `bash tools/check-hook-registration.sh --dsh-home ~/.dsh` (silencio = completo;
 el registro en dsh no es un archivo de hooks, es la entrada del patch).
 
-Estos dos hosts no llevan la marca `saikit_owned` en los perfiles del vendor,
+`--host muse` registra el gate en **Muse Code** (Meta). Muse corre hooks con la
+forma de Claude, así que no hay adaptador: reusa la copia de `~/.claude/hooks/`
+y escribe cinco eventos en el bloque `hooks` de
+`${XDG_CONFIG_HOME:-$HOME/.config}/muse/settings.json`. El comando lleva
+`SUMMONAIKIT_HOOK_TARGET=muse` delante porque Muse limpia el entorno del hook.
+Antes de reemplazar el settings, el instalador lo prueba con un Muse aislado
+(proveedor `echo`, sin red ni costo) y exige que nuestros hooks disparen. Si el
+archivo trae hooks ajenos mal formados, reporta y no escribe. Los cuatro
+perfiles de rol van a `~/.config/muse/agents/<rol>.md`, con los nombres de
+herramienta de Muse y la marca de propiedad como comentario YAML.
+`--quitar-muse` retira solo lo nuestro, con backup en
+`~/.config/muse/saikit-backups/`. Los límites medidos están en
+`docs/spec/00-project-spec.md` § Host muse.
+
+Los hosts `claude` y `kimi` no llevan la marca `saikit_owned` en los perfiles del vendor,
 así que la máquina de tres estados de arriba se amplía a un **cuarto
 estado**, `VENDOR_CONOCIDO`, con la misma vía de adopción que ya tiene el
 hook (`agents/vendor-manifest.sha256`):

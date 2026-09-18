@@ -108,14 +108,15 @@ fila.
 
 El artefacto de produccion de este repo son las **copias del gate hook**
 instaladas en los perfiles vivos, no una app: `~/.claude/hooks/` (claude;
-zcode reusa esta copia), `~/.grok/hooks/`, `~/.dsh/hooks/` y `~/.codex/hooks/`.
+zcode y muse reusan esta copia), `~/.grok/hooks/`, `~/.dsh/hooks/` y `~/.codex/hooks/`.
 Desde 7.5, Phase 15 y 18.15 cada host tiene la suya — grok ya NO apunta a la de
 claude. Tras cada merge a `master` (cierre de task o PR), **siempre**:
 
 1. Sincronizar master local: `git checkout master && git pull --ff-only`.
 2. **Deployar cada copia:** `bash tools/install-hook.sh` (claude) mas
-   `--host grok`, `--host dsh` y `--host codex` (tres estados, no pisa nada
-   ajeno). El instalador DECLARA la procedencia git de lo que instala (rama,
+   `--host grok`, `--host dsh`, `--host codex` y `--host muse` (tres estados,
+   no pisa nada ajeno; muse solo registra los hooks en
+   `~/.config/muse/settings.json`). El instalador DECLARA la procedencia git de lo que instala (rama,
    sha, sucio, coincide con origin/master juzgado contra el ref LOCAL — el
    `git fetch` del paso 1 lo deja al dia); **verificar** con
    `bash tools/install-hook.sh --check` (todas al dia + procedencia conocida,
