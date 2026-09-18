@@ -2370,7 +2370,10 @@ start_harness() {
   # previo sobreviviente de una sesion muerta con la misma llave, CodeRabbit
   # Major #64-b). ISO UTC: es la forma que la linea base dorada normaliza.
   adv_epoch_armado="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+  # saikit-23.2-muse-rearm-clear
+  _MUSE_PENDING_SET=""
   write_state "$task_hash" "0" "0" "0" "" "$lane" "$adv_epoch_armado" "" "" "" "" "$autopilot"
+  unset _MUSE_PENDING_SET
   rm -f "$STATE_DIR/receta_alias"; [ -n "$receta_alias" ] && printf '%s\n' "$receta_alias" > "$STATE_DIR/receta_alias"
   # Task 9.7 (C13): el barrido va DESPUES de write_state, asi el estado de este
   # turno ya existe y esta fresco — no puede barrerse a si mismo ni por edad ni

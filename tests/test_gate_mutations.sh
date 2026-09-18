@@ -246,6 +246,7 @@ G3|muse_status_grep_laxo|el status ready se lee con grep sobre todo tool_respons
 G3|muse_write_file_quitada|write_file sale del vocabulario de edicion y last_code_edit no se marca
 G3|muse_path_sin_fallback|el fallback de tool_input.path en muse se borra y write_file no marca last_code_edit
 G3|muse_wait_ready_no_acredita|el wait ready con pendiente deja de llamar record_agent
+G3|muse_rearm_conserva_pendiente|el armado deja de vaciar muse_pending y un wait del ciclo anterior acredita
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 "
@@ -1246,6 +1247,12 @@ mut_muse_wait_ready_no_acredita() {
   sed '/saikit-23.2-muse-wait-credit/{
     n
     s/.*/      :/
+  }'
+}
+mut_muse_rearm_conserva_pendiente() {
+  sed '/saikit-23.2-muse-rearm-clear/{
+    n
+    s/.*/  :/
   }'
 }
 mut_muse_pretool_solo_Bash() {
