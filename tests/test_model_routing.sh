@@ -53,7 +53,8 @@ caso "una fila de host sin valor devuelve VACIO con exit 0, no un default"
 # diseno: sin medicion que cierre, la fila queda vacia y hereda del padre).
 # kimi: vacia DEFINITIVA -- la 12.3 midio que el host no acepta model ni effort
 # por agente, asi que esa fila no se llena nunca y este caso queda permanente.
-for h in zcode kimi dsh; do
+# muse: vacia como kimi -- KnownFieldInactive (23.1/23.4).
+for h in zcode kimi dsh muse; do
   # Task 13.7: adversary tambien hereda la fila vacia de zcode y kimi (12.1/12.3).
   # Task 15.4 (D6): dsh hereda igual -- 15.1 no cerro el catalogo ni el modelo
   # por rol, asi que la fila queda vacia y el agente hereda el modelo de la sesion.

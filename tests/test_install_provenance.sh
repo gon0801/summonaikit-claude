@@ -34,7 +34,11 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/saikit-18-20-XXXXXX")" || exit 1
 trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/casa"
 export USERPROFILE="$tmp/casa"
-mkdir -p "$HOME/.claude/skills"
+export XDG_CONFIG_HOME="$tmp/xdg"
+export XDG_DATA_HOME="$tmp/data"
+export XDG_STATE_HOME="$tmp/state"
+export XDG_CACHE_HOME="$tmp/cache"
+mkdir -p "$HOME/.claude/skills" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
 
 if [ ! -f "$tool" ]; then
   echo "    FAIL: no existe el instalador en $tool" >&2
@@ -417,6 +421,12 @@ out="$(bash "$r9/tools/install-hook.sh" --check --host kimi 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "--check --host kimi salio $rc, se esperaba 2: $out"
 out="$(bash "$r9/tools/install-hook.sh" --check --host zcode 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "--check --host zcode salio $rc, se esperaba 2: $out"
+out="$(bash "$r9/tools/install-hook.sh" --check --host muse 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "--check --host muse salio $rc, se esperaba 2: $out"
+printf '%s' "$out" | grep -Fq -- '--check --host solo acepta' \
+  || malo "--check --host muse debe usar el mensaje de --check, no el de --host: $out"
+printf '%s' "$out" | grep -qi 'muse' \
+  || malo "--check --host muse debe nombrar muse: $out"
 
 # C10: --check no escribe nada: ni copias, ni dirs, ni backups.
 caso "C10: --check no crea ni un archivo bajo HOME"

@@ -43,6 +43,7 @@
 #   bash tools/install-hook.sh --host claude [--dry-run]
 #   bash tools/install-hook.sh --host claude --quitar-recetas
 #   bash tools/install-hook.sh --host dsh [--dry-run] [--quitar-dsh]
+#   bash tools/install-hook.sh --host muse [--dry-run] [--quitar-muse]
 #   bash tools/install-hook.sh --host claude --refrescar-manifiesto
 #   bash tools/install-hook.sh --host kimi --refrescar-manifiesto
 #   bash tools/install-hook.sh --check [--host <claude|grok|dsh|codex>]
@@ -97,6 +98,10 @@ QUITAR_DSH=0
 # y ~/.claude/skills/sencillo (marca saikit_owned; el manifiesto se juzga por
 # las marcas de las recetas que nombra); requiere el flujo claude.
 QUITAR_RECETAS=0
+# 23.3: --quitar-muse saca entradas 23.3 del settings de usuario y los
+# perfiles con marca comentario. Requiere --host muse. No exige DEST ni
+# binario (la limpieza corre si el hook de claude ya no esta).
+QUITAR_MUSE=0
 # Task 6.5: --host codex escribe la SEGUNDA copia (~/.codex/hooks) por el flujo
 # NORMAL de DEST; VIO_DEST distingue "el operador eligio ruta" de "usar la que
 # el host declara".
@@ -144,6 +149,7 @@ while [ $# -gt 0 ]; do
     --quitar-grok) QUITAR_GROK=1; shift ;;
     --quitar-dsh) QUITAR_DSH=1; shift ;;
     --quitar-recetas) QUITAR_RECETAS=1; shift ;;
+    --quitar-muse) QUITAR_MUSE=1; shift ;;
     --refrescar-manifiesto) REFRESCAR_MANIFIESTO=1; shift ;;
     -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
     *)
@@ -162,8 +168,8 @@ done
 # Phase 15: dsh (hook + plugin + patch del profile + personas; D5 compone a
 # nivel home).
 # Otro valor no se acepta: falla antes de tocar el archivo o el config.
-if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ] && [ "$HOST" != "claude" ] && [ "$HOST" != "kimi" ] && [ "$HOST" != "dsh" ]; then
-  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok", "claude", "kimi" o "dsh" (recibido: %s)\n' "$HOST" >&2
+if [ -n "$HOST" ] && [ "$HOST" != "zcode" ] && [ "$HOST" != "codex" ] && [ "$HOST" != "grok" ] && [ "$HOST" != "claude" ] && [ "$HOST" != "kimi" ] && [ "$HOST" != "dsh" ] && [ "$HOST" != "muse" ]; then
+  printf '[summonaikit] instalador: --host solo acepta "zcode", "codex", "grok", "claude", "kimi", "dsh" o "muse" (recibido: %s)\n' "$HOST" >&2
   exit 2
 fi
 # Task 12.9 (hallazgo #6, grok): kimi reusa el MISMO manifiesto
@@ -185,6 +191,10 @@ if [ "$QUITAR_GROK" -eq 1 ] && [ "$HOST" != "grok" ]; then
 fi
 if [ "$QUITAR_DSH" -eq 1 ] && [ "$HOST" != "dsh" ]; then
   printf '[summonaikit] instalador: --quitar-dsh requiere --host dsh\n' >&2
+  exit 2
+fi
+if [ "$QUITAR_MUSE" -eq 1 ] && [ "$HOST" != "muse" ]; then
+  printf '[summonaikit] instalador: --quitar-muse requiere --host muse\n' >&2
   exit 2
 fi
 # Task 16.5: --quitar-recetas despacha a quitar_recetas_claude y solo tiene
@@ -269,6 +279,18 @@ if [ "$HOST" != "dsh" ]; then
       ;;
   esac
 fi
+# 23.3: el config de Muse vive en XDG, no en ~/.muse. Un --dest ahi sin
+# --host muse cablearia el hook de claude en el settings de otro host.
+_muse_prefix="${XDG_CONFIG_HOME:-${HOME:-}/.config}/muse"
+if [ "$HOST" != "muse" ]; then
+  case "$DEST" in
+    "$_muse_prefix"|"$_muse_prefix"/*)
+      printf '[summonaikit] instalador: --dest (%s) cae bajo el config de muse: rechazado sin --host muse.\n' "$DEST" >&2
+      printf '             El destino lo decide --host y cada host declara su ruta (23.3).\n' >&2
+      exit 2
+      ;;
+  esac
+fi
 
 # 18.20: --check recorre el conjunto AUTORITATIVO de copias y no se deja
 # achicar. Aceptar --dest seria chequear una sola ruta a pedido, que es
@@ -281,12 +303,13 @@ if [ "$CHECK" -eq 1 ]; then
     exit 2
   fi
   if [ "$RESTORE" -eq 1 ] || [ "$QUITAR_ZCODE" -eq 1 ] || [ "$QUITAR_GROK" -eq 1 ] \
-     || [ "$QUITAR_DSH" -eq 1 ] || [ "$QUITAR_RECETAS" -eq 1 ] || [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
+     || [ "$QUITAR_DSH" -eq 1 ] || [ "$QUITAR_RECETAS" -eq 1 ] || [ "$QUITAR_MUSE" -eq 1 ] \
+     || [ "$REFRESCAR_MANIFIESTO" -eq 1 ]; then
     printf '[summonaikit] instalador: --check no se combina con flujos de escritura ni de quite.\n' >&2
     exit 2
   fi
-  if [ "$HOST" = "kimi" ] || [ "$HOST" = "zcode" ]; then
-    printf '[summonaikit] instalador: --check --host solo acepta claude, grok, dsh o codex (kimi no declara copia; zcode reusa la de claude).\n' >&2
+  if [ "$HOST" = "kimi" ] || [ "$HOST" = "zcode" ] || [ "$HOST" = "muse" ]; then
+    printf '[summonaikit] instalador: --check --host solo acepta claude, grok, dsh o codex (kimi no declara copia; zcode y muse reusan la de claude).\n' >&2
     exit 2
   fi
 fi
@@ -911,6 +934,719 @@ zcode_quitar() {
   # Task 5.6: despues del config, para que un fallo al borrar agentes no
   # deje el harness registrado sin poder deshacer el cableado.
   zcode_quitar_agentes
+}
+
+# ---------------------------------------------------------------- 23.3: muse
+# Reusa la copia de claude (como zcode). El JSON es forma Claude
+# (hooks.<Evento> en XDG muse/settings.json), no hooks.events de zcode.
+# El command SI lleva SUMMONAIKIT_HOOK_TARGET=muse (zcode no: el host no
+# propaga VAR=val).
+MUSE_AGENT_ROLES='implementer verifier reviewer adversary'
+MUSE_AGENT_MARCA_RE='^#[[:space:]]*saikit_owned:[[:space:]]*summonaikit-claude[[:space:]]*$'
+
+muse_config_dir() {
+  printf '%s' "${XDG_CONFIG_HOME:-${HOME:-}/.config}/muse"
+}
+
+muse_settings_path() {
+  printf '%s/settings.json' "$(muse_config_dir)"
+}
+
+muse_agents_dir() {
+  printf '%s/agents' "$(muse_config_dir)"
+}
+
+muse_binario() {
+  local ver_file ver bin
+  if [ "${SAIKIT_MUSE_BIN+set}" = "set" ]; then
+    if [ -n "$SAIKIT_MUSE_BIN" ] && [ -f "$SAIKIT_MUSE_BIN" ]; then
+      printf '%s' "$SAIKIT_MUSE_BIN"; return 0
+    fi
+    return 1
+  fi
+  ver_file="${HOME:-}/.local/bin/.muse-version"
+  [ -f "$ver_file" ] || return 1
+  ver="$(tr -d '[:space:]' < "$ver_file")"
+  [ -n "$ver" ] || return 1
+  bin="${HOME:-}/.local/bin/muse-bin-$ver"
+  [ -f "$bin" ] || return 1
+  printf '%s' "$bin"
+}
+
+muse_bash() {
+  local b
+  if [ "${SAIKIT_MUSE_BASH+set}" = "set" ]; then
+    if [ -n "$SAIKIT_MUSE_BASH" ] && [ -x "$SAIKIT_MUSE_BASH" ]; then
+      printf '%s' "$SAIKIT_MUSE_BASH"; return 0
+    fi
+    return 1
+  fi
+  if b="$(command -v bash 2>/dev/null)" && [ -n "$b" ] && [ -x "$b" ]; then
+    case "$b" in
+      /*) printf '%s' "$b"; return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+muse_harness_cmd() {  # $1=bash $2=fase (vacia = sin PHASE)
+  if [ -n "$2" ]; then
+    printf 'SUMMONAIKIT_HOOK_TARGET=muse SUMMONAIKIT_HOOK_PHASE=%s "%s" "%s" --saikit-harness-id 23.3' \
+      "$2" "$1" "$DEST"
+  else
+    printf 'SUMMONAIKIT_HOOK_TARGET=muse "%s" "%s" --saikit-harness-id 23.3' "$1" "$DEST"
+  fi
+}
+
+muse_dest_sin_meta() {
+  # saikit-23.3-muse-dest-meta
+  case "$DEST" in
+    *\$*|*\`*|*\"*|*$'\n'*) return 1 ;;
+  esac
+  return 0
+}
+
+muse_abortar_si_settings_dir() {
+  [ -d "$settings" ] || return 0
+  rm -f "$tmp_cand"
+  [ "$actual" = "$settings" ] || rm -f "$actual"
+  decir "[summonaikit] instalador: $settings es un directorio; no se escribe encima."
+  exit 5
+}
+
+# Una sola definicion de la purga para instalar y para --quitar-muse. Solo
+# reescribe un grupo objeto con .hooks arreglo que contiene una entrada nuestra;
+# todo lo demas (escalares, grupos sin hooks, .hooks no arreglo) queda igual:
+# el instalador no pisa nada ajeno.
+MUSE_JQ_PURGA='
+    def es_nuestra_h:
+      (type == "object") and ((.command | type) == "string")
+      and (.command | test("saikit-harness-id 23[.]3"));
+    def purgar_arr:
+      [ .[]
+        | if (type == "object") and ((.hooks | type) == "array") and any(.hooks[]; es_nuestra_h)
+          then (.hooks | map(select(es_nuestra_h | not))) as $kept
+            | if ($kept | length) == 0 then empty else .hooks = $kept end
+          else . end ];
+    def purgar_todos:
+      if (.hooks | type) != "object" then .
+      else .hooks |= with_entries(.value |= (if type == "array" then purgar_arr else . end))
+      end;
+'
+
+# Formas que Muse 1.3.0 rechaza con MalformedConfig, apagando TODOS los hooks
+# (medido): evento no arreglo, grupo no objeto, grupo sin hooks, hooks no
+# arreglo y handler no objeto. Una linea por forma encontrada.
+muse_hooks_mal_formados() {  # $1=settings -> stdout
+  jq -r '
+    (.hooks // {}) | to_entries[] as $e
+    | if ($e.value | type) != "array" then "hooks.\($e.key) no es un arreglo"
+      else $e.value | to_entries[] as $g
+        | if ($g.value | type) != "object" then "hooks.\($e.key)[\($g.key)] no es un objeto"
+          elif ($g.value | has("hooks") | not) then "hooks.\($e.key)[\($g.key)] no declara hooks"
+          elif ($g.value.hooks | type) != "array" then "hooks.\($e.key)[\($g.key)].hooks no es un arreglo"
+          else ($g.value.hooks | to_entries[] | select((.value | type) != "object")
+            | "hooks.\($e.key)[\($g.key)].hooks[\(.key)] no es un objeto")
+          end
+      end' "$1" 2>/dev/null
+}
+
+muse_settings_aceptable() {  # $1=settings existente
+  local sv mal
+  # saikit-23.3-muse-schema
+  sv="$(jq -r '.schema_version // empty' "$1" 2>/dev/null || true)"
+  if [ "$sv" != "1" ]; then
+    decir "[summonaikit] instalador: schema_version de muse no soportado (${sv:-vacio}); se exige 1."
+    return 1
+  fi
+  if jq -e 'has("hooks") and ((.hooks | type) != "object")' "$1" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: hooks de muse debe ser un objeto, no un array."
+    return 1
+  fi
+  # saikit-23.3-muse-mal-formados
+  mal="$(muse_hooks_mal_formados "$1")"
+  if [ -n "$mal" ]; then
+    decir "[summonaikit] instalador: el settings de muse trae hooks mal formados; Muse los apaga todos,"
+    decir "              tambien los del kit (MalformedConfig, medido en 1.3.0). No se toco nada:"
+    decir "              corrigelos a mano y vuelve a correr."
+    printf '%s\n' "$mal" | while IFS= read -r l; do decir "              $l"; done
+    return 1
+  fi
+  return 0
+}
+
+muse_ajustar_frontmatter() {
+  awk '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    function maptool(t) {
+      if (t == "Read") return "read_file"
+      if (t == "Edit") return "edit_file"
+      if (t == "Write") return "write_file"
+      if (t == "Bash") return "bash"
+      if (t == "Glob" || t == "Grep") return "search"
+      return t
+    }
+    /^---[[:space:]]*\r?$/ {
+      n++
+      if (n == 2) print "# saikit_owned: summonaikit-claude"
+      print
+      next
+    }
+    n == 1 && $0 ~ /^(model|effort|saikit_owned):/ { next }
+    n == 1 && $0 ~ /^tools:/ {
+      rest = $0
+      sub(/^tools:[[:space:]]*/, "", rest)
+      nout = 0
+      nparts = split(rest, parts, ",")
+      seen = ""
+      out = "tools:"
+      for (i = 1; i <= nparts; i++) {
+        t = trim(parts[i])
+        if (t == "") continue
+        m = maptool(t)
+        if (index("|" seen "|", "|" m "|")) continue
+        seen = seen m "|"
+        if (nout == 0) out = out " " m
+        else out = out ", " m
+        nout++
+      }
+      print out
+      next
+    }
+    n == 1 && $0 ~ /^skills:/ {
+      rest = $0
+      sub(/^skills:[[:space:]]*/, "", rest)
+      print "skills:"
+      nparts = split(rest, parts, ",")
+      for (i = 1; i <= nparts; i++) {
+        t = trim(parts[i])
+        if (t == "") continue
+        print "  - " t
+      }
+      next
+    }
+    { print }
+  '
+}
+
+muse_agente_tiene_marca_dest() {
+  zcode_agente_frontmatter "$1" | grep -Eq "$MUSE_AGENT_MARCA_RE"
+}
+
+muse_agente_estado() {  # $1=dest $2=trad $3=rol
+  local dest="$1" trad="$2" rol="$3" rc
+  if [ ! -e "$dest" ]; then printf 'AUSENTE'; return 0; fi
+  if [ ! -f "$dest" ] || [ ! -r "$dest" ]; then printf 'NO_OBSERVABLE'; return 0; fi
+  if muse_agente_tiene_marca_dest "$dest"; then
+    if cmp -s "$dest" "$trad"; then printf 'NUESTRO_IDENTICO'; else printf 'NUESTRO_DISTINTO'; fi
+    return 0
+  fi
+  agente_hash_en_manifiesto "$dest" "$rol"
+  rc=$?
+  case "$rc" in
+    0) printf 'VENDOR_CONOCIDO' ;;
+    1) printf 'DESCONOCIDO' ;;
+    *) printf 'NO_OBSERVABLE' ;;
+  esac
+}
+
+muse_registro_completo() {  # $1=settings $2=dest_claude
+  local s="$1" dest="$2"
+  jq -e --arg dest "$dest" '
+    def cmd_ok($c):
+      ($c | type == "string")
+      and ($c | test("saikit-harness-id 23[.]3"))
+      and ($c | test("SUMMONAIKIT_HOOK_TARGET=muse"))
+      and ($c | contains($dest));
+    def fase($n; $matcher; $phase):
+      any((.hooks[$n] // [])[];
+        (if $matcher == "" then true else .matcher == $matcher end)
+        and any((.hooks // [])[];
+          cmd_ok(.command // "")
+          and (if $phase == "" then
+                 ((.command // "") | test("SUMMONAIKIT_HOOK_PHASE=") | not)
+               else
+                 ((.command // "") | test("SUMMONAIKIT_HOOK_PHASE=" + $phase))
+               end)));
+    (.schema_version | tostring) == "1"
+    and fase("SessionStart"; ""; "session")
+    and fase("UserPromptSubmit"; ""; "prompt")
+    and fase("PreToolUse"; "bash"; "")
+    and fase("PostToolUse"; "bash|edit_file|write_file|subagent_spawn|subagent_wait"; "tool")
+    and fase("Stop"; ""; "stop")
+  ' "$s" >/dev/null 2>&1
+}
+
+muse_parsear_validacion() {  # $1=stderr -> MUSE_VAL_M MUSE_VAL_DETALLE
+  local m line
+  m=''
+  MUSE_VAL_DETALLE=''
+  MUSE_VAL_M=0
+  MUSE_VAL_M_MAL=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      'muse: Hooks:'*)
+        m="${line##* · }"
+        m="${m%% warning*}"
+        ;;
+      'muse:   settings.json:'*)
+        MUSE_VAL_DETALLE="${MUSE_VAL_DETALLE}${line}"$'\n'
+        ;;
+    esac
+  done <<< "$1"
+  if [ -n "$m" ]; then
+    case "$m" in
+      *[!0-9]*) MUSE_VAL_M_MAL=1; MUSE_VAL_M=0 ;;
+      *) MUSE_VAL_M="$m" ;;
+    esac
+  fi
+}
+
+muse_transformar_para_validar() {  # $1=settings $2=marcas_dir -> stdout
+  jq --arg marcas "$2" '
+    del(.mcpServers)
+    | if (.hooks | type) != "object" then .
+      else .hooks |= with_entries(
+        .key as $ev
+        | .value |= (if type == "array" then map(
+            if type == "object" then
+              .hooks |= (if type == "array" then map(
+                if type == "object" then
+                  if ((.command // "") | test("saikit-harness-id 23[.]3"))
+                  then .command = ("touch " + (($marcas + "/" + $ev) | @sh))
+                  elif (.command | type) == "string"
+                  then .command = "/usr/bin/true"
+                  else . end
+                else . end
+              ) else . end)
+            else . end
+          ) else . end)
+      ) end
+  ' "$1"
+}
+
+muse_correr_validacion() {  # $1=settings_src $2=bin -> rc; marcas en $3
+  local src="$1" bin="$2" marcas="$3" caja work xdg stderr rc retried
+  MUSE_VAL_RC=0
+  MUSE_VAL_M=0
+  MUSE_VAL_M_MAL=0
+  MUSE_VAL_DETALLE=''
+  MUSE_VAL_STDERR=''
+  caja="$(mktemp -d "${TMPDIR:-/tmp}/saikit-muse-val-XXXXXX")" || return 4
+  work="$caja/work"
+  xdg="$caja/xdg"
+  retried=0
+  mkdir -p "$work" "$xdg/muse" "$caja/home" "$caja/data" "$caja/state" "$caja/cache" "$marcas" \
+    || { rm -rf "$caja"; return 4; }
+  # saikit-23.3-muse-git-retry
+  while git -C "$work" rev-parse --is-inside-work-tree >/dev/null 2>&1; do
+    rm -rf "$caja"
+    if [ "$retried" -eq 1 ]; then return 4; fi
+    retried=1
+    caja="$(mktemp -d "/tmp/saikit-muse-val-XXXXXX")" || return 4
+    work="$caja/work"
+    xdg="$caja/xdg"
+    mkdir -p "$work" "$xdg/muse" "$caja/home" "$caja/data" "$caja/state" "$caja/cache" "$marcas" \
+      || { rm -rf "$caja"; return 4; }
+  done
+  muse_transformar_para_validar "$src" "$marcas" > "$xdg/muse/settings.json" || {
+    rm -rf "$caja"; return 4
+  }
+  stderr="$(
+    cd "$work" && env HOME="$caja/home" XDG_CONFIG_HOME="$xdg" \
+      XDG_DATA_HOME="$caja/data" XDG_STATE_HOME="$caja/state" \
+      XDG_CACHE_HOME="$caja/cache" \
+      "$bin" exec --no-session-log --provider echo "ping" 2>&1
+  )"
+  rc=$?
+  muse_parsear_validacion "${stderr:-}"
+  if [ "${MUSE_VAL_M_MAL:-0}" -eq 1 ]; then
+    rm -rf "$caja"
+    return 4
+  fi
+  MUSE_VAL_RC="$rc"
+  MUSE_VAL_STDERR="${stderr:-}"
+  rm -rf "$caja"
+  return 0
+}
+
+muse_detalle_subconjunto() {  # $1=cand_detalle $2=cur_detalle
+  local line
+  [ -z "$1" ] && return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -z "$line" ] && continue
+    printf '%s' "$2" | grep -Fxq "$line" || return 1
+  done <<< "$1"
+  return 0
+}
+
+muse_candidato_jq() {  # $1=src $2=bash -> stdout
+  local cmd_ss cmd_ups cmd_pre cmd_ptu cmd_stop
+  cmd_ss="$(muse_harness_cmd "$2" session)"
+  cmd_ups="$(muse_harness_cmd "$2" prompt)"
+  cmd_pre="$(muse_harness_cmd "$2" "")"
+  cmd_ptu="$(muse_harness_cmd "$2" tool)"
+  cmd_stop="$(muse_harness_cmd "$2" stop)"
+  jq --arg ss "$cmd_ss" --arg ups "$cmd_ups" --arg pre "$cmd_pre" \
+     --arg ptu "$cmd_ptu" --arg stop "$cmd_stop" "$MUSE_JQ_PURGA"'
+    def entrada(cmd; to): {type:"command", command:cmd, timeout:to};
+    def grupo(cmd; to; matcher):
+      (if matcher == "" then {} else {matcher: matcher} end)
+      + {hooks:[entrada(cmd; to)]};
+    def es_canon(e; cmd; to):
+      (e|type)=="object" and ((e.type // "")=="command")
+      and ((e.command // "")==cmd) and ((e.timeout // 0)==to);
+    def grupo_ok(g; matcher):
+      ((g | keys | map(select(. != "matcher" and . != "hooks")) | length) == 0)
+      and (matcher == "" or ((g.matcher // "") == matcher));
+    def tiene(fase; cmd; to; matcher):
+      any((.hooks[fase] // [])[];
+        grupo_ok(.; matcher) and any((.hooks // [])[]; es_canon(.; cmd; to)));
+    def asegurar(fase; cmd; to; matcher):
+      if tiene(fase; cmd; to; matcher) then .
+      else .hooks[fase] = ((.hooks[fase] // []) + [grupo(cmd; to; matcher)])
+      end;
+    if (.hooks | type) != "object" then .hooks = {} else . end
+    | purgar_todos
+    | asegurar("SessionStart"; $ss; 30; "")
+    | asegurar("UserPromptSubmit"; $ups; 30; "")
+    | asegurar("PreToolUse"; $pre; 30; "bash")
+    | asegurar("PostToolUse"; $ptu; 30; "bash|edit_file|write_file|subagent_spawn|subagent_wait")
+    | asegurar("Stop"; $stop; 600; "")
+  ' "$1"
+}
+
+muse_estructura_ok() {  # $1=candidato $2=bash
+  local cmd_ss cmd_ups cmd_pre cmd_ptu cmd_stop
+  cmd_ss="$(muse_harness_cmd "$2" session)"
+  cmd_ups="$(muse_harness_cmd "$2" prompt)"
+  cmd_pre="$(muse_harness_cmd "$2" "")"
+  cmd_ptu="$(muse_harness_cmd "$2" tool)"
+  cmd_stop="$(muse_harness_cmd "$2" stop)"
+  jq -e --arg ss "$cmd_ss" --arg ups "$cmd_ups" --arg pre "$cmd_pre" \
+     --arg ptu "$cmd_ptu" --arg stop "$cmd_stop" '
+    def tiene(fase; cmd; to; matcher):
+      any((.hooks[fase] // [])[];
+        (matcher == "" or .matcher == matcher)
+        and any((.hooks // [])[];
+          (.type=="command") and (.command==cmd) and (.timeout==to)));
+    tiene("SessionStart"; $ss; 30; "")
+    and tiene("UserPromptSubmit"; $ups; 30; "")
+    and tiene("PreToolUse"; $pre; 30; "bash")
+    and tiene("PostToolUse"; $ptu; 30; "bash|edit_file|write_file|subagent_spawn|subagent_wait")
+    and tiene("Stop"; $stop; 600; "")
+  ' "$1" >/dev/null 2>&1
+}
+
+muse_instalar_agentes() {
+  local dest_dir rol fuente dest trad estado i
+  local -a roles=() dests=() trads=() estados=()
+  dest_dir="$(muse_agents_dir)"
+  for rol in $MUSE_AGENT_ROLES; do
+    fuente="$repo/agents/$rol.md"
+    if [ ! -f "$fuente" ] || [ ! -r "$fuente" ]; then
+      decir "[summonaikit] instalador: falta la plantilla de agente $fuente"; exit 2
+    fi
+    zcode_agente_tiene_marca "$fuente" || {
+      decir "[summonaikit] instalador: la plantilla $fuente no lleva saikit_owned."; exit 2; }
+    zcode_agente_frontmatter "$fuente" | grep -q "^name: ${rol}$" || {
+      decir "[summonaikit] instalador: la plantilla $fuente no declara name: $rol."; exit 2; }
+  done
+  [ "$DRY_RUN" -eq 1 ] || mkdir -p "$dest_dir" || {
+    decir "[summonaikit] instalador: no se pudo crear $dest_dir"; exit 5; }
+  limpiar_trads_vendor
+  for rol in $MUSE_AGENT_ROLES; do
+    fuente="$repo/agents/$rol.md"
+    dest="$dest_dir/$rol.md"
+    trad="$(mktemp "${TMPDIR:-/tmp}/.saikit-trad-XXXXXX")" || { limpiar_trads_vendor; exit 5; }
+    TRADS_VENDOR_PENDIENTES+=("$trad")
+    if ! agente_traducido muse "$fuente" | muse_ajustar_frontmatter > "$trad"; then
+      limpiar_trads_vendor
+      decir "[summonaikit] instalador: fallo agente_traducido para muse/$rol; no se toco nada."
+      exit 2
+    fi
+    estado="$(muse_agente_estado "$dest" "$trad" "$rol")"
+    if [ "$estado" = 'NO_OBSERVABLE' ]; then
+      limpiar_trads_vendor
+      decir "[summonaikit] instalador: no se pudo clasificar $dest."; exit 5
+    fi
+    roles+=("$rol"); dests+=("$dest"); trads+=("$trad"); estados+=("$estado")
+  done
+  if [ "$DRY_RUN" -eq 1 ]; then
+    for i in "${!roles[@]}"; do
+      rol="${roles[$i]}"; dest="${dests[$i]}"; estado="${estados[$i]}"
+      case "$estado" in
+        AUSENTE)          decir "[summonaikit] dry-run: AGENTE MUSE AUSENTE: $rol; se instalaria." ;;
+        NUESTRO_IDENTICO) decir "[summonaikit] dry-run: AGENTE MUSE ya al dia: $rol." ;;
+        NUESTRO_DISTINTO) decir "[summonaikit] dry-run: AGENTE MUSE NUESTRO distinto: $rol; se repararia (con backup)." ;;
+        VENDOR_CONOCIDO)  decir "[summonaikit] dry-run: AGENTE MUSE VENDOR CONOCIDO: $rol; se archivaria y reemplazaria." ;;
+        DESCONOCIDO)      decir "[summonaikit] dry-run: AGENTE MUSE DESCONOCIDO: $rol; no se tocaria." ;;
+      esac
+      decir "              destino: $dest"
+    done
+    limpiar_trads_vendor
+    return 0
+  fi
+  for i in "${!roles[@]}"; do
+    rol="${roles[$i]}"; dest="${dests[$i]}"; trad="${trads[$i]}"; estado="${estados[$i]}"
+    case "$estado" in
+      AUSENTE)
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
+        decir "[summonaikit] AGENTE MUSE INSTALADO: $rol"
+        ;;
+      NUESTRO_IDENTICO)
+        decir "[summonaikit] AGENTE MUSE ya al dia: $rol"
+        ;;
+      NUESTRO_DISTINTO)
+        zcode_archivar_agente "$dest" || { limpiar_trads_vendor; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
+        decir "[summonaikit] AGENTE MUSE REPARADO: $rol"
+        ;;
+      VENDOR_CONOCIDO)
+        claude_archivar_vendor "$dest" || { limpiar_trads_vendor; exit 5; }
+        zcode_publicar_agente "$trad" "$dest" || { limpiar_trads_vendor; exit 5; }
+        decir "[summonaikit] AGENTE MUSE ADOPTADO (vendor conocido): $rol"
+        ;;
+      DESCONOCIDO)
+        decir "[summonaikit] AGENTE MUSE DESCONOCIDO: $rol — no se toco."
+        decir "              destino: $dest"
+        ;;
+    esac
+  done
+  limpiar_trads_vendor
+}
+
+muse_quitar_agentes() {
+  local dest_dir rol dest
+  dest_dir="$(muse_agents_dir)"
+  for rol in $MUSE_AGENT_ROLES; do
+    dest="$dest_dir/$rol.md"
+    [ -f "$dest" ] || continue
+    if muse_agente_tiene_marca_dest "$dest"; then
+      zcode_archivar_agente "$dest" || {
+        decir "[summonaikit] instalador: no se pudo respaldar $dest antes de quitarlo"; exit 5; }
+      rm -f "$dest" || {
+        decir "[summonaikit] instalador: no se pudo borrar $dest"; exit 5; }
+      decir "[summonaikit] AGENTE MUSE QUITADO: $rol"
+    else
+      decir "[summonaikit] AGENTE MUSE DESCONOCIDO: $rol — no se quito."
+    fi
+  done
+}
+
+muse_instalar() {
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --host muse requiere jq (no encontrado)."; exit 2; }
+  if command -v cygpath >/dev/null 2>&1; then
+    decir "[summonaikit] unknown — --host muse no esta medido en Windows/MSYS."
+    exit 4
+  fi
+  local cfg settings bash_bin muse_bin actual tmp_cand marcas_cur marcas_cand
+  local cur_m cur_det cand_m cand_det cur_rc cand_rc
+  cfg="$(muse_config_dir)"
+  settings="$(muse_settings_path)"
+  [ -d "$cfg" ] || {
+    decir "[summonaikit] instalador: no existe el directorio de Muse ($cfg)."
+    decir "              Muse no esta instalado. No se cablea nada."; exit 2; }
+  case "$estado" in
+    NUESTRO_IDENTICO) : ;;
+    *)
+      decir "[summonaikit] instalador: el DEST ($DEST) no es nuestro e identico a la fuente ($estado)."
+      decir "              --host muse NO instala el archivo: instalalo primero (sin --host)."
+      decir "              No se cablea un dest que no se controla."; exit 2 ;;
+  esac
+  muse_dest_sin_meta || {
+    decir "[summonaikit] instalador: --dest contiene metacaracteres de shell; rechazado."
+    exit 2; }
+  if ! grep -q 'PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY"' "$DEST" 2>/dev/null; then
+    decir "[summonaikit] instalador: el DEST no tiene el aislamiento por host de 5.3."
+    decir '              Falta: PROJECT_DIR="$STATE_ROOT/$HOST/$PROJECT_KEY" en '"$DEST"
+    decir "              No se cablea un dest que solo menciona HOST."; exit 2; fi
+  bash_bin="$(muse_bash)" || {
+    decir "[summonaikit] instalador: no encontre un bash para el command de muse."; exit 2; }
+  "$bash_bin" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: $bash_bin no es bash >= 4; Muse bloquearia cada prompt."; exit 2; }
+  "$bash_bin" -n "$DEST" >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: bash -n fallo sobre DEST ($DEST)."; exit 2; }
+  muse_bin="$(muse_binario)" || {
+    decir "[summonaikit] unknown — no hay binario de Muse para validar (SAIKIT_MUSE_BIN o muse-bin-\$(version))."
+    decir "              No se escribio nada, ni en --dry-run."; exit 4; }
+  if [ -e "$settings" ]; then
+    if [ ! -f "$settings" ] || [ ! -r "$settings" ]; then
+      decir "[summonaikit] unknown — no se pudo leer $settings"; exit 4
+    fi
+    if ! jq -e . "$settings" >/dev/null 2>&1; then
+      decir "[summonaikit] instalador: el settings de muse no es JSON valido ($settings)."; exit 2
+    fi
+    muse_settings_aceptable "$settings" || exit 2
+    actual="$settings"
+  else
+    actual="$(mktemp "${TMPDIR:-/tmp}/saikit-muse-empty-XXXXXX")" || exit 5
+    printf '%s\n' '{"schema_version":1,"hooks":{}}' > "$actual"
+  fi
+  tmp_cand="$(mktemp "${TMPDIR:-/tmp}/saikit-muse-cand-XXXXXX")" || exit 5
+  if ! muse_candidato_jq "$actual" "$bash_bin" > "$tmp_cand"; then
+    rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: jq fallo al armar el candidato muse."; exit 5
+  fi
+  if [ -n "${SAIKIT_MUSE_PATCH_CANDIDATE:-}" ]; then
+    # Costura de test (no contrato): SAIKIT_MUSE_PATCH_CANDIDATE es un filtro jq
+    # que sucia el candidato ANTES de validar, para afirmar rechazos. Nunca se
+    # documenta como API; si llega en una corrida real, tambien sucia lo que se
+    # escribiria en el settings — limite declarado, no un atajo de instalacion.
+    if ! jq "$SAIKIT_MUSE_PATCH_CANDIDATE" "$tmp_cand" > "${tmp_cand}.p"; then
+      rm -f "$tmp_cand" "${tmp_cand}.p"
+      [ "$actual" = "$settings" ] || rm -f "$actual"
+      decir "[summonaikit] instalador: SAIKIT_MUSE_PATCH_CANDIDATE no es jq valido."; exit 2
+    fi
+    mv -f "${tmp_cand}.p" "$tmp_cand"
+  fi
+  if ! muse_estructura_ok "$tmp_cand" "$bash_bin"; then
+    rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: el candidato muse no trae las cinco entradas canonicas (evento/matcher/fase/comando/timeout)."
+    exit 2
+  fi
+  marcas_cur="$(mktemp -d "${TMPDIR:-/tmp}/saikit-muse-mcur-XXXXXX")" || exit 5
+  marcas_cand="$(mktemp -d "${TMPDIR:-/tmp}/saikit-muse-mcand-XXXXXX")" || exit 5
+  if ! muse_correr_validacion "$actual" "$muse_bin" "$marcas_cur"; then
+    rm -rf "$marcas_cur" "$marcas_cand" "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] unknown — no se pudo armar la caja de validacion muse."; exit 4
+  fi
+  cur_rc="$MUSE_VAL_RC"; cur_m="$MUSE_VAL_M"; cur_det="$MUSE_VAL_DETALLE"
+  if [ -n "$MUSE_VAL_STDERR" ]; then
+    printf '%s\n' "$MUSE_VAL_STDERR" | grep '^muse:   settings.json:' \
+      | while IFS= read -r line; do decir "              aviso previo: $line"; done || true
+  fi
+  if ! muse_correr_validacion "$tmp_cand" "$muse_bin" "$marcas_cand"; then
+    rm -rf "$marcas_cur" "$marcas_cand" "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] unknown — no se pudo validar el candidato muse."; exit 4
+  fi
+  cand_rc="$MUSE_VAL_RC"; cand_m="$MUSE_VAL_M"; cand_det="$MUSE_VAL_DETALLE"
+  if [ "$cand_rc" -ne 0 ] || printf '%s' "$MUSE_VAL_STDERR" | grep -q 'malformed settings'; then
+    rm -rf "$marcas_cur" "$marcas_cand" "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: Muse rechazo el candidato (malformed settings o rc=$cand_rc)."
+    exit 2
+  fi
+  if ! muse_detalle_subconjunto "$cand_det" "$cur_det" || [ "$cand_m" -gt "$cur_m" ]; then
+    rm -rf "$marcas_cur" "$marcas_cand" "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: el candidato muse agrega avisos nuevos (detalle o conteo M)."
+    exit 2
+  fi
+  if [ ! -f "$marcas_cand/SessionStart" ] || [ ! -f "$marcas_cand/UserPromptSubmit" ] \
+     || [ ! -f "$marcas_cand/Stop" ]; then
+    rm -rf "$marcas_cur" "$marcas_cand" "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: validacion muse: faltan marcas (SessionStart/UserPromptSubmit/Stop)."
+    exit 2
+  fi
+  rm -rf "$marcas_cur" "$marcas_cand"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    muse_instalar_agentes
+    decir "[summonaikit] dry-run: registraria el harness en el settings de muse (5 eventos, id 23.3); no se escribio nada."
+    decir "              settings: $settings"
+    rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    return 0
+  fi
+  # saikit-23.3-muse-settings-file
+  muse_abortar_si_settings_dir
+  muse_instalar_agentes
+  local uc_dir bak local_atom
+  uc_dir="$(dirname "$settings")"
+  umask 077
+  mkdir -p "$uc_dir" || { rm -f "$tmp_cand"; exit 5; }
+  bak="$uc_dir/saikit-backups/$(basename "$settings").muse.$(date +%Y%m%d-%H%M%S).bak"
+  if [ -f "$settings" ]; then
+    if ! mkdir -p "$(dirname "$bak")" || ! cp "$settings" "$bak"; then
+      rm -f "$tmp_cand"
+      [ "$actual" = "$settings" ] || rm -f "$actual"
+      decir "[summonaikit] instalador: no se pudo respaldar el settings de muse."; exit 5
+    fi
+  fi
+  if ! jq -e . "$tmp_cand" >/dev/null 2>&1; then
+    rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: el candidato muse no es JSON valido; settings intacto."; exit 5
+  fi
+  muse_abortar_si_settings_dir
+  local_atom="$(mktemp "$uc_dir/.saikit-muse-XXXXXX")" || {
+    rm -f "$tmp_cand"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: no se pudo crear el temporal atomico en $uc_dir."; exit 5
+  }
+  if ! cp "$tmp_cand" "$local_atom" || ! mv -f "$local_atom" "$settings"; then
+    rm -f "$tmp_cand" "$local_atom"
+    [ "$actual" = "$settings" ] || rm -f "$actual"
+    decir "[summonaikit] instalador: el mv final fallo; settings intacto."; exit 5
+  fi
+  rm -f "$tmp_cand"
+  [ "$actual" = "$settings" ] || rm -f "$actual"
+  if [ ! -f "$settings" ]; then
+    decir "[summonaikit] instalador: el settings no quedo como archivo tras el mv."; exit 5
+  fi
+  decir "[summonaikit] REGISTRADO: harness en el settings de muse (5 eventos, id 23.3)."
+  decir "              settings: $settings"
+  [ -f "${bak:-}" ] && decir "              backup:  $bak"
+  decir "[summonaikit] unknown — catalogo muse: la aceptacion del despacho con modelo real la mide el lead."
+}
+
+muse_quitar() {
+  command -v jq >/dev/null 2>&1 || {
+    decir "[summonaikit] instalador: --quitar-muse requiere jq (no encontrado)."; exit 2; }
+  local settings uc_dir tmp_new bak
+  settings="$(muse_settings_path)"
+  [ -f "$settings" ] || {
+    decir "[summonaikit] instalador: no existe el settings de muse ($settings)."; exit 2; }
+  if ! jq -e . "$settings" >/dev/null 2>&1; then
+    decir "[summonaikit] instalador: el settings no es JSON valido; --quitar-muse no procede."; exit 2
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    local dr_n dr_rol dr_dest
+    dr_n="$(jq '[((.hooks // {})[] | .[]? | (.hooks // [])[]?
+                 | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' \
+              "$settings" 2>/dev/null)" || dr_n='?'
+    decir "[summonaikit] dry-run: --quitar-muse no ejecuta la retirada (solo reporta)."
+    decir "              quitaria ${dr_n} entrada(s) saikit-harness-id 23.3 del settings (con backup): $settings"
+    for dr_rol in $MUSE_AGENT_ROLES; do
+      dr_dest="$(muse_agents_dir)/$dr_rol.md"
+      [ -f "$dr_dest" ] || continue
+      if muse_agente_tiene_marca_dest "$dr_dest"; then
+        decir "              dry-run: AGENTE MUSE nuestro: $dr_rol — se quitaria (con backup): $dr_dest"
+      else
+        decir "              dry-run: AGENTE MUSE DESCONOCIDO: $dr_rol — no se quitaria: $dr_dest"
+      fi
+    done
+    return 0
+  fi
+  uc_dir="$(dirname "$settings")"
+  umask 077
+  tmp_new="$(mktemp "$uc_dir/.saikit-muse-XXXXXX")" || {
+    decir "[summonaikit] instalador: no se pudo crear el temporal en $uc_dir."; exit 5; }
+  bak="$uc_dir/saikit-backups/$(basename "$settings").muse.$(date +%Y%m%d-%H%M%S).bak"
+  if ! mkdir -p "$(dirname "$bak")"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo crear el dir de backups."; exit 5; fi
+  if ! cp "$settings" "$bak"; then
+    rm -f "$tmp_new"; decir "[summonaikit] instalador: no se pudo respaldar el settings."; exit 5; fi
+  # saikit-23.3-muse-purga-quitar
+  if ! jq "$MUSE_JQ_PURGA"' purgar_todos' "$settings" > "$tmp_new"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: jq fallo al quitar; settings intacto."; exit 5; fi
+  if ! jq -e . "$tmp_new" >/dev/null 2>&1; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el resultado de jq no es JSON valido; settings intacto."; exit 5; fi
+  if ! mv -f "$tmp_new" "$settings"; then
+    rm -f "$tmp_new"
+    decir "[summonaikit] instalador: el mv final fallo; settings intacto."; exit 5; fi
+  decir "[summonaikit] QUITADO: entradas 23.3 del settings de muse."
+  decir "              settings: $settings"
+  decir "              backup:  $bak"
+  muse_quitar_agentes
 }
 
 # ---------------------------------------------------------------- Task 7.5: grok
@@ -2277,6 +3013,33 @@ if [ "$CHECK" -eq 1 ]; then
         _fallo=1; _causas="$_causas registro-$_h-$_reg" ;;
     esac
   done
+  # 23.3: --check sin host suma una fila REGISTRO muse si existe el dir de
+  # config. Muse reusa la copia de claude: no hay dest propio. zcode no tiene
+  # esta fila (el check de zcode ES el de claude).
+  if [ -z "$HOST" ]; then
+    _mdir="${XDG_CONFIG_HOME:-${HOME:-}/.config}/muse"
+    if [ -d "$_mdir" ]; then
+      _mdest="${HOME:-}/.claude/hooks/summonaikit-harness.sh"
+      _mset="$_mdir/settings.json"
+      _mreg='falta-registro'
+      if [ ! -e "$_mset" ]; then
+        _mreg='falta-registro'
+      elif [ ! -f "$_mset" ] || [ ! -r "$_mset" ]; then
+        _mreg='no-observable'
+      elif ! jq -e . "$_mset" >/dev/null 2>&1; then
+        _mreg='no-observable'
+      elif muse_registro_completo "$_mset" "$_mdest"; then
+        _mreg='ok'
+      else
+        _mreg='falta-registro'
+      fi
+      decir "[summonaikit] check: host=muse dest=$_mdest resultado=reusa-claude registro=$_mreg"
+      case "$_mreg" in
+        falta-registro|no-observable)
+          _fallo=1; _causas="$_causas registro-muse-$_mreg" ;;
+      esac
+    fi
+  fi
   if [ "$PROC_CONOCIDA" -eq 0 ]; then
     _fallo=1; _causas="$_causas procedencia-desconocida"
   elif [ "$_master_juicio" = 'difiere' ]; then
@@ -3179,6 +3942,15 @@ if [ "$HOST" = "kimi" ]; then
     exit $?
   fi
   kimi_instalar_agentes
+  exit $?
+fi
+
+if [ "$HOST" = "muse" ]; then
+  if [ "$QUITAR_MUSE" -eq 1 ]; then
+    muse_quitar
+    exit $?
+  fi
+  muse_instalar
   exit $?
 fi
 
