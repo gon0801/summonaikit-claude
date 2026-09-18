@@ -308,7 +308,6 @@ if [ "$CHECK" -eq 1 ]; then
     printf '[summonaikit] instalador: --check no se combina con flujos de escritura ni de quite.\n' >&2
     exit 2
   fi
-  # saikit-23.3-muse-check-host
   if [ "$HOST" = "kimi" ] || [ "$HOST" = "zcode" ] || [ "$HOST" = "muse" ]; then
     printf '[summonaikit] instalador: --check --host solo acepta claude, grok, dsh o codex (kimi no declara copia; zcode y muse reusan la de claude).\n' >&2
     exit 2

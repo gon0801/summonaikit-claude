@@ -22,8 +22,7 @@ fail=0
 for mutation in omitir_muse_check_host ignorar_marcas omitir_comparacion_avisos omitir_target_muse; do
   case "$mutation" in
     omitir_muse_check_host)
-      # La guarda de --check --host (no la lista de --host) debe nombrar muse.
-      sed '/# saikit-23.3-muse-check-host/{n;s/ || \[ "$HOST" = "muse" \]//;}' \
+      sed 's/ || \[ "$HOST" = "muse" \]; then/; then/' \
         "$source_tool" > "$mutant"
       expected='--check --host muse salio' ;;
     ignorar_marcas)

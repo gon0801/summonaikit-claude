@@ -70,12 +70,12 @@ reset_muse() {
   cp "$fuente" "$dest"
 }
 
-# --- --check --host muse afirma el MENSAJE de la guarda 288-291, no el de --host ---
+# --- --check --host muse afirma el MENSAJE de la guarda de --check, no el de --host ---
 caso "--check --host muse sale 2 y el mensaje nombra muse"
 out="$(bash "$tool" --check --host muse 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] || malo "--check --host muse salio $rc, se esperaba 2: $out"
 printf '%s' "$out" | grep -Fq -- '--check --host solo acepta' \
-  || malo "debia ser el mensaje de --check (lineas 288-291), no el de --host: $out"
+  || malo "debia ser el mensaje de --check, no el de --host: $out"
 printf '%s' "$out" | grep -qi 'muse' \
   || malo "el mensaje de --check --host debe nombrar muse: $out"
 printf '%s' "$out" | grep -Fq 'solo acepta "zcode"' \
@@ -108,6 +108,17 @@ out="$(host_muse 2>&1)"; rc=$?
 printf '%s' "$out" | grep -qi 'muse' || malo "debe decir que Muse no esta instalado: $out"
 despues="$(find "$XDG_CONFIG_HOME" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')"
 [ "$antes" = "$despues" ] || malo "sin dir muse no debe escribir bajo XDG_CONFIG_HOME"
+
+# --- Windows/MSYS (cygpath presente) => unknown exit 4, no escribe ---
+caso "cygpath en PATH => unknown exit 4, no escribe"
+reset_muse
+mkdir -p "$SANDBOX/binwin"
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/binwin/cygpath"
+chmod +x "$SANDBOX/binwin/cygpath"
+out="$(PATH="$SANDBOX/binwin:$PATH" host_muse 2>&1)"; rc=$?
+[ "$rc" -eq 4 ] || malo "con cygpath salio $rc, se esperaba 4: $out"
+printf '%s' "$out" | grep -qi 'unknown' || malo "con cygpath debe decir unknown: $out"
+[ ! -f "$settings" ] || malo "con cygpath no debe escribir settings"
 
 # --- sin binario => unknown exit 4, incluso dry-run ---
 caso "sin binario (SAIKIT_MUSE_BIN vacia) => unknown 4, dry-run tampoco escribe"
