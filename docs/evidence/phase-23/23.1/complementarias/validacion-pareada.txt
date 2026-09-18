@@ -1,6 +1,13 @@
 Muse 1.3.0-R3401.1, proveedor echo, 2026-09-18 UTC. Muse totalmente aislado (HOME y los cuatro XDG_* temporales, cwd no-git).
 Script: los cinco eventos nuestros dejan una marca con touch; se lista que marcas quedaron. Stderr filtrado a las lineas de Muse relevantes (muse: Hooks, las de detalle muse:   settings.json:, muse: Agent delegation, malformed y tbh:). Se omiten local session messaging disabled y workspace root, que no son avisos; la segunda cambia en cada caja.
 
+Forma JSON de cada escenario de M1 (bajo "hooks"):
+  inventado                    : "NoExiste":[{"hooks":[{"type":"command","command":"/usr/bin/true"}]}]
+  ajeno_valido_mas_inventado   : "Notification":[{"hooks":[…true…]}] y el mismo "NoExiste"
+  grupo_sin_hooks              : "Notification":[{"command":"/usr/bin/true"}]  -> grupo con campo desconocido `command`: UnsupportedHandler, Muse salta solo ese grupo
+  NUESTRO grupo PreToolUse sin hooks: "PreToolUse":[{"matcher":"bash"}]      -> grupo sin `hooks`: MalformedConfig, no corre ningun hook
+  CANDIDATO = el actual mas nuestros cinco eventos, cada uno con un command "touch <caja>/marcas/<Evento>".
+
 == M1: validacion pareada actual contra candidato (stderr crudo filtrado a lineas de Muse) ==
 ### inventado: ACTUAL
 rc=0 marcas=[]

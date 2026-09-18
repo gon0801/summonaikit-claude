@@ -149,10 +149,12 @@ de entrega y este brief no lo repite.
    `tests/fixtures/muse/derivados/`, con un `README.md` que da el comando `jq`
    de cada uno: (a) un `UserPromptSubmit` con `-saikit` con el `session_id`
    del fixture 07, otro con el del 06 y otro con el del 17, para armar esas
-   sesiones; (b) un `PostToolUse subagent_wait` con
-   `tool_input.subagent_id` `verify-reminder` y status `ready`, en sesión
-   armada y sin pendiente: no acredita, y lo mata la mutación "acredita sin
-   pendiente"; (c) un `PreToolUse` de `bash` con
+   sesiones; (b) un `PostToolUse subagent_wait` que se arma desde el fixture
+   15 con
+   `jq '.tool_input.subagent_id="verify-reminder" | .tool_response |= (fromjson | .subagent_id="verify-reminder" | tojson)'`,
+   para que los dos ids coincidan; en sesión armada y sin pendiente no
+   acredita. Su mutación es "sin pendiente, acredita `canonical_agent_role`
+   del `subagent_id`", y este caso la tiene que matar; (c) un `PreToolUse` de `bash` con
    `tool_name` `bash` y otro con `bash_input`; (d) un `PostToolUse
    subagent_read_result` con `jq '.tool_name="subagent_read_result"'` sobre el
    fixture 15 (su forma real no está medida: `unknown`, corrida del lead); (e)
@@ -213,7 +215,7 @@ BY SUBAGENT:` que ya existe.
 | Resolución de `HOST` | el `if/elif` que termina en `HOST=other`, cerca de la línea 218. Muse no deja variables propias en el entorno: la señal es `SUMMONAIKIT_HOOK_TARGET=muse`, como codex y dsh |
 | `TOOL_HINT` | líneas 63 a 66. Para Muse: "the subagent_spawn tool (then wait on each with subagent_wait)" |
 | Rama de la ceremonia | `case "$TARGET" in claude\|codex\|grok\|dsh)`, línea 4263 |
-| Detección de edición | agrega `write_file` SOLO a la regex de la línea 3329 (ya tiene `edit_file`; ningún otro host emite `write_file`, así que la golden no cambia). La de la línea 2900 es del candado del adversary, inalcanzable en Muse y fuera de alcance. Con `HOST=muse` y solo para `write_file`/`edit_file`, la ruta sale de `tool_input.path` cuando no hay `file_path`. Con los fixtures 17 y 18 tal cual solo se prueba la ruta del log (`implemented: notas.txt` contra `implemented: file edit` en master). El rojo de `last_code_edit` en `harness-state-review-notice.env`, y la mutación que quita `write_file`, se prueban con el derivado (e), porque `notas.txt` es no-código. No midas en `implemented`: en master ya vale 1 |
+| Detección de edición | las regex de las líneas 2900 y 3329 comparten a propósito el mismo vocabulario: el comentario de hook:2894-2896 dice "una sola definicion". Sácalo a una constante que usen las dos y agrega `write_file` ahí (ya tienen `edit_file`; ningún otro host emite `write_file`, así que la golden no cambia). La rama de la 2900 es del candado del adversary, inalcanzable en Muse; la mutación que quita `write_file` de la constante la mata el derivado (e). Con `HOST=muse` y solo para `write_file`/`edit_file`, la ruta sale de `tool_input.path` cuando no hay `file_path`. Con los fixtures 17 y 18 tal cual solo se prueba la ruta del log (`implemented: notas.txt` contra `implemented: file edit` en master). El rojo de `last_code_edit` en `harness-state-review-notice.env`, y la mutación que quita `write_file`, se prueban con el derivado (e), porque `notas.txt` es no-código. No midas en `implemented`: en master ya vale 1 |
 | Registro del rol | `subagent="$(json_tool_input_string subagent_type)"`, línea 3223, y `record_agent` |
 | Crédito al cerrar | precedente en codex: `saikit_codex_role_event`, línea 1592 |
 | Veto de `PreToolUse` | `pretool_merge_guard`, línea 4582; la comparación con `Bash` exacto está en la 4585. Acepta `tool_name` exacto `Bash` o `bash`. `bash_input` es OTRA herramienta de Muse (escribe en un bash ya corriendo), no una clave de `tool_input`: un `PreToolUse` con `tool_name` `bash_input` sale `emit_allow` aunque traiga `gh pr merge`, y eso se declara como límite en el PR |
@@ -387,7 +389,9 @@ orden de despliegue lo controla el lead.
   `touch <caja>/<Evento>`; (3) `exec --no-session-log --provider echo "ping"`;
   (4) válido si rc 0, sin `malformed settings`, las líneas de DETALLE de avisos
   del candidato son un subconjunto de las del actual, el conteo `M` de avisos
-  es igual en los dos (sin línea resumen, `M` es 0), y EXISTEN las marcas
+  del candidato es menor o igual que el del actual (sin línea resumen, `M` es
+  0; menor porque la purga puede quitar una entrada nuestra vieja que daba
+  aviso), y EXISTEN las marcas
   `<caja>/SessionStart`, `<caja>/UserPromptSubmit` y `<caja>/Stop`. Los avisos
   previos se reportan y no bloquean. Las líneas de detalle son las que
   empiezan con `muse:   settings.json:` (tres espacios). De la línea resumen
@@ -400,9 +404,14 @@ orden de despliegue lo controla el lead.
   hooks` y además apaga todas las marcas. El aviso
   `Agent delegation: auto unavailable: workspace is untrusted` sale en toda
   validación aislada: es esperado y no cuenta como aviso. Casos: un aviso
-  ajeno previo sí instala; un grupo nuestro de `PreToolUse` sin `hooks` no
-  instala; un bloque escrito `Hooks` (mayúscula) se rechaza por falta de
-  marcas; un JSON roto se rechaza. `--quitar-muse` solo exige que el
+  ajeno previo sí instala; un grupo nuestro de `PreToolUse` con un campo
+  desconocido a nivel de grupo no instala (Muse lo salta con
+  `UnsupportedHandler: D66 …` y deja correr los demás, así que las marcas
+  siguen: medido en `validacion-pareada.txt`, escenario `grupo_sin_hooks`);
+  un bloque escrito `Hooks` (mayúscula) se rechaza por falta de marcas; un
+  JSON roto se rechaza. El caso del campo desconocido es el que prueba la
+  comparación de avisos, que es la única defensa de `PreToolUse` y
+  `PostToolUse`: en un turno `echo` no dejan marca. `--quitar-muse` solo exige que el
   resultado parsee y no necesita binario. `--dry-run` también valida (no
   escribe en el perfil).
 - **Muse falso para el CI.** El CI corre en `ubuntu-latest` y no tiene Muse.
@@ -412,15 +421,17 @@ orden de despliegue lo controla el lead.
   `jq`; con JSON roto, sin `schema_version` o con `schema_version` distinto de
   1, escribe `malformed settings …` a stderr y sale 1; por cada evento no
   soportado bajo `hooks` imprime la línea de detalle
-  `muse:   settings.json: UnsupportedEvent: …`, y por cada grupo sin `hooks`
-  la de `MalformedConfig: …`; si hay avisos imprime además el resumen
-  `muse: Hooks: N runnable · M warning`; si algún grupo carece de `hooks` no
-  ejecuta ningún comando; si no, ejecuta los `command` de
-  `.hooks.SessionStart`, `.hooks.UserPromptSubmit` y `.hooks.Stop` (solo la
-  clave `hooks` en minúscula) y sale 0. Dos mutaciones tienen que ponerse
-  rojas: la que hace que el instalador ignore la falta de marcas (la mata el
-  caso `Hooks`) y la que quita la comparación de detalle y de `M` (la mata el
-  caso del grupo nuestro sin `hooks`). Los mismos cuatro casos de
+  `muse:   settings.json: UnsupportedEvent: …`; por cada grupo con un campo
+  desconocido, la de `UnsupportedHandler: D66 …`, y salta SOLO ese grupo; por
+  cada grupo cuyo único problema es no tener `hooks`, la de
+  `MalformedConfig: hook matcher group must declare hooks`, y en ese caso no
+  ejecuta ningún comando; si hay avisos imprime además el resumen
+  `muse: Hooks: N runnable · M warning`; después ejecuta los `command` que
+  queden de `.hooks.SessionStart`, `.hooks.UserPromptSubmit` y `.hooks.Stop`
+  (solo la clave `hooks` en minúscula) y sale 0. Dos mutaciones tienen que
+  ponerse rojas: la que hace que el instalador ignore la falta de marcas (la
+  mata el caso `Hooks`) y la que quita la comparación de detalle y de `M` (la
+  mata el caso del grupo nuestro con campo desconocido). Los mismos cuatro casos de
   validación se corren además una vez con el binario real en la Mac, en la
   caja de la regla 2, y su salida se pega en el PR.
 - Settings ausente: si no existe el directorio
@@ -491,7 +502,7 @@ si el diseño del `--check` de este PR ya la resuelve.
 | La golden difiere en más de las tres líneas de cabecera, o un test de otro host cambia | Es una regresión tuya. Se arregla el código; la golden no se regraba |
 | Una mutación dice "la mutación no cambió nada" | Casi siempre se corrió fuera de la caja aislada, sin `SAIKIT_HOOK_VIVO`: revisa el comando y corre de nuevo dentro de la caja |
 | El settings actual del operador ya trae avisos previos al validar | Se reportan, no bloquean: si el candidato no agrega avisos nuevos, instala |
-| Muse avisa "Agent delegation: auto unavailable: workspace is untrusted" | `unknown`, corrida del lead |
+| Muse avisa "Agent delegation: auto unavailable: workspace is untrusted" | En la validación aislada es esperado y no cuenta como aviso. En un turno real con delegación, `unknown`: corrida del lead |
 | No hay binario de Muse en la máquina | Lo que dependa del Muse real queda `unknown`. Los tests usan el Muse falso de `tests/fixtures/muse/muse-falso.sh` vía `SAIKIT_MUSE_BIN`, y `SAIKIT_MUSE_BASH` para el resolvedor de bash. Sigue |
 | Un nombre de línea de este brief ya no coincide con el código | Busca el símbolo por nombre con `grep -n`. Los números son de `origin/master` al 2026-09-18 UTC |
 | CodeRabbit comenta antes de que el job `gate` quede verde | Arregla lo que sea un defecto real. Lo demás, contéstalo en el hilo con la razón |

@@ -34,7 +34,7 @@ experimental. En la 1.3.0 los dos registros por archivo disparan.
 |---|---|---|
 | Registro de proyecto en `<repo>/.muse/hooks.json`, forma de Claude (`{"hooks":{"<Evento>":[{"hooks":[{"type":"command","command":…,"timeout":…}]}]}}`) | Dispara, solo con el workspace confiado (`--trust-workspace`) | fixtures 00 a 05 |
 | Registro de usuario en el bloque `hooks` de `~/.config/muse/settings.json` | Dispara **con y sin** confianza del workspace. Es el canal global | medido con XDG aislado, ver Reproducir |
-| `settings.json` se valida de forma estricta | Una clave desconocida DENTRO de un bloque conocido (por ejemplo `agents`) aborta todo comando al arrancar: `malformed settings file at …: unknown field …`. En la raíz se ignora con `tbh: ignoring unknown top-level member` | sección Riesgos y `complementarias/validacion-settings.txt` |
+| `settings.json` se valida de forma estricta | Una clave desconocida dentro de `agents` (medido) aborta todo comando al arrancar: `malformed settings file at …: unknown field …`. Dentro de `hooks`, un campo de grupo desconocido sale con rc 0 y solo avisa `UnsupportedHandler` (`validacion-pareada.txt`). En la raíz se ignora con `tbh: ignoring unknown top-level member` | sección Riesgos y `complementarias/validacion-settings.txt` |
 | Eventos que disparan | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd` | fixtures 00 a 19 |
 | Forma del payload | snake_case con el vocabulario de Claude: `hook_event_name`, `session_id`, `turn_id`, `cwd`, `prompt`, `tool_name`, `tool_input`, `tool_response`, `tool_use_id`, `stop_hook_active`, `last_assistant_message`, `model`, `model_provider`, `permission_mode`. `transcript_path` llega `null` | fixtures 01, 02, 08, 10 |
 | Entorno del hook | Limpio: solo `_ HOME LANG LOGNAME PATH PWD SHELL SHLVL TERM TMPDIR USER`. **Ninguna** variable `MUSE_*`, así que el hook no puede detectar el host solo. `PATH` se hereda de quien lanza Muse | `entorno-del-hook.txt` |
@@ -42,7 +42,7 @@ experimental. En la 1.3.0 los dos registros por archivo disparan.
 | `UserPromptSubmit` con `hookSpecificOutput.additionalContext` | Entra al contexto del modelo como bloque `developer` (`hook:user_prompt_submit:prompt:0`) | `salida-contexto-inyectado.json` |
 | `Stop` con `{"decision":"block","reason":…}` | Fuerza otra pasada del modelo. La razón entra como bloque `developer` (`hook:stop:stop:0`). La segunda llamada trae `stop_hook_active` | `salida-contexto-inyectado.json`; el `Stop` disparó dos veces |
 | Herramienta de delegación | `subagent_spawn`, con `tool_input = {command_id, objective, role, subagent_type}`. El rol viaja en `tool_input.subagent_type` | fixture 08 |
-| Cuándo llega el `PostToolUse` del despacho | Al **aceptar** la tarea, no al terminarla. `tool_response` es un JSON en texto con `status` (`accepted` o `rejected`), `subagent_id` y `agent_path` (`main/reviewer/1`) | fixtures 06 y 10 |
+| Cuándo llega el `PostToolUse` del despacho | Al **aceptar** la tarea, no al terminarla. `tool_response` es un JSON en texto. `accepted` trae `status`, `subagent_id` y `agent_path` (`main/reviewer/1`), fixture 10; `rejected` trae `status`, `reason`, `cause` y `hint`, sin `subagent_id`, fixture 06 | fixtures 06 y 10 |
 | Fin del subagente | `subagent_wait` devuelve `status: ready` con `summary`. `SubagentStop` llega con la sesión del hijo y `subagent_id`, **sin rol** | fixtures 14 y 15 |
 | Eventos internos del hijo | Llegan con el `session_id` **del hijo** y sin campo de rol | fixtures 12 y 13 |
 | Orden medido | `PreToolUse subagent_spawn` (padre), `SubagentStart` (hijo), `PostToolUse subagent_spawn` (padre, trae `subagent_id`), internos del hijo, `SubagentStop`, `PostToolUse subagent_wait` | fixtures 08 a 15, por nombre de archivo |
@@ -82,9 +82,11 @@ Leído en `hooks/summonaikit-harness.sh` contra los fixtures de arriba.
    dirección y no transfiere evidencia; Muse queda como host ciego y
    `SubagentStart` no se registra.
 
-## Mediciones complementarias (2026-09-18, antes del brief)
+## Mediciones complementarias (2026-09-18 UTC)
 
-Cerraron seis de los `unknown` de la primera pasada. Evidencia en
+Se hicieron antes del brief y durante su revisión; las tres filas de
+`validacion-pareada.txt` son de la revisión. Cerraron seis de los `unknown`
+de la primera pasada. Evidencia en
 `docs/evidence/phase-23/23.1/complementarias/`. Todo con el proveedor `echo`
 salvo el turno real que midió `matcher`, veto y `tools:`.
 
