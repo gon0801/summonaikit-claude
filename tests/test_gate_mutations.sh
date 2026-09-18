@@ -107,6 +107,7 @@ G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamad
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
 G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
+G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
 G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
 G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
 G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
@@ -247,6 +248,10 @@ G3|muse_write_file_quitada|write_file sale del vocabulario de edicion y last_cod
 G3|muse_path_sin_fallback|el fallback de tool_input.path en muse se borra y write_file no marca last_code_edit
 G3|muse_wait_ready_no_acredita|el wait ready con pendiente deja de llamar record_agent
 G3|muse_rearm_conserva_pendiente|el armado deja de vaciar muse_pending y un wait del ciclo anterior acredita
+G3|muse_keep_pendiente_vacio|write_state deja de conservar muse_pending y un write_file del padre borra el pendiente antes del wait
+G3|muse_status_sin_first|json_muse_first_status deja de exigir que status sea la primera clave y un tool_response reordenado acredita
+G3|muse_spawn_sin_accepted|el despacho deja de exigir status accepted y un rejected con subagent_id deja pendiente
+G3|muse_wait_ignora_id|el wait deja de exigir que el subagent_id de la respuesta coincida y un id distinto acredita
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 "
@@ -586,6 +591,7 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 # caso que espera BLOQUEO en host no ciego se pone rojo).
 mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
 mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
+mut_muse_no_es_ciego() { sed '/saikit-23.2-muse-ciego/s/ || \[ "$HOST" = "muse" \]//'; }
 # solo_primer_span (Greptile P1, PR #72) vuelve a recortar los spans del label a
 # `| head -n1`: el veto deja de ver un segundo label con fallo y un recibo
 # exito-luego-fallo acredita — lo atrapa caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
@@ -1253,6 +1259,27 @@ mut_muse_rearm_conserva_pendiente() {
   sed '/saikit-23.2-muse-rearm-clear/{
     n
     s/.*/  :/
+  }'
+}
+mut_muse_keep_pendiente_vacio() {
+  sed 's/_keep_mp="$(grep '\''^muse_pending='\'' "$STATE_PATH" 2>\/dev\/null | tail -n 1 | cut -d= -f2-)"/_keep_mp=""/'
+}
+mut_muse_status_sin_first() {
+  sed '/saikit-23.2-muse-first/{
+    n
+    s/json_muse_inner_unescape_scan status first/json_muse_inner_unescape_scan status/
+  }'
+}
+mut_muse_spawn_sin_accepted() {
+  sed '/saikit-23.2-muse-accepted/{
+    n
+    s/if \[ "\$_st" = "accepted" \] && \[ -n "\$_id" \]; then/if [ -n "$_id" ]; then/
+  }'
+}
+mut_muse_wait_ignora_id() {
+  sed '/saikit-23.2-muse-wait-id/{
+    n
+    s/.*/      :/
   }'
 }
 mut_muse_pretool_solo_Bash() {

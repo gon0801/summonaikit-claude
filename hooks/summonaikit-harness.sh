@@ -398,7 +398,7 @@ saikit_verif_fallo_pelado() {
 # mida. La condicion estaba escrita DOS veces (predicado + ruteo de la
 # evidencia): con dos copias, el dia que se mida otro host una se actualiza y la
 # otra no, y el sintoma seria un host medio-ciego imposible de razonar.
-saikit_host_ciego() { [ "$HOST" = "zcode" ] || [ "$HOST" = "muse" ]; }
+saikit_host_ciego() { [ "$HOST" = "zcode" ] || [ "$HOST" = "muse" ]; }  # saikit-23.2-muse-ciego
 
 # Task 14.2 — extrae el SPAN del label: desde 'VERIFIED BY SUBAGENT:' hasta el
 # fin de ESA linea. El predicado (§4.3) evalua comando/resultado/veto SOLO sobre
@@ -1117,7 +1117,13 @@ json_tool_input_string() {
 # object. status is the FIRST key; never grep the whole text (summary is the
 # child model).
 json_muse_tool_response_raw() {
-  json_top_level_string tool_response
+  if [ -n "${_MUSE_TR_RAW_SET+x}" ]; then
+    printf '%s' "$_MUSE_TR_RAW"
+    return 0
+  fi
+  _MUSE_TR_RAW="$(json_top_level_string tool_response)"
+  _MUSE_TR_RAW_SET=1
+  printf '%s' "$_MUSE_TR_RAW"
 }
 
 json_muse_inner_unescape_scan() {
@@ -1125,13 +1131,13 @@ json_muse_inner_unescape_scan() {
   first_only="${2:-}"
   json_muse_tool_response_raw | awk -v want="$want" -v first_only="$first_only" '
     {
-      s = ""; esc = 0; n = length($0)
-      for (i = 1; i <= n; i++) {
-        c = substr($0, i, 1)
-        if (esc) { s = s c; esc = 0; continue }
-        if (c == "\\") { esc = 1; continue }
-        s = s c
-      }
+      s = $0
+      gsub(/\001/, "", s)
+      gsub(/\\\\/, "\001", s)
+      gsub(/\\"/, "\"", s)
+      gsub(/\\n/, "\n", s)
+      gsub(/\\t/, "\t", s)
+      gsub(/\001/, "\\", s)
       n = length(s); depth = 0; ins = 0; esc = 0; espera = 0
       ini = 0; ultima = ""; clave = ""; first = 1
       for (i = 1; i <= n; i++) {
@@ -1165,7 +1171,7 @@ json_muse_inner_unescape_scan() {
     }'
 }
 
-json_muse_first_status() {
+json_muse_first_status() {  # saikit-23.2-muse-first
   json_muse_inner_unescape_scan status first
 }
 
@@ -1539,6 +1545,7 @@ write_state() {
     _keep_cxs="$(grep '^codex_native_seen=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
   fi
   if [ -n "${_CODEX_SEEN_SET+x}" ]; then _keep_cxs="$_CODEX_SEEN_SET"; fi
+  # saikit-23.2-muse-keep
   _keep_mp=""
   if [ -f "$STATE_PATH" ]; then
     _keep_mp="$(grep '^muse_pending=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
@@ -1787,11 +1794,13 @@ saikit_muse_pending_take() {
 }
 
 saikit_muse_role_event() {
+  unset _MUSE_TR_RAW _MUSE_TR_RAW_SET
   case "$tool_name" in
     subagent_spawn)
       _st="$(json_muse_first_status)"
       _id="$(json_muse_inner_string subagent_id)"
       case "$_id" in *[!A-Za-z0-9._-]*|'') _id="" ;; esac
+      # saikit-23.2-muse-accepted
       if [ "$_st" = "accepted" ] && [ -n "$_id" ]; then
         _role="$(canonical_agent_role "$subagent")"
         [ -n "$_role" ] || return 0
@@ -1804,6 +1813,7 @@ saikit_muse_role_event() {
       _wait_id="$(json_tool_input_string subagent_id)"
       case "$_wait_id" in *[!A-Za-z0-9._-]*|'') return 0 ;; esac
       _rsp_id="$(json_muse_inner_string subagent_id)"
+      # saikit-23.2-muse-wait-id
       if [ -n "$_rsp_id" ] && [ "$_rsp_id" != "$_wait_id" ]; then return 0; fi
       json_muse_status_es ready || return 0
       # saikit-23.2-muse-pending

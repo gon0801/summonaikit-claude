@@ -1,0 +1,19 @@
+{
+  "hook_event_name": "PostToolUse",
+  "tool_name": "subagent_spawn",
+  "tool_input": {
+    "command_id": "req-001-reviewer-readme",
+    "objective": "Lee README.md del workspace y di cuántas líneas tiene.",
+    "role": "reviewer",
+    "subagent_type": "reviewer"
+  },
+  "tool_use_id": "call_01a0b27a787d77008f7dfb3c8146cf5f",
+  "tool_response": "{\"status\":\"rejected\",\"reason\":\"child_run_rejected\",\"cause\":\"agent_definition_invalid\",\"hint\":\"Agent Definition `reviewer` is invalid in the Project source with ProjectDepth scope (KnownFieldInactive, Model).\",\"subagent_id\":\"id-rejected-001\"}",
+  "session_id": "01a0b27a-5bdc-7780-8d38-e6051a29b041",
+  "turn_id": "9509d473-b255-4b1a-8982-d2e25e8df085",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "muse-spark-1.3",
+  "permission_mode": "bypassPermissions",
+  "model_provider": "meta"
+}

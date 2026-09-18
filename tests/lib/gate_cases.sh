@@ -1414,7 +1414,7 @@ caso_g5_autopilot_parrafo_en_budget_agotado() {
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_zcode_verif_label_runner_propio_acredita caso_g2_zcode_verif_label_runner_propio_directo_acredita caso_g2_zcode_verif_label_runner_propio_dotslash_acredita caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita caso_g2_zcode_verif_label_spans_separados_no_acreditan caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice caso_g2_zcode_verif_label_decoy_de_path_no_acredita caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea"
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_zcode_verif_label_runner_propio_acredita caso_g2_zcode_verif_label_runner_propio_directo_acredita caso_g2_zcode_verif_label_runner_propio_dotslash_acredita caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita caso_g2_zcode_verif_label_spans_separados_no_acreditan caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice caso_g2_zcode_verif_label_decoy_de_path_no_acredita caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea caso_g2_muse_verif_subagente_acredita caso_g2_muse_verif_subagente_sin_verifier_bloquea"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1781,6 +1781,37 @@ caso_g2_dsh_sin_recibo_bloquea() {
   lab_run stop dsh "$(lab_payload_stop 'Listo.')"
   _igual "exit code" "$LAB_RC" "2"
   _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+}
+
+_muse_ceremonia_roles() {
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_derivado spawn-implementer.json)"
+  lab_run tool muse "$(lab_payload_muse_derivado wait-implementer.json)"
+  if [ "${1:-}" != "sin_verifier" ]; then
+    lab_run tool muse "$(lab_payload_muse_derivado spawn-verifier.json)"
+    lab_run tool muse "$(lab_payload_muse_derivado wait-verifier.json)"
+  fi
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-15-real2-delegacion-PostToolUse-subagent_wait.json)"
+}
+
+caso_g2_muse_verif_subagente_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  _muse_ceremonia_roles
+  lab_run stop muse "$(lab_payload_muse_derivado stop-verif-subagente.json)"
+  _igual "exit code (muse ciego acredita VERIFIED BY SUBAGENT)" "$LAB_RC" "0"
+  _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g2_muse_verif_subagente_sin_verifier_bloquea() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  _muse_ceremonia_roles sin_verifier
+  lab_run stop muse "$(lab_payload_muse_derivado stop-verif-subagente.json)"
+  _igual "exit code" "$LAB_RC" "2"
+  _contiene "motivo" "$LAB_ERR" 'no verifier subagent ran this turn'
+  LAB_ESTADO_PATH="$_mu_backup"
 }
 
 # (b) label con resultado FALLIDO ("12 passed, failed: 1") — el veto
@@ -2457,7 +2488,7 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_bloquea caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_bloquea caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_keep_pendiente_sobrevive_write caso_g3_muse_status_no_primera_no_acredita caso_g3_muse_rejected_con_id_no_pendiente caso_g3_muse_wait_id_distinto_no_acredita caso_g3_muse_wait_summary_grande_acredita caso_g3_muse_recordatorios_no_acreditan caso_g3_muse_write_file_notas_no_marca caso_g3_muse_edit_file_notas_no_marca caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
 
 caso_g3_falta_reviewer_bloquea() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
@@ -5062,8 +5093,8 @@ caso_g1_muse_contrato_nombra_subagent_spawn() {
 }
 
 caso_g3_muse_ceremonia_incompleta_bloquea() {
-  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
-  lab_run stop muse "$(lab_payload_stop "$_RECIBO_VINETAS")"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  lab_run stop muse "$(lab_payload_muse_fixture fixture-16-real2-delegacion-Stop.json)"
   _igual "exit code (Stop de muse no se invierte)" "$LAB_RC" "2"
   _contiene "stdout JSON block" "$LAB_OUT" '"decision":"block"'
   _contiene "motivo a stderr" "$LAB_ERR" 'Missing implementer subagent run'
@@ -5114,6 +5145,102 @@ caso_g3_muse_rearm_no_hereda_pendiente() {
   _vacio "re-arm deja agents_seen vacio" "$(lab_estado agents_seen)"
   lab_run tool muse "$(lab_payload_muse_fixture fixture-15-real2-delegacion-PostToolUse-subagent_wait.json)"
   _vacio "wait de un spawn del ciclo anterior no acredita" "$(lab_estado agents_seen)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_keep_pendiente_sobrevive_write() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  lab_run tool muse "$(lab_payload_muse_derivado write-file-sesion-07.json)"
+  _contiene "write_file del padre conserva pendiente" "$(lab_estado muse_pending)" "01a0b27b-eb4e-7190-ba37-95245b9e48ef:reviewer"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-15-real2-delegacion-PostToolUse-subagent_wait.json)"
+  _igual "wait after write_file acredita" "$(lab_estado agents_seen)" "reviewer"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_status_no_primera_no_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_derivado spawn-status-no-primera.json)"
+  _vacio "status no primera en spawn no deja pendiente" "$(lab_estado muse_pending)"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  lab_run tool muse "$(lab_payload_muse_derivado wait-status-no-primera.json)"
+  _vacio "status no primera en wait no acredita" "$(lab_estado agents_seen)"
+  _contiene "el pendiente queda" "$(lab_estado muse_pending)" "01a0b27b-eb4e-7190-ba37-95245b9e48ef:reviewer"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_rejected_con_id_no_pendiente() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-06.json)"
+  _muse_apuntar_estado "01a0b27a-5bdc-7780-8d38-e6051a29b041"
+  lab_run tool muse "$(lab_payload_muse_derivado spawn-rejected-con-id.json)"
+  _vacio "rejected con subagent_id no deja pendiente" "$(lab_estado muse_pending)"
+  _vacio "rejected con id no acredita" "$(lab_estado agents_seen)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_wait_id_distinto_no_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  lab_run tool muse "$(lab_payload_muse_derivado wait-id-distinto.json)"
+  _vacio "wait con id de respuesta distinto no acredita" "$(lab_estado agents_seen)"
+  _contiene "el pendiente queda" "$(lab_estado muse_pending)" "01a0b27b-eb4e-7190-ba37-95245b9e48ef:reviewer"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_wait_summary_grande_acredita() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
+  _muse_apuntar_estado "01a0b27b-dc89-78e2-bc42-ef9808d62097"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json)"
+  _wait_g="$LAB/entrada/wait-summary-grande.json"
+  python3 - "$(_lab_muse_dir)/fixture-15-real2-delegacion-PostToolUse-subagent_wait.json" "$_wait_g" <<'PY'
+import json, sys
+src = json.load(open(sys.argv[1], encoding="utf-8"))
+inner = json.loads(src["tool_response"])
+inner["summary"] = "x" * 300000
+src["tool_response"] = json.dumps(inner, separators=(",", ":"))
+json.dump(src, open(sys.argv[2], "w"), separators=(",", ":"))
+PY
+  lab_run tool muse "$(cat "$_wait_g")"
+  _igual "wait con summary grande acredita" "$(lab_estado agents_seen)" "reviewer"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_recordatorios_no_acreditan() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-04.json)"
+  _muse_apuntar_estado "d513e9b2-7257-48bb-b651-3eae571d4f8f"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-04-echo-recordatorio-SubagentStart.json)"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-05-echo-recordatorio-SubagentStop.json)"
+  _vacio "SubagentStart/Stop recordatorio no acredita" "$(lab_estado agents_seen)"
+  _vacio "recordatorio no deja pendiente" "$(lab_estado muse_pending)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_write_file_notas_no_marca() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-17.json)"
+  _muse_apuntar_estado "01a0b27c-bbad-71f2-a60b-4b6a7ec5eef4"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-17-real3-herramientas-PostToolUse-write_file.json)"
+  rn_file="$(dirname "$LAB_ESTADO_PATH")/harness-state-review-notice.env"
+  _vacio "write_file notas.txt no marca last_code_edit" "$(grep '^last_code_edit=.' "$rn_file" 2>/dev/null)"
+  LAB_ESTADO_PATH="$_mu_backup"
+}
+
+caso_g3_muse_edit_file_notas_no_marca() {
+  _mu_backup="$LAB_ESTADO_PATH"
+  lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-17.json)"
+  _muse_apuntar_estado "01a0b27c-bbad-71f2-a60b-4b6a7ec5eef4"
+  lab_run tool muse "$(lab_payload_muse_fixture fixture-18-real3-herramientas-PostToolUse-edit_file.json)"
+  rn_file="$(dirname "$LAB_ESTADO_PATH")/harness-state-review-notice.env"
+  _vacio "edit_file notas.txt no marca last_code_edit" "$(grep '^last_code_edit=.' "$rn_file" 2>/dev/null)"
   LAB_ESTADO_PATH="$_mu_backup"
 }
 

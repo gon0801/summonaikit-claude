@@ -1,0 +1,19 @@
+{
+  "hook_event_name": "PostToolUse",
+  "tool_name": "subagent_wait",
+  "tool_input": {
+    "command_id": "wait-readme-lines-001",
+    "subagent_id": "01a0b27b-eb4e-7190-ba37-95245b9e48ef",
+    "timeout_ms": 60000,
+    "wait_for": "result_ready"
+  },
+  "tool_use_id": "call_01a0b27bef2871e395af5f1ea02e5cd9",
+  "tool_response": "{\"subagent_id\":\"01a0b27b-eb4e-7190-ba37-95245b9e48ef\",\"summary\":\"El README.md tiene 1 línea.\",\"status\":\"ready\"}",
+  "session_id": "01a0b27b-dc89-78e2-bc42-ef9808d62097",
+  "turn_id": "ed2b08d3-a447-4a61-8cfd-c4d9aea421f4",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "muse-spark-1.3",
+  "permission_mode": "bypassPermissions",
+  "model_provider": "meta"
+}
