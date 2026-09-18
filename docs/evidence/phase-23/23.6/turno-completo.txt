@@ -1,0 +1,104 @@
+Task 23.6 — turnos vivos de carril completo en Muse, 2026-09-18.
+Muse 1.3.0-R3401.1, modelo muse-spark-1.3, perfil real del operador. Mismo
+prompt y mismo comando en los tres, salvo el esfuerzo de razonamiento:
+
+-saikit Crea suma.py con una funcion suma(a, b) que regrese a + b, y test_suma.py que la pruebe con assert y termine imprimiendo OK. La bateria de este repo es bash tests/run.sh.
+
+  muse-bin-1.3.0-R3401.1 exec --trust-workspace --disable-approval \
+    --user-input-auto-resolve [--reasoning-effort low] --max-model-steps 80 \
+    --json --prompt-file <prompt>
+
+Repo descartable con README.md y tests/run.sh (corre python3 test_suma.py).
+
+| Turno | Hook | Esfuerzo | Roles acreditados | Stop | Duracion |
+|---|---|---|---|---|---|
+| 1 (10:58 PDT) | master b82780f | low | ninguno | 2, 2, presupuesto agotado | 112 s |
+| 2 (12:38 PDT) | master 60235b5 (con la 23.9) | low | los tres | 2, 2, presupuesto agotado | 103 s |
+| 3 (12:41 PDT) | master 60235b5 (con la 23.9) | max, el del perfil | los tres | pasa a la primera | 231 s |
+
+Turno 1: el hook leia el rol de `subagent_type` y el modelo lo mando en
+`role`. Detalle y reproduccion en `docs/evidence/phase-23/23.9/`.
+
+Turno 2 (sesion 01a0b607-1e80-78c0-a14b-793a05fe1e77): con la 23.9 los tres
+roles se acreditan, y los dos bloqueos solo reclaman evidencia de
+verificacion. El padre no corrio la bateria y el recibo decia
+"Verify: `bash tests/run.sh` -> OK, exit 0" en prosa, sin la linea
+`VERIFIED BY SUBAGENT:`, aunque el contrato inyectado la explica y nombra a
+Muse, y aunque cada bloqueo la menciona.
+
+Turno 3 (sesion 01a0b609-a775-7022-8662-3996d815d2e4): el modelo delego
+implementer, verifier y reviewer con `subagent_spawn` (esta vez con `role` y
+`subagent_type`), espero a cada uno, escribio y commiteo el trail antes del
+reviewer, y cerro con la linea `VERIFIED BY SUBAGENT: bash tests/run.sh exit 0
+con salida OK`. El Stop dejo pasar a la primera.
+
+Corridas de hook del turno 3:
+  12 PostToolUse completed exit=0
+   6 PreToolUse completed exit=0
+   1 SessionStart completed exit=0
+   1 Stop completed exit=0
+   1 UserPromptSubmit completed exit=0
+
+Contrato inyectado en los turnos 2 y 3: 12984 bytes (bloque developer
+hook:user_prompt_submit:prompt:0 del export).
+
+Reproduccion de los 14 eventos del turno 3 contra una copia del hook
+desplegado (bytes de origin/master 60235b5), en caja aislada:
+01-prompt rc=0 agents_seen= pending=
+02-tool rc=0 agents_seen= pending=01a0b60a-3e17-7bf1-a4c8-bead41355ad2:implementer
+03-tool rc=0 agents_seen=implementer pending=
+04-tool rc=0 agents_seen=implementer pending=01a0b60a-cccd-7ea3-beb2-62614e1ad3fe:verifier
+05-tool rc=0 agents_seen=implementer,verifier pending=
+06-tool rc=0 agents_seen=implementer,verifier pending=
+07-tool rc=0 agents_seen=implementer,verifier pending=
+08-tool rc=0 agents_seen=implementer,verifier pending=
+09-tool rc=0 agents_seen=implementer,verifier pending=
+10-tool rc=0 agents_seen=implementer,verifier pending=
+11-tool rc=0 agents_seen=implementer,verifier pending=01a0b60b-aa8c-7632-87ac-a61ac539a04d:reviewer
+12-tool rc=0 agents_seen=implementer,verifier,reviewer pending=
+13-tool rc=0 agents_seen=implementer,verifier,reviewer pending=
+14-stop rc=0 agents_seen= pending=
+
+El mismo turno sin la linea `VERIFIED BY SUBAGENT:` en el recibo:
+14-stop rc=2 agents_seen=implementer,verifier,reviewer pending=
+    - Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a `VERIFIED BY SUBAGENT: <command> <result>` on one line counts; otherwise declare an explicit skipped-check reason).
+
+El padre corrio `bash tests/run.sh; echo "EXIT:$?"`, que no acredita por el
+limite de forma (runner pegado al `;`), asi que la verificacion la cerro la
+linea del recibo, valida porque el verifier corrio y quedo acreditado.
+
+Costo (tokens del modelo, de los session.jsonl de la sesion y sus hijas):
+
+Turno 2:
+principal: llamadas=18 entrada=645429 salida=3799 cache=594674
+hijo rol (subagent_spawn): llamadas=4 entrada=89098 salida=464 cache=66259
+hijo rol (subagent_spawn): llamadas=4 entrada=89804 salida=574 cache=72004
+hijo rol (subagent_spawn): llamadas=3 entrada=67754 salida=714 cache=49491
+hijo recordatorio interno: llamadas=1 entrada=10766 salida=360 cache=2801
+hijo recordatorio interno: llamadas=1 entrada=9833 salida=1135 cache=2801
+TOTAL: llamadas=31 entrada=912684 salida=7046 cache=788030
+recordatorios lanzados (los que no tienen sesion en disco no registran consumo): {'skill-reminder': 7, 'todo-reminder': 3, 'goal-reminder': 1, 'verify-reminder': 1}
+
+Turno 3:
+principal: llamadas=18 entrada=681589 salida=8455 cache=636033
+hijo rol (subagent_spawn): llamadas=4 entrada=123937 salida=833 cache=92115
+hijo rol (subagent_spawn): llamadas=3 entrada=86602 salida=1291 cache=56930
+hijo rol (subagent_spawn): llamadas=4 entrada=124046 salida=2166 cache=91219
+hijo recordatorio interno: llamadas=1 entrada=10776 salida=893 cache=2801
+TOTAL: llamadas=30 entrada=1026950 salida=13638 cache=879098
+recordatorios lanzados (los que no tienen sesion en disco no registran consumo): {'skill-reminder': 13, 'verify-reminder': 1}
+
+Los recordatorios internos (skill, todo, goal, verify) los lanza Muse con el
+mismo modelo, no pasan por nuestros matchers y no acreditan roles. Los que no
+dejan sesion hija en disco no registran consumo: unknown.
+
+Prompt sin el token de armado, hook desplegado, cinco corridas: 0 bytes de
+salida, exit 0, entre 0.053 y 0.058 s de reloj.
+
+Perfil restaurable: `install-hook.sh --host muse --quitar-muse --dry-run`
+reporta que quitaria solo las 5 entradas `saikit-harness-id 23.3` del settings
+y los 4 perfiles nuestros, con backup, y el settings quedo igual byte a byte.
+El backup previo al kit (`settings.json.muse.20260918-084507.bak`) es JSON
+valido y, fuera de `hooks`, difiere del settings actual solo en
+`reasoning_effort` (high -> max), que cambio fuera del instalador entre las
+08:45 y las 10:57: copiar ese backup lo revertiria, `--quitar-muse` no.
