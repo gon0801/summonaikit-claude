@@ -1,0 +1,13 @@
+{
+  "hook_event_name": "SubagentStop",
+  "subagent_id": "skill-reminder",
+  "child_session_id": "d513e9b2-7257-48bb-b651-3eae571d4f8f",
+  "stop_hook_active": false,
+  "last_assistant_message": "<recortado: prompt interno del recordatorio de Muse, 65831 bytes>",
+  "session_id": "d513e9b2-7257-48bb-b651-3eae571d4f8f",
+  "turn_id": "d513e9b2-7257-48bb-b651-3eae571d4f8f",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "unknown",
+  "permission_mode": "default"
+}

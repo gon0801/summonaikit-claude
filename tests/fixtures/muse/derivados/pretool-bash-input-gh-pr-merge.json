@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "PreToolUse",
+  "tool_name": "bash_input",
+  "tool_input": {
+    "command": "gh pr merge --squash",
+    "description": "stdin de un bash ya corriendo"
+  },
+  "session_id": "01a0b27b-dc89-78e2-bc42-ef9808d62097",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "muse-spark-1.3",
+  "permission_mode": "bypassPermissions",
+  "model_provider": "meta"
+}

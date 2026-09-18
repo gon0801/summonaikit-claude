@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "SubagentStop",
+  "subagent_id": "01a0b27b-eb4e-7190-ba37-95245b9e48ef",
+  "child_session_id": "01a0b27b-eb6f-7241-b6b6-a31fc1353d91",
+  "stop_hook_active": false,
+  "last_assistant_message": "El README.md tiene 1 línea.",
+  "session_id": "01a0b27b-eb6f-7241-b6b6-a31fc1353d91",
+  "turn_id": "01a0b27b-eb6f-7241-b6b6-a31fc1353d91",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "muse-spark-1.3",
+  "permission_mode": "bypassPermissions",
+  "model_provider": "meta"
+}

@@ -1,0 +1,12 @@
+{
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "listo",
+  "session_id": "01a0b27b-dc89-78e2-bc42-ef9808d62097",
+  "turn_id": "ed2b08d3-a447-4a61-8cfd-c4d9aea421f4",
+  "cwd": "<repo>",
+  "transcript_path": null,
+  "model": "muse-spark-1.3",
+  "permission_mode": "bypassPermissions",
+  "model_provider": "meta"
+}
