@@ -61,7 +61,7 @@ desplegado (bytes de origin/master 60235b5), en caja aislada:
 
 El mismo turno sin la linea `VERIFIED BY SUBAGENT:` en el recibo:
 14-stop rc=2 agents_seen=implementer,verifier,reviewer pending=
-    - Missing verification evidence or explicit skipped-check re
+    - Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a `VERIFIED BY SUBAGENT: <command> <result>` on one line counts; otherwise declare an explicit skipped-check reason).
 
 El padre corrio `bash tests/run.sh; echo "EXIT:$?"`, que no acredita por el
 limite de forma (runner pegado al `;`), asi que la verificacion la cerro la
