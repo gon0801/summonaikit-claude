@@ -1,0 +1,126 @@
+Task 23.9 — el rol de Muse viaja en `role`, no en `subagent_type`.
+
+1. Turno vivo `-saikit` de carril completo (fila 23.6), 2026-09-18 ~10:58 PDT.
+Muse 1.3.0-R3401.1, modelo muse-spark-1.3, perfil real del operador, hook
+desplegado desde master b82780f. Prompt: crear suma.py y test_suma.py; la
+bateria del repo es `bash tests/run.sh`. Duracion: 113 s, exit 0.
+Sesion 01a0b5ab-a31d-7b80-9c9f-a397f278ab93. Corridas de hook (export de la
+sesion con `muse export`, rutas locales fuera):
+
+SessionStart  completed  exit=0  32ms  efectos=  stderr=0B
+UserPromptSubmit  completed  exit=0  195ms  efectos=context  stderr=0B
+PreToolUse  completed  exit=0  79ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  114ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  101ms  efectos=  stderr=0B
+PreToolUse  completed  exit=0  82ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  62ms  efectos=  stderr=0B
+PreToolUse  completed  exit=0  123ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  130ms  efectos=  stderr=0B
+PreToolUse  completed  exit=0  87ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  121ms  efectos=  stderr=0B
+PreToolUse  completed  exit=0  168ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  136ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  148ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  82ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  160ms  efectos=  stderr=0B
+PostToolUse  completed  exit=0  113ms  efectos=  stderr=0B
+Stop  blocked  exit=2  190ms  efectos=blocked  stderr=2576B  SUMMONAIKIT HARNESS GATE
+Stop  blocked  exit=2  195ms  efectos=blocked  stderr=2576B  SUMMONAIKIT HARNESS GATE
+Stop  blocked  exit=0  188ms  efectos=stopped  stderr=1687B  SUMMONAIKIT HARNESS REVISION BUDGET EXHAUSTED
+
+Los tres Stop listan lo mismo: falta evidencia de verificacion y faltan los
+tres roles (implementer, verifier y reviewer), aunque el modelo si delego.
+El tercero es el corte por presupuesto (2 ciclos).
+
+Argumentos de los tres `subagent_spawn` del modelo (sin `objective`). El prompt
+no nombraba el campo; el modelo uso el parametro de Muse:
+
+{"command_id":"impl-001","role":"implementer"}
+{"command_id":"ver-001","role":"verifier"}
+{"command_id":"rev-001","role":"reviewer"}
+
+Muse acepto los tres (`spawn_accepted` con `agent_path` main/implementer/1,
+main/verifier/2 y main/reviewer/3) y los tres `subagent_wait` volvieron con
+`status` ready. El hook de master lee el rol solo de `tool_input.subagent_type`,
+que no esta en el esquema de `subagent_spawn`. En la captura de la 23.1 aparecio
+porque aquel prompt pidio "subagent_type reviewer" y el modelo mando los dos
+campos.
+
+2. Reproduccion de los 14 eventos del vivo contra dos hooks, en una caja
+aislada (HOME y state propios, entorno limpio como Muse, cwd = una copia del
+repo del turno). Los payloads se armaron con los fixtures reales de la 23.1
+como molde y los datos del vivo (argumentos de cada herramienta, respuesta
+textual de Muse y mensaje final del modelo). Solo entran las herramientas del
+matcher con resultado exitoso, igual que en el vivo: 10 PostToolUse y 3 Stop.
+Los eventos (rutas locales redactadas), la semilla del repo y el script estan
+en `reproduccion/`:
+
+  bash docs/evidence/phase-23/23.9/reproduccion/reproducir.sh <hook>
+
+hook de master (b82780f):
+01-prompt rc=0 agents_seen= pending=
+02-tool rc=0 agents_seen= pending=
+03-tool rc=0 agents_seen= pending=
+04-tool rc=0 agents_seen= pending=
+05-tool rc=0 agents_seen= pending=
+06-tool rc=0 agents_seen= pending=
+07-tool rc=0 agents_seen= pending=
+08-tool rc=0 agents_seen= pending=
+09-tool rc=0 agents_seen= pending=
+10-tool rc=0 agents_seen= pending=
+11-tool rc=0 agents_seen= pending=
+12-stop rc=2 agents_seen= pending=
+    - Missing verification evidence or explicit skipped-check re
+    - Missing implementer subagent run (delegate the change via
+    - Missing verifier subagent run (delegate verification via t
+    - Missing reviewer subagent run (delegate review via the sub
+13-stop rc=2 agents_seen= pending=
+    - Missing verification evidence or explicit skipped-check re
+    - Missing implementer subagent run (delegate the change via
+    - Missing verifier subagent run (delegate verification via t
+    - Missing reviewer subagent run (delegate review via the sub
+14-stop rc=0 agents_seen= pending=
+    SUMMONAIKIT HARNESS REVISION BUDGET EXHAUSTED
+    - Missing verification evidence or explicit skipped-check re
+    - Missing implementer subagent run (delegate the change via
+    - Missing verifier subagent run (delegate verification via t
+    - Missing reviewer subagent run (delegate review via the sub
+
+hook de esta rama:
+01-prompt rc=0 agents_seen= pending=
+02-tool rc=0 agents_seen= pending=01a0b5ab-cf6c-7330-ae51-13067cdb664c:implementer
+03-tool rc=0 agents_seen=implementer pending=
+04-tool rc=0 agents_seen=implementer pending=
+05-tool rc=0 agents_seen=implementer pending=
+06-tool rc=0 agents_seen=implementer pending=
+07-tool rc=0 agents_seen=implementer pending=
+08-tool rc=0 agents_seen=implementer pending=01a0b5ac-3d3d-7553-ba32-76623584e22b:verifier
+09-tool rc=0 agents_seen=implementer,verifier pending=
+10-tool rc=0 agents_seen=implementer,verifier pending=01a0b5ac-7e21-7d01-a197-57c7d87ce417:reviewer
+11-tool rc=0 agents_seen=implementer,verifier,reviewer pending=
+12-stop rc=2 agents_seen=implementer,verifier,reviewer pending=
+    - Missing verification evidence or explicit skipped-check re
+13-stop rc=2 agents_seen=implementer,verifier,reviewer pending=
+    - Missing verification evidence or explicit skipped-check re
+14-stop rc=0 agents_seen= pending=
+    SUMMONAIKIT HARNESS REVISION BUDGET EXHAUSTED
+    - Missing verification evidence or explicit skipped-check re
+
+Con master la reproduccion da lo mismo que el vivo (codigos 2, 2 y 0 con
+presupuesto agotado, mismos cuatro faltantes). Con la rama se acreditan los
+tres roles con los datos reales y solo queda la evidencia de verificacion: el
+recibo no traia `VERIFIED BY SUBAGENT:` y el padre corrio
+`cat ...; bash tests/run.sh; echo EXIT:$?`, que no acredita porque el runner va
+pegado al `;`: el limite de forma declarado en el hook exige un espacio o el fin
+de linea despues del runner (con `bash tests/run.sh ; echo` si acredita).
+
+3. El mismo primer recibo con una linea `VERIFIED BY SUBAGENT: bash tests/run.sh
+OK, exit 0` antes de Review, contra la rama (`reproducir.sh <hook> --con-label`):
+
+11-tool rc=0 agents_seen=implementer,verifier,reviewer pending=
+12-stop rc=0 agents_seen= pending=
+
+El Stop pasa. El contrato decia que ese label solo vale en hosts ciegos y
+nombraba solo a zcode; ahora nombra tambien a Muse. En muse cuenta solo
+`role`: sin `role`, o con un `role` que no es del kit, no se acredita nada
+aunque llegue `subagent_type`, porque Muse lanza el perfil que nombra `role`.

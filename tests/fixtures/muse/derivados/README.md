@@ -138,3 +138,33 @@ jq --slurpfile src tests/fixtures/muse/fixture-07-real2-delegacion-UserPromptSub
   | jq '.tool_input.path="src/app.py"' \
   > tests/fixtures/muse/derivados/write-file-sesion-07.json
 ```
+
+(h) Forma del vivo 23.6 (2026-09-18, sesion `01a0b5ab-a31d-7b80-9c9f-a397f278ab93`):
+sin que el prompt lo nombre, el modelo pasa el rol SOLO en `role`, que es el
+parametro que Muse usa (`agent_path` `main/implementer/1`). `subagent_type` no
+existe en el esquema de `subagent_spawn`; en el fixture 10 aparece porque el
+prompt de la captura lo pidio. El segundo archivo trae los dos campos con
+valores distintos, para fijar que en muse solo cuenta `role`:
+
+```bash
+jq '.tool_input.role="implementer" | del(.tool_input.subagent_type) | .tool_response |= (fromjson | .subagent_id="id-implementer-001" | .agent_path="main/implementer/1" | tojson)' \
+  tests/fixtures/muse/fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json \
+  > tests/fixtures/muse/derivados/spawn-implementer-solo-role.json
+
+jq '.tool_input.role="implementer" | .tool_input.subagent_type="reviewer" | .tool_response |= (fromjson | .subagent_id="id-implementer-001" | .agent_path="main/implementer/1" | tojson)' \
+  tests/fixtures/muse/fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json \
+  > tests/fixtures/muse/derivados/spawn-role-difiere.json
+```
+
+(i) Los otros dos lados de "solo `role`": sin `role` (Muse no sabria que perfil
+lanzar con `subagent_type`) y con un `role` que no es un rol del kit:
+
+```bash
+jq 'del(.tool_input.role) | .tool_input.subagent_type="implementer" | .tool_response |= (fromjson | .subagent_id="id-implementer-001" | .agent_path="main/implementer/1" | tojson)' \
+  tests/fixtures/muse/fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json \
+  > tests/fixtures/muse/derivados/spawn-solo-subagent-type.json
+
+jq '.tool_input.role="planner" | .tool_input.subagent_type="implementer" | .tool_response |= (fromjson | .subagent_id="id-implementer-001" | .agent_path="main/implementer/1" | tojson)' \
+  tests/fixtures/muse/fixture-10-real2-delegacion-PostToolUse-subagent_spawn.json \
+  > tests/fixtures/muse/derivados/spawn-role-invalido.json
+```
