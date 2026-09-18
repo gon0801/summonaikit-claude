@@ -2027,26 +2027,31 @@ HARNESS_CONTEXT
 # guia generica (capacidades, fuente de datos, informacion faltante, superficie
 # de usuario) van en forma corta: lo que el Stop verifica queda completo.
 MUSE_HOOK_STDOUT_MAX=16384
-MUSE_REGLAS_CORTAS='Quality rules (short form; Muse accepts at most 16 KB from a hook): prefer what the platform or an installed library already provides over a new dependency or a hand-rolled mechanism, and state the failure stance (fail-open or fail-closed) of every guard; before building over existing data, confirm the data source exists or write the assumption into the code; decide technical and reversible questions from the repo, and ask the user only product, preference or irreversible ones; for a user-facing surface cover loading, empty, error and success, with an accessibility baseline.'
+MUSE_REGLAS_CORTAS='Quality rules (short form; Muse accepts at most 16 KB from a hook): prefer what the platform or an installed library already provides over a new dependency or a hand-rolled mechanism (the verifier rejects one that duplicates it), and state the failure stance (fail-open or fail-closed) of every guard; run guards (auth, validation, authorization) before side effects (email, payments, storage, persisted writes); before building over existing data, confirm the data source exists or write the assumption into the code; decide technical and reversible questions from the repo, and ask the user only product, preference or irreversible ones; for a user-facing surface cover loading, empty, error and success, with an accessibility baseline.'
+# Los dos cortes se anclan a INICIO de parrafo y el segundo se busca solo
+# despues del primero: un titulo de receta (va antes, en el menu) que traiga
+# alguno de los dos marcadores no puede desplazar el corte.
 muse_contrato_corto() {  # $1=contrato -> stdout
-  case "$1" in
-    *"Capability-first contract ("*"Receipt line shape"*) ;;
-    *) printf '%s' "$1"; return 0 ;;
-  esac
-  printf '%s%s\n\nReceipt line shape%s' \
-    "${1%%"Capability-first contract ("*}" "$MUSE_REGLAS_CORTAS" "${1#*"Receipt line shape"}"
+  local cab resto
+  case "$1" in *$'\n\n'"Capability-first contract ("*) ;; *) printf '%s' "$1"; return 0 ;; esac
+  cab="${1%%$'\n\n'"Capability-first contract ("*}"
+  resto="${1#*$'\n\n'"Capability-first contract ("}"
+  case "$resto" in *$'\n\n'"Receipt line shape ("*) ;; *) printf '%s' "$1"; return 0 ;; esac
+  printf '%s\n\n%s\n\nReceipt line shape (%s' "$cab" "$MUSE_REGLAS_CORTAS" "${resto#*$'\n\n'"Receipt line shape ("}"
 }
 
 # Tope duro: si aun corto el contrato de muse no cabe (recetario grande, aviso
 # de revision, parrafo autopilot), se manda solo lo que el Stop verifica. Sin
 # esto Muse descartaria el contrato entero en silencio.
+# El aviso de revision entra al minimo: rn_take_pending ya borro su archivo, y
+# si el minimo lo descartara se perderia para siempre.
 muse_contrato_minimo() {  # $1=contrato -> stdout
   printf '%s\n' "$1" | awk -v RS= '
-    NR == 1 {
+    BEGIN {
       print "SUMMONAIKIT HARNESS REQUIRED\nContract shortened for Muse: the full contract does not fit in the 16 KB that Muse accepts from a hook, so only the rules the gate checks are here.\n"
-      next
     }
-    /^Asking is not failing:/ || /^Delegation rule:/ || /^Fast lane \(-saikit:fast\):/ \
+    /^SAIKIT REVIEW NOTICE:/ || /^Asking is not failing:/ || /^Waiting on a subagent is not failing:/ \
+      || /^Delegation rule:/ || /^Fast lane \(-saikit:fast\):/ \
       || /^Receipt line shape/ || /^Final receipt required/ || /^Full lane \(-saikit\):/ {
       print $0 "\n"
     }'

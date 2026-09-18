@@ -107,6 +107,9 @@ G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamad
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
 G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
+G1|muse_tope_borde_ge|el tope de muse compara con -ge y una salida de 16384 bytes exactos, que Muse si acepta, cae al contrato minimo
+G1|muse_recorte_sin_ancla|el recorte de muse vuelve a cortar en la primera aparicion del marcador y un titulo de receta con ese texto borra la regla de delegacion
+G1|muse_minimo_sin_aviso|el contrato minimo de muse vuelve a descartar el aviso de revision, que ya se consumio y se pierde
 G1|muse_contrato_sin_recorte|el contrato de muse vuelve a mandar las secciones genericas completas y, con el recetario real, solo llega el contrato minimo en vez del normal
 G1|muse_contrato_sin_tope|el tope duro de muse se quita y un contrato que no cabe en 16384 bytes llega entero, y Muse lo descarta en silencio
 G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
@@ -593,6 +596,9 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 # caso que espera BLOQUEO en host no ciego se pone rojo).
 mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
 mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
+mut_muse_tope_borde_ge() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \]/if [ "$_mt_bytes" -ge "$MUSE_HOOK_STDOUT_MAX" ]/'; }
+mut_muse_recorte_sin_ancla() { sed "s/cab=\"\${1%%\$'\\\\n\\\\n'\"Capability-first contract (\"\*}\"/cab=\"\${1%%\"Capability-first contract (\"*}\"/"; }
+mut_muse_minimo_sin_aviso() { sed 's|/^SAIKIT REVIEW NOTICE:/ \|\| ||'; }
 mut_muse_contrato_sin_recorte() { sed '/saikit-23.8-muse-contrato-corto/,+2s/_hc="$(muse_contrato_corto "$_hc")"/_hc="$_hc"/'; }
 mut_muse_contrato_sin_tope() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \] 2>\/dev\/null; then/if false; then/'; }
 mut_muse_no_es_ciego() { sed '/saikit-23.2-muse-ciego/s/ || \[ "$HOST" = "muse" \]//'; }

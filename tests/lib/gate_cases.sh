@@ -359,7 +359,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn"
+CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_muse_contrato_marcadores_en_receta caso_g1_muse_contrato_borde_16384 caso_g1_muse_contrato_minimo_conserva_aviso caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -5096,19 +5096,22 @@ caso_g1_muse_contrato_nombra_subagent_spawn() {
 # 16384 bytes y, si se pasa, no parsea NADA (output_too_large). Con el
 # recetario real el contrato de muse pesaba 17193 bytes en carril completo y
 # 16592 en el rapido, asi que nunca llegaba al modelo.
-_muse_bytes() { printf '%s' "$1" | LC_ALL=C wc -c | tr -d ' '; }
-_muse_cabe() { if [ "$(_muse_bytes "$1")" -le 16384 ]; then echo si; else echo "no ($(_muse_bytes "$1") bytes)"; fi; }
+# Se mide el archivo de salida, no $LAB_OUT: la sustitucion de comando le quita
+# el salto final y aceptaria una salida real de 16385 bytes.
+_muse_bytes() { LC_ALL=C wc -c < "$LAB/.out" | tr -d ' '; }
+_muse_cabe() { if [ "$(_muse_bytes)" -le 16384 ]; then echo si; else echo "no ($(_muse_bytes) bytes)"; fi; }
 caso_g1_muse_contrato_cabe_en_16k() {
   export SAIKIT_RECETAS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../recetas" && pwd)"
   lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
-  _igual "contrato muse completo cabe en 16384" "$(_muse_cabe "$LAB_OUT")" "si"
+  _igual "contrato muse completo cabe en 16384" "$(_muse_cabe)" "si"
   _contiene "completo: regla de delegacion" "$LAB_OUT" 'Delegation rule:'
   _contiene "completo: forma del recibo" "$LAB_OUT" 'Receipt line shape'
   _contiene "completo: label del host ciego" "$LAB_OUT" 'VERIFIED BY SUBAGENT:'
   _contiene "completo: recetario" "$LAB_OUT" 'Recipes (recetario):'
+  _contiene "completo: guardas antes de efectos" "$LAB_OUT" 'run guards (auth'
   _no_contiene "completo: es el contrato corto, no el minimo" "$LAB_OUT" 'Contract shortened for Muse'
   lab_run prompt muse "$(lab_payload_prompt '-saikit:fast agrega el docstring')"
-  _igual "contrato muse rapido cabe en 16384" "$(_muse_cabe "$LAB_OUT")" "si"
+  _igual "contrato muse rapido cabe en 16384" "$(_muse_cabe)" "si"
   _contiene "rapido: forma del recibo" "$LAB_OUT" 'Receipt line shape'
   lab_run prompt claude "$(lab_payload_prompt '-saikit agrega el docstring')"
   unset SAIKIT_RECETAS_DIR
@@ -5124,10 +5127,64 @@ caso_g1_muse_contrato_tope_duro() {
   done
   lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
   unset SAIKIT_RECETAS_DIR
-  _igual "con el menu inflado el contrato muse sigue cabiendo" "$(_muse_cabe "$LAB_OUT")" "si"
+  _igual "con el menu inflado el contrato muse sigue cabiendo" "$(_muse_cabe)" "si"
   _contiene "contrato minimo declarado" "$LAB_OUT" 'Contract shortened for Muse'
   _contiene "minimo: forma del recibo" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
   _contiene "minimo: herramienta de delegacion" "$LAB_OUT" 'the subagent_spawn tool'
+  _contiene "minimo: forma del recibo" "$LAB_OUT" 'Receipt line shape (this is what the gate checks'
+  _contiene "minimo: label del host ciego" "$LAB_OUT" 'VERIFIED BY SUBAGENT:'
+  _contiene "minimo: linea de pausa" "$LAB_OUT" 'SUMMONAIKIT HARNESS PAUSED'
+  _contiene "minimo: linea de delegado en espera" "$LAB_OUT" 'SUMMONAIKIT HARNESS DELEGATED'
+  _contiene "minimo: parrafo del carril completo" "$LAB_OUT" 'Close must cite concrete existing paths'
+  _no_contiene "minimo: sin recetario" "$LAB_OUT" 'Recipes (recetario):'
+}
+_muse_delegation_veces() { printf '%s' "$LAB_OUT" | grep -o 'Delegation rule:' | wc -l | tr -d ' '; }
+caso_g1_muse_contrato_marcadores_en_receta() {
+  for _mm in 'Capability-first contract (' 'Receipt line shape ('; do
+    _recetas_lab
+    _receta_anadir trampa "Titulo con $_mm trampa)" full
+    lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+    _igual "[$_mm en un titulo] Delegation rule una sola vez" "$(_muse_delegation_veces)" "1"
+    _contiene "[$_mm en un titulo] nombra subagent_spawn" "$LAB_OUT" 'the subagent_spawn tool'
+    _contiene "[$_mm en un titulo] forma corta aplicada" "$LAB_OUT" 'Quality rules (short form'
+    _no_contiene "[$_mm en un titulo] no cae al minimo" "$LAB_OUT" 'Contract shortened for Muse'
+  done
+  unset SAIKIT_RECETAS_DIR
+}
+_muse_titulo() { printf '%*s' "$1" '' | tr ' ' 'y'; }
+caso_g1_muse_contrato_borde_16384() {
+  _recetas_lab
+  _receta_anadir borde "$(_muse_titulo 1)" full
+  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+  _mb_base="$(_muse_bytes)"
+  _mb_largo=$((16384 - _mb_base + 1))
+  _recetas_lab
+  _receta_anadir borde "$(_muse_titulo "$_mb_largo")" full
+  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+  _igual "salida calibrada a 16384 bytes exactos" "$(_muse_bytes)" "16384"
+  _no_contiene "con 16384 bytes llega el contrato normal" "$LAB_OUT" 'Contract shortened for Muse'
+  _recetas_lab
+  _receta_anadir borde "$(_muse_titulo $((_mb_largo + 1)))" full
+  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+  unset SAIKIT_RECETAS_DIR
+  _contiene "con 16385 bytes llega el contrato minimo" "$LAB_OUT" 'Contract shortened for Muse'
+}
+caso_g1_muse_contrato_minimo_conserva_aviso() {
+  _recetas_lab
+  _mt=0
+  while [ "$_mt" -lt 150 ]; do
+    _receta_anadir "relleno$_mt" "Receta de relleno $_mt con un titulo largo para inflar el menu del contrato" full
+    _mt=$((_mt + 1))
+  done
+  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+  _ma_backup="$LAB_ESTADO_PATH"
+  _muse_apuntar_estado
+  printf 'SAIKIT REVIEW NOTICE: aviso de prueba 23.8.\n' > "$(dirname "$(dirname "$LAB_ESTADO_PATH")")/review-notice-pending.log"
+  LAB_ESTADO_PATH="$_ma_backup"
+  lab_run prompt muse "$(lab_payload_prompt '-saikit agrega el docstring')"
+  unset SAIKIT_RECETAS_DIR
+  _contiene "el minimo se mando" "$LAB_OUT" 'Contract shortened for Muse'
+  _contiene "el minimo conserva el aviso de revision" "$LAB_OUT" 'SAIKIT REVIEW NOTICE: aviso de prueba 23.8.'
 }
 
 caso_g3_muse_ceremonia_incompleta_bloquea() {
