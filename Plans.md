@@ -313,6 +313,13 @@ sin reabrir el ciclo. Tras cada merge que cambie el hook, deploy según
 Ningún implementador externo toca las copias vivas del hook ni el perfil de
 Muse: la corrida viva es del lead.
 
+**Runbook de ejecución:** vive en `goncloud-openclaw`, no aquí, porque claw
+orquesta el autopilot de todos los repos y lee los runbooks de ahí:
+`docs/runbooks/autopilot-fase-saikit23.md`, que hereda
+`docs/runbooks/base-summonaikit.md` (openclaw #86). Su tabla de preaprobaciones
+se aprobó al mergear ese PR y cubre los dos 事前確認 de la Phase 23 que abajo
+siguen «PENDIENTE».
+
 ## 事前確認
 
 - 事項: escritura de ACLs sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`
