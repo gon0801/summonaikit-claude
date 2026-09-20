@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 python3 - <<'PY'
 from pathlib import Path
 
-paths = ('AGENTS.md', 'CLAUDE.md', 'recetas/cuidar-pr.md', 'recetas/00-lider.md')
+paths = ('AGENTS.md', 'CLAUDE.md', 'recetas/cuidar-pr.md', 'recetas/00-lider.md', 'agents/reviewer.md')
 obsolete = ('Cross-review: tope 1 ronda', 'Jamas una tercera',
             'máximo **2 rondas**', 'Claude = lead')
 def invalid(text):
