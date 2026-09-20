@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 zcode, G4 bloquea. Misma secuencia y verified que el 21, pero el Stop NO trae
 el recibo ni las etiquetas. El bloqueo es por G4 (recibo faltante), no por
 secuencia ni evidencia. Aisla el gate del recibo en este target.

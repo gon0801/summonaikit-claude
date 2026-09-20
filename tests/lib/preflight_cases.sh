@@ -17,14 +17,19 @@
 
 # Compara Stop vs preflight sobre el mismo recibo y el mismo estado.
 # $1 = nombre; $2 = verified a sembrar (0/1); $3 = recibo; $4 = causa
-# ("" = ambos PASS); $5 = target (defecto claude). El Stop que cierra limpio
-# BORRA el estado, asi que se re-siembra antes del preflight.
+# ("" = ambos PASS); $5 = target (defecto claude); $6 = "adv" para sembrar
+# violacion adversary (A6: unica via FAIL que queda). El Stop que cierra
+# limpio BORRA el estado, asi que se re-siembra antes del preflight.
 _pf_compara() {
   _pf_nombre="$1"; _pf_verified="$2"; _pf_recibo="$3"; _pf_causa="$4"; _pf_target="${5:-claude}"
-  lab_sembrar 123456 0 1 "$_pf_verified" "implementer,verifier,reviewer"
+  _pf_roles="implementer,verifier,reviewer"
+  if [ "${6:-}" = "adv" ]; then _pf_roles="$_pf_roles,adversary"; fi
+  lab_sembrar 123456 0 1 "$_pf_verified" "$_pf_roles"
+  if [ "${6:-}" = "adv" ]; then _sem_violation_adversary; fi
   lab_run stop "$_pf_target" "$(lab_payload_stop "$_pf_recibo")"
   _pf_stop_rc="$LAB_RC"; _pf_stop_out="$LAB_OUT"
-  lab_sembrar 123456 0 1 "$_pf_verified" "implementer,verifier,reviewer"
+  lab_sembrar 123456 0 1 "$_pf_verified" "$_pf_roles"
+  if [ "${6:-}" = "adv" ]; then _sem_violation_adversary; fi
   lab_run preflight "$_pf_target" "$(lab_payload_stop "$_pf_recibo")"
   _pf_pre_rc="$LAB_RC"; _pf_pre_out="$LAB_OUT"
   if [ "$_pf_stop_rc" = "0" ]; then
@@ -68,34 +73,34 @@ caso_g9_recibo_valido_cierra_en_ambos() {
   _pf_compara "recibo valido" 1 "$(_pf_base)" ""
 }
 
-caso_g9_etiqueta_ausente_bloquea_en_ambos() {
+caso_g9_etiqueta_ausente_cierra_en_ambos() {
   limpiar_saikit
   plantar_trail x
-  _pf_compara "etiqueta ausente" 1 "$_RECIBO_SIN_RETRO" "Missing Retro gate summary"
+  _pf_compara "etiqueta ausente" 1 "$_RECIBO_SIN_RETRO" ""
 }
 
-caso_g9_etiqueta_malformada_bloquea_en_ambos() {
+caso_g9_etiqueta_malformada_cierra_en_ambos() {
   limpiar_saikit
   plantar_trail x
   _pf_mal="$(printf '%s' "$(_pf_base)" | sed 's/- Understand:/- Understand/')"
-  _pf_compara "etiqueta mal formada" 1 "$_pf_mal" "Missing Understand gate summary"
+  _pf_compara "etiqueta mal formada" 1 "$_pf_mal" ""
 }
 
-caso_g9_evidencia_invalida_bloquea_en_ambos() {
+caso_g9_evidencia_invalida_cierra_en_ambos() {
   limpiar_saikit
   plantar_trail x
-  _pf_compara "evidencia invalida" 0 "$(_pf_base)" "Missing verification evidence"
+  _pf_compara "evidencia invalida" 0 "$(_pf_base)" ""
 }
 
-caso_g9_trail_inexistente_bloquea_en_ambos() {
+caso_g9_trail_inexistente_cierra_en_ambos() {
   limpiar_saikit
-  _pf_compara "trail inexistente" 1 "$(_pf_base)" "Missing trail/blast"
+  _pf_compara "trail inexistente" 1 "$(_pf_base)" ""
 }
 
-caso_g9_raiz_sin_sha_bloquea_en_ambos() {
+caso_g9_raiz_sin_sha_cierra_en_ambos() {
   limpiar_saikit
   _sha="$(_wt_nuevo wt-pf6)"
-  _pf_compara "raiz sin sha" 1 "$(_recibo_close 'trail at .saikit/decisiones/21.4.tsv ; blast at .saikit/findings/blast-21.4.json ; raiz: '"$LAB/wt-pf6"' ; code after reviewer: no.')" "raiz sin sha no acredita"
+  _pf_compara "raiz sin sha" 1 "$(_recibo_close 'trail at .saikit/decisiones/21.4.tsv ; blast at .saikit/findings/blast-21.4.json ; raiz: '"$LAB/wt-pf6"' ; code after reviewer: no.')" ""
 }
 
 caso_g9_raiz_acreditada_cierra_en_ambos() {
@@ -156,13 +161,16 @@ caso_g9_sin_gramatica_paralela() {
 caso_g9_divergencia_queda_roja() {
   limpiar_saikit
   plantar_trail x
-  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  # A6: la divergencia se demuestra por la via adversary (unica FAIL que queda).
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop "$(_pf_base)")"
   _pf_div_stop_rc="$LAB_RC"
-  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
+  lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   SAIKIT_MUT_PREFLIGHT_DIVERGE=1 lab_run preflight claude "$(lab_payload_stop "$(_pf_base)")"
   _pf_div_pre_rc="$LAB_RC"; _pf_div_pre_out="$LAB_OUT"
-  if [ "$_pf_div_stop_rc" = "0" ]; then _mal "divergencia: el Stop debia bloquear (evidencia invalida)"; fi
+  if [ "$_pf_div_stop_rc" = "0" ]; then _mal "divergencia: el Stop debia bloquear (violacion adversary)"; fi
   case "$_pf_div_pre_out" in
     *'SAIKIT PREFLIGHT (21.5): FAIL'*) _mal "divergencia: la costura no diverge (preflight FAIL igual que el Stop)" ;;
     *'SAIKIT PREFLIGHT (21.5): PASS'*) ;;
@@ -177,25 +185,26 @@ caso_g9_cursor_recibo_valido_cierra_en_ambos() {
   _pf_compara "recibo valido (cursor)" 1 "$(_pf_base)" "" "cursor"
 }
 
-caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos() {
+caso_g9_cursor_etiqueta_ausente_cierra_en_ambos() {
   limpiar_saikit
   plantar_trail x
-  _pf_compara "etiqueta ausente (cursor)" 1 "$_RECIBO_SIN_RETRO" "Missing Retro gate summary" "cursor"
+  _pf_compara "etiqueta ausente (cursor)" 1 "$_RECIBO_SIN_RETRO" "" "cursor"
 }
 
-caso_g9_estado_ilegible_bloquea_stop_error_preflight() {
+# A6: con estado ilegible el Stop es fail-open (permite: no puede leer ni
+# siquiera la via adversary) mientras el preflight sigue siendo error de
+# instrumento (se niega a evaluar sin foto del estado).
+caso_g9_estado_ilegible_permite_stop_error_preflight() {
   limpiar_saikit
   plantar_trail x
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
   chmod 000 "$LAB_ESTADO_PATH"
   lab_run stop claude "$(lab_payload_stop "$(_pf_base)")"
   _pf_ei_stop_rc="$LAB_RC"; _pf_ei_stop_out="$LAB_OUT"
-  if [ "$_pf_ei_stop_rc" = "0" ]; then
-    case "$_pf_ei_stop_out" in
-      *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) ;;
-      *) _mal "estado ilegible: el Stop debia bloquear con estado ilegible" ;;
-    esac
-  fi
+  _igual "estado ilegible: el Stop permite (fail-open)" "$_pf_ei_stop_rc" "0"
+  case "$_pf_ei_stop_out" in
+    *'"decision":"block"'*|*'"continue":false'*|*'"followup_message"'*) _mal "estado ilegible: el Stop no debio bloquear" ;;
+  esac
   chmod 644 "$LAB_ESTADO_PATH"
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
   chmod 000 "$LAB_ESTADO_PATH"
@@ -205,4 +214,13 @@ caso_g9_estado_ilegible_bloquea_stop_error_preflight() {
   _contiene "estado ilegible error" "$LAB_ERR" 'SAIKIT PREFLIGHT (21.5): ERROR'
 }
 
-CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_bloquea_en_ambos caso_g9_etiqueta_malformada_bloquea_en_ambos caso_g9_evidencia_invalida_bloquea_en_ambos caso_g9_trail_inexistente_bloquea_en_ambos caso_g9_raiz_sin_sha_bloquea_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja caso_g9_cursor_recibo_valido_cierra_en_ambos caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos caso_g9_estado_ilegible_bloquea_stop_error_preflight"
+# A6: la unica comparacion FAIL que queda (via adversary), en claude y en
+# cursor — mantiene viva la cobertura FAIL del preflight y su causa comun.
+caso_g9_adversary_bloquea_en_ambos() {
+  limpiar_saikit
+  plantar_trail x
+  _pf_compara "violacion adversary" 1 "$(_pf_base)" "adversary subagent wrote outside" "claude" "adv"
+  _pf_compara "violacion adversary (cursor)" 1 "$(_pf_base)" "adversary subagent wrote outside" "cursor" "adv"
+}
+
+CASOS_G9="caso_g9_recibo_valido_cierra_en_ambos caso_g9_etiqueta_ausente_cierra_en_ambos caso_g9_etiqueta_malformada_cierra_en_ambos caso_g9_evidencia_invalida_cierra_en_ambos caso_g9_trail_inexistente_cierra_en_ambos caso_g9_raiz_sin_sha_cierra_en_ambos caso_g9_raiz_acreditada_cierra_en_ambos caso_g9_skip_con_razon_cierra_en_ambos caso_g9_dinamicos_nombrados_no_pass caso_g9_sin_efectos caso_g9_sin_gramatica_paralela caso_g9_divergencia_queda_roja caso_g9_cursor_recibo_valido_cierra_en_ambos caso_g9_cursor_etiqueta_ausente_cierra_en_ambos caso_g9_estado_ilegible_permite_stop_error_preflight caso_g9_adversary_bloquea_en_ambos"

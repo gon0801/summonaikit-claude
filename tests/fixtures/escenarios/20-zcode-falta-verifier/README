@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 zcode, G3 bloquea. Corren implementer y reviewer pero NO verifier; hay runner
 que pasa (verified=1) y recibo en vinetas, asi que el UNICO motivo de bloqueo
 es la secuencia (Missing verifier). En zcode los eventos Agent SI llegan

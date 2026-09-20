@@ -1,3 +1,5 @@
+A7 (Bloque A): el sello se retiro — el Write ya NO registra veredicto_sha256 ni crea .gitignore; acredita implemented como cualquier edicion.
+
 Escenario 56 — el sello del veredicto (D16, Task 18.3).
 
 Un turno armado donde el reviewer escribe `.saikit/veredictos/<sha>.json` con la

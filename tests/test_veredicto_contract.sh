@@ -7,13 +7,13 @@
 #     controles crudos; lo legitimo con escapes sigue pasando. El esquema
 #     sellado quedo retirado (Bloque A: la entrega se valida con el recibo
 #     del PR, tests/test_entrega_contract.sh).
-#   - GATE (comportamiento del hook, pendiente de retirar en A7): el `Write`
-#     atribuido al reviewer sobre `.saikit/veredictos/` registra
-#     `veredicto_sha256` en el estado; el `Write` de OTRO rol NO lo registra;
-#     un `Edit` posterior deja el archivo con hash distinto al registrado.
+#   - IGNORADO (A7 retiro el sello): el `Write` sobre `.saikit/veredictos/`
+#     ya NO registra `veredicto_sha256`, no hay vinculos linked_* y los
+#     restos viejos (JSON de sellos, lineas de estado) se ignoran sin
+#     borrarse: la entrega valida el recibo del PR.
 #
-# La mitad mutation-test vive al final: romper el sello del hook tiene que
-# poner rojo a algun caso — la acreditacion que pide la DoD.
+# La mitad mutation-test vive al final: romper la exclusion noncode o la guia
+# tiene que poner rojo a algun caso — la acreditacion que pide la DoD.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -246,48 +246,23 @@ fin_caso "parser_json_valido_con_escapes_sigue_valido"
 
 
 
-# --------------------------------------------------------- gate: sello del hook
-verdict_reviewer_write_registra_hash() {
+# --------------------------------------------------------- gate: sello retirado
+# A7: el Write del reviewer ya NO registra veredicto_sha256 ni crea
+# gitignore — los restos viejos se ignoran y la entrega valida el recibo.
+verdict_reviewer_write_no_registra_hash() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="abc123abc123abc123"
   V="{\"sha\":\"$vsha\",\"pr\":1,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"PASS\",\"comando\":\"npm test -- verify/\"},\"blast\":{\"nivel\":4,\"hecho\":\"h\",\"comando\":\"npm test -- verify/\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"d\"}"
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   verdict_armar
   lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _igual "hash registrado" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
-  _contiene "gitignore creado" "$(cat "$LAB/proyecto/.saikit/veredictos/.gitignore" 2>/dev/null)" '*'
+  _vacio "hash NO registrado (A7: sin sello)" "$(lab_estado veredicto_sha256)"
+  _vacio "sin gitignore del sello" "$(cat "$LAB/proyecto/.saikit/veredictos/.gitignore" 2>/dev/null)"
 }
-caso "verdict_reviewer_write_registra_hash"
-verdict_reviewer_write_registra_hash
-fin_caso "verdict_reviewer_write_registra_hash"
+caso "verdict_reviewer_write_no_registra_hash"
+verdict_reviewer_write_no_registra_hash
+fin_caso "verdict_reviewer_write_no_registra_hash"
 
-caso "verdict_repo_fresco_sin_saikit_sella_igual"
-{
-  # Hallazgo de codex (cross-review del PR #140), adjudicado con MEDICION: «en
-  # un repo nuevo .saikit/veredictos/ no existe y el hook solo lo crea despues
-  # del Write; el test los precrea y no cubre el primer uso real».
-  #
-  # Medido con la tool real sobre un arbol SIN `.saikit`: el `Write` crea los
-  # directorios padre que faltan y deja el archivo con su contenido exacto. Asi
-  # que el primer uso real NO falla. Este caso es esa medicion convertida en
-  # regresion: `verdict_reset` deja `proyecto/` vacio, y aca se crean SOLO los
-  # padres del archivo (lo que hace el Write), nunca el arbol de antemano.
-  #
-  # El hash se compara contra el sha256 del ARCHIVO EN DISCO, no contra el
-  # contenido que el caso conoce: es la comparacion exacta que hara el merge de
-  # 18.4 (estado vs archivo actual).
-  [ -e "$LAB/proyecto/.saikit" ] && _mal "el caso arranca con .saikit ya existente; no prueba un repo fresco"
-  vsha="fresco00fresco00"
-  Vf="{\"sha\":\"$vsha\",\"pr\":1,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"PASS\",\"comando\":\"npm test -- verify/\"},\"blast\":{\"nivel\":4,\"hecho\":\"h\",\"comando\":\"npm test -- verify/\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"d\"}"
-  fpf="$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  mkdir -p "$(dirname "$fpf")"
-  printf '%s' "$Vf" > "$fpf"
-  verdict_armar
-  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$Vf")"
-  _igual "hash en repo fresco (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$fpf" | cut -c1-64)"
-  _contiene "gitignore creado en repo fresco" "$(cat "$LAB/proyecto/.saikit/veredictos/.gitignore" 2>/dev/null)" '*'
-}
-fin_caso "verdict_repo_fresco_sin_saikit_sella_igual"
 
 verdict_otro_rol_no_registra_hash() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
@@ -305,50 +280,7 @@ caso "verdict_otro_rol_no_registra_hash"
 verdict_otro_rol_no_registra_hash
 fin_caso "verdict_otro_rol_no_registra_hash"
 
-verdict_edit_posterior_deja_hash_distinto() {
-  mkdir -p "$LAB/proyecto/.saikit/veredictos"
-  vsha="ghi789ghi789ghi789"
-  V="{\"sha\":\"$vsha\",\"verifier\":\"PASS\",\"reviewer\":\"clean\"}"
-  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  verdict_armar
-  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  h1="$(lab_estado veredicto_sha256)"
-  _no_vacio "hash registrado" "$h1"
-  # Un Edit posterior (observado como tool) NO re-sella (el sello es solo del
-  # Write del reviewer, D16): el hash registrado queda igual.
-  lab_run tool claude "$(lab_payload_edit ".saikit/veredictos/$vsha.json")"
-  _igual "el Edit no re-sella (hash registrado intacto)" "$(lab_estado veredicto_sha256)" "$h1"
-  # Y una edicion REAL del archivo (contenido distinto) deja el hash del archivo
-  # distinto al registrado (el sello detecta la manipulacion).
-  V2="{\"sha\":\"$vsha\",\"verifier\":\"PASS\",\"reviewer\":\"clean\",\"tampered\":true}"
-  printf '%s' "$V2" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  h2="$(printf '%s' "$V2" | sha256sum | cut -c1-64)"
-  _no_igual "hash del archivo tras el Edit" "$h2" "$h1"
-}
-caso "verdict_edit_posterior_deja_hash_distinto"
-verdict_edit_posterior_deja_hash_distinto
-fin_caso "verdict_edit_posterior_deja_hash_distinto"
 
-# H1 (lead r1): la ruta ABSOLUTA del Write sella (en Windows C:\...; la forma
-# medida del Write de Claude Code). En Windows se arma con cygpath -w.
-verdict_ruta_absoluta_sella() {
-  mkdir -p "$LAB/proyecto/.saikit/veredictos"
-  vsha="pqr678pqr678pqr678"
-  V="{\"sha\":\"$vsha\",\"verifier\":\"PASS\",\"reviewer\":\"clean\"}"
-  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  if command -v cygpath >/dev/null 2>&1; then
-    fp="$(cygpath -w "$LAB/proyecto")\.saikit\veredictos\\$vsha.json"
-    fp="$(printf '%s' "$fp" | sed 's/\\/\\\\/g')"   # escapa los backslashes para el JSON
-  else
-    fp="$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  fi
-  verdict_armar
-  lab_run tool claude "$(verdict_payload_write reviewer "$fp" "$V")"
-  _igual "hash con ruta absoluta" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
-}
-caso "verdict_ruta_absoluta_sella"
-verdict_ruta_absoluta_sella
-fin_caso "verdict_ruta_absoluta_sella"
 
 # H1 (lead r1): una ruta absoluta FUERA de veredictos/ NO sella (atrapa un fix que matchee de mas).
 verdict_ruta_absoluta_fuera_no_sella() {
@@ -370,60 +302,31 @@ caso "verdict_ruta_absoluta_fuera_no_sella"
 verdict_ruta_absoluta_fuera_no_sella
 fin_caso "verdict_ruta_absoluta_fuera_no_sella"
 
-# H2 (lead r1): el sello NO recorta el salto de linea final del contenido.
-verdict_contenido_con_salto_final_coincide() {
-  mkdir -p "$LAB/proyecto/.saikit/veredictos"
-  vsha="vwx234vwx234vwx234"
-  V=$'{\n\t"sha": "'$vsha'",\n\t"verifier": "PASS",\n\t"reviewer": "clean"\n}\n'
-  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  verdict_armar
-  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _igual "hash con salto final (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
-}
-caso "verdict_contenido_con_salto_final_coincide"
-verdict_contenido_con_salto_final_coincide
-fin_caso "verdict_contenido_con_salto_final_coincide"
 
-# H4 (lead r1): el \r SI se decodifica (contenido CRLF).
-verdict_contenido_crlf_coincide() {
-  mkdir -p "$LAB/proyecto/.saikit/veredictos"
-  vsha="yza567yza567yza567"
-  V=$'{\r\n\t"sha": "'$vsha'",\r\n\t"verifier": "PASS"\r\n}\r\n'
-  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  verdict_armar
-  lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _igual "hash CRLF (contra el ARCHIVO)" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
-}
-caso "verdict_contenido_crlf_coincide"
-verdict_contenido_crlf_coincide
-fin_caso "verdict_contenido_crlf_coincide"
 
-# ---------------------- Task 18.13 (c): el Write del veredicto NO es trabajo
-# Un turno de SOLO revision escribe una sola cosa: el veredicto. Si ese Write
-# se acredita como trabajo, el estado reporta implementacion y edicion de
-# codigo que no existieron — la golden del escenario 56 lo mostraba
-# (implemented=1 y last_code_edit=1). Las DOS senales van en casos separados
-# porque nacen de caminos distintos y un caso que solo mire una no discrimina:
-# `implemented` viene del grep laxo del PostToolUse; `last_code_edit` de
-# rn_mark_code_edit via rn_is_noncode_path.
+# ---------------------- Task 18.13 (c), invertida por A7: sin sellos, un
+# Write es trabajo venga del rol que venga (implemented=1 como cualquier
+# edicion); pero NO es codigo (veredictos/ sigue excluido de last_code_edit
+# por rn_is_noncode_path). Las DOS senales van en casos separados porque
+# nacen de caminos distintos: `implemented` del grep laxo del PostToolUse,
+# `last_code_edit` de rn_mark_code_edit.
 verdict_payload_revision() {  # $1=vsha — contenido minimo de veredicto valido
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"n/a","comando":null},"blast":{"nivel":4,"hecho":"h","comando":"c"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/t.tsv"}' "$1"
 }
 
-verdict_write_no_acredita_implemented() {
+verdict_write_acredita_implemented() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="notrab01notrab01"
   V="$(verdict_payload_revision "$vsha")"
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   verdict_armar
   lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
-  _igual "implemented queda en 0 (el veredicto no es trabajo)" "$(lab_estado implemented)" "0"
-  _vacio "el log no acredita implemented con el veredicto" "$(lab_log | grep '^implemented:')"
+  _igual "implemented queda en 1 (A7: el Write es trabajo)" "$(lab_estado implemented)" "1"
+  _no_vacio "el log acredita implemented con el Write" "$(lab_log | grep '^implemented:')"
 }
-caso "verdict_write_no_acredita_implemented"
-verdict_write_no_acredita_implemented
-fin_caso "verdict_write_no_acredita_implemented"
+caso "verdict_write_acredita_implemented"
+verdict_write_acredita_implemented
+fin_caso "verdict_write_acredita_implemented"
 
 verdict_write_no_marca_code_edit() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
@@ -432,7 +335,6 @@ verdict_write_no_marca_code_edit() {
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   verdict_armar
   lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
   rn_file="$(dirname "$LAB_ESTADO_PATH")/harness-state-review-notice.env"
   _no_vacio "el evento del reviewer SI deja last_review" "$(grep '^last_review=.' "$rn_file" 2>/dev/null)"
   _vacio "el Write del veredicto NO marca last_code_edit" "$(grep '^last_code_edit=.' "$rn_file" 2>/dev/null)"
@@ -442,11 +344,9 @@ verdict_write_no_marca_code_edit
 fin_caso "verdict_write_no_marca_code_edit"
 
 # El detalle que la fila 18.13 pide DECLARAR y atar: un turno de solo
-# revision NO dispara la falsa alarma de "codigo tocado despues del review".
-# Pre-fix no disparaba porque rn_mark_review y rn_mark_code_edit caen en el
-# MISMO contador y el Stop compara con -gt; post-fix el Write del veredicto
-# ya no marca last_code_edit en absoluto. El caso ata el observable por
-# cualquiera de los dos mecanismos.
+# revision NO dispara la falsa alarma de "codigo tocado despues del review"
+# (el Write del veredicto no marca last_code_edit). A6/A7: el cierre es
+# limpio y sin sello.
 verdict_turno_solo_revision_sin_falso_aviso() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="notrab03notrab03"
@@ -454,19 +354,19 @@ verdict_turno_solo_revision_sin_falso_aviso() {
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   verdict_armar
   lab_run tool claude "$(verdict_payload_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  lab_run stop claude "$(lab_payload_stop)"
-  _no_vacio "el sello disparo (era el Write del reviewer sobre veredictos/)" "$(lab_estado veredicto_sha256)"
+  lab_run stop claude "$(lab_payload_stop 'Revision terminada: sin hallazgos.')"
+  _igual "el Stop cierra limpio" "$LAB_RC" "0"
   _vacio "sin aviso pendiente de review-notice para el turno siguiente" "$(find "$LAB/hooks/state" -name 'review-notice-pending.log' 2>/dev/null)"
-  _vacio "el log no registra el aviso de codigo tras el review" "$(lab_log | grep 'review-notice:')"
 }
 caso "verdict_turno_solo_revision_sin_falso_aviso"
 verdict_turno_solo_revision_sin_falso_aviso
 fin_caso "verdict_turno_solo_revision_sin_falso_aviso"
 
-# ---------------------- Task 18.26: sello unarmed (hijo Grok)
+# ---------------------- Task 18.26, invertida por A7: sin sello unarmed
 # Forma medida en docs/evidence/18.26-grok-reviewer-write/write.post_tool_use.json:
 # hookEventName=post_tool_use, toolName=write, toolInput.file_path+content,
-# subagentType top-level. Sin agent_type. Sesion sin -saikit (sin STATE_PATH).
+# subagentType top-level. Sin agent_type. Sesion sin -saikit (sin STATE_PATH):
+# el Write pasa sin crear estado ni registrar nada.
 verdict_payload_grok_write() {
   _vd_role_json=""
   if [ -n "$1" ]; then
@@ -475,21 +375,23 @@ verdict_payload_grok_write() {
   printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"auto","hookEventName":"post_tool_use","toolName":"write","toolInput":{"file_path":"%s","content":"%s"},"toolResult":{"type":"SearchReplace"},"isBackgrounded":false%s}' "$2" "$(verdict_esc "$3")" "$_vd_role_json"
 }
 
-verdict_unarmed_grok_reviewer_write_sella() {
+verdict_unarmed_grok_reviewer_write_no_sella() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"medicion 18.26\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
   _vacio "sesion sin armar (sin STATE_PATH)" "$(lab_estado task_hash)"
   lab_run tool claude "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  _igual "hash unarmed grok-shaped" "$(lab_estado veredicto_sha256)" "$(printf '%s' "$V" | sha256sum | cut -c1-64)"
-  _igual "hash unarmed contra el archivo" "$(lab_estado veredicto_sha256)" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
-  _contiene "agents_seen lleva reviewer (cruce del merge)" "$(lab_estado agents_seen)" "reviewer"
+  _igual "Write unarmed permite" "$LAB_RC" "0"
+  _vacio "sin sello unarmed (A7)" "$(lab_estado veredicto_sha256)"
+  if lab_hay_estado; then
+    _mal "write unarmed no debe crear estado"
+  fi
 }
 
-caso "verdict_unarmed_grok_reviewer_write_sella"
-verdict_unarmed_grok_reviewer_write_sella
-fin_caso "verdict_unarmed_grok_reviewer_write_sella"
+caso "verdict_unarmed_grok_reviewer_write_no_sella"
+verdict_unarmed_grok_reviewer_write_no_sella
+fin_caso "verdict_unarmed_grok_reviewer_write_no_sella"
 
 verdict_unarmed_write_sin_rol_no_sella() {
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
@@ -573,10 +475,7 @@ verdict_unarmed_aislamiento() {
   _igual "Write Grok permite" "$LAB_RC" "0"
   ruta_B="$(find "$LAB/hooks/state/grok" -path '*/independent-reviewer-B/harness-state.env')"
   if [ -f "$ruta_B" ]; then
-    _igual "sello solo en B" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
-    _igual "B no se arma" "$(sed -n 's/^lane=//p' "$ruta_B")" "seal_boot"
-  else
-    _mal "falta sello local en la sesion B"
+    _mal "A7: B no debe crear estado (sin sello unarmed)"
   fi
   cmp -s "$ruta_A" "$tmp/state-A.before" || _mal "Write B altero estado de A sin vinculo padre-hijo"
   cmp -s "$log_A" "$tmp/log-A.before" || _mal "Write B acredito reviewer en log de A sin vinculo"
@@ -611,116 +510,75 @@ caso "verdict_armed_implementer_no_sella"
 verdict_armed_implementer_no_sella
 fin_caso "verdict_armed_implementer_no_sella"
 
-# Stop con prosa (sin recibo) sobre estado seal_boot: ALLOW y el sello vive.
-# Sin el early-exit, el Stop trata task_hash=unknown como armado, exige recibo
-# y en unknown-honesto / presupuesto / close limpio borra el estado.
-verdict_unarmed_stop_prosa_conserva_sello() {
-  verdict_unarmed_grok_reviewer_write_sella
-  sello="$(lab_estado veredicto_sha256)"
-  _no_vacio "sello previo al Stop" "$sello"
-  _igual "lane del boot unarmed" "$(lab_estado lane)" "seal_boot"
-  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean. El veredicto esta sellado.' end_turn)"
-  _igual "Stop seal_boot no bloquea" "$LAB_RC" "0"
+# A7: restos viejos de sello (estado seal_boot + JSON en disco, de antes del
+# Bloque A) se ignoran — el Stop cierra limpio, borra el estado como siempre
+# y NO toca el archivo viejo.
+verdict_unarmed_stop_prosa_limpia_estado_viejo() {
+  LAB_SESSION_ID=sesion-con-restos-viejos
+  mkdir -p "$LAB/proyecto/.saikit/veredictos"
+  vsha="viejo000viejo000viejo000viejo000viejo000"
+  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"reviewer\":\"clean\"}"
+  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
+  h_antes="$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)"
+  LAB_GROK_HOOK_EVENT=user_prompt_submit
+  lab_run prompt grok "$(lab_payload_prompt '-saikit trabajo con restos')"
+  ruta_vieja="$(find "$LAB/hooks/state/grok" -path '*/sesion-con-restos-viejos/harness-state.env')"
+  [ -f "$ruta_vieja" ] || { _mal "no se pudo armar la sesion"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
+  # Sobreescribe con forma vieja (la que dejaba el sello unarmed pre-A7).
+  printf 'task_hash=unknown\ncycle=0\nimplemented=0\nverified=0\nagents_seen=reviewer\nlane=seal_boot\nveredicto_sha256=%s\n' \
+    "$(printf '%s' "$V" | sha256sum | cut -c1-64)" > "$ruta_vieja"
+  LAB_GROK_HOOK_EVENT=stop
+  lab_run stop grok "$(lab_payload_grok_stop 'Reviewer: clean. El veredicto quedo de antes.' end_turn)"
+  _igual "Stop con restos viejos cierra" "$LAB_RC" "0"
   if printf '%s' "$LAB_OUT" | grep -Fq '"decision":"block"'; then
-    _mal "Stop seal_boot exigio recibo"
+    _mal "Stop con restos viejos exigio ceremonia"
   fi
-  if ! lab_hay_estado; then
-    _mal "Stop no debe borrar STATE_PATH del sello"
+  if [ -f "$ruta_vieja" ]; then
+    _mal "el cierre limpio debe borrar el estado viejo"
   fi
-  _igual "sello sobrevive Stop" "$(lab_estado veredicto_sha256)" "$sello"
-  _contiene "agents_seen sigue reviewer" "$(lab_estado agents_seen)" "reviewer"
+  _igual "el JSON viejo queda intacto" "$(sha256sum "$LAB/proyecto/.saikit/veredictos/$vsha.json" | cut -c1-64)" "$h_antes"
+  LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
 }
 
-caso "verdict_unarmed_stop_prosa_conserva_sello"
-verdict_unarmed_stop_prosa_conserva_sello
-fin_caso "verdict_unarmed_stop_prosa_conserva_sello"
+caso "verdict_unarmed_stop_prosa_limpia_estado_viejo"
+verdict_unarmed_stop_prosa_limpia_estado_viejo
+fin_caso "verdict_unarmed_stop_prosa_limpia_estado_viejo"
 
-# Write de codigo en la misma sesion unarmed: no cae a mark_evidence.
-verdict_unarmed_write_codigo_no_implementa() {
-  verdict_unarmed_grok_reviewer_write_sella
-  sello="$(lab_estado veredicto_sha256)"
-  _no_vacio "sello previo al Write" "$sello"
-  lab_run tool claude "$(verdict_payload_grok_write "" "src/foo.py" "print(1)")"
-  _igual "write de codigo no marca implemented" "$(lab_estado implemented)" "0"
-  _igual "sello sobrevive write de codigo" "$(lab_estado veredicto_sha256)" "$sello"
-  if ! lab_hay_estado; then
-    _mal "write de codigo no debe borrar el estado del sello"
-  fi
-}
 
-caso "verdict_unarmed_write_codigo_no_implementa"
-verdict_unarmed_write_codigo_no_implementa
-fin_caso "verdict_unarmed_write_codigo_no_implementa"
 
-# ---------------------- 20.13: consumo vinculado Grok (anuncio host)
-# Positivo: padre armado anuncia hijo → hijo sella → spawn done consume en padre.
-# Negativo: otro padre no recibe el sello; sin vínculo el hijo seal_boot no basta.
-verdict_link_positivo_padre_consume_sello_hijo() {
+# ---------------------- 20.13, retirado por A7: sin vinculos linked_*
+# Padre armado + SubagentStart + Write del hijo + spawn done: nada se
+# anuncia, nada se sella y nada se consume — el recibo de entrega vive en
+# el PR, no en el estado de sesion.
+verdict_link_padre_no_anuncia_ni_consume() {
   LAB_GROK_HOOK_EVENT=post_tool_use
   mkdir -p "$LAB/proyecto/.saikit/veredictos"
   vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"20.13\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
   printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
 
   LAB_SESSION_ID=parent-A-2013
   lab_run prompt grok "$(lab_payload_prompt '-saikit trabajo padre A')"
   ruta_A="$(find "$LAB/hooks/state/grok" -path '*/parent-A-2013/harness-state.env')"
   [ -f "$ruta_A" ] || { _mal "falta estado padre A"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
   lab_run tool grok "$(lab_payload_grok_subagent_start reviewer child-B-2013 'review A')"
-  _igual "padre anuncia hijo" "$(sed -n 's/^linked_children=//p' "$ruta_A")" "child-B-2013"
+  _vacio "padre NO anuncia hijo" "$(sed -n 's/^linked_children=//p' "$ruta_A")"
 
   LAB_SESSION_ID=child-B-2013
   lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/child-B-2013/harness-state.env')"
-  [ -f "$ruta_B" ] || { _mal "falta sello hijo B"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
-  _igual "sello en hijo" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
-  _igual "hijo seal_boot" "$(sed -n 's/^lane=//p' "$ruta_B")" "seal_boot"
-  _vacio "padre aun sin sello antes del consume" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_A")"
+  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/child-B-2013/harness-state.env' 2>/dev/null)"
+  _vacio "hijo NO crea estado (sin sello unarmed)" "$ruta_B"
 
   LAB_SESSION_ID=parent-A-2013
   lab_run tool grok "$(lab_payload_grok_spawn_done reviewer child-B-2013)"
-  _igual "padre consume sello" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_A")" "$want"
-  _igual "padre nombra linked_seal_session" "$(sed -n 's/^linked_seal_session=//p' "$ruta_A")" "child-B-2013"
-  _contiene "padre agents_seen reviewer" "$(sed -n 's/^agents_seen=//p' "$ruta_A")" "reviewer"
-  _igual "hijo conserva sello" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
+  _vacio "padre sin sello tras spawn done" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_A")"
+  _vacio "padre sin linked_seal_session" "$(sed -n 's/^linked_seal_session=//p' "$ruta_A")"
   LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
 }
-caso "verdict_link_positivo_padre_consume_sello_hijo"
-verdict_link_positivo_padre_consume_sello_hijo
-fin_caso "verdict_link_positivo_padre_consume_sello_hijo"
+caso "verdict_link_padre_no_anuncia_ni_consume"
+verdict_link_padre_no_anuncia_ni_consume
+fin_caso "verdict_link_padre_no_anuncia_ni_consume"
 
-verdict_link_otro_padre_no_consume() {
-  LAB_GROK_HOOK_EVENT=post_tool_use
-  mkdir -p "$LAB/proyecto/.saikit/veredictos"
-  vsha="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-  V="{\"sha\":\"$vsha\",\"pr\":0,\"verifier\":\"PASS\",\"verify_app\":{\"resultado\":\"n/a\",\"comando\":null},\"blast\":{\"omitido\":\"20.13\"},\"adversary\":\"n/a\",\"reviewer\":\"clean\",\"decisiones\":\"n/a\"}"
-  printf '%s' "$V" > "$LAB/proyecto/.saikit/veredictos/$vsha.json"
-  want="$(printf '%s' "$V" | sha256sum | cut -c1-64)"
-
-  LAB_SESSION_ID=parent-A-2013b
-  lab_run prompt grok "$(lab_payload_prompt '-saikit padre A')"
-  lab_run tool grok "$(lab_payload_grok_subagent_start reviewer child-B-2013b 'rev')"
-  LAB_SESSION_ID=child-B-2013b
-  lab_run tool grok "$(verdict_payload_grok_write reviewer ".saikit/veredictos/$vsha.json" "$V")"
-  ruta_B="$(find "$LAB/hooks/state/grok" -path '*/child-B-2013b/harness-state.env')"
-  _igual "sello en B" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_B")" "$want"
-
-  # Padre C: spawn_done SIN SubagentStart previo → no enrolla ni consume.
-  # Mutacion consume_sin_vinculo salta la guarda de linked_children y sella C.
-  LAB_SESSION_ID=parent-C-ajeno
-  lab_run prompt grok "$(lab_payload_prompt '-saikit padre C ajeno')"
-  ruta_C="$(find "$LAB/hooks/state/grok" -path '*/parent-C-ajeno/harness-state.env')"
-  [ -f "$ruta_C" ] || { _mal "falta padre C"; LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""; return; }
-  lab_run tool grok "$(lab_payload_grok_spawn_done reviewer child-B-2013b)"
-  _vacio "C sin linked_children del hijo ajeno" "$(sed -n 's/^linked_children=//p' "$ruta_C")"
-  _vacio "C sin sello sin anuncio previo" "$(sed -n 's/^veredicto_sha256=//p' "$ruta_C")"
-  _vacio "C sin linked_seal_session" "$(sed -n 's/^linked_seal_session=//p' "$ruta_C")"
-  LAB_SESSION_ID=""; LAB_GROK_HOOK_EVENT=""
-}
-caso "verdict_link_otro_padre_no_consume"
-verdict_link_otro_padre_no_consume
-fin_caso "verdict_link_otro_padre_no_consume"
 
 # ---------------------- Task 18.13 (b): el lider commitea ANTES del reviewer
 # agents/reviewer.md lo DA POR HECHO («el lider ya commiteo antes de
@@ -762,18 +620,13 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 # ------------------------------------------------------- mutation-test propio
-# Animamos el sello y exigimos que un caso se ponga rojo: si no, nada de esta
-# suite probaria que el sello existe. Guardias: la mutacion cambia el archivo,
-# el mutado parsea, y algun caso lo atrapa.
-mut_veredicto_sello_apagado() { sed 's/^verdict_registrar_sello() {$/verdict_registrar_sello() {\n  return 0/'; }
-
-# Task 18.13 (c): las dos mitades del fix, cada una atrapada por SU caso — un
-# caso que solo mire `implemented` no veria el contador del review-notice, y
-# viceversa. La primera quita la exclusion de .saikit/veredictos/ en
-# rn_is_noncode_path (vuelve last_code_edit); la segunda quita la guardia del
-# grep laxo (vuelve implemented).
+# A7: se animan la exclusion noncode, la guia y la ausencia del sello, y se
+# exige que un caso se ponga rojo. Guardias: la mutacion cambia el archivo,
+# el mutado parsea, y algun caso la atrapa.
+# Task 18.13 (c): quita la exclusion de .saikit/veredictos/ en
+# rn_is_noncode_path (vuelve last_code_edit) — la atrapa
+# verdict_write_no_marca_code_edit.
 mut_veredicto_rn_noncode_sin_veredictos() { sed '/\.saikit\/veredictos\/\*|\.saikit\/veredictos\/\*) return 0 ;;/d'; }
-mut_veredicto_implemented_sin_guardia() { sed 's/\[ -z "$vd_write_reviewer" \] && //'; }
 
 # Task 18.13 (b): el contrato pierde la instruccion de commitear ANTES del
 # reviewer — la atrapa contrato_lider_commitea_antes_de_despachar_al_reviewer.
@@ -781,40 +634,15 @@ mut_veredicto_lider_sin_commit_antes() { sed 's/Commit BEFORE dispatching the re
 # Task 18.13 (a): el Close: pierde la clausula que cita el sha y la ruta del
 # veredicto sellado — la atrapa contrato_close_cita_sha_y_ruta_del_veredicto_sellado.
 mut_veredicto_close_sin_cita() { sed 's/; if a verdict was sealed this turn, cite the sha and path of the sealed verdict (\.saikit\/veredictos\/<sha>\.json)//'; }
-mut_veredicto_sello_unarmed_apagado() { sed 's/^verdict_try_seal_unarmed() {$/verdict_try_seal_unarmed() {\n  return 1/'; }
-mut_veredicto_seal_boot_stop_apagado() { sed 's/read_state_value lane)" = "seal_boot"/read_state_value lane)" = ""/'; }
-# Simulate the removed cross-session write, without requiring dead production
-# helpers to survive solely for mutation tests. The target is a real sibling.
-mut_veredicto_sello_cruza_sesion() {
-  awk '
-    { print }
-    /^verdict_boot_and_seal\(\) \{$/ {
-      print "  for vd_other in \"$PROJECT_DIR\"/*/harness-state.env; do"
-      print "    [ -f \"$vd_other\" ] || continue"
-      print "    [ \"$vd_other\" = \"$STATE_PATH\" ] && continue"
-      print "    STATE_PATH=\"$vd_other\""
-      print "    STATE_DIR=\"$(dirname \"$STATE_PATH\")\""
-      print "    LOG_PATH=\"$STATE_DIR/harness-evidence.log\""
-      print "    break"
-      print "  done"
-    }
-  '
-}
 
-# 20.13: consumir sello de cualquier hijo sin exigir linked_children.
-mut_veredicto_consume_sin_vinculo() {
-  sed '/case ",\$cur," in \*",\$child,"\*) ;; \*) return 0 ;; esac/d'
-}
+# A7: reintroducir el sello (cada escritura de estado emite un hash falso) —
+# la atrapa verdict_reviewer_write_no_registra_hash.
+mut_veredicto_sello_reintroducido() { sed "s|then printf 'autopilot=%s\\\\n' \"\$autopilot\"; fi|&; printf 'veredicto_sha256=falso\\\\n'|"; }
 
-MUTS_VERDICT="sello_apagado|verdict_reviewer_write_registra_hash
-rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
-implemented_sin_guardia|verdict_write_no_acredita_implemented
+MUTS_VERDICT="rn_noncode_sin_veredictos|verdict_write_no_marca_code_edit
 lider_sin_commit_antes|contrato_lider_commitea_antes_de_despachar_al_reviewer
 close_sin_cita|contrato_close_cita_sha_y_ruta_del_veredicto_sellado
-sello_unarmed_apagado|verdict_unarmed_grok_reviewer_write_sella
-seal_boot_stop_apagado|verdict_unarmed_stop_prosa_conserva_sello
-sello_cruza_sesion|verdict_unarmed_no_toca_sesion_verificada
-consume_sin_vinculo|verdict_link_otro_padre_no_consume"
+sello_reintroducido|verdict_reviewer_write_no_registra_hash"
 
 while IFS='|' read -r nombre caso_atrapa; do
   [ -n "$nombre" ] || continue

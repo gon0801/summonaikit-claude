@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# tests/test_trail_gate.sh — Stop full-lane exige cita de trail/blast o TRAIL SKIP.
+# tests/test_trail_gate.sh — A6: el Stop full-lane ya no exige cita de
+# trail/blast ni TRAIL SKIP (casos G8 invertidos a cierre).
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 Target cursor, turno completo de punta a punta.
 Dos cosas que solo se ven aca:
   1) el SessionStart real NO trae el sentinel, asi que en cursor el contrato
