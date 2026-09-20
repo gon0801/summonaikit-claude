@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tools/saikit-merge.sh — Task 18.4 (D18 + D19): gate de merge fail-closed
-# y acotado del autopilot. SEGUNDA excepcion declarada al fail-open del
-# harness (la primera es el instalador): mergear es la accion que no admite
-# "dejar pasar", asi que TODO unknown rechaza y NOMBRA la razon.
+# tools/saikit-merge.sh — Bloque A (entrega sin sello): gate de merge
+# fail-closed y acotado del autopilot. SEGUNDA excepcion declarada al
+# fail-open del harness (la primera es el instalador): mergear es la accion
+# que no admite "dejar pasar", asi que TODO unknown rechaza y NOMBRA la razon.
 #
 # USO:
 #   tools/saikit-merge.sh                 # corre TODAS las comprobaciones y,
@@ -14,7 +14,7 @@
 #                                         # INTENCION, no las condiciones:
 #                                         # esta invocacion REPITE el gate
 #                                         # completo (mismo sha, base al dia,
-#                                         # CI verde, veredicto sellado) y si
+#                                         # CI verde, recibo del PR) y si
 #                                         # algo cambio vuelve a NO-MERGE y
 #                                         # avisa EN VEZ DE MERGEAR.
 #   tools/saikit-merge.sh --dry-run       # dice que haria, sin hacerlo.
@@ -35,36 +35,32 @@
 # EL MERGE, cuando toca: `gh pr merge --squash --match-head-commit <sha>
 # --body "Saikit-Merge: <sha>"` SIN --delete-branch (el borrado remoto es un
 # paso aparte; si falla se reporta sin reintentar). NUNCA --admin, nunca
-# force. El merge_commit se registra en .saikit/veredictos/<sha>.merge — el
-# veredicto sellado no se toca JAMAS (escribirlo ahi invalidaria el propio
-# veredicto_sha256; hallazgo de CodeRabbit en el diseño).
+# force. El merge_commit se registra en .saikit/veredictos/<sha>.merge
+# (registro del efecto, no prueba de la entrega).
 #
-# ESTADO DE SESION DEL HOOK (punto de diseño de 18.4, RESUELTO y DECLARADO):
-# el gate exige cruzar `agents_seen`, `veredicto_sha256` y el
-# harness-evidence.log del estado de SESION que escribe el hook en
-#   <estado_root>/<host>/<cksum(project_root)>/<session_id>/harness-state.env
-# Este script corre como tool Bash y NO conoce su session_id (no viaja en el
-# entorno del proceso). REGLA EXPLICITA: se buscan TODOS los
-# harness-state.env del proyecto (hosts/*/<key>/*/) que tengan
-# veredicto_sha256; fuera de grok se toma el de mtime MAS RECIENTE. Bajo host
-# grok (20.13) la autoridad YA NO es mtime: solo un estado con
-# linked_seal_session (padre que consumio el sello tras anuncio host); un
-# seal_boot hijo suelto no basta. Antes de contar ambigüedad, se DESCARTAN
-# los linked cuyo veredicto_sha256 no calce con el sha256sum del verdict
-# file actual ($VEREDICTO): estados viejos de tareas ya mergeadas no
-# bloquean. Dos linked VIGENTES (mismo sello que el archivo) fallan
-# cerrados. Es determinista en la practica (la sesion viva acaba de sellar)
-# y falla CERRADO en el caso ambiguo de dos padres vivos del mismo
-# verdict. LIMITES DECLARADOS: (a) dos sesiones vivas del MISMO proyecto
-# con veredictos sellados a la vez se resuelven por mtime (no-grok) y la
-# perdedora no puede mergear hasta ser la mas reciente; (b) el cksum se
-# computa sobre `pwd -P` del toplevel, la misma forma fisica que el hook
-# canonicaliza — si el hook corrio desde una ruta distinta (p.ej. C:\ en
-# Windows vs /c/), el estado no se encuentra y el gate falla cerrado con
-# "sin estado del hook"; (c) no hay cleanup post-merge de harness-state.env
-# — los linked stale se ignoran por hash, no se borran. Override para
-# auditoria/tests: SAIKIT_ESTADO_ROOT (default ~/.claude/hooks/state, el
-# HOOK_DIR del perfil).
+# RECIBO DE ENTREGA (saikit-entrega.v1; el sello quedo retirado). La
+# autoridad es el PR, no el estado de sesion: el gate carga el ULTIMO recibo
+# aplicable (comentario APPROVE lead <sha> con bloque ```json) y valida
+# estructura y relaciones con tools/lib/entrega_contract.sh — coordenadas
+# repo/PR/sha, implementer/verifier/reviewer con ids DISTINTOS, verifier
+# PASS, reviewer APPROVE y sin bloqueantes abiertos. Sin recibo, revocado o
+# incompleto => NO-MERGE nombrado. El gate NO consulta directorios de
+# estado, veredictos sellados ni harness-evidence.log: un host nuevo
+# revalida el mismo PR sin sellar nada, y los restos viejos se ignoran.
+# LIMITES DECLARADOS: (a) el validador comprueba estructura y relaciones, no
+# la independencia criptografica de los agentes ni la verdad de la prosa;
+# (b) los enlaces de evidencia los verifica el lead, no este script; (c) un
+# REVOKE posterior del mismo autor anula el recibo, y los hallazgos
+# posteriores en prosa los adjudica el lead. Detalle en la lib.
+#
+# CI VIGENTE (A4): de cada workflowName se juzga SOLO el intento con mayor
+# number — un fallo viejo reemplazado por un verde nuevo no bloquea, y un
+# verde viejo reemplazado por un pendiente/rojo nuevo no alcanza. Sin
+# workflowName cada run se juzga solo. "Sin checks" NO es verde: se mira
+# `gh run list --commit` (gh pr checks agrega bots de terceros; medido 18.1
+# §2.1), y del run del evento pull_request si existe (el mismo head dispara
+# push + pull_request). Decision 18.24 intacta: skipped = CI rojo; solo-push
+# completed+success = verde (hay_pr=0 juzga todos los runs).
 #
 # El delay del reintento de mergeable UNKNOWN es SAIKIT_MERGE_RETRY_SEG
 # (default 3; los tests lo ponen en 0).
@@ -79,7 +75,7 @@
 # el proceso pudo vivir en otra maquina.
 #   Revalidar al adquirir: el lock se toma al PRINCIPIO de la invocacion; TODO
 #   lo que decide corre DESPUES de adquirirlo. Un reintento con el lock ya
-#   libre vuelve a correr el gate completo desde cero (sello en modo normal;
+#   libre vuelve a correr el gate completo desde cero (recibo en modo normal;
 #   punta/trailer/arbol/CI en --revert-de, que sigue SIN estado propio) — no
 #   hay nada heredado del intento anterior.
 #   LIMITE DECLARADO: el lock es por git-common-dir. Dos clones independientes
@@ -99,14 +95,15 @@ export NO_COLOR=1 CLICOLOR=0
 unset CLICOLOR_FORCE
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$HERE/lib/veredicto_contract.sh"   # esquema del veredicto + parser JSON (sin jq)
+. "$HERE/lib/veredicto_contract.sh"   # parser JSON compartido (sin jq)
+. "$HERE/lib/entrega_contract.sh"     # recibo saikit-entrega.v1 + lectura del PR
 
 CONFIRMADO=0
 DRY_RUN=0
 REVERT_DE=""
 LIBERAR_LOCK=0
 
-uso() { sed -n '2,49p' "$0"; }
+uso() { sed -n '8,33p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -301,8 +298,8 @@ ORIGEN="origin/$RAMA"
 # = verde: hay_pr=0 juzga todos los runs. Exigir pull_request seria
 # politica nueva. Ver .saikit/decisiones/18.24.tsv.
 ci_chequear() {
-  local raw flat i n hay_pr ev st conc head
-  raw="$(gh run list --commit "$SHA" --json event,status,conclusion,headSha 2>/dev/null)" \
+  local raw flat i n hay_pr ev st conc head w num lista ganadores
+  raw="$(gh run list --commit "$SHA" --json event,status,conclusion,headSha,workflowName,number 2>/dev/null)" \
     || no_merge "no se pudo leer el CI (gh run list fallo)"
   saikit_json_valido "$raw" || no_merge "gh run list devolvio algo que no es JSON"
   flat="$(saikit_json_flat "$raw")"
@@ -313,10 +310,24 @@ ci_chequear() {
     n=$((n + 1))
   done
   [ "$n" -gt 0 ] || no_merge "sin checks: gh run list no trajo ningun run para $SHA (que no haya CI no es verde)"
-  i=0
+  # A4: de cada workflowName se juzga SOLO el intento con mayor number (un
+  # fallo viejo reemplazado por un verde nuevo no bloquea; un verde viejo
+  # reemplazado por un pendiente/rojo nuevo no alcanza). Sin workflowName
+  # (gh viejo) cada run es su propio grupo y se juzgan todos.
+  i=0; lista=""
   while [ "$i" -lt "$n" ]; do
     ev="$(jget "[$i].event")"
     if [ "$hay_pr" = 1 ] && [ "$ev" != "pull_request" ]; then i=$((i + 1)); continue; fi
+    w="$(jget "[$i].workflowName")"
+    [ -n "$w" ] && [ "$w" != "<null>" ] || w="~sin-nombre-$i"
+    num="$(jget "[$i].number")"
+    case "$num" in ''|*[!0-9]*) num=0 ;; esac
+    lista="$lista$w	$num	$i
+"
+    i=$((i + 1))
+  done
+  ganadores="$(printf '%s' "$lista" | awk -F'\t' '{ if (!($1 in best) || $2 > bestnum[$1]) { best[$1]=$3; bestnum[$1]=$2 } } END { for (k in best) print best[k] }')"
+  for i in $ganadores; do
     st="$(jget "[$i].status")"
     if [ "$st" != completed ]; then no_merge "CI pendiente: el run $i no concluyo (status $st)"; fi
     conc="$(jget "[$i].conclusion")"
@@ -331,7 +342,6 @@ ci_chequear() {
     head="$(jget "[$i].headSha")"
     if [ -z "$head" ] || [ "$head" = "<null>" ]; then no_merge "CI sin headSha: el run $i no trae el sha del head (no observado no es fresco)"; fi
     if [ "$head" != "$SHA" ]; then no_merge "CI verde pero de otro sha ($head != $SHA)"; fi
-    i=$((i + 1))
   done
 }
 
@@ -444,96 +454,30 @@ done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
 
 ci_chequear
 
-# ------------------------------------------------- veredicto sellado (D16)
-VEREDICTO="$VERDICTOS/$SHA.json"
-if [ ! -f "$VEREDICTO" ]; then
-  # hay veredicto para un ANCESTRO del HEAD? => commits posteriores al sello.
-  for otro in "$VERDICTOS"/*.json; do
-    [ -f "$otro" ] || continue
-    osha="$(saikit_json_get "$(cat "$otro")" sha 2>/dev/null)" || continue
-    if git merge-base --is-ancestor "$osha" HEAD 2>/dev/null; then
-      no_merge "commits despues del veredicto: hay veredicto para $osha pero HEAD avanzo a $SHA"
-    fi
-  done
-  no_merge "sin veredicto para $SHA en $VERDICTOS"
+# ------------------------------------------------- recibo de entrega (A2/A3)
+# La autoridad es el PR: ultimo APPROVE lead <sha> aplicable + validacion de
+# estructura y relaciones. Sin estado de sesion: ni agents_seen, ni sello, ni
+# evidence log. Los motivos ya vienen con el prefijo "recibo:" de la lib.
+recibo_tmp="$(mktemp "${TMPDIR:-/tmp}/saikit-recibo-XXXXXX")" \
+  || no_merge "no se pudo crear el temporal del recibo"
+if ! motivo="$(entrega_recibo_del_pr "$REPO_GH" "$PR" "$SHA" "$LOGIN" 2>&1 >"$recibo_tmp")"; then
+  rm -f "$recibo_tmp"
+  no_merge "$motivo"
 fi
-if ! val_out="$(veredicto_validar "$VEREDICTO" "$SHA")"; then
-  no_merge "veredicto de otro sha (o esquema invalido): $val_out"
+if [ ! -s "$recibo_tmp" ]; then
+  rm -f "$recibo_tmp"
+  no_merge "recibo vacio del PR $REPO_GH#$PR para $SHA"
 fi
-V_TXT="$(cat "$VEREDICTO")"
-V_VERIFIER="$(saikit_json_get "$V_TXT" verifier)"
-V_REVIEWER="$(saikit_json_get "$V_TXT" reviewer)"
-V_VA_RES="$(saikit_json_get "$V_TXT" verify_app.resultado)"
-V_VA_CMD="$(saikit_json_get "$V_TXT" verify_app.comando)"
-V_BL_NIVEL="$(saikit_json_get "$V_TXT" blast.nivel)"
-V_BL_CMD="$(saikit_json_get "$V_TXT" blast.comando)"
-[ "$V_VERIFIER" = "PASS" ] || no_merge "verifier: FAIL (el veredicto dice $V_VERIFIER)"
-[ "$V_REVIEWER" = "clean" ] || no_merge "reviewer con findings (el veredicto dice $V_REVIEWER)"
-if ! [ "$V_BL_NIVEL" -ge 4 ] 2>/dev/null; then
-  no_merge "blast.nivel < 4 (dio ${V_BL_NIVEL:-vacio})"
+if ! motivo="$(entrega_validar "$recibo_tmp" "$REPO_GH" "$PR" "$SHA" 2>&1)"; then
+  rm -f "$recibo_tmp"
+  no_merge "$motivo"
 fi
-if [ "$V_VA_RES" = "PASS" ]; then
-  if ! printf '%s' "$V_VA_CMD" | grep -q -- 'verify/'; then
-    no_merge "verify/ fuera de lugar: el comando del drive no esta bajo verify/ (${V_VA_CMD:-vacio})"
-  fi
-elif [ "$V_VA_RES" = "n/a" ]; then
-  if [ "$CFG_SIN_VERIFY_APP" != "true" ]; then
-    no_merge "verify_app n/a sin sin_verify_app: la config no autoriza mergear sin prueba de la app"
-  fi
-else
-  no_merge "verify_app con resultado distinto de PASS/n/a: $V_VA_RES"
-fi
+rm -f "$recibo_tmp"
 
-# --------------------------------------- cruce con el estado del hook (D18)
-# Regla del punto de diseño: ver cabecera. Fail-closed: sin estado, no merge.
-# 20.13: bajo host grok la autoridad YA NO es mtime. Solo se acepta un estado
-# padre que tenga linked_seal_session (consumo tras anuncio host). Un seal_boot
-# hijo suelto no basta. Linked cuyo sello no calza con $VEREDICTO se ignoran
-# (stale de tareas ya mergeadas) antes de contar ambigüedad. Fuera de grok se
-# conserva el mtime declarado.
-estado_encontrar() {
-  local key f m best_m=-1 host_seg n_linked=0 linked_pick="" sello_f hash_file
-  ESTADO_FILE=""
-  key="$(printf '%s' "$PROJECT_ROOT" | cksum | cut -d' ' -f 1)"
-  hash_file="$(sha256sum "$VEREDICTO" | cut -d' ' -f 1)"
-  for f in "${SAIKIT_ESTADO_ROOT:-$HOME/.claude/hooks/state}"/*/"$key"/*/harness-state.env; do
-    [ -f "$f" ] || continue
-    grep -q '^veredicto_sha256=' "$f" 2>/dev/null || continue
-    case "$f" in
-      */grok/*)
-        grep -q '^linked_seal_session=' "$f" 2>/dev/null || continue
-        sello_f="$(sed -n 's/^veredicto_sha256=//p' "$f" | tail -n 1)"
-        [ -n "$sello_f" ] && [ "$sello_f" = "$hash_file" ] || continue
-        n_linked=$((n_linked + 1))
-        linked_pick="$f"
-        ;;
-      *)
-        m="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || printf '0')"
-        if [ "$m" -gt "$best_m" ]; then best_m="$m"; ESTADO_FILE="$f"; fi
-        ;;
-    esac
-  done
-  if [ "$n_linked" -gt 1 ]; then
-    no_merge "vinculo padre-hijo ambiguo: $n_linked estados grok con linked_seal_session para este proyecto"
-  fi
-  if [ "$n_linked" -eq 1 ]; then
-    ESTADO_FILE="$linked_pick"
-  fi
-  if [ -z "$ESTADO_FILE" ]; then
-    no_merge "sin estado del hook: no hay harness-state.env con veredicto_sha256 para este proyecto (¿corrio el sello en otra sesion o desde otra ruta?)"
-  fi
-}
-estado_encontrar
-AGENTS_SEEN="$(sed -n 's/^agents_seen=//p' "$ESTADO_FILE")"
-printf ',%s,' "$AGENTS_SEEN" | grep -q ',reviewer,' \
-  || no_merge "el reviewer no paso por esta sesion (agents_seen: ${AGENTS_SEEN:-vacio})"
-SELLO="$(sed -n 's/^veredicto_sha256=//p' "$ESTADO_FILE")"
-hash_actual="$(sha256sum "$VEREDICTO" | cut -d' ' -f 1)"
-[ "$SELLO" = "$hash_actual" ] \
-  || no_merge "veredicto reescrito tras el sello: el sha256 del archivo actual ($hash_actual) no es el sellado ($SELLO)"
-EVID_LOG="$(dirname "$ESTADO_FILE")/harness-evidence.log"
-[ -f "$EVID_LOG" ] || no_merge "sin harness-evidence.log en la sesion del sello"
-awk -v c="$V_BL_CMD" 'index($0, "verified: ") == 1 && index($0, c) > 0 { ok = 1 } END { exit ok ? 0 : 1 }' "$EVID_LOG" \
-  || no_merge "el comando del blast no aparece con exito en harness-evidence.log ($V_BL_CMD)"
+# A5: el head puede moverse mientras corre el gate (push durante la
+# comprobacion): se re-lee el PR justo antes del efecto y se exige el MISMO
+# sha. --match-head-commit protege el merge mismo; esto nombra la causa.
+pr_leer
+[ "$PR_HEAD" = "$SHA" ] || no_merge "el head del PR avanzo durante la comprobacion ($PR_HEAD != $SHA)"
 
 merge_final

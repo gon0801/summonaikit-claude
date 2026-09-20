@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# tests/test_veredicto_contract.sh — Task 18.3: contrato del veredicto sellado.
+# tests/test_veredicto_contract.sh — Task 18.3 + Bloque A.
 #
-# QUE AFIRMA (DoD de 18.3, docs/phase-18-autopilot-plan.md §4.1):
-#   - CONTEXTO/ESQUEMA: el veredicto valido pasa; con `sha` != HEAD => invalido;
-#     con un campo requerido faltante => invalido. La validacion es la de
-#     `tools/lib/veredicto_contract.sh` (la reusara `tools/saikit-merge.sh`, D18).
-#   - GATE (comportamiento del hook): el `Write` atribuido al reviewer sobre
-#     `.saikit/veredictos/` registra `veredicto_sha256` en el estado; el `Write`
-#     de OTRO rol NO lo registra; un `Edit` posterior deja el archivo con hash
-#     distinto al registrado (el sello es del archivo escrito).
+# QUE AFIRMA:
+#   - PARSER: el parser JSON compartido (tools/lib/veredicto_contract.sh)
+#     rechaza JSON malformado, claves con punto, duplicadas, con escapes y
+#     controles crudos; lo legitimo con escapes sigue pasando. El esquema
+#     sellado quedo retirado (Bloque A: la entrega se valida con el recibo
+#     del PR, tests/test_entrega_contract.sh).
+#   - GATE (comportamiento del hook, pendiente de retirar en A7): el `Write`
+#     atribuido al reviewer sobre `.saikit/veredictos/` registra
+#     `veredicto_sha256` en el estado; el `Write` de OTRO rol NO lo registra;
+#     un `Edit` posterior deja el archivo con hash distinto al registrado.
 #
-# La mitad mutation-test vive al final: romper el sello (`sello_veredicto_apagado`)
-# tiene que poner rojo a algun caso — la acreditacion que pide la DoD.
+# La mitad mutation-test vive al final: romper el sello del hook tiene que
+# poner rojo a algun caso — la acreditacion que pide la DoD.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,170 +82,86 @@ verdict_armar() {
 }
 
 # ---------------------------------------------------- contrato / esquema (D16)
-caso "contrato_valido_pasa"
-{
-  vsha="$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo deadbeef)"
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/app.test.cjs"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"npm test -- verify/app.test.cjs"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.3.tsv"}\n' "$vsha" > "$tmp/valido.json"
-  if ! veredicto_validar "$tmp/valido.json" "$vsha" >/dev/null; then
-    _mal "rechazo un veredicto con el esquema valido"
-  fi
-}
-fin_caso "contrato_valido_pasa"
 
-caso "contrato_sha_distinto_de_head_invalido"
-{
-  printf '{"sha":"no-es-el-head","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/app.test.cjs"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/app.test.cjs"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}\n' > "$tmp/shamal.json"
-  if veredicto_validar "$tmp/shamal.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un veredicto con sha != HEAD"
-  fi
-  out="$(veredicto_validar "$tmp/shamal.json" "$HEAD_SHA")"
-  _contiene "motivo del sha" "$out" "no coincide con HEAD"
-}
-fin_caso "contrato_sha_distinto_de_head_invalido"
 
-caso "contrato_campo_faltante_invalido"
-{
-  printf '{"sha":"abc","pr":1,"verifier":"PASS","blast":{"nivel":4,"hecho":"h","comando":"c"},"adversary":"n/a","decisiones":"d"}\n' > "$tmp/falta.json"
-  # falta verify_app, reviewer, comando, resultado, etc.
-  if veredicto_validar "$tmp/falta.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un veredicto con campos requeridos faltantes"
-  fi
-  out="$(veredicto_validar "$tmp/falta.json" "$HEAD_SHA")"
-  _contiene "motivo del campo faltante" "$out" "falta el campo"
-}
-fin_caso "contrato_campo_faltante_invalido"
 
-caso "contrato_sin_blast_o_adversary_invalido"
-{
-  # Regresion dedicada (regla de hierro): el reviewer (rol) encontro que el
-  # validador aceptaba un veredicto sin las claves contenedor blast/adversary.
-  # Un veredicto con TODAS las hojas pero SIN adversary (o SIN blast) debe ser
-  # invalido — y este caso lo atrapa si la lista de requeridos pierde esas dos.
-  # El sha va = HEAD (veredicto por lo demas valido): asi lo UNICO que lo
-  # invalida es la ausencia del contenedor blast/adversary (r1 H3: con sha="abc"
-  # la validacion lo rechazaba por sha antes de aislar el campo).
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"reviewer":"clean","decisiones":"d"}\n' "$HEAD_SHA" > "$tmp/sin-adversary.json"
-  if veredicto_validar "$tmp/sin-adversary.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un veredicto SIN adversary"
-  fi
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d","nivel":4,"hecho":"h","comando":"c"}\n' "$HEAD_SHA" > "$tmp/sin-blast.json"
-  if veredicto_validar "$tmp/sin-blast.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un veredicto SIN blast"
-  fi
-}
-fin_caso "contrato_sin_blast_o_adversary_invalido"
 
-caso "contrato_clave_solo_como_valor_invalido"
-{
-  # Hallazgo de CodeRabbit en el PR #140 («required-key text inside a string can
-  # pass»), adjudicado DISMISS *verificado* — y este caso es lo que lo mantiene
-  # cierto. Medido: en JSON VALIDO las comillas de adentro de un string van
-  # escapadas (`\"decisiones\"`), asi que la subcadena `"decisiones"` NO aparece
-  # y el grep por clave ENTRECOMILLADA ya rechaza el veredicto. El hallazgo no
-  # aplica al codigo como esta.
-  #
-  # Se deja como REGRESION porque el poder discriminante esta medido: mutando el
-  # bucle a palabras desnudas (`for campo in sha pr ...` sin comillas) este caso
-  # se pone ROJO y NINGUN otro lo atrapa. Es lo que impide que una "simplificacion"
-  # del grep vuelva cierto el hallazgo de CodeRabbit.
-  #
-  # Lo que SI queda abierto de ese hilo, y es de 18.4: un JSON malformado que
-  # abra con `{`, cierre con `}` y traiga los textos de clave pasa igual, porque
-  # esto no parsea. Declarado en la cabecera de tools/lib/veredicto_contract.sh.
-  # El sha va = HEAD para que lo UNICO en juego sea la clave.
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","nota":"a este veredicto le falta la clave \\"decisiones\\" y hay que agregarla"}\n' "$HEAD_SHA" > "$tmp/clave-en-valor.json"
-  if veredicto_validar "$tmp/clave-en-valor.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un veredicto donde \"decisiones\" aparece SOLO como texto de un valor, no como clave"
-  fi
-  out="$(veredicto_validar "$tmp/clave-en-valor.json" "$HEAD_SHA")"
-  _contiene "motivo de la clave que solo era valor" "$out" "falta el campo"
-}
-fin_caso "contrato_clave_solo_como_valor_invalido"
 
-# ------------------------------------- JSON malformado (endurecimiento 18.4)
-# La cabecera de tools/lib/veredicto_contract.sh declaraba el limite POC: la
-# validacion era por presencia de clave con grep, no un parser JSON. Un JSON
-# malformado que abra con `{`, cierre con `}` y traiga los textos de clave
-# pasaba igual. Ese endurecimiento es de la Task 18.4: validacion con un
-# parser JSON real (awk, sin jq). Cada caso de esta seccion es un JSON que el
-# grep-based aceptaba (o que un parser flojo dejaria pasar) y el parser real
-# tiene que rechazar. El `sha` va = HEAD en todos: lo UNICO en juego es que
-# sea JSON valido o no (r1 H3).
-vjson_valido() {  # fixture base valido, con el sha que venga en $1
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/app.test.cjs"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/app.test.cjs"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$1"
-}
-
-caso "contrato_json_malformado_colado_pasa_por_grep"
+# ------------------------------------- Parser JSON estricto (endurecimiento 18.4)
+# El esquema sellado quedo retirado (Bloque A): estos casos ahora ejercitan
+# el parser compartido directamente (saikit_json_valido), que es lo que el
+# contrato de entrega y los tools consumen. Cada caso es un JSON que un
+# parser flojo dejaria pasar y el real tiene que rechazar; el ultimo es la
+# regresion de que lo legitimo sigue pasando.
+caso "parser_json_malformado_colado_pasa_por_grep"
 {
   # EL caso del limite declarado: abre con {, cierra con }, trae TODAS las
   # claves como texto — pero no es JSON (sin : despues de "sha", valor sin
   # comillas, coma colgante). El grep por clave entrecomillada lo aceptaba.
   printf '{ "sha" "%s" , "verifier": PASS ,"verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":4,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d",}\n' "$HEAD_SHA" > "$tmp/mal-colado.json"
-  if veredicto_validar "$tmp/mal-colado.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-colado.json")" >/dev/null 2>&1; then
     _mal "acepto un JSON malformado que trae los textos de clave (limite POC)"
   fi
-  out="$(veredicto_validar "$tmp/mal-colado.json" "$HEAD_SHA" 2>&1)"
-  _contiene "motivo" "$out" "JSON"
 }
-fin_caso "contrato_json_malformado_colado_pasa_por_grep"
+fin_caso "parser_json_malformado_colado_pasa_por_grep"
 
-caso "contrato_json_malformado_sin_cerrar"
+caso "parser_json_malformado_sin_cerrar"
 {
   printf '{"sha":"%s","verifier":"PASS"' "$HEAD_SHA" > "$tmp/mal-abierto.json"
-  if veredicto_validar "$tmp/mal-abierto.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-abierto.json")" >/dev/null 2>&1; then
     _mal "acepto un JSON sin cerrar"
   fi
 }
-fin_caso "contrato_json_malformado_sin_cerrar"
+fin_caso "parser_json_malformado_sin_cerrar"
 
-caso "contrato_json_malformado_coma_colgante"
+caso "parser_json_malformado_coma_colgante"
 {
   printf '{"sha":"%s","verifier":"PASS",}' "$HEAD_SHA" > "$tmp/mal-coma.json"
-  if veredicto_validar "$tmp/mal-coma.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-coma.json")" >/dev/null 2>&1; then
     _mal "acepto un JSON con coma colgante"
   fi
 }
-fin_caso "contrato_json_malformado_coma_colgante"
+fin_caso "parser_json_malformado_coma_colgante"
 
-caso "contrato_json_malformado_clave_sin_comillas"
+caso "parser_json_malformado_clave_sin_comillas"
 {
   printf '{sha:"%s","verifier":"PASS"}' "$HEAD_SHA" > "$tmp/mal-clave.json"
-  if veredicto_validar "$tmp/mal-clave.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-clave.json")" >/dev/null 2>&1; then
     _mal "acepto una clave sin comillas"
   fi
 }
-fin_caso "contrato_json_malformado_clave_sin_comillas"
+fin_caso "parser_json_malformado_clave_sin_comillas"
 
-caso "contrato_json_malformado_basura_final"
+caso "parser_json_malformado_basura_final"
 {
   printf '{"sha":"%s"} xx' "$HEAD_SHA" > "$tmp/mal-cola.json"
-  if veredicto_validar "$tmp/mal-cola.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-cola.json")" >/dev/null 2>&1; then
     _mal "acepto basura tras el cierre del objeto"
   fi
 }
-fin_caso "contrato_json_malformado_basura_final"
+fin_caso "parser_json_malformado_basura_final"
 
-caso "contrato_json_malformado_escape_invalido"
+caso "parser_json_malformado_escape_invalido"
 {
   printf '{"sha":"%s","nota":"un \\q no es un escape"}' "$HEAD_SHA" > "$tmp/mal-esc.json"
-  if veredicto_validar "$tmp/mal-esc.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-esc.json")" >/dev/null 2>&1; then
     _mal "acepto un escape invalido dentro de un string"
   fi
 }
-fin_caso "contrato_json_malformado_escape_invalido"
+fin_caso "parser_json_malformado_escape_invalido"
 
-caso "contrato_json_malformado_numero_con_cero"
+caso "parser_json_malformado_numero_con_cero"
 {
   # 04 no es un numero JSON valido (leading zero); un parser de numeros flojo
   # lo deja pasar. La hoja blast.nivel es la que importa en el merge.
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/"},"blast":{"nivel":04,"hecho":"h","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-cero.json"
-  if veredicto_validar "$tmp/mal-cero.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-cero.json")" >/dev/null 2>&1; then
     _mal "acepto un numero con cero inicial"
   fi
 }
-fin_caso "contrato_json_malformado_numero_con_cero"
+fin_caso "parser_json_malformado_numero_con_cero"
 
-caso "contrato_json_clave_con_punto_colisiona_invalida"
+caso "parser_json_clave_con_punto_colisiona_invalida"
 {
   # Hallazgo de codex (cross-review PR #142), MEDIDO: una clave de primer
   # nivel "verify_app.resultado" colisiona en el aplanado con la hoja anidada
@@ -254,25 +172,25 @@ caso "contrato_json_clave_con_punto_colisiona_invalida"
     _mal "la clave con punto colisiona con la ruta anidada y gana"
   fi
   printf '{"sha":"%s","pr":1,"verify_app.resultado":"PASS","verifier":"PASS","verify_app":{"resultado":"FAIL","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-punto.json"
-  if veredicto_validar "$tmp/mal-punto.json" "$HEAD_SHA" >/dev/null 2>&1; then
-    _mal "acepto un veredicto con una clave que falsifica una ruta anidada"
+  if saikit_json_valido "$(cat "$tmp/mal-punto.json")" >/dev/null 2>&1; then
+    _mal "acepto una clave que falsifica una ruta anidada"
   fi
 }
-fin_caso "contrato_json_clave_con_punto_colisiona_invalida"
+fin_caso "parser_json_clave_con_punto_colisiona_invalida"
 
-caso "contrato_json_clave_duplicada_invalida"
+caso "parser_json_clave_duplicada_invalida"
 {
   # Hallazgo de codex (cross-review PR #142): JSON con claves duplicadas es
   # ambiguo entre consumidores y el parser elegia la primera en silencio. En
   # un gate fail-closed se rechaza.
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verifier":"FAIL","verify_app":{"resultado":"PASS","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/mal-dup.json"
-  if veredicto_validar "$tmp/mal-dup.json" "$HEAD_SHA" >/dev/null 2>&1; then
-    _mal "acepto un veredicto con claves duplicadas"
+  if saikit_json_valido "$(cat "$tmp/mal-dup.json")" >/dev/null 2>&1; then
+    _mal "acepto claves duplicadas"
   fi
 }
-fin_caso "contrato_json_clave_duplicada_invalida"
+fin_caso "parser_json_clave_duplicada_invalida"
 
-caso "contrato_json_clave_con_escape_burla_las_guardas_invalida"
+caso "parser_json_clave_con_escape_burla_las_guardas_invalida"
 {
   # Hallazgo de CodeRabbit en el PR #142, adjudicado FIX y CONFIRMADO midiendo.
   # `parseString` NO decodifica escapes, asi que las dos guardas de la clave se
@@ -300,213 +218,33 @@ caso "contrato_json_clave_con_escape_burla_las_guardas_invalida"
     _mal "rechazo un escape en un VALOR, que si es legitimo"
   fi
 }
-fin_caso "contrato_json_clave_con_escape_burla_las_guardas_invalida"
+fin_caso "parser_json_clave_con_escape_burla_las_guardas_invalida"
 
-caso "contrato_json_control_crudo_en_string_invalido"
+caso "parser_json_control_crudo_en_string_invalido"
 {
   # Hallazgo de codex: RFC 8259 prohibe TODOS los U+0000-U+001F crudos en
   # strings; el parser solo rechazaba LF/CR/TAB y aceptaba p.ej. 0x01. El
-  # veredicto es por lo demas valido: lo UNICO en juego es el control crudo.
+  # JSON es por lo demas valido: lo UNICO en juego es el control crudo.
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/"},"blast":{"nivel":4,"hecho":"h","comando":"bash verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d","nota":"ctrl:' "$HEAD_SHA" > "$tmp/mal-ctrl.json"
   printf '\001aqui"}' >> "$tmp/mal-ctrl.json"
-  if veredicto_validar "$tmp/mal-ctrl.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if saikit_json_valido "$(cat "$tmp/mal-ctrl.json")" >/dev/null 2>&1; then
     _mal "acepto un control crudo (0x01) dentro de un string"
   fi
 }
-fin_caso "contrato_json_control_crudo_en_string_invalido"
+fin_caso "parser_json_control_crudo_en_string_invalido"
 
-caso "contrato_json_valido_con_escapes_sigue_valido"
+caso "parser_json_valido_con_escapes_sigue_valido"
 {
   # El endurecimiento no puede romper lo legitimo: strings con escapes
   # comunes y el fixture base siguen validos (regresion del parser).
   printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"npm test -- verify/ \\"con comillas\\""},"blast":{"nivel":4,"hecho":"linea1\\nlinea2","comando":"npm test -- verify/"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" > "$tmp/ok-esc.json"
-  if ! veredicto_validar "$tmp/ok-esc.json" "$HEAD_SHA" >/dev/null 2>&1; then
+  if ! saikit_json_valido "$(cat "$tmp/ok-esc.json")" >/dev/null 2>&1; then
     _mal "rechazo un JSON valido con escapes"
   fi
 }
-fin_caso "contrato_json_valido_con_escapes_sigue_valido"
+fin_caso "parser_json_valido_con_escapes_sigue_valido"
 
-# ---------------------------------- Task 18.17: blast omitido (la trampa D13)
-# El PR #157 sello un veredicto real con `"blast": "n/a"` (escalar, por analogia
-# con adversary). El perfil documentaba SOLO la triada, el validador exigia SOLO
-# la triada, y un turno sin blast no tenia forma valida de decirlo. Diseno
-# cerrado: blast es XOR de dos formas — la triada {nivel,hecho,comando} o
-# {"omitido": "<razon no vacia>"}. El escalar "n/a" sigue INVALIDO: un blast
-# que no corrio se declara con su razon, no con un placeholder.
-vjson_blast() {  # fixture con el sha = HEAD y el blast que venga en $1 (JSON crudo)
-  printf '{"sha":"%s","pr":1,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":null},"blast":%s,"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$HEAD_SHA" "$1"
-}
 
-contrato_pr157_blast_na_invalido() {
-  # El veredicto REAL del PR #157 (.saikit/veredictos/f5d06916….json), con el
-  # sha = HEAD para que lo UNICO en juego sea el blast escalar.
-  printf '{\n  "sha": "%s",\n  "pr": 157,\n  "verifier": "PASS",\n  "verify_app": { "resultado": "PASS", "comando": null },\n  "blast": "n/a",\n  "adversary": "n/a",\n  "reviewer": "findings",\n  "decisiones": ".saikit/decisiones/18.16.tsv"\n}\n' "$HEAD_SHA" > "$tmp/pr157.json"
-  if veredicto_validar "$tmp/pr157.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto el veredicto del PR #157 con blast escalar \"n/a\""
-  fi
-  out="$(veredicto_validar "$tmp/pr157.json" "$HEAD_SHA")"
-  _contiene "el motivo nombra el escalar" "$out" "escalar"
-  _contiene "el motivo guia a la forma omitido" "$out" "omitido"
-}
-caso "contrato_pr157_blast_na_invalido"
-contrato_pr157_blast_na_invalido
-fin_caso "contrato_pr157_blast_na_invalido"
-
-contrato_blast_con_hecho_sigue_valido() {
-  vjson_blast '{"nivel":4,"hecho":"el drive de la app corre","comando":"npm test -- verify/app.test.cjs"}' > "$tmp/blast-triada.json"
-  if ! veredicto_validar "$tmp/blast-triada.json" "$HEAD_SHA" >/dev/null; then
-    _mal "rechazo la triada nivel/hecho/comando: $(veredicto_validar "$tmp/blast-triada.json" "$HEAD_SHA")"
-  fi
-}
-caso "contrato_blast_con_hecho_sigue_valido"
-contrato_blast_con_hecho_sigue_valido
-fin_caso "contrato_blast_con_hecho_sigue_valido"
-
-contrato_blast_omitido_con_razon_valido() {
-  vjson_blast '{"omitido":"turno de solo revision: no hubo cambio de codigo que blastear"}' > "$tmp/blast-omitido.json"
-  if ! veredicto_validar "$tmp/blast-omitido.json" "$HEAD_SHA" >/dev/null; then
-    _mal "rechazo blast.omitido con razon: $(veredicto_validar "$tmp/blast-omitido.json" "$HEAD_SHA")"
-  fi
-}
-caso "contrato_blast_omitido_con_razon_valido"
-contrato_blast_omitido_con_razon_valido
-fin_caso "contrato_blast_omitido_con_razon_valido"
-
-contrato_blast_na_sin_razon_invalido() {
-  # omitido sin razon real: vacio, espacios, null, placeholders, bool/numero,
-  # plantilla, escape \\u (el parser no decodifica). Motivo debe nombrar razon.
-  for b in \
-    '{"omitido":""}' \
-    '{"omitido":"   "}' \
-    '{"omitido":null}' \
-    '{"omitido":"n/a"}' \
-    '{"omitido":" N/A "}' \
-    '{"omitido":"0"}' \
-    '{"omitido":0}' \
-    '{"omitido":"-"}' \
-    '{"omitido":"corta"}' \
-    '{"omitido":true}' \
-    '{"omitido":false}' \
-    '{"omitido":"<por que no hubo blast>"}' \
-    '{"omitido":"\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020\\u0020"}' \
-  ; do
-    vjson_blast "$b" > "$tmp/blast-sin-razon.json"
-    if veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA" >/dev/null; then
-      _mal "acepto blast.omitido sin razon: $b"
-    fi
-    out="$(veredicto_validar "$tmp/blast-sin-razon.json" "$HEAD_SHA")"
-    _contiene "el motivo pide la razon ($b)" "$out" "sin razon"
-  done
-}
-caso "contrato_blast_na_sin_razon_invalido"
-contrato_blast_na_sin_razon_invalido
-fin_caso "contrato_blast_na_sin_razon_invalido"
-
-contrato_blast_mezcla_omitido_y_hecho_invalido() {
-  for b in \
-    '{"omitido":"razon larga ok","nivel":4,"hecho":"h","comando":"c"}' \
-    '{"omitido":"razon larga ok","hecho":"h"}' \
-    '{"omitido":"razon larga ok","nivel":4}' \
-    '{"omitido":"razon larga ok","comando":"c"}' \
-    '{"omitido":"razon larga ok","nivel":{"x":1}}' \
-    '{"omitido":"razon larga ok","nivel":[4]}' \
-  ; do
-    vjson_blast "$b" > "$tmp/blast-mezcla.json"
-    if veredicto_validar "$tmp/blast-mezcla.json" "$HEAD_SHA" >/dev/null; then
-      _mal "acepto una mezcla de omitido con la triada: $b"
-    fi
-    out="$(veredicto_validar "$tmp/blast-mezcla.json" "$HEAD_SHA")"
-    _contiene "el motivo nombra la mezcla ($b)" "$out" "mezcla"
-  done
-  vjson_blast '{}' > "$tmp/blast-vacio.json"
-  if veredicto_validar "$tmp/blast-vacio.json" "$HEAD_SHA" >/dev/null; then
-    _mal "acepto un blast sin ninguna de las dos formas"
-  fi
-}
-caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
-contrato_blast_mezcla_omitido_y_hecho_invalido
-fin_caso "contrato_blast_mezcla_omitido_y_hecho_invalido"
-
-# ------------------------------------------- productor: el PERFIL lo tiene que pedir
-# Leccion pagada en 17.5 y anotada en la fila 18.12: un perfil puede DESCRIBIR un
-# artefacto y no jalarlo nunca (0 invocaciones en 2 turnos vivos). El sello del
-# hook no vale nada si NADIE escribe el veredicto, asi que el contrato del
-# PRODUCTOR se ata acá, igual que el blast en test_blast_artifact_contract.sh.
-# Cada grep de este caso estaba en CERO antes del fix: el perfil no nombraba el
-# veredicto en ninguna forma.
-REVIEWER_MD="$repo/agents/reviewer.md"
-
-caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
-{
-  [ -r "$REVIEWER_MD" ] || _mal "no se puede leer agents/reviewer.md"
-  perfil="$(cat "$REVIEWER_MD" 2>/dev/null || printf '')"
-
-  # (a) nombra el artefacto y de donde sale el sha.
-  _contiene "el perfil nombra el directorio del veredicto" "$perfil" '.saikit/veredictos/'
-  _contiene "el perfil dice de donde sale el sha" "$perfil" 'git rev-parse HEAD'
-
-  # (b) EXIGE la tool Write. El sello del hook dispara SOLO en un Write
-  # (`grep -Eiq '^(write)$'` sobre tool_name): si el perfil deja que el
-  # veredicto se escriba con Edit o con Bash, el archivo existe y el sello NO,
-  # que es la falla silenciosa que este caso impide.
-  # La frase completa, no el token suelto: `Write` ya aparece en el frontmatter
-  # (`tools: Read, Edit, Write, ...`), asi que grepear 'Write' pasaria sin que el
-  # perfil pida nada. Se exige la instruccion.
-  _contiene "el perfil exige la tool Write" "$perfil" 'la tool `Write`'
-  _contiene "el perfil advierte que Edit/Bash no sellan" "$perfil" 'no sella'
-
-  # (c) el esquema completo (D16) — las claves contenedor y las hojas, las
-  # mismas que veredicto_validar exige mas arriba.
-  for campo in '"sha"' '"pr"' '"verifier"' '"verify_app"' '"blast"' '"adversary"' '"reviewer"' '"decisiones"' '"nivel"' '"hecho"' '"resultado"' '"comando"' '"omitido"'; do
-    _contiene "el perfil documenta el campo $campo" "$perfil" "$campo"
-  done
-
-  # (d) una sola escritura: reescribir el archivo despues deja el hash del
-  # estado viejo y el merge de 18.4 lo leeria como veredicto tocado.
-  _contiene "el perfil prohibe reescribir el veredicto" "$perfil" 'una sola vez'
-}
-fin_caso "productor_el_perfil_del_reviewer_pide_el_veredicto"
-
-caso "contrato_perfil_vs_validador_campos_blast"
-{
-  # Candado anti-deriva futura perfil↔validador (las hojas de blast del perfil
-  # tienen que ser EXACTAMENTE VEREDICTO_BLAST_TRIADA + VEREDICTO_BLAST_OMITIDO).
-  # El bug del PR #157 NO era divergencia entre capas: las tres coincidian en
-  # exigir solo la triada. Ese hueco lo atrapa contrato_pr157_blast_na_invalido.
-  _no_vacio "la lib expone VEREDICTO_HOJAS_REQUERIDAS" "${VEREDICTO_HOJAS_REQUERIDAS:-}"
-  _no_vacio "la lib expone VEREDICTO_BLAST_TRIADA" "${VEREDICTO_BLAST_TRIADA:-}"
-  _no_vacio "la lib expone VEREDICTO_BLAST_OMITIDO" "${VEREDICTO_BLAST_OMITIDO:-}"
-
-  seccion="$(sed -n '/^## El veredicto sellado/,/^## Context Policy/p' "$REVIEWER_MD" 2>/dev/null || printf '')"
-  _no_vacio "el perfil tiene la seccion del veredicto sellado" "$seccion"
-
-  perfil_blast="$(printf '%s\n' "$seccion" | grep -o '"blast": *{[^}]*}' | sed 's/^"blast": *{//' | grep -o '"[a-z_]*":' | tr -d '":' | sort -u | tr '\n' ' ')"
-  validador_blast="$(for h in ${VEREDICTO_BLAST_TRIADA:-} ${VEREDICTO_BLAST_OMITIDO:-}; do printf '%s\n' "${h#blast.}"; done | sort -u | tr '\n' ' ')"
-  _igual "las hojas de blast del perfil son las del validador" "$perfil_blast" "$validador_blast"
-  _contiene "el perfil documenta la forma omitido" "$perfil_blast" "omitido"
-  _contiene "el perfil documenta la triada" "$perfil_blast" "hecho"
-  _contiene "el perfil declara INVALIDO el escalar (D13)" "$seccion" '"blast": "n/a"'
-  _contiene "el perfil declara que omitido no mergea" "$seccion" 'no mergea'
-
-  for h in ${VEREDICTO_HOJAS_REQUERIDAS:-}; do
-    _contiene "el perfil documenta la hoja requerida $h" "$seccion" "\"${h##*.}\""
-  done
-
-  # Las listas expuestas son las que el validador USA: un veredicto armado solo
-  # con la triada expuesta pasa, y otro armado solo con la hoja omitido expuesta
-  # pasa. Si la lib renombra una hoja sin tocar la lista, uno de los dos cae.
-  triada_json="$(for h in ${VEREDICTO_BLAST_TRIADA:-}; do printf '"%s":"x",' "${h#blast.}"; done)"
-  vjson_blast "{${triada_json%,}}" > "$tmp/acople-triada.json"
-  if ! veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA" >/dev/null; then
-    _mal "la triada que expone la lib no es la que el validador exige: $(veredicto_validar "$tmp/acople-triada.json" "$HEAD_SHA")"
-  fi
-  omitido_json="$(for h in ${VEREDICTO_BLAST_OMITIDO:-}; do printf '"%s":"razon real de omision",' "${h#blast.}"; done)"
-  vjson_blast "{${omitido_json%,}}" > "$tmp/acople-omitido.json"
-  if ! veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA" >/dev/null; then
-    _mal "la hoja omitido que expone la lib no es la que el validador acepta: $(veredicto_validar "$tmp/acople-omitido.json" "$HEAD_SHA")"
-  fi
-}
-fin_caso "contrato_perfil_vs_validador_campos_blast"
 
 # --------------------------------------------------------- gate: sello del hook
 verdict_reviewer_write_registra_hash() {
@@ -1107,72 +845,6 @@ done <<EOF
 $MUTS_VERDICT
 EOF
 
-# ------------------------------------- mutation-test de la LIB (Task 18.17)
-# La lib no es el hook: se muta el archivo, se RE-CARGA en este shell y se corre
-# el caso que lo atrapa; despues se recarga la lib original. La mutacion quita
-# la exigencia de razon no vacia en blast.omitido: {"omitido":""} y
-# {"omitido":"n/a"} pasarian, que es exactamente el placeholder que la 18.17
-# prohibe.
-LIB_VERDICT="$repo/tools/lib/veredicto_contract.sh"
-# Quita el case de placeholders, plantillas, escapes y el piso de longitud.
-mut_lib_omitido_sin_razon() {
-  awk '
-    /case "\$razon" in/ { skip=1; print "    : # mutacion: sin exigencia de razon"; next }
-    skip && /^    esac$/ { skip=0; next }
-    skip { next }
-    /\[ "\$\{#razon\}" -lt 8 \]/ { skip2=1; next }
-    skip2 && /^    fi$/ { skip2=0; next }
-    skip2 { next }
-    { print }
-  '
-}
-# Acepta el escalar blast (deja el if pero sin return 1: cae al fi y sigue).
-mut_lib_blast_escalar_aceptado() {
-  sed '/if veredicto_tiene_hoja "\$flat" blast; then/,/return 1/{
-    /return 1/d
-  }'
-}
-# Acepta mezcla omitido+triada (quita el bloque del for de prefijos).
-mut_lib_blast_mezcla_aceptada() {
-  awk '
-    /for campo in \$VEREDICTO_BLAST_TRIADA; do/ && !seen++ { skip=1; next }
-    skip && /^    done$/ { skip=0; next }
-    skip { next }
-    { print }
-  '
-}
-
-MUTS_LIB="omitido_sin_razon|contrato_blast_na_sin_razon_invalido
-blast_escalar_aceptado|contrato_pr157_blast_na_invalido
-blast_mezcla_aceptada|contrato_blast_mezcla_omitido_y_hecho_invalido"
-
-while IFS='|' read -r nombre caso_atrapa; do
-  [ -n "$nombre" ] || continue
-  mutado="$tmp/lib-$nombre.sh"
-  "mut_lib_$nombre" < "$LIB_VERDICT" > "$mutado"
-  if cmp -s "$LIB_VERDICT" "$mutado"; then
-    printf '    FAIL: lib %s no cambio nada — el sed quedo obsoleto\n' "$nombre" >&2
-    fail=1
-    continue
-  fi
-  if ! bash -n "$mutado" 2>/dev/null; then
-    printf '    FAIL: lib %s no parsea; asi no prueba nada\n' "$nombre" >&2
-    fail=1
-    continue
-  fi
-  . "$mutado"
-  CASO_ROJO=0
-  "$caso_atrapa" 2>/dev/null
-  . "$LIB_VERDICT"
-  if [ "$CASO_ROJO" -ne 0 ]; then
-    printf '    mutacion lib %s atrapada por %s\n' "$nombre" "$caso_atrapa"
-  else
-    printf '    FAIL: ningun caso detecto la mutacion de la lib [%s]\n' "$nombre" >&2
-    fail=1
-  fi
-done <<EOF
-$MUTS_LIB
-EOF
 
 if [ "$fail" -ne 0 ]; then
   echo "test_veredicto_contract: FAIL" >&2

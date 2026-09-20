@@ -3,4 +3,4 @@
 # Tests: plantan un pin match/mismatch junto a una copia temporal
 # ($LAB/proyecto/tools/MANIFEST.sha256). SAIKIT_KIT_MANIFEST overridea la
 # RUTA del pin (solo test); no es un flag que autorice el merge.
-cfba20a19fee5292cfbdc28131d6d8416c1bbb19a2f7d6bacf3db20657a86f4d	saikit-merge.sh
+3429a52b7e25763a7c4a0bb539d658f73dd2953743909b22cfa89e8974bdc6a9	saikit-merge.sh
