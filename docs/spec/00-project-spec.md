@@ -2132,34 +2132,33 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
 4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
    declarada al fail-open (la primera es el instalador): mergear no admite
    "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
-   config.rama`, `headRefOid == sha del veredicto`, autor del PR = la cuenta
+   config.rama`, `headRefOid == sha` esperado, autor del PR = la cuenta
    de gh; nunca argumento libre. Precondiciones observadas, todas: `git fetch
    origin <rama>` y la rama al día con la base (`merge-base --is-ancestor`;
    si no, "base vieja": merge de master en la rama y CI de nuevo); PR
    mergeable (`UNKNOWN` diferido de GitHub ⇒ un reintento; sigue `UNKNOWN` ⇒
-   no merge); CI del head concluido en `success` ("sin checks" ≠ verde);
-   veredicto `.saikit/veredictos/<sha>.json` para ESE sha con `verifier:
-   PASS`, `blast.nivel ≥ 4`, `reviewer: clean`, `verify_app: PASS` con comando
-   bajo `verify/` (la suite unitaria no cuenta) o `n/a` solo con
-   `sin_verify_app: true`; **sello del hook**: en el `Write` del reviewer
-   sobre `veredictos/` el hook registra `veredicto_sha256` del contenido, y el
-   script exige que el archivo actual tenga ese hash (cualquier escritura
-   posterior lo invalida) además de `reviewer` en `agents_seen` y del comando
-   del blast en `harness-evidence.log` con éxito — por eso el merge corre
-   DENTRO del turno armado, antes del recibo; `git log origin/<rama>..HEAD`
+   no merge); CI del head concluido en `success` ("sin checks" ≠ verde), donde
+   de cada workflow se juzga el intento vigente (el de mayor número), no
+   intentos viejos ya reemplazados; **recibo de entrega** `saikit-entrega.v1`
+   (el sello quedó retirado): último comentario `APPROVE lead <sha>` aplicable
+   del PR con coordenadas repo/PR/sha exactas, implementer/verifier/reviewer
+   con identificadores distintos, `verifier: PASS`, `reviewer: APPROVE` y sin
+   bloqueantes abiertos — por eso el merge corre desde CUALQUIER host, sin
+   estado de sesión; `git log origin/<rama>..HEAD`
    no vacío y solo con commits del `user.email` local o de la cuenta de gh.
+   Antes del efecto se re-lee el head del PR: si avanzó durante la
+   comprobación, no mergea y lo nombra.
    Merge por `gh pr merge --squash --match-head-commit <sha> --body
-   "Saikit-Merge: <sha>"` (el trailer sella el squash) **sin
+   "Saikit-Merge: <sha>"` (el trailer marca el squash) **sin
    `--delete-branch`** (falla tras mergear cuando master vive en otro
    worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
    Sin `--confirmado` el script corre el gate y, en verde, reporta LISTO y
    termina; `--confirmado` repite el gate completo en esa invocación y solo
    entonces mergea (el sí confirma la intención, no las condiciones).
-   Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
-   reviewer con `sha = HEAD` **después** de que el líder commiteó todo
-   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo. El
-   veredicto sellado **no se modifica jamás**: el `merge_commit` va a un
-   archivo aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
+   Cualquier `unknown` ⇒ no mergea y nombra cuál. El recibo lo arma el líder
+   **después** de leer la evidencia de los tres roles; un commit posterior =
+   SHA nuevo = recibo nuevo. El `merge_commit` se registra en un archivo
+   aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
    contra `origin/<rama>` y el trailer, no contra ese archivo. La rama base es
    siempre `config.rama` (probado con un valor distinto de `master`).
 5. **La protección de rama de GitHub no está disponible** en este repo
