@@ -98,6 +98,12 @@ Para el artifact del adversary ese veredicto se emite con las reglas de `## Adju
 
 ## El veredicto sellado
 
+Contrato transitorio: esta sección describe el gate instalado que aún consume
+el sello. No atribuye a un modelo una capacidad especial de aprobar o sellar.
+Se retira junto con ese consumidor en «Entrega sin sello», no mediante una
+excepción documental. Mientras siga instalado, un bloqueo de merge afecta esa
+entrega y no detiene otros carriles independientes.
+
 Estas reglas aplican SOLO cuando tu despacho te pide el veredicto sellado. Un turno que no lo pide no escribe ningún veredicto.
 
 Es lo ÚLTIMO que haces, después de adjudicar todo lo demás. El líder ya commiteó antes de despacharte, así que `git rev-parse HEAD` es el sha del árbol que estás revisando.

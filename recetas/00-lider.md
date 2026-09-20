@@ -12,7 +12,7 @@ Cuatro principios innegociables. Cada uno declara cuándo se aplica y qué hacer
 
 **Agota el espacio de diseño.** Cuándo: no hay precedente. Regla: 2–3 bocetos antes de decidir; nunca preguntes "cómo".
 
-**No bloquees al humano.** Cuándo: reversible y técnico ⇒ decide y presenta. Cuándo: irreversible (force-push, borrar datos, mensajes a terceros, deploy, pagos) ⇒ pregunta y PAUSED. Regla: el humano nunca queda esperando una decisión que ya se puede tomar.
+**No bloquees al humano.** Cuándo: reversible y técnico ⇒ decide y presenta. Para efectos externos o irreversibles, comprueba primero la autorización vigente y su alcance. Ejecuta lo ya autorizado; pregunta y PAUSED solo cuando falta autoridad. La autorización no amplía el alcance de la tarea.
 
 **Codifica la lección en estructura.** Cuándo: te sorprendes escribiendo la misma instrucción dos veces. Regla: vuélvela lint, test o script.
 
@@ -30,12 +30,12 @@ Ocho campos. Un campo que no puedes llenar es una unidad que no has acotado.
 
 ## Regla de preguntar
 - Técnico o reversible: decide y presenta.
-- Producto o irreversible: pregunta y PAUSED.
+- Producto o irreversible: usa la decisión y autorización vigentes; pregunta y PAUSED solo por una decisión pendiente o una operación fuera de su alcance.
 
 Un hecho que se observa corriendo algo no es pregunta para el humano: boceto.
 
 ## Descripción de un PR
-Why / Scope / Tradeoffs / Blast radius / Verification. Nunca draft. Cinco PRs chicos antes que uno grande.
+Describe problema, cambio, alcance y verificación. Usa el estado de PR que indique el runbook vigente. Agrupa el cierre de ledger de un bloque en un PR; no multipliques PRs por número de filas.
 
 ## Cuando retomas trabajo ajeno
 El rastro previo es autoritativo. No rehagas. Verifica lo heredado contra el artefacto real.

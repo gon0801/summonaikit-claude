@@ -48,7 +48,7 @@ es el fork de MSYS, no la logica del hook.
 
 ## Gate final: CI Linux, no la suite local (politica 2026-08-15)
 
-La bateria completa corre en ubuntu en CADA push/PR, repartida en jobs
+La bateria completa corre en ubuntu en cada PR y push a main/master, repartida en jobs
 PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
 bateria entera, y cada nivel tiene su candado.
 
@@ -112,7 +112,8 @@ zcode y muse reusan esta copia), `~/.grok/hooks/`, `~/.dsh/hooks/` y `~/.codex/h
 Desde 7.5, Phase 15 y 18.15 cada host tiene la suya — grok ya NO apunta a la de
 claude. Tras cada merge a `master` (cierre de task o PR), **siempre**:
 
-1. Sincronizar master local: `git checkout master && git pull --ff-only`.
+1. Actualizar referencias con `git fetch origin`. Usar un worktree de deploy
+   limpio situado en `origin/master`; no cambiar la rama de una sesión activa.
 2. **Deployar cada copia:** `bash tools/install-hook.sh` (claude) mas
    `--host grok`, `--host dsh`, `--host codex` y `--host muse` (tres estados,
    no pisa nada ajeno; muse solo registra los hooks en
@@ -180,11 +181,11 @@ Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
   `~/.zcode`, `~/.grok`, `~/.codex`). Toda medicion va con HOME aislado. Si una
   medicion SOLO se puede hacer contra el perfil real, **para y decilo: esa
   corrida es del lider**.
-- **Cross-review: tope 1 ronda.** Una segunda SOLO si la primera hallo severidad
-  alta. Jamas una tercera; los residuales se declaran en el PR, no se
-  re-revisan.
+- **Revisión: política única.** Aplicar el bloque Calidad de este archivo:
+  otra ronda solo por un bloqueante reproducible, sobre el diff de los arreglos.
+  Un hallazgo menor no reabre el ciclo. No imponer otro tope de rondas.
 - **Revision por carril, no por costumbre** (decision del operador 2026-09-09;
-  el tope de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
+  la política de arriba rige las RONDAS, no obliga a sumar revisores — un runbook de docs no lleva
   tres). docs / chore / cierre de ledger = carril `fast` (`-saikit:fast`): bots
   (CodeRabbit) + lead. Codigo = carril `gate`: + reviewer del harness. Medicion
   viva / release = + cross-review con otra IA. El carril lo fija la fila
