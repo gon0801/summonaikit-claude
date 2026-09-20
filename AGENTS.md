@@ -59,9 +59,9 @@ bateria entera, y cada nivel tiene su candado.
   `test_feature_map_merge`, 376 s). Si vuelve a pasar de ~10 min: re-medir y
   re-elegir N, no recortar. Candado: `tests/test_runner_guards.sh` (union
   exacta de los shards + matrix completa del workflow).
-- `suite-lentos` — `test_gate_mutations`, que solo se llevaba ~6 de los 6.9 min
-  del job unico, repartido en 3 shards de 37 mutaciones
-  (`SAIKIT_MUT_SHARD=i/3`), ~2 min cada uno. Candado:
+- `suite-lentos` — `test_gate_mutations`, repartido según la matriz vigente
+  de `.github/workflows/quality.yml`. `SAIKIT_MUT_SHARD=i/N` usa ese mismo N;
+  no se conserva aquí otro número de shards o mutaciones. Candado:
   `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
   shard vacio, invalido o fuera de rango corta con exit 2).
 
