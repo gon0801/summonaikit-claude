@@ -17,8 +17,11 @@ honesty: green⇒merge was never seen live.
   cost-quota / SHA-PR / redacted-capture checklist and does not execute it.
 - `live-no-sim-credit` refuses to treat a simulated `saikit-merge` PASS as a
   live merge. `live_merge` stays `unknown`.
-- `live-no-seal-transfer` keeps a child-session seal off the parent: no copy
-  by newer mtime or by the presence of `verified:` (limit 18.26).
+- Bloque A retired `live-no-seal-transfer` (limit 18.26 is closed by
+  removal, not by measurement): with no seals left, there is no
+  child→parent transfer to forbid. Delivery reads the receipt from the PR at
+  merge time; it never lives in session state, so it cannot leak between
+  sessions the way a seal file could.
 
 ## How to get to it (user POV)
 
@@ -43,7 +46,6 @@ Preconditions:
 - Case `live-current-reasons`: action Name the current missing live dependencies; command `control-summonaikit drive merge-happy-path`; observable reasons that mention authorization/destination and `gh` (absent or fake).
 - Case `live-manual-procedure`: action Print the Optional measurement checklist; command `control-summonaikit drive merge-happy-path`; observable topic+marker, host, cost/quota, SHA/PR, redacted capture, and `no-autoriza-ejecutar`.
 - Case `live-no-sim-credit`: action Compare against the simulated merge feature; command `control-summonaikit drive merge-happy-path`; observable `simulated` is not live and `live_merge` stays `unknown` (`live-merge-not-run`).
-- Case `live-no-seal-transfer`: action Plant a child seal with newer mtime and a parent log that already has `verified:`; command `control-summonaikit drive merge-happy-path`; observable parent state untouched and no mtime/`verified` transfer.
 
 - **Proof.** Keep the attempt under `artifacts/<run>/merge-happy-path/<attempt>/`.
   Summary `mode` must be `live` and `result` must be `unknown`. A simulated
@@ -53,10 +55,10 @@ Preconditions:
 
 - Simulation never fills the live-merge assertion. Do not treat
   `drive saikit-merge` as `merge-happy-path`.
-- Do not transfer a child reviewer seal, log, or `veredicto_sha256` onto the
-  parent because the child file is newer or the parent already shows
-  `verified:` (18.26). There is no bypass. In the measured Grok path the
-  merge stays manual.
+- Bloque A: the delivery receipt lives on the PR, not in session state, so
+  there is no child→parent artifact to transfer or to guard against. A new
+  host revalidates the same PR by reading it, without inheriting anything
+  from another session.
 - 18.27 fixed the headless Stop hatch (wake form + DELEGATED needs in-flight
   work) and still does not guarantee a receipt on every headless exit. Merge
   stay fail-closed without the receipt; ceremony closeout is best-effort.
