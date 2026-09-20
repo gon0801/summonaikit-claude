@@ -837,16 +837,6 @@ caso "commit_de_otro_email_no_merguea"
 }
 fin_caso "commit_de_otro_email_no_merguea"
 
-
-
-# 20.13: bajo grok, seal_boot sin linked_seal_session no es autoridad de merge.
-
-
-
-# 20.13 corrección: linked viejo (sello de otro sha) no cuenta para ambigüedad;
-# el vigente del verdict actual deja LISTO. Sin el filtro por hash, n_linked=2
-# bloquearía merge para siempre tras la primera tarea del mismo repo.
-
 caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
   # pre-receive del origin rechaza TODO push (incluido el --delete): el merge

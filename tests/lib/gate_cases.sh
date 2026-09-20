@@ -4093,6 +4093,8 @@ caso_g4_grok_delegado_bg_degenerado_cierra() {
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-deg",%s,"sessionCrons":[]}' "$_v")"
     _igual "exit code" "$LAB_RC" "0"
     _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
   done
 }
@@ -4155,6 +4157,8 @@ caso_g4_grok_delegado_bg_estructural_cierra() {
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-est",%s,"sessionCrons":[]}' "$_v")"
     _igual "exit code" "$LAB_RC" "0"
     _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
   done
 
@@ -4170,6 +4174,8 @@ caso_g4_grok_delegado_bg_estructural_cierra() {
   lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"El campo \\"backgroundTasks\\": [{\\"id\\":1}] queda vacio.\\n\\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-eco","backgroundTasks":[],"sessionCrons":[]}')"
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
 
   # JSON TRUNCADO a mitad del array: fail-closed, sin evidencia no hay
@@ -4184,6 +4190,8 @@ caso_g4_grok_delegado_bg_estructural_cierra() {
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-trunc","backgroundTasks":[{"id":"t1","type":"subagent","status":"runnin'
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
 
   # Clave AUSENTE del payload (nunca medida en vivo): fail-closed conservado.
@@ -4196,6 +4204,8 @@ caso_g4_grok_delegado_bg_estructural_cierra() {
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-sinclave","sessionCrons":[]}'
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
 }
 
@@ -4222,6 +4232,10 @@ caso_g4_grok_delegado_bg_primer_token() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tok",%s,"sessionCrons":[]}' "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
   done
 
@@ -4235,6 +4249,10 @@ caso_g4_grok_delegado_bg_primer_token() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-vm","backgroundTasks":[
 ],"sessionCrons":[]}'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
 
   # Valores VALIDOS como unico elemento: siguen permitiendo (el vacio no es
@@ -4251,6 +4269,8 @@ caso_g4_grok_delegado_bg_primer_token() {
     LAB_GROK_HOOK_EVENT=""
     _igual "exit del Stop delegado con valor valido ($_v) en vuelo" "$LAB_RC" "0"
     _vacio "stdout del allow grok con valor valido ($_v)" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _no_vacio "la delegacion con valor valido ($_v) no cierra el turno: el estado sigue" "$_gk"
   done
 }
 
@@ -4287,6 +4307,8 @@ caso_g4_grok_delegado_bg_doc_roto_cierra() {
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-doc",%s,"sessionCrons":[]}' "$_v")"
     _igual "exit code" "$LAB_RC" "0"
     _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
   done
 
@@ -4302,6 +4324,8 @@ caso_g4_grok_delegado_bg_doc_roto_cierra() {
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tg","backgroundTasks":[1],"sessionCrons":[]} "trailing"'
   _igual "exit code" "$LAB_RC" "0"
   _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
 }
 
@@ -4404,6 +4428,10 @@ caso_g4_grok_delegado_bg_clave_escapada() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-esc%d",%s,"sessionCrons":[]}' "$_n" "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
   done
 
@@ -4419,6 +4447,8 @@ caso_g4_grok_delegado_bg_clave_escapada() {
     LAB_GROK_HOOK_EVENT=""
     _igual "exit del Stop delegado con grafia ($_v) en vuelo" "$LAB_RC" "0"
     _vacio "stdout del allow grok con grafia ($_v)" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _no_vacio "la delegacion con grafia ($_v) no cierra el turno: el estado sigue" "$_gk"
   done
 }
 
@@ -4497,6 +4527,8 @@ caso_g4_grok_delegado_bg_explicito_permite() {
   LAB_GROK_HOOK_EVENT=""
   _igual "exit del Stop delegado con bg explicito ([1]) en vuelo" "$LAB_RC" "0"
   _vacio "stdout del allow grok con bg explicito" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "la delegacion con trabajo en vuelo no cierra el turno: el estado sigue" "$_gk"
 }
 
 # Precedencia snake del walker: AMBOS mensajes en el payload; el snake (sin
