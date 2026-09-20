@@ -29,14 +29,6 @@ limpiar_saikit() {
 }
 
 _afirma_cierre() {
-  _igual "$1 exit" "$LAB_RC" "2"
-  _contiene "$1 decision" "$LAB_OUT" '"decision":"block"'
-  _contiene "$1 missing" "$LAB_OUT" 'Missing trail/blast'
-  _contiene "$1 nombra TRAIL SKIP:" "$LAB_OUT" 'TRAIL SKIP:'
-  _contiene "$1 nombra Close:" "$LAB_OUT" 'Close:'
-}
-
-_afirma_cierre() {
   _igual "$1 exit" "$LAB_RC" "0"
   _vacio "$1 stdout" "$LAB_OUT"
 }

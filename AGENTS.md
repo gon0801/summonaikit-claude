@@ -185,7 +185,7 @@ Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
   revisa solo el diff de los arreglos con otro revisor. Una cross-review
   satisface el rol reviewer: no se suma una revision completa por subtarea.
 - **Revision por carril, no por costumbre** (decision del operador 2026-09-09;
-  el tope de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
+  la politica de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
   tres). docs / chore / cierre de ledger = carril `fast` (`-saikit:fast`): bots
   (CodeRabbit) + lead. Codigo = carril `gate`: + reviewer independiente (una
   cross-review lo satisface). Medicion
