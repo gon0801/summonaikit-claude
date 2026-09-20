@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # saikit-merge driver — real tools/saikit-merge.sh on local Git + strict fake gh.
 # Mode is always simulated. Unexpected gh forms fail closed.
+# Bloque A: el gate valida la entrega con el recibo del PR (saikit-entrega.v1
+# leido por gh api repos/.../comments) + CI vigente; sin estado de sesion.
 set -euo pipefail
 driver_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_root="$(cd "$driver_dir/../.." && pwd)"
@@ -38,6 +40,7 @@ fix="${SAIKIT_GH_FIX:?}"
 case "$1 $2" in
   "repo view") cat "$fix/repo.json"; exit 0 ;;
   "api user")  cat "$fix/user.json"; exit 0 ;;
+  "api repos/"*) cat "$fix/comments.json"; exit 0 ;;
   "run list")  cat "$fix/runs.json"; exit 0 ;;
   "pr view")
     case "$*" in
@@ -68,6 +71,27 @@ GHEOF
   chmod +x "$SB/bin/gh"
 }
 
+# cuerpo_aprobacion <sha> <lead> <impl> <ver> <rev> <v-res> <r-res> <bloq> [sha-json]
+# — cuerpo (escapado para vivir dentro de un string JSON) de un comentario
+# APPROVE lead <sha> con bloque ```json saikit-entrega.v1. Con [sha-json] el
+# recibo interior cita otro sha que la linea APPROVE (recibo ajeno).
+cuerpo_aprobacion() {
+  local sha="$1" lead="$2" impl="$3" ver="$4" rev="$5" vres="$6" rres="$7" bloq="$8" shajson="${9:-}"
+  local recibo recibo_esc
+  [ -n "$bloq" ] || bloq="[]"
+  [ -n "$shajson" ] || shajson="$sha"
+  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"bloqueantes":%s,"residuales":[]}' "$shajson" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
+  recibo_esc="$(printf '%s' "$recibo" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf 'APPROVE lead %s\\n\\n```json\\n%s\\n```\\n' "$sha" "$recibo_esc"
+}
+
+# sembrar_recibo: siembra el comentario APPROVE lead <SHA> con un recibo
+# completo en el fixture de comments. Sin estado del hook ni sellos: el feliz
+# corre sin ninguno (Bloque A).
+sembrar_recibo() {
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
+}
+
 refix() {
   SHA="$(gitr rev-parse HEAD)"
   printf '{"nameWithOwner":"op/sandbox"}' > "$SB/ghfix/repo.json"
@@ -78,26 +102,10 @@ refix() {
   printf '%s\n' "$SHA" > "$SB/ghfix/expected-sha"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' \
     > "$SB/ghfix/pr-merge.json"
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' \
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' \
     "$SHA" > "$SB/ghfix/runs.json"
 
-  mkdir -p "$WORK/.saikit/veredictos"
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.4.tsv"}' \
-    "$SHA" > "$WORK/.saikit/veredictos/$SHA.json"
-
-  local key sd
-  rm -rf "$SB/estado"
-  key="$(printf '%s' "$(cd "$WORK" && pwd -P)" | cksum | cut -d' ' -f 1)"
-  sd="$SB/estado/claude/$key/sess1"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h196\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum "$WORK/.saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'prompt task started: h196\nverified: bash tests/run.sh\nagent: reviewer\n' \
-    > "$sd/harness-evidence.log"
+  sembrar_recibo
 }
 
 sb_reset() {
@@ -142,7 +150,6 @@ avanzar_base() {
 # $1 = sin-trailer | (vacío = con trailer)
 monta_revert() {
   sb_reset
-  rm -rf "$SB/estado"
   gitr checkout -q master
   printf 'app v2\n' > "$WORK/app.sh"
   if [ "${1:-}" = "sin-trailer" ]; then
@@ -163,7 +170,7 @@ Saikit-Merge: $SHA"
   printf '8\n' > "$SB/ghfix/expected-pr"
   printf '%s\n' "$RHEAD" > "$SB/ghfix/expected-sha"
   # 22.3r1: el verde del fixture es del HEAD del revert (presencia exigida).
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' \
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' \
     "$RHEAD" > "$SB/ghfix/runs.json"
 }
 
@@ -173,7 +180,6 @@ run_merge() {
       PATH="$SB/bin:$PATH" \
       SAIKIT_GH_FIX="$SB/ghfix" \
       SAIKIT_GH_LOG="$SB/gh.log" \
-      SAIKIT_ESTADO_ROOT="$SB/estado" \
       SAIKIT_MERGE_RETRY_SEG=0 \
     bash "$MERGE" "$@"
 }
@@ -189,7 +195,6 @@ run_merge_en() {
       PATH="$SB/bin:$PATH" \
       SAIKIT_GH_FIX="$SB/ghfix" \
       SAIKIT_GH_LOG="$gh_log_path" \
-      SAIKIT_ESTADO_ROOT="$SB/estado" \
       SAIKIT_MERGE_RETRY_SEG=0 \
       SAIKIT_MERGE_SOSTENER_SEG="$sostener" \
     bash "$MERGE" "$@"
@@ -237,7 +242,6 @@ fi
 
 if fm_only merge-confirmado; then
   sb_reset
-  h_antes="$(sha256sum "$WORK/.saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
   set +e
   out="$(run_merge --confirmado 2>&1)"
   rc=$?
@@ -280,16 +284,16 @@ if fm_only merge-confirmado; then
     fm_fail merge-confirmado ci_revalidated "gh run list" "$log"
   fi
   # assert:ci_revalidated_end
-  h_despues="$(sha256sum "$WORK/.saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  # assert:sello_intact
-  if [ "$h_antes" = "$h_despues" ]; then
-    fm_pass merge-confirmado sello_intact "sello intacto (byte-identical)" \
-      "sello intacto (byte-identical)"
+  # assert:recibo_consultado
+  if printf '%s' "$log" | grep -q 'api repos/op/sandbox/issues/7/comments'; then
+    fm_pass merge-confirmado recibo_consultado \
+      "api repos/op/sandbox/issues/7/comments" \
+      "api repos/op/sandbox/issues/7/comments consultado (recibo del PR)"
   else
-    fm_fail merge-confirmado sello_intact "sello intacto (byte-identical)" \
-      "hash $h_antes -> $h_despues"
+    fm_fail merge-confirmado recibo_consultado \
+      "api repos/op/sandbox/issues/7/comments" "$log"
   fi
-  # assert:sello_intact_end
+  # assert:recibo_consultado_end
 fi
 
 if fm_only merge-ci-rojo; then
@@ -330,59 +334,50 @@ if fm_only merge-base-movida; then
   assert_no_merge merge-base-movida no_merge_on_base
 fi
 
-if fm_only merge-sello-ajeno; then
+if fm_only merge-recibo-ajeno; then
   sb_reset
-  python3 - "$WORK/.saikit/veredictos/$SHA.json" <<'PY'
-import json, sys
-from pathlib import Path
-p = Path(sys.argv[1])
-d = json.loads(p.read_text(encoding="utf-8"))
-d["sha"] = "otro0000000000000000000000000000000000000"
-p.write_text(json.dumps(d, separators=(",", ":")), encoding="utf-8")
-PY
+  otro="otro0000000000000000000000000000000000000"
+  printf '[{"user":{"login":"op"},"body":"%s"}]' \
+    "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "" "$otro")" \
+    > "$SB/ghfix/comments.json"
   set +e
   out="$(run_merge --confirmado 2>&1)"
   rc=$?
   set -e
-  fm_action merge-sello-ajeno act-sello "$rc" "$out" bash "$MERGE" --confirmado
-  # assert:reject_sello_ajeno
-  if printf '%s' "$out" | grep -q 'NO-MERGE: veredicto de otro sha'; then
-    fm_pass merge-sello-ajeno reject_sello_ajeno \
-      "NO-MERGE: veredicto de otro sha" "NO-MERGE: veredicto de otro sha"
+  fm_action merge-recibo-ajeno act-recibo "$rc" "$out" bash "$MERGE" --confirmado
+  # assert:reject_recibo_ajeno
+  if printf '%s' "$out" | grep -q 'NO-MERGE: recibo: sha distinto'; then
+    fm_pass merge-recibo-ajeno reject_recibo_ajeno \
+      "NO-MERGE: recibo: sha distinto" "NO-MERGE: recibo: sha distinto"
   else
-    fm_fail merge-sello-ajeno reject_sello_ajeno \
-      "NO-MERGE: veredicto de otro sha" "$out"
+    fm_fail merge-recibo-ajeno reject_recibo_ajeno \
+      "NO-MERGE: recibo: sha distinto" "$out"
   fi
-  # assert:reject_sello_ajeno_end
-  assert_no_merge merge-sello-ajeno no_merge_on_sello
+  # assert:reject_recibo_ajeno_end
+  assert_no_merge merge-recibo-ajeno no_merge_on_recibo
 fi
 
-if fm_only merge-head-cambiado; then
+if fm_only merge-recibo-revocado; then
   sb_reset
-  sha_viejo="$SHA"
-  printf 'app v3\n' >> "$WORK/app.sh"
-  gitr commit -qam "feat: un commit mas"
-  gitr push -q origin feat/task
-  refix
-  rm -f "$WORK/.saikit/veredictos/$SHA.json"
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"h","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' \
-    "$sha_viejo" > "$WORK/.saikit/veredictos/$sha_viejo.json"
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")"
+  printf '[{"user":{"login":"op"},"body":"%s"},{"user":{"login":"op"},"body":"REVOKE lead %s: aparecio un bloqueante"}]' \
+    "$b" "$SHA" > "$SB/ghfix/comments.json"
   set +e
   out="$(run_merge --confirmado 2>&1)"
   rc=$?
   set -e
-  fm_action merge-head-cambiado act-head "$rc" "$out" bash "$MERGE" --confirmado
-  # assert:reject_head_cambiado
-  if printf '%s' "$out" | grep -q 'NO-MERGE: commits despues del veredicto'; then
-    fm_pass merge-head-cambiado reject_head_cambiado \
-      "NO-MERGE: commits despues del veredicto" \
-      "NO-MERGE: commits despues del veredicto"
+  fm_action merge-recibo-revocado act-revocado "$rc" "$out" bash "$MERGE" --confirmado
+  # assert:reject_recibo_revocado
+  if printf '%s' "$out" | grep -q 'NO-MERGE: recibo: revocado'; then
+    fm_pass merge-recibo-revocado reject_recibo_revocado \
+      "NO-MERGE: recibo: revocado" \
+      "NO-MERGE: recibo: revocado"
   else
-    fm_fail merge-head-cambiado reject_head_cambiado \
-      "NO-MERGE: commits despues del veredicto" "$out"
+    fm_fail merge-recibo-revocado reject_recibo_revocado \
+      "NO-MERGE: recibo: revocado" "$out"
   fi
-  # assert:reject_head_cambiado_end
-  assert_no_merge merge-head-cambiado no_merge_on_head
+  # assert:reject_recibo_revocado_end
+  assert_no_merge merge-recibo-revocado no_merge_on_revocado
 fi
 
 if fm_only revert-ok; then
