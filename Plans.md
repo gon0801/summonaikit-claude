@@ -316,8 +316,9 @@ Muse: la corrida viva es del lead.
 ## Bloque A — entrega sin sello (seguimiento no bloqueante, 2026-09-20)
 
 **Propósito:** residuales del bloque A (rama `feat/entrega-sin-sello-A`):
-los 5 hallazgos minor del adversary (ADV-A-01..05 en
-`.saikit/findings/adversary-bloque-A.json`), la mejora atómica del lock que
+4 de los 5 hallazgos minor del adversary (ADV-A-02..05; ADV-A-01 se corrigió
+en este PR y su fila A.R1 quedó cerrada) en
+`.saikit/findings/adversary-bloque-A.json`, la mejora atómica del lock que
 el A8 dejó como seguimiento, los minors M1/M3 del review y los residuales
 del verifier. Nada de esto bloquea el bloque: M2 se corrigió en el bloque
 (comentarios huérfanos 20.13 retirados) y M4 se verificó ya satisfecho (los
@@ -326,7 +327,7 @@ su escotilla, medido 2026-09-20) — por eso M2/M4 no tienen fila.
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| A.R1 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-01: bloqueante con contenedores vacíos pasa.** `entrega_validar` (`tools/lib/entrega_contract.sh:153`) detecta bloqueantes solo por hojas escalares del flat; `[{}]`, `[[]]` o `{"x":[]}` no producen hojas y PASAN aunque la lista no está vacía — contradice la regla v1 del mismo archivo ("CUALQUIER entrada es un bloqueante abierto"). Riesgo bajo: exige esa forma rara del propio lead | Caso por forma que falle antes y pase después + mutación que quite el conteo de contenedores, atrapada | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R1 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-01: bloqueante con contenedores vacíos pasa.** `entrega_validar` (`tools/lib/entrega_contract.sh:153`) detecta bloqueantes solo por hojas escalares del flat; `[{}]`, `[[]]` o `{"x":[]}` no producen hojas y PASAN aunque la lista no está vacía — contradice la regla v1 del mismo archivo ("CUALQUIER entrada es un bloqueante abierto"). Riesgo bajo: exige esa forma rara del propio lead | Caso por forma que falle antes y pase después + mutación que quite el conteo de contenedores, atrapada | — | cc:完了 [PR #345] — corregido en el bloque: chequeo estructural del JSON original (`entrega_bloqueantes_no_vacio`), 4 casos de regresión + mutación atrapada |
 | A.R2 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-02: el contador de bloqueantes informa mal.** Off-by-one (`substr($1,14)` en `tools/lib/entrega_contract.sh:156-163`): con índices <10 nunca cuenta y el mensaje dice "0 en la lista" habiendo entradas. Cosmético: el gate sigue bloqueando (rc=1) | Caso que afirme el conteo del mensaje con 1 y con 10+ entradas | — | cc:TODO — seguimiento no bloqueante del bloque A |
 | A.R3 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-03: REVOKE sin sha se ignora en silencio.** Un comentario posterior con intención de revocar pero sin el sha completo no tiene efecto ni avisa (`tools/lib/entrega_contract.sh:227-232`); el operador cree haber revocado y un `--confirmado` posterior mergea igual. Error operativo, no ataque (misma cuenta) | Aviso "REVOKE visto sin efecto" + caso que lo afirme; el REVOKE válido sin cambios (casos existentes en verde) | — | cc:TODO — seguimiento no bloqueante del bloque A |
 | A.R4 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-04: REVOKE y APPROVE en el mismo comentario gana APPROVE.** Divergencia doc-vs-código (`tools/lib/entrega_contract.sh:227-244`): el REVOKE solo anula contra un candidato ANTERIOR | Regla decidida y documentada donde hoy se promete lo contrario + caso de cada lado + mutación atrapada | — | cc:TODO — seguimiento no bloqueante del bloque A |

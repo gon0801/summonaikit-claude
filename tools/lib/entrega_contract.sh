@@ -61,6 +61,84 @@ entrega_flat_prefijo() {
   '
 }
 
+# entrega_bloqueantes_no_vacio <json> — 0 si el campo de primer nivel
+# "bloqueantes" existe y no es exactamente [] ni {} (ignorando blancos).
+# El flat solo emite hojas escalares: [{}], [[]] o {"x":[]} no dejan hojas
+# y pasarían como vacíos. Por eso se inspecciona el JSON original, sin jq:
+# scanner awk consciente de strings/escapes. Solo vale la clave literal de
+# primer nivel (la anidada o dentro de un string no cuenta); ante claves
+# duplicadas vale la primera, igual que entrega_flat_hoja.
+entrega_bloqueantes_no_vacio() {
+  printf '%s' "$1" | awk '
+    function esp(c) { return c == " " || c == "\t" || c == "\n" || c == "\r" }
+    { if (NR > 1) texto = texto "\n"; texto = texto $0 }
+    END {
+      n = length(texto); prof = 0; en_str = 0; esc = 0; i = 1
+      while (i <= n) {
+        c = substr(texto, i, 1)
+        if (en_str) {
+          if (esc) { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") {
+            en_str = 0
+            if (prof == 1 && substr(texto, ini + 1, i - ini - 1) == "bloqueantes") {
+              j = i + 1
+              while (j <= n && esp(substr(texto, j, 1))) j++
+              if (j <= n && substr(texto, j, 1) == ":") {
+                k = j + 1
+                while (k <= n && esp(substr(texto, k, 1))) k++
+                vc = substr(texto, k, 1)
+                if (vc == "{" || vc == "[") {
+                  fin = k; p2 = 0; s2 = 0; e2 = 0
+                  while (fin <= n) {
+                    d = substr(texto, fin, 1)
+                    if (s2) {
+                      if (e2) { e2 = 0 }
+                      else if (d == "\\") { e2 = 1 }
+                      else if (d == "\"") { s2 = 0 }
+                    } else {
+                      if (d == "\"") { s2 = 1 }
+                      else if (d == "{" || d == "[") { p2++ }
+                      else if (d == "}" || d == "]") {
+                        p2--
+                        if (p2 == 0) break
+                      }
+                    }
+                    fin++
+                  }
+                  v = substr(texto, k, fin - k + 1)
+                } else {
+                  fin = k; s2 = 0; e2 = 0
+                  while (fin <= n) {
+                    d = substr(texto, fin, 1)
+                    if (s2) {
+                      if (e2) { e2 = 0 }
+                      else if (d == "\\") { e2 = 1 }
+                      else if (d == "\"") { s2 = 0 }
+                    } else if (d == "\"") { s2 = 1 }
+                    else if (d == "," || d == "}" || d == "]") { break }
+                    fin++
+                  }
+                  v = substr(texto, k, fin - k)
+                }
+                gsub(/[ \t\n\r]/, "", v)
+                if (v == "[]" || v == "{}") exit 1
+                exit 0
+              }
+            }
+          }
+        } else {
+          if (c == "\"") { en_str = 1; ini = i }
+          else if (c == "{" || c == "[") { prof++ }
+          else if (c == "}" || c == "]") { prof-- }
+        }
+        i++
+      }
+      exit 1
+    }
+  '
+}
+
 # entrega_validar <recibo|-stdin> <repo> <pr> <sha>
 entrega_validar() {
   if [ "$#" -ne 4 ]; then
@@ -149,7 +227,9 @@ entrega_validar() {
 
   # bloqueantes: CUALQUIER entrada (escalar u objeto/array) es un bloqueante
   # abierto. Ausente o vacio pasa; el flat no distingue ambos y la relacion
-  # que importa es "no hay bloqueantes declarados".
+  # que importa es "no hay bloqueantes declarados". Los contenedores sin
+  # hojas ([{}], [[]], {"x":[]}) no dejan rastro en el flat y se juzgan
+  # por estructura mas abajo.
   if entrega_flat_hoja "$flat" "bloqueantes" >/dev/null 2>&1 || entrega_flat_prefijo "$flat" "bloqueantes"; then
     local primero n
     primero="$(printf '%s\n' "$flat" | awk -F'\t' '$1 == "bloqueantes" || index($1, "bloqueantes.") == 1 || index($1, "bloqueantes[") == 1 { print substr($2, 1, 120); exit }')"
@@ -162,6 +242,10 @@ entrega_validar() {
       }
       END { print c + 0 }')"
     printf 'recibo: bloqueante abierto (%s en la lista; primero: %s)\n' "$n" "$primero" >&2
+    return 1
+  fi
+  if entrega_bloqueantes_no_vacio "$txt"; then
+    printf 'recibo: bloqueante abierto (bloqueantes trae entradas)\n' >&2
     return 1
   fi
   # residuales: no bloquean nunca; se aceptan en cualquier forma.

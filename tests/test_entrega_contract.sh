@@ -140,6 +140,39 @@ caso "bloqueante_abierto_falla"
 }
 fin_caso "bloqueante_abierto_falla"
 
+caso "bloqueantes_vacio_y_ausente_pasa"
+{
+  recibo_ok | sed 's/"bloqueantes":\[\]/"bloqueantes":{}/' > "$SB/recibo.json"
+  entrega_validar "$SB/recibo.json" "$REPO" "$PR" "$SHA" >"$SB/out" 2>"$SB/err"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "objeto vacio: rc esperaba 0, dio $RC: $(cat "$SB/err")"
+  recibo_ok | sed 's/,"bloqueantes":\[\]//' > "$SB/recibo.json"
+  entrega_validar "$SB/recibo.json" "$REPO" "$PR" "$SHA" >"$SB/out" 2>"$SB/err"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "ausente: rc esperaba 0, dio $RC: $(cat "$SB/err")"
+}
+fin_caso "bloqueantes_vacio_y_ausente_pasa"
+
+caso "bloqueantes_contenedor_sin_hojas_falla"
+{
+  for variante in '[{}]' '[[]]' '{"x":[]}' '{"x":{}}'; do
+    recibo_ok | sed "s/\"bloqueantes\":\[\]/\"bloqueantes\":$variante/" > "$SB/recibo.json"
+    validar "$SB/recibo.json"
+    [ "$RC" -eq 1 ] || _mal "$variante: rc esperaba 1, dio $RC"
+    _contiene "$variante nombra bloqueante" "$OUT" "bloqueante"
+  done
+}
+fin_caso "bloqueantes_contenedor_sin_hojas_falla"
+
+caso "bloqueantes_escalar_falla"
+{
+  recibo_ok | sed 's/"bloqueantes":\[\]/"bloqueantes":"urgente"/' > "$SB/recibo.json"
+  validar "$SB/recibo.json"
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC"
+  _contiene "nombra bloqueante" "$OUT" "bloqueante"
+}
+fin_caso "bloqueantes_escalar_falla"
+
 caso "residual_no_bloqueante_pasa"
 {
   recibo_ok | sed 's/"residuales":\[\]/"residuales":[{"id":"R1","nota":"deuda menor"}]/' > "$SB/recibo.json"
@@ -320,6 +353,34 @@ caso "loader_comentario_sin_body_no_oculta"
   _contiene "halla el recibo tras el sin-body" "$OUT" '"id":"a"'
 }
 fin_caso "loader_comentario_sin_body_no_oculta"
+
+caso "mutacion_sin_chequeo_bloqueantes_atrapada"
+{
+  # Si la comprobacion estructural se inutiliza, las regresiones de
+  # contenedor-sin-hojas deben ponerse rojas (el mutante acepta lo que
+  # el gate debe rechazar). El override vive en un subshell: no afecta
+  # a otros casos. Al final va ultimo a proposito.
+  (
+    . "$LIB"
+    entrega_bloqueantes_no_vacio() { return 1; }
+    for variante in '[{}]' '[[]]' '{"x":[]}' '{"x":{}}'; do
+      recibo_ok | sed "s/\"bloqueantes\":\[\]/\"bloqueantes\":$variante/" > "$SB/mut.json"
+      if entrega_validar "$SB/mut.json" "$REPO" "$PR" "$SHA" >/dev/null 2>&1; then
+        printf 'MUTANTE-ACEPTA %s\n' "$variante"
+      else
+        printf 'MUTANTE-SOBREVIVE %s\n' "$variante"
+      fi
+    done
+    recibo_ok > "$SB/mut-ok.json"
+    entrega_validar "$SB/mut-ok.json" "$REPO" "$PR" "$SHA" >/dev/null 2>&1 \
+      || printf 'MUTANTE-ROTO recibo-valido\n'
+  ) > "$SB/mut.out" 2>&1
+  grep -q 'MUTANTE-SOBREVIVE\|MUTANTE-ROTO' "$SB/mut.out" \
+    && _mal "mutacion no atrapada: $(tr '\n' ';' < "$SB/mut.out")"
+  [ "$(grep -c 'MUTANTE-ACEPTA' "$SB/mut.out")" -eq 4 ] \
+    || _mal "mutacion vacua (no acepto los 4): $(tr '\n' ';' < "$SB/mut.out")"
+}
+fin_caso "mutacion_sin_chequeo_bloqueantes_atrapada"
 
 if [ "$fail" -ne 0 ]; then
   echo "test_entrega_contract: FAIL" >&2
