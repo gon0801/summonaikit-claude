@@ -1,0 +1,2 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-20T18:52:41Z|verify|Bloque A listo para reviewer: verifier PASS y adversary sin bloqueantes|9 focalizados en verde en copias aisladas del SHA c7713fb, sim sin estado en dos hosts, demo sin-arreglo rojo/verde; adversary probo recibo/CI/lock/confirmado/Stop con 5 minors y 0 bloqueantes|verifier PASS c7713fb; adversary-bloque-A.json 5 minor 0 bloqueantes; log origin/master..HEAD 6 commits|ok
