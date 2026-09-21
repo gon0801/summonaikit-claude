@@ -369,7 +369,8 @@ sin reproducción no se convierte automáticamente en tarea de código.
 
 **Ejecución:** ramas frescas desde `origin/<default>` y un carril/PR por repo;
 D-S no comparte PR con D-O. Dentro de un repo se agrupan tareas compatibles,
-sin un PR por observación. Pruebas focalizadas durante desarrollo; batería
+sin un PR por observación. Cada bug corregido incluye, en el mismo cambio, una
+prueba de regresión que falla antes de la corrección. Pruebas focalizadas durante desarrollo; batería
 completa una vez en CI por SHA final; implementer, verifier y reviewer
 independientes para código. Una cross-review cubre el bloque del repo; otra
 ronda revisa solo el delta de un bloqueante reproducido. El cierre conserva
