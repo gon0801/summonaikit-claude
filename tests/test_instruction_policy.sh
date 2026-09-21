@@ -11,10 +11,12 @@ obsolete = ('Cross-review: tope 1 ronda', 'Jamas una tercera',
             'máximo **2 rondas**', 'Una ronda de revisión por bloque',
             'tope de 1 ronda: un', 'Claude = lead')
 def invalid(text):
-    return [rule for rule in obsolete if rule in text]
+    normalized = ' '.join(text.split())
+    return [rule for rule in obsolete if rule in normalized]
 
 for rule in obsolete:
     assert invalid('Instrucción activa: ' + rule), rule
+assert invalid('Una ronda\nde revisión por bloque')
 for path in paths:
     text = Path(path).read_text()
     assert not invalid(text), (path, invalid(text))
