@@ -298,7 +298,7 @@ fi
 
 if fm_only merge-ci-rojo; then
   sb_reset
-  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflow":"ci"}]' \
+  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" \
     > "$SB/ghfix/runs.json"
   set +e
   out="$(run_merge --confirmado 2>&1)"
