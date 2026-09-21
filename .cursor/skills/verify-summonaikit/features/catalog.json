@@ -63,6 +63,9 @@
     "tools/lib/veredicto_contract.sh": {
       "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
     },
+    "tools/lib/entrega_contract.sh": {
+      "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
+    },
     "tools/lib/restaurar_desde_backup.sh": {
       "reason": "biblioteca interna; cubierta por consumidores, no ejecutor público"
     },

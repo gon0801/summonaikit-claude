@@ -1,39 +1,18 @@
 #!/usr/bin/env bash
-# tools/lib/veredicto_contract.sh — contrato/esquema del veredicto sellado
-# (D16). Se carga con `. tools/lib/veredicto_contract.sh`. Sin dependencias
-# fuera de coreutils+awk (SIN jq: no se puede asumir instalado). Lo usan
-# `tests/test_veredicto_contract.sh` y `tools/saikit-merge.sh` (Task 18.4);
-# el hook NO lo usa — el hook solo SELLA, no valida (la validacion es del
-# merge, que corre tras el veredicto ya sellado; D16/D18).
+# tools/lib/veredicto_contract.sh — parser JSON compartido (sin jq).
 #
-# Esquema del veredicto (`.saikit/veredictos/<sha>.json`):
-#   { "sha", "pr", "verifier", "verify_app":{resultado,comando},
-#     "blast":{nivel,hecho,comando}|{omitido:"<razon no vacia>"},
-#     "adversary":{findings,max_sev}|"n/a", "reviewer", "decisiones" }
-# blast es XOR de dos formas (Task 18.17): la triada cuando corrio, o
-# {"omitido"} con la razon cuando el turno no lo corrio. El escalar "n/a" NO
-# vale para blast (trampa D13: el PR #157 lo sello asi por analogia con
-# adversary); una razon vacia, null o "n/a" tampoco.
-#
-# `veredicto_validar` valida el CONTRATO ESTRUCTURAL: es un objeto JSON
-# (parseado con un parser JSON real en awk, no grep — el limite POC de la
-# 18.3 se cerro en la 18.4), estan los campos requeridos — las claves
-# CONTENEDOR y sus HOJAS en su nivel — y el sha del veredicto coincide con el
-# HEAD dado. No juzga los VALORES semantico-sesion (verifier=PASS,
-# blast.nivel>=4, ...) — eso es del merge (D18), que los exige ademas del
-# contrato. Postura de falla: report + exit 1 (invalido), nunca exit 0 por
-# ausencia (un veredicto que no se pudo leer no es "valido" por defecto,
-# Core Rule 2).
-#
-# Ademas del contrato, la lib expone el parser para el resto del flujo del
-# merge (gh falso o real, `.saikit/autopilot.json`):
+# El esquema sellado quedo RETIRADO (Bloque A: la entrega se valida con el
+# recibo del PR, tools/lib/entrega_contract.sh). Lo que queda es el parser
+# JSON real en awk (RFC 8259 estricto, sin dependencias fuera de coreutils),
+# que se CONSERVA porque sigue teniendo consumidores: entrega_contract.sh,
+# saikit-merge.sh, saikit-setup-autopilot.sh, saikit-postmerge.sh y sus tests.
 #   saikit_json_valido <texto>   — 0 si es JSON valido (cualquier valor raiz).
 #   saikit_json_flat  <texto>    — una linea `ruta\tvalor` por hoja escalar
 #                                  (arrays como ruta[0], raiz "" excluida;
 #                                  null se emite como el marcador <null>).
 #   saikit_json_get   <texto> <ruta> — valor de la hoja en esa ruta (primera
 #                                  ocurrencia), rc 1 si la ruta no existe.
-
+#
 # ---------------------------------------------------------------------------
 # Parser JSON (awk). Recursivo por tabla: parseValue/parseObject/parseArray se
 # llaman entre si; awk soporta recursion mutua cuando las funciones estan
@@ -180,123 +159,4 @@ saikit_json_flat() {
 # saikit_json_get <texto> <ruta> — valor de la hoja (rc 1 si no existe).
 saikit_json_get() {
   saikit_json_flat "$1" | awk -F'\t' -v p="$2" '$1 == p { print $2; found = 1; exit } END { exit found ? 0 : 1 }'
-}
-
-# Hojas del contrato, expuestas para que tests/test_veredicto_contract.sh acople
-# el perfil del reviewer a lo que el validador exige de verdad (18.17).
-VEREDICTO_HOJAS_REQUERIDAS='sha pr verifier reviewer decisiones verify_app.resultado verify_app.comando'
-VEREDICTO_BLAST_TRIADA='blast.nivel blast.hecho blast.comando'
-VEREDICTO_BLAST_OMITIDO='blast.omitido'
-
-# veredicto_tiene_hoja <flat> <ruta> — 0 si la ruta EXACTA existe en el flat.
-veredicto_tiene_hoja() {
-  printf '%s\n' "$1" | awk -F'\t' -v p="$2" '$1 == p { f = 1 } END { exit f ? 0 : 1 }'
-}
-
-# veredicto_tiene_prefijo <flat> <prefijo> — 0 si hay hoja exacta o anidada
-# bajo prefijo. (prefijo. o prefijo[). Cierra mezcla omitido+nivel-objeto.
-veredicto_tiene_prefijo() {
-  printf '%s\n' "$1" | awk -F'\t' -v p="$2" '
-    $1 == p || index($1, p ".") == 1 || index($1, p "[") == 1 { f = 1 }
-    END { exit f ? 0 : 1 }
-  '
-}
-
-# veredicto_validar <archivo> [head]
-#   0 => valido (esquema + sha==head si head viene).
-#   1 => invalido, con un motivo en stdout.
-veredicto_validar() {
-  local f="$1" head="${2:-}" txt="" flat="" campo sha razon
-  local IFS=' '
-  [ -f "$f" ] || { printf 'no existe el veredicto: %s\n' "$f"; return 1; }
-  # Listas vacias = fail-open (Core Rule 2): un mutante o source raro no
-  # puede dejar el contrato sin dientes.
-  if [ -z "${VEREDICTO_HOJAS_REQUERIDAS:-}" ] || [ -z "${VEREDICTO_BLAST_TRIADA:-}" ] || [ -z "${VEREDICTO_BLAST_OMITIDO:-}" ]; then
-    printf 'contrato incompleto: faltan las listas VEREDICTO_*\n'
-    return 1
-  fi
-  txt="$(sed 's/\r$//' "$f")"   # CR de fin de linea (CRLF); un CR a media string lo rechaza el parser
-
-  # Parser JSON real: un veredicto que no parsea ES invalido, aunque traiga
-  # los textos de todas las claves (el limite POC por grep, cerrado en 18.4).
-  if ! flat="$(printf '%s' "$txt" | awk -v MODE=flat "$SAIKIT_JSON_AWK" 2>&1 >/dev/null)"; then
-    printf 'no es un JSON valido: %s\n' "$flat"
-    return 1
-  fi
-  flat="$(saikit_json_flat "$txt")"
-
-  # Hojas requeridas por ruta EXACTA (verify_app queda cubierto por sus hojas;
-  # verify_app.comando puede valer <null>, la RUTA tiene que existir). El
-  # contenedor adversary se exige aparte, abajo: puede ser "n/a" (hoja) u
-  # objeto (prefijo de hojas). blast va aparte tambien: XOR de dos formas.
-  for campo in $VEREDICTO_HOJAS_REQUERIDAS; do
-    if ! veredicto_tiene_hoja "$flat" "$campo"; then
-      printf 'falta el campo %s\n' "$campo"
-      return 1
-    fi
-  done
-
-  # blast: escalar => invalido con guia; omitido => sin triada y con razon;
-  # si no, la triada completa.
-  if veredicto_tiene_hoja "$flat" blast; then
-    printf 'blast es un escalar, no un objeto: si el turno no corrio blast, escribe {"omitido": "<razon>"}\n'
-    return 1
-  elif veredicto_tiene_hoja "$flat" "$VEREDICTO_BLAST_OMITIDO"; then
-    for campo in $VEREDICTO_BLAST_TRIADA; do
-      if veredicto_tiene_prefijo "$flat" "$campo"; then
-        printf 'blast mezcla omitido con %s: es la triada nivel/hecho/comando O solo omitido\n' "$campo"
-        return 1
-      fi
-    done
-    # Los escapes del flat (\t \n \r) cuentan como blanco. Placeholders
-    # (bool/numero/n-a/template) y backslash (\\uXXXX no se decodifica) no
-    # son rastro. Piso de longitud >= 8.
-    razon="$(printf '%s\n' "$flat" | awk -F'\t' -v p="$VEREDICTO_BLAST_OMITIDO" '$1 == p { print $2; exit }' \
-      | sed 's/\\[tnr]/ /g; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
-    case "$razon" in
-      ''|'<null>'|'n/a'|'-'|'na'|'none'|'omitido'|'skip'|'true'|'false'|'.'|'tbd')
-        printf 'blast.omitido sin razon (vacio, null o placeholder): di por que no corrio el blast\n'
-        return 1 ;;
-    esac
-    case "$razon" in
-      '<'*'>')
-        printf 'blast.omitido sin razon (placeholder de plantilla): di por que no corrio el blast\n'
-        return 1 ;;
-    esac
-    case "$razon" in
-      *'\\'*)
-        printf 'blast.omitido sin razon (escape en el valor): di por que no corrio el blast\n'
-        return 1 ;;
-    esac
-    if [ "${#razon}" -lt 8 ]; then
-      printf 'blast.omitido sin razon (demasiado corta): di por que no corrio el blast\n'
-      return 1
-    fi
-  else
-    for campo in $VEREDICTO_BLAST_TRIADA; do
-      if ! veredicto_tiene_hoja "$flat" "$campo"; then
-        printf 'falta el campo %s (o blast.omitido con la razon, si el turno no corrio blast)\n' "$campo"
-        return 1
-      fi
-    done
-  fi
-  if ! printf '%s\n' "$flat" | awk -F'\t' '$1 == "adversary" || index($1, "adversary.") == 1 || index($1, "adversary[") == 1 { f = 1 } END { exit f ? 0 : 1 }'; then
-    printf 'falta el campo adversary\n'
-    return 1
-  fi
-
-  # sha == HEAD (si head viene). La ruta exacta `sha` (primer nivel) es la
-  # que manda: un sha anidado en otro objeto no cuenta.
-  if [ -n "$head" ]; then
-    sha="$(printf '%s\n' "$flat" | awk -F'\t' '$1 == "sha" { print $2; exit }')"
-    if [ -z "$sha" ] || [ "$sha" = "<null>" ]; then
-      printf 'el veredicto no trae un sha legible\n'
-      return 1
-    fi
-    if [ "$sha" != "$head" ]; then
-      printf 'el sha del veredicto (%s) no coincide con HEAD (%s)\n' "$sha" "$head"
-      return 1
-    fi
-  fi
-  return 0
 }

@@ -21,11 +21,7 @@
     },
     {
       "id": "gate-stop-no-receipt",
-      "required_assertions": ["stop_rejected", "not_scenario_01_02"]
-    },
-    {
-      "id": "gate-grok-bg-doc-roto",
-      "required_assertions": ["grok_doc_roto_bloquea", "grok_bg_valido_permite"]
+      "required_assertions": ["stop_permite", "not_scenario_01_02"]
     },
     {
       "id": "gate-advzona-teardown-seguro",

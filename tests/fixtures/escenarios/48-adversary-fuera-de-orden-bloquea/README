@@ -1,2 +1,4 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 D6 caso 2 (Task 13.5): adversary despues del reviewer. La regex de 3 roles ya matcheaba
 con adversary en el medio; la nueva es la que exige su posicion. Bloquea.

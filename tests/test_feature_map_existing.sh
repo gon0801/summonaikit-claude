@@ -9,7 +9,7 @@
 #   omit_sin_estado       — unarmed sin afirmar ausencia de estado/contrato
 #   omit_contract         — armed sin afirmar JSON/contrato
 #   omit_harness_state    — armed sin afirmar harness-state/task_hash
-#   omit_stop_rejected    — Stop sin afirmar exit 2 del paso stop
+#   omit_stop_permite      — Stop sin afirmar exit 0 del paso stop
 #   accept_stale_ledger   — ledger atrasado registrado como OK
 #   accept_dup_pr         — PR duplicado registrado como OK
 #   header_only           — solo encabezado + rc 0; no satisface conducta
@@ -192,7 +192,7 @@ assert_obs gate-turn sin_estado '\(sin estado\)'
 assert_obs gate-turn sin_contrato 'sin contrato|no.contrato|sin additionalContext|ausente'
 assert_obs gate-turn contract_json 'SUMMONAIKIT HARNESS REQUIRED'
 assert_obs gate-turn harness_state 'harness-state\.env'
-assert_obs gate-turn stop_rejected 'stop exit 2'
+assert_obs gate-turn stop_permite 'stop exit 0'
 assert_obs gate-turn not_scenario_01_02 '07-evidencia-incompleta'
 
 # Independiente: 01/02 no acreditan el Stop
@@ -204,12 +204,12 @@ for line in open(sys.argv[1], encoding="utf-8"):
     if not line.strip():
         continue
     rec = json.loads(line)
-    if rec.get("assertion_id") != "stop_rejected":
+    if rec.get("assertion_id") != "stop_permite":
         continue
     if rec.get("case_id") in ("gate-unarmed", "gate-armed"):
-        raise SystemExit("stop_rejected en caso 01/02")
+        raise SystemExit("stop_permite en caso 01/02")
     if rec.get("case_id") != "gate-stop-no-receipt":
-        raise SystemExit(f"stop_rejected case={rec.get('case_id')}")
+        raise SystemExit(f"stop_permite case={rec.get('case_id')}")
 PY
 fi
 
@@ -271,7 +271,7 @@ case "$fid" in
     assert gate-armed scenario_steps "=== escenario 02-armado-contrato"
     assert gate-armed contract_json "=== escenario 02-armado-contrato"
     assert gate-armed harness_state "=== escenario 02-armado-contrato"
-    assert gate-stop-no-receipt stop_rejected "=== escenario 07"
+    assert gate-stop-no-receipt stop_permite "=== escenario 07"
     assert gate-stop-no-receipt not_scenario_01_02 "=== escenario 07"
     ;;
   audit-ledger)
@@ -411,15 +411,15 @@ then
   assert_missing_or_fail gate-turn harness_state 'harness-state' "$rc"
 fi
 
-caso "mutante omit_stop_rejected: Stop sin exit 2 se pone rojo"
+caso "mutante omit_stop_permite: Stop sin exit 0 se pone rojo"
 reset_art
 mut="$SANDBOX/gate-omit-stop.sh"
 if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
-  '/assert:stop_rejected/,/assert:stop_rejected_end/d' \
-  "omit_stop_rejected"
+  '/assert:stop_permite/,/assert:stop_permite_end/d' \
+  "omit_stop_permite"
 then
   out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
-  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
+  assert_missing_or_fail gate-turn stop_permite 'stop exit 0' "$rc"
 fi
 
 caso "mutante zero_stop_exit: el nombre evidencia no acredita Stop"
@@ -430,7 +430,7 @@ if sed_must_change "$SANDBOX/gate-turn.src.sh" "$mut" \
   "zero_stop_exit"
 then
   out="$(ctrl_drv "$mut" drive-gate-scenario 07-evidencia-incompleta 2>&1)" && rc=0 || rc=$?
-  assert_missing_or_fail gate-turn stop_rejected 'stop exit 2' "$rc"
+  assert_missing_or_fail gate-turn stop_permite 'stop exit 0' "$rc"
 fi
 
 caso "mutante omit_dry_run_no_write: quitar no-write se pone rojo"

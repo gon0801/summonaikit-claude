@@ -180,13 +180,15 @@ Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
   `~/.zcode`, `~/.grok`, `~/.codex`). Toda medicion va con HOME aislado. Si una
   medicion SOLO se puede hacer contra el perfil real, **para y decilo: esa
   corrida es del lider**.
-- **Cross-review: tope 1 ronda.** Una segunda SOLO si la primera hallo severidad
-  alta. Jamas una tercera; los residuales se declaran en el PR, no se
-  re-revisan.
+- **Una sola politica de rondas** (la de `## Calidad` arriba, sin tope fijo):
+  solo un bloqueante con reproduccion abre otra ronda; cada ronda siguiente
+  revisa solo el diff de los arreglos con otro revisor. Una cross-review
+  satisface el rol reviewer: no se suma una revision completa por subtarea.
 - **Revision por carril, no por costumbre** (decision del operador 2026-09-09;
-  el tope de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
+  la politica de arriba es de RONDAS, no de revisores — un runbook de docs no lleva
   tres). docs / chore / cierre de ledger = carril `fast` (`-saikit:fast`): bots
-  (CodeRabbit) + lead. Codigo = carril `gate`: + reviewer del harness. Medicion
+  (CodeRabbit) + lead. Codigo = carril `gate`: + reviewer independiente (una
+  cross-review lo satisface). Medicion
   viva / release = + cross-review con otra IA. El carril lo fija la fila
   (`[lane:...]`) y el lead al armar el turno; un implementador no lo sube ni lo
   baja solo.

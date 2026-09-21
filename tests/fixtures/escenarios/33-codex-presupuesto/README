@@ -1,3 +1,5 @@
+A6 (Bloque A): sin violacion adversary ya no hay presupuesto que agotar — los Stop cierran limpio. El presupuesto vive en los casos G5.
+
 codex, G5: dos Stops fallidos consumen los 2 ciclos; el tercero agota el
 presupuesto y sale con la forma claude (continue:false + exit 0), que Codex
 IGNORA (6.2, veredicto blanco) — limite declarado en 6.4: el corte no bloquea

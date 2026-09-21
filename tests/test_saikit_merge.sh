@@ -5,17 +5,16 @@
 # QUE AFIRMA (DoD de la fila 18.4, columna 3 de Plans.md):
 #   - Feliz: todo ok => NO mergea por defecto, reporta LISTO. Con
 #     --confirmado => merge squash con --match-head-commit, body
-#     "Saikit-Merge: <sha>", SIN --delete-branch y SIN --admin; el veredicto
-#     sellado queda byte-identico; registra .saikit/veredictos/<sha>.merge.
+#     "Saikit-Merge: <sha>", SIN --delete-branch y SIN --admin;
+#     registra .saikit/veredictos/<sha>.merge.
 #     Config con rama:main funciona igual.
 #   - NO mergea y NOMBRA la razon: CI rojo / sin checks / pendiente /
-#     mergeable UNKNOWN dos veces / base avanzada / veredicto de otro sha /
-#     veredicto reescrito tras el sello / commits despues del veredicto /
-#     blast.nivel<4 / verifier FAIL / verify_app n/a sin sin_verify_app /
-#     comando fuera de verify/ / config ausente / merge_despliega unknown /
+#     mergeable UNKNOWN dos veces / base avanzada / base conflictiva /
+#     head movido durante la comprobacion / recibo ausente o revocado /
+#     reviewer ausente del recibo / verifier FAIL / identidad reutilizada /
+#     bloqueante abierto / config ausente / merge_despliega unknown /
 #     PR que toca autopilot.json / PR de otra rama base / repo distinto /
-#     autor != cuenta / commit de otro email / sin estado del hook /
-#     reviewer no visto.
+#     autor != cuenta / commit de otro email.
 #   - Decision 2026-08-30: --confirmado REPITE el gate; si la base movio
 #     entre el LISTO y el si, vuelve a NO-MERGE y no mergea.
 #   - Merge ok + borrado remoto falla => reporta SIN reintentar.
@@ -36,7 +35,7 @@
 #     CAIDA (kill -9) del tenedor: el lock SOBREVIVE y un tercero ajeno no lo
 #     libera; la recuperacion es EXPLICITA (--liberar-lock), nunca automatica.
 #     REINTENTO con el lock libre: re-corre el gate completo del modo (normal:
-#     base/sello; revert: punta, SIN estado propio). LIMITE DECLARADO: dos
+#     base/recibo/CI; revert: punta, SIN estado propio). LIMITE DECLARADO: dos
 #     clones independientes NO se excluyen (common-dirs distintos) — se mide
 #     para que quede fijado. Determinismo por gancho de test
 #     SAIKIT_MERGE_SOSTENER_SEG (duerme con el lock tomado; produccion = 0).
@@ -44,9 +43,10 @@
 # INFRAESTRUCTURA: git REAL en sandbox (origin bare local alcanzado via
 # url.<path>.insteadOf de la URL github que espera el script) y gh FALSO que
 # responde solo las formas que el script usa, con argv grabado en un log. El
-# estado del hook se siembra a mano con la MISMA derivacion que hace el hook
-# (state/<host>/<cksum(project_root)>/<sesion>/harness-state.env); el sello
-# en si ya lo prueba tests/test_veredicto_contract.sh.
+# recibo APPROVE lead <sha> se siembra en el fixture de comments del PR; el
+# modo normal corre SIN directorios de estado, SIN veredicto sellado y SIN
+# harness-evidence.log, y es repetible desde otro host (A3). El contrato
+# del recibo en si lo prueba tests/test_entrega_contract.sh.
 #
 # La mitad mutation-test vive al final: cada mutacion del script tiene que
 # poner rojo al caso que la nombra; una mutacion que sobrevive en verde es un
@@ -147,6 +147,7 @@ forma=""
 case "$1 $2" in
   "repo view") forma=repo ;;
   "api user")  forma=user ;;
+  "api repos/"*) forma=comments ;;
   "run list")  forma=runs ;;
   "pr view")
     case "$*" in *mergeCommit*) forma=pr_merge ;; *) forma=pr ;; esac
@@ -258,9 +259,22 @@ coloriza() {
 case "$1 $2" in
   "repo view") emitir "$fix/repo.json"; exit 0 ;;
   "api user")  emitir "$fix/user.json"; exit 0 ;;
+  "api repos/"*) emitir "$fix/comments.json"; exit 0 ;;
   "run list")  emitir "$fix/runs.json"; exit 0 ;;
   "pr view")
-    case "$*" in *mergeCommit*) emitir "$fix/pr-merge.json" ;; *) emitir "$fix/pr.json" ;; esac
+    case "$*" in
+      *mergeCommit*) emitir "$fix/pr-merge.json" ;;
+      *) # A5: con pr-head-2.json el head se MUEVE entre lecturas (la 1a
+         # trae pr.json, las siguientes pr-head-2.json): simula un push
+         # durante la comprobacion. Sin ese fixture, siempre pr.json.
+         if [ -f "$fix/pr-head-2.json" ]; then
+           cnt="$(cat "$fix/pr-view-count" 2>/dev/null || printf 0)"
+           printf '%s' "$((cnt + 1))" > "$fix/pr-view-count"
+           if [ "$cnt" -ge 1 ]; then emitir "$fix/pr-head-2.json"; else emitir "$fix/pr.json"; fi
+         else
+           emitir "$fix/pr.json"
+         fi ;;
+    esac
     exit 0 ;;
   "pr merge")
     if [ -f "$fix/merge-fail" ]; then cat "$fix/merge-fail"; exit 1; fi
@@ -274,7 +288,8 @@ GHEOF
   export SAIKIT_GH_FIX="$SB/ghfix"
   export SAIKIT_GH_LOG="$SB/gh.log"
   : > "$SAIKIT_GH_LOG"
-  export SAIKIT_ESTADO_ROOT="$SB/estado"
+  # A3: el modo normal NO consulta estado de sesion (SAIKIT_ESTADO_ROOT se
+  # fija solo en el caso de dos hosts, para probar que se ignora).
   export SAIKIT_ORDEN_LOG="$SB/orden.log"
   : > "$SAIKIT_ORDEN_LOG"
   export SAIKIT_MERGE_RETRY_SEG=0
@@ -286,24 +301,24 @@ GHEOF
   refix
 }
 
-# refix: re-escribe los fixtures que dependen del HEAD actual (sha del PR,
-# veredicto sellado y estado del hook). Se llama tras commits nuevos.
-# sembrar_sello: veredicto sellado + estado del hook para el root $1 (20.5:
-# aditivo, para poder sembrar tambien un clon hermano sin pisar el del work).
-sembrar_sello() {  # $1=root del repo a sembrar
-  local key sd
-  mkdir -p "$1/.saikit/veredictos"
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.4.tsv"}' "$SHA" > "$1/.saikit/veredictos/$SHA.json"
-  key="$(printf '%s' "$1" | cksum | cut -d' ' -f 1)"
-  sd="$SB/estado/claude/$key/sess1"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h184\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum "$1/.saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'prompt task started: h184\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+# cuerpo_aprobacion <sha> <lead> <impl> <ver> <rev> <v-res> <r-res> <bloq-json>
+# — cuerpo (ya escapado para vivir dentro de un string JSON) de un comentario
+# APPROVE lead <sha> con bloque ```json saikit-entrega.v1. El <bloq-json> va en
+# crudo (p.ej. [{"id":"B1"}]) y se escapa junto al resto.
+cuerpo_aprobacion() {
+  local sha="$1" lead="$2" impl="$3" ver="$4" rev="$5" vres="$6" rres="$7" bloq="$8"
+  local recibo recibo_esc
+  [ -n "$bloq" ] || bloq="[]"
+  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"ci":{"workflow":"ci","evidencia":"artifact:ci"},"bloqueantes":%s,"residuales":[]}' "$sha" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
+  recibo_esc="$(printf '%s' "$recibo" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf 'APPROVE lead %s\\n\\n```json\\n%s\\n```\\n' "$sha" "$recibo_esc"
+}
+
+# sembrar_recibo: siembra el comentario APPROVE lead <SHA> con un recibo
+# completo en el fixture de comments. A3: NADA de estado del hook, veredicto
+# ni evidence log — el feliz corre sin ninguno.
+sembrar_recibo() {
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
 }
 
 refix() {
@@ -312,10 +327,9 @@ refix() {
   printf '{"login":"op"}' > "$SB/ghfix/user.json"
   printf '{"number":7,"baseRefName":"%s","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$BASE_RAMA" "$SHA" > "$SB/ghfix/pr.json"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' > "$SB/ghfix/pr-merge.json"
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
 
-  rm -rf "$SB/estado"
-  sembrar_sello "$(pwd -P)"
+  sembrar_recibo
 }
 
 correr() {  # corre el script bajo prueba desde el work del sandbox
@@ -376,7 +390,6 @@ fin_caso "feliz_default_no_merguea_reporta_listo"
 
 caso "feliz_confirmado_merguea_con_trailer_y_match_head"
 {
-  h_antes="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
   correr --confirmado
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC"
   _contiene "merge ok" "$OUT" "MERGE-OK:"
@@ -386,7 +399,6 @@ caso "feliz_confirmado_merguea_con_trailer_y_match_head"
   _no_contiene "nunca --admin" "$(cat "$SAIKIT_GH_LOG")" "--admin"
   _no_contiene "nunca --delete-branch en el merge" "$(cat "$SAIKIT_GH_LOG")" "--delete-branch"
   _contiene "registra merge_commit" "$(cat ".saikit/veredictos/$SHA.merge" 2>/dev/null)" "f000000000000000000000000000000000000000"
-  _contiene "veredicto byte-identico" "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)" "$h_antes"
 }
 fin_caso "feliz_confirmado_merguea_con_trailer_y_match_head"
 
@@ -414,7 +426,7 @@ caso "feliz_bajo_terminal_ansi_no_merguea_por_presentacion"
   _contiene "merge ok" "$OUT" "MERGE-OK:"
   _contiene "registro del merge" "$(cat ".saikit/veredictos/$SHA.merge" 2>/dev/null)" "f000000000000000000000000000000000000000"
   # el gate atraveso TODAS las llamadas gh del barrido bajo el entorno hostil
-  for f in "^gh repo view" "^gh pr view --json number" "^gh api user" "^gh run list" "^gh pr view 7 --json mergeCommit"; do
+  for f in "^gh repo view" "^gh pr view --json number" "^gh api user" "^gh run list" "^gh api repos/" "^gh pr view 7 --json mergeCommit"; do
     grep -Eq -- "$f" "$SAIKIT_GH_LOG" || _mal "el gh log no trajo la forma [$f]"
   done
 }
@@ -433,6 +445,196 @@ caso "feliz_bajo_color_forzado_del_harness"
 }
 fin_caso "feliz_bajo_color_forzado_del_harness"
 
+# ------------------------------------------------- entrega con recibo (A3)
+caso "feliz_sin_estado_ni_veredicto_ni_log"
+{
+  # El feliz NO necesita directorios de estado, veredicto sellado ni
+  # harness-evidence.log: el banco ya no siembra ninguno.
+  [ ! -e "$SB/estado" ] || _mal "el banco sembro estado del hook"
+  [ ! -e ".saikit/veredictos/$SHA.json" ] || _mal "el banco sembro un veredicto"
+  [ -z "$(find "$SB" -name 'harness-evidence.log' 2>/dev/null)" ] || _mal "el banco sembro un evidence log"
+  correr
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "reporta LISTO" "$OUT" "LISTO:"
+  if merge_disparado; then _mal "mergeo sin --confirmado"; fi
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  _contiene "consulto el recibo del PR" "$(cat "$SAIKIT_GH_LOG")" "api repos/op/sandbox/issues/7/comments"
+}
+fin_caso "feliz_sin_estado_ni_veredicto_ni_log"
+
+caso "repetible_desde_dos_hosts"
+{
+  # Sin estado de sesion, el gate es repetible: dos hosts con raices de
+  # estado distintas (y vacias) llegan al mismo LISTO.
+  SAIKIT_ESTADO_ROOT="$SB/estado-host-a" correr
+  [ "$RC" -eq 0 ] || _mal "host A: rc esperaba 0, dio $RC: $OUT"
+  _contiene "host A LISTO" "$OUT" "LISTO:"
+  SAIKIT_ESTADO_ROOT="$SB/estado-host-b" correr
+  [ "$RC" -eq 0 ] || _mal "host B: rc esperaba 0, dio $RC: $OUT"
+  _contiene "host B LISTO" "$OUT" "LISTO:"
+  unset SAIKIT_ESTADO_ROOT
+}
+fin_caso "repetible_desde_dos_hosts"
+
+caso "restos_viejos_no_bloquean"
+{
+  # Reanudacion con restos del sello retirado: un harness-state.env viejo con
+  # veredicto_sha256/linked_seal_session y un veredicto viejo se IGNORAN, no
+  # se exigen ni bloquean.
+  mkdir -p "$SB/estado/claude/12345/sess-vieja"
+  printf 'task_hash=viejo\nagents_seen=implementer\nlane=full\nveredicto_sha256=aaaa\nlinked_seal_session=x\n' > "$SB/estado/claude/12345/sess-vieja/harness-state.env"
+  printf 'verified: algo viejo\n' > "$SB/estado/claude/12345/sess-vieja/harness-evidence.log"
+  export SAIKIT_ESTADO_ROOT="$SB/estado"
+  mkdir -p .saikit/veredictos
+  printf '{"sha":"viejo","pr":7}' > ".saikit/veredictos/viejo.json"
+  correr
+  unset SAIKIT_ESTADO_ROOT
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "LISTO pese a restos viejos" "$OUT" "LISTO:"
+}
+fin_caso "restos_viejos_no_bloquean"
+
+c_recibo_sin_reviewer() {
+  CASO_ROJO=0; sb_reset master
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")"
+  b="$(printf '%s' "$b" | sed 's/\\"reviewer\\":{[^}]*}/\\"reviewer\\":{}/')"
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$b" > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon sin reviewer" "$OUT" "NO-MERGE: recibo:"
+  _contiene "nombra reviewer" "$OUT" "reviewer"
+  if merge_disparado; then _mal "invoco el merge sin reviewer en el recibo"; fi
+}
+
+caso "recibo_sin_reviewer_no_invoca_merge"
+{
+  c_recibo_sin_reviewer
+}
+fin_caso "recibo_sin_reviewer_no_invoca_merge"
+
+caso "recibo_verifier_fail_no_merguea"
+{
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c FAIL APPROVE "")"
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$b" > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon verifier" "$OUT" "NO-MERGE: recibo:"
+  _contiene "nombra PASS" "$OUT" "PASS"
+  if merge_disparado; then _mal "mergeo con verifier FAIL en el recibo"; fi
+}
+fin_caso "recibo_verifier_fail_no_merguea"
+
+caso "recibo_identidad_reutilizada_no_merguea"
+{
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-b PASS APPROVE "")"
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$b" > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon identidad" "$OUT" "NO-MERGE: recibo:"
+  _contiene "nombra reutilizada" "$OUT" "reutilizada"
+  if merge_disparado; then _mal "mergeo con identidad reutilizada"; fi
+}
+fin_caso "recibo_identidad_reutilizada_no_merguea"
+
+caso "recibo_bloqueante_abierto_no_merguea"
+{
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE '[{"id":"B1"}]')"
+  printf '[{"user":{"login":"op"},"body":"%s"}]' "$b" > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon bloqueante" "$OUT" "NO-MERGE: recibo:"
+  _contiene "nombra bloqueante" "$OUT" "bloqueante"
+  if merge_disparado; then _mal "mergeo con bloqueante abierto"; fi
+}
+fin_caso "recibo_bloqueante_abierto_no_merguea"
+
+caso "recibo_sin_aprobacion_no_merguea"
+{
+  printf '[{"user":{"login":"op"},"body":"solo un comentario sin formato"}]' > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon sin recibo" "$OUT" "NO-MERGE: recibo: sin recibo"
+  if merge_disparado; then _mal "mergeo sin recibo en el PR"; fi
+}
+fin_caso "recibo_sin_aprobacion_no_merguea"
+
+caso "recibo_revocado_no_merguea"
+{
+  b="$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")"
+  printf '[{"user":{"login":"op"},"body":"%s"},{"user":{"login":"op"},"body":"REVOKE lead %s: aparecio un bloqueante"}]' "$b" "$SHA" > "$SB/ghfix/comments.json"
+  correr --confirmado
+  _contiene "razon revocado" "$OUT" "NO-MERGE: recibo:"
+  _contiene "nombra revocado" "$OUT" "revocado"
+  if merge_disparado; then _mal "mergeo con el recibo revocado"; fi
+}
+fin_caso "recibo_revocado_no_merguea"
+
+caso "base_conflictiva_no_merguea"
+{
+  sed -i.bak 's/"mergeable":"MERGEABLE"/"mergeable":"CONFLICTING"/' "$SB/ghfix/pr.json"
+  rm -f "$SB/ghfix/pr.json.bak"
+  correr --confirmado
+  _contiene "razon no mergeable" "$OUT" "NO-MERGE: el PR no es mergeable (CONFLICTING)"
+  if merge_disparado; then _mal "mergeo con base conflictiva"; fi
+}
+fin_caso "base_conflictiva_no_merguea"
+
+caso "head_avanza_durante_comprobacion_no_merguea"
+{
+  # A5: un push entre la lectura inicial y el efecto cambia el head; el gate
+  # lo detecta al re-leer y no mergea.
+  printf '{"number":7,"baseRefName":"%s","headRefOid":"ffffffffffffffffffffffffffffffffffffffff","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$BASE_RAMA" > "$SB/ghfix/pr-head-2.json"
+  correr --confirmado
+  _contiene "razon head movido" "$OUT" "NO-MERGE: el head del PR avanzo durante la comprobacion"
+  if merge_disparado; then _mal "mergeo con el head movido durante la comprobacion"; fi
+}
+fin_caso "head_avanza_durante_comprobacion_no_merguea"
+
+c_head_avanza() {
+  CASO_ROJO=0; sb_reset master
+  printf '{"number":7,"baseRefName":"%s","headRefOid":"ffffffffffffffffffffffffffffffffffffffff","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$BASE_RAMA" > "$SB/ghfix/pr-head-2.json"
+  correr --confirmado
+  _contiene "razon head movido" "$OUT" "NO-MERGE: el head del PR avanzo durante la comprobacion"
+  if merge_disparado; then _mal "mergeo con el head movido durante la comprobacion"; fi
+}
+
+c_ci_intento_viejo() {
+  # A4: un intento viejo fallido del MISMO workflow, reemplazado por un verde
+  # nuevo, no bloquea: se juzga lo vigente.
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflowName":"ci","number":41,"headSha":"%s"},{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" "$SHA" > "$SB/ghfix/runs.json"
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+}
+
+caso "ci_intento_viejo_reemplazado_pasa"
+{
+  c_ci_intento_viejo
+}
+fin_caso "ci_intento_viejo_reemplazado_pasa"
+
+c_ci_workflow_ajeno() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"docs-only-smoke","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
+  correr --confirmado
+  [ "$RC" -ne 0 ] || _mal "mergeo con un workflow distinto del acreditado por el recibo"
+  _contiene "nombra workflow requerido" "$OUT" "workflow requerido"
+  if merge_disparado; then _mal "invoco el merge sin CI del workflow acreditado"; fi
+}
+
+caso "ci_verde_de_workflow_no_acreditado_no_merguea"
+{
+  c_ci_workflow_ajeno
+}
+fin_caso "ci_verde_de_workflow_no_acreditado_no_merguea"
+
+caso "ci_verde_viejo_reemplazado_por_rojo_no_merguea"
+{
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":41,"headSha":"%s"},{"event":"pull_request","status":"completed","conclusion":"failure","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" "$SHA" > "$SB/ghfix/runs.json"
+  correr --confirmado
+  _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
+  if merge_disparado; then _mal "mergeo con el intento vigente en rojo"; fi
+}
+fin_caso "ci_verde_viejo_reemplazado_por_rojo_no_merguea"
+
 caso "confirmado_repite_el_gate_base_movio_no_merguea"
 {
   # Decision 2026-08-30: el si confirma la INTENCION, no las condiciones.
@@ -448,7 +650,7 @@ fin_caso "confirmado_repite_el_gate_base_movio_no_merguea"
 
 caso "ci_rojo_no_merguea"
 {
-  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
   if merge_disparado; then _mal "mergeo con CI rojo"; fi
@@ -457,7 +659,7 @@ fin_caso "ci_rojo_no_merguea"
 
 caso "ci_verde_de_otro_sha_no_merguea"
 {
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"0000000000000000000000000000000000000000"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"0000000000000000000000000000000000000000"}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon sha ajeno" "$OUT" "NO-MERGE: CI verde pero de otro sha"
   if merge_disparado; then _mal "mergeo con verde de otro sha"; fi
@@ -466,7 +668,7 @@ fin_caso "ci_verde_de_otro_sha_no_merguea"
 
 caso "ci_sin_headSha_no_merguea"
 {
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
   if merge_disparado; then _mal "mergeo con verde sin headSha"; fi
@@ -475,7 +677,7 @@ fin_caso "ci_sin_headSha_no_merguea"
 
 caso "ci_headSha_null_no_merguea"
 {
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":null}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":null}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
   if merge_disparado; then _mal "mergeo con verde y headSha null"; fi
@@ -484,7 +686,7 @@ fin_caso "ci_headSha_null_no_merguea"
 
 c_ci_skipped() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"pull_request","status":"completed","conclusion":"skipped","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"skipped","workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
   _contiene "nombra skipped" "$OUT" "skipped"
@@ -493,7 +695,7 @@ c_ci_skipped() {
 
 c_solo_push() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"push","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
+  printf '[{"event":"push","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
   correr --confirmado
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
   _contiene "merge ok" "$OUT" "MERGE-OK:"
@@ -519,7 +721,7 @@ fin_caso "sin_checks_no_merguea"
 
 caso "ci_pendiente_no_merguea"
 {
-  printf '[{"event":"pull_request","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"in_progress","conclusion":null,"workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon CI pendiente" "$OUT" "NO-MERGE: CI pendiente"
   if merge_disparado; then _mal "mergeo con CI pendiente"; fi
@@ -545,83 +747,12 @@ caso "base_avanzada_no_merguea"
 }
 fin_caso "base_avanzada_no_merguea"
 
-caso "veredicto_de_otro_sha_no_merguea"
-{
-  sed -i.bak "s/\"sha\":\"$SHA\"/\"sha\":\"otro0000000000000000000000000000000000000\"/" ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon veredicto de otro sha" "$OUT" "NO-MERGE: veredicto de otro sha"
-  if merge_disparado; then _mal "mergeo con veredicto de otro sha"; fi
-}
-fin_caso "veredicto_de_otro_sha_no_merguea"
 
-caso "veredicto_reescrito_tras_el_sello_no_merguea"
-{
-  # El archivo en disco ya no es lo que el Write del reviewer materializo:
-  # el sha256 del estado ya no calza con el archivo actual.
-  printf '%s' "$(cat ".saikit/veredictos/$SHA.json")" | sed 's/"reviewer":"clean"/"reviewer":"clean","extra":1/' > ".saikit/veredictos/$SHA.json.new"
-  mv ".saikit/veredictos/$SHA.json.new" ".saikit/veredictos/$SHA.json"
-  correr --confirmado
-  _contiene "razon veredicto reescrito" "$OUT" "NO-MERGE: veredicto reescrito tras el sello"
-  if merge_disparado; then _mal "mergeo con el veredicto reescrito"; fi
-}
-fin_caso "veredicto_reescrito_tras_el_sello_no_merguea"
 
-caso "commits_despues_del_veredicto_no_merguea"
-{
-  sha_viejo="$SHA"
-  printf 'app v3\n' >> app.sh
-  git commit -qam "feat: un commit mas"
-  git push -q origin feat/task
-  refix
-  # Restaurar el veredicto viejo: existe veredicto para un ancestro, pero el
-  # HEAD avanzo despues del sello.
-  rm -f ".saikit/veredictos/$SHA.json"
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"h","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$sha_viejo" > ".saikit/veredictos/$sha_viejo.json"
-  correr --confirmado
-  _contiene "razon commits despues del veredicto" "$OUT" "NO-MERGE: commits despues del veredicto"
-  if merge_disparado; then _mal "mergeo con commits posteriores al veredicto"; fi
-}
-fin_caso "commits_despues_del_veredicto_no_merguea"
 
-caso "blast_nivel_menor_de_4_no_merguea"
-{
-  sed -i.bak 's/"nivel":4/"nivel":3/' ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon blast bajo" "$OUT" "NO-MERGE: blast.nivel < 4"
-  if merge_disparado; then _mal "mergeo con blast.nivel < 4"; fi
-}
-fin_caso "blast_nivel_menor_de_4_no_merguea"
 
-caso "verifier_fail_no_merguea"
-{
-  sed -i.bak 's/"verifier":"PASS"/"verifier":"FAIL"/' ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon verifier" "$OUT" "NO-MERGE: verifier: FAIL"
-  if merge_disparado; then _mal "mergeo con verifier FAIL"; fi
-}
-fin_caso "verifier_fail_no_merguea"
 
-caso "verify_app_na_sin_sin_verify_app_no_merguea"
-{
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"n/a","comando":null},"blast":{"nivel":4,"hecho":"h","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$SHA" > ".saikit/veredictos/$SHA.json"
-  correr --confirmado
-  _contiene "razon n/a sin permiso" "$OUT" "NO-MERGE: verify_app n/a sin sin_verify_app"
-  if merge_disparado; then _mal "mergeo con verify_app n/a sin sin_verify_app"; fi
-}
-fin_caso "verify_app_na_sin_sin_verify_app_no_merguea"
 
-caso "drive_fuera_de_verify_no_merguea"
-{
-  sed -i.bak 's|"comando":"bash verify/app.sh"|"comando":"npm test"|' ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon drive fuera de verify/" "$OUT" "NO-MERGE: verify/ fuera de"
-  if merge_disparado; then _mal "mergeo con el drive fuera de verify/"; fi
-}
-fin_caso "drive_fuera_de_verify_no_merguea"
 
 caso "config_ausente_no_merguea"
 {
@@ -721,130 +852,6 @@ caso "commit_de_otro_email_no_merguea"
 }
 fin_caso "commit_de_otro_email_no_merguea"
 
-caso "sin_estado_del_hook_no_merguea"
-{
-  rm -rf "$SB/estado"
-  correr --confirmado
-  _contiene "razon sin estado" "$OUT" "NO-MERGE: sin estado del hook"
-  if merge_disparado; then _mal "mergeo sin estado del hook"; fi
-}
-fin_caso "sin_estado_del_hook_no_merguea"
-
-caso "reviewer_no_visto_en_el_estado_no_merguea"
-{
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  sd="$SB/estado/claude/$key/sess1"
-  sed -i.bak 's/agents_seen=implementer,verifier,reviewer/agents_seen=implementer,verifier/' "$sd/harness-state.env"
-  rm -f "$sd/harness-state.env.bak"
-  correr --confirmado
-  _contiene "razon reviewer no visto" "$OUT" "NO-MERGE: el reviewer no paso"
-  if merge_disparado; then _mal "mergeo sin reviewer en agents_seen"; fi
-}
-fin_caso "reviewer_no_visto_en_el_estado_no_merguea"
-
-# 20.13: bajo grok, seal_boot sin linked_seal_session no es autoridad de merge.
-caso "grok_seal_boot_sin_vinculo_no_merguea"
-{
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  sd="$SB/estado/grok/$key/child-seal-boot"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h2013\n'
-    printf 'agents_seen=reviewer\n'
-    printf 'lane=seal_boot\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
-  correr --confirmado
-  _contiene "razon seal_boot grok sin vinculo" "$OUT" "NO-MERGE: sin estado del hook"
-  if merge_disparado; then _mal "mergeo con seal_boot grok sin linked_seal_session"; fi
-}
-fin_caso "grok_seal_boot_sin_vinculo_no_merguea"
-
-caso "grok_padre_con_linked_seal_session_listo"
-{
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  sd="$SB/estado/grok/$key/parent-linked"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h2013\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-    printf 'linked_children=child-x\n'
-    printf 'linked_seal_session=child-x\n'
-  } > "$sd/harness-state.env"
-  printf 'prompt task started: h2013\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
-  correr
-  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
-  _contiene "LISTO con padre grok vinculado" "$OUT" "LISTO:"
-  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
-}
-fin_caso "grok_padre_con_linked_seal_session_listo"
-
-caso "grok_dos_linked_seal_session_no_merguea"
-{
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  hash="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  for sess in parent-a parent-b; do
-    sd="$SB/estado/grok/$key/$sess"
-    mkdir -p "$sd"
-    {
-      printf 'task_hash=h2013\n'
-      printf 'agents_seen=implementer,verifier,reviewer\n'
-      printf 'lane=full\n'
-      printf 'veredicto_sha256=%s\n' "$hash"
-      printf 'linked_seal_session=child-%s\n' "$sess"
-    } > "$sd/harness-state.env"
-    printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
-  done
-  correr --confirmado
-  _contiene "razon vinculo ambiguo" "$OUT" "NO-MERGE: vinculo padre-hijo ambiguo"
-  if merge_disparado; then _mal "mergeo con dos linked_seal_session grok"; fi
-}
-fin_caso "grok_dos_linked_seal_session_no_merguea"
-
-# 20.13 corrección: linked viejo (sello de otro sha) no cuenta para ambigüedad;
-# el vigente del verdict actual deja LISTO. Sin el filtro por hash, n_linked=2
-# bloquearía merge para siempre tras la primera tarea del mismo repo.
-caso "grok_linked_viejo_mas_vigente_listo"
-{
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  hash_vigente="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  sd_viejo="$SB/estado/grok/$key/parent-tarea1-viejo"
-  mkdir -p "$sd_viejo"
-  {
-    printf 'task_hash=h2013-old\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
-    printf 'linked_children=child-old\n'
-    printf 'linked_seal_session=child-old\n'
-  } > "$sd_viejo/harness-state.env"
-  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd_viejo/harness-evidence.log"
-  sd_nuevo="$SB/estado/grok/$key/parent-tarea2-vigente"
-  mkdir -p "$sd_nuevo"
-  {
-    printf 'task_hash=h2013-new\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$hash_vigente"
-    printf 'linked_children=child-new\n'
-    printf 'linked_seal_session=child-new\n'
-  } > "$sd_nuevo/harness-state.env"
-  printf 'prompt task started: h2013-new\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd_nuevo/harness-evidence.log"
-  correr
-  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
-  _contiene "LISTO pese a linked viejo" "$OUT" "LISTO:"
-  _no_contiene "no declara ambiguo por linked viejo" "$OUT" "vinculo padre-hijo ambiguo"
-  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
-}
-fin_caso "grok_linked_viejo_mas_vigente_listo"
-
 caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
   # pre-receive del origin rechaza TODO push (incluido el --delete): el merge
@@ -917,7 +924,7 @@ Saikit-Merge: $SHA"
   printf '{"number":8,"baseRefName":"master","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$RHEAD" > "$SB/ghfix/pr.json"
   # 22.3: el verde del fixture es del HEAD del revert, no del feat/task que
   # dejo refix (HEAD avanzo con el merge de master + el revert).
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"%s"}]' "$RHEAD" > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$RHEAD" > "$SB/ghfix/runs.json"
 }
 
 caso "revert_inverso_exacto_merguea"
@@ -1130,7 +1137,7 @@ c_lock_caida() {
 c_lock_reintento_revalida() {
   # REINTENTO revalida (modo normal): B bloqueado por el lock; tras liberar,
   # la base avanzo mientras esperaba y el reintento RE-CORRE el gate completo
-  # (sello incluido: es el mismo camino de siempre, ahora bajo el lock) y NO
+  # (recibo incluido: es el mismo camino de siempre, ahora bajo el lock) y NO
   # mergea. Nada queda cacheado del intento anterior.
   CASO_ROJO=0; sb_reset master
   : > "$SAIKIT_GH_LOG"
@@ -1152,7 +1159,7 @@ c_lock_reintento_revalida() {
 c_revert_lock() {
   # Modo --revert-de cubierto por el mismo lock. El revert es STATELESS: no
   # hay estado del hook en el sandbox y el flujo llega al merge igual (el
-  # sello es cosa del modo normal).
+  # recibo es cosa del modo normal).
   CASO_ROJO=0; monta_revert
   [ ! -d "$SB/estado" ] || _mal "precondicion rota: monta_revert debia dejar el repo SIN estado (revert stateless)"
   : > "$SAIKIT_GH_LOG"
@@ -1212,9 +1219,8 @@ c_lock_entre_clones() {
   git -C "$SB/clone2" config user.email op@example.com
   git -C "$SB/clone2" config user.name op
   git -C "$SB/clone2" checkout -q feat/task
-  # La forma FISICA del root (pwd -P): el script clavea el estado con la
-  # misma derivacion, y en macOS $SB viene por /tmp (symlink de /private/tmp).
-  sembrar_sello "$(cd "$SB/clone2" && pwd -P)"
+  # A3: sin sello que sembrar — el clon hermano usa el mismo fixture de
+  # comments (mismo HEAD, mismo SHA) y el gate no consulta estado.
   SAIKIT_MERGE_SOSTENER_SEG=6 bash "$MERGE" --confirmado > "$SB/a.log" 2>&1 &
   a_pid=$!
   esperar_lock "$SB/work/.git/saikit-merge.lock" \
@@ -1400,7 +1406,7 @@ c_confirmado() {
 
 c_ci_pendiente() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"pull_request","status":"in_progress","conclusion":null,"workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"in_progress","conclusion":null,"workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon CI pendiente" "$OUT" "NO-MERGE: CI pendiente"
   if merge_disparado; then _mal "mergeo con CI pendiente"; fi
@@ -1408,7 +1414,7 @@ c_ci_pendiente() {
 
 c_ci_rojo() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"failure","workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon CI rojo" "$OUT" "NO-MERGE: CI rojo"
   if merge_disparado; then _mal "mergeo con CI rojo"; fi
@@ -1416,7 +1422,7 @@ c_ci_rojo() {
 
 c_ci_sha_ajeno() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci","headSha":"0000000000000000000000000000000000000000"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"0000000000000000000000000000000000000000"}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon sha ajeno" "$OUT" "NO-MERGE: CI verde pero de otro sha"
   if merge_disparado; then _mal "mergeo con verde de otro sha"; fi
@@ -1424,7 +1430,7 @@ c_ci_sha_ajeno() {
 
 c_ci_sha_ausente() {
   CASO_ROJO=0; sb_reset master
-  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflow":"ci"}]' > "$SB/ghfix/runs.json"
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42}]' > "$SB/ghfix/runs.json"
   correr --confirmado
   _contiene "razon sin headSha" "$OUT" "NO-MERGE: CI sin headSha"
   if merge_disparado; then _mal "mergeo con verde sin headSha"; fi
@@ -1438,31 +1444,8 @@ c_base_avanzada() {
   if merge_disparado; then _mal "mergeo con base vieja"; fi
 }
 
-c_reescrito() {
-  CASO_ROJO=0; sb_reset master
-  printf '%s' "$(cat ".saikit/veredictos/$SHA.json")" | sed 's/"reviewer":"clean"/"reviewer":"clean","extra":1/' > ".saikit/veredictos/$SHA.json.new"
-  mv ".saikit/veredictos/$SHA.json.new" ".saikit/veredictos/$SHA.json"
-  correr --confirmado
-  _contiene "razon veredicto reescrito" "$OUT" "NO-MERGE: veredicto reescrito tras el sello"
-  if merge_disparado; then _mal "mergeo con el veredicto reescrito"; fi
-}
 
-c_verify_na() {
-  CASO_ROJO=0; sb_reset master
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"n/a","comando":null},"blast":{"nivel":4,"hecho":"h","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":"d"}' "$SHA" > ".saikit/veredictos/$SHA.json"
-  correr --confirmado
-  _contiene "razon n/a sin permiso" "$OUT" "NO-MERGE: verify_app n/a sin sin_verify_app"
-  if merge_disparado; then _mal "mergeo con verify_app n/a sin sin_verify_app"; fi
-}
 
-c_verify_ruta() {
-  CASO_ROJO=0; sb_reset master
-  sed -i.bak 's|"comando":"bash verify/app.sh"|"comando":"npm test"|' ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon drive fuera de verify/" "$OUT" "NO-MERGE: verify/ fuera de"
-  if merge_disparado; then _mal "mergeo con el drive fuera de verify/"; fi
-}
 
 c_rama_base() {
   CASO_ROJO=0; sb_reset master
@@ -1487,67 +1470,8 @@ c_email() {
   if merge_disparado; then _mal "mergeo con un commit de otro email"; fi
 }
 
-c_sin_estado() {
-  CASO_ROJO=0; sb_reset master
-  rm -rf "$SB/estado"
-  correr --confirmado
-  _contiene "razon sin estado" "$OUT" "NO-MERGE: sin estado del hook"
-  if merge_disparado; then _mal "mergeo sin estado del hook"; fi
-}
 
-c_grok_seal_boot_sin_vinculo() {
-  # 20.13: mutacion grok_sin_exigir_vinculo acepta seal_boot y mergea.
-  CASO_ROJO=0; sb_reset master
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  sd="$SB/estado/grok/$key/child-seal-boot"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h2013\n'
-    printf 'agents_seen=reviewer\n'
-    printf 'lane=seal_boot\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
-  correr --confirmado
-  _contiene "razon seal_boot grok sin vinculo" "$OUT" "NO-MERGE: sin estado del hook"
-  if merge_disparado; then _mal "mergeo con seal_boot grok sin linked_seal_session"; fi
-}
 
-c_grok_linked_viejo_mas_vigente() {
-  # 20.13: mutacion grok_cuenta_linked_viejos vuelve a contar stale → ambiguo.
-  CASO_ROJO=0; sb_reset master
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  rm -rf "$SB/estado"
-  hash_vigente="$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  sd_viejo="$SB/estado/grok/$key/parent-tarea1-viejo"
-  mkdir -p "$sd_viejo"
-  {
-    printf 'task_hash=h2013-old\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
-    printf 'linked_children=child-old\n'
-    printf 'linked_seal_session=child-old\n'
-  } > "$sd_viejo/harness-state.env"
-  printf 'verified: bash tests/run.sh\nagent: reviewer\n' > "$sd_viejo/harness-evidence.log"
-  sd_nuevo="$SB/estado/grok/$key/parent-tarea2-vigente"
-  mkdir -p "$sd_nuevo"
-  {
-    printf 'task_hash=h2013-new\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$hash_vigente"
-    printf 'linked_children=child-new\n'
-    printf 'linked_seal_session=child-new\n'
-  } > "$sd_nuevo/harness-state.env"
-  printf 'prompt task started: h2013-new\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd_nuevo/harness-evidence.log"
-  correr
-  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $OUT"
-  _contiene "LISTO pese a linked viejo" "$OUT" "LISTO:"
-  _no_contiene "no declara ambiguo por linked viejo" "$OUT" "vinculo padre-hijo ambiguo"
-  if merge_disparado; then _mal "mergueo en default sin --confirmado"; fi
-}
 
 c_borrado() {
   CASO_ROJO=0; sb_reset master
@@ -1559,14 +1483,6 @@ c_borrado() {
   [ "$n" -eq 1 ] || _mal "intentos de borrado: esperaba 1, hubo ${n:-0}"
 }
 
-c_verifier_fail() {
-  CASO_ROJO=0; sb_reset master
-  sed -i.bak 's/"verifier":"PASS"/"verifier":"FAIL"/' ".saikit/veredictos/$SHA.json"
-  rm -f ".saikit/veredictos/$SHA.json.bak"
-  correr --confirmado
-  _contiene "razon verifier" "$OUT" "NO-MERGE: verifier: FAIL"
-  if merge_disparado; then _mal "mergeo con verifier FAIL"; fi
-}
 
 c_autor() {
   CASO_ROJO=0; sb_reset master
@@ -1647,16 +1563,9 @@ ci_sin_presence_sha	s#if \[ -z "\$head" \] || \[ "\$head" = "<null>" \]; then#if
 skipped_es_verde	s/\[ "\$conc" != success \]/[ "$conc" != success ] \&\& [ "$conc" != skipped ]/	c_ci_skipped
 solo_push_exige_pr	s/\[ "\$n" -gt 0 \] || no_merge "sin checks/[ "$hay_pr" = 0 ] \&\& no_merge "exige pull_request"; [ "$n" -gt 0 ] || no_merge "sin checks/	c_solo_push
 base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avanzada
-sello_no_se_compara	s|\[ "\$SELLO" = "\$hash_actual" \]|true|	c_reescrito
-verify_na_flojo	s|\[ "\$CFG_SIN_VERIFY_APP" != "true" \]|false|	c_verify_na
-verify_ruta_floja	s|grep -q -- 'verify/'|true|	c_verify_ruta
 rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
 email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
-estado_opcional	s|if \[ -z "\$ESTADO_FILE" \]; then|if false; then|	c_sin_estado
-grok_sin_exigir_vinculo	s|grep -q '^linked_seal_session=' "\$f" 2>/dev/null || continue|true|	c_grok_seal_boot_sin_vinculo
-grok_cuenta_linked_viejos	s|\[ -n "\$sello_f" \] && \[ "\$sello_f" = "\$hash_file" \] || continue|true|	c_grok_linked_viejo_mas_vigente
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
-verifier_flojo	s|\[ "\$V_VERIFIER" = "PASS" \]|true|	c_verifier_fail
 autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor
 revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer
 revert_arbol_por_patchid	s|\[ "\$T_REVERT" = "\$T_PREVIO" \]|true|	c_revert_arbol
@@ -1668,6 +1577,10 @@ emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:
 lock_sin_guard	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if true; then|	c_lock_exclusion
 lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -p "\$LOCK_DIR" 2>/dev/null; then|	c_lock_exclusion
 trap_no_libera	s|^liberar_propio() {$|liberar_propio() { return 0; #|	c_lock_libera_propio
+recibo_opcional	s/$(entrega_validar/$(true/	c_recibo_sin_reviewer
+ci_juzga_intento_viejo	s/\$2 > bestnum\[$1\]/$2 < bestnum[$1]/	c_ci_intento_viejo
+ci_acepta_workflow_ajeno	s/if \[ -n "\$requerido" \] \&\& \[ "\$w" != "\$requerido" \]; then/if false; then/	c_ci_workflow_ajeno
+recheck_head_opcional	s/no_merge "el head del PR avanzo/true # sin recheck; no_merge "el head del PR avanzo/	c_head_avanza
 MUTS
 
 # ---------------------------------------- meta: el banco se audita a si mismo

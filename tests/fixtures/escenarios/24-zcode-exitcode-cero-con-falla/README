@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 zcode, G2 / A11 en forma zcode. Un PostToolUse de Bash cuyo tool_response trae
 exitCode: 0 (la forma de zcode, medida 5.1) PERO el stdout tiene un fracaso
 (AssertionError: ...). A11 (Task 3.8) retiro la lectura de exitCode: verified

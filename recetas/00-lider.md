@@ -37,6 +37,9 @@ Un hecho que se observa corriendo algo no es pregunta para el humano: boceto.
 ## Descripción de un PR
 Why / Scope / Tradeoffs / Blast radius / Verification. Nunca draft. Cinco PRs chicos antes que uno grande.
 
+## Entrega
+La entrega exige los roles por el recibo, no por el turno: implementer, verifier y reviewer independientes, registrados con su evidencia en el comentario `APPROVE lead <sha>` del PR. Una cross-review satisface el rol reviewer. Solo un bloqueante con reproducción abre otra ronda; cada ronda siguiente revisa solo el diff de los arreglos con otro revisor.
+
 ## Cuando retomas trabajo ajeno
 El rastro previo es autoritativo. No rehagas. Verifica lo heredado contra el artefacto real.
 

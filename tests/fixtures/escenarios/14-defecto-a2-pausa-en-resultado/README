@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 Defecto A2, grabado: la pausa se busca en el tail del transcript entero, que
 incluye resultados de herramientas. Aca la cadena de pausa aparece SOLO adentro
 del resultado de un Read: el asistente nunca la escribio, y sin embargo el gate
