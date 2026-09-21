@@ -1654,6 +1654,14 @@ caso_g2_runner_punto_y_coma_tapa_exit_no_acredita() {
   lab_sembrar 123456 0 0 0 ""
   lab_run tool claude "$(lab_payload_bash 'pytest -q ; echo listo' 'listo')"
   _igual "pytest con ; echo y salida limpia no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'bash tests/run.sh ; grep EXIT:0 notas.txt' 'sin coincidencias')"
+  _igual "EXIT:0 solo en el comando no acredita" "$(lab_estado verified)" "0"
+
+  lab_sembrar 123456 0 0 0 ""
+  lab_run tool claude "$(lab_payload_bash 'pytest -q\n echo listo' 'listo')"
+  _igual "pytest con salto literal y echo despues no acredita" "$(lab_estado verified)" "0"
 }
 
 # 23.16, control verde: con `EXIT:0` en la salida el `;` no tapa — el exit del

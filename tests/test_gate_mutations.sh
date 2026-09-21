@@ -101,7 +101,7 @@ G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutra
 G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
-G2|runner_mascarado_apagado|el veto del runner tapado por `;` se neutraliza y `bash tests/run.sh ; echo` vuelve a acreditar sin evidencia del exit
+G2|runner_mascarado_apagado|el veto del runner tapado por ';' se neutraliza y 'bash tests/run.sh ; echo' vuelve a acreditar sin evidencia del exit
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G1|muse_tope_borde_ge|el tope de muse compara con -ge y una salida de 16384 bytes exactos, que Muse si acepta, cae al contrato minimo

@@ -583,14 +583,16 @@ ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 # comando sale con el exit del ULTIMO (`echo` sale 0 aunque el runner haya
 # reventado) y la salida puede no traer senal de fracaso. El `&&` preserva el
 # exit del runner (si revienta, lo de atras no corre), asi que solo el `;`
-# exige evidencia del exit en la salida: `EXIT:0` textual (lo que
-# `echo EXIT:$?` imprime cuando el runner salio 0). El `\n` LITERAL tambien
-# separa comandos (tool_input.command llega SIN decodificar), asi que un
-# runner que no cierra la ultima linea es el mismo caso. Limites declarados:
+# exige evidencia del exit del lado de la RESPUESTA: `EXIT:0` textual
+# (lo que `echo EXIT:$?` imprime cuando el runner salio 0), leido desde
+# `"tool_response"` y nunca del comando - un `EXIT:0` citado en el comando
+# (`grep EXIT:0 ... ; pytest`) no vale. El `\n` LITERAL tambien separa
+# comandos (tool_input.command llega SIN decodificar), asi que un runner que
+# no cierra la ultima linea es el mismo caso. Limites declarados:
 # `||` y `|` tambien tapan el exit y quedan fuera (best-effort, sin parser de
 # shell); un `EXIT:0` ajeno al runner en la misma salida acredita de mas
 # (advisory, fail-open).
-SAIKIT_RUNNER_MASCARADO_RE="($TEST_RUNNER_RE|tests?/run\.sh)(([^;\\]|\\n)*;|\\n.+)"
+SAIKIT_RUNNER_MASCARADO_RE="($TEST_RUNNER_RE|tests?/run\.sh)([^;\\\\]|\\\\n)*(;|\\\\n.+)"
 SAIKIT_EXIT_CERO_RE='EXIT:[[:space:]]*0([^0-9]|$)'
 
 json_string_field() {
@@ -3391,7 +3393,7 @@ record_tool_evidence() {
        && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
               || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; } \
        && { ! printf '%s' "$command_text" | grep -Eiq "$SAIKIT_RUNNER_MASCARADO_RE" \
-            || printf '%s' "$combined" | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
+            || printf '%s' "$INPUT" | tr '\n' ' ' | sed -n 's/.*"tool_response"//p' | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi
