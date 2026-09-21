@@ -9,11 +9,11 @@
 #   omit_no_admin           — no afirma ausencia de --admin
 #   omit_no_delete_branch   — no afirma ausencia de --delete-branch
 #   omit_ci_revalidated     — confirmado sin observar gh run list
-#   omit_sello_intact       — confirmado sin observar sello intacto
+#   omit_recibo_consultado  — confirmado sin observar la consulta del recibo
 #   omit_ci_rojo            — CI rojo como OK
 #   omit_base_movida        — base avanzada como OK
-#   omit_sello_ajeno        — veredicto de otro sha como OK
-#   omit_head_cambiado      — commits tras el sello como OK
+#   omit_recibo_ajeno       — recibo de otro sha como OK
+#   omit_recibo_revocado    — recibo revocado como OK
 #   omit_revert_trailer     — revert sin trailer como OK
 #   omit_revert_punta       — revert que no es la punta como OK
 #   extra_repo              — gh pr merge --repo unexpected/other
@@ -111,7 +111,7 @@ assert (ex.get("path") or "").endswith("saikit-merge.sh")
 cases = {c.get("id"): c for c in (desc.get("cases") or [])}
 need = (
     "merge-listo", "merge-confirmado", "merge-ci-rojo", "merge-base-movida",
-    "merge-sello-ajeno", "merge-head-cambiado",
+    "merge-recibo-ajeno", "merge-recibo-revocado",
     "revert-ok", "revert-sin-trailer", "revert-no-punta",
 )
 for cid in need:
@@ -175,7 +175,7 @@ cases = s.get("cases") or s.get("cases_requested") or []
 text = " ".join(cases) if not isinstance(cases, str) else cases
 for need in (
     "merge-listo", "merge-confirmado", "merge-ci-rojo", "merge-base-movida",
-    "merge-sello-ajeno", "merge-head-cambiado",
+    "merge-recibo-ajeno", "merge-recibo-revocado",
     "revert-ok", "revert-sin-trailer", "revert-no-punta",
 ):
     assert need in text, (need, cases)
@@ -189,15 +189,15 @@ assert_obs saikit-merge match_head '--match-head-commit [0-9a-f]{7,}'
 assert_obs saikit-merge no_admin 'sin --admin|no --admin|--admin ausente'
 assert_obs saikit-merge no_delete_branch 'sin --delete-branch|no --delete-branch|--delete-branch ausente'
 assert_obs saikit-merge ci_revalidated 'gh run list'
-assert_obs saikit-merge sello_intact 'intact|igual|unchanged|byte'
+assert_obs saikit-merge recibo_consultado 'api repos/op/sandbox/issues/7/comments'
 assert_obs saikit-merge reject_ci_rojo 'NO-MERGE: CI rojo'
 assert_obs saikit-merge no_merge_on_ci_rojo 'no merge|sin merge|ausente'
 assert_obs saikit-merge reject_base_avanzada 'NO-MERGE: base avanzada'
 assert_obs saikit-merge no_merge_on_base 'no merge|sin merge|ausente'
-assert_obs saikit-merge reject_sello_ajeno 'NO-MERGE: veredicto de otro sha'
-assert_obs saikit-merge no_merge_on_sello 'no merge|sin merge|ausente'
-assert_obs saikit-merge reject_head_cambiado 'NO-MERGE: commits despues del veredicto'
-assert_obs saikit-merge no_merge_on_head 'no merge|sin merge|ausente'
+assert_obs saikit-merge reject_recibo_ajeno 'NO-MERGE: recibo: sha distinto'
+assert_obs saikit-merge no_merge_on_recibo 'no merge|sin merge|ausente'
+assert_obs saikit-merge reject_recibo_revocado 'NO-MERGE: recibo: revocado'
+assert_obs saikit-merge no_merge_on_revocado 'no merge|sin merge|ausente'
 assert_obs saikit-merge revert_merge_ok 'MERGE-OK:'
 assert_obs saikit-merge revert_match_head '--match-head-commit [0-9a-f]{7,}'
 assert_obs saikit-merge reject_sin_trailer 'NO-MERGE: sin trailer'
@@ -299,9 +299,9 @@ run_mut omit_ci_revalidated \
   '/assert:ci_revalidated/,/assert:ci_revalidated_end/d' \
   ci_revalidated 'gh run list'
 
-run_mut omit_sello_intact \
-  '/assert:sello_intact/,/assert:sello_intact_end/d' \
-  sello_intact 'intact|igual|unchanged|byte'
+run_mut omit_recibo_consultado \
+  '/assert:recibo_consultado/,/assert:recibo_consultado_end/d' \
+  recibo_consultado 'api repos/'
 
 run_mut omit_ci_rojo \
   '/assert:reject_ci_rojo/,/assert:reject_ci_rojo_end/d' \
@@ -311,13 +311,13 @@ run_mut omit_base_movida \
   '/assert:reject_base_avanzada/,/assert:reject_base_avanzada_end/d' \
   reject_base_avanzada 'base avanzada'
 
-run_mut omit_sello_ajeno \
-  '/assert:reject_sello_ajeno/,/assert:reject_sello_ajeno_end/d' \
-  reject_sello_ajeno 'veredicto de otro sha'
+run_mut omit_recibo_ajeno \
+  '/assert:reject_recibo_ajeno/,/assert:reject_recibo_ajeno_end/d' \
+  reject_recibo_ajeno 'sha distinto'
 
-run_mut omit_head_cambiado \
-  '/assert:reject_head_cambiado/,/assert:reject_head_cambiado_end/d' \
-  reject_head_cambiado 'commits despues del veredicto'
+run_mut omit_recibo_revocado \
+  '/assert:reject_recibo_revocado/,/assert:reject_recibo_revocado_end/d' \
+  reject_recibo_revocado 'revocado'
 
 run_mut omit_revert_trailer \
   '/assert:reject_sin_trailer/,/assert:reject_sin_trailer_end/d' \

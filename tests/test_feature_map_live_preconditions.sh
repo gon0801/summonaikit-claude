@@ -2,14 +2,14 @@
 # tests/test_feature_map_live_preconditions.sh — 19.16: merge vivo inventariado.
 #
 # DoD: sin autorización/destino → unknown/BLOCKED y ninguna llamada externa;
-# dependencias actuales nombradas; dobles no acreditan vivo; no transfiere
-# sello hijo-padre; simulación no llena la aserción de merge vivo; medición
-# viva sigue Optional (el procedimiento se define, no se ejecuta).
+# dependencias actuales nombradas; dobles no acreditan vivo; simulación no
+# llena la aserción de merge vivo; medición viva sigue Optional (el
+# procedimiento se define, no se ejecuta). Bloque A: sin sellos no hay
+# transferencia hijo-padre que prohibir (live-no-seal-transfer retirado).
 #
 # Mutaciones (copia del driver; SAIKIT_FM_DRIVER):
 #   perm_as_pass      — permiso faltante se presenta como PASS
 #   fake_gh_as_live   — gh script acredita acceso vivo
-#   seal_via_mtime    — sello hijo → padre por mtime/verified
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -177,7 +177,6 @@ for need in (
     "live-current-reasons",
     "live-manual-procedure",
     "live-no-sim-credit",
-    "live-no-seal-transfer",
 ):
     assert need in ids, (need, ids)
 for c in desc.get("cases") or []:
@@ -287,7 +286,6 @@ for need in (
     "live-current-reasons",
     "live-manual-procedure",
     "live-no-sim-credit",
-    "live-no-seal-transfer",
 ):
     assert need in text, (need, cases)
 PY
@@ -301,9 +299,6 @@ assert_obs merge-happy-path procedure_defined 'topic'
 assert_obs merge-happy-path procedure_not_run 'no-autoriza-ejecutar'
 assert_obs merge-happy-path sim_not_live 'simulated'
 assert_unknown merge-happy-path live_merge 'live-merge-not-run'
-assert_obs merge-happy-path parent_seal_untouched 'parent-untouched'
-assert_obs merge-happy-path no_mtime_transfer 'no-mtime-transfer'
-assert_obs merge-happy-path no_verified_transfer 'no-verified-transfer'
 
 if [ -f "$PROBELOG" ]; then
   if grep -Eq 'gh (pr|api|auth|repo|run)|curl |ssh ' "$PROBELOG"; then
@@ -387,18 +382,6 @@ if [ -f "$DRV" ]; then
     export PATH
     assert_missing_or_fail merge-happy-path reason_gh 'falso' "$mrc"
     [ "$mrc" -eq 0 ] && malo "fake_gh_as_live no debio dejar drive en PASS/0"
-  fi
-
-  caso "mutante seal_via_mtime: sello hijo a padre se pone rojo"
-  reset_art
-  mut="$SANDBOX/mhp-seal_via_mtime.sh"
-  if sed_must_change "$SANDBOX/mhp.src.sh" "$mut" \
-    '/mutate:seal_via_mtime$/,/mutate:seal_via_mtime_end$/s/do_transfer=no/do_transfer=yes/' \
-    seal_via_mtime
-  then
-    out="$(ctrl_drv "$mut" drive merge-happy-path 2>&1)" && mrc=0 || mrc=$?
-    assert_missing_or_fail merge-happy-path parent_seal_untouched 'parent-untouched' "$mrc"
-    [ "$mrc" -eq 0 ] && malo "seal_via_mtime no debio dejar drive en PASS/0"
   fi
 fi
 

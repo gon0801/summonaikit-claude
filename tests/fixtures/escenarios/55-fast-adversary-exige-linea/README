@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 D6 caso 9 (Task 13.5): lane fast con adversary visto. La ceremonia no se exige en fast,
 pero los labels del recibo si, y la linea ADVERSARY no es excepcion (B1). Bloquea solo
 por la linea faltante.

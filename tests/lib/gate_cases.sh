@@ -345,6 +345,11 @@ _RECIBO_ROLE_FALLBACK_ADVERSARY='SUMMONAIKIT HARNESS RECEIPT\n- Understand: pedi
 # Un turno sembrado como "todo en orden salvo lo que el caso quiera romper".
 _sembrar_turno_completo() { lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"; }
 
+# A6: siembra una violacion adversary en el estado ya sembrado (la unica via
+# de bloqueo del Stop que queda tras retirar la ceremonia). Va DESPUES de
+# lab_sembrar; $1 = ruta violada (opcional).
+_sem_violation_adversary() { printf 'adv_violation=1\nadv_violation_paths=%s\n' "${1:-src/fuera.ts}" >> "$LAB_ESTADO_PATH"; }
+
 # ============================================================== LAB (auto-test)
 # El banco siembra estado escribiendo en la ruta que descubrio al arrancar. Si
 # esa ruta dejara de ser la que el hook usa, TODOS los casos sembrados pasarian
@@ -908,7 +913,10 @@ caso_g1_prompt_vacio_no_desarma() {
 # pasar. Gemelo de caso_g3_eco_fuera_de_tool_input_no_cuenta para session_id.
 # Hallazgo [media] de la cross-review codex sobre la 3.4.
 caso_g1_session_id_anidado_no_reescribe_ruta() {
-  lab_sembrar 123456 0 0 0 ""   # estado armado e incompleto (missing) bajo ESTA sesion
+  # A6: la prueba de ruta viaja por violacion adversary (la ceremonia ya no
+  # bloquea); si viera el estado de otra sesion, permitiria.
+  lab_sembrar 123456 0 0 0 "adversary"   # estado armado bajo ESTA sesion
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop_con_cron_intruso 'cierre con cron intruso')"
   _igual "Stop con session_id anidado sigue viendo el estado de ESTA sesion (A4/C2)" "$LAB_RC" "2"
 }
@@ -1355,6 +1363,8 @@ caso_g1_autopilot_sufijo_desconocido_sin_flag() {
 # armado (con autopilot=1); no se siembra a mano.
 caso_g1_autopilot_parrafo_en_gate_failure() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot cierra la task')"
+  # A6: el fallo viaja por violacion adversary (la ceremonia ya no bloquea).
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop 'cierre sin recibo')"
   _contiene "feedback del gate con parrafo autopilot" "$LAB_OUT" 'Autopilot lane'
 }
@@ -1366,6 +1376,9 @@ caso_g1_autopilot_parrafo_en_gate_failure() {
 caso_g1_autopilot_parrafo_una_vez_en_grok() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit:autopilot cierra la task')"
+  # A6: el fallo viaja por violacion adversary (la ceremonia ya no bloquea).
+  _gk0="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  printf 'adv_violation=1\nadv_violation_paths=src/fuera.ts\n' >> "$_gk0"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'cierre sin recibo' end_turn)"
   LAB_GROK_HOOK_EVENT=""
@@ -1384,19 +1397,23 @@ caso_g1_autopilot_sobrevive_mark_evidence() {
   lab_run tool claude "$(lab_payload_bash 'pytest -q')"
   _igual "autopilot tras mark_evidence" "$(lab_estado autopilot)" "1"
   _igual "verified tras pytest" "$(lab_estado verified)" "1"
+  # A6: el fallo viaja por violacion adversary (la ceremonia ya no bloquea).
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop 'cierre sin recibo')"
   _contiene "Stop con parrafo autopilot" "$LAB_OUT" 'Autopilot lane'
 }
 
 # Gemelo por el write_state de record_agent (linea antes de printf 'agent:').
 # Un despacho Agent no pasa por mark_evidence, asi que el caso de arriba
-# no lo ata. Residual medido: verdict_registrar_sello y adv_reescribir_estado
-# siguen sin caso propio; uno no puede atrapar los cuatro.
+# no lo ata. Residual medido: adv_reescribir_estado sigue sin caso propio
+# (A7 retiro verdict_registrar_sello).
 caso_g1_autopilot_sobrevive_record_agent() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot cierra la task')"
   lab_run tool claude "$(lab_payload_agent 'implementer')"
   _igual "autopilot tras record_agent" "$(lab_estado autopilot)" "1"
   _igual "agents_seen tras implementer" "$(lab_estado agents_seen)" "implementer"
+  # A6: el fallo viaja por violacion adversary (la ceremonia ya no bloquea).
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop 'cierre sin recibo')"
   _contiene "Stop con parrafo autopilot" "$LAB_OUT" 'Autopilot lane'
 }
@@ -1408,13 +1425,20 @@ caso_g5_autopilot_parrafo_en_budget_agotado() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:autopilot cierra la task')"
   if [ ! -f "$LAB_ESTADO_PATH" ]; then _mal "el armado autopilot debio crear estado"; fi
   _tmp="$(mktemp)"; sed 's/^cycle=.*/cycle=2/' "$LAB_ESTADO_PATH" > "$_tmp" && cat "$_tmp" > "$LAB_ESTADO_PATH"; rm -f "$_tmp"
+  # A6: el presupuesto se agota por la via adversary (la ceremonia ya no
+  # bloquea); el parrafo autopilot del tercer emisor sigue intacto.
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop 'cierre sin recibo')"
   _contiene "budget exhausted" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
   _contiene "budget exhausted con parrafo autopilot" "$LAB_OUT" 'Autopilot lane'
 }
 
 # ============================================ G2 — evidencia de verificacion
-CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_bloquea caso_g2_zcode_verif_subagente_fallido_bloquea caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_bloquea caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_bloquea caso_g2_zcode_verif_subagente_exit1_bloquea caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea caso_g2_zcode_verif_subagente_cero_passed_bloquea caso_g2_zcode_verif_subagente_cero_passing_bloquea caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_bloquea caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_bloquea caso_g2_zcode_verif_subagente_disperso_bloquea caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_bloquea caso_g2_zcode_verif_label_runner_propio_acredita caso_g2_zcode_verif_label_runner_propio_directo_acredita caso_g2_zcode_verif_label_runner_propio_dotslash_acredita caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita caso_g2_zcode_verif_label_spans_separados_no_acreditan caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice caso_g2_zcode_verif_label_decoy_de_path_no_acredita caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_bloquea caso_g2_muse_verif_subagente_acredita caso_g2_muse_verif_subagente_sin_verifier_bloquea"
+# A6 (Bloque A): el Stop ya no exige evidencia ni ceremonia; los casos que
+# afirmaban bloqueo (*_bloquea) se INVIERTEN a cierre (*_cierra) y quedan
+# como pines contra la reintroduccion de la ceremonia. El riel de eventos
+# (verified/agents_seen) sigue intacto y sus casos no cambian.
+CASOS_G2="caso_g2_runner_marca_verificado caso_g2_runner_en_background_no_acredita caso_g2_sin_runner_no_marca caso_g2_runner_no_encontrado_no_marca caso_g2_runner_fallido_forma_real caso_g2_runner_fallido_pytest_summary_no_marca caso_g2_runner_fallido_tsc_no_marca caso_g2_runner_fallido_phpunit_no_marca caso_g2_runner_fallido_cargo_no_marca caso_g2_runner_fallido_go_no_marca caso_g2_runner_pasa_0_failed_sigue_acreditado caso_g2_runner_pasa_typeerror_en_comando_sigue_acreditado caso_g2_sin_armar_no_crea_estado caso_g2_falta_evidencia_no_reclama caso_g2_evidencia_presente_no_reclama caso_g2_excusa_declarada_no_reclama caso_g2_excusa_espanol_no_reclama caso_g2_runner_en_path_no_marca caso_g2_runner_con_ruta_marca caso_g2_excusa_con_punto_final_no_reclama caso_g2_credenciales_en_comando_se_redactan caso_g2_comando_sin_credenciales_no_se_altera caso_g2_credenciales_en_ruta_de_edicion_se_redactan caso_g2_credencial_entrecomillada_se_redacta_entera caso_g2_credenciales_token_nuevas_se_redactan caso_g2_comando_entrecomillado_marca_verificado caso_g2_eco_de_command_en_tool_response_no_marca caso_g2_eco_de_tool_name_en_tool_response_no_marca caso_g2_runner_bash_run_sh_marca caso_g2_runner_bash_ruta_absoluta_marca caso_g2_runner_bash_tras_and_marca caso_g2_runner_run_sh_directo_marca caso_g2_runner_run_sh_en_cat_no_marca caso_g2_runner_run_sh_en_grep_no_marca caso_g2_runner_bash_con_args_marca caso_g2_runner_zsh_marca caso_g2_runner_decoy_contest_no_marca caso_g2_runner_decoy_typo_no_marca caso_g2_runner_decoy_grep_bash_no_marca caso_g2_runner_decoy_printf_no_marca caso_g2_runner_decoy_echo_no_marca caso_g2_runner_fallido_dotnet_no_marca caso_g2_runner_fallido_gradle_no_marca caso_g2_dotnet_exitoso_sigue_acreditado caso_g2_runner_en_echo_no_marca caso_g2_echo_seguido_de_runner_no_acredita caso_g2_runner_con_and_y_var_sigue_acreditando caso_g2_tool_name_runner_con_comando_ajeno_no_marca caso_g2_grok_write_marca_implemented caso_g2_grok_runner_marca_verificado caso_g2_grok_runner_fallido_no_marca caso_g2_grok_nomatchesfound_no_marca caso_g2_grok_edit_marca_implemented caso_g2_grok_precedencia_toolinput_gana_snake caso_g2_grok_precedencia_toolname_gana_snake caso_g2_zcode_verif_subagente_acredita caso_g2_zcode_verif_subagente_sin_comando_cierra caso_g2_zcode_verif_subagente_fallido_cierra caso_g2_claude_verif_subagente_no_acredita caso_g2_zcode_verif_subagente_sin_verifier_cierra caso_g2_claude_label_no_corta_la_prosa_de_runner caso_g2_zcode_verif_subagente_sin_resultado_cierra caso_g2_zcode_verif_subagente_exit1_cierra caso_g2_zcode_verif_subagente_exito_luego_fallo_cierra caso_g2_zcode_verif_subagente_fallo_luego_exito_cierra caso_g2_zcode_verif_subagente_cero_passed_cierra caso_g2_zcode_verif_subagente_cero_passing_cierra caso_g2_zcode_verif_label_de_turno_anterior_no_acredita caso_g2_zcode_verif_subagente_fallo_pelado_cierra caso_g2_zcode_verif_subagente_cero_failed_acredita caso_g2_zcode_verif_subagente_sin_fallos_acredita caso_g2_zcode_verif_subagente_cmd_con_error_acredita caso_g2_zcode_verif_subagente_zero_failed_acredita caso_g2_zcode_verif_subagente_fallo_pegado_cierra caso_g2_zcode_verif_subagente_disperso_cierra caso_g2_zcode_verif_subagente_falso_positivo_acredita caso_g2_zcode_verif_subagente_minusculas_acredita caso_g2_zcode_verif_subagente_no_en_verde_cierra caso_g2_zcode_verif_label_runner_propio_acredita caso_g2_zcode_verif_label_runner_propio_directo_acredita caso_g2_zcode_verif_label_runner_propio_dotslash_acredita caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita caso_g2_zcode_verif_label_spans_separados_no_acreditan caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita caso_g2_zcode_verif_label_decoy_de_path_no_acredita caso_g2_dsh_ceremonia_cierra caso_g2_dsh_sin_recibo_cierra caso_g2_muse_verif_subagente_acredita caso_g2_muse_verif_subagente_sin_verifier_cierra"
 
 # C1, tercio de evidencia (auditoria 2026-08-13, Task 8.1) — un runner
 # entrecomillado dentro de bash -c perdia el credito: json_string_field cortaba
@@ -1669,25 +1693,22 @@ caso_g2_sin_armar_no_crea_estado() {
 # Los tres casos que siguen usan un recibo al que le falta la linea Retro: el
 # turno se bloquea igual, y eso permite LEER el motivo y afirmar sobre la linea
 # de verificacion, que es lo que este gate decide.
-caso_g2_falta_evidencia_reclama() {
+caso_g2_falta_evidencia_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 caso_g2_evidencia_presente_no_reclama() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _igual "exit code" "$LAB_RC" "0"
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 caso_g2_excusa_declarada_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_SALTEADO")"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
@@ -1695,7 +1716,6 @@ caso_g2_excusa_declarada_no_reclama() {
 caso_g2_excusa_espanol_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_NO_CORRI")"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
@@ -1722,30 +1742,32 @@ caso_g2_zcode_verif_subagente_acredita() {
 
 # (a) label CON resultado pero SIN comando — la bateria/resultado sin un comando
 # re-corrible: no acredita (sin rastro de comando), sigue BLOQUEANDO.
-caso_g2_zcode_verif_subagente_sin_comando_bloquea() {
+caso_g2_zcode_verif_subagente_sin_comando_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_SIN_COMANDO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (a-bis) label CON comando pero SIN resultado — el comando corrio pero no se
 # declara resultado observable: no acredita (sin rastro de resultado), BLOQUEA.
 # Separado de (a): quitar el requisito de comando o el de resultado deja el otro
 # caso discriminando (si van juntos, quitar uno solo deja la bateria verde).
-caso_g2_zcode_verif_subagente_sin_resultado_bloquea() {
+caso_g2_zcode_verif_subagente_sin_resultado_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_SIN_RESULTADO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # Phase 15 — la ceremonia bajo HOST=dsh (Stop claude-like, JSON). dsh entra al
@@ -1766,21 +1788,19 @@ caso_g2_dsh_ceremonia_cierra() {
 # Sin el verifier (agent_type=verifier no despachado) => la ceremonia bloquea
 # (exit 2, Missing verifier subagent run). Es lo que ata que dsh exija la
 # secuencia implementer -> verifier -> reviewer (D1/D3, como claude).
-caso_g3_dsh_ceremonia_incompleta_bloquea() {
+caso_g3_dsh_ceremonia_incompleta_cierra() {
   lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool dsh "$(lab_payload_agent 'implementer')"
   lab_run tool dsh "$(lab_payload_bash 'pytest -q' 0)"
   lab_run tool dsh "$(lab_payload_agent 'reviewer')"
   lab_run stop dsh "$(lab_payload_stop "$_RECIBO_VINETAS")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_ERR" 'Missing verifier subagent run'
+  _igual "exit code" "$LAB_RC" "0"
 }
 # Sin recibo => el Stop de dsh bloquea (exit 2) con el recibo ausente.
-caso_g2_dsh_sin_recibo_bloquea() {
+caso_g2_dsh_sin_recibo_cierra() {
   lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run stop dsh "$(lab_payload_stop 'Listo.')"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 _muse_ceremonia_roles() {
@@ -1805,94 +1825,99 @@ caso_g2_muse_verif_subagente_acredita() {
   LAB_ESTADO_PATH="$_mu_backup"
 }
 
-caso_g2_muse_verif_subagente_sin_verifier_bloquea() {
+caso_g2_muse_verif_subagente_sin_verifier_cierra() {
   _mu_backup="$LAB_ESTADO_PATH"
   _muse_ceremonia_roles sin_verifier
   lab_run stop muse "$(lab_payload_muse_derivado stop-verif-subagente.json)"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_ERR" 'no verifier subagent ran this turn'
+  _igual "exit code" "$LAB_RC" "0"
   LAB_ESTADO_PATH="$_mu_backup"
 }
 
 # (b) label con resultado FALLIDO ("12 passed, failed: 1") — el veto
 # FAILURE_SIGNAL_RE_CI/CS lo descalifica: sigue BLOQUEANDO (caso de Greptile).
-caso_g2_zcode_verif_subagente_fallido_bloquea() {
+caso_g2_zcode_verif_subagente_fallido_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLIDO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-bis) label con "exit 1" — FAILURE_SIGNAL_RE_CI/CS NO cubren esta forma; el
 # veto propio del label agrega exit[[:space:]]+[1-9] (responsabilidad del lead):
 # sigue BLOQUEANDO.
-caso_g2_zcode_verif_subagente_exit1_bloquea() {
+caso_g2_zcode_verif_subagente_exit1_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_EXIT1")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-2) DOS labels, exito y luego fallo (Greptile P1, PR #72): el veto mira TODOS
 # los spans, asi que el fallo del segundo descalifica: BLOQUEA. Lo atrapa la
 # mutacion verif_subagente_solo_primer_span (vuelve al `head -n1`: el fallo
 # queda invisible y el recibo acredita — este caso se pone rojo).
-caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea() {
+caso_g2_zcode_verif_subagente_exito_luego_fallo_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_EXITO_LUEGO_FALLO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-3) espejo, fallo y luego exito: "cualquier fallo declarado veta" — un
 # "el ultimo manda" acreditaria. BLOQUEA. No discrimina la mutacion del
 # `head -n1` (con ella tambien bloquea): fija la semantica elegida, declarado.
-caso_g2_zcode_verif_subagente_fallo_luego_exito_bloquea() {
+caso_g2_zcode_verif_subagente_fallo_luego_exito_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLO_LUEGO_EXITO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-4) "0 passed" / "0 passing" (CodeRabbit, PR #72): RESULT_RE los rematchea
 # por la rama `passed` pelada; el veto SAIKIT_VERIFIED_CERO_RE los descalifica.
 # BLOQUEAN. Lo atrapa la mutacion verif_subagente_cero_acredita (apaga el veto:
 # ambos acreditan y se ponen rojos).
-caso_g2_zcode_verif_subagente_cero_passed_bloquea() {
+caso_g2_zcode_verif_subagente_cero_passed_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_CERO_PASSED")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
-caso_g2_zcode_verif_subagente_cero_passing_bloquea() {
+caso_g2_zcode_verif_subagente_cero_passing_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_CERO_PASSING")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (d) label de un turno ANTERIOR (grok r1 #1, fe81de5 — caso que faltaba,
@@ -1908,22 +1933,24 @@ caso_g2_zcode_verif_label_de_turno_anterior_no_acredita() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_TURNO_SIN_EVIDENCIA")" "$(lab_transcript_asistente "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-5) fallo PELADO sin conteo ("ok, failed.") — residual del PR #72: BLOQUEA.
 # Lo atrapa la mutacion verif_fallo_pelado_apagado (el veto deja de ver el
 # `failed` a secas y el recibo acredita por `ok`).
-caso_g2_zcode_verif_subagente_fallo_pelado_bloquea() {
+caso_g2_zcode_verif_subagente_fallo_pelado_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLO_PELADO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (b-5 negados) "0 failed" y "no failures" son EXITO y siguen ACREDITANDO: el
@@ -1985,15 +2012,16 @@ caso_g2_zcode_verif_subagente_zero_failed_acredita() {
 # (b-5 bots #81) puntuacion PEGADA: "0 failed,error" — sin normalizar, grep -o
 # consume la coma en el primer match y `error` queda sin frontera (veto
 # perdido). BLOQUEA. Lo atrapa la mutacion verif_fallo_pegado_sin_normalizar.
-caso_g2_zcode_verif_subagente_fallo_pegado_bloquea() {
+caso_g2_zcode_verif_subagente_fallo_pegado_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_FALLO_PEGADO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (c) el MISMO label en un host NO ciego (claude) no acredita: sigue BLOQUEANDO.
@@ -2001,7 +2029,8 @@ caso_g2_claude_verif_subagente_no_acredita() {
   unset LAB_ZCODE_SESSION_ID LAB_ZCODE_PROJECT_DIR
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
 }
 
 # (c-bis) La otra mitad de (c), que (c) NO puede fijar: el recibo de (c) usa
@@ -2023,29 +2052,31 @@ caso_g2_claude_label_no_corta_la_prosa_de_runner() {
 }
 
 # (d) label sin verifier en agents_seen no acredita: sigue BLOQUEANDO.
-caso_g2_zcode_verif_subagente_sin_verifier_bloquea() {
+caso_g2_zcode_verif_subagente_sin_verifier_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_ACREDITA")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (e) CREDITO POR PIEZAS DISPERSAS: el label vacio + 'pytest' y 'ok' en OTRA
 # linea. Con el predicado sobre el SPAN del label (fix de raiz, codex #2) esto NO
 # acredita (el span no tiene comando/resultado). Con el predicado sobre el recibo
 # entero (defecto) matcheaba por piezas dispersas y acreditaba sin rastro.
-caso_g2_zcode_verif_subagente_disperso_bloquea() {
+caso_g2_zcode_verif_subagente_disperso_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_DISPERSO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # (f) FALSO POSITIVO DEL VETO: el 'TypeError:' vive en la linea Understand, fuera
@@ -2079,15 +2110,16 @@ caso_g2_zcode_verif_subagente_minusculas_acredita() {
 }
 
 # (h) RESULTADO NEGADO — "no en verde" no es exito (grok r1 #3): BLOQUEA.
-caso_g2_zcode_verif_subagente_no_en_verde_bloquea() {
+caso_g2_zcode_verif_subagente_no_en_verde_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_SUBAGENTE_NO_EN_VERDE")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # 18.18 — carril del label con el runner PROPIO del repo. El bug: ninguna forma
@@ -2145,9 +2177,9 @@ caso_g2_zcode_verif_label_runner_propio_resultado_fallido_no_acredita() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_RUNNER_PROPIO_EXIT1")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
-  _contiene "nombra el fallo declarado" "$LAB_OUT" 'declares a failure'
 }
 
 # 18.18 — comando del vocabulario SIN resultado y SIN fallo: BLOQUEA por falta
@@ -2161,10 +2193,9 @@ caso_g2_zcode_verif_label_sin_resultado_sin_fallo_no_acredita() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_SIN_RESULTADO_SIN_FALLO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
-  _contiene "nombra la falta de resultado" "$LAB_OUT" 'no SUCCESS result'
-  _contiene "exige misma linea" "$LAB_OUT" 'SAME line'
 }
 
 # 18.18 — comando en un span y exit 0 en OTRO: piezas dispersas, el credito
@@ -2177,8 +2208,9 @@ caso_g2_zcode_verif_label_spans_separados_no_acreditan() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_SPANS_SEPARADOS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
 # 18.18 — un span acreditable (bash tests/run.sh exit 0) y OTRO con fallo
@@ -2191,26 +2223,25 @@ caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_EXITO_Y_FALLO_SPANS_DISTINTOS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
-  _contiene "nombra el fallo declarado" "$LAB_OUT" 'declares a failure'
 }
 
 # 18.18 — comando FUERA del vocabulario con resultado de exito: BLOQUEA y el
 # feedback NOMBRA la condicion (comando fuera del vocabulario aceptado) en vez
 # del reclamo generico — el lead ve QUE corregir, no solo que falto.
 # Lo atrapa verif_label_mensaje_generico en su asercion de texto.
-caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice() {
+caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita() {
   LAB_ZCODE_SESSION_ID="sess_z_142"
   lab_run prompt auto "$(lab_payload_prompt '-saikit agrega el docstring')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_FUERA_DE_VOCABULARIO")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
-  _contiene "vocabulario" "$LAB_OUT" 'not in the accepted vocabulary'
-  _contiene "vocabulario nombra el runner del repo" "$LAB_OUT" 'tests/run.sh'
 }
 
 # 18.18 (review ronda 1, hallazgo 1) — decoy de PATH en el carril del label:
@@ -2224,9 +2255,9 @@ caso_g2_zcode_verif_label_decoy_de_path_no_acredita() {
   lab_run tool auto "$(lab_payload_agent 'verifier')"
   lab_run tool auto "$(lab_payload_agent 'reviewer')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VERIF_LABEL_DECOY_PATH")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_ZCODE_SESSION_ID=""
-  _contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
-  _contiene "vocabulario" "$LAB_OUT" 'not in the accepted vocabulary'
 }
 
 # DEFECTO A3, el caso que lo habria atrapado. `cat pytest.log` matchea el
@@ -2268,7 +2299,6 @@ caso_g2_runner_con_ruta_marca() {
 caso_g2_excusa_con_punto_final_no_reclama() {
   lab_sembrar 123456 0 1 0 "implementer,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_PYTEST_PUNTO")"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verification evidence'
 }
 
@@ -2488,23 +2518,24 @@ caso_g2_runner_decoy_echo_no_marca() {
 }
 
 # ============================================== G3 — secuencia de subagentes
-CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_bloquea caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_bloquea caso_g3_fuera_de_orden_bloquea caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_sigue_bloqueando caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_bloquea caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_bloquea caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_bloquea caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_bloquea caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_bloquea caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_bloquea caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_bloquea caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_spawn_solo_role_acredita caso_g3_muse_solo_cuenta_role caso_g3_muse_spawn_solo_subagent_type_no_acredita caso_g3_muse_role_invalido_no_acredita caso_g3_muse_revision_se_marca_al_esperar caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_keep_pendiente_sobrevive_write caso_g3_muse_status_no_primera_no_acredita caso_g3_muse_rejected_con_id_no_pendiente caso_g3_muse_wait_id_distinto_no_acredita caso_g3_muse_wait_summary_grande_acredita caso_g3_muse_recordatorios_no_acreditan caso_g3_muse_write_file_notas_no_marca caso_g3_muse_edit_file_notas_no_marca caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
+# A6 (Bloque A): el Stop ya no exige secuencia registrada localmente; la
+# entrega exige los roles via el recibo del PR. Casos de bloqueo INVERTIDOS
+# a cierre (pines contra la reintroduccion); el registro agents_seen sigue
+# intacto y sus casos no cambian.
+CASOS_G3="caso_g3_grok_ceremonia_completa_cierra caso_g3_grok_ceremonia_incompleta_cierra caso_g3_grok_ceremonia_no_corre_en_cursor caso_g3_falta_reviewer_cierra caso_g3_fuera_de_orden_cierra caso_g3_cursor_no_exige_secuencia caso_g3_agente_generico_no_cuenta caso_g3_agent_type_cuenta caso_g3_agent_type_generico_no_cuenta caso_g3_gana_el_de_tool_input_no_el_ultimo caso_g3_eco_fuera_de_tool_input_no_cuenta caso_g3_nombres_del_host_mapean caso_g3_turno_completo_por_eventos_permite caso_g3_target_por_claudecode_fallback caso_g3_target_por_zcode_fallback caso_g3_ceremonia_no_se_exige_en_codex caso_g3_role_fallback_implementer_permite caso_g3_role_fallback_verifier_permite caso_g3_role_fallback_reviewer_permite caso_g3_fast_cierra_sin_subagentes caso_g3_fast_sin_recibo_cierra_igual caso_g3_grok_spawn_registra_rol caso_g3_grok_interno_registra_rol caso_g3_adversary_turno_completo_cierra caso_g3_adversary_fuera_de_orden_cierra caso_g3_adversary_dos_veces_cierra caso_g3_adversary_sin_verifier_previo_cierra caso_g3_adversarial_audit_no_acredita_reviewer caso_g3_delegated_adversary_permite caso_g3_role_fallback_adversary_cierra caso_g3_sin_adversary_cierra_igual caso_g3_fast_con_adversary_no_exige_linea caso_g3_zcode_adversary_ceremonia_cierra caso_g3_zcode_adversary_sin_linea_cierra caso_g3_grok_adversary_ceremonia_cierra caso_g3_grok_adversary_sin_linea_cierra caso_g3_adversary_tardio_con_re_review_cierra caso_g3_dsh_ceremonia_incompleta_cierra caso_g3_codex_nativo_cierre_acredita caso_g3_codex_en_curso_no_acredita caso_g3_codex_interno_no_acredita caso_g3_codex_stop_huerfano_no_acredita caso_g3_codex_stop_replay_no_duplica caso_g3_codex_stop_otro_rol caso_g3_codex_stop_sin_transcript_no_acredita caso_g3_codex_stop_no_emite_veredicto caso_g3_codex_nativo_ceremonia_cierra caso_g3_codex_legacy_interno_acredita caso_g3_codex_huerfano_luego_interno_no_acredita caso_g3_codex_stop_rol_cambiado_no_acredita caso_g3_codex_nativo_fuera_de_orden_cierra caso_g3_codex_nativo_cross_session caso_g3_muse_ceremonia_incompleta_cierra caso_g3_muse_rejected_no_pendiente caso_g3_muse_accepted_no_acredita caso_g3_muse_wait_ready_con_pendiente_acredita caso_g3_muse_spawn_solo_role_acredita caso_g3_muse_solo_cuenta_role caso_g3_muse_spawn_solo_subagent_type_no_acredita caso_g3_muse_role_invalido_no_acredita caso_g3_muse_revision_se_marca_al_esperar caso_g3_muse_rearm_no_hereda_pendiente caso_g3_muse_keep_pendiente_sobrevive_write caso_g3_muse_status_no_primera_no_acredita caso_g3_muse_rejected_con_id_no_pendiente caso_g3_muse_wait_id_distinto_no_acredita caso_g3_muse_wait_summary_grande_acredita caso_g3_muse_recordatorios_no_acreditan caso_g3_muse_write_file_notas_no_marca caso_g3_muse_edit_file_notas_no_marca caso_g3_muse_wait_sin_pendiente_no_acredita caso_g3_muse_summary_hostil_no_acredita caso_g3_muse_verify_reminder_sin_pendiente_no_acredita caso_g3_muse_write_file_marca_last_code_edit caso_g3_muse_edit_file_marca_last_code_edit caso_g3_other_sigue_sin_ceremonia"
 
-caso_g3_falta_reviewer_bloquea() {
+caso_g3_falta_reviewer_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,verifier"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "stdout" "$LAB_OUT" '"decision":"block"'
-  _contiene "motivo" "$LAB_OUT" 'Missing reviewer subagent run'
+  _igual "exit code" "$LAB_RC" "0"
   _no_contiene "motivo" "$LAB_OUT" 'Missing implementer subagent run'
   _no_contiene "motivo" "$LAB_OUT" 'Missing verifier subagent run'
 }
 
-caso_g3_fuera_de_orden_bloquea() {
+caso_g3_fuera_de_orden_cierra() {
   lab_sembrar 123456 0 1 1 "reviewer,implementer,verifier"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Subagents ran out of order'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # La secuencia es una primitiva de Claude Code (Task/subagent_type). En cursor
@@ -2579,8 +2610,7 @@ caso_g3_target_por_claudecode_fallback() {
   LAB_CLAUDECODE=1
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
   LAB_CLAUDECODE=""
-  _igual "exit code (CLAUDECODE=1 => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
-  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+  _igual "exit code (CLAUDECODE=1 => TARGET=claude; A6: secuencia ya no exigida)" "$LAB_RC" "0"
 }
 
 # Task 6.4 (D3) — la ceremonia se exige TAMBIEN con TARGET=codex. 6.1 midio que
@@ -2591,7 +2621,7 @@ caso_g3_target_por_claudecode_fallback() {
 # salida la ata caso_g6_bloqueo_codex_exit_cero. Y la escotilla ROLE FALLBACK
 # (D4) tiene que valer por la MISMA rama: es la primera vez que la ceremonia
 # corre en Codex y sin escotilla un 429 dejaria el turno sin salida.
-caso_g3_ceremonia_se_exige_en_codex() {
+caso_g3_ceremonia_no_se_exige_en_codex() {
   # Sembrar bajo state/codex/: el Stop con TARGET=codex lee ahi (Task 5.3).
   # Mismo malabar que caso_g3_target_por_claudecode_fallback y por el mismo
   # motivo: los helpers del lab son esquema-agnosticos a proposito.
@@ -2600,8 +2630,6 @@ caso_g3_ceremonia_se_exige_en_codex() {
   lab_sembrar 123456 0 1 1 ""   # todo en orden salvo agents_seen (vacio)
   lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit (el bloqueo codex viaja con exit 0, medido 6.2)" "$LAB_RC" "0"
-  _contiene "decision de bloqueo en codex" "$LAB_OUT" '"decision":"block"'
-  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
 
   # La escotilla D4 vale en codex: dos roles corridos, el tercero declarado.
   lab_limpiar_estado
@@ -2625,8 +2653,7 @@ caso_g3_target_por_zcode_fallback() {
   LAB_ZCODE_SESSION_ID="sess_lab"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
   LAB_ZCODE_SESSION_ID=""
-  _igual "exit code (ZCODE_* => TARGET=claude => secuencia exigida)" "$LAB_RC" "2"
-  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+  _igual "exit code (ZCODE_* => TARGET=claude; A6: secuencia ya no exigida)" "$LAB_RC" "0"
 }
 
 # D4 (Task 6.3) — absorbe la escotilla ROLE FALLBACK del sabor Codex del kit
@@ -2646,7 +2673,7 @@ caso_g3_target_por_zcode_fallback() {
 # mecanismo compartido: pytest/tsc/phpunit/cargo/go).
 #
 # El caso que bloquea sin despacho Y sin declaracion ya existe para el rol
-# reviewer (caso_g3_falta_reviewer_bloquea ejercita la MISMA rama *) con un
+# reviewer (caso_g3_falta_reviewer_cierra ejercita la MISMA rama *) con un
 # recibo sin ROLE FALLBACK) — no se duplica esa mitad.
 caso_g3_role_fallback_implementer_permite() {
   lab_sembrar 123456 0 1 1 "verifier,reviewer"
@@ -2687,12 +2714,11 @@ caso_g3_fast_cierra_sin_subagentes() {
   if lab_hay_estado; then _mal "un cierre limpio fast debe borrar el estado del turno"; fi
 }
 
-caso_g3_fast_sin_recibo_sigue_bloqueando() {
+caso_g3_fast_sin_recibo_cierra_igual() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:fast corrige el typo')"
   lab_run tool claude "$(lab_payload_edit '/proyecto/src/header.ts')"
   lab_run stop claude "$(lab_payload_stop 'listo, creo')"
-  _igual "fast sin recibo bloquea" "$LAB_RC" "2"
-  _contiene "motivo (el recibo sigue exigido en fast)" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _igual "fast sin recibo cierra" "$LAB_RC" "0"
   _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
@@ -2702,7 +2728,9 @@ caso_g3_fast_sin_recibo_sigue_bloqueando() {
 caso_g5_presupuesto_zcode_exit2() {
   _ep_backup="$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/zcode/|')"
-  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer,adversary"
+  # A6: presupuesto via violacion adversary (unica via de bloqueo que queda).
+  printf 'adv_violation=1\nadv_violation_paths=src/fuera.ts\n' >> "$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$_ep_backup"
   LAB_ZCODE_SESSION_ID="sess_lab"
   lab_run stop auto "$(lab_payload_stop "$_TEXTO_LLANO")"
@@ -2715,7 +2743,7 @@ caso_g5_presupuesto_zcode_exit2() {
 # G4: un Stop de zcode trae SOLO hookEventName (camel). Sin leer camel, PHASE cae
 # a "tool" y stop_gate no corre (el Stop no bloquea). Usa CLAUDECODE=1 para aislar
 # el cambio PHASE del cambio TARGET.
-caso_g4_stop_camel_solo_bloquea() {
+caso_g4_stop_camel_solo_cierra() {
   _ep_backup="$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/claude/|')"
   lab_sembrar 123456 0 1 1 ""
@@ -2727,8 +2755,12 @@ caso_g4_stop_camel_solo_bloquea() {
   # le daria la fase y el lector camel nunca se ejercitaria (leccion de 5.4).
   lab_run auto auto "$(lab_payload_stop_camel "$_RECIBO_VINETAS")"
   LAB_CLAUDECODE=""
-  _igual "exit code (Stop camel-only => PHASE=stop => gate corre)" "$LAB_RC" "2"
-  _contiene "motivo (reclama implementer)" "$LAB_OUT" 'Missing implementer subagent run'
+  _igual "exit code (Stop camel-only => PHASE=stop => gate corre)" "$LAB_RC" "0"
+  # A6: sin bloqueos, la prueba de que PHASE resolvio a stop (y no cayo a
+  # tool) es el efecto del cierre limpio: el estado sembrado se borra.
+  if find "$LAB/hooks/state" -name harness-state.env 2>/dev/null | grep -q .; then
+    _mal "PHASE=stop debio cerrar limpio y borrar el estado"
+  fi
 }
 
 # DEFECTO A1 — cerrado por la Task 3.1. Los dos casos que siguen son las dos
@@ -2816,12 +2848,10 @@ caso_g3_adversary_turno_completo_cierra() {
 # Caso D6-2: adversary DESPUES del reviewer esta fuera de orden (la regex nueva
 # es la que exige la POSICION: la vieja de 3 roles ya matcheaba con adversary en
 # el medio). Se siembra: el orden es lo unico bajo prueba.
-caso_g3_adversary_fuera_de_orden_bloquea() {
+caso_g3_adversary_fuera_de_orden_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer,adversary"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo (fuera de orden con adversary)" "$LAB_OUT" 'out of order'
-  _contiene "motivo (nombra la secuencia con adversary)" "$LAB_OUT" 'adversary'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # Caso D6-3: adversary dos veces — el dedupe conserva la posicion de la primera
@@ -2844,16 +2874,14 @@ caso_g3_adversary_dos_veces_cierra() {
 # Caso D6-4: adversary sin verifier previo. Dos formas: sin verifier en
 # agents_seen (la rama missing-verifier existente) y con verifier TARDIO (la
 # regex nueva de orden — adversary camino al slot del reviewer antes de tiempo).
-caso_g3_adversary_sin_verifier_previo_bloquea() {
+caso_g3_adversary_sin_verifier_previo_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,adversary,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
-  _igual "exit code (sin verifier)" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing verifier subagent run'
+  _igual "exit code (sin verifier)" "$LAB_RC" "0"
 
   lab_sembrar 123456 0 1 1 "implementer,adversary,verifier,reviewer"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
-  _igual "exit code (verifier tardio)" "$LAB_RC" "2"
-  _contiene "motivo (orden)" "$LAB_OUT" 'out of order'
+  _igual "exit code (verifier tardio)" "$LAB_RC" "0"
 }
 
 # Caso D6-5: la trampa medida de precedencia — `adversarial-audit` hoy resolvia
@@ -2867,8 +2895,7 @@ caso_g3_adversarial_audit_no_acredita_reviewer() {
   _igual "agents_seen (adversarial-* mapea a adversary)" "$(lab_estado agents_seen)" "implementer,adversary,verifier"
 
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_ADV")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo (el slot de reviewer no se lleno con un nombre adversario)" "$LAB_OUT" 'Missing reviewer subagent run'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # Caso D6-6: la escotilla DELEGATED extendida — un lead con adversary corriendo
@@ -2901,13 +2928,12 @@ caso_g3_sin_adversary_cierra_igual() {
 # Caso D6-9: lane fast con adversary visto exige la linea (B1 — los labels del
 # recibo ya se exigen en fast; este no es una excepcion). La ceremonia NO se
 # exige en fast: el bloqueo es solo por la linea faltante.
-caso_g3_fast_con_adversary_exige_linea() {
+caso_g3_fast_con_adversary_no_exige_linea() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit:fast ataca el cambio con adversary')"
   lab_run tool claude "$(lab_payload_agent 'adversary')"
   lab_run tool claude "$(lab_payload_bash 'pytest -q')"
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_VINETAS")"
-  _igual "exit code (fast exige la linea ADVERSARY)" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'ADVERSARY'
+  _igual "exit code (fast exige la linea ADVERSARY)" "$LAB_RC" "0"
   _no_contiene "motivo (la ceremonia no se exige en fast)" "$LAB_OUT" 'Missing implementer subagent run'
 }
 
@@ -2919,7 +2945,7 @@ caso_g3_fast_con_adversary_exige_linea() {
 # agotando presupuesto. Es el camino honesto castigado (el lead que reacciona a
 # "esto tocaba auth, mejor lo ataco"), asi que el gate tiene que distinguirlo de
 # la falla real. La falla real es "el adversary corrio y NADIE adjudico despues";
-# eso lo sigue fijando caso_g3_adversary_fuera_de_orden_bloquea, que siembra el
+# eso lo sigue fijando caso_g3_adversary_fuera_de_orden_cierra, que siembra el
 # mismo agents_seen SIN re-despachar reviewer y debe seguir bloqueando.
 caso_g3_adversary_tardio_con_re_review_cierra() {
   lab_run prompt claude "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
@@ -2964,7 +2990,7 @@ caso_g3_zcode_adversary_ceremonia_cierra() {
 
 # zcode target (el que discrimina): adversary acreditado por el DESPACHO
 # zcode y recibo completo SIN la linea ADVERSARY => bloquea nombrandola.
-caso_g3_zcode_adversary_sin_linea_bloquea() {
+caso_g3_zcode_adversary_sin_linea_cierra() {
   LAB_ZCODE_SESSION_ID="sess_z_adv2"
   lab_run prompt auto "$(lab_payload_prompt '-saikit ataca el cambio con adversary')"
   lab_run tool auto "$(lab_payload_agent 'implementer')"
@@ -2974,8 +3000,7 @@ caso_g3_zcode_adversary_sin_linea_bloquea() {
   lab_run tool auto "$(lab_payload_bash 'pytest -q')"
   lab_run stop auto "$(lab_payload_stop "$_RECIBO_VINETAS")"
   LAB_ZCODE_SESSION_ID=""
-  _igual "zcode: sin linea ADVERSARY bloquea" "$LAB_RC" "2"
-  _contiene "zcode: el motivo nombra la linea" "$LAB_OUT" 'ADVERSARY'
+  _igual "zcode: sin linea ADVERSARY cierra" "$LAB_RC" "0"
 }
 
 # grok target: ceremonia completa con adversary (spawn) cierra con su linea.
@@ -2998,7 +3023,7 @@ caso_g3_grok_adversary_ceremonia_cierra() {
 
 # grok target (el que discrimina): adversary acreditado por spawn_subagent y
 # recibo completo SIN la linea => bloquea con la forma grok nombrandola.
-caso_g3_grok_adversary_sin_linea_bloquea() {
+caso_g3_grok_adversary_sin_linea_cierra() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit ataca el cambio con adversary')"
   LAB_GROK_HOOK_EVENT=post_tool_use
@@ -3012,15 +3037,16 @@ caso_g3_grok_adversary_sin_linea_bloquea() {
   lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
   LAB_GROK_HOOK_EVENT=""
   _igual "grok: bloqueo con exit 0 (7.2)" "$LAB_RC" "0"
-  _contiene "grok: decision:block" "$LAB_OUT" '"decision":"block"'
-  _contiene "grok: el motivo nombra la linea ADVERSARY" "$LAB_ERR" 'ADVERSARY'
 }
 
 # ================================================================ G4 — recibo
+# A6 (Bloque A): avance/espera/cierre ya no exigen las seis etiquetas; casos
+# de bloqueo INVERTIDOS a cierre (pines contra la reintroduccion). Las
+# escotillas PAUSED/DELEGATED siguen como via rapida de espera.
 # ORDEN load-bearing: la bateria de mutacion corta en el primer caso rojo, asi
 # que cada mutacion necesita su caso posicionado para ser alcanzado antes de que
 # otro caso se ponga rojo por otra razon. Ver docs/task-3.2-plan.md CORRECCION 5.
-CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_bloquea caso_g4_delegado_incidental_en_recibo_roto_bloquea caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_sigue_exigiendo caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_sigue_bloqueando caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_bloquea caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_bloquea caso_g4_sin_recibo_bloquea caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_bloquea caso_g4_pausa_vieja_solo_en_transcript_bloquea caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_no_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_bloquea caso_g4_grok_delegado_sin_bg_bloquea caso_g4_grok_delegado_bg_degenerado_bloquea caso_g4_grok_delegado_bg_multilinea_permite caso_g4_parser_bg_solo_corre_en_grok caso_g4_grok_delegado_bg_estructural_bloquea caso_g4_grok_delegado_bg_doc_roto_bloquea caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada caso_g4_grok_marcador_noascii_fail_closed"
+CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_cierra caso_g4_pausa_en_thinking_no_cuenta caso_g4_delegado_permite caso_g4_delegado_sin_rol_cierra caso_g4_delegado_incidental_en_recibo_roto_cierra caso_g4_delegado_incidental_en_recibo_completo_cierra_limpio caso_g4_recibo_completo_mas_paused_cierra_limpio caso_g4_recibo_roto_mas_paused_cierra_igual caso_g4_ambos_canales_ciegos_cierra_unknown caso_g4_campo_presente_sin_recibo_cierra_igual caso_g4_etiqueta_pegada_no_cuenta caso_g4_recibo_en_un_parrafo_cierra caso_g4_recibo_codex_escape_doble_cierra caso_g4_recibo_vineta_asterisco_pasa caso_g4_recibo_corrido_pasa_a8 caso_g4_recibo_dos_bloques_pasa caso_g4_falta_una_etiqueta_cierra caso_g4_sin_recibo_cierra caso_g4_transcript_dentro_del_perfil_se_lee caso_g4_informe_espanol_cierra_sin_ciclo caso_g4_recibo_en_vinetas_pasa caso_g4_recibo_corrido_solo_en_transcript_pasa caso_g4_recibo_solo_en_transcript_pasa caso_g4_transcript_fuera_de_perfil_se_ignora caso_g4_transcript_ruta_windows_y_traversal caso_g4_stop_camel_solo_cierra caso_g4_pausa_vieja_solo_en_transcript_cierra caso_g4_delegado_con_recibo_viejo_en_transcript_permite caso_g4_recibo_bold_pasa caso_g4_fuga_top_level_cierra caso_g4_cita_del_feedback_no_satisface caso_g4_grok_turno_completo_camel_cierra caso_g4_grok_stop_sin_recibo_cierra caso_g4_grok_delegado_sin_bg_cierra caso_g4_grok_delegado_bg_degenerado_cierra caso_g4_grok_delegado_bg_multilinea_permite caso_g4_parser_bg_solo_corre_en_grok caso_g4_grok_delegado_bg_estructural_cierra caso_g4_grok_delegado_bg_doc_roto_cierra caso_g4_grok_delegado_bg_primer_token caso_g4_grok_delegado_con_bg_permite caso_g4_grok_delegado_bg_explicito_permite caso_g4_grok_precedencia_lastmessage_gana_snake caso_g4_grok_transcriptpath_camel caso_g4_grok_delegado_bg_clave_escapada caso_g4_grok_marcador_noascii_fail_open"
 
 # La pausa declarada es una forma valida de terminar el turno: el agente
 # pregunto y espera. Se acepta sin recibo, sin evidencia y sin subagentes.
@@ -3035,15 +3061,14 @@ CASOS_G4="caso_g4_pausa_permite caso_g4_pausa_en_resultado_bloquea caso_g4_pausa
 #
 # Stop sin last_assistant_message a proposito: asi decide el canal transcript,
 # que es donde vive la condicion que se esta probando.
-caso_g4_fuga_top_level_no_cierra() {
+caso_g4_fuga_top_level_cierra() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
   # Sin mensaje primario, el ultimo texto assistant del transcript es la
   # fuente del skip. El unico gate roto debe ser Retro, para que la mutacion
   # de fuga top-level siga discriminando y no quede tapada por trail.
   lab_run stop claude "$(lab_payload_stop_sin_mensaje)" \
     "$(lab_transcript_fuga_top_level "${_RECIBO_SIN_RETRO}\\nTRAIL SKIP: fixture de fuga top-level" 'Retro: none.')"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Retro'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 caso_g4_pausa_permite() {
@@ -3064,7 +3089,7 @@ caso_g4_pausa_permite() {
 caso_g4_cita_del_feedback_no_satisface() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_CITA_FEEDBACK")"
-  _igual "exit citando el feedback" "$LAB_RC" "2"
+  _igual "exit citando el feedback" "$LAB_RC" "0"
 }
 
 # C4 (auditoria 2026-08-13, Task 8.2), mitad PAUSED — el tail de 160 lineas
@@ -3072,11 +3097,10 @@ caso_g4_cita_del_feedback_no_satisface() {
 # pasar el gate ENTERO de un turno que no pauso (el mensaje final del turno es
 # texto llano sin recibo). La escotilla debe mirar el turno actual
 # (last_assistant_message), no la historia.
-caso_g4_pausa_vieja_solo_en_transcript_bloquea() {
+caso_g4_pausa_vieja_solo_en_transcript_cierra() {
   lab_sembrar 123456 0 0 0 ""
   lab_run stop claude "$(lab_payload_stop 'Ya quedo el cambio, avisame.')" "$(lab_transcript_asistente "$_TEXTO_PAUSA")"
-  _igual "exit code con PAUSED viejo en el tail" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _igual "exit code con PAUSED viejo en el tail" "$LAB_RC" "0"
 }
 
 # C4, mitad DELEGATED — el recibo del turno ANTERIOR en el tail hacia fallar la
@@ -3107,16 +3131,15 @@ caso_g4_recibo_bold_pasa() {
 # encuentra y el gate deja pasar. La Task 3.2 cierra esto: el walker ignora todo
 # texto que no sea de un mensaje assistant, y la pausa aqui vive en uno user.
 # Es el caso que habria atrapado A2. Estado NO borrado: el turno sigue abierto.
-caso_g4_pausa_en_resultado_bloquea() {
+caso_g4_pausa_en_resultado_cierra() {
   _sembrar_turno_completo
   # Stop SIN last_assistant_message a proposito (Task 8.2): la escotilla ahora
   # mira el turno actual y solo cae al canal transcript cuando el payload no
   # trae el campo — que es exactamente el camino donde la condicion role:assistant
   # del walker decide, y lo que mantiene atrapable a mut_texto_incluye_tool_result.
   lab_run stop claude "$(lab_payload_stop_sin_mensaje)" "$(lab_transcript_pausa_en_resultado)"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # CORRECCION 1 (plan 3.2): la pausa en un content item que NO es type:text de
@@ -3129,11 +3152,10 @@ caso_g4_pausa_en_resultado_bloquea() {
 caso_g4_pausa_en_thinking_no_cuenta() {
   _sembrar_turno_completo
   # Stop sin last_assistant_message por la misma razon que
-  # caso_g4_pausa_en_resultado_bloquea (Task 8.2): la condicion type:text del
+  # caso_g4_pausa_en_resultado_cierra (Task 8.2): la condicion type:text del
   # walker decide en el fallback, y asi mut_texto_incluye_tool_use sigue atrapable.
   lab_run stop claude "$(lab_payload_stop_sin_mensaje)" "$(lab_transcript_thinking_con_pausa)"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # ARREGLO 1 — escotilla "delegado y en vuelo", hermana de la pausa de arriba.
@@ -3156,12 +3178,11 @@ caso_g4_delegado_permite() {
 # Task 6.3): sin el rol, "DELEGATED" a secas seria un "salteate el gate"
 # generico y no uno auditable. El turno sigue abierto (mismo criterio que la
 # pausa: el gate reclama el recibo normal, no una etiqueta puntual).
-caso_g4_delegado_sin_rol_bloquea() {
+caso_g4_delegado_sin_rol_cierra() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_DELEGADO_SIN_ROL")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # Bug de cross-review (ciclo 1), REPRODUCIDO con ejecucion: la escotilla
@@ -3170,13 +3191,11 @@ caso_g4_delegado_sin_rol_bloquea() {
 # exigencia del rol queria evitar. Con el arreglo (exigir recibo AUSENTE), el
 # recibo (esta presente, aunque roto) desactiva la escotilla y el turno cae
 # al gate normal, que reclama lo que falta de verdad.
-caso_g4_delegado_incidental_en_recibo_roto_bloquea() {
+caso_g4_delegado_incidental_en_recibo_roto_cierra() {
   lab_sembrar 123456 0 0 0 ""
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_ROTO_CON_DELEGADO_INCIDENTAL")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
-  _contiene "motivo" "$LAB_OUT" 'Missing implementer subagent run'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+  _igual "exit code" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # La otra mitad del mismo bug: un recibo COMPLETO que menciona la frase
@@ -3214,12 +3233,11 @@ caso_g4_recibo_completo_mas_paused_cierra_limpio() {
 # salteate-el-gate que la guardia de DELEGATED ya habia cerrado. Con la
 # guardia, el recibo (presente aunque roto) desactiva la escotilla y el gate
 # reclama lo que falta de verdad.
-caso_g4_recibo_roto_mas_paused_sigue_exigiendo() {
+caso_g4_recibo_roto_mas_paused_cierra_igual() {
   lab_sembrar 123456 0 0 0 ""
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO_CON_PAUSED")"
-  _igual "exit code recibo roto + PAUSED" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+  _igual "exit code recibo roto + PAUSED" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # Task 11.4 (datapoint post-11.3, host zcode 2026-08-16) — unknown honesto.
@@ -3245,12 +3263,11 @@ caso_g4_ambos_canales_ciegos_cierra_unknown() {
 # dientes a los hosts cuyo canal payload llega (claude/codex medidos 1.4/6.2).
 # Este caso pinna el borde exacto: canal payload observado, transcript
 # ilegible (la ruta por defecto del lab no existe) — hoy y siempre, exit 2.
-caso_g4_campo_presente_sin_recibo_sigue_bloqueando() {
+caso_g4_campo_presente_sin_recibo_cierra_igual() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop 'Ya quedo todo entregado, sin recibo.')"
-  _igual "exit code con canal payload observado" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: ausencia observada no es unknown"; fi
+  _igual "exit code con canal payload observado" "$LAB_RC" "0"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # Repone el atrapador de mut_ancla_de_linea_quitada (que reemplazo a
@@ -3263,8 +3280,7 @@ caso_g4_campo_presente_sin_recibo_sigue_bloqueando() {
 caso_g4_etiqueta_pegada_no_cuenta() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop 'hubo un misunderstand: aclarar con el usuario.')"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # 18.23 — el recibo en un solo parrafo: las seis etiquetas estan, pero ninguna
@@ -3272,18 +3288,16 @@ caso_g4_etiqueta_pegada_no_cuenta() {
 # posicion es la unica causa del bloqueo. Con la regex sin ancla este recibo
 # cerraba el turno. El mensaje de falta tiene que NOMBRAR la regla del
 # operador, la misma frase canonica que el contrato inyecta en sus dos bloques.
-caso_g4_recibo_en_un_parrafo_bloquea() {
+caso_g4_recibo_en_un_parrafo_cierra() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_UN_PARRAFO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
-  _contiene "motivo" "$LAB_OUT" 'opens its own paragraph'
+  _igual "exit code" "$LAB_RC" "0"
 }
 
 # 18.23 r1 (hallazgo ALTO): el recibo honesto que codex transporta con \\n
 # doble — el decodificador de una capa lo deja como \n literal — cierra
 # limpio. Sembrado bajo state/codex/ con el mismo malabar que
-# caso_g3_ceremonia_se_exige_en_codex: el Stop con TARGET=codex lee ahi, y el
+# caso_g3_ceremonia_no_se_exige_en_codex: el Stop con TARGET=codex lee ahi, y el
 # bloqueo codex viaja con exit 0 (medido 6.2), asi que lo que discrimina es
 # la AUSENCIA de la decision de bloqueo y el estado borrado.
 caso_g4_recibo_codex_escape_doble_cierra() {
@@ -3336,23 +3350,46 @@ caso_g4_recibo_dos_bloques_pasa() {
   if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado del turno"; fi
 }
 
-caso_g4_falta_una_etiqueta_bloquea() {
+caso_g4_falta_una_etiqueta_cierra() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_RECIBO_SIN_RETRO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing Retro gate summary'
+  _igual "exit code" "$LAB_RC" "0"
   _no_contiene "motivo" "$LAB_OUT" 'Missing Understand gate summary'
   _no_contiene "motivo" "$LAB_OUT" 'Missing Close gate summary'
 }
 
-caso_g4_sin_recibo_bloquea() {
+caso_g4_sin_recibo_cierra() {
   _sembrar_turno_completo
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
-  _igual "exit code" "$LAB_RC" "2"
-  _contiene "motivo" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
-  for etiqueta in Understand Implement Verify Review Close Retro; do
-    _contiene "motivo" "$LAB_OUT" "Missing $etiqueta gate summary"
-  done
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
+}
+
+# A6: un informe en espanol, sin recibo ni ceremonia, termina el turno sin
+# ciclo extra — ni bloquea ni consume revisiones. La entrega exige los roles
+# via el recibo del PR al aprobar/mergear, no por turno.
+# A6: un transcript DENTRO del perfil se lee (sin reporte unknown). Es la
+# mitad positiva de la contencion: fuera_de_perfil/traversal atan que lo de
+# afuera se ignora con diagnostico; este ata que lo de adentro se lee sin el.
+# Atrapa mut_containment_sin_resolver donde TMPDIR trae slash final (macOS):
+# sin resolver, el // crudo nunca matchea el perfil y todo se ignora.
+caso_g4_transcript_dentro_del_perfil_se_lee() {
+  _sembrar_turno_completo
+  _tr_dentro="$LAB/entrada/transcript-dentro.jsonl"
+  printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_dentro"
+  lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_dentro")"
+  _igual "exit code" "$LAB_RC" "0"
+  _no_contiene "sin reporte unknown (el transcript se leyo)" "$LAB_ERR" 'transcript=unknown'
+}
+
+caso_g4_informe_espanol_cierra_sin_ciclo() {
+  _sembrar_turno_completo
+  lab_run stop claude "$(lab_payload_stop 'Listo. Implemente el endpoint, corri la bateria (12 en verde) y la revision no tuvo hallazgos. Queda pendiente desplegar.')"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _no_contiene "sin ciclo de revision" "$LAB_OUT" 'Current revision cycle'
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 caso_g4_recibo_en_vinetas_pasa() {
@@ -3409,10 +3446,9 @@ caso_g4_transcript_fuera_de_perfil_se_ignora() {
   # Stop con transcript_path = ruta externa literal y mensaje neutro (sin recibo).
   lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$_tr_externo")"
   rm -f "$_tr_externo"
-  _igual "exit code (el transcript externo se ignora, A6)" "$LAB_RC" "2"
-  _contiene "motivo (el recibo externo no cuenta)" "$LAB_OUT" 'Missing SUMMONAIKIT HARNESS RECEIPT'
+  _igual "exit code (el transcript externo se ignora, A6)" "$LAB_RC" "0"
   _contiene "reporte por stderr (fail-open, A6)" "$LAB_ERR" 'transcript=unknown'
-  if ! lab_hay_estado; then _mal "el turno sigue abierto: el estado no se borra mientras el gate reclama"; fi
+  if lab_hay_estado; then _mal "un cierre limpio debe borrar el estado"; fi
 }
 
 # La otra mitad del arreglo de A6: la contencion NO puede apagar el canal legitimo.
@@ -3447,7 +3483,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
   printf '%s\n' "$(lab_transcript_asistente "$_RECIBO_VINETAS")" > "$_tr_externo"
   lab_run stop claude "$(lab_payload_stop_ruta_literal 'Listo.' "$LAB/entrada/../../$(basename "$_tr_externo")")"
   rm -f "$_tr_externo"
-  _igual "exit code (traversal fuera del perfil se ignora)" "$LAB_RC" "2"
+  _igual "exit code (traversal fuera del perfil se ignora)" "$LAB_RC" "0"
   _contiene "reporte por stderr (traversal)" "$LAB_ERR" 'transcript=unknown'
 }
 
@@ -3458,7 +3494,10 @@ CASOS_G5="caso_g5_autopilot_parrafo_en_budget_agotado caso_g5_presupuesto_agotad
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
 # al usuario, en vez de mandar al agente a otra vuelta.
 caso_g5_presupuesto_agotado() {
-  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  # A6: la ceremonia se retiro; el presupuesto solo se agota por bloqueos
+  # sostenidos de la via adversary. El contrato de salida no cambia.
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "0"
   _contiene "stdout" "$LAB_OUT" '"continue":false'
@@ -3478,7 +3517,8 @@ caso_g5_presupuesto_dsh_decision_block() {
   lab_run prompt dsh "$(lab_payload_prompt '-saikit agrega el docstring')"
   _dsh_state="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/dsh/' | head -n 1)"
   if [ -n "$_dsh_state" ]; then
-    { printf 'task_hash=123456\ncycle=2\nimplemented=1\nverified=1\nagents_seen=implementer,verifier,reviewer\n'; } > "$_dsh_state"
+    # A6: presupuesto via violacion adversary (unica via de bloqueo que queda).
+    { printf 'task_hash=123456\ncycle=2\nimplemented=1\nverified=1\nagents_seen=implementer,verifier,reviewer,adversary\nadv_violation=1\nadv_violation_paths=src/fuera.ts\n'; } > "$_dsh_state"
   fi
   lab_run stop dsh "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "0"
@@ -3489,7 +3529,10 @@ caso_g5_presupuesto_dsh_decision_block() {
 }
 
 caso_g5_ciclos_cuentan_y_bloquean() {
-  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
+  # A6: los ciclos solo los consumen bloqueos adversary (la ceremonia ya no
+  # bloquea). Dos violaciones seguidas cuentan 1 y 2; el tercero agotaria.
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code del ciclo 1" "$LAB_RC" "2"
   _contiene "motivo del ciclo 1" "$LAB_OUT" 'Current revision cycle: 1/2'
@@ -3518,7 +3561,9 @@ caso_g5_ciclo_consumido_no_impide_cerrar() {
 # (que ata el contrato de salida); este ata la limpieza, para no mover la
 # declaracion del caso existente.
 caso_g5_agotado_limpia_estado() {
-  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  # A6: presupuesto via violacion adversary (unica via de bloqueo que queda).
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code del presupuesto agotado" "$LAB_RC" "0"
   _contiene "stdout del presupuesto agotado" "$LAB_OUT" 'REVISION BUDGET EXHAUSTED'
@@ -3559,9 +3604,10 @@ caso_g5_tool_name_eco_no_marca_edicion() {
 }
 
 caso_g5_stop_fallido_no_borra_aviso_ajeno() {
-  # Armado e incompleto (este Stop bloquea), con secuencia RN limpia observada:
-  # el elif pre-9.8 disparaba aqui y borraba el aviso ajeno.
-  lab_sembrar 123456 0 0 0 ""
+  # Armado con violacion (este Stop bloquea), con secuencia RN limpia
+  # observada: el elif pre-9.8 disparaba aqui y borraba el aviso ajeno.
+  lab_sembrar 123456 0 0 0 "adversary"
+  _sem_violation_adversary
   printf 'last_code_edit=1\nlast_review=2\n' > "${LAB_ESTADO_PATH%.env}-review-notice.env"
   rn_ajeno="$(dirname "$(dirname "$LAB_ESTADO_PATH")")/review-notice-pending.log"
   printf 'SAIKIT REVIEW NOTICE: aviso de la sesion hermana.\n' > "$rn_ajeno"
@@ -3588,13 +3634,17 @@ CASOS_G6="caso_g6_bloqueo_por_target caso_g6_permiso_por_target caso_g6_presupue
 # claude el host lee el exit code 2 y el JSON de decision; en cursor solo lee un
 # mensaje de seguimiento, y un exit 2 ahi seria un error de hook.
 caso_g6_bloqueo_por_target() {
+  # A6: el bloqueo que distingue contratos viaja por violacion adversary
+  # (la ceremonia ya no bloquea). Los dos contratos no cambian.
   _sembrar_turno_completo
+  _sem_violation_adversary
   lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code en claude" "$LAB_RC" "2"
   _contiene "stdout en claude" "$LAB_OUT" '"decision":"block"'
   _no_vacio "stderr en claude" "$LAB_ERR"
 
   _sembrar_turno_completo
+  _sem_violation_adversary
   lab_run stop cursor "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code en cursor" "$LAB_RC" "0"
   _contiene "stdout en cursor" "$LAB_OUT" '"followup_message"'
@@ -3616,7 +3666,9 @@ caso_g6_permiso_por_target() {
 }
 
 caso_g6_presupuesto_agotado_por_target() {
-  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer"
+  # A6: presupuesto via violacion adversary (unica via de bloqueo que queda).
+  lab_sembrar 123456 2 1 1 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
   lab_run stop cursor "$(lab_payload_stop "$_TEXTO_LLANO")"
   _igual "exit code" "$LAB_RC" "0"
   _contiene "stdout" "$LAB_OUT" '"followup_message"'
@@ -3652,6 +3704,8 @@ caso_g6_bloqueo_codex_exit_cero() {
   _ep_backup="$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
   _sembrar_turno_completo
+  # A6: el bloqueo viaja por violacion adversary (la ceremonia ya no bloquea).
+  _sem_violation_adversary
   lab_run stop codex "$(lab_payload_stop "$_TEXTO_LLANO")"
   LAB_ESTADO_PATH="$_ep_backup"
   _igual "exit code en codex (con exit 2 Codex descarta el stdout, 6.2)" "$LAB_RC" "0"
@@ -3746,6 +3800,9 @@ caso_g1_grok_stop_shutdown_no_toca_estado() {
   [ -f "$_gk" ] || _mal "el Stop de cierre borro el estado del turno (D6)"
   _igual "cycle intacto tras el Stop de cierre" "$(grep '^cycle=' "$_gk" 2>/dev/null | tail -n 1 | cut -d= -f2-)" "0"
 
+  # A6: el control de que end_turn corre el gate viaja por violacion
+  # adversary (la ceremonia ya no bloquea).
+  printf 'adv_violation=1\nadv_violation_paths=src/fuera.ts\n' >> "$_gk"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'todavia no cierro' end_turn)"
   LAB_GROK_HOOK_EVENT=""
@@ -3786,9 +3843,13 @@ caso_g1_grok_autowake_no_desarma() {
 caso_g1_grok_autowake_con_sentinel_no_rearma() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega con sentinel en la descripcion')"
+  # A6: el ciclo quemado viaja por violacion adversary (la ceremonia ya no
+  # bloquea); el estado sobrevive al bloqueo con cycle=1.
+  _gk0="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  printf 'adv_violation=1\nadv_violation_paths=src/fuera.ts\n' >> "$_gk0"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'todavia sin recibo' end_turn)"
-  _contiene "el Stop sin recibo bloquea y quema un ciclo" "$LAB_OUT" '"decision":"block"'
+  _contiene "el Stop con violacion bloquea y quema un ciclo" "$LAB_OUT" '"decision":"block"'
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_autowake '01a0c0de-0040-7abc-8def-333333333340' implementer '-saikit crear nota.txt')"
   LAB_GROK_HOOK_EVENT=""
@@ -3983,13 +4044,14 @@ caso_g4_grok_turno_completo_camel_cierra() {
   [ -f "$_gk" ] && _mal "el cierre limpio grok no borro el estado"
 }
 
-caso_g4_grok_stop_sin_recibo_bloquea() {
+caso_g4_grok_stop_sin_recibo_cierra() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit turno sin recibo')"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'listo, entrega' end_turn)"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok end_turn sin recibo bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
 
 # 18.27 (D-B) — la escotilla DELEGATED en grok exige trabajo en vuelo. Medido
@@ -3999,7 +4061,7 @@ caso_g4_grok_stop_sin_recibo_bloquea() {
 # reabra la sesion (RC=0, 0/6 etiquetas, estado huerfano). Con la guardia, ese
 # Stop cae al gate normal y BLOQUEA — bloqueo que el host sostiene (m1b-r1
 # cerro 6/6 tras el bloqueo).
-caso_g4_grok_delegado_sin_bg_bloquea() {
+caso_g4_grok_delegado_sin_bg_cierra() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit delega sync y corta')"
   LAB_GROK_HOOK_EVENT=post_tool_use
@@ -4007,9 +4069,11 @@ caso_g4_grok_delegado_sin_bg_bloquea() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(lab_payload_grok_stop 'SUMMONAIKIT HARNESS DELEGATED - awaiting implementer.' end_turn)"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok delegado SIN trabajo en vuelo bloquea (18.27)" "$LAB_OUT" '"decision":"block"'
+  # A6: sin bg el DELEGATED cae al gate normal, que ahora cierra limpio.
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
-  _no_vacio "el turno sigue abierto tras el bloqueo" "$_gk"
+  _vacio "el cierre limpio borra el estado" "$_gk"
 }
 
 # 18.27 (D-B) review r2 (R27-3): las formas DEGENERADAS de "sin trabajo" —
@@ -4018,7 +4082,7 @@ caso_g4_grok_delegado_sin_bg_bloquea() {
 # vacío compacto, hay trabajo"), las tres PERMITÍAN un Stop con línea
 # DELEGATED y sin nada en vuelo (repro del lider). El patron actual es
 # positivo: solo el contenido visible dentro del array cuenta como trabajo.
-caso_g4_grok_delegado_bg_degenerado_bloquea() {
+caso_g4_grok_delegado_bg_degenerado_cierra() {
   for _v in '"backgroundTasks":[ ]' '"backgroundTasks":   [  ]' '"backgroundTasks":null' '"backgroundTasks": null'; do
     lab_limpiar_estado
     LAB_GROK_HOOK_EVENT=user_prompt_submit
@@ -4027,8 +4091,11 @@ caso_g4_grok_delegado_bg_degenerado_bloquea() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-deg",%s,"sessionCrons":[]}' "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
-    _contiene "Stop grok con backgroundTasks degenerado ($_v) bloquea (R27-3)" "$LAB_OUT" '"decision":"block"'
   done
 }
 
@@ -4074,7 +4141,7 @@ caso_g4_grok_delegado_bg_multilinea_permite() {
 # nivel vacia, JSON truncado a mitad del array, y clave AUSENTE (fail-closed
 # de la 18.27 conservado). Las variantes anidada y truncada eran los falsos
 # positivos del grep textual.
-caso_g4_grok_delegado_bg_estructural_bloquea() {
+caso_g4_grok_delegado_bg_estructural_cierra() {
   for _v in \
     '"backgroundTasks":"[{\"id\":1}]"' \
     '"backgroundTasks":42' \
@@ -4088,8 +4155,11 @@ caso_g4_grok_delegado_bg_estructural_bloquea() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-est",%s,"sessionCrons":[]}' "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
-    _contiene "Stop grok con backgroundTasks no estructural ($_v) bloquea (20.4)" "$LAB_OUT" '"decision":"block"'
   done
 
   # ECO EN PROSA: el mensaje cita el campo con un array poblado (comillas
@@ -4102,8 +4172,11 @@ caso_g4_grok_delegado_bg_estructural_bloquea() {
   lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"El campo \\"backgroundTasks\\": [{\\"id\\":1}] queda vacio.\\n\\nSUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-eco","backgroundTasks":[],"sessionCrons":[]}')"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok con eco en prosa de backgroundTasks bloquea (20.4)" "$LAB_OUT" '"decision":"block"'
 
   # JSON TRUNCADO a mitad del array: fail-closed, sin evidencia no hay
   # escotilla. Con el grep textual este payload PERMITIA (el patron matcheaba
@@ -4115,8 +4188,11 @@ caso_g4_grok_delegado_bg_estructural_bloquea() {
   lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-trunc","backgroundTasks":[{"id":"t1","type":"subagent","status":"runnin'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok con JSON truncado en backgroundTasks bloquea (20.4)" "$LAB_OUT" '"decision":"block"'
 
   # Clave AUSENTE del payload (nunca medida en vivo): fail-closed conservado.
   lab_limpiar_estado
@@ -4126,8 +4202,11 @@ caso_g4_grok_delegado_bg_estructural_bloquea() {
   lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-sinclave","sessionCrons":[]}'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok sin la clave backgroundTasks bloquea (20.4)" "$LAB_OUT" '"decision":"block"'
 }
 
 # 20.4 (hallazgo del verificador, r1): la basura BALANCEADA dentro del array
@@ -4153,8 +4232,11 @@ caso_g4_grok_delegado_bg_primer_token() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tok",%s,"sessionCrons":[]}' "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
-    _contiene "Stop grok con token invalido en backgroundTasks ($_v) bloquea (20.4 r1)" "$LAB_OUT" '"decision":"block"'
   done
 
   # VACIO MULTILINEA REAL: salto de linea de verdad entre "[" y "]" — JSON
@@ -4167,8 +4249,11 @@ caso_g4_grok_delegado_bg_primer_token() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-vm","backgroundTasks":[
 ],"sessionCrons":[]}'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok con backgroundTasks vacio multilinea real bloquea (20.4 r1)" "$LAB_OUT" '"decision":"block"'
 
   # Valores VALIDOS como unico elemento: siguen permitiendo (el vacio no es
   # la unica forma no-basura; un array con un numero o un string raro pero
@@ -4184,6 +4269,8 @@ caso_g4_grok_delegado_bg_primer_token() {
     LAB_GROK_HOOK_EVENT=""
     _igual "exit del Stop delegado con valor valido ($_v) en vuelo" "$LAB_RC" "0"
     _vacio "stdout del allow grok con valor valido ($_v)" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _no_vacio "la delegacion con valor valido ($_v) no cierra el turno: el estado sigue" "$_gk"
   done
 }
 
@@ -4208,7 +4295,7 @@ caso_g4_grok_delegado_bg_primer_token() {
 # "\q", "\u12G" (3 hex + cierre), "\u12GX" (hex invalido) y un tab CRUDO
 # dentro de un string. Los escapes VALIDOS ("\n", "\"", "\u0041", el eco en
 # prosa de mas abajo) siguen permitiendo.
-caso_g4_grok_delegado_bg_doc_roto_bloquea() {
+caso_g4_grok_delegado_bg_doc_roto_cierra() {
   _v_tab_crudo="$(printf '"backgroundTasks":[1],"x":"a\tb"')"
   for _v in '"backgroundTasks":[nul]' '"backgroundTasks":[1,]' '"backgroundTasks":[1],"bad":oops' '"backgroundTasks":[1. ]' '"backgroundTasks":[- ]' '"backgroundTasks":[1e ]' '"backgroundTasks":[1],"x":"\q"' '"backgroundTasks":[1],"x":"\u12G"' '"backgroundTasks":[1],"x":"\u12GX"' '"backgroundTasks":[1],"x":"\u12G34"' "$_v_tab_crudo"; do
     lab_limpiar_estado
@@ -4218,8 +4305,11 @@ caso_g4_grok_delegado_bg_doc_roto_bloquea() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-doc",%s,"sessionCrons":[]}' "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
-    _contiene "Stop grok con documento roto ($_v) bloquea (r1)" "$LAB_OUT" '"decision":"block"'
   done
 
   # Trailing garbage: el documento COMPLETO cierra y DESPUES del cierre del
@@ -4232,8 +4322,11 @@ caso_g4_grok_delegado_bg_doc_roto_bloquea() {
   lab_run auto grok "$(lab_payload_grok_spawn implementer)"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-tg","backgroundTasks":[1],"sessionCrons":[]} "trailing"'
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _vacio "el cierre limpio borra el estado" "$_gk"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "Stop grok con basura tras el cierre del root bloquea (r1)" "$LAB_OUT" '"decision":"block"'
 }
 
 # review r2 del PR #273: el parser completo de backgroundTasks es una
@@ -4301,11 +4394,9 @@ EOF
         lab_run auto "$_target" "$(lab_payload_grok_stop_bg 'SUMMONAIKIT HARNESS DELEGATED - awaiting implementer')"
       fi
       [ -e "$_awk_marker" ] || _mal "grok target=$_target bg=$_bg: no invoco el parser"
-      if [ "$_bg" = "vacio" ]; then
-        _contiene "grok target=$_target con bg vacio bloquea" "$LAB_OUT" '"decision":"block"'
-      else
-        _vacio "grok target=$_target con bg poblado permite" "$LAB_OUT"
-      fi
+      # A6: vacio y poblado permiten igual (sin ceremonia que bloquear); el
+      # parser se sigue invocando en grok, que es lo que este caso ata.
+      _vacio "grok target=$_target bg=$_bg permite" "$LAB_OUT"
     done
   done
 
@@ -4337,8 +4428,11 @@ caso_g4_grok_delegado_bg_clave_escapada() {
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-esc%d",%s,"sessionCrons":[]}' "$_n" "$_v")"
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _vacio "el cierre limpio borra el estado" "$_gk"
     LAB_GROK_HOOK_EVENT=""
-    _contiene "Stop grok con clave DISTINTA via escapes ($_v) bloquea (review r2 P1)" "$LAB_OUT" '"decision":"block"'
   done
 
   for _v in '"backgroundTasks":[1]' '"back\u0067roundTasks":[1]'; do
@@ -4353,6 +4447,8 @@ caso_g4_grok_delegado_bg_clave_escapada() {
     LAB_GROK_HOOK_EVENT=""
     _igual "exit del Stop delegado con grafia ($_v) en vuelo" "$LAB_RC" "0"
     _vacio "stdout del allow grok con grafia ($_v)" "$LAB_OUT"
+    _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+    _no_vacio "la delegacion con grafia ($_v) no cierra el turno: el estado sigue" "$_gk"
   done
 }
 
@@ -4361,7 +4457,7 @@ caso_g4_grok_delegado_bg_clave_escapada() {
 # vacio; la segunda vacia el marcador portable y exige que su guard falle
 # cerrado. En ambos casos una clave escapada DISTINTA no puede colapsar sobre
 # backgroundTasks ni abrir la escotilla DELEGATED.
-caso_g4_grok_marcador_noascii_fail_closed() {
+caso_g4_grok_marcador_noascii_fail_open() {
   _awk_real="$(command -v awk)"
   _awk_bin="$LAB/awk-noascii-bin"
   mkdir -p "$_awk_bin"
@@ -4388,7 +4484,8 @@ EOF
     lab_run auto grok "$(lab_payload_grok_spawn implementer)"
     LAB_GROK_HOOK_EVENT=stop
     lab_run auto grok '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","cwd":"/proyecto","workspaceRoot":"/proyecto","permissionMode":"bypassPermissions","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","promptId":"p-gk-noascii","back\ngroundTasks":[1],"backgroundTasks":[],"sessionCrons":[]}'
-    _contiene "marcador noascii $SAIKIT_AWK_NOASCII_MODE falla cerrado" "$LAB_OUT" '"decision":"block"'
+    _igual "exit code" "$LAB_RC" "0"
+    _vacio "stdout" "$LAB_OUT"
   done
 
   LAB_GROK_HOOK_EVENT=""
@@ -4430,6 +4527,8 @@ caso_g4_grok_delegado_bg_explicito_permite() {
   LAB_GROK_HOOK_EVENT=""
   _igual "exit del Stop delegado con bg explicito ([1]) en vuelo" "$LAB_RC" "0"
   _vacio "stdout del allow grok con bg explicito" "$LAB_OUT"
+  _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
+  _no_vacio "la delegacion con trabajo en vuelo no cierra el turno: el estado sigue" "$_gk"
 }
 
 # Precedencia snake del walker: AMBOS mensajes en el payload; el snake (sin
@@ -4439,8 +4538,9 @@ caso_g4_grok_precedencia_lastmessage_gana_snake() {
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit precedencia del walker')"
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok "$(printf '{"sessionId":"__SESSION_ID__","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"last_assistant_message":"%s","lastAssistantMessage":"%s","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$_TEXTO_LLANO" "$_RECIBO_VINETAS")"
+  _igual "exit code" "$LAB_RC" "0"
+  _vacio "stdout" "$LAB_OUT"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "last_message snake gano: bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
 
 # transcriptPath camel: el recibo SOLO en el transcript (canal 2), el payload
@@ -4470,7 +4570,6 @@ caso_g4_grok_transcriptpath_camel() {
   LAB_GROK_HOOK_EVENT=stop
   lab_run auto grok '{"sessionId":"__SESSION_ID__","transcript_path":"/no/existe/transcript.jsonl","transcriptPath":"__TRANSCRIPT__","hookEventName":"stop","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"'"$_TEXTO_LLANO"'","promptId":"p1","backgroundTasks":[],"sessionCrons":[]}' "$(lab_transcript_asistente "$_RECIBO_VINETAS")"
   LAB_GROK_HOOK_EVENT=""
-  _contiene "transcript snake gano: bloquea (7.4: exit 0 + decision)" "$LAB_OUT" '"decision":"block"'
 }
 
 # ============================== Task 7.4: ceremonia Grok (D3) ================
@@ -4502,7 +4601,7 @@ caso_g3_grok_ceremonia_completa_cierra() {
 # Caso que BLOQUEA (el catch de mut_ceremonia_sin_grok): sin despachar
 # verifier/reviewer, el Stop bloquea con la forma grok (exit 0 + decision:block
 # + el contrato en el reason — la re-planificacion del armado de 7.2).
-caso_g3_grok_ceremonia_incompleta_bloquea() {
+caso_g3_grok_ceremonia_incompleta_cierra() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit ceremonia incompleta')"
   LAB_GROK_HOOK_EVENT=post_tool_use
@@ -4513,10 +4612,6 @@ caso_g3_grok_ceremonia_incompleta_bloquea() {
   lab_run auto grok "$(lab_payload_grok_stop "$_RECIBO_VINETAS" end_turn)"
   LAB_GROK_HOOK_EVENT=""
   _igual "bloqueo grok con exit 0 (exit 2 es ignorado, 7.2)" "$LAB_RC" "0"
-  _contiene "bloqueo grok con decision:block" "$LAB_OUT" '"decision":"block"'
-  _contiene "el motivo nombra al verifier faltante" "$LAB_ERR" 'Missing verifier'
-  _contiene "el contrato viaja en el bloqueo (reason, 7.2)" "$LAB_OUT" 'SUMMONAIKIT HARNESS RECEIPT'
-  _contiene "el reason nombra la tool nativa de grok (CR PR #28)" "$LAB_OUT" 'spawn_subagent tool'
   case "$LAB_OUT" in *'Task tool'*) _mal "el reason grok nombra Task tool, que no existe en Grok (CR PR #28)" ;; esac
   case "$LAB_OUT" in *'$TOOL_HINT'*) _mal "el contrato emite TOOL_HINT literal: el heredoc no expande (r3 PR #28)" ;; esac
 }
@@ -4844,7 +4939,7 @@ todos_los_casos() {
 # (R1, no se exige) y el Stop no emite veredictos de exito (R2). Otros hosts
 # intactos: el credito por agent_type de eventos internos sigue vivo en claude
 # (caso_g3_agent_type_cuenta) y no cambia aca.
-# Malabar de ruta de estado (como caso_g3_ceremonia_se_exige_en_codex): los
+# Malabar de ruta de estado (como caso_g3_ceremonia_no_se_exige_en_codex): los
 # helpers del lab apuntan a state/<host-descubierto>/ y el evento codex lee
 # state/codex/; cada caso alinea LAB_ESTADO_PATH y lo restaura.
 
@@ -4965,7 +5060,7 @@ caso_g3_codex_nativo_cross_session() {
 
 # Menor (revision externa): la ceremonia nativa fuera de orden bloquea — el
 # orden se exige sobre agents_seen y el canal nativo lo hereda.
-caso_g3_codex_nativo_fuera_de_orden_bloquea() {
+caso_g3_codex_nativo_fuera_de_orden_cierra() {
   _cx_backup="$LAB_ESTADO_PATH"
   LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
   lab_run prompt codex "$(lab_payload_prompt '-saikit tarea fuera de orden')"
@@ -4976,7 +5071,6 @@ caso_g3_codex_nativo_fuera_de_orden_bloquea() {
   lab_run tool codex "$(lab_payload_bash 'pytest -q')"
   lab_run stop codex "$(lab_payload_stop "$_RECIBO_VINETAS")"
   _igual "exit code (ceremonia fuera de orden)" "$LAB_RC" "0"
-  _contiene "bloqueo por orden" "$LAB_OUT" '"decision":"block"'
   LAB_ESTADO_PATH="$_cx_backup"
 }
 
@@ -5196,13 +5290,10 @@ caso_g1_muse_contrato_minimo_conserva_aviso() {
   _contiene "el minimo conserva el aviso de revision" "$LAB_OUT" 'SAIKIT REVIEW NOTICE: aviso de prueba 23.8.'
 }
 
-caso_g3_muse_ceremonia_incompleta_bloquea() {
+caso_g3_muse_ceremonia_incompleta_cierra() {
   lab_run prompt muse "$(lab_payload_muse_derivado prompt-saikit-sesion-07.json)"
   lab_run stop muse "$(lab_payload_muse_fixture fixture-16-real2-delegacion-Stop.json)"
-  _igual "exit code (Stop de muse no se invierte)" "$LAB_RC" "2"
-  _contiene "stdout JSON block" "$LAB_OUT" '"decision":"block"'
-  _contiene "motivo a stderr" "$LAB_ERR" 'Missing implementer subagent run'
-  _contiene "TOOL_HINT en el motivo" "$LAB_ERR" 'subagent_spawn'
+  _igual "exit code (Stop de muse no se invierte)" "$LAB_RC" "0"
 }
 
 caso_g3_muse_rejected_no_pendiente() {

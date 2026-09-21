@@ -1,0 +1,55 @@
+{
+  "role": "adversary",
+  "attacked": [
+    "entrega_validar: formas de bloqueantes (9 variantes), coords, roles, PASS/APPROVE",
+    "entrega_recibo_del_pr: REVOKE (mismo comentario, sin sha, otro autor), APPROVE ambiguo/invalido/otro-schema, pagina error-objeto, cerca indentada, comentario sin body (via tests)",
+    "ci_chequear (codigo real): verde-viejo/rojo-nuevo, rojo-viejo/verde-nuevo, otro-sha, sin-headSha, empate de number",
+    "--confirmado: ausencia de bypass + no invencion de permiso (diseno l62)",
+    "lock de integracion: diff sin cambios + contencion real (rc=3) + liberacion por trap",
+    "hook Stop: bloque adversary temprano, escaneo secretos, cierre limpio, restos sello/linked",
+    "parser: limites de atribucion vs afirmaciones (overclaim)",
+    "blast radius: llamadores de la lib + poder discriminante de tests (mutaciones)"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "location": "tools/lib/entrega_contract.sh:153",
+      "claim": "[ADV-A-01] (no bloqueante) entrega_validar detecta bloqueantes solo por hojas escalares del flat (hoja 'bloqueantes' o prefijo 'bloqueantes.'/'bloqueantes['). Una entrada que es un contenedor vacio ([{}], [[]]) o que solo contiene contenedores vacios ({\"x\":[]}) no produce hojas y PASA la validacion, aunque la lista no esta vacia. Contradice la regla v1 declarada en el mismo archivo (linea 39-40 y comentario 150-151): 'CUALQUIER entrada (escalar u objeto/array) es un bloqueante abierto'. Impacto: Un bloqueante declarado con forma rara pasa como si no hubiera bloqueantes y el merge sigue. Riesgo bajo: exige que el propio autor del recibo (lead, cuenta de confianza) use esa forma; un lead malicioso ya puede quitar el bloqueante por via legitima (v1: el cerrado se quita de la lista), asi que no gana poder nuevo. El riesgo real es accidental (herramienta que genere [{}]).",
+      "trigger": "El recibo trae bloqueantes como array/objeto NO vacio pero sin ninguna hoja escalar: [{}], [[]], {\"x\":[]}, {\"a\":{}} o combinaciones.",
+      "evidence": "PoC en copia detached /tmp/advA/wt (mismo SHA), lib real: for b in '[]' '[{}]' '[[]]' '[{\"id\":\"B1\"}]' '{\"x\":[]}' 'null' '[null]' '\"\"' '{}'. Salida real: 'bloqueantes=[{}] => rc=0 PASA' ; 'bloqueantes=[[]] => rc=0 PASA' ; 'bloqueantes={\"x\":[]} => rc=0 PASA' ; 'bloqueantes=[{\"id\":\"B1\"}] => rc=1 BLOQUEA'. Reproducible: si (comando + salida arriba).",
+      "confirmed": true
+    },
+    {
+      "severity": "minor",
+      "location": "tools/lib/entrega_contract.sh:156-163",
+      "claim": "[ADV-A-02] (no bloqueante) El contador de bloqueantes usa substr($1,14) sobre rutas 'bloqueantes[<i>]...', pero el indice empieza en la posicion 13 ('bloqueantes'=11 chars + '['=12). Con indices <10, rest empieza en ']' (no digito) y NUNCA cuenta (siempre 0); con indices >=10 cuenta un fantasma (ej. [10] se lee como 0). Off-by-one solo en el texto del mensaje. Impacto: Cosmetico: el mensaje informa mal ('0 en la lista' cuando hay entradas). No abre el gate (sigue rc=1), pero confunde al operador que diagnostica el NO-MERGE.",
+      "trigger": "Cualquier recibo con bloqueantes en array que llegue al mensaje de rechazo (ej. [{\"id\":\"B1\"}]).",
+      "evidence": "Mismo PoC ADV-A-01, salida real: 'bloqueantes=[{\"id\":\"B1\"}] => rc=1 BLOQUEA: recibo: bloqueante abierto (0 en la lista; primero: B1)'. Reproducible: si.",
+      "confirmed": true
+    },
+    {
+      "severity": "minor",
+      "location": "tools/lib/entrega_contract.sh:227-232",
+      "claim": "[ADV-A-03] (no bloqueante) El REVOKE exige ('REVOKE' y sha como subcadenas) en un comentario POSTERIOR del mismo autor; un REVOKE sin sha se ignora en silencio, sin aviso de 'comentario tipo-REVOKE visto pero sin efecto'. Intencion de revocar humana cae en fail-open silencioso. Impacto: El operador cree haber revocado y un --confirmado posterior mergea igual. Modelo de amenaza de una sola cuenta (el REVOKE valido exige la misma cuenta que corre el gate), asi que es error operativo, no escalada: minor.",
+      "trigger": "El lead publica un comentario posterior con la palabra REVOKE pero sin el sha completo de 40 chars (ej. 'REVOKE lead: me arrepiento, aparecio un bloqueante').",
+      "evidence": "PoC caso C en /tmp/advA/wt con gh falso: APPROVE valido + comentario posterior 'REVOKE lead: me arrepiento (sin sha)' del mismo autor. Salida real: 'rc=0 (REVOKE-sin-sha ignorado)'. Reproducible: si. Ademas: grep -rin 'revoke' en recetas/00-lider.md, AGENTS.md y el plan no trae NINGUNA mencion al formato REVOKE: el protocolo (literal REVOKE + sha + mismo autor + comentario posterior) solo existe en comentarios del codigo.",
+      "confirmed": true
+    },
+    {
+      "severity": "minor",
+      "location": "tools/lib/entrega_contract.sh:227-244",
+      "claim": "[ADV-A-04] (no bloqueante) REVOKE y APPROVE en el mismo comentario: gana APPROVE. El REVOKE solo anula contra un candidato de un comentario ANTERIOR; en el mismo comentario se evalua primero (sin efecto) y luego el APPROVE asigna y resetea revocado=0. Impacto: Bajo: el contenido del recibo igual se valida completo despues (entrega_validar), y el trigger es solo un localizador; el autor es la cuenta de confianza. Es divergencia doc-vs-codigo ('Un comentario ambiguo... no aprueba nada', linea 35), no apertura del gate.",
+      "trigger": "Un SOLO comentario contiene a la vez 'REVOKE <sha>' y 'APPROVE lead <sha>' con un bloque json valido (sin candidato previo).",
+      "evidence": "PoC caso A en /tmp/advA/wt con gh falso: un comentario 'REVOKE lead <sha> por las dudas' + 'APPROVE lead <sha>' + bloque valido. Salida real: 'rc=0 bytes=317' (devuelve el recibo). Reproducible: si. Causa: la rama REVOKE (227) exige candidato previo ([ -n \"$candidato\" ]); sin previo no dispara, y la rama APPROVE (233) si asigna.",
+      "confirmed": true
+    },
+    {
+      "severity": "minor",
+      "location": "tools/lib/entrega_contract.sh:205-216",
+      "claim": "[ADV-A-05] (no bloqueante) Una pagina JSON-valida pero no-array (n=0 hojas [i]) se salta en silencio en vez de rc=3 'respuesta inutilizable'. Contradice la disciplina declarada en el mismo archivo (193-194): 'una respuesta truncada no puede leerse como ausencia'. Impacto: Diagnostico equivocado: un estado desconocido (respuesta inutilizable) se reporta como ausencia ('sin recibo'). Sigue fail-closed hacia NO-MERGE (rc=1 en ambos casos), asi que no abre el gate; solo manda al operador a buscar un recibo faltante cuando el problema seria la API.",
+      "trigger": "gh sale 0 pero una pagina es JSON valido que NO es array (ej. objeto de error {\"message\":\"API rate limit...\"}).",
+      "evidence": "PoC caso E en /tmp/advA/wt con gh falso rc=0 y pagina '{\"message\":\"API rate limit exceeded\",...}'. Salida real: 'rc=1 err=recibo: sin recibo: el PR op/sandbox#7 no trae un comentario APPROVE...'. Reproducible: si. (El gh real sale !=0 en errores de API, asi que exige un gh roto para dispararse.)",
+      "confirmed": true
+    }
+  ]
+}

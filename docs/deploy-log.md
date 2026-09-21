@@ -29,6 +29,43 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-21 — PR #345 (Bloque A: entrega sin sello) — deploy ACTUALIZA las cuatro copias y perfiles
+
+- **Merge:** `81aa8ff301f666d94bb1ce63177d3efb762f7718`,
+  2026-09-21T03:37:26Z, verificado con la API de GitHub y sincronizado en
+  `master` mediante fast-forward. PR head revisado:
+  `1d85c163d7e696b7b693d1c50e9a90daf631ca92`.
+- **Deploy:** desde ese `master`, las cuatro copias dieron REPARADO.
+  Backups locales del 2026-09-20 PDT: claude
+  `summonaikit-harness.sh.nuestro.20260920-203735.bak`, grok
+  `summonaikit-harness.sh.nuestro.20260920-203744.bak`, dsh y codex
+  `summonaikit-harness.sh.nuestro.20260920-203745.bak`, en el directorio
+  `saikit-backups` de cada host. No se instaló la rama antes del merge.
+- **Perfiles y registros:** actualizados con `--host claude`, `kimi`,
+  `grok`, `dsh`, `codex`, `zcode` y `muse`. Receta del lead actualizada;
+  Zcode y Muse reutilizan la copia de Claude. Backups de configuración:
+  `config.json.zcode.20260920-203745.bak` y
+  `settings.json.muse.20260920-203746.bak`. Sin borrar estado antiguo ni
+  reiniciar sesiones de OpenClaw.
+- **Verificación:** a las 03:38:01 UTC, lectura en vivo del reloj al acabar
+  el checklist. `install-hook.sh --check` dio `veredicto=ok`, las cuatro
+  copias al día, registros Claude/Grok/DSH/Codex/Muse `ok`;
+  `check-hook-registration.sh` sin avisos; `audita-ledger.sh` dio OK.
+  Los cinco hashes, fuente y cuatro copias, coincidieron en
+  `d2becf0a81266862de6d0fcf294ea22b87351846a081f4facce71ee7f511d1f0`.
+- **CI y review:** [Quality 35557349576](https://github.com/gon0801/summonaikit-claude/actions/runs/35557349576)
+  completo en verde sobre el head final; revisión independiente del delta
+  APPROVE y 26 casos focalizados. CodeRabbit revisó `b20e242..1d85c16`
+  sin nuevos comentarios accionables. Recibo persistente en
+  [el PR](https://github.com/gon0801/summonaikit-claude/pull/345#issuecomment-5755052884).
+- **Límites:** instalación y registro comprobados en esta máquina macOS.
+  No se afirma un despacho nuevo a un modelo real de Muse; el instalador
+  lo declara `unknown`. No es una medición nueva de modelos ni un deploy
+  del gateway OpenClaw. Los seguimientos no bloqueantes A.R2–A.R11 quedan
+  en `Plans.md`. El PR que integra este registro es solo ledger; su
+  comprobación post-merge se publicará en ese mismo PR, sin otro commit
+  autorreferente ni otra batería local.
+
 ## 2026-09-18 — PRs #331–#337 (Phase 23: Muse Code como quinto host) — deploy ACTUALIZA las cuatro copias y registra muse
 
 - **Merges:** #331 `a35164700968c5af65d3e1f9530b84f8dd4d9888`

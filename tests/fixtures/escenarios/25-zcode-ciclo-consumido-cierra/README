@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 zcode, G5 pasa (g5_ciclo_consumido_no_impide_cerrar). Un Stop que falla al
 principio (ciclo 0 -> 1, sin recibo ni secuencia) y despues el turno completo
 (implementer -> verifier -> reviewer, runner que pasa, recibo en vinetas). El

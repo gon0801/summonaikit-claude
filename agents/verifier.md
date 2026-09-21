@@ -68,7 +68,7 @@ When the diff touches a domain, read that skill's `references/gotchas.md` and ch
 
 ## Output format
 
-Return a verdict: **PASS** with the evidence, or **FAIL** with a numbered list of what failed and the exact reproduction (command + observed result). Be specific enough that the implementer can act without guessing.
+Return a verdict: **PASS** with the evidence, or **FAIL** with a numbered list of what failed and the exact reproduction (command + observed result). Be specific enough that the implementer can act without guessing. The lead records your verdict and evidence links in the PR delivery receipt (`APPROVE lead <sha>`); without an independent PASS there is no delivery.
 
 ## Redacción antes de escribir
 

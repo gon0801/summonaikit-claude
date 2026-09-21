@@ -40,7 +40,7 @@ From those, identify the repo's own **type-check / build / test / lint** command
 
 ## Batch your evidence
 
-Group your verification commands into a few shell invocations (one per checkpoint), never one call per command — each call costs a full model turn.
+Group your verification commands into a few shell invocations (one per checkpoint), never one call per command — each call costs a full model turn. Report the evidence (commands + results) so the lead can cite it in the PR delivery receipt (`APPROVE lead <sha>`).
 
 ## Classify applicable skills before starting
 

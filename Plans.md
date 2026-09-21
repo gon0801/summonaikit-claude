@@ -316,9 +316,46 @@ Muse: la corrida viva es del lead.
 **Runbook de ejecución:** vive en `goncloud-openclaw`, no aquí, porque claw
 orquesta el autopilot de todos los repos y lee los runbooks de ahí:
 `docs/runbooks/autopilot-fase-saikit23.md`, que hereda
-`docs/runbooks/base-summonaikit.md` (openclaw #86). Su tabla de preaprobaciones
-se aprobó al mergear ese PR y cubre los dos 事前確認 de la Phase 23 que abajo
-siguen «PENDIENTE».
+`docs/runbooks/base-summonaikit.md` (openclaw #86, actualizado por #118). La
+tabla de preaprobaciones se aprobó para el bloque A del runbook y cubre los dos
+事前確認 de la Phase 23 que abajo siguen «PENDIENTE», sin marcarlos como
+aprobados.
+
+## Bloque A — entrega sin sello (seguimiento no bloqueante, 2026-09-20)
+
+**Cierre de la entrega:** A1–A10 integrados por PR #345 en
+`81aa8ff301f666d94bb1ce63177d3efb762f7718` e instalados desde `master`.
+CI final [35557349576](https://github.com/gon0801/summonaikit-claude/actions/runs/35557349576)
+verde; review independiente APPROVE; CodeRabbit sin nuevos hallazgos
+accionables. Las cuatro copias y registros quedaron verificados el
+2026-09-21; evidencia y alcance en `docs/deploy-log.md`.
+A8 se satisface por su alternativa explícita: conservar el lock y registrar
+la mejora en A.R6. El cierre no declara realizadas las mejoras de abajo,
+ni los bloques B/C de OpenClaw, ni el runbook de Fase 9.
+
+**Propósito:** residuales del bloque A (rama `feat/entrega-sin-sello-A`):
+4 de los 5 hallazgos minor del adversary (ADV-A-02..05; ADV-A-01 se corrigió
+en este PR y su fila A.R1 quedó cerrada) en
+`.saikit/findings/adversary-bloque-A.json`, la mejora atómica del lock que
+el A8 dejó como seguimiento, los minors M1/M3 del review y los residuales
+del verifier. Nada de esto bloquea el bloque: M2 se corrigió en el bloque
+(comentarios huérfanos 20.13 retirados) y M4 se verificó ya satisfecho (los
+3 casos no-grok afirman estado conservado y se ponen ROJO bajo mutante de
+su escotilla, medido 2026-09-20) — por eso M2/M4 no tienen fila.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| A.R1 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-01: bloqueante con contenedores vacíos pasa.** `entrega_validar` (`tools/lib/entrega_contract.sh:153`) detecta bloqueantes solo por hojas escalares del flat; `[{}]`, `[[]]` o `{"x":[]}` no producen hojas y PASAN aunque la lista no está vacía — contradice la regla v1 del mismo archivo ("CUALQUIER entrada es un bloqueante abierto"). Riesgo bajo: exige esa forma rara del propio lead | Caso por forma que falle antes y pase después + mutación que quite el conteo de contenedores, atrapada | — | cc:完了 [PR #345] — corregido en el bloque: chequeo estructural del JSON original (`entrega_bloqueantes_no_vacio`), 4 casos de regresión + mutación atrapada |
+| A.R2 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-02: el contador de bloqueantes informa mal.** Off-by-one (`substr($1,14)` en `tools/lib/entrega_contract.sh:156-163`): con índices <10 nunca cuenta y el mensaje dice "0 en la lista" habiendo entradas. Cosmético: el gate sigue bloqueando (rc=1) | Caso que afirme el conteo del mensaje con 1 y con 10+ entradas | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R3 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-03: REVOKE sin sha se ignora en silencio.** Un comentario posterior con intención de revocar pero sin el sha completo no tiene efecto ni avisa (`tools/lib/entrega_contract.sh:227-232`); el operador cree haber revocado y un `--confirmado` posterior mergea igual. Error operativo, no ataque (misma cuenta) | Aviso "REVOKE visto sin efecto" + caso que lo afirme; el REVOKE válido sin cambios (casos existentes en verde) | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R4 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-04: REVOKE y APPROVE en el mismo comentario gana APPROVE.** Divergencia doc-vs-código (`tools/lib/entrega_contract.sh:227-244`): el REVOKE solo anula contra un candidato ANTERIOR | Regla decidida y documentada donde hoy se promete lo contrario + caso de cada lado + mutación atrapada | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R5 | `[Adversary]` `[lane:gate]` `[tdd:required]` **ADV-A-05: página no-array se salta en silencio.** Una página JSON-válida pero no-array se ignora en vez de rc=3 "respuesta inutilizable" (`tools/lib/entrega_contract.sh:205-216`), y un estado desconocido se reporta como ausencia ("sin recibo"). Sigue fail-closed a NO-MERGE (rc=1 en ambos casos) | Página no-array ⇒ rc=3 con caso; las páginas válidas sin cambios | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R6 | `[Lock]` `[lane:gate]` `[tdd:required]` **Mejora atómica del lock A8.** El plan A8 pedía recuperación de propietario local muerto con exclusión atómica; como seguimiento quedó explícito: hoy el lock se conserva y la ÚNICA recuperación es `--liberar-lock` explícito (nunca se auto-borra, ni con pid muerto) | Casos del A8 (proceso vivo, muerto, pid reutilizado, host ajeno, dos recuperadores); identidad indeterminable ⇒ no borrar, informar y dejar seguir otros carriles; mutación que quite la exclusión, atrapada | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R7 | `[Review]` `[lane:gate]` `[tdd:required]` **M1 del review del bloque A: helpers muertos + golden.** Tras retirar la ceremonia (A6/A7) quedaron helpers sin llamadores; la golden sigue grabando su forma vieja | Helpers retirados sin referencias; `tests/golden/baseline.txt` regrabada con `--record` y diff auditado y clasificado en el PR; suite verde | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R8 | `[Review]` `[lane:gate]` `[tdd:required]` **M3 del review del bloque A: re-pin de CLAUDECODE.** El pin que el bloque usa quedó divergente de lo que el review pide | Pin actualizado y verificado contra la fuente; suite verde en CI | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R9 | `[Verifier]` `[lane:gate]` `[tdd:required]` **Residuales del verifier del bloque A + endurecimiento opcional.** (a) Cablear/documentar el override `SAIKIT_HOOK_VIVO` en las corridas para ejercitar el hook del repo de forma determinista; (b) casos que hoy solo corren fuera de CI Linux; (c, opcional) rechazar sha vacío en `entrega_validar`/recibo | Override documentado y usado por las baterías; casos corriendo en CI Linux; sha vacío ⇒ rechazo con caso (si se hace (c)) | — | cc:TODO — seguimiento no bloqueante del bloque A |
+| A.R10 | `[Review]` `[lane:fast]` **Documentación menor de CodeRabbit.** El comentario de `entrega_bloqueantes_no_vacio` atribuye precedencia a la primera clave aunque el parser rechaza duplicados; el bot también informa cobertura de docstrings de 55.80% frente a su umbral de 80% | Alinear el comentario con el parser y evaluar cobertura documental útil, sin ampliar código por el porcentaje del bot; conservar enlace al PR #345 | — | cc:TODO — observaciones tardías no bloqueantes, no abren ronda |
+| A.R11 | `[CI]` `[lane:gate]` `[tdd:required]` **Repartir la partición rápida 2/7.** Run 35553346727: job 13m32s; concentra `test_feature_map_merge` y `test_install_muse_mutations`, aproximadamente 6m37s y 5m15s según timestamps consecutivos de PASS | Distribuir los archivos pesados en jobs distintos y conservar el candado de unión exacta de toda la batería; medir la nueva duración en CI, sin omitir tests ni crear otro gate | — | cc:TODO — tarea de rendimiento independiente; no reabre la entrega A |
 
 ## 事前確認
 

@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 D6 caso 5 (Task 13.5): la trampa medida de precedencia. adversarial-audit hoy resolvia a
 reviewer por el keyword audit; con la rama adversar ANTES, acredita adversary y el slot de
 reviewer sigue bloqueando.

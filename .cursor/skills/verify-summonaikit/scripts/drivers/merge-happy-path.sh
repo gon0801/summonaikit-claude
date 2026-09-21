@@ -57,32 +57,16 @@ case "$gh_kind" in
   *) gh_reason="gh oficial presente (sin sondear cuota)" ;;
 esac
 
-LAB="$VERIFY_TMPDIR/fm-live-seal"
-mkdir -p "$LAB/parent" "$LAB/child"
-printf 'lane=full\n' > "$LAB/parent/harness-state.env"
-printf 'verified: bash tests/run.sh\n' > "$LAB/parent/harness-evidence.log"
-printf 'veredicto_sha256=childsealdeadbeef\n' > "$LAB/child/harness-state.env"
-# parent older so a mtime heuristic would pick the child
-touch -t 202001010101 "$LAB/parent/harness-state.env" "$LAB/parent/harness-evidence.log" \
-  2>/dev/null || true
-touch "$LAB/child/harness-state.env"
-
-# mutate:seal_via_mtime
-do_transfer=no
-# mutate:seal_via_mtime_end
-if [ "$do_transfer" = yes ]; then
-  if grep -q 'verified: ' "$LAB/parent/harness-evidence.log" \
-    || [ "$LAB/child/harness-state.env" -nt "$LAB/parent/harness-state.env" ]; then
-    printf 'veredicto_sha256=childsealdeadbeef\n' >> "$LAB/parent/harness-state.env"
-  fi
-fi
+# Bloque A: sin sellos no hay transferencia hijo→padre que prohibir. La
+# autoridad de entrega es el recibo del PR, que se lee de GitHub al mergear y
+# nunca vive en el estado de sesion: no puede filtrarse entre sesiones.
 
 PROCEDURE=$'Manual live measurement (Optional; preparing this does NOT authorize running it):\n'
 PROCEDURE+=$'1. Disposable repo (not an operator production profile).\n'
 PROCEDURE+=$'2. Identify the run with topic+marker.\n'
 PROCEDURE+=$'3. Name the host (claude/grok/dsh/codex).\n'
 PROCEDURE+=$'4. Record cost/quota before any live gh call.\n'
-PROCEDURE+=$'5. Capture SHA/PR of the sealed verdict.\n'
+PROCEDURE+=$'5. Capture SHA/PR of the delivery receipt.\n'
 PROCEDURE+=$'6. Redacted capture only — no tokens in artifacts.\n'
 PROCEDURE+=$'Preparing this procedure no-autoriza-ejecutar the live merge.\n'
 
@@ -152,13 +136,12 @@ if fm_only live-manual-procedure; then
   fi
   # assert:procedure_defined_end
   # assert:procedure_not_run
-  if printf '%s' "$PROCEDURE" | grep -q 'no-autoriza-ejecutar' \
-    && [ "${do_transfer:-no}" = no ]; then
+  if printf '%s' "$PROCEDURE" | grep -q 'no-autoriza-ejecutar'; then
     fm_pass live-manual-procedure procedure_not_run \
       "no-autoriza-ejecutar" "no-autoriza-ejecutar (Optional, not run)"
   else
     fm_fail live-manual-procedure procedure_not_run \
-      "no-autoriza-ejecutar" "procedure ausente o transfer activo"
+      "no-autoriza-ejecutar" "procedure ausente"
   fi
   # assert:procedure_not_run_end
 fi
@@ -187,37 +170,4 @@ PY
   fm_unknown live-no-sim-credit live_merge \
     "live-merge-not-run" "unknown: live-merge-not-run (sin autorización)"
   # assert:live_merge_end
-fi
-
-if fm_only live-no-seal-transfer; then
-  fm_action live-no-seal-transfer act-seal 3 \
-    "child seal must not move to parent" "merge-happy-path" seal
-  parent_blob="$(cat "$LAB/parent/harness-state.env")"
-  # assert:parent_seal_untouched
-  if printf '%s' "$parent_blob" | grep -q 'veredicto_sha256='; then
-    fm_fail live-no-seal-transfer parent_seal_untouched \
-      "parent-untouched" "parent received child seal"
-  else
-    fm_pass live-no-seal-transfer parent_seal_untouched \
-      "parent-untouched" "parent-untouched"
-  fi
-  # assert:parent_seal_untouched_end
-  # assert:no_mtime_transfer
-  if [ "$do_transfer" = yes ]; then
-    fm_fail live-no-seal-transfer no_mtime_transfer \
-      "no-mtime-transfer" "transferred by mtime/verified"
-  else
-    fm_pass live-no-seal-transfer no_mtime_transfer \
-      "no-mtime-transfer" "no-mtime-transfer"
-  fi
-  # assert:no_mtime_transfer_end
-  # assert:no_verified_transfer
-  if [ "$do_transfer" = yes ]; then
-    fm_fail live-no-seal-transfer no_verified_transfer \
-      "no-verified-transfer" "transferred because verified: present"
-  else
-    fm_pass live-no-seal-transfer no_verified_transfer \
-      "no-verified-transfer" "no-verified-transfer"
-  fi
-  # assert:no_verified_transfer_end
 fi
