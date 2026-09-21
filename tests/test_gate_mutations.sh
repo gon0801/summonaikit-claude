@@ -101,6 +101,7 @@ G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutra
 G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
+G2|runner_mascarado_apagado|el veto del runner tapado por `;` se neutraliza y `bash tests/run.sh ; echo` vuelve a acreditar sin evidencia del exit
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
 G1|muse_tope_borde_ge|el tope de muse compara con -ge y una salida de 16384 bytes exactos, que Muse si acepta, cae al contrato minimo
@@ -431,6 +432,11 @@ mut_falla_gradle_quitada()   { sed 's@|FAILURE: Build failed|BUILD FAILED@@'; }
 # vuelve a acreditar verificacion sin correr nada — lo atrapa
 # caso_g2_runner_en_echo_no_marca.
 mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCHEA_ESTO'@"; }
+
+# 23.16 (fase 23, carril B): neutraliza el veto del runner tapado por `;` - con
+# eso `bash tests/run.sh ; echo listo` vuelve a acreditar sin evidencia del
+# exit. Lo atrapa caso_g2_runner_punto_y_coma_tapa_exit_no_acredita.
+mut_runner_mascarado_apagado() { sed "s@^SAIKIT_RUNNER_MASCARADO_RE=.*@SAIKIT_RUNNER_MASCARADO_RE='NUNCA_MATCHEA_ESTO_23_16'@"; }
 
 # CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
 # SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una

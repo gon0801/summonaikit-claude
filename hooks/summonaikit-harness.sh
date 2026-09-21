@@ -579,6 +579,20 @@ FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]
 # pytest. Se aplica SOLO a la primera linea del comando (ver su uso).
 ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 
+# 23.16 (fase 23, carril B): un runner encadenado con `;` tapa su exit - el
+# comando sale con el exit del ULTIMO (`echo` sale 0 aunque el runner haya
+# reventado) y la salida puede no traer senal de fracaso. El `&&` preserva el
+# exit del runner (si revienta, lo de atras no corre), asi que solo el `;`
+# exige evidencia del exit en la salida: `EXIT:0` textual (lo que
+# `echo EXIT:$?` imprime cuando el runner salio 0). El `\n` LITERAL tambien
+# separa comandos (tool_input.command llega SIN decodificar), asi que un
+# runner que no cierra la ultima linea es el mismo caso. Limites declarados:
+# `||` y `|` tambien tapan el exit y quedan fuera (best-effort, sin parser de
+# shell); un `EXIT:0` ajeno al runner en la misma salida acredita de mas
+# (advisory, fail-open).
+SAIKIT_RUNNER_MASCARADO_RE="($TEST_RUNNER_RE|tests?/run\.sh)(([^;\\]|\\n)*;|\\n.+)"
+SAIKIT_EXIT_CERO_RE='EXIT:[[:space:]]*0([^0-9]|$)'
+
 json_string_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
@@ -3375,7 +3389,9 @@ record_tool_evidence() {
     if [ -z "$toolresult_err" ] \
        && ! printf '%s' "$INPUT" | grep -Eiq "$SAIKIT_DESPACHO_BG_RE" \
        && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
-              || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
+              || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; } \
+       && { ! printf '%s' "$command_text" | grep -Eiq "$SAIKIT_RUNNER_MASCARADO_RE" \
+            || printf '%s' "$combined" | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi
