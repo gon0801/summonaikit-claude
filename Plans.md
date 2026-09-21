@@ -349,6 +349,33 @@ su escotilla, medido 2026-09-20) — por eso M2/M4 no tienen fila.
 | A.R10 | `[Review]` `[lane:fast]` **Documentación menor de CodeRabbit.** El comentario de `entrega_bloqueantes_no_vacio` atribuye precedencia a la primera clave aunque el parser rechaza duplicados; el bot también informa cobertura de docstrings de 55.80% frente a su umbral de 80% | Alinear el comentario con el parser y evaluar cobertura documental útil, sin ampliar código por el porcentaje del bot; conservar enlace al PR #345 | — | cc:TODO — observaciones tardías no bloqueantes, no abren ronda |
 | A.R11 | `[CI]` `[lane:gate]` `[tdd:required]` **Repartir la partición rápida 2/7.** Run 35553346727: job 13m32s; concentra `test_feature_map_merge` y `test_install_muse_mutations`, aproximadamente 6m37s y 5m15s según timestamps consecutivos de PASS | Distribuir los archivos pesados en jobs distintos y conservar el candado de unión exacta de toda la batería; medir la nueva duración en CI, sin omitir tests ni crear otro gate | — | cc:TODO — tarea de rendimiento independiente; no reabre la entrega A |
 
+## Bloque D — hardening acumulado después de entrega-sin-sello B y C
+
+**Entrada:** A, B y C integrados y sus revisiones cerradas. Este bloque no
+retrasa B/C ni reabre A. Registrar una fila no la marca realizada. Los
+bloqueantes de B/C se corrigen dentro de su bloque o lo detienen; D recibe
+solo mejoras y hallazgos no bloqueantes.
+
+| Carril | Repo | Inventario inicial | Fuente | Status |
+|---|---|---|---|---|
+| D-S | `gon0801/summonaikit-claude` | A.R2–A.R11 | tabla anterior, con su DoD literal | cc:TODO — empieza después de B/C |
+| D-O | `gon0801/goncloud-openclaw` | Fase 9.17–9.18: recuperación explícita y auditable de lock vivo colgado o PID reciclado; hardening de `--solo-watchdog-global` ante empuje propio sobrante y `avance-tareas` ausente o mal configurado | `goncloud-openclaw/Plans.md`, Fase 9 | cc:TODO — no bloquea el cierre normal de Fase 9 |
+| D-B/C | repo propietario de cada hallazgo | hallazgos no bloqueantes que produzcan B y C | PR y recibo final del bloque de origen | cc:TODO — inventario se completa al cerrar B/C |
+
+**Regla de ingreso:** cada hallazgo nuevo lleva ID estable, reproducción o
+evidencia que justifique trabajo, impacto, repo, archivos propietarios y
+criterio observable. Los duplicados apuntan a una sola fila. Un comentario
+sin reproducción no se convierte automáticamente en tarea de código.
+
+**Ejecución:** ramas frescas desde `origin/<default>` y un carril/PR por repo;
+D-S no comparte PR con D-O. Dentro de un repo se agrupan tareas compatibles,
+sin un PR por observación. Cada bug corregido incluye, en el mismo cambio, una
+prueba de regresión que falla antes de la corrección. Pruebas focalizadas durante desarrollo; batería
+completa una vez en CI por SHA final; implementer, verifier y reviewer
+independientes para código. Una cross-review cubre el bloque del repo; otra
+ronda revisa solo el delta de un bloqueante reproducido. El cierre conserva
+pendiente, con razón, todo lo que no se implemente y enumera descartes.
+
 ## 事前確認
 
 - 事項: escritura de ACLs sobre `~/.claude/hooks/` y `~/.claude/hooks/state/`
