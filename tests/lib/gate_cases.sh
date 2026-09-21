@@ -3488,7 +3488,7 @@ caso_g4_transcript_ruta_windows_y_traversal() {
 }
 
 # ================================================ G5 — presupuesto de 2 ciclos
-CASOS_G5="caso_g5_autopilot_parrafo_en_budget_agotado caso_g5_presupuesto_agotado caso_g5_presupuesto_dsh_decision_block caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno caso_g5_tool_name_eco_no_marca_edicion"
+CASOS_G5="caso_g5_autopilot_parrafo_en_budget_agotado caso_g5_presupuesto_agotado caso_g5_presupuesto_dsh_decision_block caso_g5_ciclos_cuentan_y_bloquean caso_g5_ciclo_consumido_no_impide_cerrar caso_g5_agotado_limpia_estado caso_g5_presupuesto_zcode_exit2 caso_g5_stop_fallido_no_borra_aviso_ajeno caso_g5_tool_name_eco_no_marca_edicion caso_g5_stop_violacion_sin_barra_n"
 
 # Agotado el presupuesto cambia el CONTRATO DE SALIDA: ya no es un bloqueo con
 # exit 2, es un `continue:false` con exit 0 — el turno se detiene y se le pide
@@ -3625,6 +3625,19 @@ caso_g5_stop_fallido_no_borra_aviso_ajeno() {
   if [ -f "$rn_ajeno" ]; then
     _mal "el cierre LIMPIO con secuencia observada debe llevarse el aviso desactualizado (borde C14)"
   fi
+}
+
+# 23.15 — la lista de fallas del Stop sale con saltos de linea reales: la
+# entrada de violacion adversary terminaba en barra-n literal y el modelo la
+# leia pegada a la falla siguiente en una sola linea. Con la violacion
+# sembrada el Stop bloquea y su stderr trae la entrada con saltos reales.
+caso_g5_stop_violacion_sin_barra_n() {
+  lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer,adversary"
+  _sem_violation_adversary
+  lab_run stop claude "$(lab_payload_stop "$_TEXTO_LLANO")"
+  _igual "el Stop con violacion bloquea" "$LAB_RC" "2"
+  _contiene "stderr trae la entrada de violacion" "$LAB_ERR" 'adversary subagent wrote outside'
+  _no_contiene "stderr sin barra-n literal (23.15)" "$LAB_ERR" '\n'
 }
 
 # ========================================== G6 — salidas por target y por fase
