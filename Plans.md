@@ -359,7 +359,7 @@ solo mejoras y hallazgos no bloqueantes.
 | Carril | Repo | Inventario inicial | Fuente | Status |
 |---|---|---|---|---|
 | D-S | `gon0801/summonaikit-claude` | A.R2–A.R11 | tabla anterior, con su DoD literal | cc:TODO — empieza después de B/C |
-| D-O | `gon0801/goncloud-openclaw` | Fase 9.17: recuperación explícita y auditable de lock vivo colgado o PID reciclado | `goncloud-openclaw/Plans.md`, Fase 9 | cc:TODO — no bloquea el cierre normal de Fase 9 |
+| D-O | `gon0801/goncloud-openclaw` | Fase 9.17–9.18: recuperación explícita y auditable de lock vivo colgado o PID reciclado; hardening de `--solo-watchdog-global` ante empuje propio sobrante y `avance-tareas` ausente o mal configurado | `goncloud-openclaw/Plans.md`, Fase 9 | cc:TODO — no bloquea el cierre normal de Fase 9 |
 | D-B/C | repo propietario de cada hallazgo | hallazgos no bloqueantes que produzcan B y C | PR y recibo final del bloque de origen | cc:TODO — inventario se completa al cerrar B/C |
 
 **Regla de ingreso:** cada hallazgo nuevo lleva ID estable, reproducción o

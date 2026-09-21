@@ -177,6 +177,10 @@ if [ -f "$repo/Plans.md" ]; then
   if [ -n "$out" ]; then
     while IFS= read -r l; do malo "Plans.md:$l"; done <<< "$out"
   fi
+  caso "el inventario D-O enumera las tareas 9.17–9.18 del repo OpenClaw"
+  if ! grep -Fq '| D-O | `gon0801/goncloud-openclaw` | Fase 9.17–9.18:' "$repo/Plans.md"; then
+    malo "Plans.md: la fila D-O no enumera Fase 9.17–9.18"
+  fi
 else
   echo "  UNKNOWN: no existe $repo/Plans.md, no se pudo mirar" >&2
   unknown=1
