@@ -121,6 +121,7 @@ G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
 G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae a "tool" (stop_gate no corre)
 G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
+G5|barra_n_vuelve|las entradas de violacion y secreto del Stop vuelven a terminar en barra-n literal y el modelo las lee pegadas en una sola linea (23.15)
 G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
@@ -708,6 +709,9 @@ mut_stop_bloquea_de_nuevo() { sed '/cae directo al cierre limpio/,/^}/ s|^  emit
 # caso_g5_presupuesto_zcode_exit2. {n;} edita la linea DESPUES del comentario 5.4
 # del budget (donde vive el exit 2), sin tocar el exit 2 del gate_failure.
 mut_budget_zcode_sigue_0()  { sed '/saikit-5.4-zcode-budget/s/exit 2/exit 0/'; }
+# 23.15: reintroduce la barra-n literal al final de las dos entradas del
+# Stop (violacion y secreto). La atrapa caso_g5_stop_violacion_sin_barra_n.
+mut_barra_n_vuelve() { sed 's/a new armed turn resets it)\."/a new armed turn resets it).\\n"/; s/escapes through this same manual path\."/escapes through this same manual path.\\n"/'; }
 
 # D4 (Task 6.3): saca la escotilla ROLE FALLBACK del gate de secuencia
 # (rompe la CONDICION, no el texto del mensaje). Apunta al ancla unica

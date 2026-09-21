@@ -290,28 +290,28 @@ traducir los perfiles de rol. Contrato de datos de siempre: lo no medido queda
 | 23.11 | `[Recommended]` `[lane:gate]` `[tdd:required]` **Pendientes menores de la Phase 23:** (a) la caché de `json_muse_tool_response_raw` se asigna dentro de una sustitución de comando y no persiste, así que `tool_response` se lee dos veces por evento; (b) falta un caso con un despacho del reviewer RECHAZADO que no mueva `last_review` (nitpick de CodeRabbit en el #335; el aceptado ya está cubierto desde la 23.9); (c) el verificador de registro nombra `Agent` en su mensaje de matcher también en modo muse, donde la herramienta es `subagent_spawn`; (d) `GIT_DIR` y `GIT_WORK_TREE` heredados hacen que el chequeo fuera-de-git del instalador (`git -C … rev-parse`) conteste por otro repo y falle cerrado; (e) la salida del `Stop` de muse no tiene tope (teórico: el motivo mide menos de 3 KB y Muse corta en 16384) | Cada punto con un caso que falla en master y pasa después, o declarado `no se hace` con su razón en el PR; (a) medido con una sola lectura de `tool_response` por evento; una mutación por punto arreglado | 23.10 para (a) y (e); (b), (c) y (d) sin dependencia | cc:TODO |
 | 23.12 | `[Recommended]` `[lane:gate]` `[tdd:required]` **Feature map `install-hosts` con casos de muse:** la ficha y el descriptor cubren `--host muse` y `--quitar-muse` con el Muse falso de `tests/fixtures/muse/muse-falso.sh` (sacado de la 23.7) | La ficha instala y quita con el Muse falso y deja evidencia; el lint del catálogo pasa; los `test_feature_map_*` quedan en verde en CI | - | cc:TODO |
 | 23.13 | `[Recommended]` `[lane:gate]` `[tdd:required]` **Un reporte de subagente que cita el token de armado no arma el gate:** en esta fase, reportes de revisores devueltos a la sesión del lead en Claude armaron el gate porque citaban el token. El hook ya descarta `<task-notification>` (`SAIKIT_TASK_NOTIFICATION_RE`), pero no el formato del reporte devuelto. Primero se captura el payload real de `UserPromptSubmit` de un reporte devuelto | Payload capturado y guardado como fixture; caso con ese fixture que con master arma y después no; el prompt real del usuario con el token sigue armando (caso existente en verde); mutación que quita el filtro y el caso la atrapa; regla escrita en el spec en el mismo PR | 23.14, 23.15 | cc:TODO |
-| 23.14 | `[Recommended]` `[lane:gate]` `[tdd:required]` **El bloqueo por verificación en un host ciego le dice al modelo que su host es ciego:** en el vivo de la 23.6 con esfuerzo `low`, el modelo recibió dos veces el motivo genérico ("on a host with a blind channel …") y no escribió la línea `VERIFIED BY SUBAGENT:`. El hook sabe que el host es ciego (`saikit_host_ciego`) y si el verifier quedó acreditado | En zcode y muse, con el verifier acreditado, el motivo nombra al host como ciego y trae la línea de ejemplo con el comando; sin verifier o en otros hosts el motivo no cambia (casos de los dos lados); mutación atrapada; turno vivo completo en Muse con `--reasoning-effort low` que cierra, con evidencia en `docs/evidence/phase-23/23.14/` | 23.9 | cc:TODO |
+| 23.14 | `[Recommended]` `[lane:gate]` `[tdd:required]` **El bloqueo por verificación en un host ciego le dice al modelo que su host es ciego:** en el vivo de la 23.6 con esfuerzo `low`, el modelo recibió dos veces el motivo genérico ("on a host with a blind channel …") y no escribió la línea `VERIFIED BY SUBAGENT:`. El hook sabe que el host es ciego (`saikit_host_ciego`) y si el verifier quedó acreditado | En zcode y muse, con el verifier acreditado, el motivo nombra al host como ciego y trae la línea de ejemplo con el comando; sin verifier o en otros hosts el motivo no cambia (casos de los dos lados); mutación atrapada; turno vivo completo en Muse con `--reasoning-effort low` que cierra, con evidencia en `docs/evidence/phase-23/23.14/` | 23.9 | cc:TODO — blocked: el gate de evidencia que el motivo debía modificar fue retirado por el bloque A (81aa8ff, PR #345): saikit_verif_motivo quedó write-only (4 escrituras, 0 lecturas) y saikit_verif_evidence_ok sin llamadores; sin motivo emitido no hay texto que nombrar-ciego ni turno vivo que cerrar |
 | 23.15 | `[Recommended]` `[lane:gate]` `[tdd:required]` **La lista de fallas del `Stop` sale con saltos de línea reales:** hoy cada falla termina en una barra y una n literales en todos los hosts, grabadas así en `tests/golden/baseline.txt`, y el modelo lee `…reason).\n- Missing…` en una sola línea. Va en el mismo PR que la 23.14 | Ninguna salida de `Stop` del golden trae la barra-n literal entre fallas; el golden regrabado cambia solo esas líneas y el encabezado, con el diff clasificado en el PR; caso que falla en master | 23.14 | cc:TODO |
 | 23.16 | `[Recommended]` `[lane:gate]` `[tdd:required]` **Un runner encadenado con `;` no acredita cuando el exit final tapa el suyo:** `bash tests/run.sh ; echo EXIT:$?` acredita la verificación aunque el runner falle y su salida no traiga señal de fracaso (hallado por el revisor del #337, todos los hosts). Se decide y se declara la regla: exigir que el runner sea el último comando o vaya encadenado con `&&`, o leer `EXIT:<n>` de la salida. Va en el mismo PR que la 23.13 | Caso con un runner fallido seguido de `; echo` que hoy acredita y después no; `bash tests/run.sh` solo y con `&& otro` siguen acreditando (casos existentes en verde); mutación atrapada; regla escrita en el spec en el mismo PR | 23.13 | cc:TODO |
+| 23.17 | [Recommended] [lane:gate] [tdd:required] **La tarea armada sigue viva hasta que cierra:** hoy un prompt sin el token desarma la tarea a propósito (A4-c2), y eso corta el gate con un mensaje escrito a media tarea y con la respuesta a un PAUSED. Un prompt sin token con una tarea armada abierta ya no desarma; la tarea se cierra sola con su recibo o con el presupuesto agotado; -saikit:off la apaga a mano; una tarea sin actividad más allá de un tope medido se desarma como hoy. El contrato deja de decir que la respuesta a un PAUSED apaga el gate | Casos: mensaje sin token a media tarea no desarma; respuesta a un PAUSED no desarma; tras un cierre limpio el siguiente mensaje sin token queda libre; -saikit:off desarma; tarea inactiva más allá del tope se desarma; las notificaciones siguen sin armar ni desarmar; una mutación por rama; medido por host si un mensaje a media tarea dispara el hook de prompt y si el Stop corre tras un Esc, unknown donde no se mida; turno vivo en Claude y en Muse: armar, mensaje intermedio sin token, recibo exigido, siguiente mensaje libre; regla en el spec | 23.13, 23.16 | cc:TODO |
 
-**Orden de las recomendadas (plan del 2026-09-18).** Cuatro bloques tocan
-`hooks/summonaikit-harness.sh` y van en fila, un PR por bloque, cada uno con su
-golden regrabado:
+**Orden de las recomendadas (cuatro streams, runbook `autopilot-fase-saikit23.md` en `origin/main` de goncloud-openclaw).** Stream 1 toca `hooks/summonaikit-harness.sh` y va en fila, un PR por bloque, cada uno con su golden regrabado:
 
 1. **A:** 23.14 y 23.15, del lead.
-2. **B:** 23.13 y 23.16, del lead, con revisor fresco.
-3. **C:** 23.10, de GLM o Cursor por brief del lead, con revisor fresco y
-   revisión cruzada.
-4. **D:** 23.11, de Cursor. Sus puntos del instalador (c y d) pueden ir antes;
-   los del hook (a y e), después de C.
+2. **B:** 23.13 y 23.16, del lead.
+3. **B2:** 23.17, del lead.
+4. **C:** 23.10, primer token disponible de `glm → cursor-agent → muse → grok`, con revisor fresco y revisión cruzada.
+5. **D-hook:** 23.11(a,e), más (b) si D-install demuestra que exige hook; `cursor-agent → glm → muse → grok`.
 
-En paralelo desde el inicio, porque no tocan el hook: **E**, la 23.5, de Grok,
-y **F**, la 23.12, de DeepSeek (sin push ni ledger: cierra el lead). Una ronda
-de revisión por bloque; las observaciones menores tardías se declaran en el PR
-sin reabrir el ciclo. Tras cada merge que cambie el hook, deploy según
-`AGENTS.md`. Lo vivo en Muse: el turno de la 23.14 y el probe de la 23.5.
-Ningún implementador externo toca las copias vivas del hook ni el perfil de
-Muse: la corrida viva es del lead.
+En paralelo desde el inicio, porque no tocan el hook: **E**, la 23.5, de `grok → glm → cursor-agent → muse`; **F**, la 23.12, de `cursor-agent → glm → muse → grok`; **D-install**, la 23.11(b,c,d), de `cursor-agent → glm → muse → grok` y sin tocar el hook. Revisión por la regla 4 vigente: otra ronda solo mientras salga un bloqueante, cada una sobre los arreglos con `cross-review -Desde`; lo no bloqueante que no se corrige va a una fila nueva de la fase. Tras cada merge que cambie el hook, deploy según `AGENTS.md`. Lo vivo ocurre solo tras merge y deploy: el turno de la 23.14 (evidencia en B), el probe de la 23.5 y los vivos de la 23.17 (evidencia en cierre). Ningún implementador externo toca las copias vivas del hook ni el perfil de Muse: la corrida viva es del lead.
+
+**Runbook de ejecución:** vive en `goncloud-openclaw`, no aquí, porque claw
+orquesta el autopilot de todos los repos y lee los runbooks de ahí:
+`docs/runbooks/autopilot-fase-saikit23.md`, que hereda
+`docs/runbooks/base-summonaikit.md` (openclaw #86, actualizado por #118). La
+tabla de preaprobaciones se aprobó para el bloque A del runbook y cubre los dos
+事前確認 de la Phase 23 que abajo siguen «PENDIENTE», sin marcarlos como
+aprobados.
 
 ## Bloque A — entrega sin sello (seguimiento no bloqueante, 2026-09-20)
 
@@ -476,9 +476,9 @@ pendiente, con razón, todo lo que no se implemente y enumera descartes.
   理由: el DoD de la 23.14 pide cerrar un turno vivo con esfuerzo bajo; el
   deploy tras merge es el paso fijo de `AGENTS.md`
   scope: Phase 23 / Tasks 23.10, 23.11, 23.13, 23.14, 23.15 y 23.16 —
-  **PENDIENTE de aprobación del operador**
+  **aprobado por el operador el 2026-09-18**
 - 事項: push de ramas y `gh pr create` por bloque (external-send)
   理由: la entrega es por PR; los agentes externos no hacen push salvo que el
   brief lo diga, y ninguno toca el ledger ni las copias vivas
-  scope: Phase 23 / Tasks 23.5 y 23.10–23.16 — **PENDIENTE de aprobación del
-  operador**
+  scope: Phase 23 / Tasks 23.5 y 23.10–23.16 — **aprobado por el operador el
+2026-09-18**

@@ -1,0 +1,1 @@
+{"hecho":"El cambio solo quita dos sufijos literales backslash-n de dos cadenas del Stop; ningun escenario del golden cambia de comportamiento","comando":"bash tools/golden-harness.sh --record + git diff tests/golden/baseline.txt","salida":"57 escenarios; diff solo encabezado: hook_sha256 y hook_bytes 259845->259841 (-4 = los 2 sufijos); 0 lineas de escenario","nivel":4}
