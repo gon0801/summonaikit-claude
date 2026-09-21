@@ -579,6 +579,103 @@ FAILURE_SIGNAL_RE_CS='test result: FAILED|FAIL[^a-zA-Z]|FAILURES!|---[[:space:]]
 # pytest. Se aplica SOLO a la primera linea del comando (ver su uso).
 ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 
+# 23.16 (fase 23, carril B): un runner encadenado con `;` tapa su exit - el
+# comando sale con el exit del ULTIMO (`echo` sale 0 aunque el runner haya
+# reventado) y la salida puede no traer senal de fracaso. El `&&` preserva el
+# exit del runner (si revienta, lo de atras no corre), asi que solo el `;`
+# exige evidencia del exit del lado de la RESPUESTA: `EXIT:0` textual
+# (lo que `echo EXIT:$?` imprime cuando el runner salio 0), leido desde
+# `"tool_response"` y nunca del comando - un `EXIT:0` citado en el comando
+# (`grep EXIT:0 ... ; pytest`) no vale. El `\n` LITERAL tambien separa
+# comandos (tool_input.command llega SIN decodificar), asi que un runner que
+# no cierra la ultima linea es el mismo caso. Limites declarados:
+# `||` y `|` tambien tapan el exit y quedan fuera (best-effort, sin parser de
+# shell); un `EXIT:0` ajeno al runner en la misma salida acredita de mas
+# (advisory, fail-open).
+SAIKIT_RUNNER_MASCARADO_RE="($TEST_RUNNER_RE|tests?/run\.sh)([^;\\\\]|\\\\n)*(;|\\\\n.+)"
+SAIKIT_EXIT_CERO_RE='EXIT:[[:space:]]*0([^0-9]|$)'
+
+# 23.16 r2 (hallazgo Major CodeRabbit PR #349): el chequeo del corredor tapado
+# extrae SOLO el valor de `tool_response` de primer nivel, con el mismo escaneo
+# acotado (depth + in-string + escape) de los otros lectores. El lector anterior
+# (`sed s/.*"tool_response"//`) dejaba TODO lo que sigue en el documento: si
+# `tool_response` precede a `tool_input`, un `EXIT:0` citado en el comando
+# satisfacia la regla y un runner fallido acreditaba. Atiende objeto (Bash:
+# {stdout,stderr,...}) y cadena (background: "Command running..."); otro tipo
+# de valor calla (fail-closed).
+# r2-revisor (codex, unica ronda sobre este arreglo): el valor se emite SOLO
+# con cierre — cadena sin comilla de cierre u objeto/array sin su cierre
+# pareado y TIPADO callan (un documento trunco no acredita; el lector viejo
+# acreditaba el fragmento). El blanco entre clave, dos puntos y valor incluye
+# \r (los cuatro blancos del JSON).
+json_tool_response_texto() {
+  case "$INPUT" in
+    *"\"tool_response\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0
+      ini = 0; ultima = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") { ins = 0; ultima = substr(buf, ini, i - ini) }
+          continue
+        }
+        if (c == "\"") { ins = 1; ini = i + 1 }
+        else if (c == ":") {
+          if (depth == 1 && ultima == "tool_response") {
+            j = i + 1
+            while (j <= n && (substr(buf, j, 1) == " " || substr(buf, j, 1) == "\t" || substr(buf, j, 1) == "\n" || substr(buf, j, 1) == "\r")) j++
+            v = substr(buf, j, 1)
+            if (v == "\"") {
+              k = j + 1; e = 0; out = ""; cerrado = 0
+              while (k <= n) {
+                ch = substr(buf, k, 1)
+                if (e) { out = out "\\" ch; e = 0 }
+                else if (ch == "\\") { e = 1 }
+                else if (ch == "\"") { cerrado = 1; break }
+                else out = out ch
+                k++
+              }
+              if (cerrado) printf "%s", out; exit
+            } else if (v == "{" || v == "[") {
+              d = 0; k = j; ii = 0; e = 0; out = ""; ok = 0; pila = ""
+              while (k <= n) {
+                ch = substr(buf, k, 1)
+                out = out ch
+                if (ii) {
+                  if (e) e = 0
+                  else if (ch == "\\") e = 1
+                  else if (ch == "\"") ii = 0
+                } else {
+                  if (ch == "\"") ii = 1
+                  else if (ch == "{" || ch == "[") { d++; pila = pila ch }
+                  else if (ch == "}" || ch == "]") {
+                    need = (ch == "}") ? "{" : "["
+                    if (substr(pila, length(pila), 1) != need) exit
+                    pila = substr(pila, 1, length(pila) - 1)
+                    d--; if (d == 0) { ok = 1; break }
+                  }
+                }
+                k++
+              }
+              if (ok) printf "%s", out; exit
+            }
+            exit
+          }
+        }
+        else if (c == "{" || c == "[") { depth++ }
+        else if (c == "}" || c == "]") { depth-- }
+      }
+    }'
+}
+
 json_string_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
@@ -3375,7 +3472,9 @@ record_tool_evidence() {
     if [ -z "$toolresult_err" ] \
        && ! printf '%s' "$INPUT" | grep -Eiq "$SAIKIT_DESPACHO_BG_RE" \
        && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
-              || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; }; then
+              || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; } \
+       && { ! printf '%s' "$command_text" | grep -Eiq "$SAIKIT_RUNNER_MASCARADO_RE" \
+            || json_tool_response_texto | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi

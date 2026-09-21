@@ -2605,9 +2605,16 @@ La evidencia vive bajo `docs/evidence/phase-23/`.
 - **Límites declarados.** `bash tests/run.sh; echo EXIT:$?` no acredita
   verificación en ningún host: el runner pegado al `;` queda fuera del límite
   de forma del hook, que exige un espacio o el fin de línea después del runner.
-  Con `bash tests/run.sh ; echo EXIT:$?` sí acredita aunque el exit del último
-  comando tape el del runner, un hueco anterior a esta fase que queda en la
-  23.11. `bash_input` no pasa por el veto de `PreToolUse`;
+  Con espacio (`bash tests/run.sh ; echo ...`) tampoco acredita desde la
+  23.16: el exit del comando es el del ultimo y la salida puede no traer senal
+  de fracaso; solo acredita con `EXIT:0` textual del lado de la respuesta
+  (valor de `tool_response` de primer nivel, acotado: vale igual aunque la
+  respuesta preceda al comando; lo que `echo EXIT:$?` imprime cuando el runner
+  salio 0; un `EXIT:0` citado en el comando no vale) o encadenado con `&&`
+  (que preserva su exit).
+  El `\n` literal tambien separa comandos. Limites:
+  `||` y `|` tambien tapan el exit y quedan fuera; un `EXIT:0` ajeno acredita
+  de mas (advisory, fail-open). `bash_input` no pasa por el veto de `PreToolUse`;
   `subagent_read_result` no acredita. Muse se autoactualiza al arrancar: el
   contrato puede cambiar sin aviso, y el probe de la 23.5 sigue pendiente.
 

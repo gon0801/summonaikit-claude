@@ -313,6 +313,31 @@ lab_payload_pretool_edit() {
 # Medido en hook_lab: esa forma acredita verified=1 igual que un PostToolUse
 # en primer plano -- el credito depende SOLO de command_text (lo que se
 # lanzo), nunca de la forma del tool_response. $1 = comando, $2 = id del job.
+# 23.16 r2 (CodeRabbit PR #349, Major): mismo evento Bash que
+# lab_payload_bash pero con `tool_response` ANTES de `tool_input` en el
+# documento. El orden de claves no lo controla el turno: con el lector viejo
+# (`sed s/.*"tool_response"//`) todo lo que sigue a la respuesta —incluido el
+# comando con su `EXIT:0` citado— satisfacia la regla del corredor tapado.
+# $1 = comando, $2 = stderr (mismo orden que lab_payload_bash).
+lab_payload_bash_respuesta_antes() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_input":{"command":"%s","description":"paso del turno"},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "${2:-}" "$1"
+}
+
+# 23.16 r2-revisor (codex): respuesta TRUNCA — el documento termina a mitad
+# del valor de `tool_response` (EOF real, sin cerrar). El lector calla
+# (fail-closed); el lector viejo acreditaba el fragmento si traia EXIT:0.
+# $1 = comando (tool_input, va ANTES), $2 = fragmento crudo de la respuesta.
+lab_payload_bash_respuesta_trunca() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":%s' "$1" "$2"
+}
+
+# 23.16 r2-revisor (codex): respuesta ANTES con blancos CRLF entre la clave,
+# los dos puntos y el valor. El \r es blanco JSON valido y el lector lo salta.
+# $1 = comando, $2 = stderr (mismo orden que lab_payload_bash).
+lab_payload_bash_respuesta_antes_crlf() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response"\r\n:\r\n{"stdout":"salida","stderr":"%s"},"tool_input":{"command":"%s"},"tool_use_id":"toolu_01"}' "${2:-}" "$1"
+}
+
 lab_payload_bash_en_background() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno","run_in_background":true},"tool_response":"Command running in background with ID: %s","tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":300}' "$1" "${2:-bg-1234abcd}"
 }
