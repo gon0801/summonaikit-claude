@@ -48,7 +48,7 @@ es el fork de MSYS, no la logica del hook.
 
 ## Gate final: CI Linux, no la suite local (politica 2026-08-15)
 
-La bateria completa corre en ubuntu en CADA push/PR, repartida en jobs
+La bateria completa corre en ubuntu en cada PR y push a main/master, repartida en jobs
 PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
 bateria entera, y cada nivel tiene su candado.
 
@@ -59,9 +59,9 @@ bateria entera, y cada nivel tiene su candado.
   `test_feature_map_merge`, 376 s). Si vuelve a pasar de ~10 min: re-medir y
   re-elegir N, no recortar. Candado: `tests/test_runner_guards.sh` (union
   exacta de los shards + matrix completa del workflow).
-- `suite-lentos` — `test_gate_mutations`, que solo se llevaba ~6 de los 6.9 min
-  del job unico, repartido en 3 shards de 37 mutaciones
-  (`SAIKIT_MUT_SHARD=i/3`), ~2 min cada uno. Candado:
+- `suite-lentos` — `test_gate_mutations`, repartido según la matriz vigente
+  de `.github/workflows/quality.yml`. `SAIKIT_MUT_SHARD=i/N` usa ese mismo N;
+  no se conserva aquí otro número de shards o mutaciones. Candado:
   `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
   shard vacio, invalido o fuera de rango corta con exit 2).
 
@@ -112,7 +112,8 @@ zcode y muse reusan esta copia), `~/.grok/hooks/`, `~/.dsh/hooks/` y `~/.codex/h
 Desde 7.5, Phase 15 y 18.15 cada host tiene la suya — grok ya NO apunta a la de
 claude. Tras cada merge a `master` (cierre de task o PR), **siempre**:
 
-1. Sincronizar master local: `git checkout master && git pull --ff-only`.
+1. Actualizar referencias con `git fetch origin`. Usar un worktree de deploy
+   limpio situado en `origin/master`; no cambiar la rama de una sesión activa.
 2. **Deployar cada copia:** `bash tools/install-hook.sh` (claude) mas
    `--host grok`, `--host dsh`, `--host codex` y `--host muse` (tres estados,
    no pisa nada ajeno; muse solo registra los hooks en

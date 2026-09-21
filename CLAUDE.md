@@ -27,6 +27,10 @@ Sweep manual de basura (reporta, no borra): `python tools/check_context_docs.py 
 
 ## Formato del receipt del harness (regla del operador, 2026-09-03)
 
+El recibo aplica cuando la tarea está armada con el harness y su contrato lo
+exige. Una conversación sin tarea armada no añade esa ceremonia. Las reglas de
+revisión y entrega están en `AGENTS.md`; este archivo solo define el formato.
+
 El `SUMMONAIKIT HARNESS RECEIPT` se entrega SIEMPRE con un parrafo por
 punto: **Understand:**, **Implement:**, **Verify:**, **Review:**, **Close:**,
 **Retro:** — cada etiqueta abre su propio parrafo, sin mezclar puntos ni

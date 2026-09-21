@@ -21,7 +21,7 @@ adversary: opcional
    - **base vieja** (falló porque la base avanzó): mergea la base en la rama, NO edites el código.
    - **real** (tu cambio lo rompió): fix + la prueba que falla antes del fix (regla de hierro del repo), commit aparte.
 6. **Esperas sin bloquear**: antes de esperar a CI o a un bot, comprueba si YA terminó (no re-polies en loop). Si tienes que esperar, usa un heartbeat largo, nunca un segundo sleep-loop.
-7. **Tope**: máximo **2 rondas** de fix+CI por turno. Si a la segunda no está verde, paras y reportas — no inventas un fix infinito.
+7. **Rondas**: sigue la política de revisión de `AGENTS.md`: otra ronda solo por un bloqueante reproducible y sobre los arreglos de la anterior. Si el mismo bloqueante vuelve en dos rondas seguidas, detén ese bloque y presenta el diagnóstico al operador. Lo no bloqueante no reabre el ciclo. No repitas CI del mismo SHA ya validado.
 8. **Descubrimientos se reportan, no se hacen.** Si descubres algo que está mal pero quedó FUERA del alcance del PR, lo reportas al operador y no amplías el PR por tu cuenta.
 9. **cuidar nunca mergea.** Dejar listo no es publicar: el merge es del operador y solo por `tools/saikit-merge.sh`.
 

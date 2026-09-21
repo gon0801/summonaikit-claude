@@ -2627,8 +2627,9 @@ La evidencia vive bajo `docs/evidence/phase-23/`.
   compartido** (choque medido). Phase 19 permite trabajos/PRs independientes
   en worktrees separados e integración serial por el líder; no modifica el
   lock de un PR autopilot por repo. **No Graphite/stacks**, **no modo pegajoso**
-  (contradice Core Rule 3), **no paneles de 4 modelos** (tope de 1 ronda: un
-  panel = adversary + 1 cross-review de otro vendor).
+  (contradice Core Rule 3), **no paneles de 4 modelos**: el carril define los
+  roles, no un panel fijo. Solo un bloqueante reproducible abre otra ronda,
+  sobre el delta de los arreglos y sin un tope fijo.
 - **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
   explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
   y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y
