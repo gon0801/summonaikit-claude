@@ -96,57 +96,11 @@ Cada hallazgo de adversary, blast o bot cae en uno de cuatro cubos, con su razó
 
 Para el artifact del adversary ese veredicto se emite con las reglas de `## Adjudicating adversary findings`. Alta confianza cuando dos revisores independientes coinciden.
 
-## El veredicto sellado
+## El recibo de entrega
 
-Contrato transitorio: esta sección describe el gate instalado que aún consume
-el sello. No atribuye a un modelo una capacidad especial de aprobar o sellar.
-Se retira junto con ese consumidor en «Entrega sin sello», no mediante una
-excepción documental. Mientras siga instalado, un bloqueo de merge afecta esa
-entrega y no detiene otros carriles independientes.
+El sello quedó retirado: no escribes ningún archivo de veredicto. Lo ÚLTIMO que haces, después de adjudicar todo lo demás, es devolver tu juicio en el reporte: `APPROVE` (sin gaps abiertos) o la lista numerada de gaps. El líder registra tu juicio y tu evidencia en el recibo de entrega del PR (`APPROVE lead <sha>`); sin tu revisión independiente no hay entrega.
 
-Estas reglas aplican SOLO cuando tu despacho te pide el veredicto sellado. Un turno que no lo pide no escribe ningún veredicto.
-
-Es lo ÚLTIMO que haces, después de adjudicar todo lo demás. El líder ya commiteó antes de despacharte, así que `git rev-parse HEAD` es el sha del árbol que estás revisando.
-
-1. Lee el sha con `git rev-parse HEAD`.
-2. Escribe `.saikit/veredictos/<sha>.json` **con la tool `Write`**, una sola vez.
-3. Nombra en tu reporte el sha y la ruta que escribiste.
-
-**Por qué `Write` y no otra cosa:** el hook sella el veredicto registrando el sha256 de lo que ese `Write` materializó. Un veredicto escrito con `Edit`, con `Bash` o con un redirect deja el archivo en su lugar pero **no sella** — y sin sello el merge lo rechaza. Por la misma razón no lo reescribas ni lo corrijas después: cualquier escritura posterior deja el hash sellado viejo, y eso se lee como un veredicto tocado después de la revisión. Si te equivocaste, dilo al líder en vez de reescribirlo.
-
-El esquema es exacto. `adversary` es el objeto o la cadena `"n/a"` cuando el turno no corrió uno. `blast` es XOR de dos objetos (nunca la cadena `"n/a"`):
-
-```json
-{
-  "sha": "<git rev-parse HEAD>",
-  "pr": 1,
-  "verifier": "PASS",
-  "verify_app": { "resultado": "PASS", "comando": "<comando bajo verify/, o null>" },
-  "blast": { "nivel": 4, "hecho": "<el hecho único>", "comando": "<comando>" },
-  "adversary": { "findings": 0, "max_sev": "none" },
-  "reviewer": "clean",
-  "decisiones": ".saikit/decisiones/<task>.tsv"
-}
-```
-
-Cuando el turno no corrió blast (solo revisión, carril rápido, verifier sin blast), la forma es este otro bloque:
-
-```json
-{
-  "sha": "<git rev-parse HEAD>",
-  "pr": 1,
-  "verifier": "PASS",
-  "verify_app": { "resultado": "n/a", "comando": null },
-  "blast": { "omitido": "turno de solo revision: el despacho no nombro blast" },
-  "adversary": "n/a",
-  "reviewer": "clean",
-  "decisiones": ".saikit/decisiones/<task>.tsv"
-}
-```
-
-La razón de `omitido` tiene que ser real: vacía, `null`, `"n/a"`, bool, número o plantilla invalida el veredicto, y mezclar `omitido` con cualquiera de `nivel`/`hecho`/`comando` también. **`"blast": "n/a"` es INVÁLIDO** (D13): a diferencia de `adversary`, blast no acepta la cadena suelta. `omitido` sella y valida el contrato; el merge (D18) sigue exigiendo la triada con `nivel >= 4`, así que un turno sin blast **no mergea** — el omitido cierra la sesión con rastro, no abre el autopilot.
-
-`verifier` y `reviewer` llevan tu juicio, no un deseo: `PASS`/`FAIL` y `clean`/`findings`. Un veredicto con findings abiertos se escribe igual, con `"reviewer": "findings"` — el que decide si eso mergea es el merge, no tú.
+Tu juicio es eso, no un deseo: si hay gaps abiertos los listas igual — el que decide si eso mergea es el gate de entrega, no tú.
 
 ## Context Policy
 

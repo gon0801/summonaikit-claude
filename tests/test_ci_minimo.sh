@@ -889,6 +889,7 @@ fix="${SAIKIT_GH_FIX:?}"
 case "$1 $2" in
   "repo view") cat "$fix/repo.json"; exit 0 ;;
   "api user")  cat "$fix/user.json"; exit 0 ;;
+  "api repos/"*) cat "$fix/comments.json"; exit 0 ;;
   "run list")  cat "$fix/runs.json"; exit 0 ;;
   "pr view")
     case "$*" in *mergeCommit*) cat "$fix/pr-merge.json" ;; *) cat "$fix/pr.json" ;; esac
@@ -916,20 +917,10 @@ GHEOF
   printf '{"number":7,"baseRefName":"master","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$SHA" > "$SB/ghfix/pr.json"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' > "$SB/ghfix/pr-merge.json"
   printf '[]' > "$SB/ghfix/runs.json"
-
-  mkdir -p .saikit/veredictos
-  printf '{"sha":"%s","pr":7,"verifier":"PASS","verify_app":{"resultado":"PASS","comando":"bash verify/app.sh"},"blast":{"nivel":4,"hecho":"el drive de la app corre","comando":"bash tests/run.sh"},"adversary":"n/a","reviewer":"clean","decisiones":".saikit/decisiones/18.8.tsv"}' "$SHA" > ".saikit/veredictos/$SHA.json"
-
-  key="$(printf '%s' "$(pwd -P)" | cksum | cut -d' ' -f 1)"
-  sd="$SB/estado/claude/$key/sess1"
-  mkdir -p "$sd"
-  {
-    printf 'task_hash=h188\n'
-    printf 'agents_seen=implementer,verifier,reviewer\n'
-    printf 'lane=full\n'
-    printf 'veredicto_sha256=%s\n' "$(sha256sum ".saikit/veredictos/$SHA.json" | cut -d' ' -f 1)"
-  } > "$sd/harness-state.env"
-  printf 'prompt task started: h188\nverified: bash tests/run.sh\nagent: reviewer\n' > "$sd/harness-evidence.log"
+  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"worker-a","evidencia":"artifact:implementacion"},"verifier":{"id":"worker-b","resultado":"PASS","evidencia":"artifact:verificacion"},"reviewer":{"id":"worker-c","resultado":"APPROVE","evidencia":"artifact:revision"},"ci":{"workflow":"ci","evidencia":"artifact:ci"},"bloqueantes":[],"residuales":[]}' "$SHA")"
+  recibo_esc="$(printf '%s' "$recibo" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf '[{"user":{"login":"op"},"body":"APPROVE lead %s\\n\\n```json\\n%s\\n```\\n"}]' \
+    "$SHA" "$recibo_esc" > "$SB/ghfix/comments.json"
 
   OUT="$(bash "$MERGE" --confirmado 2>&1)"
   RC=$?

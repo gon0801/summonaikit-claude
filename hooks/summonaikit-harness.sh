@@ -1497,7 +1497,8 @@ rn_take_pending() {
   rm -f "$RN_PENDING_PATH" 2>/dev/null || true
 }
 # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-# Task 10.1: write_state persiste tambien el carril (lane = full | fast | seal_boot). Un
+# Task 10.1: write_state persiste tambien el carril (lane = full | fast;
+# A7: seal_boot retirado — un estado viejo con ese carril se trata normal). Un
 # estado sin el campo (sembrado por el banco, o escrito por un hook previo a la
 # 10.1) lee lane="" — y "" != "fast", o sea que el default ausente es el lado
 # SEGURO: ceremonia completa. Ningun call site inventa un lane.
@@ -1522,17 +1523,9 @@ write_state() {
   adv_paths="$8"
   adv_violation="$9"
   adv_violation_paths="${10}"
-  veredicto_sha256="${11:-}"
+  veredicto_sha256="${11:-}"  # A7: retirado — se ignora (restos viejos: nada los consume)
   autopilot="${12:-}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
-  # 20.13: leer vínculo ANTES de truncar el archivo (el redirect `>` lo borra).
-  _keep_lc=""; _keep_lss=""
-  if [ -f "$STATE_PATH" ]; then
-    _keep_lc="$(grep '^linked_children=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
-    _keep_lss="$(grep '^linked_seal_session=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
-  fi
-  if [ -n "${_LINK_CHILDREN_SET+x}" ]; then _keep_lc="$_LINK_CHILDREN_SET"; fi
-  if [ -n "${_LINK_SEAL_SET+x}" ]; then _keep_lss="$_LINK_SEAL_SET"; fi
   _keep_cx=""; _keep_cxd=""
   if [ -f "$STATE_PATH" ]; then
     _keep_cx="$(grep '^codex_children=' "$STATE_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
@@ -1562,20 +1555,12 @@ write_state() {
     printf 'adv_paths=%s\n' "$adv_paths"
     printf 'adv_violation=%s\n' "$adv_violation"
     printf 'adv_violation_paths=%s\n' "$adv_violation_paths"
-    # Sello del veredicto (D16): se escribe SOLO cuando hay hash (el hook lo
-    # registra en el Write del reviewer sobre veredictos/). Ausente para
-    # cualquier otro evento, asi la forma del estado de los demas turnos no
-    # cambia (los escenarios de la linea base siguen byte-identicos).
-    if [ -n "$veredicto_sha256" ]; then printf 'veredicto_sha256=%s\n' "$veredicto_sha256"; fi
     # 18.6: mismo patron que veredicto_sha256 — la linea autopilot se escribe
     # SOLO en turnos autopilot. Se exige =1 (no solo no-vacio): el armado pasa
     # "0" cuando el carril no se detecto, y escribir autopilot=0 cambiaria la
     # forma del estado de TODOS los turnos (linea base dejaria de ser
     # byte-identica); un sufijo typo cae a full con la linea AUSENTE.
     if [ "$autopilot" = "1" ]; then printf 'autopilot=%s\n' "$autopilot"; fi
-    # 20.13: vínculo padre→hijo (Grok). Ausentes sin anuncio host.
-    if [ -n "$_keep_lc" ]; then printf 'linked_children=%s\n' "$_keep_lc"; fi
-    if [ -n "$_keep_lss" ]; then printf 'linked_seal_session=%s\n' "$_keep_lss"; fi
     # 21.2: ciclo de vida nativo de codex (SubagentStart/SubagentStop con
     # agent_id). Ausentes sin eventos nativos: la forma del estado de los
     # demas hosts (y de los turnos sin subagentes nativos) no cambia.
@@ -1586,61 +1571,9 @@ write_state() {
   } > "$STATE_PATH" 2>/dev/null || true
 }
 
-# 20.13 — anuncio host padre→hijo (Grok). Autoridad: SubagentStart.subagentId /
-# spawn toolResult.subagent_id. No mtime, no ruta, no task_hash.
-link_session_key() {
-  printf '%s' "$1" | sed 's/[^A-Za-z0-9_-]/_/g' | cut -c1-64
-}
-
-link_record_child() {
-  local child="$1" cur new
-  [ "$HOST" = "grok" ] || return 0
-  [ -f "$STATE_PATH" ] || return 0
-  [ -n "$child" ] || return 0
-  case "$child" in *[!A-Za-z0-9._-]*) return 0 ;; esac
-  cur="$(read_state_value linked_children)"
-  case ",$cur," in *",$child,"*) return 0 ;; esac
-  if [ -n "$cur" ]; then new="$cur,$child"; else new="$child"; fi
-  _LINK_CHILDREN_SET="$new"
-  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
-    "$(read_state_value implemented)" "$(read_state_value verified)" \
-    "$(read_state_value agents_seen)" "$(read_state_value lane)" \
-    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
-    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
-    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
-  unset _LINK_CHILDREN_SET
-  return 0
-}
-
-link_consume_child_seal() {
-  local child="$1" cur child_key child_state child_sha agents
-  [ "$HOST" = "grok" ] || return 0
-  [ -f "$STATE_PATH" ] || return 0
-  [ -n "$child" ] || return 0
-  cur="$(read_state_value linked_children)"
-  case ",$cur," in *",$child,"*) ;; *) return 0 ;; esac
-  child_key="$(link_session_key "$child")"
-  [ -n "$child_key" ] || return 0
-  child_state="$PROJECT_DIR/$child_key/harness-state.env"
-  [ -f "$child_state" ] || return 0
-  child_sha="$(grep '^veredicto_sha256=' "$child_state" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
-  [ -n "$child_sha" ] || return 0
-  agents="$(read_state_value agents_seen)"
-  case ",$agents," in *,reviewer,*) ;; *)
-    if [ -n "$agents" ]; then agents="$agents,reviewer"; else agents="reviewer"; fi
-    ;;
-  esac
-  _LINK_SEAL_SET="$child"
-  write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
-    "$(read_state_value implemented)" "$(read_state_value verified)" \
-    "$agents" "$(read_state_value lane)" \
-    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" \
-    "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
-    "$child_sha" "$(read_state_value autopilot)"
-  unset _LINK_SEAL_SET
-  printf 'linked_seal_session: %s\n' "$child" >> "$LOG_PATH" 2>/dev/null || true
-  return 0
-}
+# A7 (Bloque A): transferencias linked_* retiradas — el recibo de entrega
+# vive en el PR, no en el estado de sesion. Restos viejos (linked_children,
+# linked_seal_session, veredicto_sha256) se ignoran: nada los lee.
 
 # 21.2 — ciclo de vida nativo de roles delegados de Codex. Autoridad: la
 # re-corrida de 21.1 (docs/evidence/phase-21/21.1/, codex-cli 0.154.0) midio
@@ -2521,7 +2454,6 @@ redact_secrets() {
 # Fallback textual si el root no existe (fail-open, familia A6).
 ADV_PROJECT_CANON="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || ADV_PROJECT_CANON=""
 ADV_FINDINGS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/findings"
-VERDICTOS_DIR="${ADV_PROJECT_CANON:-$PROJECT_ROOT}/.saikit/veredictos"
 # 20.6 — zona de pruebas del adversary: ubicacion privada por ejecucion para
 # fixtures adversariales (plan 18 dejo la deuda: el rol no tenia DONDE montar
 # un repro que escriba). Bajo el repo, no bajo TMPDIR: la canonizacion FISICA
@@ -2665,135 +2597,9 @@ adv_ensure_gitignore() {
   return 0
 }
 
-# Sello del veredicto (D16, Task 18.3). En un PostToolUse de un Write atribuido
-# al rol reviewer sobre `.saikit/veredictos/`, el hook registra en el estado de
-# sesion `veredicto_sha256` = sha256 del archivo que el reviewer acaba de
-# escribir (el tool_input.content que el Write materializo; en PostToolUse el
-# archivo ya existe). Es un **registro de estado**, NO un check del Stop — el
-# gate sigue advisory. Cualquier escritura posterior — del lider, de otro rol,
-# por Edit o por Bash — cambia el archivo y el hash deja de coincidir (asi el
-# merge de D18 detecta un veredicto tocado despues del sello).
-verdict_ensure_gitignore() {
-  # Igual disciplina que adv_ensure_gitignore: solo en sesion cuyo root pudo
-  # resolverse, jamas a traves de un enlace, idempotente y sin tocar uno ajeno.
-  if [ -z "$ADV_PROJECT_CANON" ]; then return 0; fi
-  if [ -L "${VERDICTOS_DIR%/*}" ] || [ -L "$VERDICTOS_DIR" ]; then return 0; fi
-  mkdir -p "$VERDICTOS_DIR" 2>/dev/null || return 0
-  if [ ! -e "$VERDICTOS_DIR/.gitignore" ] && [ ! -L "$VERDICTOS_DIR/.gitignore" ]; then
-    printf '*\n' > "$VERDICTOS_DIR/.gitignore" 2>/dev/null || true
-  fi
-  return 0
-}
-
-# ¿El blanco del Write es un veredicto? Se canonicaliza con `adv_canon_path`
-# (backslash→slash, relativo→root, cd dirname && pwd -P) y se compara contra
-# $VERDICTOS_DIR/*, asi la forma absoluta de Windows (C:\...) y la relativa
-# (.saikit/veredictos/...) sellan igual. Los -L evitan un .saikit enlazado
-# (misma disciplina que adv_path_dentro).
-verdict_path_dentro() {
-  local vp
-  vp="$(adv_canon_path "$1")"
-  [ -n "$vp" ] || return 1
-  if [ -L "${VERDICTOS_DIR%/*}" ]; then return 1; fi
-  if [ -L "$VERDICTOS_DIR" ]; then return 1; fi
-  case "$vp" in
-    "$VERDICTOS_DIR"/*) return 0 ;;
-  esac
-  return 1
-}
-
-# Decodifica los escapes JSON de un string LEIDO POR STDIN (el que
-# `json_tool_input_string` devuelve con los escapes crudos: `\"`, `\n`, `\t`,
-# `\\`, `\r`). Es lo que vuelve el `content` del Write equivalente al archivo que
-# materializa (D16: el sello se hashea sobre el contenido real, no sobre la forma
-# escapada). Decodifica `\r` a un retorno de carro (contenido CRLF).
-verdict_unescape() {
-  awk '
-    { out = ""; esc = 0
-      for (i = 1; i <= length($0); i++) {
-        c = substr($0, i, 1)
-        if (esc) {
-          if      (c == "n") out = out "\n"
-          else if (c == "t") out = out "\t"
-          else if (c == "r") out = out "\r"
-          else if (c == "\\") out = out "\\"
-          else if (c == "\"") out = out "\""
-          else                out = out "\\" c
-          esc = 0
-        } else if (c == "\\") { esc = 1 }
-        else out = out c
-      }
-      printf "%s", out
-    }'
-}
-
-verdict_registrar_sello() {
-  # $1 = sha256 (ya computado por el llamador con el pipeline del handler del
-  # Write: `printf '%s' "$vd_content" | verdict_unescape | sha256sum`). No se pasa
-  # el contenido por `$(...)` porque la sustitucion de comando recorta el salto de
-  # linea final; en su lugar el llamador computa el hash sobre el contenido exacto
-  # decodificado. Registra veredicto_sha256 = $1: es lo que el Write materializo
-  # en el archivo, asi la comparacion posterior (D18: sha256 del archivo actual vs
-  # estado) coincide mientras el archivo no se toque, y deja de coincidir tras
-  # cualquier escritura posterior.
-  local vd_sha="$1" vd_task vd_cycle vd_impl vd_verif vd_agents vd_lane vd_ae vd_ap vd_av vd_avp
-  vd_task="$(read_state_value task_hash)";  [ -z "$vd_task" ] && vd_task="unknown"
-  vd_cycle="$(read_state_value cycle)";     [ -z "$vd_cycle" ] && vd_cycle="0"
-  vd_impl="$(read_state_value implemented)"; [ -z "$vd_impl" ] && vd_impl="0"
-  vd_verif="$(read_state_value verified)";   [ -z "$vd_verif" ] && vd_verif="0"
-  vd_agents="$(read_state_value agents_seen)"
-  vd_lane="$(read_state_value lane)"
-  vd_ae="$(read_state_value adv_epoch)"
-  vd_ap="$(read_state_value adv_paths)"
-  vd_av="$(read_state_value adv_violation)"
-  vd_avp="$(read_state_value adv_violation_paths)"
-  write_state "$vd_task" "$vd_cycle" "$vd_impl" "$vd_verif" "$vd_agents" "$vd_lane" "$vd_ae" "$vd_ap" "$vd_av" "$vd_avp" "$vd_sha" "$(read_state_value autopilot)"
-  if [ -n "$vd_sha" ]; then
-    printf 'veredicto_sha256: %s\n' "$vd_sha" >> "$LOG_PATH" 2>/dev/null || true
-  fi
-  return 0
-}
-
-# Role comes from measured channels only. A path under veredictos/ is not reviewer.
-verdict_sealable_unarmed() {
-  [ -n "$3" ] || return 1
-  [ "$(canonical_agent_role "$3")" = "reviewer" ] || return 1
-  [ -n "$2" ] || return 1
-  printf '%s' "$1" | grep -Eiq '^(write)$' || return 1
-  verdict_path_dentro "$2" || return 1
-  [ -n "$4" ] || return 1
-  return 0
-}
-
-verdict_boot_and_seal() {
-  # The measured Grok payload identifies this child, not its parent. Neither
-  # mtime nor a sibling's verified: log establishes that relationship (A4).
-  # Seal only THIS session. D18 still requires blast evidence in this same
-  # session: without it, autopilot must stop and hand off to the operator.
-  verdict_ensure_gitignore
-  vd_sha="$(printf '%s' "$1" | verdict_unescape | sha256sum | cut -c1-64)"
-  if [ ! -f "$STATE_PATH" ]; then
-    write_state "unknown" "0" "0" "0" "reviewer" "seal_boot" "" "" "" "" "" ""
-    printf 'agent: reviewer\n' >> "$LOG_PATH" 2>/dev/null || true
-  fi
-  verdict_registrar_sello "$vd_sha"
-}
-
-verdict_try_seal_unarmed() {
-  local vd_tool_name vd_file_path vd_subagent vd_content
-  vd_tool_name="$(json_top_level_string tool_name)"
-  [ -n "$vd_tool_name" ] || vd_tool_name="$(json_top_level_string toolName)"
-  vd_file_path="$(json_tool_input_string file_path)"
-  [ -n "$vd_file_path" ] || vd_file_path="$(json_tool_input_string file_path toolInput)"
-  # Unarmed: measured host channels only. toolInput is agent-controlled.
-  vd_subagent="$(json_top_level_string subagentType)"
-  if [ -z "$vd_subagent" ]; then vd_subagent="$(json_top_level_string agent_type)"; fi
-  vd_content="$(json_tool_input_string content)"
-  [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
-  verdict_sealable_unarmed "$vd_tool_name" "$vd_file_path" "$vd_subagent" "$vd_content" || return 1
-  verdict_boot_and_seal "$vd_content"
-  return 0
-}
+# A7 (Bloque A): productor de sellos retirado — el Write del reviewer ya
+# no registra veredicto_sha256. Los archivos .saikit/veredictos/*.json
+# viejos se ignoran (no se borran); la entrega valida el recibo del PR.
 
 # Reescribe el estado preservando los 6 campos clasicos y poniendo los 4 del
 # candado ($1 epoca, $2 rutas permitidas, $3 violacion, $4 rutas violadas);
@@ -2870,11 +2676,11 @@ adv_canon_path() {
       ;;
   esac
   # 18.22: el colapso lexico conservaba el prefijo LOGICO de PROJECT_ROOT,
-  # mientras ADV_FINDINGS_DIR/VERDICTOS_DIR anclan al FISICO (pwd -P). En
+  # mientras ADV_FINDINGS_DIR ancla al FISICO (pwd -P). En
   # Darwin /var -> /private/var los diverge, pero solo cuando el dir del
   # blanco no existe todavia (un Write que crea su directorio): el `cd` de
-  # arriba falla y cae aca — y el hook dejaba de sellar veredictos o inventaba
-  # violaciones (medido, escenarios 47/56 y advlock_falla_infra_fail_open).
+  # arriba falla y cae aca — y el hook inventaba violaciones
+  # (medido, escenarios 47/56 y advlock_falla_infra_fail_open).
   # Se ancla el ancestro existente mas profundo en su forma fisica; el resto
   # se colapsa lexico igual que antes. En GNU sin symlinks en el tmp fisico ==
   # logico: mismo string, mismo comportamiento (la golden no se regraba).
@@ -3233,7 +3039,7 @@ $(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null |
       # CodeRabbit r2: el NOMBRE del artefacto lo eligio el adversary y puede
       # cargar un valor con pinta de secreto — el path viaja REDACTADO, misma
       # disciplina que la rama de violacion y la linea de log.
-      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
+      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path."
       return 0
     fi
   done <<EOF
@@ -3349,7 +3155,7 @@ record_agent() {
       # y eso es exactamente lo que acaba de pasar. Alcance minimo a proposito:
       # cualquier otro rol re-despachado conserva su posicion (el dedupe de
       # siempre), y un adversary que corrio SIN reviewer posterior sigue
-      # bloqueando (lo fija caso_g3_adversary_fuera_de_orden_bloquea, que
+      # bloqueando (lo fija caso_g3_adversary_fuera_de_orden_cierra, que
       # siembra el mismo agents_seen sin re-despacho).
       if [ "$agent" = "reviewer" ]; then
         case ",$agents_seen," in
@@ -3376,14 +3182,9 @@ record_tool_evidence() {
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # Sin tarea armada NO se crea archivo de estado. Si no, mark_evidence lo crearia
   # con task_hash=unknown en cualquier edicion y el Stop gate se activaria solo,
-  # anulando el sentinel. SealableWrite igual sella. El hijo Grok trae
+  # anulando el sentinel. (A7: el sello unarmed se retiro.) El hijo Grok trae
   # subagentType medido y no trae -saikit.
   if [ ! -f "$STATE_PATH" ]; then
-    if verdict_try_seal_unarmed; then emit_allow; fi
-    emit_allow
-  fi
-  if [ "$(read_state_value lane)" = "seal_boot" ]; then
-    verdict_try_seal_unarmed
     emit_allow
   fi
   # <<< SAIKIT-SENTINEL-GATE v1 <<<
@@ -3414,24 +3215,6 @@ record_tool_evidence() {
     esac
   fi
   combined="$event_name $tool_name $command_text $file_path $INPUT"
-
-  # 20.13: Grok parent — SubagentStart records host-announced child id;
-  # spawn_subagent PostToolUse consumes that child's seal only if already linked
-  # (no enroll+consume in one spawn event; foreign parents stay empty).
-  if [ "$HOST" = "grok" ]; then
-    _ann="$(json_top_level_string subagentId)"
-    [ -n "$_ann" ] || _ann="$(json_top_level_string subagent_id)"
-    if [ -n "$_ann" ]; then
-      link_record_child "$_ann"
-    fi
-    if printf '%s' "$tool_name" | grep -Eiq '^(spawn_subagent)$'; then
-      _spawn_id="$(json_tool_input_string subagent_id toolResult)"
-      [ -n "$_spawn_id" ] || _spawn_id="$(json_tool_input_string subagent_id tool_response)"
-      if [ -n "$_spawn_id" ]; then
-        link_consume_child_seal "$_spawn_id"
-      fi
-    fi
-  fi
 
   # Record harness subagent runs (the delegation tool carries a subagent_type in
   # its tool_input) so the Stop gate can enforce the implementer -> verifier ->
@@ -3502,45 +3285,12 @@ record_tool_evidence() {
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
 
-  # Task 18.13 (c): el Write del veredicto del reviewer NO es trabajo — es el
-  # artefacto de cierre de la propia revision. Acreditarlo hacia que un turno
-  # de SOLO revision reportara trabajo que no existio (la golden del escenario
-  # 56 lo media: implemented=1 y last_code_edit=1). El flag guarda el grep
-  # laxo de implemented de abajo; para last_code_edit, rn_is_noncode_path
-  # excluye .saikit/veredictos/. Es el MISMO molde que el sello (D16):
-  # reviewer por un canal medido + Write bajo veredictos/, calculado UNA sola
-  # vez y reusado por el sello mas abajo.
-  vd_write_reviewer=""
-  if [ -n "$subagent" ] && [ "$(canonical_agent_role "$subagent")" = "reviewer" ] \
-     && [ -n "$file_path" ] \
-     && printf '%s' "$tool_name" | grep -Eiq '^(write)$' \
-     && verdict_path_dentro "$file_path"; then
-    vd_write_reviewer=1
-  fi
-
-  if [ -z "$vd_write_reviewer" ] && printf '%s' "$combined" | grep -Eiq 'afterFileEdit|Edit|Write|apply_patch|file_path|edits'; then
+  # A7: sin sellos, un Write es trabajo venga del rol que venga (implemented);
+  # para last_code_edit, rn_is_noncode_path sigue excluyendo
+  # .saikit/veredictos/ (JSON de artefactos, no codigo).
+  if printf '%s' "$combined" | grep -Eiq 'afterFileEdit|Edit|Write|apply_patch|file_path|edits'; then
     mark_evidence "implemented" "${file_path:-file edit}"
   fi
-
-  # >>> SAIKIT-VEREDICTO-SELLO v1 (D16, Task 18.3) >>>
-  # El sello corre SOLO en sesiones armadas (el early-exit de arriba ya lo acoto)
-  # y solo cuando el evento resuelve a reviewer por un canal medido ($subagent ya
-  # lleva el despacho o el interno, M1) Y es un Write cuyo blanco cae bajo
-  # .saikit/veredictos/ — la resolucion que el flag vd_write_reviewer de la
-  # 18.13 (c) calcula arriba una sola vez. Es registro de estado — NO agrega
-  # nada al Stop gate.
-  if [ -n "$vd_write_reviewer" ]; then
-    verdict_ensure_gitignore
-    vd_content="$(json_tool_input_string content)"
-    [ -z "$vd_content" ] && vd_content="$(json_tool_input_string content toolInput)"
-    if [ -n "$vd_content" ]; then
-      vd_sha="$(printf '%s' "$vd_content" | verdict_unescape | sha256sum | cut -c1-64)"
-    else
-      vd_sha=""
-    fi
-    verdict_registrar_sello "$vd_sha"
-  fi
-  # <<< SAIKIT-VEREDICTO-SELLO v1 <<<
 
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   # Senal PRECISA para el orden, distinta del grep laxo de arriba (ese matchea
@@ -4074,10 +3824,11 @@ transcript_en_perfil() {
 RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'
 
 stop_gate() {
+  # A6 (Bloque A): avance/espera/cierre NO exigen ceremonia — ni seis
+  # etiquetas, ni evidencia, ni trail, ni secuencia local. La entrega exige
+  # los roles via el recibo del PR (al aprobar/mergear). El unico bloqueo
+  # que queda es el adversary temprano (escritura/secretos) + su presupuesto.
   if [ ! -f "$STATE_PATH" ]; then
-    emit_allow
-  fi
-  if [ "$(read_state_value lane)" = "seal_boot" ]; then
     emit_allow
   fi
 
@@ -4167,7 +3918,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # en el Stop) — la salida real es revertir y RE-ARMAR (-saikit) en un
     # turno nuevo, cuyo armado reinicia el estado; o agotar el presupuesto.
     # qwen #7: los paths viajan REDACTADOS al feedback, como en la linea de log.
-    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it).\n"
+    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it)."
   elif [ "$adv_adv_presente" = "1" ]; then
     adv_early_missing="$(adv_chequear_secretos)"
   fi
@@ -4307,9 +4058,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # el canal ciego). Postura: fail-open declarado — diagnostico fuerte por
   # stderr y log, exit 0 SIN consumir ciclo, estado de la sesion limpio
   # (mismo desenlace que el presupuesto agotado, A4).
-  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => el gate
-  # sigue bloqueando como siempre (claude/codex medidos 1.4/6.2 no pierden
-  # dientes). La deteccion de presencia es la misma subcadena que usa
+  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => cierra
+  # por la via normal (A6: sin bloqueos de ceremonia; la distincion decide
+  # unknown vs cierre normal). La deteccion de presencia es la misma
+  # subcadena que usa
   # assistant_text_payload: una clave anidada (p.ej. en tool_input) cuenta como
   # observado — no dispara el unknown, o sea queda del lado que sigue
   # exigiendo. NO toca A6: el camino 1 (extender la contencion al tmpdir de
@@ -4318,18 +4070,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   case "$INPUT" in
     *"\"last_assistant_message\""*|*"\"lastAssistantMessage\""*) canal_payload_observed=1 ;;
   esac
-  # (el chequeo del unknown honesto vive mas abajo, tras leer cycle del estado)
+  # (el chequeo del unknown honesto vive justo abajo)
 
-  implemented="$(read_state_value implemented)"
-  verified="$(read_state_value verified)"
-  cycle="$(read_state_value cycle)"
-  task_hash="$(read_state_value task_hash)"
-  agents_seen="$(read_state_value agents_seen)"
-  lane="$(read_state_value lane)"
-  if [ -z "$implemented" ]; then implemented="0"; fi
-  if [ -z "$verified" ]; then verified="0"; fi
-  if [ -z "$cycle" ]; then cycle="0"; fi
-  if [ -z "$task_hash" ]; then task_hash="unknown"; fi
 
   # Task 11.4 (datapoint post-11.3, host zcode 2026-08-16) — unknown honesto.
   # El gate juzga el recibo por DOS canales de texto: last_assistant_message
@@ -4343,9 +4085,10 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # el canal ciego). Postura: fail-open declarado — diagnostico fuerte por
   # stderr y log, exit 0 SIN consumir ciclo, estado de la sesion limpio
   # (mismo desenlace que el presupuesto agotado, A4).
-  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => el gate
-  # sigue bloqueando como siempre (claude/codex medidos 1.4/6.2 no pierden
-  # dientes). La deteccion de presencia es la misma subcadena que usa
+  # Distincion clave: campo PRESENTE sin recibo = ausencia OBSERVADA => cierra
+  # por la via normal (A6: sin bloqueos de ceremonia; la distincion decide
+  # unknown vs cierre normal). La deteccion de presencia es la misma
+  # subcadena que usa
   # assistant_text_payload: una clave anidada (p.ej. en tool_input) cuenta como
   # observado — no dispara el unknown, o sea queda del lado que sigue
   # exigiendo. NO toca A6: el camino 1 (extender la contencion al tmpdir de
@@ -4377,158 +4120,8 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     emit_allow
   fi
 
-  missing=""
-  if ! printf '%s' "$text" | grep -Eiq 'SUMMONAIKIT HARNESS RECEIPT'; then
-    missing="$missing- Missing SUMMONAIKIT HARNESS RECEIPT.\n"
-  fi
-  if ! has_receipt_label "Understand" "Capito" "$text"; then
-    missing="$missing- Missing Understand gate summary (each receipt label opens its own paragraph: add a line beginning 'Understand:' inside the SUMMONAIKIT HARNESS RECEIPT block, restating the request in plain words). If you instead need to ask the user first, end the turn with the line 'SUMMONAIKIT HARNESS PAUSED - awaiting your answer'.\n"
-  fi
-  if ! has_receipt_label "Implement" "Implementazione" "$text"; then
-    missing="$missing- Missing Implement gate summary (each receipt label opens its own paragraph: add a line beginning 'Implement:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
-  fi
-  if ! has_receipt_label "Verify" "Verifica" "$text"; then
-    missing="$missing- Missing Verify gate summary (each receipt label opens its own paragraph: add a line beginning 'Verify:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
-  fi
-  if ! has_receipt_label "Review" "Revisione" "$text"; then
-    missing="$missing- Missing Review gate summary (each receipt label opens its own paragraph: add a line beginning 'Review:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
-  fi
-  if ! has_receipt_label "Close" "Chiusura" "$text"; then
-    missing="$missing- Missing Close gate summary (each receipt label opens its own paragraph: add a line beginning 'Close:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
-  fi
-  if ! has_receipt_label "Retro" "Retrospettiva" "$text"; then
-    missing="$missing- Missing Retro gate summary (each receipt label opens its own paragraph: add a line beginning 'Retro:' inside the SUMMONAIKIT HARNESS RECEIPT block).\n"
-  fi
-  # Task 13.5 (D4/B1): la linea ADVERSARY del recibo se exige cuando ESTE turno
-  # corrio un adversary (,adversary, en agents_seen), en CUALQUIER lane — los
-  # labels del recibo ya se exigen en fast y este no es excepcion. Sin adversary
-  # en agents_seen este bloque no corre y el recibo sigue exactamente igual
-  # (anti-regresion del costo, D1). Label-only: el gate NUNCA valida N contra
-  # el JSON del artefacto (validarlo exigiria parsear en el Stop un archivo que
-  # otro modelo reescribio — TOCTOU declarado de D2). ROLE FALLBACK: ADVERSARY
-  # sustituye la linea para el despacho que acredito agents_seen pero murio sin
-  # reportar — misma disciplina substring sin anclar de los otros tres roles.
-  case ",$agents_seen," in
-    *,adversary,*)
-      if ! has_receipt_label "ADVERSARY" "ADVERSARIO" "$text" \
-         && ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *ADVERSARY'; then
-        missing="$missing- Missing ADVERSARY line (this turn ran an adversary subagent: each receipt label opens its own paragraph: add a line beginning 'ADVERSARY:' inside the SUMMONAIKIT HARNESS RECEIPT block with the findings count and the highest severity — presence only, the gate never checks the numbers. If the adversary was dispatched but died without reporting, declare ROLE FALLBACK: ADVERSARY (reason) instead).\n"
-      fi
-      ;;
-  esac
-  # VERIFY_SKIP_RE: EN+IT historicos + ES natural. Vivo 2026-08-13: zcode
-  # escribio "No corri los candados" y el gate lo rechazo porque solo
-  # aceptaba skipped/not run. "se corrio la bateria" NO matchea (falta "no ").
-  # Task 9.10 r2: el runner bash propio tambien se acepta aqui via
-  # TEST_RUNNER_CMD_RE — grep ancla ^ por LINEA, asi que en prosa solo cuenta
-  # una linea que ESTEME en posicion de comando; el credito real del carril
-  # run.sh vive en el evento (arriba), este es el fallback de prosa.
-  # Task 14.2 — via ADICIONAL de credito: label VERIFIED BY SUBAGENT en hosts con
-  # canal interno ciego ($HOST=zcode). Las 5 condiciones del contrato (14.1 §3):
-  # prefijo literal + comando+resultado (§4.3) + HOST ciego (sobre $HOST, JAMAS
-  # $TARGET: en zcode el fallback 5.4 deja TARGET=claude) + verifier en
-  # agents_seen + verified!=1 (la condicion de este if). Cuando el label esta
-  # PRESENTE, la evidencia la juzga SOLO el predicado §4.3 (con el veto de fallo),
-  # NO el fallback de prosa/runner — asi un label con fallo no acredita por la
-  # via laxa de prosa (A11) y el label queda a la par del raíl de evento. Sin
-  # label, comportamiento identico al de antes.
-  # Task 14.2 / grok r1 #1: se juzga sobre $text_hatch (el texto del turno
-  # ACTUAL, last_assistant_message) NO sobre $text (que concatena el tail de 160
-  # lineas del transcript con turnos ANTERIORES). Un 'VERIFIED BY SUBAGENT:' que
-  # un turno previo dejo en el tail NO debe encender la via exclusiva del label
-  # ni servir su span para acreditar el turno nuevo — la misma clase que las
-  # escotillas PAUSED/DELEGATED ya cierran con text_hatch (Task 8.2).
-  if [ "$verified" != "1" ] && ! saikit_verif_evidence_ok "$text_hatch"; then
-    # 18.18 — cuando el label estuvo PRESENTE y no acredito, saikit_verif_motivo
-    # (seteado por saikit_verif_subagente_credita) nombra la condicion incumplida
-    # en vez del reclamo generico: el lead ve QUE falto (verifier, fallo declarado,
-    # resultado fuera del span, comando fuera del vocabulario) y no solo que falto.
-    # Vacio = el label no fue el juez este turno: mensaje generico intacto.
-    if [ -n "${saikit_verif_motivo:-}" ]; then
-      missing="$missing- Missing verification evidence: ${saikit_verif_motivo}.\n"
-    else
-      missing="$missing- Missing verification evidence or explicit skipped-check reason (on a host with a blind channel, a \`VERIFIED BY SUBAGENT: <command> <result>\` on one line counts; otherwise declare an explicit skipped-check reason).\n"
-    fi
-  fi
-
-  if [ "$(read_state_value lane)" != "fast" ]; then
-    if ! has_trail_skip "$text_hatch"; then
-      if ! trail_cited_and_present; then
-        missing="$missing- Missing trail/blast: Close: must cite concrete paths that exist under PROJECT_ROOT (.saikit/decisiones/<task>.tsv and .saikit/findings/blast-<task>.json), or declare TRAIL SKIP: <reason> as its own receipt line. A leftover file you did not cite does not count.\n"
-        if [ -n "${TRAIL_RAIZ_BLOQUEO:-}" ]; then
-          missing="$missing- Missing trail/blast (raiz): ${TRAIL_RAIZ_BLOQUEO}.\n"
-        fi
-      fi
-    fi
-  fi
-
-  # Sequential subagent enforcement (Claude only — Task/subagent_type is a Claude
-  # Code primitive). The first three gates must each run as their own subagent,
-  # in order. closer/retro stay receipt sections the lead writes.
-  # Task 10.1: con lane=fast (armado con -saikit:fast) la ceremonia de
-  # subagentes NO se exige — el recibo y la evidencia de verificacion siguen
-  # exigidos arriba, ahi no cambia nada. Un lane ausente/vacio (estado sembrado
-  # por el banco o escrito por un hook pre-10.1) != "fast" => ceremonia
-  # completa: el default ausente es el lado seguro.
-  if [ "$(read_state_value lane)" != "fast" ]; then
-  # Task 6.4 (D3): la ceremonia acepta codex. 6.1 midio que el rol LLEGA en
-  # Codex (agent_type de primer nivel en los eventos internos, forma identica
-  # a Claude post-3.7), asi que la rama se prende — la condicion del diseno
-  # ("solo si 6.1 mide que el rol llega") esta cumplida y medida. cursor y
-  # other siguen fuera; zcode entra por su fallback TARGET=claude (5.4).
-  # Task 7.4 (D3): grok entra — 7.1 midio el rol por TRES canales
-  # (SubagentStart.subagentType top-level, despacho spawn_subagent con
-  # toolInput.subagent_type que SI emite post_tool_use, e internos del hijo
-  # con subagentType), y el env map entrega TARGET=grok en los 37 dumps. La
-  # condicion del diseño ("solo si 7.1 mide que el rol llega") cumplida por
-  # partida doble. Los tres canales ya los leia la 7.3.
-  # Phase 15 (D3): dsh entra — 15.1 midio el rol por tools/* (no ciego, D7), y el
-  # adaptador @summonaikit/dsh-gate traduce la tool `subagent` a un PostToolUse
-  # con subagent_type (D4), asi que la ceremonia se exige como en claude.
-  case "$TARGET" in claude|codex|grok|dsh|muse)
-    # D4 (Task 6.3): absorbe la escotilla "ROLE FALLBACK" del sabor Codex del
-    # kit -- un subagente caido por infraestructura (429, limite de uso, error
-    # de herramienta) trababa el turno sin salida. La declaracion en el recibo
-    # sustituye al despacho; sin ella, el motivo de siempre sigue exigiendo.
-    #
-    # Limite declarado (revision cruzada, ciclo 1): el match es SUBCADENA SIN
-    # ANCLAR sobre el texto del asistente -- si el propio agente cita "ROLE
-    # FALLBACK: <ROL>" mientras ese rol falta de verdad, lo perdona. Aceptado a
-    # proposito: anclar mas estricto repite A8 (un recibo legitimo en texto
-    # corrido dejaba de contar), y el gate es advisory/fail-open por diseno --
-    # mismo trade-off que el README ya declara para el gate entero.
-    case ",$agents_seen," in
-      *",implementer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *IMPLEMENTER'; then missing="$missing- Missing implementer subagent run (delegate the change via $TOOL_HINT, or declare ROLE FALLBACK: IMPLEMENTER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
-    esac
-    case ",$agents_seen," in
-      *",verifier,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *VERIFIER'; then missing="$missing- Missing verifier subagent run (delegate verification via $TOOL_HINT, or declare ROLE FALLBACK: VERIFIER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
-    esac
-    case ",$agents_seen," in
-      *",reviewer,"*) ;;
-      *) if ! printf '%s' "$text" | grep -Eiq 'ROLE FALLBACK: *REVIEWER'; then missing="$missing- Missing reviewer subagent run (delegate review via $TOOL_HINT, or declare ROLE FALLBACK: REVIEWER (reason) in the receipt if that subagent is down after one retry).\n"; fi ;;
-    esac
-    if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q reviewer; then
-      if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*reviewer'; then
-        missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> reviewer.\n"
-      fi
-    fi
-    # Task 13.5 (D4): con adversary en agents_seen, la secuencia exigida lo
-    # incluye ENTRE verifier y reviewer. La regex de 3 roles de arriba ya
-    # matcheaba con adversary en el medio — ESTA es la que exige su posicion:
-    # rechaza adversary-antes-de-verifier y adversary-despues-de-reviewer. El
-    # "adversary sin verifier previo" sin verifier en agents_seen lo atrapa la
-    # rama missing-verifier de arriba; con verifier tardio, esta.
-    if printf '%s' "$agents_seen" | grep -q implementer && printf '%s' "$agents_seen" | grep -q verifier && printf '%s' "$agents_seen" | grep -q adversary && printf '%s' "$agents_seen" | grep -q reviewer; then
-      if ! printf '%s' "$agents_seen" | grep -Eq 'implementer.*verifier.*adversary.*reviewer'; then
-        missing="$missing- Subagents ran out of order; required sequence is implementer -> verifier -> adversary -> reviewer.\n"
-      fi
-    fi
-  ;;
-  esac
-  fi
-
+  # A6: sin acumulacion de ceremonia — etiquetas, evidencia, trail y
+  # secuencia se retiraron; el turno cae directo al cierre limpio.
   # >>> SAIKIT-REVIEW-NOTICE v1 >>>
   # Chequeo ADVISORY: compara el evento de la ultima edicion de codigo contra
   # el evento de la ultima corrida del reviewer. NUNCA agrega un motivo a
@@ -4559,62 +4152,40 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # Task 9.8 (C14): el borde declarado es "el Stop de una sesion con
     # secuencia limpia PUEDE borrar el aviso" — y ese borde es el CIERRE
     # limpio, no cualquier Stop. Aca solo se ANOTA que la secuencia se observo
-    # limpia; el rm vive abajo, dentro de [ -z "$missing" ], junto al del
+    # limpia; el rm vive abajo, dentro del cierre limpio, junto al del
     # RN_ORDER. Antes el rm corria aqui, en TODO Stop: uno que BLOQUEABA se
     # llevaba el aviso que una sesion hermana dejo para el proximo turno del
     # proyecto (RN_PENDING_PATH es per-proyecto a proposito).
     rn_pendiente_borrable=1
   fi
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-  if [ -z "$missing" ]; then
-    # >>> SAIKIT-REVIEW-NOTICE v1 >>>
-    rm -f "$RN_ORDER_PATH" 2>/dev/null || true
-    # Task 9.8 (C14): el aviso pendiente desactualizado solo lo borra un
-    # cierre LIMPIO cuya secuencia se observo limpia (el elif de arriba). Si
-    # el aviso disparo en ESTE Stop (rama if), el flag no se seteo y el
-    # pendiente queda para el turno siguiente, como siempre.
-    if [ "$rn_pendiente_borrable" = "1" ]; then
-      rm -f "$RN_PENDING_PATH" 2>/dev/null || true
-    fi
-    # Canal INMEDIATO (ademas del pendiente que lee el turno siguiente): en un
-    # cierre limpio donde el aviso disparo, se emite el campo systemMessage
-    # del contrato de hooks de Claude Code -- documentado como universal, se
-    # muestra AL USUARIO y no toca la decision (sin campo decision + exit 0 =
-    # allow igual que siempre). Asi el usuario se entera al final del MISMO
-    # turno, no recien cuando vuelva a armar -saikit en este proyecto. Solo
-    # target no-cursor, el mismo criterio que ya usa emit_gate_failure (el
-    # vendor emite JSON estilo Claude para todo lo que no es cursor). Si el
-    # host ignorase este stdout en exit 0, el peor caso es el silencio de hoy
-    # (fail-open); el pendiente del turno siguiente sigue existiendo igual.
-    if [ "$rn_notice_fired" = "1" ] && [ "$TARGET" != "cursor" ]; then
-      printf '{"systemMessage":"SAIKIT REVIEW NOTICE: code was edited after the reviewer subagent last ran in this turn; those edits were not re-reviewed. The next -saikit turn on this project will see this notice too. (Tool-name signal only -- edits made via shell commands are not detected.)"}\n'
-    fi
-    # <<< SAIKIT-REVIEW-NOTICE v1 <<<
-    adv_limpiar_zona   # 20.6: cierre limpio — la zona de pruebas se va con el estado
-    rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
-    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
-    emit_allow
+  # >>> SAIKIT-REVIEW-NOTICE v1 >>>
+  rm -f "$RN_ORDER_PATH" 2>/dev/null || true
+  # Task 9.8 (C14): el aviso pendiente desactualizado solo lo borra un
+  # cierre LIMPIO cuya secuencia se observo limpia (el elif de arriba). Si
+  # el aviso disparo en ESTE Stop (rama if), el flag no se seteo y el
+  # pendiente queda para el turno siguiente, como siempre.
+  if [ "$rn_pendiente_borrable" = "1" ]; then
+    rm -f "$RN_PENDING_PATH" 2>/dev/null || true
   fi
-
-  if [ "$cycle" -ge "$MAX_CYCLES" ] 2>/dev/null; then
-    # Presupuesto agotado limpia el estado de ESTA sesion (STATE_PATH/LOG_PATH/
-    # RN_ORDER_PATH). RN_PENDING_PATH queda (per-project, ver comentario
-    # REVIEW-NOTICE). Sin esto, cycle=MAX sobrevivia en disco y el turno seguia
-    # cobrando recibo despues de declararse agotado (A4).
-    _ap_budget="$(read_state_value autopilot)"  # 18.6: antes del rm (A4-c4)
-    _lane_budget="$(read_state_value lane)"
-    adv_limpiar_zona   # 20.6: presupuesto agotado — la ejecucion termina, su zona se va
-    rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c4 presupuesto
-    podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
-    emit_budget_exhausted "$missing" "$_ap_budget" "$_lane_budget"
+  # Canal INMEDIATO (ademas del pendiente que lee el turno siguiente): en un
+  # cierre limpio donde el aviso disparo, se emite el campo systemMessage
+  # del contrato de hooks de Claude Code -- documentado como universal, se
+  # muestra AL USUARIO y no toca la decision (sin campo decision + exit 0 =
+  # allow igual que siempre). Asi el usuario se entera al final del MISMO
+  # turno, no recien cuando vuelva a armar -saikit en este proyecto. Solo
+  # target no-cursor, el mismo criterio que ya usa emit_gate_failure (el
+  # vendor emite JSON estilo Claude para todo lo que no es cursor). Si el
+  # host ignorase este stdout en exit 0, el peor caso es el silencio de hoy
+  # (fail-open); el pendiente del turno siguiente sigue existiendo igual.
+  if [ "$rn_notice_fired" = "1" ] && [ "$TARGET" != "cursor" ]; then
+    printf '{"systemMessage":"SAIKIT REVIEW NOTICE: code was edited after the reviewer subagent last ran in this turn; those edits were not re-reviewed. The next -saikit turn on this project will see this notice too. (Tool-name signal only -- edits made via shell commands are not detected.)"}\n'
   fi
-
-  next_cycle=$((cycle + 1))
-  write_state "$task_hash" "$next_cycle" "$implemented" "$verified" "$agents_seen" "$lane" \
-    "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
-    "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
-  feedback="$(build_gate_feedback "$missing" "$next_cycle")"
-  emit_gate_failure "$feedback"
+  # <<< SAIKIT-REVIEW-NOTICE v1 <<<
+  adv_limpiar_zona   # 20.6: cierre limpio — la zona de pruebas se va con el estado
+  rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
+  podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
+  emit_allow
 }
 
 # >>> SAIKIT-PRETOOL-MERGE v1 (Task 18.11 / D24) >>>

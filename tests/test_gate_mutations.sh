@@ -94,10 +94,8 @@ G2|falla_frontera_aflojada|la frontera [1-9] se afloja a [0-9] y 0 failed se tom
 G2|falla_excepciones_sin_dospuntos|se quita el ':' despues de las excepciones y un runner exitoso con TypeError/etc. en el comando vuelve a falsamente NO acreditar
 G2|estado_sin_turno_armado|un evento de herramienta crea estado sin turno armado
 G2|runner_sin_frontera|las fronteras de palabra del runner se quitan
-G2|runner_frontera_sin_punto_de_frase|un runner al final de una frase deja de contar
 G2|redaccion_quitada|la redaccion de credenciales se desactiva y el secreto vuelve al log
 G2|redaccion_sin_ghp|la regla de redaccion de ghp_ se neutraliza y un token ghp_ vuelve al log
-G2|skip_sin_espanol|un skip en espanol (no corri) deja de contar y el vivo zcode vuelve a bloquear
 G2|command_desacotado|command se vuelve a leer del payload entero y un eco en tool_response acredita verificacion
 G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutralizan y bash tests/run.sh vuelve a NO acreditar
 G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
@@ -105,76 +103,27 @@ G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FA
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
-G2|verif_subagente_label_apagado|el reconocimiento del label VERIFIED BY SUBAGENT se apaga y un recibo con la declaracion honesta vuelve a bloquear por evidencia (Task 14.2)
-G2|verif_subagente_host_a_cualquiera|la condicion de host ciego (\$HOST=zcode) se afloja a CUALQUIER host y el label acredita tambien en claude (Task 14.2)
 G1|muse_tope_borde_ge|el tope de muse compara con -ge y una salida de 16384 bytes exactos, que Muse si acepta, cae al contrato minimo
 G1|muse_recorte_sin_ancla|el recorte de muse vuelve a cortar en la primera aparicion del marcador y un titulo de receta con ese texto borra la regla de delegacion
 G1|muse_minimo_sin_aviso|el contrato minimo de muse vuelve a descartar el aviso de revision, que ya se consumio y se pierde
 G1|muse_contrato_sin_recorte|el contrato de muse vuelve a mandar las secciones genericas completas y, con el recetario real, solo llega el contrato minimo en vez del normal
 G1|muse_contrato_sin_tope|el tope duro de muse se quita y un contrato que no cabe en 16384 bytes llega entero, y Muse lo descarta en silencio
 G1|muse_contrato_sin_host_ciego|el contrato vuelve a nombrar solo a zcode como host ciego y el modelo de Muse no sabe que VERIFIED BY SUBAGENT es la via para acreditar lo que corrio su verifier
-G2|muse_no_es_ciego|se quita muse de saikit_host_ciego y un Stop honesto de Muse con VERIFIED BY SUBAGENT vuelve a bloquear por evidencia
-G2|verif_subagente_solo_primer_span|el span del label vuelve a head -n1 y un label con exito seguido de otro con fallo acredita (Greptile P1, PR #72)
-G2|verif_subagente_cero_acredita|el veto del conteo cero se apaga y '0 passed' / '0 passing' vuelven a acreditar por la rama passed pelada (CodeRabbit, PR #72)
-G2|verif_label_sobre_text_entero|la via del label se juzga sobre \$text entero y un label de un turno ANTERIOR del transcript acredita el turno nuevo (grok r1 #1, PR #72)
-G2|verif_fallo_pelado_apagado|el veto del fallo PELADO se apaga y 'pytest -q, ok, failed.' vuelve a acreditar por el ok (residual PR #72, Greptile r3)
-G2|verif_fallo_negado_apagado|el descuento de la negacion se apaga y '0 failed' / 'no failures' (formas de exito) pasan a BLOQUEAR
-G2|verif_fallo_ruta_no_descontada|el descuento de ruta/archivo se apaga y un 'tests/errors.py' en el COMANDO veta un recibo legitimo (bots PR #81)
-G2|verif_fallo_pegado_sin_normalizar|la normalizacion de puntuacion se apaga y '0 failed,error' pierde el veto (grep -o consume la coma) (bots PR #81)
-G2|verif_label_vocabulario_cerrado|las dos ramas del runner propio (tests/run.sh) salen del vocabulario del label y 'VERIFIED BY SUBAGENT: bash tests/run.sh exit 0' vuelve a NO acreditar (18.18)
-G2|verif_label_resulto_opcional|la guarda de resultado en el MISMO span se quita y un label con comando del vocabulario pero sin resultado acredita (18.18)
-G2|verif_label_veto_local|el veto global del label se neutraliza y un fallo declarado en otro span ya no descalifica (18.18)
-G2|verif_label_mensaje_generico|el motivo especifico del label deja de llegar al missing y el reclamo vuelve al mensaje generico (18.18)
-G3|reviewer_siempre_visto|el gate del reviewer nunca se reporta como faltante
-G3|orden_no_se_exige|la secuencia deja de exigir el orden entre los tres roles
-G3|secuencia_tambien_en_cursor|la secuencia se exige en cualquier host, no solo claude
 G3|subagent_type_greedy|el rol se vuelve a leer con el lector greedy del payload crudo
 G3|tool_input_no_se_acota|el escaner deja de exigir que la clave sea de tool_input
 G3|agent_type_no_se_lee|el rol de los eventos internos (agent_type) deja de leerse
-G3|target_sin_claudecode|el fallback CLAUDECODE=1 se anula y TARGET queda vacio en produccion
-G4|retro_no_se_exige|la etiqueta Retro deja de pedirse
-G4|ancla_de_linea_quitada|el ancla de linea se quita y la etiqueta vuelve a aceptarse en cualquier posicion: un recibo pegado en un parrafo cierra (18.23)
-G4|etiqueta_sin_bold|la alternativa markdown bold se quita y un recibo **Label**: vuelve a bloquear
-G4|pausa_no_se_reconoce|la pausa declarada deja de reconocerse
-G4|delegado_no_se_reconoce|la escotilla de subagente delegado deja de reconocerse (arreglo 1)
-G4|delegado_ignora_recibo|la escotilla DELEGATED deja de exigir que el recibo este ausente (fix cross-review ciclo 1)
-G4|delegado_grok_sin_bg|la guardia de backgroundTasks de la escotilla grok se neutraliza y un Stop delegado sin nada en vuelo vuelve a permitir (18.27)
-G4|delegado_grok_bg_degenerado|el lector estructural deja de exigir contenido dentro del array y el vacío ([ ]) vuelve a habilitar la escotilla (18.27 r2, 20.4)
-G4|delegado_grok_bg_textual|la lectura estructural de backgroundTasks vuelve al grep textual y el Stop multilínea con trabajo en vuelo vuelve a bloquear (20.4)
-G4|delegado_grok_bg_solo_balance|el validador completo del documento vuelve a solo balance (sin gram_*) y las formas rotas cuya inval vive solo en gram_* ([1,], clave ajena rota, trailing, escapes) vuelven a habilitar la escotilla (r1; tabla medida en el comentario de la mutacion)
-G4|delegado_grok_bg_trailing|la basura tras el cierre del root deja de invalidar y un documento con trailing garbage vuelve a habilitar la escotilla (r1)
-G4|delegado_grok_bg_ignora_doc|la validez fuera de la clave deja de pesar y un valor roto en OTRA clave del documento vuelve a habilitar la escotilla (r1)
-G4|delegado_grok_bg_escape_leniente|la estrictura de escapes se quita y cualquier caracter tras barra invertida vuelve a valer: "\q" habilita la escotilla (r3)
-G4|delegado_grok_bg_control_crudo|el veto del char de control crudo en strings se quita y un tab literal dentro de un string habilita la escotilla (r3)
-G4|delegado_grok_bg_uhex_leniente|el veto de "\u"+4hex se quita y "\u12G34" (G colado entre hex) habilita la escotilla (r3)
-G4|delegado_grok_bg_escape_clave_sin_decodificar|la decodificacion de escapes al acumular la clave se quita y una clave DISTINTA con escapes vuelve a colisionar con backgroundTasks (review r2 P1)
-G4|delegado_parser_bg_usa_target|la invocacion del parser vuelve a decidir por TARGET en vez de HOST y falla ante identidades divergentes (review r3 PR #273)
-G4|delegado_grok_bg_decide_por_target|la exigencia fail-closed de backgroundTasks vuelve a decidir por TARGET en vez de HOST y Grok divergente puede salir sin trabajo en vuelo (review r3 PR #273)
-G4|paused_sin_guardia_de_recibo|la escotilla PAUSED deja de exigir que el recibo este ausente (fix 11.2)
-G4|paused_exige_recibo|la escotilla PAUSED invierte la guardia y exige recibo PRESENTE para permitir (11.2)
-G4|escotillas_leen_tail_viejo|las escotillas PAUSED/DELEGATED vuelven a leer el tail entero (texto de turnos anteriores decide)
-G4|walker_sin_resets|el walker deja de resetear en_text/en_assistant al cerrar llaves y un valor top-level se cuela como texto del asistente
-G4|canal_payload_crudo|el canal payload vuelve al lector greedy del vendor sin decodificar
-G4|canal_transcript_vacio|el canal transcript se ignora y no devuelve texto del asistente
-G4|texto_incluye_tool_result|el walker deja de exigir role:assistant y acepta mensajes user
-G4|texto_incluye_tool_use|el walker deja de exigir type:text y acepta thinking/tool_use
 G4|transcript_sin_containment|la contencion de transcript_path se anula y se vuelve a leer cualquier ruta
 G4|containment_sin_resolver|la contencion compara la ruta cruda en vez de resolverla con cd+pwd
 G4|unknown_honesto_quitado|el cierre unknown honesto (11.4) se neutraliza y un Stop con ambos canales de texto ciegos vuelve a bloquear exigiendo evidencia no observable
-G4|unknown_ciega_al_payload|la deteccion del canal payload se apaga (11.4) y el unknown honesto dispara tambien con last_assistant_message PRESENTE (ausencia observada deja de bloquear)
 G5|tool_name_desacotado|tool_name vuelve al lector greedy y un eco en tool_response se lee como la herramienta del evento (marca una edicion que no ocurrio)
 G5|presupuesto_infinito|el presupuesto pasa de 2 ciclos a 99
 G5|presupuesto_no_limpia|el presupuesto agotado deja de limpiar el estado
 G6|cursor_no_se_distingue|cursor deja de tener contrato de salida propio
-G3|zcode_sin_target|el fallback ZCODE_* se anula y TARGET queda vacio en zcode (la secuencia no se exige)
 G4|phase_sin_camel|la lectura de hookEventName se anula y un Stop camel-only cae a "tool" (stop_gate no corre)
 G5|budget_zcode_sigue_0|el exit 2 del budget en zcode vuelve a exit 0 (continue:false es ignorado)
-G3|role_fallback_quitada|se saca la escotilla ROLE FALLBACK del gate (D4) y un recibo con la declaracion vuelve a bloquear
-G3|fast_no_exime_ceremonia|lane=fast deja de eximir la secuencia (el carril no sirve)
+G5|barra_n_vuelve|las entradas de violacion y secreto del Stop vuelven a terminar en barra-n literal y el modelo las lee pegadas en una sola linea (23.15)
 G1|host_codex_sin_rama|la senal explicita TARGET=codex deja de mapear HOST=codex y un turno codex heredando CLAUDECODE=1 vuelve a creerse claude
-G3|ceremonia_sin_codex|la rama de ceremonia vuelve a claude-only y el gate queda inerte en codex (D3)
 G6|bloqueo_codex_exit2|el bloqueo en target codex vuelve a exit 2, que Codex descarta (el gate vuelve a ser decorativo ahi)
-G5|aviso_se_borra_en_fallo|el borrado del aviso RN pendiente vuelve al elif de todo Stop y un Stop que bloquea se lleva el aviso ajeno
 G1|host_grok_sin_rama|la senal GROK_HOOK_EVENT deja de mapear HOST=grok y un turno grok heredando CLAUDECODE=1 vuelve a creerse claude (D2)
 G1|host_dsh_no_reconocido|la rama HOST=dsh se apaga y un turno dsh cae en other — no crea state/dsh/ (Phase 15, D2)
 G1|tool_hint_sin_dsh|la rama TOOL_HINT de dsh se apaga y el contrato vuelve a nombrar Task tool (Phase 15, D4)
@@ -184,13 +133,7 @@ G2|toolresult_variantes_quitada|la deteccion de FileNotFound/NoMatchesFound en t
 G2|alias_padre_camel_quitado|el fallback camel del padre (toolInput) se quita y command vuelve a leerse solo de tool_input snake (D4)
 G1|stop_sin_filtro_end_turn|el filtro de Stop grok distinto de end_turn se neutraliza y el Stop de cierre vuelve a contar ciclo/tocar estado (D6)
 G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor no-vacio y una senal exportada vacia clasifica por las senales heredadas (r1, Greptile P2)
-G3|ceremonia_sin_grok|la rama de ceremonia vuelve a claude|codex y el gate queda inerte en grok (D3, 7.4)
-G3|ceremonia_sin_dsh|la rama de ceremonia vuelve a claude|codex|grok y el gate queda inerte en dsh (D1/D3, Phase 15)
 G3|adv_keyword_sin_precedencia|la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)
-G3|adv_delegated_sin_adversary|la escotilla DELEGATED vuelve a no perdonar awaiting adversary y una delegacion viva quema un ciclo (D6, Task 13.5)
-G3|adv_linea_no_se_exige|la linea ADVERSARY del recibo deja de exigirse y un turno fast con adversary cierra sin reporte (D4/B1, Task 13.5)
-G3|adv_fallback_sin_adversary|la sustitucion ROLE FALLBACK: ADVERSARY deja de aceptarse y un adversary caido vuelve a bloquear el cierre (D4/D6, Task 13.5)
-G3|adv_orden_sin_adversary|el chequeo de orden con adversary deja de correr y un adversary fuera de posicion cierra igual (D4, Task 13.5)
 G1|adv_contrato_criterio_roto|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
 G1|adv_contrato_despacho_roto|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
 G7|pretool_gh_pr_merge_apagado|el patron gh pr merge se apaga y el merge a pelo vuelve a pasar
@@ -213,32 +156,12 @@ G7|pretool_lectura_sin_r_crudo|el veto de \r crudo se quita y git show + escape 
 G7|pretool_lectura_sin_u_crudo|el veto de \u crudo se quita y git show + escape + invocacion pasa con pin incorrecto
 G7|pretool_lectura_sin_cntrl|el veto grep de controles se quita y un C0 distinto de tab pasa con pin incorrecto
 G7|pretool_lectura_veta_tab|el tab deja de exceptuarse y la lectura simple con tab se niega con pin incorrecto
-G8|trail_check_eliminado|el chequeo trail/blast del Stop se apaga y un full sin cita cierra
-G8|trail_vuelve_a_glob|cite-and-present vuelve a cualquier leftover tsv+blast en disco y un leftover sin cita cierra
-G8|trail_acepta_glob_token|el token glob en Close cuenta como cita
-G8|trail_sin_existir|una cita sin archivo en disco cierra
-G8|trail_solo_tsv|se deja de exigir la familia blast
-G8|trail_solo_blast|se deja de exigir la familia tsv
-G8|trail_lee_recibo_entero|las citas se leen del recibo entero, no del span Close
-G8|trail_skip_vacio|has_trail_skip acepta cualquier texto
-G8|trail_skip_sin_razon|TRAIL SKIP: vacio cuenta
-G8|trail_skip_substring|el skip se busca como subcadena sin ancla
-G8|trail_lee_text_entero|skip/cita se leen de \$text (tail) no de text_hatch
-G8|trail_tambien_en_fast|el guard lane!=fast se apaga y fast sin cita bloquea
-G8|trail_parrafo_solo_hc|build_gate_feedback deja de adosar trail_parrafo
-G8|trail_sin_limite_fisico|una carpeta de evidencia enlazada afuera se acredita
-G8|trail_acepta_archivo_enlazado|un archivo de evidencia enlazado afuera se acredita
-G8|trail_skip_preambulo|un skip anterior a la cabecera acredita el recibo
-G8|trail_close_preambulo|un Close anterior a la cabecera acredita el recibo
 G3|codex_interno_credita|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
 G3|codex_huerfano_via_rolmatch|el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)
 G3|codex_flag_nativo_invertido|la guarda de codex_native_seen se invierte y el legado acredita en una sesion que YA vio un evento nativo (21.2 r2, revision externa)
 G3|codex_cierre_sin_transcript|la exigencia de agent_transcript_path se apaga y un Stop sin transcript acredita (21.2)
 G3|codex_rol_cambiado_acredita|la guarda de cambio de rol entre Start y Stop se neutraliza y el rol nuevo del Stop acredita (21.2 r2)
 G3|codex_legado_ignora_flag|el fallback legado ignora la marca de canal nativo visto y un interno acredita tras un Stop huerfano (21.2 r2)
-G8|trail_raiz_vuelve_a_ambiental|la resolucion contra la raiz acreditada vuelve a PROJECT_ROOT ambiental y una raiz valida citada con cwd de otra sesion bloquea
-G8|trail_raiz_sin_hash_disco|la comparacion fisica disco/arbol se apaga y assume-unchanged o git replace vuelven a enganar a status
-G8|trail_raiz_sin_veredicto_sellado|el anclaje al veredicto sellado se apaga y un repo ajeno autoconsistente con su propio HEAD vuelve a acreditar
 G9|preflight_sin_stop|el preflight deja de ejecutar el stop_gate compartido (copia liviana que reporta PASS sin evaluar) y un recibo roto pasa el preflight mientras el Stop bloquea
 G9|preflight_consume_ciclo|el preflight deja de redirigir el estado al scratch y un bloqueo del preflight consume un ciclo real
 G9|preflight_falla_callada|el FAIL del preflight sale con exit 0 y el llamante lo lee como PASS
@@ -246,7 +169,6 @@ G9|preflight_ignora_cursor|el veredicto del preflight deja de reconocer el canal
 G9|preflight_error_callado|la foto del estado vuelve a ignorar el fallo de cp (|| true) y con estado ilegible el preflight evalua sin estado y reporta PASS donde el Stop bloquea
 G1|host_muse_no_reconocido|la rama HOST=muse se apaga y un turno muse cae en other — no crea state/muse/
 G1|tool_hint_sin_muse|la rama TOOL_HINT de muse se apaga y el contrato vuelve a nombrar Task tool
-G3|ceremonia_sin_muse|la rama de ceremonia vuelve a claude|codex|grok|dsh y el gate queda inerte en muse
 G3|muse_acredita_al_aceptar|el spawn accepted acredita record_agent en vez de dejar pendiente
 G3|muse_sin_pendiente_acredita|un wait sin pendiente acredita canonical_agent_role del subagent_id
 G3|muse_status_grep_laxo|el status ready se lee con grep sobre todo tool_response y un summary hostil acredita
@@ -264,6 +186,10 @@ G3|muse_revision_al_despachar|el aviso de revision vuelve a marcar la revision a
 G3|muse_revision_sin_wait|el wait ready del reviewer deja de marcar la revision y el aviso de codigo editado despues de revisar se apaga en muse
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
+G2|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G2 invertido se pone rojo
+G3|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G3 invertido se pone rojo
+G4|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G4 invertido se pone rojo
+G8|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G8 invertido se pone rojo
 "
 
 # Cada mutacion es un filtro de stdin a stdout. Se rompe LA CONDICION del gate,
@@ -370,7 +296,6 @@ mut_prompt_greedy()             { sed 's/json_top_level_decoded prompt/json_stri
 # campo lane siguen sanos) — lo atrapa caso_g3_fast_cierra_sin_subagentes
 # (exit 0 -> 2: la ceremonia vuelve a exigirse con lane=fast).
 mut_fast_no_se_detecta()        { sed 's/then lane="fast"; fi/then lane="full"; fi/'; }
-mut_fast_no_exime_ceremonia()   { sed 's/!= "fast" ]/!= "fast NUNCA" ]/'; }
 # Task 16.4 (D1) — que el recetario se APAGUE (la guarda del manifiesto se vuelve
 # `if true`) deje de ofrecer recetas aunque el manifiesto este valido: lo atrapa
 # caso_g1_contrato_nombra_recetario. Task 16.6 (D3) — alias: una mutacion mata la
@@ -396,8 +321,8 @@ mut_autopilot_no_pisa_alias()   { sed 's/autopilot="1"; lane="full"; receta_alia
 mut_grok_duplica_parrafo()      { sed 's/if \[ "$TARGET" != "grok" \] \&\& \[ "$(read_state_value autopilot)" = "1" \]/if [ "$(read_state_value autopilot)" = "1" ]/'; }
 # 18.6 (PR #162, hueco 4): vacia el 12o arg SOLO en el write_state de
 # mark_evidence (la linea siguiente es printf '%s: %s\n'). Lo atrapa
-# caso_g1_autopilot_sobrevive_mark_evidence. Residual: verdict_registrar_sello
-# y adv_reescribir_estado no los toca este sed (medido: sobreviven).
+# caso_g1_autopilot_sobrevive_mark_evidence. Residual: adv_reescribir_estado
+# no lo toca este sed (medido: sobrevive). A7 retiro verdict_registrar_sello.
 mut_mark_evidence_tira_autopilot() {
   sed '/write_state .*read_state_value autopilot/{
     N
@@ -484,10 +409,6 @@ mut_frontera_izquierda_floja()  { sed "s@^SAIKIT_SENTINEL_RE=.*@SAIKIT_SENTINEL_
 #                       la mutacion la ataca en vez de solo apagar el barrido.
 mut_estado_inmortal()           { sed 's@rmdir "$STATE_DIR"@true "$STATE_DIR"@'; }
 mut_barrido_sin_ttl()           { sed 's@ -mmin "+$SAIKIT_STATE_TTL_MIN"@@'; }
-# Task 9.6 (C12): saca los dos resets del walker. Con eso en_text/en_assistant
-# quedan en 1 para siempre y un valor top-level posterior a `message` vuelve a
-# contarse como texto del asistente — lo atrapa caso_g4_fuga_top_level_no_cierra.
-mut_walker_sin_resets()         { sed 's@if (depth < 4) en_text = 0@if (0) en_text = 0@; s@if (depth < 2) en_assistant = 0@if (0) en_assistant = 0@'; }
 
 # Nota (actualizada al aterrizar 9.4): el fallback SI tiene mutacion ahora
 # (mut_fallback_sin_acotar, arriba), pero cubre el acotamiento a `session`, no lo
@@ -532,7 +453,6 @@ mut_runner_sin_pytest()      { sed 's/|pytest|/|pytestNUNCA|/'; }
 # a la lista pelada en ambos greps; la segunda quita la alternativa de
 # punto-de-frase, que es lo que separa `pytest.` (prosa) de `pytest.log` (archivo).
 mut_runner_sin_frontera()    { sed 's/^TEST_RUNNER_WORD_RE=.*/TEST_RUNNER_WORD_RE="$TEST_RUNNER_RE"/'; }
-mut_runner_frontera_sin_punto_de_frase() { awk '{gsub(/\\\.\(/, "XX("); print}'; }
 # La redaccion de credenciales (Task 3.5 / A5): se revierte en el call site de
 # mark_evidence, de modo que $detail vuelve a escribirse crudo. Sin escapar el
 # `$` (BRE: literal a mitad de patron) ni meter backslashes (la trampa de
@@ -549,9 +469,6 @@ mut_redaccion_quitada() { sed 's/"$(redact_secrets "$detail")"/"$detail"/'; }
 # lo atrapa caso_g2_credenciales_token_nuevas_se_redactan (su _no_contiene de
 # `ghp_...` deja de cumplirse).
 mut_redaccion_sin_ghp() { sed "s@'s/ghp_@'s/ghp_NOPE_@"; }
-# Quita el tramo ES de VERIFY_SKIP_RE. El catch es caso_g2_excusa_espanol_no_reclama
-# (el recibo del vivo zcode). skipped/not run siguen, el resto de G2 no se rompe.
-mut_skip_sin_espanol() { sed 's/|no corri.*sin tests//'; }
 # Task 8.1 (C3, clase A1 para la evidencia): devuelven command/tool_name al
 # lector greedy del payload entero. Catches: caso_g2_comando_entrecomillado_
 # marca_verificado y caso_g2_eco_de_command_en_tool_response_no_marca (command);
@@ -589,56 +506,12 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 # Task 14.2 — via de credito del label VERIFIED BY SUBAGENT, una mutacion por
 # condicion clave. label_apagado neutraliza el reconocimiento del prefijo
 # (SAIKIT_VERIFIED_SUBAGENT_RE a un literal imposible): el recibo honesto con el
-# label deja de acreditar y vuelve a bloquear — lo atrapa
-# caso_g2_zcode_verif_subagente_acredita (ningun otro caso del gate G2 escribe el
-# prefijo VERIFIED BY SUBAGENT, asi que ningun otro reacciona; los negativos
-# siguen bloqueando porque bloquean por igual sin el label reconocido).
-# host_a_cualquiera afloja la condicion de host ciego `[ "$HOST" = "zcode" ]` a
-# `true` (cualquier host). El sed reemplaza las DOS ocurrencias (la del helper
-# saikit_verif_subagente_credita y la de saikit_verif_evidence_ok): el label
-# acredita tambien en claude — lo atrapa caso_g2_claude_verif_subagente_no_acredita
-# (el label ya acredita en zcode, asi que el caso de ACREDITA sigue verde; solo el
-# caso que espera BLOQUEO en host no ciego se pone rojo).
-mut_verif_subagente_label_apagado() { sed "s/^SAIKIT_VERIFIED_SUBAGENT_RE=.*/SAIKIT_VERIFIED_SUBAGENT_RE='NUNCA_MATCHEA_ESTO_14_2'/"; }
-mut_verif_subagente_host_a_cualquiera() { sed 's/\[ "$HOST" = "zcode" \]/true/'; }
 mut_muse_tope_borde_ge() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \]/if [ "$_mt_bytes" -ge "$MUSE_HOOK_STDOUT_MAX" ]/'; }
 mut_muse_recorte_sin_ancla() { sed "s/cab=\"\${1%%\$'\\\\n\\\\n'\"Capability-first contract (\"\*}\"/cab=\"\${1%%\"Capability-first contract (\"*}\"/"; }
 mut_muse_minimo_sin_aviso() { sed 's|/^SAIKIT REVIEW NOTICE:/ \|\| ||'; }
 mut_muse_contrato_sin_host_ciego() { sed 's/(zcode and Muse today; kimi once measured)/(zcode today; kimi once measured)/'; }
 mut_muse_contrato_sin_recorte() { sed '/saikit-23.8-muse-contrato-corto/,+2s/_hc="$(muse_contrato_corto "$_hc")"/_hc="$_hc"/'; }
 mut_muse_contrato_sin_tope() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \] 2>\/dev\/null; then/if false; then/'; }
-mut_muse_no_es_ciego() { sed '/saikit-23.2-muse-ciego/s/ || \[ "$HOST" = "muse" \]//'; }
-# solo_primer_span (Greptile P1, PR #72) vuelve a recortar los spans del label a
-# `| head -n1`: el veto deja de ver un segundo label con fallo y un recibo
-# exito-luego-fallo acredita — lo atrapa caso_g2_zcode_verif_subagente_exito_luego_fallo_bloquea
-# (el espejo fallo-luego-exito bloquea con y sin la mutacion: no la discrimina).
-mut_verif_subagente_solo_primer_span() { sed 's/grep -Eio "$SAIKIT_VERIFIED_SUBAGENT_RE\[^\[:cntrl:\]\]\*"$/& | head -n1/'; }
-# cero_acredita (CodeRabbit, PR #72) apaga SAIKIT_VERIFIED_CERO_RE (literal
-# imposible): "0 passed"/"0 passing" vuelven a acreditar por la rama `passed`
-# pelada de RESULT_RE — lo atrapan caso_g2_zcode_verif_subagente_cero_passed_bloquea
-# y ..._cero_passing_bloquea.
-mut_verif_subagente_cero_acredita() { sed "s/^SAIKIT_VERIFIED_CERO_RE=.*/SAIKIT_VERIFIED_CERO_RE='NUNCA_MATCHEA_ESTO_0_PASSED'/"; }
-# label_sobre_text_entero (grok r1 #1, fe81de5) vuelve a juzgar la via del label
-# sobre $text (tail del transcript + turno actual): un label valido de un turno
-# ANTERIOR acredita el turno nuevo — lo atrapa
-# caso_g2_zcode_verif_label_de_turno_anterior_no_acredita.
-mut_verif_label_sobre_text_entero() { sed 's/saikit_verif_evidence_ok "$text_hatch"/saikit_verif_evidence_ok "$text"/'; }
-# fallo_pelado_apagado (residual PR #72) deja SAIKIT_VERIFIED_FALLO_PELADO_RE en
-# un literal imposible: la extraccion no devuelve nada, el veto no dispara y
-# "ok, failed." acredita — lo atrapa caso_g2_zcode_verif_subagente_fallo_pelado_bloquea.
-# fallo_negado_apagado deja SAIKIT_VERIFIED_FALLO_NEGADO_RE imposible: nada se
-# descuenta, "0 failed"/"no failures" vetan y los dos casos que ACREDITAN se
-# ponen rojos (caso_g2_zcode_verif_subagente_cero_failed_acredita / _sin_fallos_acredita).
-mut_verif_fallo_pelado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_PELADO_RE=.*/SAIKIT_VERIFIED_FALLO_PELADO_RE='NUNCA_MATCHEA_ESTO_FALLO_PELADO'/"; }
-mut_verif_fallo_negado_apagado() { sed "s/^SAIKIT_VERIFIED_FALLO_NEGADO_RE=.*/SAIKIT_VERIFIED_FALLO_NEGADO_RE='NUNCA_MATCHEA_ESTO_NEGADO'/"; }
-# ruta_no_descontada (bots #81) deja SAIKIT_VERIFIED_FALLO_RUTA_RE imposible:
-# `tests/errors.py` en el comando vuelve a vetar — lo atrapa
-# caso_g2_zcode_verif_subagente_cmd_con_error_acredita.
-# pegado_sin_normalizar reemplaza saikit_verif_fallo_norm por `cat`: la coma
-# pegada vuelve a tragarse la frontera y "0 failed,error" acredita — lo atrapa
-# caso_g2_zcode_verif_subagente_fallo_pegado_bloquea.
-mut_verif_fallo_ruta_no_descontada() { sed "s/^SAIKIT_VERIFIED_FALLO_RUTA_RE=.*/SAIKIT_VERIFIED_FALLO_RUTA_RE='NUNCA_MATCHEA_ESTO_RUTA'/"; }
-mut_verif_fallo_pegado_sin_normalizar() { sed 's/^saikit_verif_fallo_norm() .*/saikit_verif_fallo_norm() { cat; }/'; }
 # 18.18 — una mutacion por condicion nueva del carril del label con el runner
 # propio, cada una acreditada a su caso (los literales aparecen una sola vez en
 # el hook). vocabulario_cerrado apaga SOLO la constante de las dos ramas nuevas
@@ -652,20 +525,6 @@ mut_verif_fallo_pegado_sin_normalizar() { sed 's/^saikit_verif_fallo_norm() .*/s
 # no_acredita (runner propio sin resultado — el DISCRIMINANTE pensado para esta
 # mutacion: un caso con resultado FALLIDO no sirve porque el veto global corre
 # antes y bloquea igual con o sin la guarda).
-# veto_local apaga el veto global: los CUATRO greps del bloque leen entrada
-# vacia (dejan de ver los spans; el calculo sigue, jamas descalifica por
-# FAILURE_SIGNAL/exit [1-9]/cero) — lo atrapa
-# caso_g2_zcode_verif_label_exito_y_fallo_en_spans_distintos_no_acredita (y los
-# casos de veto preexistentes: exit1/fallido/exito_luego_fallo/cero, que corren
-# antes en CASOS_G2 y pueden quedarse con el credito).
-# mensaje_generico rompe el nombre de la variable que lleva el motivo al Stop
-# (queda siempre vacia y el mensaje vuelve al generico) — lo atrapa
-# caso_g2_zcode_verif_label_comando_fuera_de_vocabulario_no_acredita_y_lo_dice
-# en su asercion de texto (el generico no nombra el vocabulario).
-mut_verif_label_vocabulario_cerrado() { sed "s/^SAIKIT_VERIFIED_RUNNER_PROPIO_RE=.*/SAIKIT_VERIFIED_RUNNER_PROPIO_RE='NUNCA_MATCHEA_ESTO_RUNNER_PROPIO'/"; }
-mut_verif_label_resulto_opcional()    { sed 's/grep -Eiq "$SAIKIT_VERIFIED_RESULT_RE"/true/'; }
-mut_verif_label_veto_local()          { sed "s/printf '%s\\\\n' \"\$saikit_spans\"/printf '%s\\\\n' \"\"/g"; }
-mut_verif_label_mensaje_generico()    { sed 's/"${saikit_verif_motivo:-}"/"${saikit_verif_motivo_NUNCA:-}"/'; }
 # Las mutaciones del arreglo de A11 (Task 3.8). El hook ahora tiene DOS regex
 # (FAILURE_SIGNAL_RE_CI case-insensitive y FAILURE_SIGNAL_RE_CS case-sensitive);
 # cada mutacion nueva aisla UNA rama de esos regex y se acredita a SU caso en
@@ -728,18 +587,8 @@ mut_falla_frontera_aflojada() { sed 's/\[1-9\]/[0-9]/g'; }
 mut_falla_excepciones_sin_dospuntos() { sed 's/rror:/rror/g'; }
 # El early-exit ya no es el one-liner. Ancla: SealableWrite. emit_allow -> true
 # deja caer al mark_evidence y caso_g2_sin_armar_no_crea_estado se pone rojo.
-mut_estado_sin_turno_armado(){ sed '/SealableWrite igual sella/,/^  fi$/ s/emit_allow/true/g'; }
+mut_estado_sin_turno_armado(){ sed '/subagentType medido y no trae -saikit/,/^  fi$/ s/emit_allow/true/g'; }
 
-mut_reviewer_siempre_visto()      { sed 's/\*",reviewer,"\*) ;;/*) ;;/'; }
-mut_orden_no_se_exige()           { sed "s/'implementer\.\*verifier\.\*reviewer'/'implementer|verifier|reviewer'/"; }
-# Task 6.4 movio la condicion de la ceremonia de `if [ "$TARGET" = "claude" ]`
-# a `case "$TARGET" in claude|codex)`: el sed de esta mutacion se actualiza al
-# literal nuevo (el patron `*)` matchea cualquier target, mismo efecto que el
-# `if true` de antes). Si el sed viejo quedara, la guardia 2 del driver ("la
-# mutacion no cambio nada") reventaria la bateria entera.
-# Phase 15 (PR #85) sumo dsh al case: el ancla sigue al literal nuevo (misma
-# guardia 2 que atrapo ceremonia_sin_grok/sin_codex en CI).
-mut_secuencia_tambien_en_cursor() { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in *)/'; }
 # Las dos mitades del arreglo de A1 (Task 3.1), una mutacion cada una: volver al
 # lector greedy sobre el payload crudo, y dejar que el escaner tome la clave en
 # cualquier objeto en vez de solo en `tool_input` de primer nivel.
@@ -758,7 +607,6 @@ mut_tool_input_no_se_acota() { sed 's/depth == 2 \&\& clave1 == padre \&\& clave
 # (CORRECCION 4 del plan). Cambiar el valor no toca la estructura de corchetes
 # ni mete backslashes (la trampa de MSYS2 de :128-131).
 mut_agent_type_no_se_lee()   { sed 's/json_top_level_string agent_type/true/'; }
-mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/'; }
 # Task 6.4 (D2): apaga la rama explicita de codex en la deteccion de HOST. Con
 # CLAUDECODE=1 heredado (el escenario real: Codex lanzado desde adentro de
 # Claude), el lado codex vuelve a HOST=claude y los dos hosts comparten estado
@@ -766,10 +614,6 @@ mut_target_sin_claudecode()  { sed 's/"$CLAUDECODE" = "1"/"$CLAUDECODE" = "0"/';
 # matchea SOLO la linea de deteccion (SUMMONAIKIT_HOOK_TARGET con su `:-`), no
 # el chequeo de salida de emit_gate_failure (que compara $TARGET pelado).
 mut_host_codex_sin_rama()    { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "codex" \]/SUMMONAIKIT_HOOK_TARGET:-}" = "codexNUNCA" ]/'; }
-# Task 6.4 (D3): revierte la ceremonia a claude-only — el gate vuelve a ser
-# inerte en codex. Lo atrapa caso_g3_ceremonia_se_exige_en_codex (el bloqueo
-# que reclama al implementer desaparece y el turno cierra limpio).
-mut_ceremonia_sin_codex()    { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|grok|dsh|muse)/'; }
 # Task 6.4 (medido 6.2): devuelve el exit 2 al bloqueo de codex. Codex descarta
 # el stdout con exit != 0, o sea gate decorativo — lo atrapa
 # caso_g6_bloqueo_codex_exit_cero (su _igual de exit pasa de 0 a 2). Mismo
@@ -785,21 +629,9 @@ mut_host_grok_sin_rama()     { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]; th
 # mut_host_codex_sin_rama. Sin la rama, target dsh resuelve HOST=other y el
 # armado no crea state/dsh/. Lo atrapa caso_g1_dsh_arma_y_aisla_estado.
 mut_host_dsh_no_reconocido() { sed 's/= "dsh" \]; then/= "NUNCA_dsh" ]; then/'; }
-# Phase 15 (D1/D3): revierte la ceremonia a claude|codex|grok — el gate vuelve a
-# quedar inerte en dsh. Lo atrapa caso_g2_dsh_ceremonia_incompleta_bloquea (el
-# turno sin verifier pasa a cerrar en vez de bloquear).
-mut_ceremonia_sin_dsh()      { sed 's/case "\$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|grok|muse)/'; }
 # Phase 15 (D4): vuelve la tool model-facing de dsh a "Task tool". Lo atrapa
 # caso_g1_dsh_contrato_nombra_subagent.
 mut_tool_hint_sin_dsh()      { sed 's|if \[ "\$TARGET" = "dsh" \]; then TOOL_HINT="the subagent tool"|if [ "$TARGET" = "dsh" ]; then TOOL_HINT="the Task tool"|'; }
-# Task 7.4 (D3): revierte la ceremonia a claude|codex — el gate vuelve a ser
-# inerte en grok. Lo atrapa caso_g3_grok_ceremonia_incompleta_bloquea (el turno
-# incompleto pasa a cerrar limpio y el decision:block desaparece).
-# Phase 15 (PR #85) movio el case a `claude|codex|grok|dsh)` y este sed quedo
-# OBSOLETO: la guardia 2 ("la mutacion no cambio nada del hook") lo atrapo en CI
-# y master quedo rojo desde ese merge. El ancla sigue al literal nuevo; se
-# quita SOLO grok (dsh queda) — mismo efecto que antes: el gate inerte en grok.
-mut_ceremonia_sin_grok()  { sed 's/case "$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|dsh|muse)/'; }
 # Task 7.3 (D4): saca user_prompt_submit del case de PHASE. Un envelope real
 # de Grok cae a PHASE=tool (record_tool_evidence ignora el prompt) y NUNCA
 # arma — es el defecto central que esta task cierra. Lo atrapa
@@ -827,177 +659,9 @@ mut_stop_sin_filtro_end_turn() { sed 's/\[ "$stop_reason" != "end_turn" \]/[ "$s
 # arbol del host heredado. Lo atrapa caso_g1_grok_senal_exportada_vacia_cuenta.
 mut_grok_setness_por_valor() { sed 's/if \[ "\${GROK_HOOK_EVENT+x}" = "x" \]/if [ -n "\${GROK_HOOK_EVENT:-}" ]/'; }
 
-mut_retro_no_se_exige()    { sed 's/if ! has_receipt_label "Retro"/if false \&\& ! has_receipt_label "Retro"/'; }
-# 18.23: el prefijo anclado (^|\n-literal)[[:space:]]*([-*+][[:space:]]+)?
-# (\*\*|__)? de has_receipt_label reemplazo a la frontera izquierda de las
-# Tasks 8.3/9.3 — frontera y ancla colapsaron en UN solo concepto, y las dos
-# mutaciones viejas (etiqueta_sin_frontera, frontera_acepta_comillas) sedian
-# un literal que dejo de existir (la guardia 2, "la mutacion no cambio nada",
-# las reventaba). Esta mutacion sola cubre todas las caras: sin el prefijo, la
-# etiqueta vuelve a aceptarse pegada a mitad de palabra, citada entre comillas
-# en el feedback y transportada como llega a codex (\n literal incluido, que
-# `.` tambien traga). Lo atrapan: caso_g4_recibo_en_un_parrafo_bloquea (las
-# seis etiquetas en un solo parrafo vuelven a cerrar el turno),
-# caso_g4_recibo_codex_escape_doble_cierra, caso_g4_recibo_vineta_asterisco_pasa,
-# caso_g4_cita_del_feedback_no_satisface y caso_g4_etiqueta_pegada_no_cuenta
-# (el driver nombra solo el primero que reacciona). Escaping BRE: `\^` es el
-# circunflejo LITERAL (pelado al inicio del patron seria ancla), los cuatro
-# backslashes del \n literales del hook son `\\\\\\\\` (ocho: dos por cada
-# backslash literal), el `+` va PELADO (literal en BRE; `\+` es cuantificador
-# en GNU sed) y `(\\\*\\\*|__)?` sigue la forma de mut_etiqueta_sin_bold. El
-# hook mutado queda `(^|.)(...)`: cualquier posicion con un caracter delante.
-mut_ancla_de_linea_quitada(){ sed 's/(\^|\\\\\\\\n)\[\[:space:\]\]\*(\[-\*+\]\[\[:space:\]\]+)?(\\\*\\\*|__)?/(^|.)/'; }
-# Task 9.8 (C14): devuelve el rm del aviso pendiente al elif de todo Stop —
-# la anotacion del flag se reemplaza por el rm directo, asi un Stop que
-# bloquea vuelve a llevarse el aviso ajeno. Lo atrapa
-# caso_g5_stop_fallido_no_borra_aviso_ajeno (su primera mitad). El patron es
-# unico: la comparacion del camino limpio lleva espacios y comillas
-# ("$rn_pendiente_borrable" = "1") y no matchea.
-mut_aviso_se_borra_en_fallo(){ sed 's#rn_pendiente_borrable=1#rm -f "$RN_PENDING_PATH" 2>/dev/null || true#'; }
-# Task 8.3 (C7): quita la alternativa markdown bold entre etiqueta y `:`.
-# Catch: caso_g4_recibo_bold_pasa (el recibo **Label**: vuelve a bloquear).
-mut_etiqueta_sin_bold()    { sed 's/(\\\*\\\*|__)?\[\[:space:\]\]\*:/[[:space:]]*:/'; }
-mut_pausa_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED NUNCA'/"; }
-# Arreglo 1 (escotilla hermana "delegado y en vuelo"): neutraliza la CONDICION
-# apuntando al ancla unica `grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED` -- ese
-# prefijo con la comilla y el "grep -Eiq" solo aparece en la condicion del
-# Stop gate, nunca en el texto del contrato inyectado (ahi es prosa suelta,
-# sin "grep -Eiq '" delante), asi que la mutacion no le pega al mensaje. Con
-# "_NUNCA" pegado, "SUMMONAIKIT HARNESS DELEGATED - awaiting verifier" deja de
-# matchear -> la escotilla desaparece -> un recibo que la usa vuelve a
-# bloquear. Lo atrapa caso_g4_delegado_permite (ningun otro caso de CASOS_G4
-# escribe "SUMMONAIKIT HARNESS DELEGATED" en su fixture, asi que ningun otro
-# reacciona). Misma forma que mut_pausa_no_se_reconoce / mut_role_fallback_quitada.
-mut_delegado_no_se_reconoce() { sed "s/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED/grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED_NUNCA/"; }
-# Fix de cross-review (ciclo 1): la escotilla DELEGATED tiene que exigir
-# ADEMAS que no haya recibo, o un recibo (roto o completo) que solo la
-# mencione de pasada la deja disparar igual -- ver RECEIPT_MARKER_RE y el
-# comentario largo que lo explica en el hook. Se declaro como constante
-# propia (no inline) exactamente para que esta mutacion pueda apuntar SOLO a
-# su definicion, sin tocar de paso el chequeo separado y no relacionado de
-# "Missing SUMMONAIKIT HARNESS RECEIPT" (que usa el mismo literal inline mas
-# abajo en stop_gate). Con el marcador roto ("_NUNCA" pegado), la guardia
-# `! grep "$RECEIPT_MARKER_RE"` vuelve a dar VERDADERO siempre -- la
-# escotilla vuelve a disparar sin importar si hay recibo. Lo atrapa
-# caso_g4_delegado_incidental_en_recibo_roto_bloquea (el recibo roto con la
-# frase incidental vuelve a cerrar en silencio, exit 0 en vez de 2).
-mut_delegado_ignora_recibo() { sed "s/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT'/RECEIPT_MARKER_RE='SUMMONAIKIT HARNESS RECEIPT_NUNCA'/"; }
-# 18.27 (D-B): la guardia de backgroundTasks de la escotilla grok se
-# neutraliza (siempre "en vuelo") y un Stop con la linea DELEGATED y el array
-# VACIO vuelve a permitir — la salida headless sin recibo del hallazgo E. El
-# ancla es la INICIALIZACION grok_bg_en_vuelo=0 (unica ocurrencia del =0; la
-# otra asignacion es =1 dentro del case). Lo atrapa
-# caso_g4_grok_delegado_sin_bg_bloquea.
-mut_delegado_grok_sin_bg() { sed 's/grok_bg_en_vuelo=0/grok_bg_en_vuelo=1/'; }
-# 18.27 (D-B) review r2 (R27-3), reescrita para el lector estructural de la
-# 20.4: la exigencia de CONTENIDO dentro del array (hay trabajo solo si se VE
-# algo entre "[" y su "]") se quita del veredicto del awk — con eso todo array
-# que abre y cierra pareado cuenta como poblado, y el VACIO ([] y [ ])
-# vuelve a habilitar la escotilla (null no: nunca abre el array). Lo atrapa
-# caso_g4_grok_delegado_bg_degenerado_bloquea, y antes a el
-# caso_g4_grok_delegado_sin_bg_bloquea con el [] compacto.
-# (Una sola linea a proposito: el c\\ multilinea de otras mutaciones no
-# inserta texto en el sed BSD local.)
-mut_delegado_grok_bg_degenerado() { sed 's/cerro && contenido) { print "1" }/cerro) { print "1" }/'; }
-# r1 (cross-review 20.x): la gramatica COMPLETA del documento entro al veredicto
-# del awk (gram_arr = validez de lo DENTRO del array buscado, gram_doc = validez
-# del documento entero). Tres mutaciones, una por proteccion nueva:
-#   solo_balance: el veredicto vuelve a "balance + primer token" (sin gram_*; el
-#     estado terminal st == "A" SIGUE en el veredicto). r3 (Grok, medido): NO
-#     son "las cuatro formas" — las que viven SOLO en gram_* reabren y las que
-#     mata la maquina abierta no. Tabla medida sano→mutante:
-#       [nul]=bloquea→bloquea (queda en st="L"≠"A" y eso no lo toca la mutacion)
-#       [1. ]=bloquea→bloquea (idem, st queda en subestado de numero incompleto)
-#       [1,]=bloquea→PERMITE    bad:oops=bloquea→PERMITE    trailing=bloquea→PERMITE
-#       (y desde r3, "\q"=bloquea→PERMITE: la inval del escape vive en gram_*)
-#   bg_trailing: la rama de basura tras el cierre del root (o separador invalido
-#     tras valor) deja de invalidar — el sub-caso del trailing garbage vuelve a
-#     PERMITIR.
-#   bg_ignora_doc: gram_doc sale del veredicto; solo cuenta lo de dentro del
-#     array — un valor roto en OTRA clave del documento vuelve a PERMITIR
-#     ([nul] y [1,] siguen rechazados por gram_arr: la mutacion aisla la
-#     validez FUERA de la clave).
-# r3 (cross-review hosts, hallazgo ALTA): dos mutaciones mas, una por mitad de
-# la estrictura de ESCAPES nueva:
-#   bg_escape_leniente: se quita la inval del caracter tras "\" — cualquier
-#     escape vuelve a valer y "\q" reabre la escotilla.
-#   bg_control_crudo: se quita la inval del char de control crudo en strings y
-#     el tab literal dentro de un string vuelve a valer.
-#   bg_uhex_leniente: se quita la inval del hex tras "\u" y "\u12G34" (una G
-#     colada entre hex) vuelve a valer; "\u12G"/"\u12GX" solas NO discriminan
-#     esta rama (sin la inval el string queda abierto y caen igual).
-mut_delegado_grok_bg_solo_balance() { sed 's/if (gram_arr && gram_doc && pila == ""/if (pila == ""/'; }
-mut_delegado_grok_bg_trailing()     { sed 's/else gram_doc = 0   # r1-trailing/else { }                # r1-trailing/'; }
-mut_delegado_grok_bg_ignora_doc()   { sed 's/if (gram_arr && gram_doc && pila/if (gram_arr \&\& pila/'; }
-mut_delegado_grok_bg_escape_leniente() { sed '/^            inval()   # r3-escape: tras/d'; }
-mut_delegado_grok_bg_control_crudo()   { sed '/^          if (c < " ") { inval(); continue }   # r3-control/d'; }
-mut_delegado_grok_bg_uhex_leniente()   { sed '/^            else inval()   # r3-uhex/d'; }
-# r4 (review r2 del PR #273, hallazgo P1): la decodificacion de escapes al
-# acumular la clave se quita — los escapes se VALIDAN pero su aporte vuelve a
-# descartarse (key_buf = key_buf, sin el char decodificado), asi que una clave
-# DISTINTA escrita con escapes ("back\ngroundTasks", "background\u0000Tasks",
-# "backgroundTasks\t") vuelve a colapsar sobre backgroundTasks y a habilitar
-# la escotilla sin trabajo en vuelo. OJO la forma: el `continue` se conserva
-# en su lugar — reescribir el bloque a `{ if (st == "SK") continue }` dejaria
-# caer los escapes VALIDOS de los strings de VALOR al inval() de abajo y el
-# caso multilinea (lastAssistantMessage con \n\n) se pondria rojo ANTES, por
-# la razon equivocada. Lo atrapa caso_g4_grok_delegado_bg_clave_escapada (las
-# tres contrapruebas esperan block y vuelve a salir allow).
-mut_delegado_grok_bg_escape_clave_sin_decodificar() {
-  sed -e 's/key_buf = key_buf c; continue/key_buf = key_buf; continue/' \
-      -e 's/key_buf = key_buf noascii; continue/key_buf = key_buf; continue/' \
-      -e '/key_buf = key_buf udec(uhex)/d'
-}
-# review r3 del PR #273: cada proteccion vuelve independientemente a la
-# identidad secundaria TARGET. La matriz divergente del caso dedicado exige
-# que ambas usen HOST, que ya incorpora las senales reales y su precedencia.
-mut_delegado_parser_bg_usa_target() {
-  sed 's/if \[ "$HOST" = "grok" \] \&\& \[ "$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/if [ "$TARGET" = "grok" ] \&\& [ "$(json_top_level_array_poblado backgroundTasks)" = "1" ]; then/'
-}
-mut_delegado_grok_bg_decide_por_target() {
-  sed 's/{ \[ "$HOST" != "grok" \] || \[ "$grok_bg_en_vuelo" = "1" \]; }/{ [ "$TARGET" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }/'
-}
-# 20.4: la lectura ESTRUCTURAL del array de primer nivel vuelve al grep
-# textual de la 18.27 — con el, la forma MULTILINEA (contenido en la linea
-# siguiente a "[") vuelve a NO matchear y el Stop que espera de verdad a un
-# subagente async bloquea en vez de permitir. Lo atrapa
-# caso_g4_grok_delegado_bg_multilinea_permite. (c\\ de una linea, mismo
-# formato que mut_paused_sin_guardia_de_recibo; los \\[ del ERE doblados
-# porque el texto de c\ come un nivel de backslash.)
-mut_delegado_grok_bg_textual() { sed '/if \[ "$HOST" = "grok" \] && \[ "\$(json_top_level_array_poblado backgroundTasks)" = "1" \]; then/c\
-  if [ "$HOST" = "grok" ] \&\& printf '\''%s'\'' "$INPUT" | grep -Eq '\''"backgroundTasks":[[:space:]]*\\[[[:space:]]*[^][:space:]]'\''; then'; }
-# Task 11.2 (hallazgo de campo Kimi 2026-08-16), mitad 1: revierte la clausula
-# !recibo de la escotilla PAUSED — reescribe el if completo (condicion +
-# continuacion + cuerpo) a la forma vieja de una sola condicion. El ancla es el
-# grep del PAUSED, que solo aparece en la condicion de la escotilla (el texto
-# del contrato y el feedback del gate citan la frase sin "grep -Eiq '" delante,
-# asi que la mutacion no los toca). Sin la guardia, un recibo + PAUSED vuelve a
-# saltar el gate entero -- lo atrapa caso_g4_recibo_completo_mas_paused_cierra_limpio
-# (primero en el orden de CASOS_G4; el roto+PAUSED, caso_g4_recibo_roto_mas_
-# paused_sigue_exigiendo, reacciona igual).
-mut_paused_sin_guardia_de_recibo() { sed "/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/,+3c\\
-  if printf '%s' \"\$text_hatch\" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then emit_allow; fi"; }
-# Task 11.2, mitad 2: INVIERTA la guardia — la escotilla solo permite si hay
-# recibo PRESENTE (if anidado, sin `&&` para no pelear con el `&` de sed en el
-# reemplazo). Con eso, una pausa legitima SIN recibo (la unica que la escotilla
-# debe permitir) vuelve a bloquear -- lo atrapa caso_g4_pausa_permite (ningun
-# otro caso de CASOS_G4 pausa sin recibo: los nuevos de la 11.2 siempre lo
-# llevan puesto).
-mut_paused_exige_recibo() { sed "/grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'/,+3c\\
-  if printf '%s' \"\$text_hatch\" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED'; then if printf '%s' \"\$text_hatch\" | grep -Eiq \"\$RECEIPT_MARKER_RE\"; then emit_allow; fi; fi"; }
-# Task 8.2 (C4): devuelve las escotillas al texto completo ($text incluye el
-# tail con turnos anteriores). Catch: caso_g4_pausa_vieja_solo_en_transcript_
-# bloquea (un PAUSED viejo vuelve a saltar el gate).
-mut_escotillas_leen_tail_viejo() { sed 's/text_hatch="$(last_assistant_text)"/text_hatch="$text"/'; }
-# Las cuatro mitades del arreglo de A2+A8 (Task 3.2), una mutacion cada una.
-# Las dos primeras mutan la LLAMADA en stop_gate (no el awk interno) porque
-# MSYS2/Git Bash corrompe los backslashes en literales de sed — cambiar la
-# funcion llamada es equivalente para lo que el caso prueba y no tiene ese
-# problema. Las dos ultimas mutan la condicion del walker directamente.
-mut_canal_payload_crudo()    { sed 's/$(last_assistant_text)/$(json_string_field last_assistant_message)/'; }
-mut_canal_transcript_vacio() { sed 's/| assistant_text_transcript/| true/'; }
-mut_texto_incluye_tool_result() { sed 's/c2 == "role" \&\& ultima == "assistant"/c2 == "role"/'; }
-mut_texto_incluye_tool_use()    { sed 's/c4 == "type" \&\& ultima == "text"/c4 == "type"/'; }
+# A6 (Bloque A): mut_aviso_se_borra_en_fallo se retiro — el elif RN solo corre
+# en cierres (toda via de bloqueo sale antes), asi que borrar directo o por
+# flag es inobservable; el aviso ajeno lo ata caso_g5_stop_fallido.
 # Las dos mitades del arreglo de A6 (Task 3.6), una mutacion cada una y cada una
 # acreditada a su caso. La primera neutraliza la contencion (el hook vuelve a leer
 # cualquier transcript_path); la segunda la deja pero comparando el string crudo
@@ -1011,29 +675,19 @@ mut_transcript_sin_containment() { sed 's/transcript_en_perfil "$transcript_path
 mut_containment_sin_resolver()   { sed 's|_tp_dir="$(cd "$(dirname "$1")" 2>/dev/null \&\& pwd)" \|\| _tp_dir=""|_tp_dir="$(dirname "$1")"|'; }
 
 # Task 11.4, mitad 1: neutraliza el cierre unknown honesto — la condicion del
-# if nunca se cumple y un Stop con AMBOS canales de texto ciegos vuelve al
-# gate normal: rc 2 consumiendo ciclo por evidencia que el gate no puede ver.
-# Lo atrapa caso_g4_ambos_canales_ciegos_cierra_unknown (espera rc 0 y estado
-# limpio; con la mutacion vuelve a bloquear con estado vivo).
+# if nunca se cumple y un Stop con AMBOS canales de texto ciegos cae al
+# cierre normal sin el diagnostico (A6: ambos cierran; lo que distingue es
+# el reporte por stderr). Lo atrapa caso_g4_ambos_canales_ciegos_cierra_unknown
+# (espera el diagnostico 'unknown honesto' por stderr).
 mut_unknown_honesto_quitado() { sed 's/\[ "$canal_payload_observed" -eq 0 \] \&\& \[ "$transcript_observed" -eq 0 \]/[ "$canal_payload_observed" -eq 1 ] \&\& [ "$transcript_observed" -eq 1 ]/'; }
-# Task 11.4, mitad 2: apaga SOLO la deteccion del canal payload — el flag ya
-# nunca marca observado, asi que el unknown honesto dispara tambien con
-# last_assistant_message PRESENTE sin recibo (ausencia OBSERVADA), que debe
-# seguir bloqueando. La atrapa caso_g4_campo_presente_sin_recibo_sigue_
-# bloqueando (espera rc 2 y estado vivo; con la mutacion cierra en exit 0);
-# la declaracion de la corrida puede nombrar antes a otro caso del gate que
-# tambien reacciona (p.ej. caso_g4_delegado_sin_rol_bloquea) — con el canal
-# payload ciego, TODO caso que espera bloqueo con campo presente se pone rojo.
-mut_unknown_ciega_al_payload() { sed 's/canal_payload_observed=1/canal_payload_observed=0/'; }
 
 mut_presupuesto_infinito() { sed 's/^MAX_CYCLES=2$/MAX_CYCLES=99/'; }
-# Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A
-# diferencia de E2, a E4 si se le puede borrar el rm directo: su if tambien lleva
-# `emit_budget_exhausted`, asi que borrar el rm no deja el if vacio (que bash -n
-# rechazaria). Se ancla al comentario inline `# A4-c4 presupuesto` porque las tres
-# lineas rm son casi identicas; sin el ancla el sed se llevaria la de E2 o la del
-# cierre limpio de :959.
-mut_presupuesto_no_limpia() { sed '/rm -f.*RN_ORDER_PATH.*# A4-c4 presupuesto/d'; }
+# Cuarta clausula de A4: el presupuesto agotado tiene que limpiar el estado. A6
+# retiro el presupuesto por ceremonia; el que queda es el de la via adversary
+# (if sobre $adv_cycle). El rango va de ese if a su emit_budget_exhausted y
+# neutraliza el unico rm del rango (los rms del cierre limpio y del unknown
+# quedan fuera del rango). Lo atrapa caso_g5_agotado_limpia_estado.
+mut_presupuesto_no_limpia() { sed '/if \[ "$adv_cycle" -ge "\$MAX_CYCLES" \]/,/emit_budget_exhausted/ s/rm -f/:/'; }
 
 mut_cursor_no_se_distingue() { sed 's/if \[ "\$TARGET" = "cursor" \]; then/if false; then/'; }
 
@@ -1042,28 +696,25 @@ mut_cursor_no_se_distingue() { sed 's/if \[ "\$TARGET" = "cursor" \]; then/if fa
 # budget); cada sed acota con contexto unico para no tocar los otros dos.
 # zcode_sin_target: anula la CONDICION del bloque TARGET (lleva `[ -z "$TARGET" ] &&`
 # delante, que HOST/budget no tienen). Caso: caso_g3_target_por_zcode_fallback.
-mut_zcode_sin_target()      { sed 's/\[ -z "$TARGET" \] && \[ -n "${ZCODE_SESSION_ID:-}${ZCODE_PROJECT_DIR:-}" \]; then/[ -z "$TARGET" ] \&\& false; then/'; }
-# phase_sin_camel: anula la lectura de hookEventName. Caso: caso_g4_stop_camel_solo_bloquea
+# phase_sin_camel: anula la lectura de hookEventName. Caso: caso_g4_stop_camel_solo_cierra
 # (un Stop camel-only debe llegar a stop_gate; sin camel cae a "tool" y no bloquea).
 mut_phase_sin_camel()       { sed 's/event="$(json_top_level_string hookEventName)"/event=""/'; }
+# A6: el Stop vuelve a bloquear (reintroduccion de ceremonia). El rango va de
+# la nota A6 al cierre del stop_gate y convierte el allow del cierre limpio en
+# un fallo con motivo falso; las escotillas quedan antes y siguen permitiendo.
+# La atrapa el primer caso invertido de cada gate (G2/G3/G4/G8) — si la
+# ceremonia volviera, la suite lo diria.
+mut_stop_bloquea_de_nuevo() { sed '/cae directo al cierre limpio/,/^}/ s|^  emit_allow$|  feedback="$(build_gate_feedback "x" "1")"; emit_gate_failure "$feedback"|'; }
 # budget_zcode_sigue_0: el exit 2 del budget en zcode vuelve a exit 0. Caso:
 # caso_g5_presupuesto_zcode_exit2. {n;} edita la linea DESPUES del comentario 5.4
 # del budget (donde vive el exit 2), sin tocar el exit 2 del gate_failure.
 mut_budget_zcode_sigue_0()  { sed '/saikit-5.4-zcode-budget/s/exit 2/exit 0/'; }
+# 23.15: reintroduce la barra-n literal al final de las dos entradas del
+# Stop (violacion y secreto). La atrapa caso_g5_stop_violacion_sin_barra_n.
+mut_barra_n_vuelve() { sed 's/a new armed turn resets it)\."/a new armed turn resets it).\\n"/; s/escapes through this same manual path\."/escapes through this same manual path.\\n"/'; }
 
 # D4 (Task 6.3): saca la escotilla ROLE FALLBACK del gate de secuencia
 # (rompe la CONDICION, no el texto del mensaje). Apunta al ancla unica
-# `grep -Eiq 'ROLE FALLBACK: ` -- solo aparece en las tres condiciones nuevas,
-# nunca en el texto del mensaje ("...or declare ROLE FALLBACK: VERIFIER
-# (reason)...", sin comilla simple ni "grep -Eiq" delante) ni en el bullet del
-# contrato inyectado, asi que la mutacion no les pega. Sin escapar el `*` de
-# `ROLE FALLBACK: *VERIFIER` (la parte que sigue intacta tras el reemplazo):
-# el patron de busqueda no lo incluye, asi que no hace falta la trampa de
-# backslashes de MSYS2 documentada en :128-131. Con las tres condiciones
-# neutralizadas, un recibo con la declaracion vuelve a bloquear -- lo atrapa
-# caso_g3_role_fallback_verifier_permite (ningun otro caso de CASOS_G3 escribe
-# "ROLE FALLBACK: " en su recibo, asi que ningun otro reacciona).
-mut_role_fallback_quitada() { sed "s/grep -Eiq 'ROLE FALLBACK: /grep -Eiq 'ROLE_FALLBACK_NUNCA: /"; }
 
 # Task 13.5 (D4/D6) — una mutacion por condicion nueva del rol adversary, cada
 # una acreditada a su caso del gate G3 (los 9 casos D6 viven al final de
@@ -1071,10 +722,6 @@ mut_role_fallback_quitada() { sed "s/grep -Eiq 'ROLE FALLBACK: /grep -Eiq 'ROLE_
 # DELEGATED, la etiqueta ADVERSARY, la sustitucion ROLE FALLBACK y el trigger
 # de orden de 4 roles — cada literal aparece una sola vez en el hook.
 mut_adv_keyword_sin_precedencia() { sed "s@grep -Eq '(^|\[^a-z\])adversar'@grep -Eq '(^|[^a-z])adversarZ'@"; }
-mut_adv_delegated_sin_adversary() { sed "s@reviewer|adversary)'@reviewer)'@"; }
-mut_adv_linea_no_se_exige()       { sed 's/has_receipt_label "ADVERSARY" "ADVERSARIO"/has_receipt_label "ADVERSARY-NUNCA" "ADVERSARIO-NUNCA"/'; }
-mut_adv_fallback_sin_adversary()  { sed "s/'ROLE FALLBACK: \*ADVERSARY'/'ROLE FALLBACK: *ADVERSARYNUNCA'/"; }
-mut_adv_orden_sin_adversary()     { sed 's/grep -q adversary \&\& printf/grep -q adversaryNUNCA \&\& printf/'; }
 
 # Task 13.6 (D1) — el contrato de armado es el canal que invoca el rol: si el
 # texto pierde el criterio de delegacion o la forma del despacho que nombra el
@@ -1138,117 +785,29 @@ mut_pretool_lectura_veta_tab() {
   sed 's# | tr -d "\$_pt_tab" | grep# | grep#'
 }
 
-mut_trail_sin_limite_fisico() { sed 's/"$ADV_PROJECT_CANON"|"$ADV_PROJECT_CANON"\/\*) return 0 ;;/\*) return 0 ;;/'; }
-mut_trail_skip_preambulo() { sed '/^has_trail_skip()/,/^}/s/trail_receipt="$(trail_receipt_block "$1")"/trail_receipt="$1"/'; }
-mut_trail_close_preambulo() { sed '/^close_span()/,/^}/s/trail_receipt="$(trail_receipt_block "$1")"/trail_receipt="$1"/'; }
-mut_trail_acepta_archivo_enlazado() { sed '/\[ ! -L "\$_joined" \] || return 1/d'; }
-mut_trail_check_eliminado() { sed 's/if ! has_trail_skip "\$text_hatch"; then/if false; then/'; }
-mut_trail_vuelve_a_glob() {
-  awk '
-    /^trail_cited_and_present\(\) \{$/ {
-      print "trail_cited_and_present() { [ -n \"$(find \"$PROJECT_ROOT/.saikit/decisiones\" -name \"*.tsv\" 2>/dev/null | head -n1)\" ] && [ -n \"$(find \"$PROJECT_ROOT/.saikit/findings\" -name \"blast-*.json\" 2>/dev/null | head -n1)\" ]; return; }"
-      print "trail_cited_and_present_OFF() {"
-      next
-    }
-    { print }
-  '
-}
-mut_trail_acepta_glob_token() {
-  awk '
-    /^TRAIL_TSV_CITE_RE=/ { print "TRAIL_TSV_CITE_RE='"'"'(\\./)?\\.saikit/decisiones/[^[:space:]]+\\.tsv'"'"'"; next }
-    /^TRAIL_BLAST_CITE_RE=/ { print "TRAIL_BLAST_CITE_RE='"'"'(\\./)?\\.saikit/findings/blast-[^[:space:]]+\\.json'"'"'"; next }
-    /\*'\''\*'\''\*/ { next }
-    /^path_present_under_root\(\) \{$/ {
-      print
-      print "  case \"$1\" in *\"*\"*) _m=$(find \"$PROJECT_ROOT/$(dirname -- \"$1\")\" -name \"$(basename -- \"$1\")\" 2>/dev/null | head -n1); [ -n \"$_m\" ]; return; esac"
-      next
-    }
-    { print }
-  '
-}
-mut_trail_sin_existir() {
-  awk '
-    /^path_present_under_root\(\) \{$/ {
-      print "path_present_under_root() { return 0; }"
-      print "path_present_under_root_OFF() {"
-      next
-    }
-    { print }
-  '
-}
-mut_trail_solo_tsv() { sed 's/\[ "\$_tsv" -eq 0 \] \&\& \[ "\$_blast" -eq 0 \]/[ "$_tsv" -eq 0 ]/'; }
-mut_trail_solo_blast() { sed 's/\[ "\$_tsv" -eq 0 \] \&\& \[ "\$_blast" -eq 0 \]/[ "$_blast" -eq 0 ]/'; }
-mut_trail_lee_recibo_entero() { sed 's/close_span "\$text_hatch"/printf "%s" "$text_hatch"/'; }
-mut_trail_skip_vacio() {
-  awk '
-    /^has_trail_skip\(\) \{$/ {
-      print "has_trail_skip() { return 0; }"
-      print "has_trail_skip_OFF() {"
-      next
-    }
-    { print }
-  '
-}
-mut_trail_skip_sin_razon() { sed '/TRAIL SKIP.*\[\^\[:space:]]/d'; }
-mut_trail_skip_substring() {
-  awk '
-    /^has_trail_skip\(\) \{$/ {
-      print "has_trail_skip() { printf \"%s\" \"$1\" | grep -Fq \"TRAIL SKIP:\"; }"
-      print "has_trail_skip_OFF() {"
-      next
-    }
-    { print }
-  '
-}
-mut_trail_lee_text_entero() { sed 's/has_trail_skip "\$text_hatch"/has_trail_skip "$text"/; s/close_span "\$text_hatch"/close_span "$text"/'; }
-mut_trail_tambien_en_fast() {
-  awk '
-    /has_trail_skip "\$text_hatch"/ {
-      if (prev ~ /read_state_value lane/) sub(/!= "fast"/, "!= \"__never__\"", prev)
-    }
-    NR>1 { print prev }
-    { prev=$0 }
-    END { print prev }
-  '
-}
-mut_trail_parrafo_solo_hc() { sed 's/_gf="\$(printf '\''%s\\n\\n%s'\'' "\$_gf" "\$(trail_parrafo)")"/_gf="$_gf"/'; }
-# 21.4: la rama acreditada vuelve a resolver bajo el ambiente — el caso
-# "cwd de otra sesion" (raiz valida, proyecto limpio) vuelve a bloquear.
-# Lo atrapa caso_g8_full_raiz_acreditada_otro_cwd_cierra.
-mut_trail_raiz_vuelve_a_ambiental() { sed 's/_present="path_present_under_acreditada"/_present="path_present_under_root"/'; }
-# 21.4r2: sin la comparacion fisica disco/arbol, assume-unchanged y git
-# replace vuelven a enganar a status. Lo atrapan
-# caso_g8_full_raiz_assume_unchanged_bloquea y
-# caso_g8_full_raiz_replace_blob_bloquea.
-mut_trail_raiz_sin_hash_disco() { sed '/_blob_arbol=/d; /_blob_disco=/d; /\[ "\$_blob_arbol" = "\$_blob_disco" \]/d'; }
-# 21.4r2: sin el veredicto sellado, un repo ajeno autoconsistente con su
-# propio HEAD vuelve a acreditar. Lo atrapa
-# caso_g8_full_raiz_autoconsistente_sin_veredicto_bloquea.
-mut_trail_raiz_sin_veredicto_sellado() { sed '/\.saikit\/veredictos\/\$_shas\.json/d'; }
 # 21.5: sin la llamada al stop_gate compartido, el subshell captura vacio
 # (rc 0) y todo preflight reporta PASS. Lo atrapa
-# caso_g9_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+# caso_g9_adversary_bloquea_en_ambos (Stop FAIL vs preflight PASS).
 mut_preflight_sin_stop() { sed 's/^    stop_gate # 21.5.*/    : # mutante preflight_sin_stop/'; }
 # 21.5: sin la redireccion del estado, el subshell escribe el ciclo real.
 # Lo atrapa caso_g9_sin_efectos (ciclo y estado intactos).
 mut_preflight_consume_ciclo() { sed 's|^    STATE_PATH="\$_pf_box/sesion/harness-state.env"|    : # mutante preflight_consume_ciclo|'; }
 # 21.5: el FAIL con exit 0 se lee como PASS. Lo atrapa
-# caso_g9_etiqueta_ausente_bloquea_en_ambos (espera exit 1 en FAIL).
+# caso_g9_adversary_bloquea_en_ambos (espera exit 1 en FAIL).
 mut_preflight_falla_callada() { sed 's/if \[ "\$_pf_v" = "FAIL" \]; then exit 1; fi/if [ "$_pf_v" = "FAIL" ]; then exit 0; fi/'; }
 # 21.5r1: sin el canal followup_message en la extraccion, el bloqueo de
 # cursor (exit 0) vuelve a leerse como PASS. Lo atrapa
-# caso_g9_cursor_etiqueta_ausente_bloquea_en_ambos (Stop FAIL vs preflight PASS).
+# caso_g9_adversary_bloquea_en_ambos (Stop FAIL vs preflight PASS).
 mut_preflight_ignora_cursor() { sed "s%|\*'"\"followup_message\""'\*%%"; }
 # 21.5r2: sin el ERROR por foto fallida, el preflight vuelve a evaluar sin
 # estado y reporta PASS donde el Stop bloquea. Lo atrapa
-# caso_g9_estado_ilegible_bloquea_stop_error_preflight (espera ERROR rc 2).
+# caso_g9_estado_ilegible_permite_stop_error_preflight (espera ERROR rc 2).
 mut_preflight_error_callado() { sed 's|^  _pf_foto "$STATE_PATH" "$_pf_box/sesion/harness-state.env"$|  if [ -f "$STATE_PATH" ]; then cp "$STATE_PATH" "$_pf_box/sesion/harness-state.env" 2>/dev/null \|\| true; fi|'; }
 
 mut_host_muse_no_reconocido() { sed 's/SUMMONAIKIT_HOOK_TARGET:-}" = "muse" \]/SUMMONAIKIT_HOOK_TARGET:-}" = "NUNCA_muse" ]/'; }
 mut_tool_hint_sin_muse() {
   sed 's|if \[ "\$TARGET" = "muse" \]; then TOOL_HINT="the subagent_spawn tool (then wait on each with subagent_wait)"|if [ "$TARGET" = "muse" ]; then TOOL_HINT="the Task tool"|'
 }
-mut_ceremonia_sin_muse() { sed 's/case "$TARGET" in claude|codex|grok|dsh|muse)/case "$TARGET" in claude|codex|grok|dsh)/'; }
 mut_muse_acredita_al_aceptar() {
   sed '/saikit-23.2-muse-spawn-pending/{
     n

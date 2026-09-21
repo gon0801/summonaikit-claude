@@ -1,3 +1,5 @@
+A7 (Bloque A): los vinculos linked_* se retiraron — el estado ya no lleva linked_children.
+
 grok, turno COMPLETO que cierra limpio. La ceremonia real medida en recaptura:
 por cada rol, el despacho spawn_subagent con toolInput.subagent_type (paso par)
 y su SubagentStart con subagentType de primer nivel (paso impar), en el orden

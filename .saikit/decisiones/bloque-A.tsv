@@ -1,0 +1,3 @@
+cuando|etapa|decision|por_que|evidencia|resultado
+2026-09-20T18:52:41Z|verify|Bloque A listo para reviewer: verifier PASS y adversary sin bloqueantes|9 focalizados en verde en copias aisladas del SHA c7713fb, sim sin estado en dos hosts, demo sin-arreglo rojo/verde; adversary probo recibo/CI/lock/confirmado/Stop con 5 minors y 0 bloqueantes|verifier PASS c7713fb; adversary-bloque-A.json 5 minor 0 bloqueantes; log origin/master..HEAD 6 commits|ok
+2026-09-20T21:19:24Z|review|CodeRabbit PR345: CR-1/2/3 corregidos, CR-4 se queda en A.R1|CR-1 esquema exacto contenido-identico; CR-2 wording; CR-3 duplicado muerto; CR-4 = ADV-A-01 ya adjudicado minor sin exploit nuevo|diff 4 archivos; trail_gate verde; JSON esquema validado|ok

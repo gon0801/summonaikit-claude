@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 grok, G2/G3/G4 bloquean + LAS DOS FORMAS PROPIAS DE GROK (7.4/7.2): el JSON
 decision:block viaja con exit 0 (exit 2 es IGNORADO — PowerShell lo devuelve
 como 1 y el host hace fail-open en Stop) y el CONTRATO COMPLETO va adosado al

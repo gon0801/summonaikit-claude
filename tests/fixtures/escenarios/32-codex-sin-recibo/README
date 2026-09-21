@@ -1,3 +1,5 @@
+A6 (Bloque A): el Stop ya no bloquea por ceremonia — este escenario ahora cierra limpio (exit 0, estado borrado).
+
 codex, G4 bloquea con la forma 6.4: la ceremonia entera corrio y el runner
 esta verde, pero el Stop no trae recibo => decision:block con exit 0.
 Analogo del 22.

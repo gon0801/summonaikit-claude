@@ -224,9 +224,18 @@ advlock_secreto_sesion_actual_bloquea_y_anterior_no() {
   adv_despachar
   # (a) artefacto con mtime ANTERIOR a la epoca = sesion anterior: NO bloquea.
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  # A6: sin ceremonia, ese Stop es cierre limpio (rc 0) y se lleva el estado
+  # del turno — la sesion armada ya no sigue viva para un segundo Stop.
+  _igual "cierre limpio sin secreto actual" "$LAB_RC" "0"
   _no_contiene "sin secreto de sesion anterior" "$LAB_ERR" 'adversary-viejo.json'
   # (b) artefacto de ESTA sesion (mtime >= epoca, escrito por Bash): SI bloquea,
-  # nombrando archivo y linea, JAMAS el contenido.
+  # nombrando archivo y linea, JAMAS el contenido. Sesion FRESCA a proposito:
+  # el Stop de (a) cerro el turno (A6), asi que el secreto nuevo necesita su
+  # propia sesion armada; sin re-armar, el segundo Stop no encuentra sesion y
+  # permite sin escanear (emit_allow por falta de estado, no presupuesto).
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
   printf 'repro output: token=sekret-beta-456\n' > "$LAB/proyecto/.saikit/findings/adversary-actual.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "exit code con secreto actual" "$LAB_RC" "2"
@@ -235,6 +244,26 @@ advlock_secreto_sesion_actual_bloquea_y_anterior_no() {
   _no_contiene "no muestra el contenido" "$LAB_ERR" 'sekret-beta-456'
 }
 advlock_secreto_sesion_actual_bloquea_y_anterior_no; fin_caso "advlock_secreto_sesion_actual_bloquea_y_anterior_no"
+
+# 23.15 — la lista de fallas del Stop sale con saltos de linea reales: la
+# entrada de secreto persistido terminaba en barra-n literal y el modelo la
+# leia pegada a la falla siguiente en una sola linea. Sesion fresca con
+# secreto actual: el Stop bloquea nombrando archivo y linea, sin barra-n.
+caso "advlock_secreto_sin_barra_n"
+advlock_secreto_sin_barra_n() {
+  [ "$ADV_EPOCA_OK" = "1" ] || { saikit_skip_caso "${FUNCNAME[0]}" 'sin GNU date/touch no se puede fijar la epoca'; return 0; }
+  mkdir -p "$LAB/proyecto/.saikit/findings"
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
+  printf 'repro output: token=sekret-gamma-789\n' > "$LAB/proyecto/.saikit/findings/adversary-actual.json"
+  lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  _igual "exit code con secreto actual" "$LAB_RC" "2"
+  _contiene "nombra archivo" "$LAB_ERR" 'adversary-actual.json'
+  _no_contiene "stderr sin barra-n literal (23.15)" "$LAB_ERR" '\n'
+}
+advlock_secreto_sin_barra_n; fin_caso "advlock_secreto_sin_barra_n"
+
 
 caso "advlock_armado_inicializa_estado_previo"
 advlock_armado_inicializa_estado_previo() {
@@ -259,10 +288,17 @@ advlock_armado_inicializa_estado_previo() {
   # Las aserciones miran el NOMBRE de archivo, no el valor del secreto: el
   # bloqueo jamas muestra el contenido, asi que el valor no discrimina.
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
+  # A6: sin fantasma ni secreto vigente, ese Stop es cierre limpio (rc 0).
+  _igual "cierre limpio sin fantasma" "$LAB_RC" "0"
   _no_contiene "sin violacion fantasma" "$LAB_ERR" 'viejo.ts'
   _no_contiene "sin secreto fantasma" "$LAB_ERR" 'adversary-fantasma.json'
   # Y un secreto NUEVO de esta sesion sigue bloqueando (el armado no mato el
-  # escaneo, lo reinicio).
+  # escaneo, lo reinicio). Sesion FRESCA: el Stop de arriba cerro el turno
+  # (A6) y se llevo el estado; sin re-armar, el segundo Stop permite sin
+  # escanear y este medio caso mediria el allow-sin-estado, no el escaneo.
+  lab_limpiar_estado
+  adv_armar
+  adv_despachar
   printf 'repro output: token=sekret-nuevo-000\n' > "$LAB/proyecto/.saikit/findings/adversary-nuevo.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
   _igual "exit code con secreto nuevo" "$LAB_RC" "2"
@@ -513,12 +549,14 @@ advlock_artefacto_redactado_no_bloquea() {
   adv_despachar
   printf 'evidence: token="[REDACTED]"\npass: password="[REDACTED]"\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-comillas.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
-  # El camino de presupuesto agotado informa con exit 0; la ceremonia
-  # incompleta (este payload no trae recibo) bloquea con 2. Exigir 2 es lo que
-  # detecta que el turno NO se escapo por el presupuesto sin escanear. Que el
-  # escaneo de verdad corrio y de verdad descuenta la forma entrecomillada lo
-  # prueba la mutacion `redactado_comillas_ciego`, no esta linea.
-  _igual "entrecomillado: no salio por presupuesto agotado" "$LAB_RC" "2"
+  # A6: la ceremonia ya no bloquea, asi que el redactado correcto cierra
+  # limpio con 0 (antes se exigia 2, que era el bloqueo de ceremonia: conducta
+  # retirada a proposito, no presupuesto — el escape por presupuesto es
+  # imposible aca por construccion: primer Stop de una sesion fresca,
+  # cycle=0). Que el escaneo de verdad corrio y de verdad descuenta la forma
+  # entrecomillada lo prueba la mutacion `redactado_comillas_ciego`, no esta
+  # linea — con el mutante, esta linea tambien se pone roja.
+  _igual "entrecomillado: cierre limpio (redactado no bloquea)" "$LAB_RC" "0"
   _no_contiene "redactado entrecomillado no bloquea" "$LAB_ERR" 'adversary-redactado-comillas.json'
   # Delimitadores ORDINARIOS despues del marcador: `;` y `)`. La primera version
   # del descuento listaba los delimitadores PERMITIDOS y esta lista quedaba
@@ -533,7 +571,9 @@ advlock_artefacto_redactado_no_bloquea() {
   adv_despachar
   printf 'cfg: token=[REDACTED];\nfn(password=[REDACTED])\n' > "$LAB/proyecto/.saikit/findings/adversary-redactado-signos.json"
   lab_run stop claude "$(lab_payload_stop 'Listo.')"
-  _igual "signos: no salio por presupuesto agotado" "$LAB_RC" "2"
+  # A6: igual que el entrecomillado de arriba — el redactado correcto cierra
+  # limpio con 0; la discriminacion la acredita `redactado_rama_estricta_muerta`.
+  _igual "signos: cierre limpio (redactado no bloquea)" "$LAB_RC" "0"
   _no_contiene "redactado con ; y ) no bloquea" "$LAB_ERR" 'adversary-redactado-signos.json'
   # COLA DE PUNTUACION: un secreto real pegado al marcador detras de un signo
   # que NO cierra ningun valor (`token=[REDACTED]!secreto`). Tiene que BLOQUEAR.
@@ -1075,6 +1115,10 @@ fi
 mut_advlock_gitignore_neutralizado() { sed 's/^adv_ensure_gitignore() {$/adv_ensure_gitignore() {\n  return 0/'; }
 mut_advlock_violacion_ciega()        { sed 's/^adv_registrar_violacion() {$/adv_registrar_violacion() {\n  return 0/'; }
 mut_advlock_secreto_ciego()          { sed 's/^adv_chequear_secretos() {$/adv_chequear_secretos() {\n  return 0/'; }
+# 23.15: reintroduce la barra-n literal al final de la entrada de secreto.
+# La atrapa advlock_secreto_sin_barra_n (necesita GNU date/touch: va en la
+# lista del skip declarado, igual que secreto_ciego).
+mut_advlock_barra_n_vuelve() { sed 's/escapes through this same manual path\."/escapes through this same manual path.\\n"/'; }
 mut_advlock_epoca_no_se_inicializa() { sed 's/"\$adv_epoch_armado" "" "" "" "" "\$autopilot"$/"ADV-MUT" "" "" "" "" "$autopilot"/'; }
 mut_advlock_prefijo_roto()           { sed 's|"\$ADV_FINDINGS_DIR"/\*)|*)|'; }
 mut_advlock_bash_ciego()             { sed 's/^adv_guard_bash() {$/adv_guard_bash() {\n  return 0/'; }
@@ -1178,6 +1222,7 @@ mut_advlock_teardown_ancla_prefijo() { sed 's#^    if \[ "\$advzl_aqui" != "\$AD
 MUTS_ADVLOCK="gitignore_neutralizado|advlock_gitignore_idempotente_y_ajeno
 violacion_ciega|advlock_bloquea_escritura_fuera
 secreto_ciego|advlock_secreto_sesion_actual_bloquea_y_anterior_no
+barra_n_vuelve|advlock_secreto_sin_barra_n
 epoca_no_se_inicializa|advlock_armado_inicializa_estado_previo
 prefijo_roto|advlock_traversal_y_ruta_absoluta
 bash_ciego|advlock_bash_best_effort
@@ -1205,7 +1250,7 @@ while IFS='|' read -r nombre caso_atrapa; do
   # limite del entorno (sin GNU date/touch, sin symlinks reales) se salta
   # DECLARADA, no falla — fallar aqui castigaria al entorno, no al codigo.
   case "$nombre" in
-    secreto_ciego|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_rama_estricta_muerta|redactado_cola_ciega)
+    secreto_ciego|barra_n_vuelve|epoca_no_se_inicializa|redactado_cuenta|redactado_comillas_ciego|redactado_rama_estricta_muerta|redactado_cola_ciega)
       if [ "$ADV_EPOCA_OK" != "1" ]; then
         saikit_skip_caso "mutacion_$nombre" 'necesita GNU date/touch'
         continue

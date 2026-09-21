@@ -28,14 +28,6 @@
     {
       "id": "live-no-sim-credit",
       "required_assertions": ["sim_not_live", "live_merge"]
-    },
-    {
-      "id": "live-no-seal-transfer",
-      "required_assertions": [
-        "parent_seal_untouched",
-        "no_mtime_transfer",
-        "no_verified_transfer"
-      ]
     }
   ]
 }

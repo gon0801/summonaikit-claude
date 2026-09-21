@@ -2090,12 +2090,21 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
 
 **Reglas nuevas.**
 
-1. **El carril lo fija el sentinel, nunca la receta ni el recibo.** `-saikit`
-   = full; `-saikit:fast` (y los alias `-saikit:pregunta` / `-saikit:boceto`,
-   Phase 16.6) = fast; match exacto con frontera, un typo cae a full. Medido:
-   en full el Stop exige los tres roles aunque no haya cambio de código; una
-   receta de solo lectura en un turno full corre la ceremonia igual. Rechazado
-   que el líder baje el carril desde el recibo (Core Rule 3).
+1. **El sentinel arma el turno; el recibo persistente acredita la entrega.**
+   `-saikit` = full; `-saikit:fast` (y los alias `-saikit:pregunta` /
+   `-saikit:boceto`, Phase 16.6) = fast; match exacto con frontera, un typo
+   cae a full. Desde Bloque A el Stop no exige ceremonia ni recibo; conserva
+   las restricciones del adversary. El merge no consulta el sentinel ni
+   estado de la sesión que creó el PR.
+   La clase del recibo describe el cambio real del PR: codigo, configuracion,
+   bug, runbook y documentacion requieren implementer/verifier/reviewer
+   independientes; editorial, ledger y progreso usan autor y revisión del
+   lead. El lead comprueba la clase contra el diff antes de publicar el
+   recibo. Un cambio de código no se convierte en editorial por su etiqueta.
+   El parser comprueba la clase declarada y sus roles, no clasifica el diff:
+   una clasificación falsa del lead es el mismo límite de confianza que una
+   evidencia falsa. Esta regla sustituye la antigua autoridad del sentinel
+   sobre el merge, sin reinstaurar un estado de turno para reanudarlo.
 2. **Sin recetario no hay menú, y una receta se ofrece solo si su hash
    coincide.** El hook lee `<dir-del-hook>/recetas/MANIFEST.sha256` (override
    `SAIKIT_RECETAS_DIR` para el lab; columna `tipo` = `receta` | `lider`) y
@@ -2132,34 +2141,36 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
 4. **`tools/saikit-merge.sh` es fail-closed y acotado** — la segunda excepción
    declarada al fail-open (la primera es el instalador): mergear no admite
    "dejar pasar". Alcance: repo del cwd, PR de la rama actual, `baseRefName ==
-   config.rama`, `headRefOid == sha del veredicto`, autor del PR = la cuenta
+   config.rama`, `headRefOid == sha` esperado, autor del PR = la cuenta
    de gh; nunca argumento libre. Precondiciones observadas, todas: `git fetch
    origin <rama>` y la rama al día con la base (`merge-base --is-ancestor`;
    si no, "base vieja": merge de master en la rama y CI de nuevo); PR
    mergeable (`UNKNOWN` diferido de GitHub ⇒ un reintento; sigue `UNKNOWN` ⇒
-   no merge); CI del head concluido en `success` ("sin checks" ≠ verde);
-   veredicto `.saikit/veredictos/<sha>.json` para ESE sha con `verifier:
-   PASS`, `blast.nivel ≥ 4`, `reviewer: clean`, `verify_app: PASS` con comando
-   bajo `verify/` (la suite unitaria no cuenta) o `n/a` solo con
-   `sin_verify_app: true`; **sello del hook**: en el `Write` del reviewer
-   sobre `veredictos/` el hook registra `veredicto_sha256` del contenido, y el
-   script exige que el archivo actual tenga ese hash (cualquier escritura
-   posterior lo invalida) además de `reviewer` en `agents_seen` y del comando
-   del blast en `harness-evidence.log` con éxito — por eso el merge corre
-   DENTRO del turno armado, antes del recibo; `git log origin/<rama>..HEAD`
+   no merge); CI del head concluido en `success` ("sin checks" ≠ verde), donde
+   de cada workflow se juzga el intento vigente (el de mayor número), no
+   intentos viejos ya reemplazados; **recibo de entrega** `saikit-entrega.v1`
+   (el sello quedó retirado): último comentario `APPROVE lead <sha>` aplicable
+   del PR con coordenadas repo/PR/sha exactas; en codigo, implementer/verifier/
+   reviewer con identificadores distintos, `verifier: PASS` y `reviewer:
+   APPROVE`; en editorial/ledger/progreso, autor y revision del lead por carril
+   fast. El recibo nombra el workflow de bateria y su evidencia; el gate exige
+   ese workflow exacto, no cualquier check verde. Sin bloqueantes abiertos, el
+   merge corre desde CUALQUIER host, sin
+   estado de sesión; `git log origin/<rama>..HEAD`
    no vacío y solo con commits del `user.email` local o de la cuenta de gh.
+   Antes del efecto se re-lee el head del PR: si avanzó durante la
+   comprobación, no mergea y lo nombra.
    Merge por `gh pr merge --squash --match-head-commit <sha> --body
-   "Saikit-Merge: <sha>"` (el trailer sella el squash) **sin
+   "Saikit-Merge: <sha>"` (el trailer marca el squash) **sin
    `--delete-branch`** (falla tras mergear cuando master vive en otro
    worktree); la rama remota se borra aparte. Nunca `--admin` ni force.
    Sin `--confirmado` el script corre el gate y, en verde, reporta LISTO y
    termina; `--confirmado` repite el gate completo en esa invocación y solo
    entonces mergea (el sí confirma la intención, no las condiciones).
-   Cualquier `unknown` ⇒ no mergea y nombra cuál. El veredicto lo escribe el
-   reviewer con `sha = HEAD` **después** de que el líder commiteó todo
-   (incluido el rastro); un commit posterior = SHA nuevo = veredicto nuevo. El
-   veredicto sellado **no se modifica jamás**: el `merge_commit` va a un
-   archivo aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
+   Cualquier `unknown` ⇒ no mergea y nombra cuál. El recibo lo arma el líder
+   **después** de leer la evidencia de los roles exigidos por la clase; un commit posterior =
+   SHA nuevo = recibo nuevo. El `merge_commit` se registra en un archivo
+   aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
    contra `origin/<rama>` y el trailer, no contra ese archivo. La rama base es
    siempre `config.rama` (probado con un valor distinto de `master`).
 5. **La protección de rama de GitHub no está disponible** en este repo
@@ -2184,8 +2195,8 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    arman el operador o el turno con ese bloque, y se mergea con
    `bash tools/saikit-merge.sh --revert-de <merge_commit> --confirmado`: un
    **modo con
-   precondiciones propias** — el turno desarmado ya no tiene el estado del
-   hook que exige la regla 4 — que **no confía en ningún JSON local**: exige
+   precondiciones propias** que, igual que el merge normal, no depende del
+   estado del hook y **no confía en ningún JSON local**: exige
    que `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git
    fetch` (si algo aterrizó después, no revierte: reporta), que lleve el
    trailer `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el
@@ -2609,8 +2620,9 @@ La evidencia vive bajo `docs/evidence/phase-23/`.
   compartido** (choque medido). Phase 19 permite trabajos/PRs independientes
   en worktrees separados e integración serial por el líder; no modifica el
   lock de un PR autopilot por repo. **No Graphite/stacks**, **no modo pegajoso**
-  (contradice Core Rule 3), **no paneles de 4 modelos** (tope de 1 ronda: un
-  panel = adversary + 1 cross-review de otro vendor).
+  (contradice Core Rule 3), **no paneles de 4 modelos**: el carril define los
+  roles, no un panel fijo. Solo un bloqueante reproducible abre otra ronda,
+  sobre el delta de los arreglos y sin un tope fijo.
 - **No se adoptan `.cursor`** en este alcance. `.codex` se reabre de forma
   explícita en Phase 6, Grok (`~/.grok`) entra como host distinto en Phase 7,
   y Phase 12 reabre la propiedad de los perfiles de agente en `.claude` y

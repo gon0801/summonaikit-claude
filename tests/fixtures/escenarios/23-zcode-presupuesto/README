@@ -1,3 +1,5 @@
+A6 (Bloque A): sin violacion adversary ya no hay presupuesto que agotar — los Stop cierran limpio. El presupuesto vive en los casos G5.
+
 zcode, G5 bloquea. Tres Stop seguidos sobre el mismo turno armado (como el 08).
 ciclo 1/2 bloquea, 2/2 bloquea y el tercero cae por presupuesto agotado. El
 delta contra el 08 es el corte de 5.4: en zcode el tercer Stop sale con exit 2

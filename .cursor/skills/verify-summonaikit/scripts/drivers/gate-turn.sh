@@ -182,15 +182,18 @@ if fm_only gate-stop-no-receipt; then
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block 07-evidencia-incompleta "$outf")"
   out="$(cat "$outf")"
-  # assert:stop_rejected
-  if [ "${STOP_EXIT:-}" = "2" ]; then
-    fm_pass gate-stop-no-receipt stop_rejected "stop exit 2" \
+  # Bloque A (A6): el Stop ya no exige recibo ni ceremonia — un turno
+  # armado sin recibo cierra (exit 0). La entrega exige los roles via el
+  # recibo del PR, que se valida al aprobar/mergear, no por turno.
+  # assert:stop_permite
+  if [ "${STOP_EXIT:-}" = "0" ]; then
+    fm_pass gate-stop-no-receipt stop_permite "stop exit 0" \
       "stop exit ${STOP_EXIT}"
   else
-    fm_fail gate-stop-no-receipt stop_rejected "stop exit 2" \
+    fm_fail gate-stop-no-receipt stop_permite "stop exit 0" \
       "stop exit ${STOP_EXIT:-missing} ${out}"
   fi
-  # assert:stop_rejected_end
+  # assert:stop_permite_end
   if [ "${BLOCK_NAME:-}" = "07-evidencia-incompleta" ]; then
     fm_pass gate-stop-no-receipt not_scenario_01_02 "07-evidencia-incompleta" \
       "07-evidencia-incompleta"
@@ -199,129 +202,12 @@ if fm_only gate-stop-no-receipt; then
       "${BLOCK_NAME:-}"
   fi
 fi
-
 # ---------------------------------------------------------------------------
-# r1 (cross-review 20.x): la escotilla grok DELEGATED exige un documento JSON
-# valido COMPLETO. Cuatro formas rotas siguen BLOQUEANDO (exit 2) y un array
-# valido no vacio sigue PERMITIENDO (exit 0). Escenarios sinteticos propios
-# (espejo de caso_g4_grok_delegado_bg_doc_roto_bloquea): armar, despachar
-# implementer, Stop DELEGATED con backgroundTasks roto de cada forma.
-# ---------------------------------------------------------------------------
-if fm_only gate-grok-bg-doc-roto; then
-  sc_root="$VERIFY_TMPDIR/sc-grok-docroto"
-  rm -rf "$sc_root"
-  mkdir -p "$sc_root"
-
-  _grok_armar() {  # $1=dir $2=serial
-    mkdir -p "$1"
-    cat > "$1/01.prompt.grok.json" <<EOF
-{"hookEventName":"user_prompt_submit","sessionId":"gk-doc-$2","cwd":"C:\\\\dev\\\\demo","workspaceRoot":"C:/dev/demo/","transcriptPath":"__TRANSCRIPT__","promptId":"p-gk-doc-$2","permissionMode":"bypassPermissions","prompt":"<user_query>\\n-saikit delega con payload roto\\n</user_query>"}
-EOF
-    cat > "$1/02.tool.grok.json" <<EOF
-{"hookEventName":"post_tool_use","sessionId":"gk-doc-$2","cwd":"C:\\\\dev\\\\demo","workspaceRoot":"C:/dev/demo/","transcriptPath":"__TRANSCRIPT__","permissionMode":"bypassPermissions","toolName":"spawn_subagent","toolInput":{"prompt":"hace lo tuyo","description":"paso del harness","subagent_type":"implementer","background":false},"toolResult":{"ok":true},"toolUseId":"tu-gk-03","isBackgrounded":false}
-EOF
-  }
-
-  _grok_stop_bg() {  # $1=dir $2=serial $3=contenido crudo del array (o vacio)
-    cat > "$1/03.stop.grok.json" <<EOF
-{"hookEventName":"stop","sessionId":"gk-doc-$2","cwd":"C:\\\\dev\\\\demo","workspaceRoot":"C:/dev/demo/","transcriptPath":"__TRANSCRIPT__","promptId":"p-gk-doc-$2","permissionMode":"bypassPermissions","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","backgroundTasks":[$3],"sessionCrons":[]}
-EOF
-  }
-
-  _grok_stop_trailing() {  # $1=dir $2=serial: documento cerrado + basura detras
-    cat > "$1/03.stop.grok.json" <<EOF
-{"hookEventName":"stop","sessionId":"gk-doc-$2","cwd":"C:\\\\dev\\\\demo","workspaceRoot":"C:/dev/demo/","transcriptPath":"__TRANSCRIPT__","promptId":"p-gk-doc-$2","permissionMode":"bypassPermissions","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","backgroundTasks":[1],"sessionCrons":[]} "trailing"
-EOF
-  }
-
-  # Las cuatro formas rotas del producto: literal incompleto, coma colgante,
-  # clave ajena con valor invalido y basura tras el cierre del root.
-  _grok_armar "$sc_root/59-grok-bg-docroto-nul" nul
-  _grok_stop_bg "$sc_root/59-grok-bg-docroto-nul" nul 'nul'
-  _grok_armar "$sc_root/60-grok-bg-docroto-coma" coma
-  _grok_stop_bg "$sc_root/60-grok-bg-docroto-coma" coma '1,'
-  _grok_armar "$sc_root/61-grok-bg-docroto-clave" clave
-  cat > "$sc_root/61-grok-bg-docroto-clave/03.stop.grok.json" <<'EOF'
-{"hookEventName":"stop","sessionId":"gk-doc-clave","cwd":"C:\\dev\\demo","workspaceRoot":"C:/dev/demo/","transcriptPath":"__TRANSCRIPT__","promptId":"p-gk-doc-clave","permissionMode":"bypassPermissions","reason":"end_turn","stopHookActive":false,"lastAssistantMessage":"SUMMONAIKIT HARNESS DELEGATED - awaiting implementer","backgroundTasks":[1],"bad":oops,"sessionCrons":[]}
-EOF
-  _grok_armar "$sc_root/62-grok-bg-docroto-trailing" trailing
-  _grok_stop_trailing "$sc_root/62-grok-bg-docroto-trailing" trailing
-  # Control: array valido y poblado -> la escotilla sigue permitiendo.
-  _grok_armar "$sc_root/63-grok-bg-valido-permite" ok
-  _grok_stop_bg "$sc_root/63-grok-bg-valido-permite" ok '1'
-
-  outf="$VERIFY_TMPDIR/gate-grok-docroto.txt"
-  set +e
-  run_scenario_parent "$sc_root" >"$outf" 2>&1
-  rc=$?
-  set -e
-  fm_action gate-grok-bg-doc-roto act-docroto "$rc" "golden sintetico grok x5" \
-    bash "$GOLDEN" --print --hook "$VERIFY_DEST"
-  # Grok Stop: el hook emite la decision en stdout y el host la interpreta
-  # (7.2: exit 0 + {"decision":"block"}); el veredicto es la DECISION, no rc.
-  grok_stop_decision() {  # $1=scenario $2=file → block|allow
-    python3 - "$1" "$2" <<'PYDEC'
-import re, sys
-from pathlib import Path
-scenario, path = sys.argv[1], sys.argv[2]
-text = Path(path).read_text(encoding="utf-8", errors="replace")
-pasos = {}  # "scenario/paso NN" -> texto del paso
-for b in re.split(r"^=== escenario ", text, flags=re.M)[1:]:
-    name = b.splitlines()[0].strip()
-    for p in re.split(r"^--- paso ", b, flags=re.M)[1:]:
-        pasos[f"{name}/paso {p.split()[0]}"] = p
-
-def stop_paso(name):
-    for key, p in pasos.items():
-        if key.startswith(name + "/paso ") and "phase=stop" in p.splitlines()[0].split():
-            return p
-    return ""
-
-# golden deduplica streams identicos como «identico a <sc>/paso NN»: hay que
-# SEGUIR la referencia hasta el paso que si trae el contenido.
-def has_block(p, seen=None):
-    if not p:
-        return False
-    seen = set() if seen is None else seen
-    if '"decision":"block"' in p:
-        return True
-    m = re.search(r"identico a ([^/\s]+/paso \d+)", p)
-    if m and m.group(1) not in seen:
-        seen.add(m.group(1))
-        return has_block(pasos.get(m.group(1), ""), seen)
-    return False
-
-print("block" if has_block(stop_paso(scenario)) else "allow")
-PYDEC
-  }
-  rotos=""
-  for sc in 59-grok-bg-docroto-nul 60-grok-bg-docroto-coma \
-    61-grok-bg-docroto-clave 62-grok-bg-docroto-trailing; do
-    dec="$(grok_stop_decision "$sc" "$outf")"
-    [ "$dec" = "block" ] || rotos="$rotos $sc:$dec"
-  done
-  permitia="$(grok_stop_decision 63-grok-bg-valido-permite "$outf")"
-  eval "$(parse_block 63-grok-bg-valido-permite "$outf")"
-  # assert:grok_doc_roto_bloquea
-  if [ -z "$rotos" ]; then
-    fm_pass gate-grok-bg-doc-roto grok_doc_roto_bloquea 'decision "block"' \
-      "las 4 formas rotas bloquean (nul, coma, clave ajena, trailing)"
-  else
-    fm_fail gate-grok-bg-doc-roto grok_doc_roto_bloquea 'decision "block"' \
-      "$rotos $(cat "$outf")"
-  fi
-  # assert:grok_bg_valido_permite
-  if [ "$permitia" = "allow" ] && [ "${STOP_EXIT:-}" = "0" ]; then
-    fm_pass gate-grok-bg-doc-roto grok_bg_valido_permite \
-      "sin decision block + exit 0" \
-      "backgroundTasks valido y poblado permite la espera"
-  else
-    fm_fail gate-grok-bg-doc-roto grok_bg_valido_permite \
-      "sin decision block + exit 0" \
-      "decision=$permitia exit=${STOP_EXIT:-missing} $(cat "$outf")"
-  fi
-  rm -rf "$sc_root"
-fi
+# Bloque A (A6): gate-grok-bg-doc-roto retirado. El Stop ya no bloquea por
+# ceremonia, asi que la distincion "documento roto cae al gate normal" dejo
+# de ser observable a nivel drive (ambos caminos permiten). La escotilla
+# DELEGATED sigue viva en el hook como via rapida de espera; su parseo lo
+# atan los casos G4 a nivel producto.
 
 # ---------------------------------------------------------------------------
 # r1 (cross-review 20.x): teardown de la zona adversarial seguro contra
