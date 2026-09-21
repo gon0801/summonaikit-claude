@@ -309,7 +309,7 @@ cuerpo_aprobacion() {
   local sha="$1" lead="$2" impl="$3" ver="$4" rev="$5" vres="$6" rres="$7" bloq="$8"
   local recibo recibo_esc
   [ -n "$bloq" ] || bloq="[]"
-  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"bloqueantes":%s,"residuales":[]}' "$sha" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
+  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"ci":{"workflow":"ci","evidencia":"artifact:ci"},"bloqueantes":%s,"residuales":[]}' "$sha" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
   recibo_esc="$(printf '%s' "$recibo" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   printf 'APPROVE lead %s\\n\\n```json\\n%s\\n```\\n' "$sha" "$recibo_esc"
 }
@@ -610,6 +610,21 @@ caso "ci_intento_viejo_reemplazado_pasa"
   c_ci_intento_viejo
 }
 fin_caso "ci_intento_viejo_reemplazado_pasa"
+
+c_ci_workflow_ajeno() {
+  CASO_ROJO=0; sb_reset master
+  printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"docs-only-smoke","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
+  correr --confirmado
+  [ "$RC" -ne 0 ] || _mal "mergeo con un workflow distinto del acreditado por el recibo"
+  _contiene "nombra workflow requerido" "$OUT" "workflow requerido"
+  if merge_disparado; then _mal "invoco el merge sin CI del workflow acreditado"; fi
+}
+
+caso "ci_verde_de_workflow_no_acreditado_no_merguea"
+{
+  c_ci_workflow_ajeno
+}
+fin_caso "ci_verde_de_workflow_no_acreditado_no_merguea"
 
 caso "ci_verde_viejo_reemplazado_por_rojo_no_merguea"
 {
@@ -1564,6 +1579,7 @@ lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -
 trap_no_libera	s|^liberar_propio() {$|liberar_propio() { return 0; #|	c_lock_libera_propio
 recibo_opcional	s/$(entrega_validar/$(true/	c_recibo_sin_reviewer
 ci_juzga_intento_viejo	s/\$2 > bestnum\[$1\]/$2 < bestnum[$1]/	c_ci_intento_viejo
+ci_acepta_workflow_ajeno	s/if \[ -n "\$requerido" \] \&\& \[ "\$w" != "\$requerido" \]; then/if false; then/	c_ci_workflow_ajeno
 recheck_head_opcional	s/no_merge "el head del PR avanzo/true # sin recheck; no_merge "el head del PR avanzo/	c_head_avanza
 MUTS
 

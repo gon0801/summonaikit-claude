@@ -188,20 +188,19 @@ bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>   # VERDE/ROJO
 bash tools/saikit-merge.sh --revert-de <sha> --confirmado           # merge del PR de revert (modo sin estado)
 ```
 
-Qué NUNCA hace: mergear sin el sí, sin CI verde del head exacto, sin
-veredicto sellado (`veredicto_sha256` del estado == sha256 del archivo), ni
+Qué NUNCA hace: mergear sin el sí, sin el workflow de CI que acredita el
+recibo para el head exacto, sin recibo `saikit-entrega.v1` válido en el PR, ni
 leyendo la config de otro lado que `origin/<rama>`; revertir solo (el
 postmerge avisa con el comando listo y no ejecuta nada); `--admin`, force, ni
 `--delete-branch` (el borrado remoto es paso aparte).
 
 Límites medidos (detalle en el spec §§ Límites MEDIDOS de la Phase 18 y
 Phase 20, y en `docs/smoke-autopilot-2026-09-05.md` para la línea base):
-Phase 20 midió en vivo lo que en Phase 18 era límite. El camino verde
-completo hasta publicar **sí se observó**: en Claude (20.10 — PR #9/#10, CI
-verde, LISTO sin publicar, sí explícito, merge solo por la tool con el sha
-sellado, postmerge VERDE ×2, evidencia `docs/evidence/phase-20/20.10/`) y en
-Grok (20.14 — PR #8, sello consumido por vínculo 20.13, merge por la tool
-tras el sí, postmerge VERDE, evidencia `docs/evidence/phase-20/20.14/`). La
+Phase 20 midió en vivo el flujo anterior con sello. Esa evidencia queda como
+historia, pero el contrato vigente usa el recibo del PR y no consume sellos ni
+estado de sesión. Los recorridos históricos completos están en Claude 20.10
+(`docs/evidence/phase-20/20.10/`) y Grok 20.14
+(`docs/evidence/phase-20/20.14/`). La
 guardia `PreToolUse` contra el merge a pelo **negó en vivo** un merge
 directo antes de ejecutar y dejó pasar un uso permitido, con payload,
 decisión y ejecución correlacionados por `tool_use_id` (20.9, evidencia

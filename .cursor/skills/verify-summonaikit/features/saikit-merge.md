@@ -5,7 +5,10 @@ against a disposable Git repo and a strict fake `gh` that only answers the
 forms the tool uses and records argv. The mode is always `simulated`: no live
 GitHub. Delivery authority is the PR receipt (`APPROVE lead <sha>` with a
 `saikit-entrega.v1` block, read via `gh api repos/.../comments`) plus current
-CI — no session state, no sealed verdict.
+CI — no session state, no sealed verdict. The receipt names the workflow that
+represents the full battery, and the gate requires that exact workflow for the
+current SHA. Fast editorial, ledger, and progress changes use author plus lead
+instead of inventing verifier and reviewer roles.
 
 ## Sub-features
 

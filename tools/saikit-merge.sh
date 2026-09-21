@@ -43,8 +43,10 @@
 # aplicable (comentario APPROVE lead <sha> con bloque ```json) y valida
 # estructura y relaciones con tools/lib/entrega_contract.sh — coordenadas
 # repo/PR/sha, implementer/verifier/reviewer con ids DISTINTOS, verifier
-# PASS, reviewer APPROVE y sin bloqueantes abiertos. Sin recibo, revocado o
-# incompleto => NO-MERGE nombrado. El gate NO consulta directorios de
+# PASS, reviewer APPROVE y sin bloqueantes abiertos. Para clases fast basta
+# autor + lead. El recibo identifica el workflow que acredita la bateria; el
+# gate exige ese workflow exacto. Sin recibo, revocado o incompleto =>
+# NO-MERGE nombrado. El gate NO consulta directorios de
 # estado, veredictos sellados ni harness-evidence.log: un host nuevo
 # revalida el mismo PR sin sellar nada, y los restos viejos se ignoran.
 # LIMITES DECLARADOS: (a) el validador comprueba estructura y relaciones, no
@@ -53,10 +55,12 @@
 # REVOKE posterior del mismo autor anula el recibo, y los hallazgos
 # posteriores en prosa los adjudica el lead. Detalle en la lib.
 #
-# CI VIGENTE (A4): de cada workflowName se juzga SOLO el intento con mayor
-# number — un fallo viejo reemplazado por un verde nuevo no bloquea, y un
-# verde viejo reemplazado por un pendiente/rojo nuevo no alcanza. Sin
-# workflowName cada run se juzga solo. "Sin checks" NO es verde: se mira
+# CI VIGENTE (A4): en modo normal se juzga el workflow que acredita el recibo;
+# los demas no lo sustituyen. De ese workflowName se toma SOLO el intento con
+# mayor number: un fallo viejo reemplazado por un verde nuevo no bloquea, y un
+# verde viejo reemplazado por un pendiente/rojo nuevo no alcanza. En revert,
+# que no usa recibo, se juzgan todos los workflows vigentes. "Sin checks" NO
+# es verde: se mira
 # `gh run list --commit` (gh pr checks agrega bots de terceros; medido 18.1
 # §2.1), y del run del evento pull_request si existe (el mismo head dispara
 # push + pull_request). Decision 18.24 intacta: skipped = CI rojo; solo-push
@@ -298,7 +302,8 @@ ORIGEN="origin/$RAMA"
 # = verde: hay_pr=0 juzga todos los runs. Exigir pull_request seria
 # politica nueva. Ver .saikit/decisiones/18.24.tsv.
 ci_chequear() {
-  local raw flat i n hay_pr ev st conc head w num lista ganadores
+  local requerido="${1:-}"
+  local raw flat i n hay_pr ev st conc head w num lista ganadores seleccionados
   raw="$(gh run list --commit "$SHA" --json event,status,conclusion,headSha,workflowName,number 2>/dev/null)" \
     || no_merge "no se pudo leer el CI (gh run list fallo)"
   saikit_json_valido "$raw" || no_merge "gh run list devolvio algo que no es JSON"
@@ -314,18 +319,23 @@ ci_chequear() {
   # fallo viejo reemplazado por un verde nuevo no bloquea; un verde viejo
   # reemplazado por un pendiente/rojo nuevo no alcanza). Sin workflowName
   # (gh viejo) cada run es su propio grupo y se juzgan todos.
-  i=0; lista=""
+  i=0; lista=""; seleccionados=0
   while [ "$i" -lt "$n" ]; do
     ev="$(jget "[$i].event")"
     if [ "$hay_pr" = 1 ] && [ "$ev" != "pull_request" ]; then i=$((i + 1)); continue; fi
     w="$(jget "[$i].workflowName")"
     [ -n "$w" ] && [ "$w" != "<null>" ] || w="~sin-nombre-$i"
+    if [ -n "$requerido" ] && [ "$w" != "$requerido" ]; then i=$((i + 1)); continue; fi
     num="$(jget "[$i].number")"
     case "$num" in ''|*[!0-9]*) num=0 ;; esac
     lista="$lista$w	$num	$i
 "
+    seleccionados=$((seleccionados + 1))
     i=$((i + 1))
   done
+  if [ -n "$requerido" ] && [ "$seleccionados" -eq 0 ]; then
+    no_merge "sin CI del workflow requerido por el recibo ($requerido) para $SHA"
+  fi
   ganadores="$(printf '%s' "$lista" | awk -F'\t' '{ if (!($1 in best) || $2 > bestnum[$1]) { best[$1]=$3; bestnum[$1]=$2 } } END { for (k in best) print best[k] }')"
   for i in $ganadores; do
     st="$(jget "[$i].status")"
@@ -452,8 +462,6 @@ while IFS=' ' read -r csha email; do
   esac
 done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
 
-ci_chequear
-
 # ------------------------------------------------- recibo de entrega (A2/A3)
 # La autoridad es el PR: ultimo APPROVE lead <sha> aplicable + validacion de
 # estructura y relaciones. Sin estado de sesion: ni agents_seen, ni sello, ni
@@ -472,7 +480,14 @@ if ! motivo="$(entrega_validar "$recibo_tmp" "$REPO_GH" "$PR" "$SHA" 2>&1)"; the
   rm -f "$recibo_tmp"
   no_merge "$motivo"
 fi
+recibo_txt="$(cat "$recibo_tmp")" \
+  || { rm -f "$recibo_tmp"; no_merge "no se pudo releer el recibo validado"; }
+recibo_flat="$(saikit_json_flat "$recibo_txt")"
+CI_WORKFLOW="$(entrega_flat_hoja "$recibo_flat" "ci.workflow")" \
+  || { rm -f "$recibo_tmp"; no_merge "recibo: falta ci.workflow"; }
 rm -f "$recibo_tmp"
+
+ci_chequear "$CI_WORKFLOW"
 
 # A5: el head puede moverse mientras corre el gate (push durante la
 # comprobacion): se re-lee el PR justo antes del efecto y se exige el MISMO

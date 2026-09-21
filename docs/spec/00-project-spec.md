@@ -2141,9 +2141,12 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    de cada workflow se juzga el intento vigente (el de mayor número), no
    intentos viejos ya reemplazados; **recibo de entrega** `saikit-entrega.v1`
    (el sello quedó retirado): último comentario `APPROVE lead <sha>` aplicable
-   del PR con coordenadas repo/PR/sha exactas, implementer/verifier/reviewer
-   con identificadores distintos, `verifier: PASS`, `reviewer: APPROVE` y sin
-   bloqueantes abiertos — por eso el merge corre desde CUALQUIER host, sin
+   del PR con coordenadas repo/PR/sha exactas; en codigo, implementer/verifier/
+   reviewer con identificadores distintos, `verifier: PASS` y `reviewer:
+   APPROVE`; en editorial/ledger/progreso, autor y revision del lead por carril
+   fast. El recibo nombra el workflow de bateria y su evidencia; el gate exige
+   ese workflow exacto, no cualquier check verde. Sin bloqueantes abiertos, el
+   merge corre desde CUALQUIER host, sin
    estado de sesión; `git log origin/<rama>..HEAD`
    no vacío y solo con commits del `user.email` local o de la cuenta de gh.
    Antes del efecto se re-lee el head del PR: si avanzó durante la

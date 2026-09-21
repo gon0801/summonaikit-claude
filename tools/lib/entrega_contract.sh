@@ -15,6 +15,7 @@
 #     "implementer": {"id", "evidencia"},
 #     "verifier": {"id", "resultado", "evidencia"},
 #     "reviewer": {"id", "resultado", "evidencia"},
+#     "ci": {"workflow", "evidencia"},
 #     "bloqueantes": [], "residuales": [] }
 #
 #   entrega_validar <recibo|-stdin> <repo> <pr> <sha>
@@ -37,8 +38,10 @@
 #     el recibo. Hallazgos posteriores en prosa los adjudica el lead, no este
 #     parser.
 #   - v1: `bloqueantes` con CUALQUIER entrada es bloqueante abierto (un
-#     bloqueante cerrado se quita de la lista, no se marca); `clase` solo se
-#     exige presente y no vacia, y los tres roles se exigen siempre.
+#     bloqueante cerrado se quita de la lista, no se marca). Las clases de
+#     codigo/contrato exigen tres roles; editorial/ledger/progreso usan el
+#     carril fast y no inventan verifier/reviewer. `ci.workflow` identifica la
+#     bateria que el gate debe observar; `ci.evidencia` enlaza su resultado.
 ENTREGA_SCHEMA="saikit-entrega.v1"
 
 # Parser JSON compartido (tools/lib/veredicto_contract.sh). Esta lib es un
@@ -183,8 +186,14 @@ entrega_validar() {
     || { printf 'recibo: falta el campo clase\n' >&2; return 1; }
   [ -n "$val" ] && [ "$val" != "<null>" ] \
     || { printf 'recibo: clase vacia\n' >&2; return 1; }
+  local requiere_roles
+  case "$val" in
+    codigo|configuracion|bug|runbook|documentacion) requiere_roles=1 ;;
+    editorial|ledger|progreso) requiere_roles=0 ;;
+    *) printf 'recibo: clase desconocida (%s)\n' "$val" >&2; return 1 ;;
+  esac
 
-  local id_impl id_ver id_rev
+  local id_impl id_ver="" id_rev=""
   id_impl="$(entrega_flat_hoja "$flat" "implementer.id")" \
     || { printf 'recibo: falta implementer.id\n' >&2; return 1; }
   [ -n "$id_impl" ] && [ "$id_impl" != "<null>" ] \
@@ -194,36 +203,47 @@ entrega_validar() {
   [ -n "$val" ] && [ "$val" != "<null>" ] \
     || { printf 'recibo: implementer.evidencia vacia\n' >&2; return 1; }
 
-  id_ver="$(entrega_flat_hoja "$flat" "verifier.id")" \
-    || { printf 'recibo: falta verifier.id\n' >&2; return 1; }
-  [ -n "$id_ver" ] && [ "$id_ver" != "<null>" ] \
-    || { printf 'recibo: verifier.id vacio\n' >&2; return 1; }
-  val="$(entrega_flat_hoja "$flat" "verifier.resultado")" \
-    || { printf 'recibo: falta verifier.resultado\n' >&2; return 1; }
-  [ "$val" = "PASS" ] \
-    || { printf 'recibo: verifier.resultado distinto de PASS (dio %s)\n' "$val" >&2; return 1; }
-  val="$(entrega_flat_hoja "$flat" "verifier.evidencia")" \
-    || { printf 'recibo: falta verifier.evidencia\n' >&2; return 1; }
-  [ -n "$val" ] && [ "$val" != "<null>" ] \
-    || { printf 'recibo: verifier.evidencia vacia\n' >&2; return 1; }
+  if [ "$requiere_roles" = 1 ]; then
+    id_ver="$(entrega_flat_hoja "$flat" "verifier.id")" \
+      || { printf 'recibo: falta verifier.id\n' >&2; return 1; }
+    [ -n "$id_ver" ] && [ "$id_ver" != "<null>" ] \
+      || { printf 'recibo: verifier.id vacio\n' >&2; return 1; }
+    val="$(entrega_flat_hoja "$flat" "verifier.resultado")" \
+      || { printf 'recibo: falta verifier.resultado\n' >&2; return 1; }
+    [ "$val" = "PASS" ] \
+      || { printf 'recibo: verifier.resultado distinto de PASS (dio %s)\n' "$val" >&2; return 1; }
+    val="$(entrega_flat_hoja "$flat" "verifier.evidencia")" \
+      || { printf 'recibo: falta verifier.evidencia\n' >&2; return 1; }
+    [ -n "$val" ] && [ "$val" != "<null>" ] \
+      || { printf 'recibo: verifier.evidencia vacia\n' >&2; return 1; }
 
-  id_rev="$(entrega_flat_hoja "$flat" "reviewer.id")" \
-    || { printf 'recibo: falta reviewer.id (sin revision independiente no hay entrega)\n' >&2; return 1; }
-  [ -n "$id_rev" ] && [ "$id_rev" != "<null>" ] \
-    || { printf 'recibo: reviewer.id vacio (sin revision independiente no hay entrega)\n' >&2; return 1; }
-  val="$(entrega_flat_hoja "$flat" "reviewer.resultado")" \
-    || { printf 'recibo: falta reviewer.resultado\n' >&2; return 1; }
-  [ "$val" = "APPROVE" ] \
-    || { printf 'recibo: reviewer.resultado distinto de APPROVE (dio %s)\n' "$val" >&2; return 1; }
-  val="$(entrega_flat_hoja "$flat" "reviewer.evidencia")" \
-    || { printf 'recibo: falta reviewer.evidencia\n' >&2; return 1; }
-  [ -n "$val" ] && [ "$val" != "<null>" ] \
-    || { printf 'recibo: reviewer.evidencia vacia\n' >&2; return 1; }
+    id_rev="$(entrega_flat_hoja "$flat" "reviewer.id")" \
+      || { printf 'recibo: falta reviewer.id (sin revision independiente no hay entrega)\n' >&2; return 1; }
+    [ -n "$id_rev" ] && [ "$id_rev" != "<null>" ] \
+      || { printf 'recibo: reviewer.id vacio (sin revision independiente no hay entrega)\n' >&2; return 1; }
+    val="$(entrega_flat_hoja "$flat" "reviewer.resultado")" \
+      || { printf 'recibo: falta reviewer.resultado\n' >&2; return 1; }
+    [ "$val" = "APPROVE" ] \
+      || { printf 'recibo: reviewer.resultado distinto de APPROVE (dio %s)\n' "$val" >&2; return 1; }
+    val="$(entrega_flat_hoja "$flat" "reviewer.evidencia")" \
+      || { printf 'recibo: falta reviewer.evidencia\n' >&2; return 1; }
+    [ -n "$val" ] && [ "$val" != "<null>" ] \
+      || { printf 'recibo: reviewer.evidencia vacia\n' >&2; return 1; }
 
-  if [ "$id_impl" = "$id_ver" ] || [ "$id_impl" = "$id_rev" ] || [ "$id_ver" = "$id_rev" ]; then
-    printf 'recibo: identidad reutilizada en roles independientes (implementer=%s verifier=%s reviewer=%s)\n' "$id_impl" "$id_ver" "$id_rev" >&2
-    return 1
+    if [ "$id_impl" = "$id_ver" ] || [ "$id_impl" = "$id_rev" ] || [ "$id_ver" = "$id_rev" ]; then
+      printf 'recibo: identidad reutilizada en roles independientes (implementer=%s verifier=%s reviewer=%s)\n' "$id_impl" "$id_ver" "$id_rev" >&2
+      return 1
+    fi
   fi
+
+  val="$(entrega_flat_hoja "$flat" "ci.workflow")" \
+    || { printf 'recibo: falta ci.workflow\n' >&2; return 1; }
+  [ -n "$val" ] && [ "$val" != "<null>" ] \
+    || { printf 'recibo: ci.workflow vacio\n' >&2; return 1; }
+  val="$(entrega_flat_hoja "$flat" "ci.evidencia")" \
+    || { printf 'recibo: falta ci.evidencia\n' >&2; return 1; }
+  [ -n "$val" ] && [ "$val" != "<null>" ] \
+    || { printf 'recibo: ci.evidencia vacia\n' >&2; return 1; }
 
   # bloqueantes: CUALQUIER entrada (escalar u objeto/array) es un bloqueante
   # abierto. Ausente o vacio pasa; el flat no distingue ambos y la relacion

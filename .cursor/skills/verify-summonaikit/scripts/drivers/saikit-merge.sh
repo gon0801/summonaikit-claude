@@ -80,7 +80,7 @@ cuerpo_aprobacion() {
   local recibo recibo_esc
   [ -n "$bloq" ] || bloq="[]"
   [ -n "$shajson" ] || shajson="$sha"
-  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"bloqueantes":%s,"residuales":[]}' "$shajson" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
+  recibo="$(printf '{"schema":"saikit-entrega.v1","repo":"op/sandbox","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"%s","evidencia":"artifact:implementacion"},"verifier":{"id":"%s","resultado":"%s","evidencia":"artifact:verificacion"},"reviewer":{"id":"%s","resultado":"%s","evidencia":"artifact:revision"},"ci":{"workflow":"ci","evidencia":"artifact:ci"},"bloqueantes":%s,"residuales":[]}' "$shajson" "$impl" "$ver" "$vres" "$rev" "$rres" "$bloq")"
   recibo_esc="$(printf '%s' "$recibo" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   printf 'APPROVE lead %s\\n\\n```json\\n%s\\n```\\n' "$sha" "$recibo_esc"
 }

@@ -44,7 +44,7 @@ SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 # ejemplos de fixture, no evidencia de produccion).
 recibo_ok() {
   cat <<JSON
-{"schema":"saikit-entrega.v1","repo":"$REPO","pr":7,"sha":"$SHA","clase":"codigo","implementer":{"id":"worker-a","evidencia":"artifact:implementacion"},"verifier":{"id":"worker-b","resultado":"PASS","evidencia":"artifact:verificacion"},"reviewer":{"id":"worker-c","resultado":"APPROVE","evidencia":"artifact:revision"},"bloqueantes":[],"residuales":[]}
+{"schema":"saikit-entrega.v1","repo":"$REPO","pr":7,"sha":"$SHA","clase":"codigo","implementer":{"id":"worker-a","evidencia":"artifact:implementacion"},"verifier":{"id":"worker-b","resultado":"PASS","evidencia":"artifact:verificacion"},"reviewer":{"id":"worker-c","resultado":"APPROVE","evidencia":"artifact:revision"},"ci":{"workflow":"ci","evidencia":"artifact:ci"},"bloqueantes":[],"residuales":[]}
 JSON
 }
 
@@ -100,6 +100,36 @@ caso "identidad_reutilizada_falla"
   _contiene "nombra identidad reutilizada" "$OUT" "reutilizada"
 }
 fin_caso "identidad_reutilizada_falla"
+
+caso "editorial_fast_pasa_sin_verifier_ni_reviewer"
+{
+  recibo_ok \
+    | sed 's/"clase":"codigo"/"clase":"editorial"/' \
+    | sed 's/,"verifier":{[^}]*},"reviewer":{[^}]*}//' \
+    > "$SB/recibo.json"
+  entrega_validar "$SB/recibo.json" "$REPO" "$PR" "$SHA" >"$SB/out" 2>"$SB/err"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC: $(cat "$SB/err")"
+}
+fin_caso "editorial_fast_pasa_sin_verifier_ni_reviewer"
+
+caso "clase_desconocida_falla"
+{
+  recibo_ok | sed 's/"clase":"codigo"/"clase":"codgio"/' > "$SB/recibo.json"
+  validar "$SB/recibo.json"
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC"
+  _contiene "nombra clase" "$OUT" "clase"
+}
+fin_caso "clase_desconocida_falla"
+
+caso "ci_ausente_falla"
+{
+  recibo_ok | sed 's/,"ci":{[^}]*}//' > "$SB/recibo.json"
+  validar "$SB/recibo.json"
+  [ "$RC" -eq 1 ] || _mal "rc esperaba 1, dio $RC"
+  _contiene "nombra ci" "$OUT" "ci.workflow"
+}
+fin_caso "ci_ausente_falla"
 
 caso "sha_distinto_falla"
 {
@@ -250,12 +280,12 @@ caso "loader_toma_ultimo_recibo_aplicable"
   } > "$SB/c1.txt"
   {
     printf 'APPROVE lead %s\n\n```json\n' "$SHA"
-    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
     printf '```\n'
   } > "$SB/c2.txt"
   {
     printf 'APPROVE lead %s\n\ncorreccion: evidencia final\n\n```json\n' "$SHA"
-    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a2","evidencia":"e1"},"verifier":{"id":"b2","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c2","resultado":"APPROVE","evidencia":"e3"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a2","evidencia":"e1"},"verifier":{"id":"b2","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c2","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
     printf '```\n'
   } > "$SB/c3.txt"
   {
@@ -297,7 +327,7 @@ caso "loader_revocado_falla"
 {
   {
     printf 'APPROVE lead %s\n\n```json\n' "$SHA"
-    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
     printf '```\n'
   } > "$SB/c1.txt"
   printf 'REVOKE lead %s: aparecio un bloqueante\n' "$SHA" > "$SB/c2.txt"
@@ -338,7 +368,7 @@ caso "loader_comentario_sin_body_no_oculta"
 {
   {
     printf 'APPROVE lead %s\n\n```json\n' "$SHA"
-    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
     printf '```\n'
   } > "$SB/c-apr.txt"
   {
