@@ -323,6 +323,21 @@ lab_payload_bash_respuesta_antes() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"salida","stderr":"%s","interrupted":false,"isImage":false,"noOutputExpected":false},"tool_input":{"command":"%s","description":"paso del turno"},"tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":1200}' "${2:-}" "$1"
 }
 
+# 23.16 r2-revisor (codex): respuesta TRUNCA — el documento termina a mitad
+# del valor de `tool_response` (EOF real, sin cerrar). El lector calla
+# (fail-closed); el lector viejo acreditaba el fragmento si traia EXIT:0.
+# $1 = comando (tool_input, va ANTES), $2 = fragmento crudo de la respuesta.
+lab_payload_bash_respuesta_trunca() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno"},"tool_response":%s' "$1" "$2"
+}
+
+# 23.16 r2-revisor (codex): respuesta ANTES con blancos CRLF entre la clave,
+# los dos puntos y el valor. El \r es blanco JSON valido y el lector lo salta.
+# $1 = comando, $2 = stderr (mismo orden que lab_payload_bash).
+lab_payload_bash_respuesta_antes_crlf() {
+  printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response"\r\n:\r\n{"stdout":"salida","stderr":"%s"},"tool_input":{"command":"%s"},"tool_use_id":"toolu_01"}' "${2:-}" "$1"
+}
+
 lab_payload_bash_en_background() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","effort":{"level":"xhigh"},"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"paso del turno","run_in_background":true},"tool_response":"Command running in background with ID: %s","tool_use_id":"toolu_01b2c3d4e5f60718293a4b5c","duration_ms":300}' "$1" "${2:-bg-1234abcd}"
 }

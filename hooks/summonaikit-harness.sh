@@ -603,6 +603,11 @@ SAIKIT_EXIT_CERO_RE='EXIT:[[:space:]]*0([^0-9]|$)'
 # satisfacia la regla y un runner fallido acreditaba. Atiende objeto (Bash:
 # {stdout,stderr,...}) y cadena (background: "Command running..."); otro tipo
 # de valor calla (fail-closed).
+# r2-revisor (codex, unica ronda sobre este arreglo): el valor se emite SOLO
+# con cierre — cadena sin comilla de cierre u objeto/array sin su cierre
+# pareado y TIPADO callan (un documento trunco no acredita; el lector viejo
+# acreditaba el fragmento). El blanco entre clave, dos puntos y valor incluye
+# \r (los cuatro blancos del JSON).
 json_tool_response_texto() {
   case "$INPUT" in
     *"\"tool_response\""*) ;;
@@ -626,21 +631,21 @@ json_tool_response_texto() {
         else if (c == ":") {
           if (depth == 1 && ultima == "tool_response") {
             j = i + 1
-            while (j <= n && (substr(buf, j, 1) == " " || substr(buf, j, 1) == "\t" || substr(buf, j, 1) == "\n")) j++
+            while (j <= n && (substr(buf, j, 1) == " " || substr(buf, j, 1) == "\t" || substr(buf, j, 1) == "\n" || substr(buf, j, 1) == "\r")) j++
             v = substr(buf, j, 1)
             if (v == "\"") {
-              k = j + 1; e = 0; out = ""
+              k = j + 1; e = 0; out = ""; cerrado = 0
               while (k <= n) {
                 ch = substr(buf, k, 1)
                 if (e) { out = out "\\" ch; e = 0 }
                 else if (ch == "\\") { e = 1 }
-                else if (ch == "\"") break
+                else if (ch == "\"") { cerrado = 1; break }
                 else out = out ch
                 k++
               }
-              printf "%s", out; exit
+              if (cerrado) printf "%s", out; exit
             } else if (v == "{" || v == "[") {
-              d = 0; k = j; ii = 0; e = 0; out = ""
+              d = 0; k = j; ii = 0; e = 0; out = ""; ok = 0; pila = ""
               while (k <= n) {
                 ch = substr(buf, k, 1)
                 out = out ch
@@ -650,12 +655,17 @@ json_tool_response_texto() {
                   else if (ch == "\"") ii = 0
                 } else {
                   if (ch == "\"") ii = 1
-                  else if (ch == "{" || ch == "[") d++
-                  else if (ch == "}" || ch == "]") { d--; if (d == 0) break }
+                  else if (ch == "{" || ch == "[") { d++; pila = pila ch }
+                  else if (ch == "}" || ch == "]") {
+                    need = (ch == "}") ? "{" : "["
+                    if (substr(pila, length(pila), 1) != need) exit
+                    pila = substr(pila, 1, length(pila) - 1)
+                    d--; if (d == 0) { ok = 1; break }
+                  }
                 }
                 k++
               }
-              printf "%s", out; exit
+              if (ok) printf "%s", out; exit
             }
             exit
           }
