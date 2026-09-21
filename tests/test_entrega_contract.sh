@@ -101,6 +101,21 @@ caso "identidad_reutilizada_falla"
 }
 fin_caso "identidad_reutilizada_falla"
 
+caso "spec_entrega_no_depende_del_sentinel_de_sesion"
+{
+  # La entrega debe poder continuar desde otro host sin recuperar el turno.
+  # Este contrato documental evita restaurar la regla que contradice A6.
+  spec="$repo/docs/spec/00-project-spec.md"
+  if grep -Eq 'El carril lo fija el sentinel, nunca la receta ni el recibo|en full el Stop exige los tres roles|que el líder baje el carril desde el recibo' "$spec"; then
+    _mal "la especificacion sigue exigiendo estado de turno para la entrega"
+  fi
+  grep -Fq 'La clase del recibo describe el cambio real del PR' "$spec" \
+    || _mal "falta la autoridad persistente de la clase del cambio"
+  grep -Fq 'El lead comprueba la clase contra el diff' "$spec" \
+    || _mal "falta declarar quien impide etiquetar codigo como editorial"
+}
+fin_caso "spec_entrega_no_depende_del_sentinel_de_sesion"
+
 caso "editorial_fast_pasa_sin_verifier_ni_reviewer"
 {
   recibo_ok \

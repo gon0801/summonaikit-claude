@@ -2090,12 +2090,21 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
 
 **Reglas nuevas.**
 
-1. **El carril lo fija el sentinel, nunca la receta ni el recibo.** `-saikit`
-   = full; `-saikit:fast` (y los alias `-saikit:pregunta` / `-saikit:boceto`,
-   Phase 16.6) = fast; match exacto con frontera, un typo cae a full. Medido:
-   en full el Stop exige los tres roles aunque no haya cambio de código; una
-   receta de solo lectura en un turno full corre la ceremonia igual. Rechazado
-   que el líder baje el carril desde el recibo (Core Rule 3).
+1. **El sentinel arma el turno; el recibo persistente acredita la entrega.**
+   `-saikit` = full; `-saikit:fast` (y los alias `-saikit:pregunta` /
+   `-saikit:boceto`, Phase 16.6) = fast; match exacto con frontera, un typo
+   cae a full. Desde Bloque A el Stop no exige ceremonia ni recibo; conserva
+   las restricciones del adversary. El merge no consulta el sentinel ni
+   estado de la sesión que creó el PR.
+   La clase del recibo describe el cambio real del PR: codigo, configuracion,
+   bug, runbook y documentacion requieren implementer/verifier/reviewer
+   independientes; editorial, ledger y progreso usan autor y revisión del
+   lead. El lead comprueba la clase contra el diff antes de publicar el
+   recibo. Un cambio de código no se convierte en editorial por su etiqueta.
+   El parser comprueba la clase declarada y sus roles, no clasifica el diff:
+   una clasificación falsa del lead es el mismo límite de confianza que una
+   evidencia falsa. Esta regla sustituye la antigua autoridad del sentinel
+   sobre el merge, sin reinstaurar un estado de turno para reanudarlo.
 2. **Sin recetario no hay menú, y una receta se ofrece solo si su hash
    coincide.** El hook lee `<dir-del-hook>/recetas/MANIFEST.sha256` (override
    `SAIKIT_RECETAS_DIR` para el lab; columna `tipo` = `receta` | `lider`) y
@@ -2159,7 +2168,7 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    termina; `--confirmado` repite el gate completo en esa invocación y solo
    entonces mergea (el sí confirma la intención, no las condiciones).
    Cualquier `unknown` ⇒ no mergea y nombra cuál. El recibo lo arma el líder
-   **después** de leer la evidencia de los tres roles; un commit posterior =
+   **después** de leer la evidencia de los roles exigidos por la clase; un commit posterior =
    SHA nuevo = recibo nuevo. El `merge_commit` se registra en un archivo
    aparte (`veredictos/<sha>.merge`) y de todos modos se confirma
    contra `origin/<rama>` y el trailer, no contra ese archivo. La rama base es
@@ -2186,8 +2195,8 @@ mergeaba solo y se lee bajo esa decisión). Origen: `cursor/plugins` → pstack
    arman el operador o el turno con ese bloque, y se mergea con
    `bash tools/saikit-merge.sh --revert-de <merge_commit> --confirmado`: un
    **modo con
-   precondiciones propias** — el turno desarmado ya no tiene el estado del
-   hook que exige la regla 4 — que **no confía en ningún JSON local**: exige
+   precondiciones propias** que, igual que el merge normal, no depende del
+   estado del hook y **no confía en ningún JSON local**: exige
    que `<merge_commit>` sea la punta actual de `origin/<rama>` tras `git
    fetch` (si algo aterrizó después, no revierte: reporta), que lleve el
    trailer `Saikit-Merge:` que solo pone la regla 4, revert **exactamente el
