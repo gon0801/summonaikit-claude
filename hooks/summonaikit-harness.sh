@@ -3039,7 +3039,7 @@ $(find "$ADV_FINDINGS_DIR" -type f -newermt "@$((advs_epoca - 1))" 2>/dev/null |
       # CodeRabbit r2: el NOMBRE del artefacto lo eligio el adversary y puede
       # cargar un valor con pinta de secreto — el path viaja REDACTADO, misma
       # disciplina que la rama de violacion y la linea de log.
-      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path.\n"
+      printf '%s\n' "- Possible secret persisted in adversary artifact $(redact_secrets "$advs_f"):$advs_linea (content NOT shown). Redact or delete that artifact, then re-close. Fail-closed on purpose: a persisted secret is one git add away from a commit; a false positive escapes through this same manual path."
       return 0
     fi
   done <<EOF
@@ -3918,7 +3918,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     # en el Stop) — la salida real es revertir y RE-ARMAR (-saikit) en un
     # turno nuevo, cuyo armado reinicia el estado; o agotar el presupuesto.
     # qwen #7: los paths viajan REDACTADOS al feedback, como en la linea de log.
-    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it).\n"
+    adv_early_missing="- The adversary subagent wrote outside .saikit/findings/ (registered: $(redact_secrets "$(read_state_value adv_violation_paths)")). No receipt label satisfies this entry: inspect and revert the unauthorized write (e.g. git restore <file>, or delete the created file), then re-arm with -saikit in a fresh turn — re-closing THIS turn stays blocked on purpose (the flag persists for the session and the block never verifies the revert; a new armed turn resets it)."
   elif [ "$adv_adv_presente" = "1" ]; then
     adv_early_missing="$(adv_chequear_secretos)"
   fi
