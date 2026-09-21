@@ -595,6 +595,77 @@ ECHO_LEAD_RE='^[[:space:]]*(echo|printf)([[:space:]]|$)'
 SAIKIT_RUNNER_MASCARADO_RE="($TEST_RUNNER_RE|tests?/run\.sh)([^;\\\\]|\\\\n)*(;|\\\\n.+)"
 SAIKIT_EXIT_CERO_RE='EXIT:[[:space:]]*0([^0-9]|$)'
 
+# 23.16 r2 (hallazgo Major CodeRabbit PR #349): el chequeo del corredor tapado
+# extrae SOLO el valor de `tool_response` de primer nivel, con el mismo escaneo
+# acotado (depth + in-string + escape) de los otros lectores. El lector anterior
+# (`sed s/.*"tool_response"//`) dejaba TODO lo que sigue en el documento: si
+# `tool_response` precede a `tool_input`, un `EXIT:0` citado en el comando
+# satisfacia la regla y un runner fallido acreditaba. Atiende objeto (Bash:
+# {stdout,stderr,...}) y cadena (background: "Command running..."); otro tipo
+# de valor calla (fail-closed).
+json_tool_response_texto() {
+  case "$INPUT" in
+    *"\"tool_response\""*) ;;
+    *) return 0 ;;
+  esac
+  printf '%s' "$INPUT" | awk '
+    { buf = buf $0 "\n" }
+    END {
+      n = length(buf)
+      depth = 0; ins = 0; esc = 0
+      ini = 0; ultima = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(buf, i, 1)
+        if (ins) {
+          if (esc)            { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") { ins = 0; ultima = substr(buf, ini, i - ini) }
+          continue
+        }
+        if (c == "\"") { ins = 1; ini = i + 1 }
+        else if (c == ":") {
+          if (depth == 1 && ultima == "tool_response") {
+            j = i + 1
+            while (j <= n && (substr(buf, j, 1) == " " || substr(buf, j, 1) == "\t" || substr(buf, j, 1) == "\n")) j++
+            v = substr(buf, j, 1)
+            if (v == "\"") {
+              k = j + 1; e = 0; out = ""
+              while (k <= n) {
+                ch = substr(buf, k, 1)
+                if (e) { out = out "\\" ch; e = 0 }
+                else if (ch == "\\") { e = 1 }
+                else if (ch == "\"") break
+                else out = out ch
+                k++
+              }
+              printf "%s", out; exit
+            } else if (v == "{" || v == "[") {
+              d = 0; k = j; ii = 0; e = 0; out = ""
+              while (k <= n) {
+                ch = substr(buf, k, 1)
+                out = out ch
+                if (ii) {
+                  if (e) e = 0
+                  else if (ch == "\\") e = 1
+                  else if (ch == "\"") ii = 0
+                } else {
+                  if (ch == "\"") ii = 1
+                  else if (ch == "{" || ch == "[") d++
+                  else if (ch == "}" || ch == "]") { d--; if (d == 0) break }
+                }
+                k++
+              }
+              printf "%s", out; exit
+            }
+            exit
+          }
+        }
+        else if (c == "{" || c == "[") { depth++ }
+        else if (c == "}" || c == "]") { depth-- }
+      }
+    }'
+}
+
 json_string_field() {
   field="$1"
   printf '%s' "$INPUT" | tr '\n' ' ' | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
@@ -3393,7 +3464,7 @@ record_tool_evidence() {
        && ! { printf '%s' "$combined" | grep -Eiq "$FAILURE_SIGNAL_RE_CI" \
               || printf '%s' "$combined" | grep -Eq  "$FAILURE_SIGNAL_RE_CS"; } \
        && { ! printf '%s' "$command_text" | grep -Eiq "$SAIKIT_RUNNER_MASCARADO_RE" \
-            || printf '%s' "$INPUT" | tr '\n' ' ' | sed -n 's/.*"tool_response"//p' | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
+            || json_tool_response_texto | grep -Eq "$SAIKIT_EXIT_CERO_RE"; }; then
       mark_evidence "verified" "${command_text:-verification command}"
     fi
   fi

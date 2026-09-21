@@ -2608,8 +2608,10 @@ La evidencia vive bajo `docs/evidence/phase-23/`.
   Con espacio (`bash tests/run.sh ; echo ...`) tampoco acredita desde la
   23.16: el exit del comando es el del ultimo y la salida puede no traer senal
   de fracaso; solo acredita con `EXIT:0` textual del lado de la respuesta
-  (lo que `echo EXIT:$?` imprime cuando el runner salio 0; un `EXIT:0` citado
-  en el comando no vale) o encadenado con `&&` (que preserva su exit).
+  (valor de `tool_response` de primer nivel, acotado: vale igual aunque la
+  respuesta preceda al comando; lo que `echo EXIT:$?` imprime cuando el runner
+  salio 0; un `EXIT:0` citado en el comando no vale) o encadenado con `&&`
+  (que preserva su exit).
   El `\n` literal tambien separa comandos. Limites:
   `||` y `|` tambien tapan el exit y quedan fuera; un `EXIT:0` ajeno acredita
   de mas (advisory, fail-open). `bash_input` no pasa por el veto de `PreToolUse`;

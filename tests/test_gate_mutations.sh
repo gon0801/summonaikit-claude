@@ -101,6 +101,7 @@ G2|runner_bash_quitada|las ramas del runner bash propio (tests/run.sh) se neutra
 G2|falla_dotnet_quitada|'failed' sale de la via B del CI y el banner de dotnet (Failed: 1) vuelve a acreditar
 G2|falla_gradle_quitada|los literales de gradle salen del CS y BUILD FAILED / FAILURE: Build failed vuelven a acreditar
 G2|credito_por_mencion|la guarda de echo/printf se neutraliza y 'echo pytest' vuelve a acreditar verificacion
+G2|respuesta_exit_desacotada|la evidencia del exit del runner tapado se vuelve a leer con el lector greedy de strings y el EXIT:0 real de la respuesta deja de acreditar
 G2|runner_mascarado_apagado|el veto del runner tapado por ';' se neutraliza y 'bash tests/run.sh ; echo' vuelve a acreditar sin evidencia del exit
 G2|credito_por_tool_name|el credito vuelve a evaluar tool_name y una tool llamada como un runner acredita sin correr nada
 G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la posicion de comando estricta deja de aplicarse (r1)
@@ -436,6 +437,13 @@ mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCH
 # 23.16 (fase 23, carril B): neutraliza el veto del runner tapado por `;` - con
 # eso `bash tests/run.sh ; echo listo` vuelve a acreditar sin evidencia del
 # exit. Lo atrapa caso_g2_runner_punto_y_coma_tapa_exit_no_acredita.
+# 23.16 r2 (CodeRabbit PR #349): devuelve la lectura de la evidencia del
+# exit al lector greedy de strings. Como el valor real es un OBJETO (no una
+# cadena), el lector ya no ve nada y el EXIT:0 real deja de acreditar. La
+# atrapa caso_g2_runner_punto_y_coma_con_exit_cero_si_acredita (y la segunda
+# mitad del caso nuevo, que corre despues en la lista G2).
+mut_respuesta_exit_desacotada()    { sed 's/json_tool_response_texto |/json_string_field tool_response |/'; }
+
 mut_runner_mascarado_apagado() { sed "s@^SAIKIT_RUNNER_MASCARADO_RE=.*@SAIKIT_RUNNER_MASCARADO_RE='NUNCA_MATCHEA_ESTO_23_16'@"; }
 
 # CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
