@@ -305,6 +305,14 @@ traducir los perfiles de rol. Contrato de datos de siempre: lo no medido queda
 
 En paralelo desde el inicio, porque no tocan el hook: **E**, la 23.5, de `grok → glm → cursor-agent → muse`; **F**, la 23.12, de `cursor-agent → glm → muse → grok`; **D-install**, la 23.11(b,c,d), de `cursor-agent → glm → muse → grok` y sin tocar el hook. Revisión por la regla 4 vigente: otra ronda solo mientras salga un bloqueante, cada una sobre los arreglos con `cross-review -Desde`; lo no bloqueante que no se corrige va a una fila nueva de la fase. Tras cada merge que cambie el hook, deploy según `AGENTS.md`. Lo vivo ocurre solo tras merge y deploy: el turno de la 23.14 (evidencia en B), el probe de la 23.5 y los vivos de la 23.17 (evidencia en cierre). Ningún implementador externo toca las copias vivas del hook ni el perfil de Muse: la corrida viva es del lead.
 
+**Runbook de ejecución:** vive en `goncloud-openclaw`, no aquí, porque claw
+orquesta el autopilot de todos los repos y lee los runbooks de ahí:
+`docs/runbooks/autopilot-fase-saikit23.md`, que hereda
+`docs/runbooks/base-summonaikit.md` (openclaw #86, actualizado por #118). La
+tabla de preaprobaciones se aprobó para el bloque A del runbook y cubre los dos
+事前確認 de la Phase 23 que abajo siguen «PENDIENTE», sin marcarlos como
+aprobados.
+
 ## Bloque A — entrega sin sello (seguimiento no bloqueante, 2026-09-20)
 
 **Cierre de la entrega:** A1–A10 integrados por PR #345 en
