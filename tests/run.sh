@@ -19,6 +19,14 @@
 # sinteticos (ver tests/test_runner_guards.sh); por defecto es el repo que lo
 # contiene. Las libs se resuelven siempre junto a ESTE archivo, no a la raiz
 # recibida.
+#
+# HOOK BAJO PRUEBA (A.R9): los tests que ejercitan el hook miden SIEMPRE una
+# copia determinista, jamas escriben sobre la del perfil. Que copia se mide lo
+# elige SAIKIT_HOOK_VIVO (ruta absoluta); sin el override el default es la
+# copia INSTALADA del operador ($HOME/.claude/hooks/summonaikit-harness.sh).
+# Durante el desarrollo, apuntar el override a la fuente del repo es la forma
+# determinista de ejercitar lo que se esta editando: sin el, la bateria mide
+# la copia instalada, que tu cambio todavia no la toco (leccion de la Task 3.5).
 set -u
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,0 +1,33 @@
+  caso: repo sin hook y sin tests => exit 0
+  caso: hooks/summonaikit-harness.sh que no parsea => rompe la corrida
+  caso: repo sano con un test verde => exit 0 y lo reporta PASS
+  caso: un test que sale 3 se reporta UNKNOWN, no PASS
+  caso: si TODOS los tests son unknown, la corrida NO cierra OK
+  caso: un unknown NO tapa un fallo real
+  caso: un test que falla => rompe la corrida y lo nombra
+  caso: test que escribe DENTRO del repo => se detecta la fuga aunque pase
+  caso: escritura del tooling del host en .claude/ y out/ NO se reporta como fuga
+  caso: el .DS_Store que Finder reescribe NO se reporta como fuga
+  caso: test que escribe en $HOME => queda contenido, no toca el HOME del invocador
+  caso: raiz inexistente => falla, no pasa como verde con cobertura cero
+  caso: unknown + SKIP sin ejecutor simultaneos => el resumen de skips igual imprime
+  caso: un test que CORRIO y salio exit 1 => el resumen dice FAIL y NO cierra OK
+  caso: un test SIN ejecutor => el resumen lo dice y lo cuenta como unknown
+  caso: particion 'lentos' corre SOLO los listados
+  caso: particion 'rapidos' corre todo MENOS los listados
+  caso: la union de las dos mitades == la bateria entera (ni un test se pierde)
+  caso: un test NUEVO que nadie listo cae en 'rapidos' (default seguro), nunca en el limbo
+  caso: SAIKIT_PARTICION invalida => corta y NO corre nada
+  caso: una mitad que no corre NINGUN test falla (lista huerfana), no cierra en verde
+  caso: una mitad cuyos tests se saltan TODOS (sin ejecutor) tampoco cierra en verde
+  caso: SAIKIT_SHARD=i/N: la union de 1..N es EXACTAMENTE la particion, sin repetidos
+  caso: cada shard corre al menos un archivo y cierra OK
+  caso: el reparto es determinista: dos corridas del mismo shard listan lo mismo
+  caso: SAIKIT_SHARD con forma invalida => exit 2 y NO corre nada
+  caso: SAIKIT_SHARD fuera de rango (4/3) => exit 2 y NO corre nada
+  caso: un shard que queda VACIO (N mayor que los archivos) => exit 2, nunca verde
+  caso: el workflow reparte 'suite' en shards 1/N..N/N COMPLETOS y pasa SAIKIT_SHARD (mutante N-1)
+  caso: skip por caso seguido de un fallo real => el fallo sale a la luz
+  caso: skip sin ejecutor del caso => cuenta como skip, NO como PASS liso
+  caso: sin marcadores => cero ruido de skip en el resumen
+test_runner_guards: OK
