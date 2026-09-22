@@ -29,8 +29,7 @@ on:
 
 jobs:
   quality:
-    runs-on: fasterci-large
-    if: github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -72,8 +71,7 @@ jobs:
   # se instalan las peer deps (ya son las del propio dsh, no deps nuevas) para
   # que `node --test` resuelva el import.
   node-adapter:
-    runs-on: fasterci-large
-    if: github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -128,8 +126,7 @@ jobs:
   # duraciones medidas, N=6 da 7.7 min y N=7 da 6.8 — por eso 7. Si el reloj
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar tests.
   suite:
-    runs-on: fasterci-large
-    if: github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
@@ -166,8 +163,7 @@ jobs:
   # posicion: N=8 da 11.2 min el peor, N=10 da 7.8. Por eso 10. Si el reloj
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar mutaciones.
   suite-lentos:
-    runs-on: fasterci-large
-    if: github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
@@ -194,8 +190,8 @@ jobs:
   # nada — seria el mismo verde vacio con otra forma. Los nombres con guion van
   # en corchetes (`needs['node-adapter']`), que es la sintaxis que GitHub acepta.
   gate:
-    runs-on: fasterci-large
-    if: always() && github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
+    if: always()
     needs: [quality, node-adapter, suite, suite-lentos, secrets]
     steps:
       - name: Todos los jobs de calidad en verde
@@ -228,8 +224,7 @@ jobs:
   # trampas reales (ghp_/AKIA/sk-proj). La capa local (pre-commit) vive en
   # tools/check-secrets.sh.
   secrets:
-    runs-on: fasterci-large
-    if: github.head_ref != 'benchmark/fasterci-large'
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
