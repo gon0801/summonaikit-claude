@@ -812,6 +812,8 @@ advzona_ejecucion_ajena_bloqueada_y_no_se_barre() {
   # Fin de ejecucion SIN Stop (desarme: prompt nuevo sin sentinel): la zona
   # PROPIA se limpia, la AJENA queda intacta — y con su owner, que es lo que la
   # declara huerfana de la ejecucion que la dejo.
+  # 23.17: el desarme se ejercita con tarea RANCIA (la fresca conserva).
+  saikit_antedatar "$LAB_ESTADO_PATH" 202001010000 || { _mal "antedatar para el desarme rancio — 23.17"; return 1; }
   lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
   if [ -e "$(adv_zona_lab)" ]; then _mal "el desarme no limpio la zona propia"; fi
   if [ ! -f "$_ajena/owner" ] || [ ! -f "$_ajena/su-fixture.txt" ]; then
@@ -913,6 +915,8 @@ advzona_teardown_no_atraviesa_enlaces_de_ancestros() {
     adv_symlink_o_skip "$LAB/afuera" "$1" || { _mal "no se pudo plantar el enlace de ancestro $1"; return 1; }
     adv_armar
     adv_despachar
+    # 23.17: el desarme se ejercita con tarea RANCIA (la fresca conserva).
+    saikit_antedatar "$LAB_ESTADO_PATH" 202001010000 || { _mal "antedatar para el desarme rancio — 23.17"; return 1; }
     lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
     return 0
   }
@@ -954,6 +958,8 @@ advzona_teardown_no_atraviesa_enlaces_de_ancestros() {
   _zona="$(adv_zona_lab)"
   rm -rf "$_zona"
   if adv_symlink_o_skip "$LAB/afuera-zona" "$_zona"; then
+    # 23.17: el desarme se ejercita con tarea RANCIA (la fresca conserva).
+    saikit_antedatar "$LAB_ESTADO_PATH" 202001010000 || { _mal "antedatar para el desarme rancio — 23.17"; return 1; }
     lab_run prompt claude "$(lab_payload_prompt 'seguimos con otra cosa sin sentinel')"
     _igual "desarme fail-open con la zona enlazada" "$LAB_RC" "0"
     _contiene "limpieza declarada OMITIDA (dir de sesion)" "$LAB_ERR" 'limpieza de zona OMITIDA'
@@ -1028,6 +1034,8 @@ advzona_teardown_gana_la_carrera_de_swap() {
     printf 'centinela-ajeno\n' > "$_carr_blanco/centinela.txt"
     lab_limpiar_estado
     lab_sembrar h1 0 1 0 "implementer,adversary"
+    # 23.17: el desarme se ejercita con tarea RANCIA (la fresca conserva).
+    saikit_antedatar "$LAB_ESTADO_PATH" 202001010000 || { _mal "antedatar para el desarme rancio — 23.17"; return 1; }
     # plantador: a los 0.5s (en plena pausa de 2s) swappea scratch por un
     # symlink al blanco externo — el ataque de la carrera, SIN estadistica.
     ( sleep 0.5; rm -rf "$_carr_S"; ln -s "$_carr_A" "$_carr_S" ) >/dev/null 2>&1 &
@@ -1077,6 +1085,8 @@ advzona_teardown_ancla_exacta() {
   export SAIKIT_ADV_TEARDOWN_ANCLA_PAUSA_SEG=2
   lab_limpiar_estado
   lab_sembrar h1 0 1 0 "implementer,adversary"
+  # 23.17: el desarme se ejercita con tarea RANCIA (la fresca conserva).
+  saikit_antedatar "$LAB_ESTADO_PATH" 202001010000 || { _mal "antedatar para el desarme rancio — 23.17"; return 1; }
   # plantador determinista: a los 0.5s (en plena pausa pre-cd de 2s) swappea
   # scratch por un symlink INTERNO a .saikit/findings
   ( sleep 0.5; rm -rf "$_an_S"; ln -s "$_an_F" "$_an_S" ) >/dev/null 2>&1 &
