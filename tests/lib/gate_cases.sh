@@ -886,10 +886,13 @@ caso_g1_candado_huerfano_acotado() {
 # nuevo y no borra). Dos rondas: cada una reescribe el estado, no deja el
 # candado ni el marcador puestos, y nadie cuelga (todo acotado por el tope).
 caso_g1_candado_dos_recuperadores_no_pierden() {
-  lab_run prompt claude "$(lab_payload_prompt '-saikit semilla robo doble')"
   _rd_dir="$(dirname "$LAB_ESTADO_PATH")"
   _rd=1
   while [ "$_rd" -le 2 ]; do
+    # Re-siembra cada ronda: los prompts son fijos y el task_hash es
+    # cksum(prompt), asi que sin esto la ronda 2 compararia contra el hash
+    # ganador de la ronda 1 y fallaria aunque nadie perdiera nada.
+    lab_run prompt claude "$(lab_payload_prompt '-saikit semilla robo doble')"
     (exit 0) & _rd_muerto="$!"
     wait "$_rd_muerto" 2>/dev/null || true
     mkdir -p "$_rd_dir/.harness-state.lock"
