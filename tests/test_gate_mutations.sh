@@ -56,6 +56,8 @@ G1|notificacion_no_se_reconoce|el acotamiento de notificacion de tarea se neutra
 G1|grok_wake_strict_apagado|el skip estricto del auto-wake grok se neutraliza y un wake con sentinel en la descripcion del subagente vuelve a re-armar (18.27)
 G1|grok_wake_strict_sin_contenido|la condicion de contenido del skip grok se neutraliza y un sobre de OTRO evento con sentinel deja de armar (18.27, review r2)
 G1|reporte_devuelto_sin_filtro|el skip estricto del reporte devuelto se neutraliza y un hand-back agent-message que cita el token vuelve a armar el gate (23.13)
+G1|tarea_viva_sin_keepalive|el keep-alive de la tarea armada se neutraliza y un mensaje sin token a media tarea vuelve a desarmar como A4-c2 (23.17)
+G1|off_no_apaga|la rama de -saikit:off se neutraliza y el apagado manual deja de desarmar: el prompt cae al gate del sentinel y conserva el estado (23.17)
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
@@ -451,6 +453,16 @@ mut_runner_mascarado_apagado() { sed "s@^SAIKIT_RUNNER_MASCARADO_RE=.*@SAIKIT_RU
 # Con eso el reporte devuelto que cita el token vuelve a armar. La atrapa
 # caso_g1_reporte_devuelto_con_token_no_arma.
 mut_reporte_devuelto_sin_filtro() { sed "s@^SAIKIT_AGENT_MESSAGE_INICIO_RE=.*@SAIKIT_AGENT_MESSAGE_INICIO_RE='NUNCA_MATCHEA_ESTO_23_13'@"; }
+
+# 23.17 (fase 23, carril B2): neutraliza el keep-alive — el `if tarea_rancia`
+# siempre toma la rama del desarme y el mensaje a media tarea vuelve a borrar
+# el estado. La atrapa caso_g1_mensaje_sin_token_a_media_tarea_no_desarma.
+mut_tarea_viva_sin_keepalive() { sed 's@if tarea_rancia; then@if true; then@'; }
+
+# 23.17: neutraliza el apagado manual — -saikit:off ya no limpia y cae al gate
+# del sentinel, que conserva (o arma) el estado. La atrapa
+# caso_g1_saikit_off_desarma.
+mut_off_no_apaga() { sed "s@^SAIKIT_OFF_RE=.*@SAIKIT_OFF_RE='NUNCA_MATCHEA_ESTO_23_17'@"; }
 
 # CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
 # SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una

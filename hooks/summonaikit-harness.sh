@@ -1929,7 +1929,7 @@ Run the work as a gated harness:
 Asking is not failing:
 - When you need an answer before you can do the work well, ask your plain-language questions and then END THE TURN with a final line that reads exactly:
   SUMMONAIKIT HARNESS PAUSED - awaiting your answer
-- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and a prompt without the sentinel stands the gate down by design; the cycle you promised still applies — run it yourself when they reply, or ask them to include -saikit in the reply to keep the gate enforced.
+- That line tells the harness you are correctly waiting for the user, so it will not demand a completed receipt. Their reply will usually not carry -saikit, and that reply keeps the armed task alive (the gate stays up, 23.17); the task closes on its own with its receipt or when the budget runs out. To stand the gate down by hand, reply with -saikit:off; a task idle beyond the measured cap stands down as before. The cycle you promised still applies — run it yourself when they reply.
 - PAUSED is ONLY for when you cannot proceed yet. If the work is DONE and you are asking for a decision (deploy? merge?), write the full receipt and put your question after it — do NOT add the PAUSED line: the receipt closes the gate cleanly and your question stands on its own.
 
 Waiting on a subagent is not failing:
@@ -1937,7 +1937,7 @@ Waiting on a subagent is not failing:
 - While you are waiting on that subagent, END THE TURN with a final line that reads exactly, naming the role you delegated to:
   SUMMONAIKIT HARNESS DELEGATED - awaiting <ROLE>
   where <ROLE> is implementer, verifier, reviewer, or adversary — naming one of those is what makes the line count.
-- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the gate stands down by design — the promised cycle still applies: finish it yourself, or ask them to re-arm with -saikit.
+- That line tells the harness you are correctly waiting on a subagent, so it will not demand a completed receipt. As soon as that subagent answers, resume the cycle: read its output and continue from where you left off. If the user sends a NEW message without -saikit before you resume, the armed task stays alive (23.17) — the promised cycle still applies: finish it yourself. To stand the gate down by hand, ask them to reply with -saikit:off.
 
 $RECETAS_MENU
 
@@ -2224,9 +2224,10 @@ emit_allow() {
 # operador). Por eso el acotamiento de abajo exige las DOS condiciones a la
 # vez -- el lado seguro: si el prompt viene vacio/ausente, no desarma (cubre la
 # forma no medida); si trae la marca, tampoco (cubre la forma medida). Un
-# prompt HUMANO real sin sentinel SIGUE desarmando -- eso es A4 y no se afloja,
-# aflojarlo de mas revive el defecto que ese borrado cierra
-# (caso_g1_prompt_sin_sentinel_desarma fija esa regresion).
+# prompt HUMANO real sin sentinel con tarea FRESCA ya no desarma (23.17,
+# keep-alive); con tarea RANCIA desarma como A4
+# (caso_g1_prompt_sin_sentinel_con_tarea_fresca_no_desarma y
+# caso_g1_tarea_rancia_sin_token_si_desarma fijan la frontera).
 # ESTRICTA: anclada al inicio del texto y con el cierre presente. La version
 # laxa (solo "contiene la marca") la rechazaron DOS revisores independientes
 # en el PR #30 -- greptile P1 y coderabbit Major, mismo hallazgo: un prompt
@@ -2290,6 +2291,28 @@ SAIKIT_AGENT_MESSAGE_ANUNCIO_RE='Another Claude session sent a message:'
 SAIKIT_AGENT_MESSAGE_APERTURA_RE='<agent-message from="'
 SAIKIT_AGENT_MESSAGE_CIERRE_RE='</agent-message>'
 
+# 23.17 (fase 23, carril B2): la tarea armada sigue viva hasta que cierra.
+# Hoy un prompt sin token desarma a proposito (A4-c2) y eso corta el gate con
+# un mensaje a media tarea (MEDIDO en claude 2026-09-21: el mensaje humano
+# intermedio llega como UserPromptSubmit plano, sonda /tmp/f23-saikit/b2-sonda2)
+# y con la respuesta a un PAUSED. Desde esta fila: sin token y con tarea
+# FRESCA ya no se desarma (keep-alive: se refresca el mtime y se deja pasar);
+# la tarea se cierra sola con su recibo o con el presupuesto agotado (ambos ya
+# limpian el estado); -saikit:off la apaga a mano; y una tarea RANCIA (mtime
+# mas alla del tope) se desarma como hoy.
+#
+# Reloj: el mtime de harness-state.env (write_state lo reescribe en cada
+# armado y en cada mark: prompt, PostToolUse, Stop). Tope 1440 min (24 h):
+# las pausas reales intra-sesion medidas en los transcripts del repo llegan
+# a ~17.4 h (sesion 9109cea7, 2026-09-09/10: 04:18 -> 22:xx? no: 07:05 ->
+# 00:30 = 17.4 h entre turnos humanos genuinos); el tope ~= 1.4x ese maximo.
+# Sin `find` no hay reloj: fail-open hacia conservar (igual que el barrido,
+# que sin find no barre). El caso rancio usa saikit_antedatar (18.19).
+SAIKIT_TAREA_VIVA_TOPE_MIN=1440   # 24 h de inactividad
+# Frontera exacta como :fast (el `:` pasa la frontera del sentinel: sin el
+# skip de abajo, -saikit:off ARMARIA en vez de apagar).
+SAIKIT_OFF_RE='(^|[^A-Za-z0-9_/-])-saikit:off([^A-Za-z0-9_-]|$)'
+
 # La forma laxa exige las DOS marcas, apertura y cierre. Motivo MEDIDO (PR #30,
 # hallazgo de greptile que quedo a medias hasta esta correccion): con solo la
 # apertura, un prompt HUMANO sin sentinel que apenas MENCIONA la marca dejaba
@@ -2321,6 +2344,15 @@ parece_notificacion_laxa() {
     return 0
   fi
   return 1
+}
+
+# 23.17: exit 0 si el estado armado supera el tope de inactividad (tarea
+# RANCIA: se desarma como hoy). `find -mmin` es la primitiva ya medida del
+# barrido (MSYS2) y del antedatado portable (18.19).
+tarea_rancia() {
+  command -v find >/dev/null 2>&1 || return 1
+  [ -f "$STATE_PATH" ] || return 1
+  [ -n "$(find "$STATE_PATH" -mmin "+$SAIKIT_TAREA_VIVA_TOPE_MIN" 2>/dev/null)" ]
 }
 
 start_harness() {
@@ -2391,6 +2423,18 @@ start_harness() {
     emit_allow
   fi
 
+  # 23.17: -saikit:off apaga el gate a mano. Vive ANTES del gate del sentinel
+  # porque el `:` pasa su frontera: sin esto armaria (lado equivocado). Con
+  # tarea armada hace la misma limpieza del desarme A4-c2; sin ella no deja
+  # nada (cae a emit_allow sin estado y sin contrato).
+  if [ "$PHASE" = "prompt" ] \
+     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_OFF_RE"; then
+    adv_limpiar_zona
+    rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
+    podar_dir_sesion
+    emit_allow
+  fi
+
   # >>> SAIKIT-SENTINEL-GATE v1 >>>
   # El sentinel es la unica condicion de armado (REEMPLAZO a los clasificadores
   # is_engineering_task / is_trivial_task del vendor, retirados en la Task 10.1
@@ -2425,9 +2469,18 @@ start_harness() {
     if [ "$PHASE" = "prompt" ] && [ -f "$STATE_PATH" ] \
        && [ -n "$prompt_text" ] \
        && ! parece_notificacion_laxa "$prompt_text"; then
-      adv_limpiar_zona   # 20.6: fin de la ejecucion sin Stop — su zona se va con su estado
-      rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
-      podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
+      if tarea_rancia; then
+        adv_limpiar_zona   # 20.6: fin de la ejecucion sin Stop — su zona se va con su estado
+        rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true  # A4-c2 desarme
+        podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
+      else
+        # 23.17 keep-alive: un prompt sin token con tarea FRESCA ya no
+        # desarma — cubre el mensaje a media tarea y la respuesta a un PAUSED
+        # (el contrato deja de decir que esa respuesta apaga el gate). El
+        # touch refresca el reloj de inactividad; el Stop de la escotilla
+        # PAUSED ya conservaba el estado, asi que no hay rama para ella.
+        touch "$STATE_PATH" 2>/dev/null || true
+      fi
     fi
     # >>> SAIKIT-STANDING-RULES v1 >>>
     # Task 10.6: la fase session sin sentinel salia en silencio; ahora deja las

@@ -58,7 +58,7 @@ crear estado ni bloquear nada.
    en primera línea con el marco `<agent-message from="...">`…`</agent-message>`,
    fixture `tests/fixtures/23.13-reporte-devuelto.json`). Solo la forma
    estricta saltea el gate; una mención humana del marco en medio del texto
-   arma igual, y un reporte sin token tampoco desarma un turno armado.
+   arma igual, y un reporte sin token tampoco desarma un turno armado. Desde la 23.17, un prompt sin token con tarea armada FRESCA ya no desarma (keep-alive hasta el recibo o el presupuesto; `-saikit:off` apaga a mano; la tarea RANCIA —sin actividad mas alla del tope medido— desarma como antes).
 4. **Nunca se prueba contra el estado real.** Todo test corre contra un `HOME`
    y un directorio de hooks aislados.
 5. **La identidad del archivo se declara en el archivo.** Un marcador propio
