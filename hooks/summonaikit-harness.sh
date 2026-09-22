@@ -1220,6 +1220,9 @@ json_muse_tool_response_raw() {
   fi
   _MUSE_TR_RAW="$(json_top_level_string tool_response)"
   _MUSE_TR_RAW_SET=1
+  # 23.11(a), costura de medicion: con SAIKIT_CUENTA_TR se registra cada
+  # lectura REAL de tool_response (la rama con cache no escribe). Solo tests.
+  if [ -n "${SAIKIT_CUENTA_TR:-}" ]; then printf '.\n' >> "$SAIKIT_CUENTA_TR" 2>/dev/null || true; fi
   printf '%s' "$_MUSE_TR_RAW"
 }
 
@@ -1992,6 +1995,10 @@ saikit_muse_pending_take() {
 
 saikit_muse_role_event() {
   unset _MUSE_TR_RAW _MUSE_TR_RAW_SET MUSE_REVISION_ACREDITADA
+  # 23.11(a): la cache de tool_response se ceba en ESTE shell — los usos via
+  # $(...) heredan el valor, pero lo que asignan adentro no vuelve (por eso
+  # cada clave re-leia el campo: dos lecturas por evento).
+  json_muse_tool_response_raw > /dev/null
   case "$tool_name" in
     subagent_spawn)
       _st="$(json_muse_first_status)"
