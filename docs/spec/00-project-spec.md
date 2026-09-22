@@ -64,6 +64,22 @@ crear estado ni bloquear nada.
 5. **La identidad del archivo se declara en el archivo.** Un marcador propio
    permite distinguir "esto es nuestro" de "esto es del vendor" sin depender del
    hash del archivo entero, que cambia con cada edición legítima.
+6. **Toda reescritura de `harness-state.env` corre bajo el candado de estado
+   (23.10).** Dos eventos simultaneos de una sesion (dos `SubagentStart`, un
+   `Stop` contra un prompt) reescribian el archivo a la vez y se perdian campos
+   o hijos registrados (medido: dos starts concurrentes pierden uno 20/20 sin
+   candado, 0/20 con el). El candado es un directorio bajo el propio `STATE_DIR`
+   (`mkdir` es atomico en POSIX; macOS no trae `flock`), reentrante por proceso,
+   con espera acotada (`SAIKIT_LOCK_WAIT_S`, default 10 s) y fail-open: si no se
+   consigue a tiempo, se sigue sin candado y se deja una linea en el log — el
+   hook nunca cuelga al host. Un candado huerfano se roba en vez de
+   esperarse, y el robo exige dueno muerto (`kill -0`): la antiguedad sola
+   nunca roba — un dueno vivo conserva el candado por mas que retenga
+   (`SAIKIT_LOCK_STALE_S` queda sin efecto). Cada adquisicion publica un
+   token unico; el robo se serializa con un marcador atomico y revalida el
+   holder antes de borrar, y el unlock solo borra si el token sigue siendo
+   el propio. La instantanea y las limpiezas terminales del `Stop` gate
+   tambien corren bajo el candado.
 
 **Postura del Stop gate ante canales de texto no observados (Task 11.4,
 2026-08-16).** El `stop_gate` juzga el recibo por dos canales de texto:
