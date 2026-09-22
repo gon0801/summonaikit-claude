@@ -101,3 +101,16 @@ Rama `entrega-sin-sello-d-kit-a` desde `origin/master` (86c5988). Trabajo del
 `bash tests/test_entrega_contract.sh`, `tests/test_saikit_merge.sh`,
 `tests/test_runner_guards.sh` y `tests/golden-harness.sh --check` en rc 0.
 La batería completa corre una vez en CI sobre este SHA.
+
+## Ronda de CI (mismo PR)
+
+- Primera corrida del CI: suite 2/8 en rojo por DOS causas, ambas del lado de
+  esta rama: (1) el pin de `tools/MANIFEST.sha256` quedó viejo al tocar
+  `saikit-merge.sh` (test_pretool_merge lo canda: "pin desactualizado"); (2)
+  en un runner cargado, la comparación etime-vs-edad del lock leyó "reciclado"
+  un dueño VIVO por jitter de ~1 s y el contendor recuperó un lock que el
+  banco esperaba bloqueado. Arreglo: margen de 5 s en esa comparación (el caso
+  real de pid reciclado lleva el lock huérfano años; el margen no lo toca) y
+  pin regenerado. `test_saikit_merge`, `test_pretool_merge` y
+  `test_runner_guards` en rc 0 local tras el ajuste; el CI de este mismo PR
+  re-mide todo.

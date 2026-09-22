@@ -264,7 +264,12 @@ if [ "$CONFIRMADO" = 1 ]; then
             else
               e_lock="$(edad_inicio_iso "$lock_inicio")" || e_lock=""
               e_proc="$(segundos_de_vida "$lock_pid")" || e_proc=""
-              if [ -n "$e_lock" ] && [ -n "$e_proc" ] && [ "$e_proc" -lt "$e_lock" ]; then
+              # Margen de 5 s: en una maquina cargada, la edad del lock y el
+              # etime del dueno difieren en segundos de puro redondeo; sin
+              # margen un dueno vivo se leeria reciclado (medido en CI). El
+              # caso real de pid reciclado lleva el lock huerfano desde hace
+              # mucho mas que el margen.
+              if [ -n "$e_lock" ] && [ -n "$e_proc" ] && [ $((e_lock - e_proc)) -gt 5 ]; then
                 lock_clase="reciclado"
               else
                 lock_clase="vivo"

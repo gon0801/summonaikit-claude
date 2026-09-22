@@ -97,7 +97,7 @@
   caso: lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea
     ok: lock_dos_worktrees_del_mismo_clone_el_segundo_no_merguea
   caso: mutante_lock_path_sin_canonicalizar_se_pone_rojo
-      FAIL: reporta el lock COMPARTIDO (common-dir): no contiene [/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-1G7lwS/logical/work/.git/saikit-merge.lock]
+      FAIL: reporta el lock COMPARTIDO (common-dir): no contiene [/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-iMPhN7/logical/work/.git/saikit-merge.lock]
     ok: mutante sin canon queda rojo (costura symlink)
     ok: mutante_lock_path_sin_canonicalizar_se_pone_rojo
   caso: lock_recupera_dueno_local_muerto
@@ -125,7 +125,7 @@
       FAIL: reporta LISTO: no contiene [LISTO:]
       FAIL: mergeo sin --confirmado
     mutacion confirmado_default_si atrapada por c_feliz
-      FAIL: pinea el head: no contiene [--match-head-commit 4836bfa979683b0ba47445c7be113c972c6730ec]
+      FAIL: pinea el head: no contiene [--match-head-commit d7b44016dde918b936a3e311dccb7a437232de38]
     mutacion sin_match_head_commit atrapada por c_confirmado
       FAIL: razon sin checks: no contiene [NO-MERGE: sin checks]
     mutacion sin_checks_n_opcional atrapada por c_sin_checks
@@ -161,9 +161,9 @@
       FAIL: razon sin trailer: no contiene [NO-MERGE: sin trailer]
       FAIL: mergeo un revert de un commit sin trailer
     mutacion revert_trailer_opcional atrapada por c_revert_trailer
-To /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-8bCmB6/logical/origin.git
+To /var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-1sfPZw/logical/origin.git
  ! [rejected]        revert/task -> revert/task (non-fast-forward)
-error: failed to push some refs to '/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-8bCmB6/logical/origin.git'
+error: failed to push some refs to '/var/folders/hp/sc_3c6qs7nvdswl_x3w5sdbr0000gn/T//saikit-merge-link-1sfPZw/logical/origin.git'
 hint: Updates were rejected because the tip of your current branch is behind
 hint: its remote counterpart. If you want to integrate the remote changes,
 hint: use 'git pull' before pushing again.
@@ -187,13 +187,13 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
       FAIL: merge ok: no contiene [MERGE-OK:]
     mutacion sin_unset_color_force atrapada por c_ansi_force
       FAIL: la forma emitida fallo con scripts 100644 (rc=126): tests/test_saikit_merge.sh: line 360: tools/saikit-merge.sh: Permission denied
-      FAIL: argv capturado: la forma emitida llega al merge: no contiene [pr merge 7 --squash --match-head-commit b7d2c7be06ef7080a8b167f7d716913874f3b163]
+      FAIL: argv capturado: la forma emitida llega al merge: no contiene [pr merge 7 --squash --match-head-commit ff85e0ce25b30339034a33756fa297e959746eb0]
       FAIL: la forma emitida no completo el flujo del merge
     mutacion emision_listo_sin_bash atrapada por c_listo_emision
       FAIL: A no tomo el lock; el caso no mide contencion
     mutacion lock_sin_guard atrapada por c_lock_exclusion
       FAIL: el segundo proceso deberia bloquearse con 3, dio 0: BORRADO-OK: rama remota feat/task borrada (paso aparte)
-MERGE-OK: f000000000000000000000000000000000000000 (registrado en .saikit/veredictos/09b33e9eb6795179a309fa7b5bdc180f87e8e9d7.merge)
+MERGE-OK: f000000000000000000000000000000000000000 (registrado en .saikit/veredictos/5646f11bc0f35867ad535525a786f990cdcd5215.merge)
       FAIL: reporta el lock: no contiene [saikit-merge.lock]
       FAIL: muestra como liberarlo: no contiene [--liberar-lock]
       FAIL: el segundo proceso llamo merge pese al lock del primero
