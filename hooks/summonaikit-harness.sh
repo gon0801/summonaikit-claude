@@ -2282,6 +2282,11 @@ SAIKIT_GROK_WAKE_CONTENIDO_RE='Background subagent'
 # caso_g1_reporte_devuelto_con_token_no_arma y por
 # caso_g1_mencion_humana_agent_message_sigue_armando.
 SAIKIT_AGENT_MESSAGE_INICIO_RE='^Another Claude session sent a message:$'
+# Sin anclar: la red laxa la exige en CUALQUIER posicion (r2 CodeRabbit PR #351:
+# un humano que citara apertura+cierre sin el anuncio heredaba el estado armado).
+# Sigue sin pedir orden posicional: no hay variante medida con el anuncio
+# desplazado y el idioma del hook son greps, no awk de posiciones.
+SAIKIT_AGENT_MESSAGE_ANUNCIO_RE='Another Claude session sent a message:'
 SAIKIT_AGENT_MESSAGE_APERTURA_RE='<agent-message from="'
 SAIKIT_AGENT_MESSAGE_CIERRE_RE='</agent-message>'
 
@@ -2310,7 +2315,8 @@ parece_notificacion_laxa() {
   # turno armado a mitad de camino (A4 por otra puerta, el reverso del caso
   # que arma). La estricta de start_harness ya saltea el armado; esta red solo
   # evita el desarme. Atado por caso_g1_reporte_devuelto_sin_token_no_desarma.
-  if printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_APERTURA_RE" \
+  if printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_ANUNCIO_RE" \
+     && printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_APERTURA_RE" \
      && printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_CIERRE_RE"; then
     return 0
   fi
