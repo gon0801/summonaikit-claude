@@ -29,6 +29,54 @@ el bullet de merge. Solo #264 y #271 conservan hora de deploy respaldada por
 los nombres de backup del instalador. El deploy NO se repitió: cada entrada
 describe el deploy original.
 
+## 2026-09-22 — PR #354 (23.11 D-hook: cebado de caché tool_response; casos rejected/stop-tope) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `1454770fe8b63c501ccbf9b192d23f15cea6d4cc`, 2026-09-22T18:39:22Z, [PR #354](https://github.com/gon0801/summonaikit-claude/pull/354). El merge toca `hooks/summonaikit-harness.sh` (hook `084107a1…`); push run 35768611933 success sobre el merge.
+- **Deploy:** desde worktree limpio en `origin/master` (`~/dev/wt-f23-saikit-deploy`, 1454770, sucio=no, coincide_origin_master=si), las cuatro copias dieron REPARADO (13:18 PDT del 2026-09-22, hora medida en vivo). Backups del instalador: claude `summonaikit-harness.sh.nuestro.20260922-131840.bak`, grok `summonaikit-harness.sh.nuestro.20260922-131840.bak`, dsh `summonaikit-harness.sh.nuestro.20260922-131841.bak`, codex `summonaikit-harness.sh.nuestro.20260922-131841.bak`. Incidente declarado: con el `bash` del sistema (3.2) el instalador rechazó la fuente (`bash -n` falla en el texto del contrato); con `/opt/homebrew/bin` primero en el PATH (bash 5.3) instaló sin errores. Muse: REGISTRADO (5 eventos) con backup `settings.json.muse.20260922-131842.bak`; catálogo `unknown` declarado por el instalador (la aceptación real la mide el lead).
+- **Verificación:** `install-hook.sh --check` dio `veredicto=ok` (las cuatro copias al día, muse reusa-claude, registros ok); `check-hook-registration.sh` rc 0 sin avisos. Fuente y cuatro copias coinciden en `084107a10e4b1251948ea5a4a5236a1ef3f70eb15877828c78a53507dbf51d1f`.
+- **Operador:** cierre de stream 1, fase 23 (sesión del implementer por el lead).
+
+## 2026-09-22 — PR #353 (23.10 candado de estado) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `e0b115f2d5ff317384163f19521dabc5708e13dc`, 2026-09-22T14:27:05Z, [PR #353](https://github.com/gon0801/summonaikit-claude/pull/353). El merge toca `hooks/summonaikit-harness.sh` (hook `aa12acfa…`); push run 35740405511 success sobre el merge.
+- **Deploy:** post-merge sin registro sobreviviente; el deploy ocurrió (las copias vivas al inicio del cierre estaban en `aa12acfa` == hook de este merge, 07:39–07:40 PDT del 2026-09-22 según los backups del instalador). Backups: claude `summonaikit-harness.sh.nuestro.20260922-073942.bak`, codex `summonaikit-harness.sh.nuestro.20260922-074005.bak`, grok `summonaikit-harness.sh.nuestro.20260922-074001.bak`, dsh `summonaikit-harness.sh.nuestro.20260922-074002.bak`, muse `settings.json.muse.20260922-074006.bak`.
+
+## 2026-09-21 — PR #352 (23.17 tarea armada sigue viva) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `a216b1ca8fe927da0247b65a4e6b881c2734df12`, 2026-09-22T05:42:39Z, [PR #352](https://github.com/gon0801/summonaikit-claude/pull/352). El merge toca `hooks/summonaikit-harness.sh` (hook `8b5e418b…`); checks del PR en verde (el push run 35691773724 sobre el merge quedó failure, superado por el verde de los merges posteriores).
+- **Deploy:** post-merge sin registro sobreviviente; el deploy ocurrió (la serie de backups avanza 22:49–22:52 PDT del 2026-09-21, posterior al merge). Backups: claude `summonaikit-harness.sh.nuestro.20260921-224919.bak`, codex `summonaikit-harness.sh.nuestro.20260921-225230.bak`, grok `summonaikit-harness.sh.nuestro.20260921-225136.bak`, dsh `summonaikit-harness.sh.nuestro.20260921-225226.bak`.
+
+## 2026-09-21 — PR #351 (23.13 reporte devuelto no arma) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `ed926fe1fdbbd9c24d3b949512fca6f0bc4276fe`, 2026-09-22T02:05:53Z, [PR #351](https://github.com/gon0801/summonaikit-claude/pull/351). El merge toca `hooks/summonaikit-harness.sh` (hook `5882bfff…`); push run 35678212637 success sobre el merge.
+- **Deploy:** post-merge sin registro sobreviviente; el deploy ocurrió (backups 19:09–19:11 PDT del 2026-09-21, posteriores al merge de las 19:05 PDT). Backups: claude `summonaikit-harness.sh.nuestro.20260921-190941.bak`, codex `summonaikit-harness.sh.nuestro.20260921-191119.bak`, grok `summonaikit-harness.sh.nuestro.20260921-191038.bak`, dsh `summonaikit-harness.sh.nuestro.20260921-191108.bak`, muse `settings.json.muse.20260921-191148.bak`.
+
+## 2026-09-21 — PR #347 (post-B/C hardening block) — hooks NO-OP
+
+- **Merge:** `6464ffd75dfb0a97bb4b96fa60cc62162a77f60a`, [PR #347](https://github.com/gon0801/summonaikit-claude/pull/347). Docs-only: el merge no toca `hooks/summonaikit-harness.sh` (verificado por diff `6464ffd^..6464ffd`); push run 35669616943 success. Sin cambio en las copias vivas.
+
+## 2026-09-21 — PR #344 (instrucciones de revisión y autorización) — hooks NO-OP
+
+- **Merge:** `1384046393f2ec3a8e96b1ad8c396053ce2a006b`, [PR #344](https://github.com/gon0801/summonaikit-claude/pull/344). Docs-only: el merge no toca `hooks/summonaikit-harness.sh` (verificado por diff `1384046^..1384046`); push run 35669602106 success. Sin cambio en las copias vivas.
+
+## 2026-09-21 — PR #349 (23.16 runner con punto-y-coma) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `b14f0705a229b6bb9bb6cf168b01e8505dfd646e`, 2026-09-21T23:48:23Z, [PR #349](https://github.com/gon0801/summonaikit-claude/pull/349). El merge toca `hooks/summonaikit-harness.sh` (hook `dbfff2c4…`); push run 35669217715 success sobre el merge.
+- **Deploy:** post-merge sin registro sobreviviente; el deploy ocurrió (backups 16:51–16:52 PDT del 2026-09-21, posteriores al merge de las 16:48 PDT). Backups: claude `summonaikit-harness.sh.nuestro.20260921-165110.bak`, codex `summonaikit-harness.sh.nuestro.20260921-165219.bak`, grok `summonaikit-harness.sh.nuestro.20260921-165148.bak`, dsh `summonaikit-harness.sh.nuestro.20260921-165216.bak`, muse `settings.json.muse.20260921-165256.bak`.
+
+## 2026-09-21 — PR #343 (plan apunta al runbook) — hooks NO-OP
+
+- **Merge:** `315410352db145c704461af95e46d6fd85b2a68f`, [PR #343](https://github.com/gon0801/summonaikit-claude/pull/343). Docs-only: el merge no toca `hooks/summonaikit-harness.sh` (verificado por diff `3154103^..3154103`); push run 35656906423 success. Sin cambio en las copias vivas.
+
+## 2026-09-21 — PR #348 (23.15 Stop con saltos reales; 23.14 blocked) — deploy ACTUALIZA las cuatro copias
+
+- **Merge:** `7b420b13ef1af6e482e7306c3b6dba4d54a6e1a4`, 2026-09-21T20:16:51Z, [PR #348](https://github.com/gon0801/summonaikit-claude/pull/348). El merge toca `hooks/summonaikit-harness.sh` (hook `2c0cd6c0…`); push run 35650082175 success sobre el merge.
+- **Deploy:** post-merge sin registro sobreviviente; el deploy ocurrió (backups 13:19–13:21 PDT del 2026-09-21, posteriores al merge de las 13:16 PDT). Backups: claude `summonaikit-harness.sh.nuestro.20260921-131919.bak`, codex `summonaikit-harness.sh.nuestro.20260921-132112.bak`, grok `summonaikit-harness.sh.nuestro.20260921-132041.bak`, dsh `summonaikit-harness.sh.nuestro.20260921-132109.bak`.
+
+## 2026-09-21 — PR #346 (cierre e instalación verificada del Bloque A) — hooks NO-OP
+
+- **Merge:** `8aae4bdc94f477fa4f6e63e8201c209d7eda47c5`, 2026-09-21T03:55:37Z, [PR #346](https://github.com/gon0801/summonaikit-claude/pull/346). Docs-only: el merge no toca `hooks/summonaikit-harness.sh` (verificado por diff `8aae4bd^..8aae4bd`); push run 35559168424 success. Sin cambio en las copias vivas.
+
 ## 2026-09-21 — PR #345 (Bloque A: entrega sin sello) — deploy ACTUALIZA las cuatro copias y perfiles
 
 - **Merge:** `81aa8ff301f666d94bb1ce63177d3efb762f7718`,

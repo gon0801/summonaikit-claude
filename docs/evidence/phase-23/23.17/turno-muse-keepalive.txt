@@ -1,0 +1,35 @@
+Task 23.17 — turno vivo en Muse (keep-alive), 2026-09-22.
+Muse 1.3.0-R3401.1, modelo meta por defecto, workspace descartable
+/private/tmp/f23-2317-muse (README + tests/run.sh), hook desplegado desde
+origin/master 1454770 (copia viva 084107a1, verificado con --check).
+Sesiones: armar/cierre 26ae47f2-139d-482a-b3e1-3a78630813ee,
+keep-alive c99cdc3c-e20a-453c-9fe9-5b6dc155e502. Comando:
+muse-bin-1.3.0-R3401.1 exec --yolo [--max-model-steps N] --json
+--session-id <uuid> --prompt-file <p>.
+
+1. Armar: "-saikit Crea suma.py ..." -> estado armado con
+   task_hash=1989946592, implemented=1,
+   agents_seen=implementer,verifier,reviewer, lane=full. Cierre limpio a
+   la primera (EXIT=0): recibo en prosa con Verify (python3 test_suma.py
+   OK exit 0, bash tests/run.sh OK exit 0), commit, estado retirado. Sin
+   bloqueos de Stop observados; la linea VERIFIED BY SUBAGENT no aparece
+   en el log (acreditacion por espera, agents_seen completo).
+2. Siguiente mensaje sin token tras cierre ("hola, solo confirma con la
+   palabra ok") -> "ok", sin armar (sin estado). Libre: OK.
+3. Keep-alive: sesion nueva, "-saikit Crea resta.py ..." con
+   --max-model-steps 6 -> "model did not reach a terminal state within 6
+   step(s)", estado armado task_hash=4261753294, implemented=1,
+   verified=0, agents_seen=implementer (13:49:51 PDT).
+4. Mensaje intermedio SIN token ("continua donde quedaste", mismo
+   session-id, sin tope): el estado SIGUE con task_hash=4261753294
+   (mtime 13:49->13:50, crece al avanzar) — con A4-c2 se habria
+   desarmado. Sigue viva: OK. La corrida cerro con ceremonia completa
+   (verifier PASS global, reviewer LGTM sobre SHA bc47fd8, EXIT=0,
+   estado retirado).
+5. Siguiente mensaje sin token ("gracias, eso es todo") -> EXIT=0, sin
+   estado. Libre: OK.
+
+Vivo en Claude: BLOQUEADO por cuota ("You've hit your weekly limit,
+resets Sep 23 at 10pm", EXIT=1 en -p y TUI). Sin armar nada: ningun
+estado parcial. Reanudar tras el reset con el mismo protocolo en un
+workspace descartable.
