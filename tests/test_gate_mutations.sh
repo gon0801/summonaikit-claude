@@ -112,6 +112,7 @@ G2|cmdpos_no_se_aplica|las llamadas a TEST_RUNNER_CMD_RE se neutralizan y la pos
 G1|muse_tope_borde_ge|el tope de muse compara con -ge y una salida de 16384 bytes exactos, que Muse si acepta, cae al contrato minimo
 G1|muse_recorte_sin_ancla|el recorte de muse vuelve a cortar en la primera aparicion del marcador y un titulo de receta con ese texto borra la regla de delegacion
 G1|muse_minimo_sin_aviso|el contrato minimo de muse vuelve a descartar el aviso de revision, que ya se consumio y se pierde
+G1|muse_stop_adosa_contrato|el bloqueo del Stop adosa el contrato tambien en muse (como en grok) y la salida pasa de 2899 a 16221 bytes, al borde del corte de Muse
 G1|muse_contrato_sin_recorte|el contrato de muse vuelve a mandar las secciones genericas completas y, con el recetario real, solo llega el contrato minimo en vez del normal
 G1|muse_contrato_sin_tope|el tope duro de muse se quita y un contrato que no cabe en 16384 bytes llega entero, y Muse lo descarta en silencio
 G1|muse_contrato_sin_host_ciego|el contrato vuelve a nombrar solo a zcode como host ciego y el modelo de Muse no sabe que VERIFIED BY SUBAGENT es la via para acreditar lo que corrio su verifier
@@ -190,6 +191,7 @@ G3|muse_rol_de_subagent_type|en muse el rol se vuelve a leer de subagent_type y 
 G3|muse_rol_cae_a_subagent_type|sin role el rol se toma de subagent_type y se acredita un perfil que Muse no lanzo
 G3|muse_revision_al_despachar|el aviso de revision vuelve a marcar la revision al despachar al reviewer, aunque el despacho no termine
 G3|muse_revision_sin_wait|el wait ready del reviewer deja de marcar la revision y el aviso de codigo editado despues de revisar se apaga en muse
+G3|muse_tr_sin_cebado|el cebado de la cache de tool_response se quita y cada clave vuelve a leer el campo completo (dos lecturas por evento)
 G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
 G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 G2|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G2 invertido se pone rojo
@@ -550,6 +552,7 @@ mut_cmdpos_no_se_aplica()  { sed 's/grep -Eiq "\$TEST_RUNNER_CMD_RE"/grep -Eiq "
 mut_muse_tope_borde_ge() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \]/if [ "$_mt_bytes" -ge "$MUSE_HOOK_STDOUT_MAX" ]/'; }
 mut_muse_recorte_sin_ancla() { sed "s/cab=\"\${1%%\$'\\\\n\\\\n'\"Capability-first contract (\"\*}\"/cab=\"\${1%%\"Capability-first contract (\"*}\"/"; }
 mut_muse_minimo_sin_aviso() { sed 's|/^SAIKIT REVIEW NOTICE:/ \|\| ||'; }
+mut_muse_stop_adosa_contrato() { sed '/viaja ADOSADO/,+10s/if \[ "\$TARGET" = "grok" \]; then/if [ "$TARGET" = "grok" ] || [ "$TARGET" = "muse" ]; then/'; }
 mut_muse_contrato_sin_host_ciego() { sed 's/(zcode and Muse today; kimi once measured)/(zcode today; kimi once measured)/'; }
 mut_muse_contrato_sin_recorte() { sed '/saikit-23.8-muse-contrato-corto/,+2s/_hc="$(muse_contrato_corto "$_hc")"/_hc="$_hc"/'; }
 mut_muse_contrato_sin_tope() { sed 's/if \[ "$_mt_bytes" -gt "$MUSE_HOOK_STDOUT_MAX" \] 2>\/dev\/null; then/if false; then/'; }
@@ -912,6 +915,9 @@ mut_muse_revision_al_despachar() {
 }
 mut_muse_revision_sin_wait() {
   sed 's/\[ "\$_role" != "reviewer" \] || MUSE_REVISION_ACREDITADA=1/:/'
+}
+mut_muse_tr_sin_cebado() {
+  sed '/^  json_muse_tool_response_raw > \/dev\/null$/d'
 }
 mut_muse_pretool_trata_bash_input() {
   sed 's/!= "bash" \]; then/!= "bash" ] \&\& [ "$_pt_tool" != "bash_input" ]; then/'
