@@ -364,7 +364,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_muse_contrato_marcadores_en_receta caso_g1_muse_contrato_borde_16384 caso_g1_muse_contrato_minimo_conserva_aviso caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_con_tarea_fresca_no_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_reporte_devuelto_con_token_no_arma caso_g1_mencion_humana_agent_message_sigue_armando caso_g1_reporte_devuelto_sin_token_no_desarma caso_g1_marcas_sin_anuncio_si_desarma caso_g1_mensaje_sin_token_a_media_tarea_no_desarma caso_g1_respuesta_a_paused_no_desarma caso_g1_cierre_limpio_siguiente_sin_token_queda_libre caso_g1_saikit_off_desarma caso_g1_tarea_rancia_sin_token_si_desarma caso_g1_notificacion_con_tarea_armada_no_cambia caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_no_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn caso_g1_muse_contrato_se_declara_ciego"
+CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_muse_contrato_marcadores_en_receta caso_g1_muse_contrato_borde_16384 caso_g1_muse_contrato_minimo_conserva_aviso caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_con_tarea_fresca_no_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_reporte_devuelto_con_token_no_arma caso_g1_mencion_humana_agent_message_sigue_armando caso_g1_reporte_devuelto_sin_token_no_desarma caso_g1_marcas_sin_anuncio_si_desarma caso_g1_mensaje_sin_token_a_media_tarea_no_desarma caso_g1_respuesta_a_paused_no_desarma caso_g1_cierre_limpio_siguiente_sin_token_queda_libre caso_g1_saikit_off_desarma caso_g1_tarea_rancia_sin_token_si_desarma caso_g1_notificacion_con_tarea_armada_no_cambia caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_no_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn caso_g1_muse_contrato_se_declara_ciego caso_g1_candado_escrituras_concurrentes_no_pierden caso_g1_candado_huerfano_acotado"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -797,6 +797,59 @@ caso_g1_dos_sesiones_no_comparten_estado() {
          "$(grep '^cycle=' "$ruta_A" | tail -n 1 | cut -d= -f2-)" "0"
   # Restaurar la sesion por defecto para los casos siguientes.
   LAB_SESSION_ID=""
+}
+
+# 23.10 — dos SubagentStart de codex concurrentes (misma sesion, mismo estado)
+# registraban un solo hijo con master: el segundo write_state pisaba al
+# primero (lectura rancia + truncado con `>`). Con el candado, quedan los dos.
+# Tres rondas: en master cada ronda pierde uno (medido 20/20 local), asi la
+# mutacion que quita el candado no escapa por un interleaving fortuito.
+caso_g1_candado_escrituras_concurrentes_no_pierden() {
+  _cx_backup="$LAB_ESTADO_PATH"
+  LAB_ESTADO_PATH="$(printf '%s' "$LAB_ESTADO_PATH" | sed 's|/state/[^/]*/|/state/codex/|')"
+  _c10_ronda=1
+  while [ "$_c10_ronda" -le 3 ]; do
+    lab_limpiar_estado
+    lab_sembrar 123456 0 0 0 ""
+    lab_run_bg "c10a$_c10_ronda" tool codex "$(lab_payload_codex_subagent_start "ag-c10-$_c10_ronda-a" 'implementer')"
+    lab_run_bg "c10b$_c10_ronda" tool codex "$(lab_payload_codex_subagent_start "ag-c10-$_c10_ronda-b" 'verifier')"
+    lab_wait_bg
+    _kids="$(grep '^codex_children=' "$LAB_ESTADO_PATH" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    case ",$_kids," in *"ag-c10-$_c10_ronda-a"*) ;; *) _mal "ronda $_c10_ronda: el Start concurrente A se perdio (hijos: [$_kids])" ;; esac
+    case ",$_kids," in *"ag-c10-$_c10_ronda-b"*) ;; *) _mal "ronda $_c10_ronda: el Start concurrente B se perdio (hijos: [$_kids])" ;; esac
+    _c10_ronda=$((_c10_ronda + 1))
+  done
+  LAB_ESTADO_PATH="$_cx_backup"
+}
+
+# 23.10 — un candado huerfano no bloquea mas que la espera acotada: (a) con
+# dueno muerto se roba y la escritura completa, sin dejar el candado puesto;
+# (b) con dueno VIVO se espera el tope (SAIKIT_LOCK_WAIT_S) y se sigue sin
+# candado (fail-open): la escritura completa y el tiempo queda acotado.
+caso_g1_candado_huerfano_acotado() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit semilla huerfano')"
+  _hu_dir="$(dirname "$LAB_ESTADO_PATH")"
+  # (a) dueno muerto: pid de un subshell ya cosechado.
+  (exit 0) & _hu_muerto="$!"
+  wait "$_hu_muerto" 2>/dev/null || true
+  mkdir -p "$_hu_dir/.harness-state.lock"
+  printf '%s %s' "$_hu_muerto" "$(date +%s)" > "$_hu_dir/.harness-state.lock/holder"
+  lab_run prompt claude "$(lab_payload_prompt '-saikit tras huerfano muerto')"
+  [ -f "$LAB_ESTADO_PATH" ] || _mal "tras huerfano muerto el estado no se escribio"
+  if [ -d "$_hu_dir/.harness-state.lock" ]; then
+    _mal "tras robar el huerfano el candado quedo puesto"
+  fi
+  # (b) dueno vivo: el propio pid del banco, siempre vivo durante el caso.
+  mkdir -p "$_hu_dir/.harness-state.lock"
+  printf '%s %s' "$$" "$(date +%s)" > "$_hu_dir/.harness-state.lock/holder"
+  _hu_t0="$(date +%s)"
+  SAIKIT_LOCK_WAIT_S=2 SAIKIT_LOCK_STALE_S=600 lab_run prompt claude "$(lab_payload_prompt '-saikit tras huerfano vivo')"
+  _hu_t1="$(date +%s)"
+  [ -f "$LAB_ESTADO_PATH" ] || _mal "con candado vivo la escritura no completo (fail-open roto)"
+  _hu_dt=$((_hu_t1 - _hu_t0))
+  if [ "$_hu_dt" -lt 1 ]; then _mal "con candado vivo no espero (robo un candado ajeno vivo): ${_hu_dt}s"; fi
+  if [ "$_hu_dt" -gt 12 ]; then _mal "con candado vivo bloqueo mas que la espera acotada: ${_hu_dt}s"; fi
+  rm -rf "$_hu_dir/.harness-state.lock"
 }
 
 # DEFECTO A4 (clausula 2) — cerrado por la Task 3.4. Antes un prompt sin sentinel

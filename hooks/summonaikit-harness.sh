@@ -1609,7 +1609,87 @@ rn_take_pending() {
 # sobreviviente (CodeRabbit Major #64-b). La epoca viaja en ISO UTC porque es
 # la forma que el arnes de salida dorada ya normaliza (<TS>): en segundos la
 # linea base dejaria de ser reproducible entre corridas.
+# 23.10: candado portable de estado por sesion. macOS no trae flock, asi que
+# el candado es un directorio (mkdir es atomico en POSIX) bajo el propio
+# STATE_DIR: vive y muere con la sesion y los barridos existentes se lo llevan
+# sin codigo nuevo. Espera acotada + fail-open: el hook JAMAS cuelga al host
+# (Muse corta un hook a los 30 s): si el candado no se consigue dentro de
+# SAIKIT_LOCK_WAIT_S (default 10), se sigue SIN candado y se deja una linea en
+# el log. Un candado huerfano (dueno muerto, o mas viejo que
+# SAIKIT_LOCK_STALE_S, default 30) se roba en vez de esperarse. Reentrante por
+# proceso: las envolturas que leen y luego llaman a write_state toman el mismo
+# candado sin bloquearse (contador _SAIKIT_STATE_LOCK_DEPTH).
+saikit_state_lock() {
+  if [ "${_SAIKIT_STATE_LOCK_DEPTH:-0}" -gt 0 ] 2>/dev/null; then
+    _SAIKIT_STATE_LOCK_DEPTH=$((_SAIKIT_STATE_LOCK_DEPTH + 1))
+    return 0
+  fi
+  [ -n "${STATE_DIR:-}" ] || return 0
+  _saikit_lock_dir="$STATE_DIR/.harness-state.lock"
+  _saikit_lock_wait="${SAIKIT_LOCK_WAIT_S:-10}"
+  _saikit_lock_stale="${SAIKIT_LOCK_STALE_S:-30}"
+  case "$_saikit_lock_wait" in ''|*[!0-9]*) _saikit_lock_wait=10 ;; esac
+  case "$_saikit_lock_stale" in ''|*[!0-9]*) _saikit_lock_stale=30 ;; esac
+  mkdir -p "$STATE_DIR" 2>/dev/null || true
+  _saikit_lock_start="$(date +%s 2>/dev/null || printf '0')"
+  case "$_saikit_lock_start" in ''|*[!0-9]*) _saikit_lock_start=0 ;; esac
+  _saikit_lock_deadline=$((_saikit_lock_start + _saikit_lock_wait))
+  while :; do
+    if mkdir "$_saikit_lock_dir" 2>/dev/null; then
+      if [ -d "$_saikit_lock_dir" ]; then
+        printf '%s %s' "$$" "$(date +%s 2>/dev/null || printf '0')" > "$_saikit_lock_dir/holder" 2>/dev/null || true
+      fi
+      _SAIKIT_STATE_LOCK_DEPTH=1
+      return 0
+    fi
+    _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
+    _saikit_lock_pid="${_saikit_lock_holder%% *}"
+    _saikit_lock_since="${_saikit_lock_holder##* }"
+    case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
+    case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
+    if [ -z "$_saikit_lock_holder" ]; then
+      sleep 2
+      _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
+      _saikit_lock_pid="${_saikit_lock_holder%% *}"
+      _saikit_lock_since="${_saikit_lock_holder##* }"
+      case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
+      case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
+    fi
+    _saikit_lock_steal=0
+    if [ -n "$_saikit_lock_pid" ]; then
+      kill -0 "$_saikit_lock_pid" 2>/dev/null || _saikit_lock_steal=1
+    fi
+    _saikit_lock_now="$(date +%s 2>/dev/null || printf '0')"
+    case "$_saikit_lock_now" in ''|*[!0-9]*) _saikit_lock_now=0 ;; esac
+    if [ "$((_saikit_lock_now - _saikit_lock_since))" -gt "$_saikit_lock_stale" ] 2>/dev/null; then
+      _saikit_lock_steal=1
+    fi
+    if [ "$_saikit_lock_steal" = "1" ]; then
+      rm -rf "$_saikit_lock_dir" 2>/dev/null || true
+      continue
+    fi
+    if [ "$_saikit_lock_now" -ge "$_saikit_lock_deadline" ]; then
+      printf 'state-lock: espera agotada (%ss), se sigue sin candado\n' "$_saikit_lock_wait" >> "$LOG_PATH" 2>/dev/null || true
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+saikit_state_unlock() {
+  if [ "${_SAIKIT_STATE_LOCK_DEPTH:-0}" -gt 1 ] 2>/dev/null; then
+    _SAIKIT_STATE_LOCK_DEPTH=$((_SAIKIT_STATE_LOCK_DEPTH - 1))
+    return 0
+  fi
+  if [ "${_SAIKIT_STATE_LOCK_DEPTH:-0}" -eq 1 ] 2>/dev/null; then
+    _SAIKIT_STATE_LOCK_DEPTH=0
+    rm -rf "${_saikit_lock_dir:-$STATE_DIR/.harness-state.lock}" 2>/dev/null || true
+  fi
+  return 0
+}
+
 write_state() {
+  saikit_state_lock
   task_hash="$1"
   cycle="$2"
   implemented="$3"
@@ -1666,6 +1746,7 @@ write_state() {
     if [ -n "$_keep_cxs" ]; then printf 'codex_native_seen=%s\n' "$_keep_cxs"; fi
     if [ -n "$_keep_mp" ]; then printf 'muse_pending=%s\n' "$_keep_mp"; fi
   } > "$STATE_PATH" 2>/dev/null || true
+  saikit_state_unlock
 }
 
 # A7 (Bloque A): transferencias linked_* retiradas — el recibo de entrega
@@ -1683,6 +1764,7 @@ write_state() {
 # DESCONOCE si emite Stop — sin Stop = running = no acreditado). El rol viaja en el PROPIO evento (agent_type top-level): ni task_name,
 # ni prompt, ni prosa, ni ruta acreditan. Otros hosts intactos.
 saikit_codex_children_write() { # $1 = en curso, $2 = cerrados, $3 = flag nativo
+  saikit_state_lock
   _CODEX_CHILDREN_SET="$1"
   _CODEX_DONE_SET="$2"
   _CODEX_SEEN_SET="${3:-}"
@@ -1693,7 +1775,8 @@ saikit_codex_children_write() { # $1 = en curso, $2 = cerrados, $3 = flag nativo
     "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
     "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
   unset _CODEX_CHILDREN_SET _CODEX_DONE_SET _CODEX_SEEN_SET
-  return 0
+  saikit_state_unlock; return 0
+  saikit_state_unlock
 }
 
 saikit_codex_stop_huerfano() {
@@ -1702,6 +1785,7 @@ saikit_codex_stop_huerfano() {
 }
 
 saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
+  saikit_state_lock
 # de PRIMER nivel (21.2 r2, revision externa: ni subagent_type de tool_input ni
 # ningun otro canal de $subagent alimenta el rol nativo; el despacho no trae
 # agent_type de primer nivel, asi que no registra — R1).
@@ -1709,8 +1793,8 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
   cx_sid="$(json_top_level_string agent_id)"
   # Charset del id medido (UUID): sin comas ni dos puntos — la lista de estado
   # es texto plano separado por comas. Un id ajeno se ignora, no bloquea.
-  case "$cx_sid" in *[!A-Za-z0-9._-]*) return 0 ;; esac
-  [ -n "$cx_sid" ] || return 0
+  case "$cx_sid" in *[!A-Za-z0-9._-]*) saikit_state_unlock; return 0 ;; esac
+  [ -n "$cx_sid" ] || { saikit_state_unlock; return 0; }
   cx_running="$(read_state_value codex_children)"
   cx_done="$(read_state_value codex_children_done)"
   cx_seen="$(read_state_value codex_native_seen)"
@@ -1728,9 +1812,9 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
   esac
   case "$event_name" in
     SubagentStart)
-      [ -n "$cx_role" ] || return 0
-      case ",$cx_done," in *",$cx_sid,"*) return 0 ;; esac # Start tras cierre
-      case ",$cx_running," in *",$cx_sid:"*) return 0 ;; esac # ya en curso
+      [ -n "$cx_role" ] || { saikit_state_unlock; return 0; }
+      case ",$cx_done," in *",$cx_sid,"*) saikit_state_unlock; return 0 ;; esac # Start tras cierre
+      case ",$cx_running," in *",$cx_sid:"*) saikit_state_unlock; return 0 ;; esac # ya en curso
       saikit_codex_children_write "${cx_running:+$cx_running,}$cx_sid:$cx_role" "$cx_done" "1"
       printf 'codex native: start %s (%s)\n' "$cx_sid" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
       ;;
@@ -1739,7 +1823,7 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
       case ",$cx_done," in
         *",$cx_sid,"*)
           printf 'codex native: stop replay %s ignorado\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
-          return 0 ;;
+          saikit_state_unlock; return 0 ;;
       esac
       # Quitar de en curso conservando el rol del ALTA: la entrada es id:rol.
       cx_entry_role=""
@@ -1754,7 +1838,7 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
       done
       IFS="$cx_IFS"
       if [ -z "$cx_entry_role" ]; then
-        saikit_codex_stop_huerfano "$cx_sid"; return 0 # 21.2: sin alta previa no hay identidad
+        saikit_codex_stop_huerfano "$cx_sid"; saikit_state_unlock; return 0 # 21.2: sin alta previa no hay identidad
       fi
       # 21.2 r2 (revision externa): el rol del cierre debe ser el mismo que el
       # del alta. Un cambio de rol entre Start y Stop contradice la identidad
@@ -1762,13 +1846,13 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
       if [ "$cx_role" != "$cx_entry_role" ]; then
         printf 'codex native: stop de %s con rol cambiado (%s -> %s); no acredita\n' "$cx_sid" "$cx_entry_role" "$cx_role" >> "$LOG_PATH" 2>/dev/null || true
         saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
-        return 0
+        saikit_state_unlock; return 0
       fi
       if [ -z "$cx_role" ] || [ -z "$cx_tr" ]; then
         # Forma no observada (el Stop medido trae rol y transcript): no acredita.
         printf 'codex native: stop de %s sin credito (rol o transcript ausentes)\n' "$cx_sid" >> "$LOG_PATH" 2>/dev/null || true
         saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
-        return 0
+        saikit_state_unlock; return 0
       fi
       saikit_codex_children_write "$cx_running" "${cx_done:+$cx_done,}$cx_sid" "1"
       record_agent "$cx_role"
@@ -1780,14 +1864,16 @@ saikit_codex_role_event() { # sin argumentos: el rol viene SOLO de agent_type
       # historico por agent_type de eventos internos sigue vivo. En una sesion
       # con canal nativo activo (hay eventos nativos vistos, o altas vivas),
       # los internos corren en fase running y NO acreditan (postura 21.2).
-      if [ -n "$cx_running" ] || [ -n "$cx_done" ] || [ "$cx_seen" = "1" ]; then return 0; fi
+      if [ -n "$cx_running" ] || [ -n "$cx_done" ] || [ "$cx_seen" = "1" ]; then saikit_state_unlock; return 0; fi
       record_agent "$cx_role"
       ;;
   esac
-  return 0
+  saikit_state_unlock; return 0
+  saikit_state_unlock
 }
 
 saikit_muse_pending_write() {
+  saikit_state_lock
   _MUSE_PENDING_SET="$1"
   write_state "$(read_state_value task_hash)" "$(read_state_value cycle)" \
     "$(read_state_value implemented)" "$(read_state_value verified)" \
@@ -1796,18 +1882,22 @@ saikit_muse_pending_write() {
     "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" \
     "$(read_state_value veredicto_sha256)" "$(read_state_value autopilot)"
   unset _MUSE_PENDING_SET
-  return 0
+  saikit_state_unlock; return 0
+  saikit_state_unlock
 }
 
 saikit_muse_pending_add() {
-  case "$1" in *[!A-Za-z0-9._-]*|'') return 0 ;; esac
-  [ -n "$2" ] || return 0
+  saikit_state_lock
+  case "$1" in *[!A-Za-z0-9._-]*|'') saikit_state_unlock; return 0 ;; esac
+  [ -n "$2" ] || { saikit_state_unlock; return 0; }
   mp_cur="$(read_state_value muse_pending)"
-  case ",$mp_cur," in *",$1:"*) return 0 ;; esac
+  case ",$mp_cur," in *",$1:"*) saikit_state_unlock; return 0 ;; esac
   saikit_muse_pending_write "${mp_cur:+$mp_cur,}$1:$2"
+  saikit_state_unlock
 }
 
 saikit_muse_pending_take() {
+  saikit_state_lock
   mp_cur="$(read_state_value muse_pending)"
   mp_role=""; mp_new=""
   mp_IFS="$IFS"; IFS=","
@@ -1818,9 +1908,10 @@ saikit_muse_pending_take() {
     esac
   done
   IFS="$mp_IFS"
-  [ -n "$mp_role" ] || return 1
+  [ -n "$mp_role" ] || { saikit_state_unlock; return 1; }
   saikit_muse_pending_write "$mp_new"
   printf '%s' "$mp_role"
+  saikit_state_unlock
 }
 
 saikit_muse_role_event() {
@@ -2799,6 +2890,7 @@ adv_ensure_gitignore() {
 # candado ($1 epoca, $2 rutas permitidas, $3 violacion, $4 rutas violadas);
 # $5 opcional reemplaza el ciclo (lo usa el bloque temprano del Stop).
 adv_reescribir_estado() {
+  saikit_state_lock
   task_hash="$(read_state_value task_hash)"
   cycle="$(read_state_value cycle)"
   implemented="$(read_state_value implemented)"
@@ -2812,9 +2904,11 @@ adv_reescribir_estado() {
   if [ -z "$verified" ]; then verified="0"; fi
   if [ -n "${5:-}" ]; then cycle="$5"; fi
   write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$1" "$2" "$3" "$4" "$veredicto_sha256" "$(read_state_value autopilot)"
+  saikit_state_unlock
 }
 
 adv_registrar_violacion() {
+  saikit_state_lock
   advv_nueva="$1"
   advv_epoch="$(read_state_value adv_epoch)"
   advv_paths="$(read_state_value adv_paths)"
@@ -2827,17 +2921,20 @@ adv_registrar_violacion() {
     *) if [ -n "$advv_lista" ]; then advv_lista="$advv_lista|$advv_nueva"; else advv_lista="$advv_nueva"; fi ;;
   esac
   adv_reescribir_estado "$advv_epoch" "$advv_paths" "1" "$advv_lista"
+  saikit_state_unlock
 }
 
 adv_registrar_path_permitido() {
+  saikit_state_lock
   advp_nueva="$1"
   advp_epoch="$(read_state_value adv_epoch)"
   advp_lista="$(read_state_value adv_paths)"
   case "|$advp_lista|" in
-    *"|$advp_nueva|"*) return 0 ;;
+    *"|$advp_nueva|"*) saikit_state_unlock; return 0 ;;
   esac
   if [ -n "$advp_lista" ]; then advp_lista="$advp_lista|$advp_nueva"; else advp_lista="$advp_nueva"; fi
   adv_reescribir_estado "$advp_epoch" "$advp_lista" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)"
+  saikit_state_unlock
 }
 
 # Canonicaliza el blanco de una escritura: backslashes de Windows a slashes
@@ -3244,6 +3341,7 @@ EOF
 # <<< SAIKIT-ADVERSARY-LOCK v1 <<<
 
 mark_evidence() {
+  saikit_state_lock
   kind="$1"
   detail="$2"
   task_hash="$(read_state_value task_hash)"
@@ -3266,6 +3364,7 @@ mark_evidence() {
   if [ "$kind" = "verified" ]; then verified="1"; fi
   write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256" "$(read_state_value autopilot)"
   printf '%s: %s\n' "$kind" "$(redact_secrets "$detail")" >> "$LOG_PATH" 2>/dev/null || true
+  saikit_state_unlock
 }
 
 # Map a host's agent/subagent name onto a canonical harness role
@@ -3316,8 +3415,9 @@ canonical_agent_role() {
 # canonical role) into persistent state so the Stop gate can verify the sequence
 # ran — robust to the transcript tail window dropping the Task call.
 record_agent() {
+  saikit_state_lock
   agent="$(canonical_agent_role "$1")"
-  if [ -z "$agent" ]; then return 0; fi
+  if [ -z "$agent" ]; then saikit_state_unlock; return 0; fi
   task_hash="$(read_state_value task_hash)"
   cycle="$(read_state_value cycle)"
   implemented="$(read_state_value implemented)"
@@ -3370,6 +3470,7 @@ record_agent() {
   esac
   write_state "$task_hash" "$cycle" "$implemented" "$verified" "$agents_seen" "$lane" "$adv_epoch" "$adv_paths" "$adv_violation" "$adv_violation_paths" "$veredicto_sha256" "$(read_state_value autopilot)"
   printf 'agent: %s\n' "$agent" >> "$LOG_PATH" 2>/dev/null || true
+  saikit_state_unlock
 }
 
 record_tool_evidence() {

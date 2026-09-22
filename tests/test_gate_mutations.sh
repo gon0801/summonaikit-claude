@@ -58,6 +58,7 @@ G1|grok_wake_strict_sin_contenido|la condicion de contenido del skip grok se neu
 G1|reporte_devuelto_sin_filtro|el skip estricto del reporte devuelto se neutraliza y un hand-back agent-message que cita el token vuelve a armar el gate (23.13)
 G1|tarea_viva_sin_keepalive|el keep-alive de la tarea armada se neutraliza y un mensaje sin token a media tarea vuelve a desarmar como A4-c2 (23.17)
 G1|off_no_apaga|la rama de -saikit:off se neutraliza y el apagado manual deja de desarmar: el prompt cae al gate del sentinel y conserva el estado (23.17)
+G1|candado_fuera|el candado de estado se neutraliza (adquiere sin retener) y dos escrituras concurrentes vuelven a perder un hijo (23.10)
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
@@ -463,6 +464,14 @@ mut_tarea_viva_sin_keepalive() { sed 's@if tarea_rancia; then@if true; then@'; }
 # del sentinel, que conserva (o arma) el estado. La atrapa
 # caso_g1_saikit_off_desarma.
 mut_off_no_apaga() { sed "s@^SAIKIT_OFF_RE=.*@SAIKIT_OFF_RE='NUNCA_MATCHEA_ESTO_23_17'@"; }
+
+# 23.10 (fase 23, carril C): el candado finge adquirir sin tocar el disco
+# (`if true`: ni crea el dir ni espera) — cero exclusion, sin errores, sin
+# demoras y sin stderr. Con eso dos SubagentStart concurrentes vuelven a
+# perder un hijo. La atrapa
+# caso_g1_candado_escrituras_concurrentes_no_pierden (el caso del huerfano
+# sigue verde con esta mutacion: el robo por pid muerto no necesita exclusion).
+mut_candado_fuera() { sed 's|if mkdir "$_saikit_lock_dir" 2>/dev/null; then|if true; then|'; }
 
 # CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
 # SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una

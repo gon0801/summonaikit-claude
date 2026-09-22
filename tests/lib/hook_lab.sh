@@ -633,3 +633,41 @@ lab_payload_muse_fixture() {
 lab_payload_muse_derivado() {
   cat "$(_lab_muse_dir)/derivados/$1"
 }
+
+# 23.10 — corridas concurrentes del hook bajo prueba. Replica el entorno de
+# lab_run pero con archivos de entrada/salida propios por etiqueta, asi dos
+# invocaciones pueden correr a la vez sin pisarse (lab_run comparte
+# entrada/paso-N y las variables LAB_OUT/LAB_RC). Uso:
+#   lab_run_bg A tool codex "$payload_a"
+#   lab_run_bg B tool codex "$payload_b"
+#   lab_wait_bg
+# y despues se afirma sobre el archivo de estado. Los dos corredores usan la
+# misma sesion, el mismo cwd y la misma copia del hook: comparten STATE_PATH,
+# que es justo la condicion de la carrera.
+lab_run_bg() {
+  _bg_tag="$1"; _bg_fase="$2"; _bg_target="$3"; _bg_payload="$4"
+  _bg_tr="$LAB/entrada/transcript-bg-$_bg_tag.jsonl"
+  printf 'x\n' > "$_bg_tr"
+  _bg_in="$LAB/entrada/paso-bg-$_bg_tag.json"
+  _bg_sid="${LAB_SESSION_ID:-$LAB_SESION_DEF}"
+  printf '%s' "$_bg_payload" | sed "s|__TRANSCRIPT__|$_bg_tr|g; s|__SESSION_ID__|$_bg_sid|g; s|__CWD__|$LAB/proyecto|g" > "$_bg_in"
+  _bg_cmd=(env -u SUMMONAIKIT_INTERNAL_GENERATION -u SUMMONAIKIT_HOOK_PHASE -u SUMMONAIKIT_HOOK_TARGET
+           -u CLAUDECODE -u ZCODE_SESSION_ID -u ZCODE_PROJECT_DIR
+           -u GROK_HOOK_EVENT -u GROK_SESSION_ID -u GROK_WORKSPACE_ROOT
+           HOME="$LAB/home" USERPROFILE="$LAB/home")
+  _bg_cmd+=(SUMMONAIKIT_HOOK_PHASE="$_bg_fase" SUMMONAIKIT_HOOK_TARGET="$_bg_target")
+  [ -n "${LAB_CLAUDECODE:-}" ] && _bg_cmd+=(CLAUDECODE="$LAB_CLAUDECODE")
+  [ -n "${LAB_ZCODE_SESSION_ID:-}" ] && _bg_cmd+=(ZCODE_SESSION_ID="$LAB_ZCODE_SESSION_ID")
+  [ -n "${LAB_ZCODE_PROJECT_DIR:-}" ] && _bg_cmd+=(ZCODE_PROJECT_DIR="$LAB_ZCODE_PROJECT_DIR")
+  [ -n "${LAB_GROK_HOOK_EVENT:-}" ] && _bg_cmd+=(GROK_HOOK_EVENT="$LAB_GROK_HOOK_EVENT")
+  [ -n "${LAB_GROK_SESSION_ID:-}" ] && _bg_cmd+=(GROK_SESSION_ID="$LAB_GROK_SESSION_ID")
+  [ -n "${LAB_GROK_WORKSPACE_ROOT:-}" ] && _bg_cmd+=(GROK_WORKSPACE_ROOT="$LAB_GROK_WORKSPACE_ROOT")
+  [ "${LAB_GROK_HOOK_EVENT_VACIA:-}" = "1" ] && _bg_cmd+=(GROK_HOOK_EVENT="")
+  ( cd "$LAB/proyecto" && "${_bg_cmd[@]}" bash "$LAB/hooks/summonaikit-harness.sh" < "$_bg_in" > "$LAB/.out-bg-$_bg_tag" 2> "$LAB/.err-bg-$_bg_tag" ) &
+  LAB_BG_PIDS="${LAB_BG_PIDS:-} $!"
+}
+
+lab_wait_bg() {
+  for _bg_pid in ${LAB_BG_PIDS:-}; do wait "$_bg_pid" || true; done
+  LAB_BG_PIDS=""
+}
