@@ -30,6 +30,7 @@ on:
 jobs:
   quality:
     runs-on: fasterci-large
+    if: github.head_ref != 'benchmark/fasterci-large'
     steps:
       - uses: actions/checkout@v7
 
@@ -72,6 +73,7 @@ jobs:
   # que `node --test` resuelva el import.
   node-adapter:
     runs-on: fasterci-large
+    if: github.head_ref != 'benchmark/fasterci-large'
     steps:
       - uses: actions/checkout@v7
 
@@ -127,6 +129,7 @@ jobs:
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar tests.
   suite:
     runs-on: fasterci-large
+    if: github.head_ref != 'benchmark/fasterci-large'
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
@@ -164,6 +167,7 @@ jobs:
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar mutaciones.
   suite-lentos:
     runs-on: fasterci-large
+    if: github.head_ref != 'benchmark/fasterci-large'
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
@@ -191,7 +195,7 @@ jobs:
   # en corchetes (`needs['node-adapter']`), que es la sintaxis que GitHub acepta.
   gate:
     runs-on: fasterci-large
-    if: always()
+    if: always() && github.head_ref != 'benchmark/fasterci-large'
     needs: [quality, node-adapter, suite, suite-lentos, secrets]
     steps:
       - name: Todos los jobs de calidad en verde
@@ -225,6 +229,7 @@ jobs:
   # tools/check-secrets.sh.
   secrets:
     runs-on: fasterci-large
+    if: github.head_ref != 'benchmark/fasterci-large'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7

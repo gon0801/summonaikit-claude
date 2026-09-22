@@ -1,0 +1,13 @@
+name: FasterCI smoke test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: fasterci-medium
+    steps:
+      - uses: actions/checkout@v7
+      - name: Confirm FasterCI runner
+        run: echo "Hello World from FasterCI"
