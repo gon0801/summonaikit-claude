@@ -227,15 +227,19 @@ if fm_only autopilot-no-inherit; then
   fm_action autopilot-no-inherit act-follow "$rcf" "golden derived ap-follow" \
     bash "$GOLDEN" --print --hook "$VERIFY_DEST"
   eval "$(parse_block ap-follow "$outf")"
+  # 23.17: la fresca continua con su modo (keep-alive conserva el estado
+  # entero, autopilot=1 incluido); no-inherit queda en plain_no_flag y
+  # typo_no_flag para turnos frescos. La rancia desarma (producto:
+  # caso_g1_tarea_rancia_sin_token_si_desarma).
   if [ "${HAS_HEADER:-0}" != 1 ]; then
-    fm_fail autopilot-no-inherit followup_no_inherit "no inherit" \
+    fm_fail autopilot-no-inherit followup_continua "continua" \
       "sin encabezado golden"
-  elif [ "${LAST_SIN_ESTADO:-0}" = 1 ] || [ "${LAST_AUTOPILOT:-1}" = 0 ]; then
-    fm_pass autopilot-no-inherit followup_no_inherit "no inherit" \
-      "sin estado/ausente"
+  elif [ "${LAST_SIN_ESTADO:-1}" = 0 ] && [ "${LAST_AUTOPILOT:-0}" = 1 ]; then
+    fm_pass autopilot-no-inherit followup_continua "continua" \
+      "tarea continua con autopilot=1"
   else
-    fm_fail autopilot-no-inherit followup_no_inherit "no inherit" \
-      "follow-up conservo autopilot=1"
+    fm_fail autopilot-no-inherit followup_continua "continua" \
+      "follow-up no continuo la tarea con autopilot=1"
   fi
 fi
 

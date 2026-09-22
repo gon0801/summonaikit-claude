@@ -17,7 +17,7 @@
     },
     {
       "id": "autopilot-no-inherit",
-      "required_assertions": ["plain_no_flag", "typo_no_flag", "followup_no_inherit"]
+      "required_assertions": ["plain_no_flag", "typo_no_flag", "followup_continua"]
     },
     {
       "id": "autopilot-paragraph",

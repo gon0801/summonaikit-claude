@@ -8,7 +8,7 @@ the exact sentinel does not inherit the flag.
 ## Sub-features
 
 - `autopilot-sentinel` arms lane `full` and `autopilot=1` only for the exact sentinel.
-- `autopilot-no-inherit` leaves the flag absent for plain `-saikit`, a typo, and a follow-up without the sentinel.
+- `autopilot-no-inherit` leaves the flag absent for plain `-saikit` and a typo; a follow-up without the sentinel continues the armed task with its mode (23.17).
 - `autopilot-paragraph` injects the confirmation paragraph and does not promise unattended merge or revert.
 - `autopilot-persist` keeps `autopilot=1` after a mid-turn tool rewrite from a current fixture.
 
@@ -26,7 +26,7 @@ Preconditions:
 - The drive consumes current golden fixtures (01, 02, and a pytest tool step). It does not rewrite hook or baseline.
 
 - Case `autopilot-sentinel`: action Drive a prompt derived from fixture 02 with the exact sentinel; command `control-summonaikit drive autopilot-contract`; observable `-saikit:autopilot`, `lane=full`, and `autopilot=1`.
-- Case `autopilot-no-inherit`: action Drive fixture 02, a typo suffix, and a follow-up without the sentinel; command `control-summonaikit drive autopilot-contract`; observable no `autopilot=1` on those paths, and the follow-up disarms.
+- Case `autopilot-no-inherit`: action Drive fixture 02, a typo suffix, and a follow-up without the sentinel; command `control-summonaikit drive autopilot-contract`; observable no `autopilot=1` on the fresh paths, and the follow-up continues the armed task (23.17; the rancia task disarms).
 - Case `autopilot-paragraph`: action Read the contract from the exact-sentinel drive; command `control-summonaikit drive autopilot-contract`; observable `Autopilot lane`, `STOP AND ASK`, and no unattended merge/revert promise.
 - Case `autopilot-persist`: action After the exact sentinel, replay the pytest tool fixture; command `control-summonaikit drive autopilot-contract`; observable `autopilot=1` still in state.
 

@@ -272,6 +272,9 @@ if fm_only gate-advzona-teardown-seguro; then
   rm -rf "$ADVLAB/proyecto/.saikit"
   ln -s "$afuera" "$ADVLAB/proyecto/.saikit" 2>/dev/null || true
   if [ -L "$ADVLAB/proyecto/.saikit" ]; then
+    # 23.17: la fresca conserva por keep-alive y el desarme (con su
+    # limpieza de zona) solo se ejercita con tarea RANCIA.
+    find "$ADVLAB/hooks/state" -type f -name harness-state.env -exec touch -t 202001010000 {} +
     adv_run prompt claude \
       "$(adv_payload_prompt 'seguimos con otra cosa sin sentinel')"
     fm_action gate-advzona-teardown-seguro act-teardown "$ADV_RC" "$ADV_ERR" \

@@ -364,7 +364,7 @@ caso_lab_ruta_de_estado_es_la_que_usa_el_hook() {
 }
 
 # ================================================== G1 — armado por el sentinel
-CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_muse_contrato_marcadores_en_receta caso_g1_muse_contrato_borde_16384 caso_g1_muse_contrato_minimo_conserva_aviso caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_reporte_devuelto_con_token_no_arma caso_g1_mencion_humana_agent_message_sigue_armando caso_g1_reporte_devuelto_sin_token_no_desarma caso_g1_marcas_sin_anuncio_si_desarma caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_si_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn caso_g1_muse_contrato_se_declara_ciego"
+CASOS_G1="caso_g1_muse_contrato_cabe_en_16k caso_g1_muse_contrato_tope_duro caso_g1_muse_contrato_marcadores_en_receta caso_g1_muse_contrato_borde_16384 caso_g1_muse_contrato_minimo_conserva_aviso caso_g1_no_arma_sin_sentinel caso_g1_arma_con_sentinel caso_g1_contrato_muestra_forma_recibo caso_g1_sentinel_con_frontera caso_g1_dos_sesiones_no_comparten_estado caso_g1_prompt_sin_sentinel_con_tarea_fresca_no_desarma caso_g1_correccion_al_vuelo_no_desarma caso_g1_notificacion_tarea_no_desarma caso_g1_notificacion_con_sentinel_no_rearma caso_g1_reporte_devuelto_con_token_no_arma caso_g1_mencion_humana_agent_message_sigue_armando caso_g1_reporte_devuelto_sin_token_no_desarma caso_g1_marcas_sin_anuncio_si_desarma caso_g1_mensaje_sin_token_a_media_tarea_no_desarma caso_g1_respuesta_a_paused_no_desarma caso_g1_cierre_limpio_siguiente_sin_token_queda_libre caso_g1_saikit_off_desarma caso_g1_tarea_rancia_sin_token_si_desarma caso_g1_notificacion_con_tarea_armada_no_cambia caso_g1_mencion_humana_de_la_marca_sigue_armando caso_g1_mencion_humana_sin_sentinel_no_desarma caso_g1_prompt_vacio_no_desarma caso_g1_session_id_anidado_no_reescribe_ruta caso_g1_dos_hosts_mismo_repo_no_comparten_estado caso_g1_host_segun_senal caso_g1_arma_con_comillas_antes_del_sentinel caso_g1_correccion_con_comillas_no_desarma caso_g1_arma_con_sentinel_en_linea_nueva caso_g1_fast_arma_con_lane caso_g1_pelado_arma_lane_full caso_g1_sufijo_desconocido_arma_full caso_g1_session_inyecta_reglas caso_g1_session_inyecta_reglas_codex caso_g1_session_no_inyecta_en_grok caso_g1_reglas_nombran_donde_correr_la_bateria caso_g1_reglas_exigen_base_de_rama_limpia caso_g1_session_no_desarma caso_g1_session_con_sentinel_en_summary_arma_y_no_da_reglas caso_g1_prompt_sin_campo_no_arma caso_g1_estado_no_se_acumula caso_g1_dos_hosts_codex_y_claude_no_comparten_estado caso_g1_host_codex_solo_literal caso_g1_grok_senal_exportada_vacia_cuenta caso_g1_grok_envelope_arma caso_g1_dos_hosts_grok_y_claude_no_comparten_estado caso_g1_grok_stop_shutdown_no_toca_estado caso_g1_grok_autowake_no_desarma caso_g1_grok_autowake_con_sentinel_no_rearma caso_g1_grok_mencion_humana_del_wake_si_desarma caso_g1_grok_sobre_de_otro_evento_con_sentinel_arma caso_g1_contrato_nombra_adversary caso_g1_contrato_label_verif_una_linea caso_g1_dsh_arma_y_aisla_estado caso_g1_dsh_no_se_hereda_sin_target caso_g1_dsh_contrato_nombra_subagent caso_g1_contrato_nombra_recetario caso_g1_sin_recetario_contrato_igual caso_g1_receta_hash_distinto_se_omite caso_g1_alias_pregunta_arma_fast_y_nombra_receta caso_g1_alias_boceto_arma_fast_y_nombra_receta caso_g1_alias_typo_arma_full_sin_receta caso_g1_alias_desarme_limpia_estado caso_g1_receta_nombre_inseguro_se_omite caso_g1_receta_titulo_hostil_no_se_inyecta caso_g1_receta_menu_lee_solo_frontmatter caso_g1_alias_sin_receta_no_baja_el_carril caso_g1_alias_sin_recetario_queda_full caso_g1_autopilot_arma_full_con_flag caso_g1_autopilot_gana_sobre_fast caso_g1_autopilot_gana_sobre_alias caso_g1_autopilot_sufijo_desconocido_sin_flag caso_g1_autopilot_parrafo_en_gate_failure caso_g1_autopilot_parrafo_una_vez_en_grok caso_g1_autopilot_sobrevive_mark_evidence caso_g1_autopilot_sobrevive_record_agent caso_g1_muse_arma_y_aisla_estado caso_g1_muse_contrato_nombra_subagent_spawn caso_g1_muse_contrato_se_declara_ciego"
 
 # Task 10.6: reglas PERMANENTES en la fase session. No gatean, no arman, no
 # cuentan ciclos: dejan escrito el invariante una vez por sesion, arme o no.
@@ -802,15 +802,15 @@ caso_g1_dos_sesiones_no_comparten_estado() {
 # DEFECTO A4 (clausula 2) — cerrado por la Task 3.4. Antes un prompt sin sentinel
 # no tocaba el estado, asi que un turno -saikit abandonado segui cobrando recibo a
 # turnos que no lo pidieron. Ahora desarma: borra el estado de ESTA sesion, y el
-# Stop siguiente no bloquea. Acotado a PHASE=prompt (un SessionStart sin sentinel
-# no toca el estado — cursor arma ahi con -saikit en el texto).
-caso_g1_prompt_sin_sentinel_desarma() {
+# 23.17 (fase 23, carril B2) — reemplaza A4-c2 para la tarea FRESCA:
+# un prompt sin token con tarea fresca conserva el estado (keep-alive).
+# El desarme sigue para la tarea RANCIA
+# (caso_g1_tarea_rancia_sin_token_si_desarma) y el apagado manual es
+# -saikit:off (caso_g1_saikit_off_desarma).
+caso_g1_prompt_sin_sentinel_con_tarea_fresca_no_desarma() {
   lab_sembrar 123456 0 1 1 "implementer,verifier,reviewer"
   lab_run prompt claude "$(lab_payload_prompt 'un prompt sin sentinel a mitad de turno')"
-  if lab_hay_estado; then _mal "un prompt sin sentinel debe desarmar (borrar el estado) — A4 c.2"; fi
-  lab_run stop claude "$(lab_payload_stop 'cierre sin estar armado')"
-  _igual "Stop tras desarme no bloquea (A4 c.2)" "$LAB_RC" "0"
-  _vacio "stdout del Stop tras desarme" "$LAB_OUT"
+  if ! lab_hay_estado; then _mal "un prompt sin sentinel con tarea fresca no debe desarmar — 23.17"; fi
 }
 
 # DEFECTO A4 (clausula 3) — correccion al vuelo. Bajo el diseño confirmado
@@ -865,11 +865,31 @@ caso_g1_notificacion_tarea_no_desarma() {
 # vivo el estado armado anterior, y el Stop gate le exigia recibo a un turno que
 # nadie pidio. Ese es el defecto A4 por otra puerta. Con la forma laxa exigiendo
 # tambien la marca de CIERRE, una mencion casual vuelve a desarmar como siempre.
-caso_g1_mencion_humana_sin_sentinel_si_desarma() {
+# 23.17 — una mencion humana de la marca sin sentinel con tarea FRESCA ya no
+# desarma (keep-alive; A4-c2 solo para la tarea RANCIA). La guarda estricta
+# sigue sin tratar la mencion como notificacion: esto llega al bloque A4 y
+# ahi conserva.
+caso_g1_mencion_humana_sin_sentinel_no_desarma() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
   lab_run prompt claude "$(lab_payload_prompt 'contame como se ve un <task-notification> cuando llega, sin arrancar nada')"
+  if ! lab_hay_estado; then
+    _mal "un prompt humano que solo MENCIONA la marca con tarea fresca no debe desarmar — 23.17"
+    return
+  fi
+  _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
+
+  # 23.17: con tarea RANCIA la guarda estricta sigue discriminando: sin la
+  # marca de cierre no hay skip y A4 desarma. La mutacion laxa_sin_cierre
+  # se atrapa aqui (con la fresca ambos conservan y no se observa).
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt 'contame como se ve un <task-notification> cuando llega, sin arrancar nada')"
   if lab_hay_estado; then
-    _mal "un prompt humano que solo MENCIONA la marca debe desarmar igual (A4) — PR #30"
+    _mal "un prompt humano que solo MENCIONA la marca con tarea rancia debe desarmar (A4) — PR #30"
+    return
   fi
 }
 
@@ -936,16 +956,117 @@ caso_g1_reporte_devuelto_sin_token_no_desarma() {
   _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
 }
 
-# r2 (CodeRabbit PR #351, Minor): la red laxa exige el anuncio. Un humano que
-# cita apertura+cierre SIN el anuncio (y sin sentinel) desarma como siempre:
-# sin esto heredaba el estado armado anterior (A4 por otra puerta).
+# r2 (CodeRabbit PR #351, Minor): la red laxa exige el anuncio. 23.17: con
+# tarea FRESCA el keep-alive conserva igual y el anuncio no se observa; la
+# frontera se ejercita con tarea RANCIA —sin anuncio desarma por A4 (sin esto
+# heredaba el estado anterior), con anuncio la laxa conserva.
 caso_g1_marcas_sin_anuncio_si_desarma() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
-  lab_run prompt claude "$(lab_payload_prompt 'contame como se ve un <agent-message from=\"x\"> cuando llega con su </agent-message>, sin arrancar nada')"
-  if lab_hay_estado; then
-    _mal "citar apertura+cierre sin el anuncio debe desarmar igual (A4) — r2 23.13"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
     return
   fi
+  lab_run prompt claude "$(lab_payload_prompt 'contame como se ve un <agent-message from=\"x\"> cuando llega con su </agent-message>, sin arrancar nada')"
+  if lab_hay_estado; then
+    _mal "citar apertura+cierre sin el anuncio con tarea rancia debe desarmar (A4) — r2 23.13"
+    return
+  fi
+
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt 'Another Claude session sent a message:\n<agent-message from=\"y83912\">\nrevise sin hallazgos, sin token.\n</agent-message>')"
+  if ! lab_hay_estado; then
+    _mal "con el anuncio la red laxa debe conservar aun con tarea rancia — r2 23.13"
+    return
+  fi
+}
+
+# 23.17 (fase 23, carril B2) — un mensaje sin token a media tarea ya no
+# desarma (keep-alive: refresca el mtime y deja pasar). Con master (A4-c2)
+# el estado se borra (ROJO); con el fix se conserva.
+caso_g1_mensaje_sin_token_a_media_tarea_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt 'sigo con el endpoint: agrega el campo nombre a la respuesta')"
+  if ! lab_hay_estado; then
+    _mal "un mensaje sin token a media tarea no debe desarmar el turno armado — 23.17"
+    return
+  fi
+  _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
+}
+
+# 23.17 (fase 23, carril B2) — la respuesta a un PAUSED es un prompt sin token
+# con tarea armada: el contrato ya no dice que apaga el gate (keep-alive).
+caso_g1_respuesta_a_paused_no_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt 'los datos van en lista: id, nombre y fecha de alta')"
+  if ! lab_hay_estado; then
+    _mal "la respuesta a un PAUSED no debe desarmar el turno armado — 23.17"
+    return
+  fi
+  _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
+}
+
+# 23.17, control verde: tras un cierre limpio (sin estado) el siguiente
+# mensaje sin token queda libre — no arma ni deja restos.
+caso_g1_cierre_limpio_siguiente_sin_token_queda_libre() {
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt 'agrega el endpoint nuevo a la lista')"
+  if lab_hay_estado; then
+    _mal "sin tarea armada un mensaje sin token debe quedar libre — 23.17"
+    return
+  fi
+}
+
+# 23.17 — -saikit:off apaga el gate a mano con tarea armada (misma limpieza
+# del desarme A4-c2); sin tarea no deja nada y NO arma (el `:` pasa la
+# frontera del sentinel: sin la rama dedicada armaria en vez de apagar).
+caso_g1_saikit_off_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt 'ya termine por hoy -saikit:off')"
+  if lab_hay_estado; then
+    _mal "-saikit:off debe desarmar el turno armado — 23.17"
+    return
+  fi
+
+  lab_limpiar_estado
+  lab_run prompt claude "$(lab_payload_prompt '-saikit:off')"
+  if lab_hay_estado; then
+    _mal "-saikit:off sin tarea armada no debe armar — 23.17"
+    return
+  fi
+}
+
+# 23.17 — tarea RANCIA (mtime mas alla del tope de 1440 min) se desarma como
+# A4-c2, y el Stop posterior no bloquea. Usa saikit_antedatar (18.19).
+caso_g1_tarea_rancia_sin_token_si_desarma() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt 'retomo lo del endpoint despues de unos dias')"
+  if lab_hay_estado; then
+    _mal "una tarea inactiva mas alla del tope debe desarmarse — 23.17"
+    return
+  fi
+  lab_run stop claude "$(lab_payload_stop 'cierre sin estar armado')"
+  _igual "Stop tras desarme de tarea rancia no bloquea — 23.17" "$LAB_RC" "0"
+  _vacio "stdout del Stop tras desarme de tarea rancia" "$LAB_OUT"
+}
+
+# 23.17 — las notificaciones siguen sin armar ni desarmar: con tarea armada
+# la notificacion conserva el estado (10.14 lo cubre sin estado).
+caso_g1_notificacion_con_tarea_armada_no_cambia() {
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  lab_run prompt claude "$(lab_payload_prompt_notificacion_tarea 't-2317')"
+  if ! lab_hay_estado; then
+    _mal "una notificacion no debe desarmar el turno armado — 23.17"
+    return
+  fi
+  _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
 }
 
 caso_g1_prompt_vacio_no_desarma() {
@@ -956,6 +1077,17 @@ caso_g1_prompt_vacio_no_desarma() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
   lab_run prompt claude "$(lab_payload_prompt '')"
   if ! lab_hay_estado; then _mal "un UserPromptSubmit con prompt VACIO (campo presente, string vacio) no debe desarmar un turno armado — Task 10.14"; fi
+
+  # 23.17: la fresca conserva por keep-alive y la clausula [ -n ] no se
+  # observa; con tarea RANCIA la clausula es lo unico que conserva (A4
+  # desarmaria): la mutacion desarma_con_prompt_vacio se atrapa aqui.
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt '')"
+  if ! lab_hay_estado; then _mal "con tarea rancia un prompt VACIO debe conservar (clausula [ -n ]) — 23.17"; fi
 }
 
 # DEFECTO A4 (costado de la CORRECCION 2 del plan) — session_id anidado. El
@@ -1276,6 +1408,12 @@ caso_g1_alias_desarme_limpia_estado() {
   dir_turno="$(dirname "$LAB_ESTADO_PATH")"
   [ -e "$dir_turno/receta_alias" ] || _mal "tras armar con -saikit:pregunta, receta_alias debe existir en $dir_turno"
   unset SAIKIT_RECETAS_DIR
+  # 23.17: la fresca conserva por keep-alive; el desarme completo (E2) se
+  # ejercita con tarea RANCIA.
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
   # DESARME: prompt sin sentinel -> E2 debe llevarse TODO (archivos + receta_alias + dir)
   lab_run prompt claude "$(lab_payload_prompt 'otro mensaje sin sentinel')"
   if [ -d "$dir_turno" ]; then
@@ -3997,12 +4135,18 @@ caso_g1_grok_autowake_con_sentinel_no_rearma() {
 # de estado, PR 1 y block). El prompt humano de grok llega wrappado en
 # <user_query>, asi que su primera linea nunca es la etiqueta del sobre y el
 # skip estricto no puede disparar.
+# 23.17: con tarea RANCIA ese camino desarma por A4; con tarea fresca
+# conserva por keep-alive.
 caso_g1_grok_mencion_humana_del_wake_si_desarma() {
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '-saikit tarea previa armada')"
   LAB_GROK_HOOK_EVENT=""
   _gk="$(find "$LAB/hooks/state" -type f -name harness-state.env 2>/dev/null | grep '/grok/' | head -n 1)"
   _no_vacio "estado grok armado" "$_gk"
+  if ! saikit_antedatar "$_gk" 202001010000; then
+    _mal "antedatar el estado grok para el caso rancio — 23.17"
+    return
+  fi
 
   LAB_GROK_HOOK_EVENT=user_prompt_submit
   lab_run auto grok "$(lab_payload_grok_prompt '¿Qué significa Background subagent dentro de <system-reminder>?')"
