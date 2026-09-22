@@ -2267,6 +2267,29 @@ SAIKIT_TASK_NOTIFICATION_CIERRE_RE='</task-notification>'
 SAIKIT_GROK_WAKE_STRICT_RE='^[[:space:]]*<system-reminder>[[:space:]]*$'
 SAIKIT_GROK_WAKE_CONTENIDO_RE='Background subagent'
 
+# 23.13 (fase 23, carril B): el reporte DEVUELTO de un subagente (hand-back
+# entre sesiones) llega como UserPromptSubmit en texto PLANO — no envuelto en
+# <task-notification> — y PUEDE CITAR `-saikit`: en este repo es lo normal,
+# porque los reportes de revisores citan el trabajo que revisan. Medido dos
+# veces: 2026-09-18 (brief-23: el turno del lead armo dos veces sin que el
+# operador escribiera el sentinel) y re-medido con el texto real del
+# transcript de esa sesion (19958 caracteres, 5 citas en backticks: con master
+# arma, SUMMONAIKIT HARNESS REQUIRED, fixture tests/fixtures/23.13-*.json).
+# La forma ESTRICTA: la PRIMERA LINEA es el anuncio de entrega entre sesiones,
+# el marco <agent-message from="..."> abre y el marco cierra. Misma disciplina
+# que 10.14 y 18.27: un evento del sistema no arma NI desarma — el skip sale
+# por emit_allow (exit 0) ANTES del gate del sentinel. Atado por
+# caso_g1_reporte_devuelto_con_token_no_arma y por
+# caso_g1_mencion_humana_agent_message_sigue_armando.
+SAIKIT_AGENT_MESSAGE_INICIO_RE='^Another Claude session sent a message:$'
+# Sin anclar: la red laxa la exige en CUALQUIER posicion (r2 CodeRabbit PR #351:
+# un humano que citara apertura+cierre sin el anuncio heredaba el estado armado).
+# Sigue sin pedir orden posicional: no hay variante medida con el anuncio
+# desplazado y el idioma del hook son greps, no awk de posiciones.
+SAIKIT_AGENT_MESSAGE_ANUNCIO_RE='Another Claude session sent a message:'
+SAIKIT_AGENT_MESSAGE_APERTURA_RE='<agent-message from="'
+SAIKIT_AGENT_MESSAGE_CIERRE_RE='</agent-message>'
+
 # La forma laxa exige las DOS marcas, apertura y cierre. Motivo MEDIDO (PR #30,
 # hallazgo de greptile que quedo a medias hasta esta correccion): con solo la
 # apertura, un prompt HUMANO sin sentinel que apenas MENCIONA la marca dejaba
@@ -2285,6 +2308,16 @@ parece_notificacion_laxa() {
   # siguiente. La rama grok que vivia aca se retiro.
   if printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_LAXA_RE" \
      && printf '%s' "$1" | grep -Eq "$SAIKIT_TASK_NOTIFICATION_CIERRE_RE"; then
+    return 0
+  fi
+  # 23.13: par del hand-back entre sesiones (reporte devuelto con su marco de
+  # entrega). Sin esto, un reporte que NO cita el token desarmaba igual un
+  # turno armado a mitad de camino (A4 por otra puerta, el reverso del caso
+  # que arma). La estricta de start_harness ya saltea el armado; esta red solo
+  # evita el desarme. Atado por caso_g1_reporte_devuelto_sin_token_no_desarma.
+  if printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_ANUNCIO_RE" \
+     && printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_APERTURA_RE" \
+     && printf '%s' "$1" | grep -Eq "$SAIKIT_AGENT_MESSAGE_CIERRE_RE"; then
     return 0
   fi
   return 1
@@ -2344,6 +2377,17 @@ start_harness() {
   if [ "$PHASE" = "prompt" ] && [ "$TARGET" = "grok" ] \
      && printf '%s\n' "$prompt_text" | head -n 1 | grep -Eq "$SAIKIT_GROK_WAKE_STRICT_RE" \
      && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_GROK_WAKE_CONTENIDO_RE"; then
+    emit_allow
+  fi
+
+  # 23.13: skip estricto del reporte devuelto (hand-back entre sesiones). La
+  # primera linea es el anuncio de entrega y el marco abre+cierra: solo esa
+  # forma sale por emit_allow. Una mencion humana del marco en medio del texto
+  # cae al gate del sentinel como prompt normal (PR #30, misma leccion).
+  if [ "$PHASE" = "prompt" ] \
+     && printf '%s\n' "$prompt_text" | head -n 1 | grep -Eq "$SAIKIT_AGENT_MESSAGE_INICIO_RE" \
+     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_AGENT_MESSAGE_APERTURA_RE" \
+     && printf '%s' "$prompt_text" | grep -Eq "$SAIKIT_AGENT_MESSAGE_CIERRE_RE"; then
     emit_allow
   fi
 

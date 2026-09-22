@@ -72,6 +72,7 @@ lab_init() {
   LAB="$(mktemp -d "${TMPDIR:-/tmp}/saikit-lab-XXXXXX")" || return 1
   mkdir -p "$LAB/hooks/state" "$LAB/proyecto" "$LAB/home" "$LAB/entrada" || return 1
   LAB_PASO=0
+  LAB_REPO="$(cd "$(dirname "$lab_hook_origen")/.." && pwd)"
   LAB_RC=""; LAB_OUT=""; LAB_ERR=""
   cp "$lab_hook_origen" "$LAB/hooks/summonaikit-harness.sh" || return 1
 
@@ -244,6 +245,14 @@ lab_payload_prompt_notificacion_con_sentinel() {
 
 lab_payload_prompt_notificacion_tarea() {
   printf '{"session_id":"__SESSION_ID__","transcript_path":"__TRANSCRIPT__","cwd":"/proyecto","prompt_id":"c1a70000-1111-4222-8333-777788889999","permission_mode":"auto","hook_event_name":"UserPromptSubmit","prompt":"<task-notification>\\n<task-id>%s</task-id>\\n<task-status>completed</task-status>\\n</task-notification>"}' "$1"
+}
+
+# 23.13 — el fixture es el payload REAL del reporte devuelto (UserPromptSubmit
+# cuyo prompt es el hand-back agent-message que cita -saikit, capturado del
+# transcript de la sesion que midio el defecto). El banco sustituye
+# __SESSION_ID__/__TRANSCRIPT__ igual que en los constructores de arriba.
+lab_fixture_reporte_devuelto() {
+  cat "$LAB_REPO/tests/fixtures/23.13-reporte-devuelto.json"
 }
 
 # Task 9.4 (C9): un UserPromptSubmit SIN campo `prompt`, con el sentinel en OTRO

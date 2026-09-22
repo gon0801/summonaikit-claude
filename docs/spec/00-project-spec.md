@@ -51,6 +51,14 @@ crear estado ni bloquear nada.
 3. **El sentinel `-saikit` es la ÚNICA condición de armado.** El regex del vendor
    busca sus palabras clave como SUBCADENA y en español se arma solo. Esta regla
    no se re-litiga; se vuelve código propio en vez de parche por anclas.
+   Un evento del sistema no arma ni desarma aunque cite el token: la
+   notificación de tarea en background (`<task-notification>` en primera línea,
+   10.14), el auto-wake de subagente de grok (18.27) y, desde la 23.13, el
+   reporte devuelto entre sesiones (`Another Claude session sent a message:`
+   en primera línea con el marco `<agent-message from="...">`…`</agent-message>`,
+   fixture `tests/fixtures/23.13-reporte-devuelto.json`). Solo la forma
+   estricta saltea el gate; una mención humana del marco en medio del texto
+   arma igual, y un reporte sin token tampoco desarma un turno armado.
 4. **Nunca se prueba contra el estado real.** Todo test corre contra un `HOME`
    y un directorio de hooks aislados.
 5. **La identidad del archivo se declara en el archivo.** Un marcador propio
