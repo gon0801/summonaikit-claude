@@ -74,6 +74,9 @@ crear estado ni bloquear nada.
    consigue a tiempo, se sigue sin candado y se deja una linea en el log — el
    hook nunca cuelga al host. Un candado huerfano (dueno muerto o mas viejo que
    `SAIKIT_LOCK_STALE_S`, default 30 s) se roba en vez de esperarse.
+   Cada adquisicion publica un token unico; el robo se serializa con un
+   marcador atomico y revalida el holder antes de borrar, y el unlock solo
+   borra si el token sigue siendo el propio.
 
 **Postura del Stop gate ante canales de texto no observados (Task 11.4,
 2026-08-16).** El `stop_gate` juzga el recibo por dos canales de texto:

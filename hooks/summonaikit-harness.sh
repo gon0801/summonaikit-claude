@@ -1616,7 +1616,11 @@ rn_take_pending() {
 # (Muse corta un hook a los 30 s): si el candado no se consigue dentro de
 # SAIKIT_LOCK_WAIT_S (default 10), se sigue SIN candado y se deja una linea en
 # el log. Un candado huerfano (dueno muerto, o mas viejo que
-# SAIKIT_LOCK_STALE_S, default 30) se roba en vez de esperarse. Reentrante por
+# SAIKIT_LOCK_STALE_S, default 30) se roba en vez de esperarse.
+# Cada adquisicion publica un token unico (pid + epoca + secuencia); si la
+# publicacion falla no se declara adquirido y se reintenta sin borrar nada.
+# El robo se serializa con un marcador atomico y revalida el holder antes de
+# borrar; el unlock solo borra si el token sigue siendo el propio. Reentrante por
 # proceso: las envolturas que leen y luego llaman a write_state toman el mismo
 # candado sin bloquearse (contador _SAIKIT_STATE_LOCK_DEPTH).
 saikit_state_lock() {
@@ -1626,9 +1630,10 @@ saikit_state_lock() {
   fi
   [ -n "${STATE_DIR:-}" ] || return 0
   _saikit_lock_dir="$STATE_DIR/.harness-state.lock"
+  _saikit_lock_recupera="$STATE_DIR/.harness-state.lock.recupera"
   _saikit_lock_wait="${SAIKIT_LOCK_WAIT_S:-10}"
-  _saikit_lock_stale="${SAIKIT_LOCK_STALE_S:-30}"
   case "$_saikit_lock_wait" in ''|*[!0-9]*) _saikit_lock_wait=10 ;; esac
+  _saikit_lock_stale="${SAIKIT_LOCK_STALE_S:-30}"
   case "$_saikit_lock_stale" in ''|*[!0-9]*) _saikit_lock_stale=30 ;; esac
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   _saikit_lock_start="$(date +%s 2>/dev/null || printf '0')"
@@ -1636,27 +1641,43 @@ saikit_state_lock() {
   _saikit_lock_deadline=$((_saikit_lock_start + _saikit_lock_wait))
   while :; do
     if mkdir "$_saikit_lock_dir" 2>/dev/null; then
-      if [ -d "$_saikit_lock_dir" ]; then
-        printf '%s %s' "$$" "$(date +%s 2>/dev/null || printf '0')" > "$_saikit_lock_dir/holder" 2>/dev/null || true
+      _saikit_lock_ahora="$(date +%s 2>/dev/null || printf '0')"
+      case "$_saikit_lock_ahora" in ''|*[!0-9]*) _saikit_lock_ahora=0 ;; esac
+      _SAIKIT_LOCK_SEQ=$((${_SAIKIT_LOCK_SEQ:-0} + 1))
+      _saikit_lock_azar="${RANDOM:-0}${RANDOM:-0}"
+      _saikit_lock_mio="$$ $_saikit_lock_ahora $$-$_saikit_lock_ahora-$_SAIKIT_LOCK_SEQ-$_saikit_lock_azar"
+      if printf '%s' "$_saikit_lock_mio" > "$_saikit_lock_dir/holder" 2>/dev/null \
+        && [ "$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)" = "$_saikit_lock_mio" ]; then
+        _SAIKIT_STATE_LOCK_TOKEN="$$-$_saikit_lock_ahora-$_SAIKIT_LOCK_SEQ-$_saikit_lock_azar"
+        _SAIKIT_STATE_LOCK_DEPTH=1
+        return 0
       fi
-      _SAIKIT_STATE_LOCK_DEPTH=1
-      return 0
+      # La publicacion fallo (ENOENT: otro proceso borro el dir entre mkdir y
+      # printf) o un rival publico primero: NO se borra nada — el dir actual
+      # puede ser ya de otro dueno — y se cae a observar/reintentar hasta el
+      # tope, igual que una espera normal.
     fi
     _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
     _saikit_lock_pid="${_saikit_lock_holder%% *}"
-    _saikit_lock_since="${_saikit_lock_holder##* }"
     case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
+    _saikit_lock_rest="${_saikit_lock_holder#* }"
+    _saikit_lock_since="${_saikit_lock_rest%% *}"
     case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
     if [ -z "$_saikit_lock_holder" ]; then
       sleep 2
       _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
       _saikit_lock_pid="${_saikit_lock_holder%% *}"
-      _saikit_lock_since="${_saikit_lock_holder##* }"
       case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
+      _saikit_lock_rest="${_saikit_lock_holder#* }"
+      _saikit_lock_since="${_saikit_lock_rest%% *}"
       case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
     fi
+    # Dir sin holder en dos lecturas seguidas = adquiriente muerto en la
+    # ventana mkdir/printf: se roba sin pid que declarar muerto.
     _saikit_lock_steal=0
-    if [ -n "$_saikit_lock_pid" ]; then
+    if [ -z "$_saikit_lock_holder" ]; then
+      _saikit_lock_steal=1
+    elif [ -n "$_saikit_lock_pid" ]; then
       kill -0 "$_saikit_lock_pid" 2>/dev/null || _saikit_lock_steal=1
     fi
     _saikit_lock_now="$(date +%s 2>/dev/null || printf '0')"
@@ -1665,8 +1686,35 @@ saikit_state_lock() {
       _saikit_lock_steal=1
     fi
     if [ "$_saikit_lock_steal" = "1" ]; then
-      rm -rf "$_saikit_lock_dir" 2>/dev/null || true
-      continue
+      # Robo serializado: el marcador atomico evita que dos recuperadores se
+      # pisen; bajo el marcador se re-lee y solo se borra si el holder NO
+      # cambio (mismo huerfano observado) — si otro proceso ya robo o
+      # adquirio, el holder difiere y no se toca nada.
+      if mkdir "$_saikit_lock_recupera" 2>/dev/null; then
+        printf '%s' "$$" > "$_saikit_lock_recupera/por" 2>/dev/null || true
+        _saikit_lock_holder2="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
+        _saikit_lock_pid2="${_saikit_lock_holder2%% *}"
+        case "$_saikit_lock_pid2" in ''|*[!0-9]*) _saikit_lock_pid2="" ;; esac
+        if [ "$_saikit_lock_holder2" = "$_saikit_lock_holder" ]; then
+          if [ -z "$_saikit_lock_holder2" ]; then
+            rm -rf "$_saikit_lock_dir" 2>/dev/null || true
+          elif [ -n "$_saikit_lock_pid2" ]; then
+            kill -0 "$_saikit_lock_pid2" 2>/dev/null || rm -rf "$_saikit_lock_dir" 2>/dev/null || true
+          fi
+        fi
+        rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+      else
+        # Marcador ocupado: otro recuperador trabaja. Si es de un muerto (o
+        # no trae pid) se limpia; si no, se espera un turno — el tope global
+        # acota de todos modos.
+        _saikit_lock_rec_pid="$(cat "$_saikit_lock_recupera/por" 2>/dev/null || true)"
+        case "$_saikit_lock_rec_pid" in ''|*[!0-9]*) _saikit_lock_rec_pid="" ;; esac
+        if [ -z "$_saikit_lock_rec_pid" ]; then
+          rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+        else
+          kill -0 "$_saikit_lock_rec_pid" 2>/dev/null || rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+        fi
+      fi
     fi
     if [ "$_saikit_lock_now" -ge "$_saikit_lock_deadline" ]; then
       printf 'state-lock: espera agotada (%ss), se sigue sin candado\n' "$_saikit_lock_wait" >> "$LOG_PATH" 2>/dev/null || true
@@ -1683,7 +1731,41 @@ saikit_state_unlock() {
   fi
   if [ "${_SAIKIT_STATE_LOCK_DEPTH:-0}" -eq 1 ] 2>/dev/null; then
     _SAIKIT_STATE_LOCK_DEPTH=0
-    rm -rf "${_saikit_lock_dir:-$STATE_DIR/.harness-state.lock}" 2>/dev/null || true
+    # Borrado condicional por token: solo se borra si el holder sigue siendo
+    # el propio. Un candado reemplazado entre el lock y este unlock (otro
+    # dueno) NO se toca. La verificacion se serializa con el mismo marcador
+    # del robo; sin el, la ventana comprobar-luego-borrar seguiria abierta.
+    _saikit_lock_dir="${_saikit_lock_dir:-$STATE_DIR/.harness-state.lock}"
+    _saikit_lock_recupera="$STATE_DIR/.harness-state.lock.recupera"
+    _saikit_un_tries=0
+    while [ "$_saikit_un_tries" -lt 3 ]; do
+      if mkdir "$_saikit_lock_recupera" 2>/dev/null; then
+        _saikit_un_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
+        _saikit_un_token=""
+        case "$_saikit_un_holder" in
+          *' '*) _saikit_un_rest="${_saikit_un_holder#* }"
+            case "$_saikit_un_rest" in
+              *' '*) _saikit_un_token="${_saikit_un_rest#* }" ;;
+            esac ;;
+        esac
+        if [ -n "${_SAIKIT_STATE_LOCK_TOKEN:-}" ] && [ "$_saikit_un_token" = "$_SAIKIT_STATE_LOCK_TOKEN" ]; then
+          rm -rf "$_saikit_lock_dir" 2>/dev/null || true
+        fi
+        rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+        break
+      fi
+      _saikit_un_rec_pid="$(cat "$_saikit_lock_recupera/por" 2>/dev/null || true)"
+      case "$_saikit_un_rec_pid" in ''|*[!0-9]*) _saikit_un_rec_pid="" ;; esac
+      if [ -z "$_saikit_un_rec_pid" ]; then
+        rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+      elif kill -0 "$_saikit_un_rec_pid" 2>/dev/null; then
+        sleep 1
+      else
+        rm -rf "$_saikit_lock_recupera" 2>/dev/null || true
+      fi
+      _saikit_un_tries=$((_saikit_un_tries + 1))
+    done
+    _SAIKIT_STATE_LOCK_TOKEN=""
   fi
   return 0
 }
