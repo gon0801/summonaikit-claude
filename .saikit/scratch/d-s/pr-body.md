@@ -44,3 +44,7 @@ Evidencia en `.saikit/scratch/d-s/`: `verde-test_entrega_contract.log` (26 casos
 - **A.R8 (re-pin de CLAUDECODE): no implementado.** El pin concreto que pidió el review M3 no está en ninguna fuente recuperable: ni en el cuerpo, comentarios ni reviews inline del PR #345, ni en `.saikit/findings/`, ni en el rastro de decisiones. Las dos lecturas posibles tocarían el fallback `CLAUDECODE` del hook, que tiene comportamiento medido y mutaciones propias (G1); cambiarlo a ciegas es inventar el requerimiento. La fila queda abierta con esta declaración.
 - **A.R9(b)** no llevó código porque el estado del repo ya lo cumple (verificado arriba, sin caso huérfano hacia CI Linux).
 - **Cobertura documental (A.R10)**: decisión declarada de no ampliar código por el porcentaje del bot, como la propia fila manda.
+
+### Ronda de CI
+
+La primera corrida de CI dejó dos rojos en suite 2/8, ambos de esta rama y corregidos en el último commit: (1) el pin de `tools/MANIFEST.sha256` quedó viejo al tocar `saikit-merge.sh` (lo canda `test_pretool_merge`); (2) en un runner cargado, la comparación etime-vs-edad del lock leyó "reciclado" un dueño vivo por jitter de ~1 s — la clasificación ahora exige una diferencia mayor a 5 s (el caso real de pid reciclado lleva el lock huérfano años, el margen no lo toca). Re-medido local: `test_saikit_merge`, `test_pretool_merge` y `test_runner_guards` en rc 0. La segunda corrida de CI de este SHA es la válida para el bloque.
