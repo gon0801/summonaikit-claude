@@ -671,3 +671,18 @@ lab_wait_bg() {
   for _bg_pid in ${LAB_BG_PIDS:-}; do wait "$_bg_pid" || true; done
   LAB_BG_PIDS=""
 }
+
+# Antedatado portable (movido desde gate_cases.sh en 23.10-r2: test_adversary_lock
+# tambien lo necesita y no trae gate_cases). 'touch -d 15 days ago' es
+# GNU-only: el touch de BSD responde 'illegal time specification' y la bateria
+# cerraba en FAIL en macOS por una dependencia que no estaba escrita en ningun
+# lado. 'touch -t' con fecha fija es portable (GNU, BSD, MSYS2) y 2020-01-01
+# esta siempre a mas de los 14 dias del TTL del barrido. La costura
+# SAIKIT_FINGIR_SIN=touch SIMULA la ausencia de la herramienta: en
+# ubuntu-latest (los 6 jobs del CI) touch -d siempre funciona, asi que sin esta
+# costura la rama 'sin la herramienta' nunca se toma y una mutacion 'la
+# ausencia pasa como verde' sobrevive en verde.
+saikit_antedatar() {  # $1 = archivo, $2 = fecha touch -t (YYYYMMDDhhmm[.ss])
+  [ "${SAIKIT_FINGIR_SIN:-}" = touch ] && return 1
+  touch -t "$2" "$1" 2>/dev/null
+}

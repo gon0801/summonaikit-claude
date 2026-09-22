@@ -208,7 +208,7 @@ mut_sentinel_acepta_cualquier_prompt() { sed "s/^SAIKIT_SENTINEL_RE=.*/SAIKIT_SE
 mut_codex_interno_credita() { sed 's/^      saikit_codex_role_event$/      record_agent "\$subagent"/'; }
 mut_codex_cierre_sin_transcript() { sed 's/if \[ -z "\$cx_role" \] || \[ -z "\$cx_tr" \]; then/if false; then/'; }
 mut_codex_rol_cambiado_acredita() { sed 's/if \[ "\$cx_role" != "\$cx_entry_role" \]; then/if false; then/'; }
-mut_codex_huerfano_via_rolmatch() { sed 's/saikit_codex_stop_huerfano "\$cx_sid"; return 0/cx_entry_role="\$cx_role";/'; }
+mut_codex_huerfano_via_rolmatch() { sed 's/saikit_codex_stop_huerfano "\$cx_sid"; saikit_state_unlock; return 0/cx_entry_role="\$cx_role";/'; }
 mut_codex_flag_nativo_invertido() { sed 's/\[ "\$cx_seen" = "1" \]/[ "\$cx_seen" != "1" ]/'; }
 mut_codex_legado_ignora_flag() { sed 's/\[ "\$cx_seen" = "1" \]/false/'; }
 mut_sentinel_sin_guardia()             { sed 's/^.*grep -Eq "\$SAIKIT_SENTINEL_RE".*$/  if false; then/'; }

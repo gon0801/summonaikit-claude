@@ -78,7 +78,8 @@ crear estado ni bloquear nada.
    (`SAIKIT_LOCK_STALE_S` queda sin efecto). Cada adquisicion publica un
    token unico; el robo se serializa con un marcador atomico y revalida el
    holder antes de borrar, y el unlock solo borra si el token sigue siendo
-   el propio.
+   el propio. La instantanea y las limpiezas terminales del `Stop` gate
+   tambien corren bajo el candado.
 
 **Postura del Stop gate ante canales de texto no observados (Task 11.4,
 2026-08-16).** El `stop_gate` juzga el recibo por dos canales de texto:

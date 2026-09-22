@@ -68,10 +68,8 @@ unset _skip_lib
 # touch -d siempre funciona, asi que sin esta costura la rama 'sin la
 # herramienta' nunca se toma y una mutacion 'la ausencia pasa como verde'
 # sobrevive en verde — la trampa que costo una version de la DoD de esta fila.
-saikit_antedatar() {  # $1 = archivo, $2 = fecha touch -t (YYYYMMDDhhmm[.ss])
-  [ "${SAIKIT_FINGIR_SIN:-}" = touch ] && return 1
-  touch -t "$2" "$1" 2>/dev/null
-}
+# 23.10-r2: la definicion vive en hook_lab.sh (test_adversary_lock tambien
+# antedata y no trae este lib); aqui queda solo esta nota.
 
 _mal()      { printf '      FAIL: %s\n' "$1"; CASO_ROJO=1; }
 _igual()    { if [ "$2" != "$3" ]; then _mal "$1: esperaba [$3], dio [$2]"; fi; }
@@ -888,13 +886,10 @@ caso_g1_candado_huerfano_acotado() {
 # nuevo y no borra). Dos rondas: cada una reescribe el estado, no deja el
 # candado ni el marcador puestos, y nadie cuelga (todo acotado por el tope).
 caso_g1_candado_dos_recuperadores_no_pierden() {
+  lab_run prompt claude "$(lab_payload_prompt '-saikit semilla robo doble')"
   _rd_dir="$(dirname "$LAB_ESTADO_PATH")"
   _rd=1
   while [ "$_rd" -le 2 ]; do
-    # Re-siembra cada ronda: los prompts son fijos y el task_hash es
-    # cksum(prompt), asi que sin esto la ronda 2 compararia contra el hash
-    # ganador de la ronda 1 y fallaria aunque nadie perdiera nada.
-    lab_run prompt claude "$(lab_payload_prompt '-saikit semilla robo doble')"
     (exit 0) & _rd_muerto="$!"
     wait "$_rd_muerto" 2>/dev/null || true
     mkdir -p "$_rd_dir/.harness-state.lock"

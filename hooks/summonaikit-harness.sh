@@ -4277,6 +4277,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # aca mismo y las escotillas de abajo quedan inalcanzables (el bloque sale
   # con exit; no hace falta condicionarlas). Sin adversary ni violacion en el
   # estado, este bloque es no-op y el Stop sigue byte-identico al de hoy.
+  # 23.10 (ronda 2): la instantanea de estado y las limpiezas terminales de
+  # este gate corren bajo el candado — un evento concurrente de la sesion ya
+  # no reescribe ni lee a medias entre la foto y el rm. Espera acotada +
+  # fail-open: si no se consigue, el gate sigue como antes. Se libera antes
+  # de cada salida (los emit hacen exit) y siempre ANTES de podar_dir_sesion,
+  # que exige el dir vacio.
+  saikit_state_lock
   adv_early_missing=""
   adv_st_violation="$(read_state_value adv_violation)"
   adv_st_agents="$(read_state_value agents_seen)"
@@ -4303,11 +4310,13 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
       _lane_budget="$(read_state_value lane)"
       adv_limpiar_zona   # 20.6: la ejecucion se declara agotada — su zona se va con su estado
       rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
+      saikit_state_unlock
       podar_dir_sesion
       emit_budget_exhausted "$adv_early_missing" "$_ap_budget" "$_lane_budget"
     fi
     adv_reescribir_estado "$(read_state_value adv_epoch)" "$(read_state_value adv_paths)" "$(read_state_value adv_violation)" "$(read_state_value adv_violation_paths)" "$((adv_cycle + 1))"
     feedback="$(build_gate_feedback "$adv_early_missing" "$((adv_cycle + 1))")"
+    saikit_state_unlock
     emit_gate_failure "$feedback"
   fi
   # <<< SAIKIT-ADVERSARY-LOCK v1 <<<
@@ -4329,6 +4338,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # gate and may get blocked.
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS PAUSED' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE"; then
+    saikit_state_unlock
     emit_allow
   fi
 
@@ -4416,6 +4426,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   if printf '%s' "$text_hatch" | grep -Eiq 'SUMMONAIKIT HARNESS DELEGATED.*awaiting[[:space:]]+(implementer|verifier|reviewer|adversary)' \
      && ! printf '%s' "$text_hatch" | grep -Eiq "$RECEIPT_MARKER_RE" \
      && { [ "$HOST" != "grok" ] || [ "$grok_bg_en_vuelo" = "1" ]; }; then
+    saikit_state_unlock
     emit_allow
   fi
 
@@ -4489,6 +4500,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
     printf 'summonaikit-harness: unknown honesto — ningun canal de texto observable (last_assistant_message/lastAssistantMessage ausente del payload y transcript ausente, ilegible o fuera del perfil); no se juzga el recibo desde la no-observacion (Core Rule 2). Cierro sin consumir ciclo de revision y limpio el estado de esta sesion.\n' >&2
     adv_limpiar_zona   # r1: la zona de pruebas se va con el estado (teardown seguro)
     rm -f "$STATE_PATH" "$LOG_PATH" "$RN_ORDER_PATH" 2>/dev/null || true
+    saikit_state_unlock
     podar_dir_sesion
     emit_allow
   fi
@@ -4557,6 +4569,7 @@ $(printf '%s' "$tail_text" | assistant_text_transcript)"
   # <<< SAIKIT-REVIEW-NOTICE v1 <<<
   adv_limpiar_zona   # 20.6: cierre limpio — la zona de pruebas se va con el estado
   rm -f "$STATE_PATH" "$LOG_PATH" 2>/dev/null || true
+  saikit_state_unlock
   podar_dir_sesion   # Task 9.7 (C13): el dir tambien se va, no solo los archivos
   emit_allow
 }
