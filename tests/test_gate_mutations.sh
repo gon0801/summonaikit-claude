@@ -55,6 +55,7 @@ G2|despacho_bg_acredita|el guard del despacho en background se neutraliza y un j
 G1|notificacion_no_se_reconoce|el acotamiento de notificacion de tarea se neutraliza y una notificacion en background vuelve a desarmar el turno armado
 G1|grok_wake_strict_apagado|el skip estricto del auto-wake grok se neutraliza y un wake con sentinel en la descripcion del subagente vuelve a re-armar (18.27)
 G1|grok_wake_strict_sin_contenido|la condicion de contenido del skip grok se neutraliza y un sobre de OTRO evento con sentinel deja de armar (18.27, review r2)
+G1|reporte_devuelto_sin_filtro|el skip estricto del reporte devuelto se neutraliza y un hand-back agent-message que cita el token vuelve a armar el gate (23.13)
 G1|session_id_greedy|session_id se vuelve a leer con el lector greedy del payload crudo
 G1|host_sin_llave|el estado se vuelve a llavear sin HOST (A y B colapsan al mismo path)
 G1|prompt_greedy|el prompt vuelve al lector greedy sin decodificar (comillas o \n antes de -saikit no arman / desarman)
@@ -445,6 +446,11 @@ mut_credito_por_mencion()    { sed "s@^ECHO_LEAD_RE=.*@ECHO_LEAD_RE='NUNCA_MATCH
 mut_respuesta_exit_desacotada()    { sed 's/json_tool_response_texto |/json_string_field tool_response |/'; }
 
 mut_runner_mascarado_apagado() { sed "s@^SAIKIT_RUNNER_MASCARADO_RE=.*@SAIKIT_RUNNER_MASCARADO_RE='NUNCA_MATCHEA_ESTO_23_16'@"; }
+
+# 23.13 (fase 23, carril B): neutraliza el skip del hand-back agent-message.
+# Con eso el reporte devuelto que cita el token vuelve a armar. La atrapa
+# caso_g1_reporte_devuelto_con_token_no_arma.
+mut_reporte_devuelto_sin_filtro() { sed "s@^SAIKIT_AGENT_MESSAGE_INICIO_RE=.*@SAIKIT_AGENT_MESSAGE_INICIO_RE='NUNCA_MATCHEA_ESTO_23_13'@"; }
 
 # CodeRabbit PR #22: reemplaza a la retirada `tool_name_desacotado` por una que
 # SI es observable. Devuelve `tool_name` a la condicion de credito; con eso una
