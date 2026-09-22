@@ -834,21 +834,52 @@ caso_g1_candado_huerfano_acotado() {
   wait "$_hu_muerto" 2>/dev/null || true
   mkdir -p "$_hu_dir/.harness-state.lock"
   printf '%s %s' "$_hu_muerto" "$(date +%s)" > "$_hu_dir/.harness-state.lock/holder"
+  _hu_task_before="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
   lab_run prompt claude "$(lab_payload_prompt '-saikit tras huerfano muerto')"
+  _igual "tras huerfano muerto el hook termina correctamente" "$LAB_RC" "0"
   [ -f "$LAB_ESTADO_PATH" ] || _mal "tras huerfano muerto el estado no se escribio"
+  _hu_task_after="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
+  [ "$_hu_task_after" != "$_hu_task_before" ] ||
+    _mal "tras huerfano muerto el estado no se reescribio"
   if [ -d "$_hu_dir/.harness-state.lock" ]; then
     _mal "tras robar el huerfano el candado quedo puesto"
   fi
   # (b) dueno vivo: el propio pid del banco, siempre vivo durante el caso.
   mkdir -p "$_hu_dir/.harness-state.lock"
   printf '%s %s' "$$" "$(date +%s)" > "$_hu_dir/.harness-state.lock/holder"
+  _hu_task_before="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
   _hu_t0="$(date +%s)"
   SAIKIT_LOCK_WAIT_S=2 SAIKIT_LOCK_STALE_S=600 lab_run prompt claude "$(lab_payload_prompt '-saikit tras huerfano vivo')"
   _hu_t1="$(date +%s)"
+  _igual "con candado vivo el hook termina correctamente" "$LAB_RC" "0"
   [ -f "$LAB_ESTADO_PATH" ] || _mal "con candado vivo la escritura no completo (fail-open roto)"
+  _hu_task_after="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
+  [ "$_hu_task_after" != "$_hu_task_before" ] ||
+    _mal "con candado vivo el estado no se reescribio"
   _hu_dt=$((_hu_t1 - _hu_t0))
   if [ "$_hu_dt" -lt 1 ]; then _mal "con candado vivo no espero (robo un candado ajeno vivo): ${_hu_dt}s"; fi
   if [ "$_hu_dt" -gt 12 ]; then _mal "con candado vivo bloqueo mas que la espera acotada: ${_hu_dt}s"; fi
+  rm -rf "$_hu_dir/.harness-state.lock"
+  # (c) dueno VIVO con marca rancia: la antiguedad sola NUNCA roba (ronda 2).
+  # holder de dos campos (formato previo al token) con epoca 1 y umbral
+  # SAIKIT_LOCK_STALE_S=0: todo es rancio y aun asi el candado ajeno vivo
+  # se conserva — se espera el tope y se sigue sin candado.
+  lab_run prompt claude "$(lab_payload_prompt '-saikit semilla vivo rancio')"
+  mkdir -p "$_hu_dir/.harness-state.lock"
+  printf '%s %s' "$$" "1" > "$_hu_dir/.harness-state.lock/holder"
+  _hu_task_before="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
+  _hu_t0="$(date +%s)"
+  SAIKIT_LOCK_WAIT_S=2 SAIKIT_LOCK_STALE_S=0 lab_run prompt claude "$(lab_payload_prompt '-saikit tras vivo rancio')"
+  _hu_t1="$(date +%s)"
+  _igual "con candado vivo rancio el hook termina correctamente" "$LAB_RC" "0"
+  _hu_task_after="$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")"
+  [ "$_hu_task_after" != "$_hu_task_before" ] ||
+    _mal "con candado vivo rancio el estado no se reescribio"
+  [ -d "$_hu_dir/.harness-state.lock" ] ||
+    _mal "con candado vivo rancio el candado ajeno se robo por antiguedad"
+  _igual "con candado vivo rancio el holder ajeno queda intacto"     "$(cat "$_hu_dir/.harness-state.lock/holder" 2>/dev/null || true)" "$$ 1"
+  _hu_dt=$((_hu_t1 - _hu_t0))
+  if [ "$_hu_dt" -gt 12 ]; then _mal "con candado vivo rancio bloqueo mas que la espera acotada: ${_hu_dt}s"; fi
   rm -rf "$_hu_dir/.harness-state.lock"
 }
 

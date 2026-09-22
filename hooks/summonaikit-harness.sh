@@ -1615,8 +1615,10 @@ rn_take_pending() {
 # sin codigo nuevo. Espera acotada + fail-open: el hook JAMAS cuelga al host
 # (Muse corta un hook a los 30 s): si el candado no se consigue dentro de
 # SAIKIT_LOCK_WAIT_S (default 10), se sigue SIN candado y se deja una linea en
-# el log. Un candado huerfano (dueno muerto, o mas viejo que
-# SAIKIT_LOCK_STALE_S, default 30) se roba en vez de esperarse.
+# el log. Un candado huerfano (dueno muerto) se roba en vez de esperarse:
+# la antiguedad sola NUNCA roba — un dueno vivo conserva el candado por
+# mas que retenga (el reloj no es senal de muerte; SAIKIT_LOCK_STALE_S queda
+# sin efecto desde esta ronda).
 # Cada adquisicion publica un token unico (pid + epoca + secuencia); si la
 # publicacion falla no se declara adquirido y se reintenta sin borrar nada.
 # El robo se serializa con un marcador atomico y revalida el holder antes de
@@ -1633,8 +1635,6 @@ saikit_state_lock() {
   _saikit_lock_recupera="$STATE_DIR/.harness-state.lock.recupera"
   _saikit_lock_wait="${SAIKIT_LOCK_WAIT_S:-10}"
   case "$_saikit_lock_wait" in ''|*[!0-9]*) _saikit_lock_wait=10 ;; esac
-  _saikit_lock_stale="${SAIKIT_LOCK_STALE_S:-30}"
-  case "$_saikit_lock_stale" in ''|*[!0-9]*) _saikit_lock_stale=30 ;; esac
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   _saikit_lock_start="$(date +%s 2>/dev/null || printf '0')"
   case "$_saikit_lock_start" in ''|*[!0-9]*) _saikit_lock_start=0 ;; esac
@@ -1660,20 +1660,17 @@ saikit_state_lock() {
     _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
     _saikit_lock_pid="${_saikit_lock_holder%% *}"
     case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
-    _saikit_lock_rest="${_saikit_lock_holder#* }"
-    _saikit_lock_since="${_saikit_lock_rest%% *}"
-    case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
     if [ -z "$_saikit_lock_holder" ]; then
       sleep 2
       _saikit_lock_holder="$(cat "$_saikit_lock_dir/holder" 2>/dev/null || true)"
       _saikit_lock_pid="${_saikit_lock_holder%% *}"
       case "$_saikit_lock_pid" in ''|*[!0-9]*) _saikit_lock_pid="" ;; esac
-      _saikit_lock_rest="${_saikit_lock_holder#* }"
-      _saikit_lock_since="${_saikit_lock_rest%% *}"
-      case "$_saikit_lock_since" in ''|*[!0-9]*) _saikit_lock_since=0 ;; esac
     fi
-    # Dir sin holder en dos lecturas seguidas = adquiriente muerto en la
-    # ventana mkdir/printf: se roba sin pid que declarar muerto.
+    # El robo exige dueno MUERTO (kill -0): la antiguedad sola nunca roba —
+    # un dueno vivo que retiene mas que SAIKIT_LOCK_STALE_S conserva el
+    # candado (el reloj no es senal de muerte y el dueno puede seguir
+    # escribiendo). Dir sin holder en dos lecturas seguidas = adquiriente
+    # muerto en la ventana mkdir/printf: no hay pid que declarar muerto.
     _saikit_lock_steal=0
     if [ -z "$_saikit_lock_holder" ]; then
       _saikit_lock_steal=1
@@ -1682,9 +1679,6 @@ saikit_state_lock() {
     fi
     _saikit_lock_now="$(date +%s 2>/dev/null || printf '0')"
     case "$_saikit_lock_now" in ''|*[!0-9]*) _saikit_lock_now=0 ;; esac
-    if [ "$((_saikit_lock_now - _saikit_lock_since))" -gt "$_saikit_lock_stale" ] 2>/dev/null; then
-      _saikit_lock_steal=1
-    fi
     if [ "$_saikit_lock_steal" = "1" ]; then
       # Robo serializado: el marcador atomico evita que dos recuperadores se
       # pisen; bajo el marcador se re-lee y solo se borra si el holder NO
