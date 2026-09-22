@@ -13,8 +13,8 @@ SAIKIT_MARCA
 #
 #   redactar()            $1 = texto de entrada; lo imprime por stdout con las
 #                         formas de credencial reemplazadas por `[REDACTED]`.
-#   saikit_secret_re      imprime (stdout) la familia de regex para ESCANEAR.
-#   SAIKIT_SECRET_SCAN_RE variable de solo lectura con la MISMA regex.
+#   SAIKIT_SECRET_SCAN_RE variable de solo lectura con la familia de regex
+#                         para ESCANEAR.
 #
 # POR QUE UNA LIB Y NO INLINE. El hook (`hooks/summonaikit-harness.sh`) ya
 # aislaba su `redact_secrets` porque corre INSTALADO, solo, en el repo consumer,
@@ -56,12 +56,6 @@ SAIKIT_MARCA
 # alternancia a proposito: grep -E y sed -E lo entienden igual en las tres
 # familias de sed/grep que el repo presupone.
 readonly SAIKIT_SECRET_SCAN_RE='([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=[^[:space:]]|://[^[:space:]@/?#]*@|ghp_[A-Za-z0-9]|github_pat_[A-Za-z0-9]|gho_[A-Za-z0-9]|(^|[^A-Za-z0-9])sk-[A-Za-z0-9]|AKIA[0-9A-Z]|xox[bp]-[A-Za-z0-9]'
-
-# Imprime la misma familia por stdout, para quien prefiera la forma funcional
-# (p.ej. `grep -En "$(saikit_secret_re)"`).
-saikit_secret_re() {
-  printf '%s\n' "$SAIKIT_SECRET_SCAN_RE"
-}
 
 # Redacta $1 reemplazando las formas de credencial por `[REDACTED]`. Las reglas
 # en el MISMO orden que el hook: primero par clave=valor (con valor

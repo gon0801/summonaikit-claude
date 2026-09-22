@@ -35,8 +35,11 @@
 #     produccion: alla los enlaces deben resolver a reportes persistentes.
 #   - Un comentario ambiguo, invalido o para otro SHA no aprueba nada: se
 #     ignora y se sigue buscando. Un REVOKE posterior del mismo autor anula
-#     el recibo. Hallazgos posteriores en prosa los adjudica el lead, no este
-#     parser.
+#     el recibo; un REVOKE sin el sha completo avisa y no tiene efecto
+#     (A.R3). Un comentario que trae REVOKE no aprueba nada, aunque tambien
+#     traiga un APPROVE con bloque valido: revocar y volver a aprobar exige
+#     dos comentarios (A.R4, regla decidida). Hallazgos posteriores en prosa
+#     los adjudica el lead, no este parser.
 #   - v1: `bloqueantes` con CUALQUIER entrada es bloqueante abierto (un
 #     bloqueante cerrado se quita de la lista, no se marca). Las clases de
 #     codigo/contrato exigen tres roles; editorial/ledger/progreso usan el
@@ -69,8 +72,10 @@ entrega_flat_prefijo() {
 # El flat solo emite hojas escalares: [{}], [[]] o {"x":[]} no dejan hojas
 # y pasarían como vacíos. Por eso se inspecciona el JSON original, sin jq:
 # scanner awk consciente de strings/escapes. Solo vale la clave literal de
-# primer nivel (la anidada o dentro de un string no cuenta); ante claves
-# duplicadas vale la primera, igual que entrega_flat_hoja.
+# primer nivel (la anidada o dentro de un string no cuenta). Sobre claves
+# duplicadas no hay precedencia que documentar: el parser las RECHAZA
+# (veredicto_contract.sh, "clave duplicada"), igual que rechaza '.'/'['/']'
+# en las claves; el escaneo aqui no ve nunca un duplicado (A.R10).
 entrega_bloqueantes_no_vacio() {
   printf '%s' "$1" | awk '
     function esp(c) { return c == " " || c == "\t" || c == "\n" || c == "\r" }
@@ -149,6 +154,10 @@ entrega_validar() {
     return 3
   fi
   local origen="$1" repo="$2" pr="$3" sha="$4"
+  # A.R9(c): sin coordenadas no hay comparacion posible (un sha vacio haria
+  # matchear cualquier recibo o ninguno con la misma frase ambigua).
+  [ -n "$repo" ] && [ -n "$pr" ] && [ -n "$sha" ] \
+    || { printf 'recibo: coordenadas vacias: repo, pr y sha son obligatorios\n' >&2; return 3; }
   local txt flat val motivo
   if [ "$origen" = "-" ]; then
     txt="$(cat)" || { printf 'recibo: no se pudo leer el recibo de stdin\n' >&2; return 3; }
@@ -253,10 +262,13 @@ entrega_validar() {
   if entrega_flat_hoja "$flat" "bloqueantes" >/dev/null 2>&1 || entrega_flat_prefijo "$flat" "bloqueantes"; then
     local primero n
     primero="$(printf '%s\n' "$flat" | awk -F'\t' '$1 == "bloqueantes" || index($1, "bloqueantes.") == 1 || index($1, "bloqueantes[") == 1 { print substr($2, 1, 120); exit }')"
+    # A.R2: el indice empieza detras de "bloqueantes[" (12 caracteres); el
+    # substr viejo (14) se comia el digito de los indices <10 y el mensaje
+    # decia "0 en la lista" habiendo entradas.
     n="$(printf '%s\n' "$flat" | awk -F'\t' '
       $1 == "bloqueantes" { c++; next }
       index($1, "bloqueantes[") == 1 {
-        rest = substr($1, 14); idx = ""
+        rest = substr($1, 13); idx = ""
         while (substr(rest, 1, 1) ~ /^[0-9]$/) { idx = idx substr(rest, 1, 1); rest = substr(rest, 2) }
         if (idx != "" && !(idx in v)) { v[idx] = 1; c++ }
       }
@@ -281,6 +293,13 @@ entrega_bloque_json() {  # $1=texto $2=indice(1-based) -> stdout el bloque
   '
 }
 
+# entrega_body_trae_revoke <body> — 0 si el comentario lleva intencion de
+# revocar. Escotilla SOLO de prueba: la mutacion de A.R4 la anula para
+# comprobar que el caso de rechazo es el que atrapa la regla.
+entrega_body_trae_revoke() {
+  printf '%s' "$1" | grep -Fq "REVOKE"
+}
+
 # entrega_recibo_del_pr <repo> <pr> <sha> [lead]
 entrega_recibo_del_pr() {
   if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
@@ -288,6 +307,10 @@ entrega_recibo_del_pr() {
     return 3
   fi
   local repo="$1" pr="$2" sha="$3" lead="${4:-}"
+  # A.R9(c): con sha vacio, grep -Fq "" matchea cualquier cuerpo y un
+  # "APPROVE lead " sin sha podria aprobar cualquier comentario.
+  [ -n "$repo" ] && [ -n "$pr" ] && [ -n "$sha" ] \
+    || { printf 'recibo: coordenadas vacias: repo, pr y sha son obligatorios\n' >&2; return 3; }
   local raw rc
   raw="$(gh api "repos/$repo/issues/$pr/comments" --paginate 2>/dev/null)" && rc=0 || rc=$?
   if [ "$rc" -ne 0 ]; then
@@ -308,6 +331,13 @@ entrega_recibo_del_pr() {
     case "$pagina" in *[![:space:]]*) ;; *) continue ;; esac
     saikit_json_valido "$pagina" \
       || { printf 'recibo: no se pudo consultar los comentarios del PR %s#%s (pagina no-JSON)\n' "$repo" "$pr" >&2; return 3; }
+    # A.R5: la pagina tiene que ser una LISTA de comentarios. Un objeto
+    # JSON-valido (por ejemplo un error de la API) aplanaria a cero hojas [i]
+    # y se leeria como "sin comentarios": una respuesta inutilizable no puede
+    # leerse como ausencia.
+    primer_char="$(printf '%s' "$pagina" | awk '{ for (j = 1; j <= length($0); j++) { c = substr($0, j, 1); if (c != " " && c != "\t" && c != "\r") { print c; exit } } }')"
+    [ "$primer_char" = "[" ] \
+      || { printf 'recibo: no se pudo consultar los comentarios del PR %s#%s (la pagina no es una lista de comentarios)\n' "$repo" "$pr" >&2; return 3; }
     flat="$(saikit_json_flat "$pagina")"
     # Cuenta por el mayor indice [i] del flat, no por .body presente: un
     # comentario sin body no debe ocultar a los siguientes. [] aplana a nada.
@@ -326,12 +356,20 @@ entrega_recibo_del_pr() {
       # shellcheck disable=SC2059
       body="$(printf '%b' "$body")"
       if [ -n "$lead" ] && [ "$login" != "$lead" ]; then i=$((i + 1)); continue; fi
-      # REVOKE posterior del mismo autor anula el candidato (fail-closed: un
-      # REVOKE huerfano sin candidato no hace nada).
-      if [ -n "$candidato" ] && [ "$login" = "$autor_candidato" ] \
-         && printf '%s' "$body" | grep -Fq "REVOKE" \
-         && printf '%s' "$body" | grep -Fq "$sha"; then
-        revocado=1
+      # A.R3 + A.R4: un comentario que trae REVOKE se juzga entero y no
+      # aprueba nada. Con el sha completo anula el recibo vigente del mismo
+      # autor (como siempre); SIN el sha completo no tiene efecto y se avisa,
+      # para que el operador no crea haber revocado. En cualquier caso el
+      # comentario es ambiguo para su propio APPROVE: revocar y volver a
+      # aprobar exige dos comentarios.
+      if entrega_body_trae_revoke "$body"; then
+        if [ -n "$candidato" ] && [ "$login" = "$autor_candidato" ]; then
+          if printf '%s' "$body" | grep -Fq "$sha"; then
+            revocado=1
+          else
+            printf 'recibo: aviso: REVOKE visto sin efecto: el comentario de %s no trae el sha completo (%s); el recibo sigue vivo\n' "$login" "$sha" >&2
+          fi
+        fi
         i=$((i + 1)); continue
       fi
       if printf '%s' "$body" | grep -Fq "APPROVE lead $sha"; then
