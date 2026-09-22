@@ -877,6 +877,20 @@ caso_g1_mencion_humana_sin_sentinel_no_desarma() {
     return
   fi
   _igual "task_hash conservado" "$(sed -n 's/^task_hash=//p' "$LAB_ESTADO_PATH")" "123456"
+
+  # 23.17: con tarea RANCIA la guarda estricta sigue discriminando: sin la
+  # marca de cierre no hay skip y A4 desarma. La mutacion laxa_sin_cierre
+  # se atrapa aqui (con la fresca ambos conservan y no se observa).
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt 'contame como se ve un <task-notification> cuando llega, sin arrancar nada')"
+  if lab_hay_estado; then
+    _mal "un prompt humano que solo MENCIONA la marca con tarea rancia debe desarmar (A4) — PR #30"
+    return
+  fi
 }
 
 caso_g1_mencion_humana_de_la_marca_sigue_armando() {
@@ -1063,6 +1077,17 @@ caso_g1_prompt_vacio_no_desarma() {
   lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
   lab_run prompt claude "$(lab_payload_prompt '')"
   if ! lab_hay_estado; then _mal "un UserPromptSubmit con prompt VACIO (campo presente, string vacio) no debe desarmar un turno armado — Task 10.14"; fi
+
+  # 23.17: la fresca conserva por keep-alive y la clausula [ -n ] no se
+  # observa; con tarea RANCIA la clausula es lo unico que conserva (A4
+  # desarmaria): la mutacion desarma_con_prompt_vacio se atrapa aqui.
+  lab_sembrar 123456 1 1 1 "implementer,verifier,reviewer"
+  if ! saikit_antedatar "$LAB_ESTADO_PATH" 202001010000; then
+    _mal "antedatar el estado para el caso rancio — 23.17"
+    return
+  fi
+  lab_run prompt claude "$(lab_payload_prompt '')"
+  if ! lab_hay_estado; then _mal "con tarea rancia un prompt VACIO debe conservar (clausula [ -n ]) — 23.17"; fi
 }
 
 # DEFECTO A4 (costado de la CORRECCION 2 del plan) — session_id anidado. El
