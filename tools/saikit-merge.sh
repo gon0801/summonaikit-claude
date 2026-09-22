@@ -29,8 +29,12 @@
 #   tools/saikit-merge.sh --liberar-lock
 #                                         # recuperacion EXPLICITA del lock de
 #                                         # integracion (20.5): muestra su
-#                                         # contenido y lo quita. El lock jamas
-#                                         # se borra solo.
+#                                         # contenido y lo quita. Desde A.R6 un
+#                                         # dueno LOCAL muerto o con pid
+#                                         # reciclado se recupera solo, con
+#                                         # reclamo atomico; identidad
+#                                         # indeterminable, host ajeno y dueno
+#                                         # vivo jamas se tocan.
 #
 # EL MERGE, cuando toca: `gh pr merge --squash --match-head-commit <sha>
 # --body "Saikit-Merge: <sha>"` SIN --delete-branch (el borrado remoto es un
@@ -74,9 +78,11 @@
 # MISMO archivo para todos los worktrees del clone. Mismo diseño que el lock
 # D20 del setup: mkdir atomico, el dir guarda pid/host/inicio/modo, el trap
 # EXIT libera SOLO el propio (comparando el pid), un lock ajeno se REPORTA y
-# BLOQUEA con exit 3 (distinguible del NO-MERGE del gate) y SOLO
-# --liberar-lock explicito lo quita — nunca se borra solo, ni con pid muerto:
-# el proceso pudo vivir en otra maquina.
+# BLOQUEA con exit 3 (distinguible del NO-MERGE del gate). SOLO se borra por
+# --liberar-lock explicito, o por la recuperacion atomica de A.R6 cuando el
+# dueno es LOCAL y esta muerto (o su pid fue reciclado: el proceso actual es
+# mas joven que el lock): identidad indeterminable, host ajeno y dueno vivo
+# jamas se tocan.
 #   Revalidar al adquirir: el lock se toma al PRINCIPIO de la invocacion; TODO
 #   lo que decide corre DESPUES de adquirirlo. Un reintento con el lock ya
 #   libre vuelve a correr el gate completo desde cero (recibo en modo normal;
@@ -175,10 +181,11 @@ fi
 # trae --confirmado, en cualquiera de los dos modos): LISTO y --dry-run no
 # integran nada y no toman el lock. mkdir es atomico: si ya existe, otro
 # saikit-merge del mismo clone lo tiene (o lo dejo). Se REPORTA y se BLOQUEA
-# con exit 3 (distinguible del NO-MERGE del gate). NUNCA se borra solo — ni
-# con pid muerto ni viejo — : solo --liberar-lock explicito lo quita. La
-# caida del tenedor (kill -9) NO corre el trap y el lock SOBREVIVE para que
-# un tercero no lo libere en silencio.
+# con exit 3 (distinguible del NO-MERGE del gate). La caida del tenedor
+# (kill -9) NO corre el trap y el lock SOBREVIVE; desde A.R6 la recuperación
+# de un dueno LOCAL muerto (o con el pid reciclado) es automatica y atomica
+# por reclamo (ver abajo): identidad indeterminable, host ajeno o dueno vivo
+# jamas se tocan, y --liberar-lock sigue siendo la salida explicita.
 SOSTENER="${SAIKIT_MERGE_SOSTENER_SEG:-0}"
 candado_propio=0
 liberar_propio() {
@@ -189,23 +196,117 @@ liberar_propio() {
   fi
   candado_propio=0
 }
+
+# segundos_de_vida <pid>: etime de ps a segundos; vacio si no se pudo medir.
+segundos_de_vida() {
+  local e d=0 h=0
+  e="$(ps -o etime= -p "$1" 2>/dev/null | tr -d ' ')" || return 1
+  case "$e" in ''|*[!0-9:-]*) return 1;; esac
+  case "$e" in *-*) d="${e%%-*}"; e="${e#*-}";; esac
+  case "$e" in *:*:*) h="${e%%:*}"; e="${e#*:}";; esac
+  case "$e" in
+    *:*) printf '%s\n' $(( d*86400 + h*3600 + ${e%%:*}*60 + ${e##*:} ));;
+    *) return 1;;
+  esac
+}
+
+# edad_inicio_iso <started_at>: segundos desde la marca UTC del lock; 1 sin dato.
+edad_inicio_iso() {
+  INICIO_ISO="$1" python3 -c '
+import os, datetime
+try:
+    t = datetime.datetime.strptime(os.environ["INICIO_ISO"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+    print(int(datetime.datetime.now(datetime.timezone.utc).timestamp() - t.timestamp()))
+except Exception:
+    raise SystemExit(1)
+' 2>/dev/null
+}
+
+lock_tomar_campos() {  # escribe pid/host/started_at/modo y arma el trap propio
+  printf '%s' "$$" > "$LOCK_DIR/pid" \
+    || { rmdir "$LOCK_DIR" 2>/dev/null; no_merge "no se pudo escribir el lock de integracion"; }
+  printf '%s' "$(hostname 2>/dev/null || printf '?')" > "$LOCK_DIR/pid.host.tmp" 2>/dev/null \
+    && mv "$LOCK_DIR/pid.host.tmp" "$LOCK_DIR/host" 2>/dev/null || true
+  printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')" > "$LOCK_DIR/started_at" 2>/dev/null || true
+  if [ -n "$REVERT_DE" ]; then MODO_LOCK=revert; else MODO_LOCK=merge; fi
+  printf '%s' "$MODO_LOCK" > "$LOCK_DIR/modo" 2>/dev/null || true
+  candado_propio=1
+  trap 'liberar_propio' EXIT
+}
+
 if [ "$CONFIRMADO" = 1 ]; then
   if mkdir "$LOCK_DIR" 2>/dev/null; then
-    printf '%s' "$$" > "$LOCK_DIR/pid" \
-      || { rmdir "$LOCK_DIR" 2>/dev/null; no_merge "no se pudo escribir el lock de integracion"; }
-    printf '%s' "$(hostname 2>/dev/null || printf '?')" > "$LOCK_DIR/pid.host.tmp" 2>/dev/null \
-      && mv "$LOCK_DIR/pid.host.tmp" "$LOCK_DIR/host" 2>/dev/null || true
-    printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')" > "$LOCK_DIR/started_at" 2>/dev/null || true
-    if [ -n "$REVERT_DE" ]; then MODO_LOCK=revert; else MODO_LOCK=merge; fi
-    printf '%s' "$MODO_LOCK" > "$LOCK_DIR/modo" 2>/dev/null || true
-    candado_propio=1
-    trap 'liberar_propio' EXIT
+    lock_tomar_campos
   else
-    printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n' "$LOCK_DIR" >&2
-    mostrar_lock >&2
-    printf '  no se borra solo: si el dueno murio, liberalo explicito con:\n' >&2
-    printf '    bash tools/saikit-merge.sh --liberar-lock\n' >&2
-    exit 3
+    # A.R6: clasificar al dueno ANTES de rendirse. Sin pid, con pid no
+    # numerico o sin host: identidad INDETERMINABLE, el lock no se toca. Con
+    # host ajeno: menos aun (puede haber un merge en curso desde otra
+    # maquina que comparte el common-dir). Dueno local vivo: no se roba.
+    # Dueno local muerto, o pid reciclado (el proceso del pid es MAS JOVEN
+    # que el lock, asi que el que tomo el lock ya no existe): recuperacion
+    # ATOMICA por reclamo — mv a una tumba (el mv es el arbitro entre dos
+    # recuperadores), re-verificacion del pid dentro de la tumba, y mkdir
+    # nuevo. El perdedor de la carrera ve la tumba perdida o el lock sano
+    # del ganador y sale 3 sin tocar nada.
+    lock_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    lock_host="$(cat "$LOCK_DIR/host" 2>/dev/null || true)"
+    lock_inicio="$(cat "$LOCK_DIR/started_at" 2>/dev/null || true)"
+    lock_local="$(hostname 2>/dev/null || printf '?')"
+    lock_clase="indeterminable"
+    case "$lock_pid" in
+      ''|*[!0-9]*) : ;;
+      *)
+        case "$lock_host" in
+          ''|'?') : ;;
+          "$lock_local")
+            if ! kill -0 "$lock_pid" 2>/dev/null; then
+              lock_clase="muerto"
+            else
+              e_lock="$(edad_inicio_iso "$lock_inicio")" || e_lock=""
+              e_proc="$(segundos_de_vida "$lock_pid")" || e_proc=""
+              if [ -n "$e_lock" ] && [ -n "$e_proc" ] && [ "$e_proc" -lt "$e_lock" ]; then
+                lock_clase="reciclado"
+              else
+                lock_clase="vivo"
+              fi
+            fi ;;
+          *) lock_clase="ajeno" ;;
+        esac ;;
+    esac
+    if [ "$lock_clase" = "muerto" ] || [ "$lock_clase" = "reciclado" ]; then
+      # Gancho SOLO de test: pausa ENTRE la clasificacion y el reclamo, para
+      # que el caso de dos recuperadores los parquee a los dos dentro de la
+      # ventana con determinismo. Sin la variable es 0: PRODUCCION INTACTA.
+      sleep "${SAIKIT_MERGE_RECUPERAR_PAUSA:-0}" 2>/dev/null || true
+      tumba="$LOCK_DIR.muerto.$$-${RANDOM:-0}"
+      if mv "$LOCK_DIR" "$tumba" 2>/dev/null \
+         && [ "$(cat "$tumba/pid" 2>/dev/null || true)" = "$lock_pid" ] \
+         && rm -f "$tumba"/pid "$tumba"/host "$tumba"/started_at "$tumba"/modo 2>/dev/null \
+         && rmdir "$tumba" 2>/dev/null \
+         && mkdir "$LOCK_DIR" 2>/dev/null; then
+        printf 'saikit-merge: lock de un dueno local %s (pid %s): recuperado con reclamo atomico\n' "$lock_clase" "$lock_pid" >&2
+        lock_tomar_campos
+      else
+        [ -d "$tumba" ] && { mv "$tumba" "$LOCK_DIR" 2>/dev/null || true; }
+        printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n' "$LOCK_DIR" >&2
+        mostrar_lock >&2
+        exit 3
+      fi
+    else
+      printf 'saikit-merge: LOCK de integracion ocupado, no se sigue (%s):\n' "$LOCK_DIR" >&2
+      mostrar_lock >&2
+      case "$lock_clase" in
+        vivo)
+          printf '  el dueno (pid %s en %s) sigue vivo: no se roba un merge en curso\n' "$lock_pid" "$lock_host" >&2
+          printf '  no se borra solo: si el dueno murio, liberalo explicito con:\n' >&2
+          printf '    bash tools/saikit-merge.sh --liberar-lock\n' >&2 ;;
+        ajeno)
+          printf '  el dueno esta en otro host (%s): este clone no toca ese lock\n' "$lock_host" >&2 ;;
+        *)
+          printf '  identidad indeterminable (pid=%s host=%s): sin identidad no se borra\n' "${lock_pid:-(sin pid)}" "${lock_host:-(sin host)}" >&2 ;;
+      esac
+      exit 3
+    fi
   fi
 fi
 
