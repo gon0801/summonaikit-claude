@@ -199,7 +199,13 @@ fi
 # P4: cada perfil como item "- <rol>" del mensaje del catalogo ("Use an
 # exact listed id"). Buscar el nombre en todo el documento aceptaria un
 # perfil ausente del catalogo con su nombre en un campo ajeno (vuelta 1).
-catalogo="$(jq -r '[.. | strings | select(contains("Use an exact listed id"))] | first // empty' "$exp" 2>/dev/null)"
+# El catalogo vive en el evento model_request_configured: tomar el primer
+# texto coincidente de todo el documento aceptaria una nota que imite la
+# lista (vuelta 2 de revision).
+catalogo="$(jq -r '[.events[]? | .envelope.payload.event
+  | select(.kind == "model_request_configured")
+  | .. | strings | select(contains("Use an exact listed id"))] | first // empty' \
+  "$exp" 2>/dev/null)"
 roles_ok=1
 for r in implementer verifier reviewer adversary; do
   printf '%s\n' "$catalogo" | grep -q -- "- $r$" || { roles_ok=0; break; }

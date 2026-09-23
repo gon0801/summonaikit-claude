@@ -74,6 +74,12 @@ correr perfil-fuera-de-catalogo rojo-p4b
 [ "$RC" -eq 1 ] || malo "rojo P4b: exit $RC (esperaba 1)"
 grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4b: P4 no esta en fail"
 
+caso "rojo P4c (catalogo-imitado): nota que imita la lista no salva el catalogo roto"
+correr catalogo-imitado rojo-p4c
+[ "$RC" -eq 1 ] || malo "rojo P4c: exit $RC (esperaba 1)"
+grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4c: P4 no esta en fail"
+grep -q 'punto=P1 veredicto=pass' "$OF" || malo "rojo P4c: P1 debio seguir en pass"
+
 caso "unknown sin binario: exit 4, sin fail"
 correr SIN-BINARIO unk-1
 [ "$RC" -eq 4 ] || malo "unknown: exit $RC (esperaba 4)"
