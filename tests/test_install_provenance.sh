@@ -179,6 +179,21 @@ case "$out" in
   *) malo "checkout no-git no reporto desconocida: [$out]" ;;
 esac
 
+# 23.11(d): GIT_DIR/GIT_WORK_TREE heredados no convierten un checkout no-git
+# en un repo ajeno: el chequeo fuera-de-git los ignora y sigue desconocida
+# con motivo no-es-repo-git. En master contestaba por el repo apuntado.
+caso "P5b: GIT_DIR+GIT_WORK_TREE heredados => sigue desconocida (no-es-repo-git)"
+ajeno="$(repo_sandbox repo-p5b)"
+nogitgd="$tmp/nogit-gitdir"
+mkdir -p "$nogitgd/tools"
+cp "$tool" "$nogitgd/tools/install-hook.sh"
+out="$(GIT_DIR="$ajeno/.git" GIT_WORK_TREE="$ajeno" bash "$nogitgd/tools/install-hook.sh" --dry-run --source "$tmp/fuente-nogit.sh" --dest "$tmp/dest-nogit-gitdir.sh" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run nogit con GIT_DIR salio $rc: $out"
+case "$out" in
+  *'procedencia: desconocida (no-es-repo-git)'*) ;;
+  *) malo "con GIT_DIR heredado no dio desconocida/no-es-repo-git: [$out]" ;;
+esac
+
 # P6: sin git disponible => desconocida, y el exit NO se mueve (reportar no
 # bloquea: desinstalar/reparar andan igual con git roto).
 caso "P6: SAIKIT_GIT_BIN inexistente => desconocida y exit intacto"
