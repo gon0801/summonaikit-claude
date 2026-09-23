@@ -194,6 +194,31 @@ case "$out" in
   *) malo "con GIT_DIR heredado no dio desconocida/no-es-repo-git: [$out]" ;;
 esac
 
+# 23.11(d) ronda 2: con checkout git PROPIO y GIT_DIR ajeno heredado, la
+# procedencia sigue juzgando al propio (rama+sha propios), no al ajeno.
+# Cubre status/HEAD/origin-master, que la primera version del fix dejaba
+# heredando GIT_DIR.
+caso "P5c: checkout git con GIT_DIR ajeno => procedencia propia, no ajena"
+propio="$(repo_sandbox repo-p5c-propio)"
+ajeno2="$(repo_sandbox repo-p5c-ajeno)"
+# Segundo commit en el ajeno para que los shas difieran (mismo fixture,
+# misma fecha => mismo sha si no).
+( cd "$ajeno2" && printf '# extra-p5c\n' >> hooks/summonaikit-harness.sh \
+  && git -c user.email=t@t -c user.name=t add hooks/summonaikit-harness.sh \
+  && git -c user.email=t@t -c user.name=t commit -qm extra-p5c ) >/dev/null 2>&1
+sha_propio="$(git -C "$propio" rev-parse HEAD 2>/dev/null)" || sha_propio=''
+sha_ajeno="$(git -C "$ajeno2" rev-parse HEAD 2>/dev/null)" || sha_ajeno=''
+[ -n "$sha_propio" ] && [ -n "$sha_ajeno" ] && [ "$sha_propio" != "$sha_ajeno" ] || malo "fixture P5c sin shas distintos"
+out="$(GIT_DIR="$ajeno2/.git" GIT_WORK_TREE="$ajeno2" bash "$propio/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run propio con GIT_DIR ajeno salio $rc: $out"
+case "$out" in
+  *"sha=$sha_propio"*) ;;
+  *) malo "con GIT_DIR ajeno no reporto el sha propio: [$out]" ;;
+esac
+case "$out" in
+  *"sha=$sha_ajeno"*) malo "con GIT_DIR ajeno reporto el sha AJENO: [$out]" ;;
+esac
+
 # P6: sin git disponible => desconocida, y el exit NO se mueve (reportar no
 # bloquea: desinstalar/reparar andan igual con git roto).
 caso "P6: SAIKIT_GIT_BIN inexistente => desconocida y exit intacto"
