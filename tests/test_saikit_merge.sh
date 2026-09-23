@@ -33,7 +33,10 @@
 #     segundo NO llama merge y sale 3 (distinguible del NO-MERGE). DOS
 #     WORKTREES del mismo clone: comparten common-dir, el hermano se bloquea.
 #     CAIDA (kill -9) del tenedor: el lock SOBREVIVE y un tercero ajeno no lo
-#     libera; la recuperacion es EXPLICITA (--liberar-lock), nunca automatica.
+#     libera mientras nadie lo recupere. A.R6: dueno LOCAL muerto (o pid
+#     reciclado) se recupera SOLO, con reclamo atomico (mv-arbitro); dueno
+#     vivo, host ajeno e identidad indeterminable jamas se tocan, y
+#     --liberar-lock sigue siendo la salida explicita.
 #     REINTENTO con el lock libre: re-corre el gate completo del modo (normal:
 #     base/recibo/CI; revert: punta, SIN estado propio). LIMITE DECLARADO: dos
 #     clones independientes NO se excluyen (common-dirs distintos) — se mide
@@ -1115,18 +1118,25 @@ c_lock_caida() {
     || { _mal "A no tomo el lock; el caso no mide caida"; wait "$a_pid" 2>/dev/null; return; }
   kill -9 "$a_pid"; wait "$a_pid" 2>/dev/null
   [ -d ".git/saikit-merge.lock" ] || _mal "la caida (SIGKILL) libero el lock: el trap no corre con -9 y el lock tiene que sobrevivir"
-  # Tercero ajeno: bloqueado por el huerfano...
+  # A.R6: el lock huerfano tiene dueno LOCAL muerto: la recuperacion
+  # automatica con reclamo atomico lo recupera y el tercero SI sigue hasta el
+  # merge. Sigue siendo cierto que la SALIDA del tercero no libera un lock
+  # ajeno: aqui el lock era huerfano y lo recupera ANTES de trabajar.
   correr --confirmado
-  [ "$RC" -eq 3 ] || _mal "el tercero deberia bloquearse con 3 (lock huerfano), dio $RC: $OUT"
-  _contiene "reporta el pid del dueno caido" "$OUT" "$a_pid"
-  _contiene "dice que no se borra solo" "$OUT" "no se borra solo"
-  if merge_disparado; then _mal "el tercero llamo merge con un lock huerfano presente"; fi
-  # ...y su salida NO libera el lock ajeno (el trap compara el pid).
-  [ -d ".git/saikit-merge.lock" ] || _mal "la salida del tercero libero un lock ajeno"
-  # Recuperacion EXPLICITA: --liberar-lock muestra el contenido y lo quita.
+  [ "$RC" -eq 0 ] || _mal "con dueno local muerto el tercero debio recuperarse y mergear, dio $RC: $OUT"
+  _contiene "dice que recupero" "$OUT" "recuperado con reclamo atomico"
+  _contiene "clasifica muerto" "$OUT" "dueno local muerto"
+  _contiene "merge ok tras recuperar" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
+  # La via EXPLICITA sigue viva: un lock plantado a mano lo quita --liberar-lock.
+  mkdir -p ".git/saikit-merge.lock"
+  printf '999999' > ".git/saikit-merge.lock/pid"
+  printf "$(hostname 2>/dev/null || printf '?')" > ".git/saikit-merge.lock/host"
+  printf "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')" > ".git/saikit-merge.lock/started_at"
+  printf 'merge' > ".git/saikit-merge.lock/modo"
   OUT2="$(bash "$MERGE" --liberar-lock 2>&1)"; RC2=$?
   [ "$RC2" -eq 0 ] || _mal "--liberar-lock fallo: $OUT2"
-  _contiene "muestra el contenido antes de quitar" "$OUT2" "$a_pid"
+  _contiene "muestra el contenido antes de quitar" "$OUT2" "999999"
   [ ! -d ".git/saikit-merge.lock" ] || _mal "--liberar-lock no quito el lock"
   # Tras liberar, el reintento ya no esta bloqueado y llega al final del gate.
   correr --confirmado
@@ -1237,6 +1247,132 @@ c_lock_entre_clones() {
   [ "$RC2" -eq 0 ] || _mal "limpieza: liberar-lock fallo: $OUT2"
 }
 
+plantar_lock_huerfano() {  # $1 pid, $2 host, $3 started_at
+  mkdir -p ".git/saikit-merge.lock"
+  printf '%s' "$1" > ".git/saikit-merge.lock/pid"
+  printf '%s' "$2" > ".git/saikit-merge.lock/host"
+  printf '%s' "$3" > ".git/saikit-merge.lock/started_at"
+  printf 'merge' > ".git/saikit-merge.lock/modo"
+}
+
+c_lock_recuperar_muerto() {
+  # A.R6, caso muerto: dueno LOCAL con pid inexistente. La recuperacion
+  # automatica con reclamo atomico toma el lock y el gate sigue hasta el
+  # merge; el clasificador lo nombra.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  plantar_lock_huerfano 999999 "$(hostname 2>/dev/null || printf '?')" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  correr --confirmado
+  [ "$RC" -eq 0 ] || _mal "debio recuperar el huerfano muerto y mergear, dio $RC: $OUT"
+  _contiene "clasifica muerto" "$OUT" "dueno local muerto"
+  _contiene "dice reclamo atomico" "$OUT" "recuperado con reclamo atomico"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
+}
+
+c_lock_recuperar_reciclado() {
+  # A.R6, caso pid reutilizado: el pid vive pero el proceso es MAS JOVEN que
+  # el lock, asi que el que lo tomo ya no existe. Misma recuperacion, con su
+  # propia clasificacion.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  sleep 30 & rec_pid=$!
+  plantar_lock_huerfano "$rec_pid" "$(hostname 2>/dev/null || printf '?')" "2020-01-01T00:00:00Z"
+  correr --confirmado
+  kill "$rec_pid" 2>/dev/null; wait "$rec_pid" 2>/dev/null
+  [ "$RC" -eq 0 ] || _mal "debio recuperar el pid reciclado y mergear, dio $RC: $OUT"
+  _contiene "clasifica reciclado" "$OUT" "dueno local reciclado"
+  _contiene "dice reclamo atomico" "$OUT" "recuperado con reclamo atomico"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
+}
+
+c_lock_reciclado_etime_octal() {
+  # El etime trae ceros a la izquierda (macOS mide 00:00) y bash lee 08/09
+  # como octal invalido en la aritmetica: sin base 10, un pid reciclado con
+  # etime 08:00:01 se clasificaba VIVO y el lock no se reclamaba. Un ps de
+  # mentira contesta 08:00:01 y la recuperacion tiene que salir igual.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  mkdir -p "$SB/bin08"
+  cat > "$SB/bin08/ps" <<'PS08'
+#!/bin/sh
+case "$1 $2" in
+  "-o etime="*) printf '08:00:01\n'; exit 0 ;;
+esac
+exec /bin/ps "$@"
+PS08
+  chmod +x "$SB/bin08/ps"
+  sleep 30 & rec_pid=$!
+  plantar_lock_huerfano "$rec_pid" "$(hostname 2>/dev/null || printf '?')" "2020-01-01T00:00:00Z"
+  PATH="$SB/bin08:$PATH" correr --confirmado
+  kill "$rec_pid" 2>/dev/null; wait "$rec_pid" 2>/dev/null
+  [ "$RC" -eq 0 ] || _mal "con etime 08:00:01 debio recuperar el reciclado, dio $RC: $OUT"
+  _contiene "clasifica reciclado" "$OUT" "dueno local reciclado"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
+}
+
+c_lock_host_ajeno_no_se_toca() {
+  # A.R6, caso host ajeno: el lock dice otro host; este clone no lo toca ni
+  # con pid muerto (pudo vivir en otra maquina del common-dir compartido).
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  plantar_lock_huerfano 999999 "otro-host-de-otra-maquina" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  correr --confirmado
+  [ "$RC" -eq 3 ] || _mal "un lock de host ajeno debe bloquear con 3, dio $RC: $OUT"
+  _contiene "nombra el host ajeno" "$OUT" "otro host"
+  if merge_disparado; then _mal "mergeo con el lock de otro host puesto"; fi
+  [ -d ".git/saikit-merge.lock" ] || _mal "se toco el lock de un host ajeno"
+  [ "$(cat .git/saikit-merge.lock/pid 2>/dev/null)" = "999999" ] || _mal "el contenido del lock ajeno cambio"
+  bash "$MERGE" --liberar-lock >/dev/null 2>&1
+}
+
+c_lock_indeterminable_no_se_toca() {
+  # A.R6, caso identidad indeterminable: sin pid no hay verificacion posible;
+  # no se borra, se informa y el carril queda libre de seguir con otras filas.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  plantar_lock_huerfano "" "$(hostname 2>/dev/null || printf '?')" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  correr --confirmado
+  [ "$RC" -eq 3 ] || _mal "sin identidad debe bloquear con 3, dio $RC: $OUT"
+  _contiene "nombra la identidad indeterminable" "$OUT" "identidad indeterminable"
+  if merge_disparado; then _mal "mergeo con un lock sin identidad"; fi
+  [ -d ".git/saikit-merge.lock" ] || _mal "se toco un lock sin identidad"
+  bash "$MERGE" --liberar-lock >/dev/null 2>&1
+}
+
+c_lock_dos_recuperadores() {
+  # A.R6, caso dos recuperadores: los dos ven el huerfano y quedan parqueados
+  # DENTRO de la ventana (SAIKIT_MERGE_RECUPERAR_PAUSA, gancho de test). El
+  # mv es el arbitro: exactamente uno recupera y mergea; el otro sale 3 sin
+  # tocar nada. Un mutante que quite el reclamo atomico deja este caso rojo.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  plantar_lock_huerfano 999999 "$(hostname 2>/dev/null || printf '?')" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  SAIKIT_MERGE_RECUPERAR_PAUSA=2 bash "$MERGE" --confirmado > "$SB/r1.log" 2>&1 &
+  r1=$!
+  SAIKIT_MERGE_RECUPERAR_PAUSA=2 bash "$MERGE" --confirmado > "$SB/r2.log" 2>&1 &
+  r2=$!
+  wait "$r1"; rc1=$?
+  wait "$r2"; rc2=$?
+  ganadores=0; bloqueados=0
+  for par in "$rc1:$r1" "$rc2:$r2"; do
+    rc="${par%%:*}"; quien="${par#*:}"
+    log="$SB/r1.log"; [ "$quien" = "$r2" ] && log="$SB/r2.log"
+    if [ "$rc" -eq 0 ]; then
+      ganadores=$((ganadores + 1))
+      grep -q "recuperado con reclamo atomico" "$log"         || _mal "el ganador no dice que recupero: $(cat "$log")"
+    else
+      bloqueados=$((bloqueados + 1))
+      grep -q "LOCK de integracion ocupado" "$log"         || _mal "el perdedor no reporta el lock ocupado (rc $rc): $(cat "$log")"
+    fi
+  done
+  [ "$ganadores" -eq 1 ] || _mal "exactamente un recuperador debio ganar, hubo $ganadores"
+  [ "$bloqueados" -eq 1 ] || _mal "exactamente un recuperador debio bloquearse, hubo $bloqueados"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el ganador debio liberar su lock al salir"
+}
+
 caso "lock_segundo_proceso_no_llama_merge_exit_3"
 {
   c_lock_dos_procesos
@@ -1265,6 +1401,42 @@ caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
   fi
 }
 fin_caso "mutante_lock_path_sin_canonicalizar_se_pone_rojo"
+
+caso "lock_recupera_dueno_local_muerto"
+{
+  c_lock_recuperar_muerto
+}
+fin_caso "lock_recupera_dueno_local_muerto"
+
+caso "lock_recupera_pid_reciclado"
+{
+  c_lock_recuperar_reciclado
+}
+fin_caso "lock_recupera_pid_reciclado"
+
+caso "lock_recupera_pid_reciclado_con_etime_08"
+{
+  c_lock_reciclado_etime_octal
+}
+fin_caso "lock_recupera_pid_reciclado_con_etime_08"
+
+caso "lock_host_ajeno_no_se_toca"
+{
+  c_lock_host_ajeno_no_se_toca
+}
+fin_caso "lock_host_ajeno_no_se_toca"
+
+caso "lock_identidad_indeterminable_no_se_toca"
+{
+  c_lock_indeterminable_no_se_toca
+}
+fin_caso "lock_identidad_indeterminable_no_se_toca"
+
+caso "lock_dos_recuperadores_un_solo_ganador"
+{
+  c_lock_dos_recuperadores
+}
+fin_caso "lock_dos_recuperadores_un_solo_ganador"
 
 caso "lock_caida_no_libera_ajeno_recuperacion_explicita"
 {
@@ -1344,7 +1516,17 @@ mut_sed() {  # $1=sed-expr, aplica sobre el fuente y deja el mutado en $MUTADO
   # Fuera de SB_LINK_ROOT: sb_reset borra el arbol del symlink y $SB-mutado
   # (hermano de logical/) moria con el reset (20.28 costura).
   MUTADO="${TMPDIR:-/tmp}/saikit-merge-mutado-$$.sh"
-  { sed "$1" "$MERGE"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
+  # El exit del sed manda: un s mal cerrado salia 1 con stdout vacio y el
+  # banco acreditaba una mutacion que nunca se aplico (revision del bloque D).
+  bruto="${TMPDIR:-/tmp}/saikit-merge-mutado-bruto-$$.sh"
+  if ! sed "$1" "$MERGE" > "$bruto"; then
+    printf '    FAIL: el sed de la mutacion salio con error: %s\n' "$1" >&2
+    fail=1
+    return
+  fi
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$bruto" > "$MUTADO" || { fail=1; return; }
+  rm -f "$bruto"
+  [ -s "$MUTADO" ] || { printf '    FAIL: el sed dejo el mutado VACIO\n' >&2; fail=1; }
 }
 
 correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
@@ -1576,6 +1758,7 @@ sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
 emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:   tools/saikit-merge.sh --confirmado|	c_listo_emision
 lock_sin_guard	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if true; then|	c_lock_exclusion
 lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -p "\$LOCK_DIR" 2>/dev/null; then|	c_lock_exclusion
+recuperacion_sin_arbitro	s|if mv "$LOCK_DIR" "$tumba" 2>/dev/null|if cp -R "$LOCK_DIR" "$tumba" 2>/dev/null|	c_lock_dos_recuperadores
 trap_no_libera	s|^liberar_propio() {$|liberar_propio() { return 0; #|	c_lock_libera_propio
 recibo_opcional	s/$(entrega_validar/$(true/	c_recibo_sin_reviewer
 ci_juzga_intento_viejo	s/\$2 > bestnum\[$1\]/$2 < bestnum[$1]/	c_ci_intento_viejo

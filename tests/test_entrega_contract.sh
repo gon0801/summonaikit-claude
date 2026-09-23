@@ -399,6 +399,153 @@ caso "loader_comentario_sin_body_no_oculta"
 }
 fin_caso "loader_comentario_sin_body_no_oculta"
 
+caso "bloqueantes_conteo_exacto_en_el_mensaje"
+{
+  # A.R2 (ADV-A-02): el contador del mensaje usa el indice detras de
+  # "bloqueantes[" (12 caracteres). Con el substr viejo (14) un indice <10
+  # nunca contaba y el mensaje decia "0 en la lista" habiendo entradas.
+  uno='[{"id":"B1","titulo":"caida en prod"}]'
+  doce='[{"id":"B1"},{"id":"B2"},{"id":"B3"},{"id":"B4"},{"id":"B5"},{"id":"B6"},{"id":"B7"},{"id":"B8"},{"id":"B9"},{"id":"B10"},{"id":"B11"},{"id":"B12"}]'
+  recibo_ok | sed "s/\"bloqueantes\":\[\]/\"bloqueantes\":$uno/" > "$SB/recibo.json"
+  validar "$SB/recibo.json"
+  [ "$RC" -eq 1 ] || _mal "un bloqueante debe rechazar (rc 1), dio $RC"
+  _contiene "con 1 entrada dice 1" "$OUT" "1 en la lista"
+  recibo_ok | sed "s/\"bloqueantes\":\[\]/\"bloqueantes\":$doce/" > "$SB/recibo.json"
+  validar "$SB/recibo.json"
+  [ "$RC" -eq 1 ] || _mal "doce bloqueantes deben rechazar (rc 1), dio $RC"
+  _contiene "con 12 entradas dice 12" "$OUT" "12 en la lista"
+  _contiene "el primero sigue nombrado" "$OUT" "B1"
+}
+fin_caso "bloqueantes_conteo_exacto_en_el_mensaje"
+
+caso "revoke_sin_sha_avisa_y_no_hace_nada"
+{
+  # A.R3 (ADV-A-03): intencion de revocar sin el sha completo no puede caer
+  # en silencio: el operador creeria haber revocado y un --confirmado
+  # posterior mergea igual. El recibo sigue vivo (rc 0) y el aviso sale.
+  {
+    printf 'APPROVE lead %s\n\n```json\n' "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '```\n'
+  } > "$SB/c1.txt"
+  printf 'REVOKE lead: aparecio un problema, revoco lo anterior\n' > "$SB/c2.txt"
+  {
+    printf '['; comentario_json "op" "$SB/c1.txt"; printf ','
+    comentario_json "op" "$SB/c2.txt"; printf ']'
+  } > "$SB/comments.json"
+  export SAIKIT_GH_COMMENTS="$SB/comments.json" SAIKIT_GH_API_FALLA=0
+  OUT="$(entrega_recibo_del_pr "$REPO" "$PR" "$SHA" "op" 2>"$SB/err")"
+  RC=$?
+  [ "$RC" -eq 0 ] || _mal "sin el sha el REVOKE no tiene efecto: rc esperaba 0, dio $RC"
+  _contiene "el recibo sigue vivo" "$OUT" '"id":"a"'
+  _contiene "avisa el REVOKE sin efecto" "$(cat "$SB/err")" "REVOKE visto sin efecto"
+}
+fin_caso "revoke_sin_sha_avisa_y_no_hace_nada"
+
+caso "revoke_y_approve_mismo_comentario_no_aprueba"
+{
+  # A.R4 (ADV-A-04), lado 1: como PRIMER comentario, REVOKE y APPROVE juntos
+  # son ambiguos y NO aprueban nada (el texto viejo prometia que gana el
+  # APPROVE; la regla decidida es fail-closed: revocar y volver a aprobar
+  # exige dos comentarios).
+  {
+    printf 'REVOKE lead %s: anulo lo anterior\n\n' "$SHA"
+    printf 'APPROVE lead %s\n\n```json\n' "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '```\n'
+  } > "$SB/c1.txt"
+  {
+    printf '['; comentario_json "op" "$SB/c1.txt"; printf ']'
+  } > "$SB/comments.json"
+  export SAIKIT_GH_COMMENTS="$SB/comments.json" SAIKIT_GH_API_FALLA=0
+  OUT="$(entrega_recibo_del_pr "$REPO" "$PR" "$SHA" "op" 2>"$SB/err")"
+  RC=$?
+  [ "$RC" -eq 1 ] || _mal "un comentario mixto no puede aprobar; rc esperaba 1, dio $RC"
+  _contiene "declara sin recibo" "$(cat "$SB/err")" "sin recibo"
+}
+fin_caso "revoke_y_approve_mismo_comentario_no_aprueba"
+
+caso "revoke_con_sha_tras_recibo_sigue_revocando"
+{
+  # A.R4, lado 2: un REVOKE con sha completo despues de un recibo valido lo
+  # anula, aunque el mismo comentario intente volver a aprobar con un bloque
+  # NUEVO: el recibo queda revocado, no reemplazado.
+  {
+    printf 'APPROVE lead %s\n\n```json\n' "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '```\n'
+  } > "$SB/c1.txt"
+  {
+    printf 'REVOKE lead %s: anulo lo anterior\n\n' "$SHA"
+    printf 'APPROVE lead %s\n\n```json\n' "$SHA"
+    printf '{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"z","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n' "$REPO" "$SHA"
+    printf '```\n'
+  } > "$SB/c2.txt"
+  {
+    printf '['; comentario_json "op" "$SB/c1.txt"; printf ','
+    comentario_json "op" "$SB/c2.txt"; printf ']'
+  } > "$SB/comments.json"
+  export SAIKIT_GH_COMMENTS="$SB/comments.json" SAIKIT_GH_API_FALLA=0
+  OUT="$(entrega_recibo_del_pr "$REPO" "$PR" "$SHA" "op" 2>"$SB/err")"
+  RC=$?
+  [ "$RC" -eq 1 ] || _mal "el recibo debe quedar revocado; rc esperaba 1, dio $RC"
+  _contiene "declara revocado" "$(cat "$SB/err")" "revocado"
+}
+fin_caso "revoke_con_sha_tras_recibo_sigue_revocando"
+
+caso "pagina_no_array_es_desconocido"
+{
+  # A.R5 (ADV-A-05): una pagina JSON-valida que no es una LISTA de comentarios
+  # (por ejemplo un error de la API) aplana a cero comentarios y se leeria
+  # como "sin recibo". Es una respuesta inutilizable: rc 3. Las paginas
+  # validas de lista no cambian: los casos de loader de arriba siguen verdes.
+  printf '{"message":"Not Found","documentation_url":"https://docs.github.com"}' > "$SB/comments.json"
+  export SAIKIT_GH_COMMENTS="$SB/comments.json" SAIKIT_GH_API_FALLA=0
+  OUT="$(entrega_recibo_del_pr "$REPO" "$PR" "$SHA" "op" 2>"$SB/err")"
+  RC=$?
+  [ "$RC" -eq 3 ] || _mal "una pagina no-array es unknown; rc esperaba 3, dio $RC"
+  _contiene "nombra la pagina" "$(cat "$SB/err")" "no es una lista"
+}
+fin_caso "pagina_no_array_es_desconocido"
+
+caso "coordenadas_vacias_rechazadas"
+{
+  # A.R9(c): con sha vacio, grep -Fq "" matchea cualquier cuerpo; las
+  # coordenadas son obligatorias y su ausencia es un rechazo propio (rc 3),
+  # no una comparacion ambigua.
+  recibo_ok > "$SB/recibo.json"
+  ERR="$(entrega_validar "$SB/recibo.json" "$REPO" "$PR" "" 2>&1 >/dev/null)"; RC=$?
+  [ "$RC" -eq 3 ] || _mal "entrega_validar con sha vacio debe salir 3, dio $RC"
+  _contiene "nombra coordenadas vacias" "$ERR" "coordenadas vacias"
+  ERR="$(entrega_recibo_del_pr "$REPO" "$PR" "" "op" 2>&1 >/dev/null)"; RC=$?
+  [ "$RC" -eq 3 ] || _mal "entrega_recibo_del_pr con sha vacio debe salir 3, dio $RC"
+  _contiene "nombra coordenadas vacias" "$ERR" "coordenadas vacias"
+}
+fin_caso "coordenadas_vacias_rechazadas"
+
+caso "mutacion_revoke_dejado_de_bloquear_atrapada"
+{
+  # Mutante de A.R4: si el comentario mixto dejara de bloquearse (la escotilla
+  # entrega_body_trae_revoke anulada), el mutante aprueba lo que el gate debe
+  # rechazar: eso prueba que la asercion rc 1 del caso lado-1 es la que
+  # atrapa la regla. Va al final a proposito, como su hermano de bloqueantes.
+  (
+    . "$LIB"
+    entrega_body_trae_revoke() { return 1; }
+    printf 'APPROVE lead %s\n\n```json\n{"schema":"saikit-entrega.v1","repo":"%s","pr":7,"sha":"%s","clase":"codigo","implementer":{"id":"a","evidencia":"e1"},"verifier":{"id":"b","resultado":"PASS","evidencia":"e2"},"reviewer":{"id":"c","resultado":"APPROVE","evidencia":"e3"},"ci":{"workflow":"ci","evidencia":"e4"},"bloqueantes":[],"residuales":[]}\n```\n' "$SHA" "$REPO" "$SHA" > "$SB/mut-c1.txt"
+    printf '[%s]' "$(comentario_json "op" "$SB/mut-c1.txt")" > "$SB/mut-comments.json"
+    export SAIKIT_GH_COMMENTS="$SB/mut-comments.json" SAIKIT_GH_API_FALLA=0
+    if entrega_recibo_del_pr "$REPO" "$PR" "$SHA" "op" >/dev/null 2>&1; then
+      printf 'MUTANTE-APRUEBA\n'
+    else
+      printf 'MUTANTE-RECHAZA\n'
+    fi
+  ) > "$SB/mut.out" 2>&1
+  grep -q 'MUTANTE-APRUEBA' "$SB/mut.out" \
+    || _mal "el mutante sigue rechazando: el caso no discrimina (ver arriba)"
+}
+fin_caso "mutacion_revoke_dejado_de_bloquear_atrapada"
+
 caso "mutacion_sin_chequeo_bloqueantes_atrapada"
 {
   # Si la comprobacion estructural se inutiliza, las regresiones de

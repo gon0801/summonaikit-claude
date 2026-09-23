@@ -53,12 +53,15 @@ PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
 bateria entera, y cada nivel tiene su candado.
 
 - `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), repartida por ARCHIVO
-  en 7 shards (`SAIKIT_SHARD=i/7`, round-robin en orden LC_ALL=C; 20.29).
+  en 8 shards (`SAIKIT_SHARD=i/8`, round-robin en orden LC_ALL=C; 20.29).
   Medido 2026-09-09: sin shard tardaba 22-26 min (60 archivos en serie); con 4
   shards el peor dio 9m26 (run 34316372671); con 7, ~7 min (el piso es
-  `test_feature_map_merge`, 376 s). Si vuelve a pasar de ~10 min: re-medir y
-  re-elegir N, no recortar. Candado: `tests/test_runner_guards.sh` (union
-  exacta de los shards + matrix completa del workflow).
+  `test_feature_map_merge`, 376 s). A.R11 (run 35553346727): con 7 el
+  round-robin ponia `test_feature_map_merge` y `test_install_muse_mutations`
+  en el MISMO shard 2 y ese job llego a 13m32s; se sube a 8 para separar los
+  pesados (quedan en los shards 7 y 4). Si vuelve a pasar de ~10 min:
+  re-medir y re-elegir N, no recortar. Candado: `tests/test_runner_guards.sh`
+  (union exacta de los shards + matrix completa del workflow).
 - `suite-lentos` — `test_gate_mutations`, repartido según la matriz vigente
   de `.github/workflows/quality.yml`. `SAIKIT_MUT_SHARD=i/N` usa ese mismo N;
   no se conserva aquí otro número de shards o mutaciones. Candado:

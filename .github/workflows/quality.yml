@@ -114,7 +114,7 @@ jobs:
   #      111 mutaciones en 3 (37/37/37) — candado:
   #      `tests/test_gate_mutations_guards.sh`.
   #   3) 20.29 — `SAIKIT_SHARD=i/N` (en `tests/run.sh`) reparte los ARCHIVOS de
-  #      la mitad rapida en 7 (round-robin, orden LC_ALL=C) — candado:
+  #      la mitad rapida (round-robin, orden LC_ALL=C) — candado:
   #      `tests/test_runner_guards.sh` (union exacta de los shards y esta
   #      matrix completa: N-1 entradas es un archivo que deja de correr).
   # Reloj medido ANTES de 20.29 (2026-09-09, runs 34310637856 y 34311050392):
@@ -125,13 +125,19 @@ jobs:
   # tocaron `feature_map_merge` y `adversary_lock` juntos; simulado con las
   # duraciones medidas, N=6 da 7.7 min y N=7 da 6.8 — por eso 7. Si el reloj
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar tests.
+  # A.R11 (medido en el run 35553346727): con N=7 el round-robin ponia los DOS
+  # archivos pesados en el MISMO shard 2 (`test_feature_map_merge` pos 23 y
+  # `test_install_muse_mutations` pos 44, ambos ≡ 2 mod 7) y ese job llego a
+  # 13m32s. Se sube a N=8: los pesados caen en shards distintos (7 y 4) y la
+  # union sigue siendo la particion entera (mismo candado). Duracion nueva:
+  # la mide el CI de este PR.
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false   # un shard rojo no debe ocultar el resultado de los otros
       matrix:
-        shard: ['1/7', '2/7', '3/7', '4/7', '5/7', '6/7', '7/7']
+        shard: ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8']
     steps:
       - uses: actions/checkout@v7
 

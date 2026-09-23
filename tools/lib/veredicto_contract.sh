@@ -10,8 +10,12 @@
 #   saikit_json_flat  <texto>    — una linea `ruta\tvalor` por hoja escalar
 #                                  (arrays como ruta[0], raiz "" excluida;
 #                                  null se emite como el marcador <null>).
-#   saikit_json_get   <texto> <ruta> — valor de la hoja en esa ruta (primera
-#                                  ocurrencia), rc 1 si la ruta no existe.
+#   saikit_json_get   <texto> <ruta> — valor de la hoja en esa ruta, rc 1 si
+#                                  la ruta no existe. Sin "primera ocurrencia"
+#                                  que documentar: el parser rechaza claves
+#                                  duplicadas, cada ruta es unica (A.R10, el
+#                                  texto viejo prometia algo que no puede
+#                                  ocurrir).
 #
 # ---------------------------------------------------------------------------
 # Parser JSON (awk). Recursivo por tabla: parseValue/parseObject/parseArray se
