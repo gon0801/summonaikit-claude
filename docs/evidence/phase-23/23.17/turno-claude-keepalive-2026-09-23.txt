@@ -1,0 +1,49 @@
+Task 23.17 — turno vivo en Claude (protocolo keep-alive espejo del turno muse), 2026-09-23 manana (PDT).
+Nodo: Mac del operador (Darwin arm64). Repo: ~/dev/summonaikit-claude.
+Hook desplegado = bytes de origin/master c4569f5 (incluye #352 de la 23.17;
+verificado: copia viva ~/.claude/hooks/summonaikit-harness.sh identica a origin/master).
+Rama de trabajo fase23/23.18-dieta-contrato-claude con cambios de dieta SIN guardar:
+no se tocaron (respaldo en /tmp/dieta-23.18-backup.patch); el vivo corre contra el hook
+desplegado (mergeado), segun runbook. Cuota semanal liberada a la manana (soda "ok" OK,
+USD 0.18, modelo opus por defecto).
+
+1. ARMAR EN CLAUDE: OK (medido, no supuesto).
+   - Workspace descartable /tmp/f23-2317-vivoB (README + tests/run.sh).
+   - `claude -p --output-format json -- "-saikit Crea suma.py ..."` (el `--` final
+     evita que el token -saikit se lea como flag del CLI; sin el, "unknown option").
+   - Estado del hook: dir 3210488175 (= proyecto), sesion 82c99fd3-... con
+     harness-state.env: task_hash=2382028388, lane=full, cycle=0. ARMADO.
+   - El modelo creo suma.py en el workspace (actividad real delegada/inline).
+
+2. HALLAZGO DE HERRAMIENTA (para futuros vivos en -p): sin
+   --dangerously-skip-permissions cada Bash/Edit se niega por aprobacion
+   ("require approval", toolDenialKind user-rejected) y el modelo queda atascado
+   sin poder escribir. Con el flag, escribe y delega. Equivale al --yolo de muse.
+
+3. INCIDENTE (declarado por el implementador): la primera tanda levanto 3
+   runners -p duplicados en el mismo workspace (un screen + un huerfano de una
+   sesion companion caida + un disparo de cron cuya instalacion parecio fallar
+   pero entro). Los duplicados se mataron; el gasto concurrente en opus agoto la
+   cuota semanal a mitad de la corrida (V2: 10 turnos y luego api_error 429
+   "weekly limit, resets 10pm"). Leccion: UN solo runner con lock mkdir + sin
+   tocar crontab (crontab cuelga en este nodo) + topes --max-budget-usd.
+
+4. ESTADO AL CORTE (10:11 PDT): V2/V3/V4 y haiku bloqueados por el mismo 429
+   (sonda haiku "ok" -> api_error, costo 0). Keep-alive (mensaje sin token con
+   tarea armada) y siguiente-libre: PENDIENTES del reset de las 22:00 PDT.
+
+5. REINTENTO PROGRAMADO: screen vivo2317C en el nodo; espera a las 21:30, sonda
+   haiku cada 15 min hasta las 23:45 y al liberarse corre V1 (armar+cierre,
+   tope USD 6), V2 (armar con corte por presupuesto USD 1), V3 (resume sin token,
+   keep-alive, tope USD 6) y V4 (siguiente libre, tope USD 2) en workspace fresco
+   /tmp/f23-2317-vivoC con --dangerously-skip-permissions y lock mkdir.
+   Recoger con: `cat /tmp/vivo2317C-progress.log` y JSONs /tmp/f23-2317C-V*.json.
+   Screen: `screen -ls` (sesion vivo2317C). Transcripts: sesion en
+   ~/.claude/projects/-private-tmp-f23-2317-vivoc/.
+   Transcripts de este intento: sesion 82c99fd3 (V1, armada) y dad97e36 (V2,
+   cortada por cuota) en ~/.claude/projects/-private-tmp-f23-2317-vivob/.
+   Estados huerfanos de los runners duplicados en
+   ~/.claude/hooks/state/claude/3179802182/ (los retira el tope de 24 h, 23.17).
+
+Costos de este intento: sonda ~0.18 + V1 parcial + V2 0.33 (todo contra la cuota
+semanal de la suscripcion; sin llaves en esta evidencia).
