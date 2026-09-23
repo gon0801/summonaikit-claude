@@ -18,6 +18,10 @@
 #
 # Core Rule 4: todo contra tmpdirs. Ningun caso mira ni escribe el perfil real.
 set -u
+# Sin git heredado: GIT_DIR/GIT_WORK_TREE (y las locales GIT_COMMON_DIR,
+# GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY) del llamador redirigirian los
+# fixtures a OTRO repo; se limpian antes de crear fixtures o leer shas.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -177,6 +181,50 @@ out="$(bash "$nogit/tools/install-hook.sh" --dry-run --source "$tmp/fuente-nogit
 case "$out" in
   *'procedencia: desconocida'*) ;;
   *) malo "checkout no-git no reporto desconocida: [$out]" ;;
+esac
+
+# 23.11(d): GIT_DIR/GIT_WORK_TREE heredados no convierten un checkout no-git
+# en un repo ajeno: el chequeo fuera-de-git los ignora y sigue desconocida
+# con motivo no-es-repo-git. En master contestaba por el repo apuntado.
+caso "P5b: GIT_DIR+GIT_WORK_TREE heredados => sigue desconocida (no-es-repo-git)"
+ajeno="$(repo_sandbox repo-p5b)"
+nogitgd="$tmp/nogit-gitdir"
+mkdir -p "$nogitgd/tools"
+cp "$tool" "$nogitgd/tools/install-hook.sh"
+out="$(GIT_DIR="$ajeno/.git" GIT_WORK_TREE="$ajeno" bash "$nogitgd/tools/install-hook.sh" --dry-run --source "$tmp/fuente-nogit.sh" --dest "$tmp/dest-nogit-gitdir.sh" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run nogit con GIT_DIR salio $rc: $out"
+case "$out" in
+  *'procedencia: desconocida (no-es-repo-git)'*) ;;
+  *) malo "con GIT_DIR heredado no dio desconocida/no-es-repo-git: [$out]" ;;
+esac
+
+# 23.11(d) ronda 2: con checkout git PROPIO y GIT_DIR ajeno heredado, la
+# procedencia sigue juzgando al propio (rama+sha propios), no al ajeno.
+# Cubre status/HEAD/origin-master, que la primera version del fix dejaba
+# heredando GIT_DIR.
+caso "P5c: checkout git con GIT_DIR ajeno => procedencia propia, no ajena"
+propio="$(repo_sandbox repo-p5c-propio)"
+ajeno2="$(repo_sandbox repo-p5c-ajeno)"
+# Segundo commit en el ajeno para que los shas difieran (mismo fixture,
+# misma fecha => mismo sha si no).
+( cd "$ajeno2" && printf '# extra-p5c\n' >> hooks/summonaikit-harness.sh \
+  && git -c user.email=t@t -c user.name=t add hooks/summonaikit-harness.sh \
+  && git -c user.email=t@t -c user.name=t commit -qm extra-p5c ) >/dev/null 2>&1
+sha_propio="$(git -C "$propio" rev-parse HEAD 2>/dev/null)" || sha_propio=''
+sha_ajeno="$(git -C "$ajeno2" rev-parse HEAD 2>/dev/null)" || sha_ajeno=''
+[ -n "$sha_propio" ] && [ -n "$sha_ajeno" ] && [ "$sha_propio" != "$sha_ajeno" ] || malo "fixture P5c sin shas distintos"
+out="$(GIT_DIR="$ajeno2/.git" GIT_WORK_TREE="$ajeno2" bash "$propio/tools/install-hook.sh" --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run propio con GIT_DIR ajeno salio $rc: $out"
+case "$out" in
+  *"sha=$sha_propio"*) ;;
+  *) malo "con GIT_DIR ajeno no reporto el sha propio: [$out]" ;;
+esac
+case "$out" in
+  *"sha=$sha_ajeno"*) malo "con GIT_DIR ajeno reporto el sha AJENO: [$out]" ;;
+esac
+case "$out" in
+  *"coincide_origin_master=si "*) ;;
+  *) malo "con GIT_DIR ajeno no comparo contra el origin/master propio: [$out]" ;;
 esac
 
 # P6: sin git disponible => desconocida, y el exit NO se mueve (reportar no

@@ -14,7 +14,9 @@
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-tool="$here/../tools/check-hook-registration.sh"
+# Misma costura que SAIKIT_INSTALL_TOOL: permite correr esta bateria contra
+# una copia MUTADA del verificador y exigir que se de cuenta.
+tool="${SAIKIT_REGISTRO_TOOL:-$here/../tools/check-hook-registration.sh}"
 # Comprobado: sin `tmp` los fixtures se escribirian en `/completo.json` y los
 # casos pasarian por el motivo equivocado (Task 0.4).
 tmp="$(mktemp -d)" || { echo "test_hook_registration: FAIL (mktemp)" >&2; exit 1; }
@@ -1032,6 +1034,23 @@ printf '%s' "$out" | grep -Fq "subagent_wait" \
   || malo "el aviso muse debe nombrar subagent_wait: $out"
 printf '%s' "$out" | grep -Fq "'Agent'" \
   && malo "el aviso muse no debe nombrar Agent: $out"
+
+caso "muse: matcher que no compila => unknown que nombra herramientas de Muse, no Agent"
+escribir_muse_completo "$tmp/muse-badregex.json"
+"$py_bin" - "$tmp/muse-badregex.json" <<'PY2'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["hooks"]["PostToolUse"][0]["matcher"] = "subagent_spawn["
+json.dump(d, open(p, "w"))
+PY2
+out="$(bash "$tool" --muse-settings "$tmp/muse-badregex.json" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc"
+printf '%s' "$out" | grep -qi 'unknown' || malo "matcher que no compila es unknown: $out"
+printf '%s' "$out" | grep -Fq "subagent_spawn" \
+  || malo "el unknown muse debe nombrar subagent_spawn: $out"
+printf '%s' "$out" | grep -Fq "'Agent'" \
+  && malo "el unknown muse no debe nombrar Agent: $out"
 
 caso "muse: forma zcode hooks.events pasado como --muse-settings => INCOMPLETO"
 escribir_zcode_completo "$tmp/muse-como-zcode.json"
