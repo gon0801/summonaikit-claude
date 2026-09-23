@@ -876,6 +876,7 @@ if fm_only hosts-quitar-muse-dry; then
     # reviewer SIN marca — el clasificador dice de este "no se quitaria" y de
     # los otros "se quitaria".
     printf 'AJENO-MUSE-%s\n' "$$" > "$muse_cfg_dir/ajeno.txt"
+    mkdir -p "$muse_agents"
     printf -- '---\nnombre: revisor ajeno\n---\ncuerpo ajeno sin marca saikit_owned\n' \
       > "$muse_agents/reviewer.md"
     mkdir -p "$muse_cfg_dir/saikit-backups"
@@ -893,7 +894,7 @@ if fm_only hosts-quitar-muse-dry; then
         "dry-run: --quitar-muse no ejecuta la retirada" "reporta sin ejecutar (install rc=$muse_ins_rc)"
     else
       fm_fail hosts-quitar-muse-dry quitar_muse_dry_reporta \
-        "dry-run: --quitar-muse no ejecuta la retirada" "rc=$muse_q_rc $muse_q_out"
+        "dry-run: --quitar-muse no ejecuta la retirada" "rc=$muse_q_rc install_rc=$muse_ins_rc install=[$muse_ins_out] $muse_q_out"
     fi
     # assert:quitar_muse_dry_reporta_end
     # assert:quitar_muse_dry_clasifica
