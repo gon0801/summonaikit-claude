@@ -223,7 +223,7 @@ case "$out" in
   *"sha=$sha_ajeno"*) malo "con GIT_DIR ajeno reporto el sha AJENO: [$out]" ;;
 esac
 case "$out" in
-  *"coincide_origin_master=si"*) ;;
+  *"coincide_origin_master=si "*) ;;
   *) malo "con GIT_DIR ajeno no comparo contra el origin/master propio: [$out]" ;;
 esac
 
