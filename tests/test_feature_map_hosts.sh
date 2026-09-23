@@ -171,7 +171,8 @@ for need in (
     "hosts-four-copies", "hosts-zcode-reuses", "hosts-kimi-profiles",
     "hosts-identity", "hosts-noop", "hosts-retirada", "hosts-foreign",
     "hosts-registration", "hosts-os-unavailable", "hosts-symlink",
-    "hosts-quitar-zcode-dry", "hosts-quitar-grok-dry", "hosts-no-live",
+    "hosts-quitar-zcode-dry", "hosts-quitar-grok-dry", "hosts-muse-install",
+    "hosts-quitar-muse-dry", "hosts-no-live",
 ):
     assert need in text, (need, cases)
 PY
@@ -209,6 +210,15 @@ assert_obs install-hosts quitar_grok_dry_clasifica_agente 'implementer.*verifier
 assert_obs install-hosts quitar_grok_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
 assert_obs install-hosts quitar_grok_dry_snapshot_igual 'identidad|snapshot|igual'
 assert_obs install-hosts quitar_grok_dry_preserva '4 perfiles|implementer.*reviewer.*adversary'
+assert_obs install-hosts muse_settings_registra 'entradas=5|SessionStart.*Stop|5 entradas'
+assert_obs install-hosts muse_perfiles 'implementer.*verifier.*adversary|4 perfiles|sin model'
+assert_obs install-hosts muse_reusa_claude 'unchanged|reusa|sin copia'
+assert_obs install-hosts quitar_muse_dry_reporta 'reporta sin ejecutar|dry-run'
+assert_obs install-hosts quitar_muse_dry_clasifica 'settings 23.3|entrada'
+assert_obs install-hosts quitar_muse_dry_clasifica_agente 'implementer.*verifier.*adversary|por pieza'
+assert_obs install-hosts quitar_muse_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
+assert_obs install-hosts quitar_muse_dry_snapshot_igual 'identidad|snapshot|igual'
+assert_obs install-hosts quitar_muse_dry_preserva 'entradas 23.3=5|implementer.*reviewer.*adversary'
 assert_obs install-hosts foreign_intact 'intact|igual|unchanged'
 assert_obs install-hosts registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO'
 assert_obs install-hosts registro_por_texto 'gate NO corre'
@@ -575,6 +585,17 @@ mut_omit_hosts omit_clasifica_pieza quitar_grok_dry_clasifica_agente \
 # (medido: drive rc=0 con clasifica en PASS contra el driver pre-H1).
 mut_inyecta_hosts se_por_no_se quitar_grok_dry_clasifica \
   's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@out="${out//— se quitaria/— no se quitaria}"; &@'
+
+mut_omit_hosts omit_muse muse_settings_registra 'entradas=5|SessionStart.*Stop|5 entradas' \
+  '/assert:muse_settings_registra/,/assert:muse_settings_registra_end/d'
+control_sano_hosts
+mut_omit_hosts omit_quitar_muse_clasifica quitar_muse_dry_clasifica_agente \
+  'implementer.*verifier.*adversary|por pieza' \
+  '/assert:quitar_muse_dry_clasifica_agente/,/assert:quitar_muse_dry_clasifica_agente_end/d'
+# Escribe en el settings tras el dry-run muse: el snapshot ya no queda
+# identico (costura: la linea fm_action del caso seco, como zcode/grok).
+mut_inyecta_hosts dry_muse_escribe quitar_muse_dry_snapshot_igual \
+  's@fm_action hosts-quitar-muse-dry act-quitar-muse-dry@printf x >> "$muse_settings"; &@'
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

@@ -79,6 +79,25 @@
       ]
     },
     {
+      "id": "hosts-muse-install",
+      "required_assertions": [
+        "muse_settings_registra",
+        "muse_perfiles",
+        "muse_reusa_claude"
+      ]
+    },
+    {
+      "id": "hosts-quitar-muse-dry",
+      "required_assertions": [
+        "quitar_muse_dry_reporta",
+        "quitar_muse_dry_clasifica",
+        "quitar_muse_dry_clasifica_agente",
+        "quitar_muse_dry_clasifica_desconocido",
+        "quitar_muse_dry_snapshot_igual",
+        "quitar_muse_dry_preserva"
+      ]
+    },
+    {
       "id": "hosts-foreign",
       "required_assertions": ["foreign_intact"]
     },
