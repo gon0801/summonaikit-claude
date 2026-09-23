@@ -205,7 +205,10 @@ segundos_de_vida() {
   case "$e" in *-*) d="${e%%-*}"; e="${e#*-}";; esac
   case "$e" in *:*:*) h="${e%%:*}"; e="${e#*:}";; esac
   case "$e" in
-    *:*) printf '%s\n' $(( d*86400 + h*3600 + ${e%%:*}*60 + ${e##*:} ));;
+    # 10#: etime trae ceros a la izquierda y bash leería 08/09 como octal
+    # inválido ("value too great for base"); sin el prefijo, un pid reciclado
+    # con etime en la ventana 08/09 se clasificaba vivo y no se reclamaba.
+    *:*) printf '%s\n' $(( 10#$d*86400 + 10#$h*3600 + 10#${e%%:*}*60 + 10#${e##*:} ));;
     *) return 1;;
   esac
 }

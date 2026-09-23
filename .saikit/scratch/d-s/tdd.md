@@ -86,15 +86,39 @@ Rama `entrega-sin-sello-d-kit-a` desde `origin/master` (86c5988). Trabajo del
   completa) se mantiene en verde. AGENTS.md actualizado. La duración nueva la
   mide el CI de este PR.
 
-## Evidencia (este directorio)
+## Evidencia
 
-- `verde-test_entrega_contract.log` — 26 casos previos + 7 nuevos, rc 0.
-- `verde-test_saikit_merge.log` — banco completo con los casos A.R6, rc 0.
-- `verde-test_runner_guards.log` — candado del runner/workflow, rc 0.
-- `mut-ar2-substr14.log`, `mut-ar3-sin-aviso.log`, `mut-ar5-sin-lista.log`,
-  `mut-ar9c-sin-guarda.log` — cada arreglo revertido ⇒ su caso en rojo.
-  (La mutación de A.R4 y la de A.R6 corren dentro del propio banco, en la
-  tabla MUTS.)
+Por revision del bloque D los logs crudos de corrida locales no se versionan
+(rutas de esta maquina, ningun gate los usa). Las mediciones quedan citadas en
+el cuerpo del PR y aqui, en una linea por cada una:
+
+- Verde con produccion: test_entrega_contract (26 casos previos + 7 nuevos,
+  rc 0), test_saikit_merge (banco completo con A.R6, rc 0),
+  test_runner_guards (rc 0) y golden-harness --check.
+- Mutaciones atrapadas: substr 13 -> 14 ⇒ caso del conteo rojo; quitar el
+  aviso de REVOKE sin sha ⇒ caso rojo; quitar el chequeo de pagina no-array
+  ⇒ caso rojo; quitar las guardas de coordenadas ⇒ caso rojo; la mutacion de
+  A.R4 (escotilla entrega_body_trae_revoke anulada) y la de A.R6
+  (recuperacion_sin_arbitro) corren dentro del banco (tabla MUTS,
+  autoauditada).
+
+## Ronda de revision del bloque D (grok)
+
+- Bug: el sed de `recuperacion_sin_arbitro` llevaba el delimitador escapado
+  (`\|`), sed salia 1 sin cambiar nada y el banco acreditaba una mutacion que
+  no existio. Arreglo doble: el s cierra sin escapes (patron y reemplazo sin
+  barra final, que sed matchea como subcadena), y `mut_sed` ahora mira el exit
+  del sed y rechaza un mutado vacio antes de acreditar nada. Verificado: la
+  mutacion se aplica (mv -> cp -R) y queda atrapada por
+  c_lock_dos_recuperadores, con el control sano en verde.
+- Bug: `segundos_de_vida` metia etime con ceros a la izquierda en la
+  aritmetica; `08`/`09` abortaban (octal invalido) y un pid reciclado en esa
+  ventana se clasificaba vivo. Arreglo: prefijo `10#`. Caso nuevo
+  `lock_recupera_pid_reciclado_con_etime_08` (ps que contesta `08:00:01`);
+  rojo medido antes del arreglo con el error exacto
+  (`08: value too great for base`).
+- Los .log de corridas locales salieron del repo; las citas de este documento
+  y del cuerpo del PR quedan como registro.
 
 ## Pruebas focales
 

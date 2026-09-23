@@ -1287,6 +1287,32 @@ c_lock_recuperar_reciclado() {
   [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
 }
 
+c_lock_reciclado_etime_octal() {
+  # El etime trae ceros a la izquierda (macOS mide 00:00) y bash lee 08/09
+  # como octal invalido en la aritmetica: sin base 10, un pid reciclado con
+  # etime 08:00:01 se clasificaba VIVO y el lock no se reclamaba. Un ps de
+  # mentira contesta 08:00:01 y la recuperacion tiene que salir igual.
+  CASO_ROJO=0; sb_reset master
+  : > "$SAIKIT_GH_LOG"
+  mkdir -p "$SB/bin08"
+  cat > "$SB/bin08/ps" <<'PS08'
+#!/bin/sh
+case "$1 $2" in
+  "-o etime="*) printf '08:00:01\n'; exit 0 ;;
+esac
+exec /bin/ps "$@"
+PS08
+  chmod +x "$SB/bin08/ps"
+  sleep 30 & rec_pid=$!
+  plantar_lock_huerfano "$rec_pid" "$(hostname 2>/dev/null || printf '?')" "2020-01-01T00:00:00Z"
+  PATH="$SB/bin08:$PATH" correr --confirmado
+  kill "$rec_pid" 2>/dev/null; wait "$rec_pid" 2>/dev/null
+  [ "$RC" -eq 0 ] || _mal "con etime 08:00:01 debio recuperar el reciclado, dio $RC: $OUT"
+  _contiene "clasifica reciclado" "$OUT" "dueno local reciclado"
+  _contiene "merge ok" "$OUT" "MERGE-OK:"
+  [ ! -d ".git/saikit-merge.lock" ] || _mal "el recuperador debio liberar su lock al salir"
+}
+
 c_lock_host_ajeno_no_se_toca() {
   # A.R6, caso host ajeno: el lock dice otro host; este clone no lo toca ni
   # con pid muerto (pudo vivir en otra maquina del common-dir compartido).
@@ -1388,6 +1414,12 @@ caso "lock_recupera_pid_reciclado"
 }
 fin_caso "lock_recupera_pid_reciclado"
 
+caso "lock_recupera_pid_reciclado_con_etime_08"
+{
+  c_lock_reciclado_etime_octal
+}
+fin_caso "lock_recupera_pid_reciclado_con_etime_08"
+
 caso "lock_host_ajeno_no_se_toca"
 {
   c_lock_host_ajeno_no_se_toca
@@ -1484,7 +1516,17 @@ mut_sed() {  # $1=sed-expr, aplica sobre el fuente y deja el mutado en $MUTADO
   # Fuera de SB_LINK_ROOT: sb_reset borra el arbol del symlink y $SB-mutado
   # (hermano de logical/) moria con el reset (20.28 costura).
   MUTADO="${TMPDIR:-/tmp}/saikit-merge-mutado-$$.sh"
-  { sed "$1" "$MERGE"; } | sed "s|^HERE=.*$|HERE=$repo/tools|" > "$MUTADO"
+  # El exit del sed manda: un s mal cerrado salia 1 con stdout vacio y el
+  # banco acreditaba una mutacion que nunca se aplico (revision del bloque D).
+  bruto="${TMPDIR:-/tmp}/saikit-merge-mutado-bruto-$$.sh"
+  if ! sed "$1" "$MERGE" > "$bruto"; then
+    printf '    FAIL: el sed de la mutacion salio con error: %s\n' "$1" >&2
+    fail=1
+    return
+  fi
+  sed "s|^HERE=.*$|HERE=$repo/tools|" "$bruto" > "$MUTADO" || { fail=1; return; }
+  rm -f "$bruto"
+  [ -s "$MUTADO" ] || { printf '    FAIL: el sed dejo el mutado VACIO\n' >&2; fail=1; }
 }
 
 correr_mutacion() {  # $1=nombre, $2=sed-expr, $3=funcion de caso
@@ -1716,7 +1758,7 @@ sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
 emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:   tools/saikit-merge.sh --confirmado|	c_listo_emision
 lock_sin_guard	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if true; then|	c_lock_exclusion
 lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -p "\$LOCK_DIR" 2>/dev/null; then|	c_lock_exclusion
-recuperacion_sin_arbitro	s|if mv "$LOCK_DIR" "$tumba" 2>/dev/null \|if cp -R "$LOCK_DIR" "$tumba" 2>/dev/null \|	c_lock_dos_recuperadores
+recuperacion_sin_arbitro	s|if mv "$LOCK_DIR" "$tumba" 2>/dev/null|if cp -R "$LOCK_DIR" "$tumba" 2>/dev/null|	c_lock_dos_recuperadores
 trap_no_libera	s|^liberar_propio() {$|liberar_propio() { return 0; #|	c_lock_libera_propio
 recibo_opcional	s/$(entrega_validar/$(true/	c_recibo_sin_reviewer
 ci_juzga_intento_viejo	s/\$2 > bestnum\[$1\]/$2 < bestnum[$1]/	c_ci_intento_viejo
