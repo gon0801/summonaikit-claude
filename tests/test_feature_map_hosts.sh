@@ -171,7 +171,8 @@ for need in (
     "hosts-four-copies", "hosts-zcode-reuses", "hosts-kimi-profiles",
     "hosts-identity", "hosts-noop", "hosts-retirada", "hosts-foreign",
     "hosts-registration", "hosts-os-unavailable", "hosts-symlink",
-    "hosts-quitar-zcode-dry", "hosts-quitar-grok-dry", "hosts-no-live",
+    "hosts-quitar-zcode-dry", "hosts-quitar-grok-dry", "hosts-muse-install",
+    "hosts-quitar-muse-dry", "hosts-no-live",
 ):
     assert need in text, (need, cases)
 PY
@@ -209,6 +210,15 @@ assert_obs install-hosts quitar_grok_dry_clasifica_agente 'implementer.*verifier
 assert_obs install-hosts quitar_grok_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
 assert_obs install-hosts quitar_grok_dry_snapshot_igual 'identidad|snapshot|igual'
 assert_obs install-hosts quitar_grok_dry_preserva '4 perfiles|implementer.*reviewer.*adversary'
+assert_obs install-hosts muse_settings_registra 'entradas=5|SessionStart.*Stop|5 entradas'
+assert_obs install-hosts muse_perfiles 'implementer.*verifier.*adversary|4 perfiles|sin model'
+assert_obs install-hosts muse_reusa_claude 'unchanged|reusa|sin copia'
+assert_obs install-hosts quitar_muse_dry_reporta 'reporta sin ejecutar|dry-run'
+assert_obs install-hosts quitar_muse_dry_clasifica 'settings 23.3|entrada'
+assert_obs install-hosts quitar_muse_dry_clasifica_agente 'implementer.*verifier.*adversary|por pieza'
+assert_obs install-hosts quitar_muse_dry_clasifica_desconocido 'reviewer|no se quitaria|DESCONOCIDO'
+assert_obs install-hosts quitar_muse_dry_snapshot_igual 'identidad|snapshot|igual'
+assert_obs install-hosts quitar_muse_dry_preserva 'entradas 23.3=5|implementer.*reviewer.*adversary'
 assert_obs install-hosts foreign_intact 'intact|igual|unchanged'
 assert_obs install-hosts registro_por_texto 'REGISTRO DEL HOOK INCOMPLETO'
 assert_obs install-hosts registro_por_texto 'gate NO corre'
@@ -575,6 +585,38 @@ mut_omit_hosts omit_clasifica_pieza quitar_grok_dry_clasifica_agente \
 # (medido: drive rc=0 con clasifica en PASS contra el driver pre-H1).
 mut_inyecta_hosts se_por_no_se quitar_grok_dry_clasifica \
   's@fm_action hosts-quitar-grok-dry act-quitar-grok-dry@out="${out//— se quitaria/— no se quitaria}"; &@'
+
+mut_omit_hosts omit_muse muse_settings_registra 'entradas=5|SessionStart.*Stop|5 entradas' \
+  '/assert:muse_settings_registra/,/assert:muse_settings_registra_end/d'
+control_sano_hosts
+mut_omit_hosts omit_quitar_muse_clasifica quitar_muse_dry_clasifica_agente \
+  'implementer.*verifier.*adversary|por pieza' \
+  '/assert:quitar_muse_dry_clasifica_agente/,/assert:quitar_muse_dry_clasifica_agente_end/d'
+# Escribe en el settings tras el dry-run muse: el snapshot ya no queda
+# identico (costura: la linea fm_action del caso seco, como zcode/grok).
+mut_inyecta_hosts dry_muse_escribe quitar_muse_dry_snapshot_igual \
+  's@fm_action hosts-quitar-muse-dry act-quitar-muse-dry@printf x >> "$muse_settings"; &@'
+
+# Muda el hook 23.3 de Stop a SessionStart tras instalar muse: el total sigue
+# en 5 y los cinco nombres de evento siguen presentes, pero el registro por
+# evento debe ponerse rojo (medido: PASS contra el driver pre-fix).
+mut_inyecta_hosts mueve_stop_a_sessionstart muse_settings_registra \
+  's@fm_action hosts-muse-install act-muse@python3 -c "import json,sys;p=sys.argv[1];s=json.load(open(p));h=s.get('\''hooks'\'',{});mov=[];[(mov.extend([x for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' in x.get('\''command'\'','\'''\'')]),m.__setitem__('\''hooks'\'',[x for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' not in x.get('\''command'\'','\'''\'')])) for m in h.get('\''Stop'\'',[])];(h.get('\''SessionStart'\'') or [{}])[0].setdefault('\''hooks'\'',[]).extend(mov);json.dump(s,open(p,'\''w'\''),indent=2)" "$muse_settings"; &@'
+
+# La retirada que parte de UNA sola entrada 23.3 debe ponerse roja en
+# clasifica y preserva (medido: PASS contra el driver pre-fix, que aceptaba
+# N>=1 y preserva >0 aunque la ficha exige las cinco).
+caso "mutante recorta_muse_a_una_entrada: se pone rojo"
+reset_art
+mut="$SANDBOX/hosts-recorta-muse.sh"
+control_sano_hosts
+if sed_must_change "$SANDBOX/hosts.src.sh" "$mut" \
+  's@muse_ins_out="$(run_muse --host muse --dest "$VERIFY_DEST" 2>&1)"@&; python3 -c "import json,sys;p=sys.argv[1];s=json.load(open(p));h=s.get('\''hooks'\'',{});t=[(m,x) for ev in h.values() for m in ev for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' in x.get('\''command'\'','\'''\'')];[m['\''hooks'\''].remove(x) for (m,x) in t[1:]];json.dump(s,open(p,'\''w'\''),indent=2)" "$muse_settings"@' \
+  "recorta_muse"
+then
+  out="$(ctrl_drv "$mut" drive install-hosts 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail install-hosts quitar_muse_dry_preserva quitar_muse_dry_preserva "$rc"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

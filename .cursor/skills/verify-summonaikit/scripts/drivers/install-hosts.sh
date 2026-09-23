@@ -732,6 +732,243 @@ if fm_only hosts-quitar-grok-dry; then
   fi
 fi
 
+# 23.12: muse instala y se retira con el Muse falso
+# (`tests/fixtures/muse/muse-falso.sh` via SAIKIT_MUSE_BIN, precedente 23.3).
+# Muse reusa la copia de claude: no publica hook propio bajo su config. El
+# dir del config simula a Muse instalado (sin dir, el instalador sale 2).
+muse_falso="$VERIFY_REPO/tests/fixtures/muse/muse-falso.sh"
+muse_bash_instalador=''
+for _cand in /opt/homebrew/bin/bash /usr/local/bin/bash "$(command -v bash)"; do
+  [ -n "$_cand" ] && [ -x "$_cand" ] || continue
+  if "$_cand" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
+    muse_bash_instalador="$_cand"
+    break
+  fi
+done
+
+run_muse() {
+  runtime_exec "$VERIFY_HOME" env SAIKIT_MUSE_BIN="$muse_falso" \
+    SAIKIT_MUSE_BASH="$muse_bash_instalador" bash "$INSTALLER" \
+    --source "$HOOK_SRC" --manifest "$MANIFEST" --no-registration-check "$@"
+}
+
+muse_cfg_dir="$VERIFY_HOME/.config/muse"
+muse_settings="$muse_cfg_dir/settings.json"
+muse_agents="$muse_cfg_dir/agents"
+
+muse_no_observable() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'jq ausente; muse no observado'
+  elif [ -z "$muse_bash_instalador" ]; then
+    printf 'sin bash>=4; muse no observado'
+  elif [ ! -f "$muse_falso" ]; then
+    printf 'sin muse-falso.sh; muse no observado'
+  fi
+}
+
+if fm_only hosts-muse-install; then
+  muse_motivo="$(muse_no_observable || true)"
+  if [ -n "$muse_motivo" ]; then
+    fm_unknown hosts-muse-install muse_settings_registra "5 entradas 23.3" "$muse_motivo"
+    fm_unknown hosts-muse-install muse_perfiles "4 perfiles con marca" "$muse_motivo"
+    fm_unknown hosts-muse-install muse_reusa_claude "reusa claude" "$muse_motivo"
+  else
+    # Estado limpio: el instalador preserva un agente DESCONOCIDO preexistente
+    # (no lo re-marca); sin reset, un re-drive tras el dry-run de retirada
+    # dejaria reviewer sin marca y este caso caeria (medido).
+    rm -rf "$muse_cfg_dir"
+    mkdir -p "$muse_cfg_dir"
+    muse_antes="$(fm_sha "$VERIFY_DEST")"
+    set +e
+    muse_out="$(run_muse --host muse --dest "$VERIFY_DEST" 2>&1)"
+    muse_rc=$?
+    set -e
+    fm_action hosts-muse-install act-muse "$muse_rc" "$muse_out" bash "$INSTALLER" --host muse
+    # assert:muse_settings_registra
+    muse_n="$(jq '[((.hooks // {})[] | .[]? | (.hooks // [])[]? | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' "$muse_settings" 2>/dev/null || printf '?')"
+    muse_ev="$(jq -r '[(.hooks // {}) | keys[]] | sort | join(" ")' "$muse_settings" 2>/dev/null || printf '?')"
+    # Por evento: cada uno de los cinco trae exactamente UN hook 23.3. El
+    # total y los nombres no bastan (medido: Stop vacio con su hook mudado a
+    # SessionStart seguia dando PASS).
+    muse_por_evento=''
+    muse_eventos_ok=1
+    for muse_ev_uno in SessionStart UserPromptSubmit PreToolUse PostToolUse Stop; do
+      muse_n_uno="$(jq --arg ev "$muse_ev_uno" '[((.hooks // {})[$ev] // [] | .[]? | (.hooks // [])[]? | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' "$muse_settings" 2>/dev/null || printf '?')"
+      muse_por_evento="$muse_por_evento $muse_ev_uno=$muse_n_uno"
+      [ "$muse_n_uno" = "1" ] || muse_eventos_ok=0
+    done
+    if [ "$muse_rc" -eq 0 ] && [ "$muse_n" = "5" ] && [ "$muse_eventos_ok" = "1" ] \
+      && printf '%s' "$muse_ev" | grep -q 'SessionStart' \
+      && printf '%s' "$muse_ev" | grep -q 'UserPromptSubmit' \
+      && printf '%s' "$muse_ev" | grep -q 'PreToolUse' \
+      && printf '%s' "$muse_ev" | grep -q 'PostToolUse' \
+      && printf '%s' "$muse_ev" | grep -q 'Stop'; then
+      fm_pass hosts-muse-install muse_settings_registra \
+        "5 entradas 23.3 SessionStart..Stop" "entradas=$muse_n eventos=[$muse_ev ] por-evento=[$muse_por_evento ]"
+    else
+      fm_fail hosts-muse-install muse_settings_registra \
+        "5 entradas 23.3 SessionStart..Stop" "rc=$muse_rc entradas=$muse_n eventos=[$muse_ev ] por-evento=[$muse_por_evento ]"
+    fi
+    # assert:muse_settings_registra_end
+    # assert:muse_perfiles
+    muse_have=''
+    muse_todos=0
+    for rol in implementer verifier reviewer adversary; do
+      if [ -f "$muse_agents/$rol.md" ] \
+        && grep -q '^# saikit_owned: summonaikit-claude' "$muse_agents/$rol.md" \
+        && ! grep -q '^model:' "$muse_agents/$rol.md" \
+        && ! grep -q '^effort:' "$muse_agents/$rol.md"; then
+        muse_have="$muse_have $rol"
+        muse_todos=$((muse_todos + 1))
+      fi
+    done
+    if [ "$muse_rc" -eq 0 ] && [ "$muse_todos" -eq 4 ]; then
+      fm_pass hosts-muse-install muse_perfiles \
+        "4 perfiles con marca, sin model/effort" "perfiles:[$muse_have ]"
+    else
+      fm_fail hosts-muse-install muse_perfiles \
+        "4 perfiles con marca, sin model/effort" "rc=$muse_rc perfiles:[$muse_have ] ($muse_todos/4)"
+    fi
+    # assert:muse_perfiles_end
+    # assert:muse_reusa_claude
+    muse_despues="$(fm_sha "$VERIFY_DEST")"
+    if [ "$muse_antes" = "$muse_despues" ] \
+      && [ ! -e "$muse_cfg_dir/hooks/summonaikit-harness.sh" ] \
+      && [ ! -e "$muse_cfg_dir/summonaikit-harness.sh" ]; then
+      fm_pass hosts-muse-install muse_reusa_claude \
+        "reusa claude, sin copia" "unchanged $muse_despues"
+    else
+      fm_fail hosts-muse-install muse_reusa_claude \
+        "reusa claude, sin copia" "cambio $muse_antes -> $muse_despues"
+    fi
+    # assert:muse_reusa_claude_end
+  fi
+fi
+
+# 23.12: la retirada muse respeta DRY_RUN — reporta y clasifica entradas y
+# agentes sin tocar nada (misma costura que zcode/grok: la linea fm_action
+# de abajo es la de los mutantes de escritura del banco).
+if fm_only hosts-quitar-muse-dry; then
+  muse_motivo="$(muse_no_observable || true)"
+  if [ -n "$muse_motivo" ]; then
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_reporta \
+      "dry-run: --quitar-muse no ejecuta la retirada" "$muse_motivo"
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_clasifica \
+      "quitaria N entrada(s) 23.3" "$muse_motivo"
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_clasifica_agente \
+      "AGENTE MUSE nuestro — se quitaria" "$muse_motivo"
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_clasifica_desconocido \
+      "DESCONOCIDO — no se quitaria" "$muse_motivo"
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_snapshot_igual \
+      "snapshot antes == despues" "$muse_motivo"
+    fm_unknown hosts-quitar-muse-dry quitar_muse_dry_preserva \
+      "piezas presentes" "$muse_motivo"
+  else
+    # Reset como en hosts-muse-install: el caso es autocontenido aunque un
+    # drive previo dejara un reviewer DESCONOCIDO o entradas 23.3.
+    rm -rf "$muse_cfg_dir"
+    mkdir -p "$muse_cfg_dir"
+    set +e
+    muse_ins_out="$(run_muse --host muse --dest "$VERIFY_DEST" 2>&1)"
+    muse_ins_rc=$?
+    set -e
+    # AJENO: el snapshot debe probar que el dry-run ni lo toco. DESCONOCIDO:
+    # reviewer SIN marca — el clasificador dice de este "no se quitaria" y de
+    # los otros "se quitaria".
+    printf 'AJENO-MUSE-%s\n' "$$" > "$muse_cfg_dir/ajeno.txt"
+    mkdir -p "$muse_agents"
+    printf -- '---\nnombre: revisor ajeno\n---\ncuerpo ajeno sin marca saikit_owned\n' \
+      > "$muse_agents/reviewer.md"
+    mkdir -p "$muse_cfg_dir/saikit-backups"
+    muse_q_antes="$(snapshot_tree "$muse_cfg_dir")"
+    set +e
+    muse_q_out="$(run_muse --host muse --quitar-muse --dry-run --dest "$VERIFY_DEST" 2>&1)"
+    muse_q_rc=$?
+    set -e
+    fm_action hosts-quitar-muse-dry act-quitar-muse-dry "$muse_q_rc" "$muse_q_out" \
+      bash "$INSTALLER" --host muse --quitar-muse --dry-run
+    # assert:quitar_muse_dry_reporta
+    if [ "$muse_q_rc" -eq 0 ] \
+      && printf '%s' "$muse_q_out" | grep -q 'dry-run: --quitar-muse no ejecuta la retirada'; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_reporta \
+        "dry-run: --quitar-muse no ejecuta la retirada" "reporta sin ejecutar (install rc=$muse_ins_rc)"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_reporta \
+        "dry-run: --quitar-muse no ejecuta la retirada" "rc=$muse_q_rc install_rc=$muse_ins_rc install=[$muse_ins_out] $muse_q_out"
+    fi
+    # assert:quitar_muse_dry_reporta_end
+    # assert:quitar_muse_dry_clasifica
+    if printf '%s' "$muse_q_out" \
+      | grep -Eq 'quitaria 5 entrada\(s\) saikit-harness-id 23[.]3'; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_clasifica \
+        "quitaria N entrada(s) 23.3" "linea de settings 23.3 clasificada"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_clasifica \
+        "quitaria N entrada(s) 23.3" "$muse_q_out"
+    fi
+    # assert:quitar_muse_dry_clasifica_end
+    # assert:quitar_muse_dry_clasifica_agente
+    muse_nuestros=0
+    muse_vistos=''
+    for rol in implementer verifier adversary; do
+      if printf '%s' "$muse_q_out" | grep -F -q "AGENTE MUSE nuestro: $rol — se quitaria"; then
+        muse_nuestros=$((muse_nuestros + 1))
+        muse_vistos="$muse_vistos $rol"
+      fi
+    done
+    if [ "$muse_nuestros" -eq 3 ]; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_clasifica_agente \
+        "AGENTE MUSE nuestro — se quitaria" "por pieza:$muse_vistos"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_clasifica_agente \
+        "AGENTE MUSE nuestro — se quitaria" "vistos$muse_vistos ($muse_nuestros/3)"
+    fi
+    # assert:quitar_muse_dry_clasifica_agente_end
+    # assert:quitar_muse_dry_clasifica_desconocido
+    if printf '%s' "$muse_q_out" \
+      | grep -F -q "AGENTE MUSE DESCONOCIDO: reviewer — no se quitaria"; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "reviewer ajeno clasificado no-se-quita"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_clasifica_desconocido \
+        "DESCONOCIDO — no se quitaria" "$muse_q_out"
+    fi
+    # assert:quitar_muse_dry_clasifica_desconocido_end
+    muse_q_despues="$(snapshot_tree "$muse_cfg_dir")"
+    # assert:quitar_muse_dry_snapshot_igual
+    if [ "$muse_q_antes" = "$muse_q_despues" ]; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_snapshot_igual \
+        "snapshot antes == despues" "identidad de contenido y arbol muse (find+cksum, dirs incluidos)"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_snapshot_igual \
+        "snapshot antes == despues" "el arbol muse cambio tras el dry-run"
+    fi
+    # assert:quitar_muse_dry_snapshot_igual_end
+    muse_ent_despues="$(jq '[((.hooks // {})[] | .[]? | (.hooks // [])[]? | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' \
+      "$muse_settings" 2>/dev/null || printf '?')"
+    muse_ag_despues=''
+    for r in implementer verifier reviewer adversary; do
+      if [ -f "$muse_agents/$r.md" ]; then
+        muse_ag_despues="$muse_ag_despues $r"
+      fi
+    done
+    # assert:quitar_muse_dry_preserva
+    if [ "$muse_ent_despues" = "5" ] \
+      && printf '%s' "$muse_ag_despues" | grep -q implementer \
+      && printf '%s' "$muse_ag_despues" | grep -q verifier \
+      && printf '%s' "$muse_ag_despues" | grep -q reviewer \
+      && printf '%s' "$muse_ag_despues" | grep -q adversary; then
+      fm_pass hosts-quitar-muse-dry quitar_muse_dry_preserva \
+        "piezas presentes" "entradas 23.3=$muse_ent_despues agentes=[$muse_ag_despues ]"
+    else
+      fm_fail hosts-quitar-muse-dry quitar_muse_dry_preserva \
+        "piezas presentes" \
+        "entradas=$muse_ent_despues agentes=[$muse_ag_despues ]"
+    fi
+    # assert:quitar_muse_dry_preserva_end
+  fi
+fi
+
 if fm_only hosts-no-live; then
   fm_pass hosts-no-live no_live_turn \
     "install != live turn" \

@@ -75,6 +75,9 @@
     "tools/probe-zcode-output.sh": {
       "reason": "diagnóstico especializado histórico, público pero fuera de esta ampliación"
     },
+    "tools/probe-muse-contract.sh": {
+      "reason": "sonda gratis del contrato de Muse (23.5); diagnóstico especializado, público pero fuera de esta ampliación"
+    },
     "tools/hook-acl.ps1": {
       "reason": "herramienta pública Windows/ACL; cobertura no acreditada aquí; requiere otro entorno"
     }
