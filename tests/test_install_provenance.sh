@@ -18,6 +18,9 @@
 #
 # Core Rule 4: todo contra tmpdirs. Ningun caso mira ni escribe el perfil real.
 set -u
+# Sin git heredado: GIT_DIR/GIT_WORK_TREE del llamador redirigirian los
+# fixtures a OTRO repo; se limpian antes de crear fixtures o leer shas.
+unset GIT_DIR GIT_WORK_TREE
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"

@@ -3,6 +3,9 @@
 # copia, SAIKIT_INSTALL_TOOL=<mutante>, el driver test_install_provenance.sh
 # debe ir rojo.
 set -u
+# Sin git heredado: GIT_DIR/GIT_WORK_TREE del llamador redirigirian los
+# fixtures a OTRO repo; se limpian antes de crear fixtures o leer shas.
+unset GIT_DIR GIT_WORK_TREE
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 . "$here/lib/sandbox.sh"
@@ -29,7 +32,7 @@ for mutation in \
 do
   case "$mutation" in
     chequeo_atiende_git_heredado)
-      sed 's/env -u GIT_DIR -u GIT_WORK_TREE //' \
+      sed 's/env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY //' \
         "$source_tool" > "$mutant"
       expected='con GIT_DIR heredado no dio desconocida' ;;
   esac

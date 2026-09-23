@@ -2726,13 +2726,13 @@ edad_del_ref() {
   local _gd _now _clock _refpath _clock_file
   _now="$(date +%s)" || return 0
   case "$_now" in *[!0-9]*) return 0 ;; esac
-  _gd="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse --git-dir 2>/dev/null)" || return 0
+  _gd="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" rev-parse --git-dir 2>/dev/null)" || return 0
   [ -n "$_gd" ] || return 0
   case "$_gd" in
     /*) ;;
     *) _gd="$repo/$_gd" ;;
   esac
-  _refpath="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || _refpath=
+  _refpath="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" rev-parse --git-path refs/remotes/origin/master 2>/dev/null)" || _refpath=
   case "$_refpath" in
     '') ;;
     /*) ;;
@@ -2747,7 +2747,7 @@ edad_del_ref() {
     esac
   fi
   if [ -z "$PROC_EDAD_ORIGEN" ] && _proc_es_sha "${_master:-}"; then
-    _clock="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" log -1 --format=%ct origin/master 2>/dev/null)" || _clock=
+    _clock="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" log -1 --format=%ct origin/master 2>/dev/null)" || _clock=
     case "$_clock" in
       ''|*[!0-9]*) ;;
       *) PROC_EDAD_ORIGEN='committerdate' ;;
@@ -2801,21 +2801,22 @@ PROC_RAMA=''; PROC_SHA=''; PROC_SUCIO='no'; PROC_SIN_SEG=0
 PROC_COINCIDE='sin-ref'; PROC_MOTIVO=''
 if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
   PROC_MOTIVO='git-no-disponible'
-# saikit-23.11d-sin-git-heredado: GIT_DIR/GIT_WORK_TREE heredados harian que
+# saikit-23.11d-sin-git-heredado: GIT_DIR/GIT_WORK_TREE (y las locales
+# GIT_COMMON_DIR/GIT_INDEX_FILE/GIT_OBJECT_DIRECTORY) heredados harian que
 # la procedencia contestara por OTRO repo; todas las lecturas git de este
 # bloque (rev-parse/status/log/show) los ignoran y juzgan este checkout.
-elif ! env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+elif ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
   PROC_MOTIVO='no-es-repo-git'
 else
-  _st="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" status --porcelain=v1 -b 2>/dev/null)" || _st=''
+  _st="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" status --porcelain=v1 -b 2>/dev/null)" || _st=''
   # HEAD y origin/master en DOS llamadas SEPARADAS a proposito: en una sola
   # (`rev-parse HEAD origin/master`), si el ref no existe git imprime el sha
   # de HEAD, luego el literal, y devuelve 128 — el || vaciaba AMBOS y caia en
   # un "sin-commits" falso. El checkout de CI es shallow y no trae ese ref
   # (igual que un clone --depth 1): sin ref remoto, rama y sha igual se
   # conocen y lo unico unknown es el coincide.
-  _head="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse HEAD 2>/dev/null)" || _head=''
-  _master="$(env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse origin/master 2>/dev/null)" || _master=''
+  _head="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" rev-parse HEAD 2>/dev/null)" || _head=''
+  _master="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" rev-parse origin/master 2>/dev/null)" || _master=''
   if ! _proc_es_sha "$_head"; then
     PROC_MOTIVO='sin-commits'
   else
@@ -2970,7 +2971,7 @@ if [ "$CHECK" -eq 1 ]; then
     _mtmp=''
     _mtmp="$(mktemp "${TMPDIR:-/tmp}/saikit-master-XXXXXX" 2>/dev/null)" || _mtmp=''
     if [ -n "$_mtmp" ]; then
-      if env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" show "origin/master:hooks/summonaikit-harness.sh" >"$_mtmp" 2>/dev/null \
+      if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY "$GIT_BIN" -C "$repo" show "origin/master:hooks/summonaikit-harness.sh" >"$_mtmp" 2>/dev/null \
          && [ -s "$_mtmp" ] && [ -f "$SOURCE" ] && [ -r "$SOURCE" ]; then
         if cmp -s "$_mtmp" "$SOURCE"; then _master_juicio='ok'; else _master_juicio='difiere'; fi
       fi
