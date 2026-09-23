@@ -787,17 +787,27 @@ if fm_only hosts-muse-install; then
     # assert:muse_settings_registra
     muse_n="$(jq '[((.hooks // {})[] | .[]? | (.hooks // [])[]? | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' "$muse_settings" 2>/dev/null || printf '?')"
     muse_ev="$(jq -r '[(.hooks // {}) | keys[]] | sort | join(" ")' "$muse_settings" 2>/dev/null || printf '?')"
-    if [ "$muse_rc" -eq 0 ] && [ "$muse_n" = "5" ] \
+    # Por evento: cada uno de los cinco trae exactamente UN hook 23.3. El
+    # total y los nombres no bastan (medido: Stop vacio con su hook mudado a
+    # SessionStart seguia dando PASS).
+    muse_por_evento=''
+    muse_eventos_ok=1
+    for muse_ev_uno in SessionStart UserPromptSubmit PreToolUse PostToolUse Stop; do
+      muse_n_uno="$(jq --arg ev "$muse_ev_uno" '[((.hooks // {})[$ev] // [] | .[]? | (.hooks // [])[]? | select(((.command // "") | test("saikit-harness-id 23[.]3"))))] | length' "$muse_settings" 2>/dev/null || printf '?')"
+      muse_por_evento="$muse_por_evento $muse_ev_uno=$muse_n_uno"
+      [ "$muse_n_uno" = "1" ] || muse_eventos_ok=0
+    done
+    if [ "$muse_rc" -eq 0 ] && [ "$muse_n" = "5" ] && [ "$muse_eventos_ok" = "1" ] \
       && printf '%s' "$muse_ev" | grep -q 'SessionStart' \
       && printf '%s' "$muse_ev" | grep -q 'UserPromptSubmit' \
       && printf '%s' "$muse_ev" | grep -q 'PreToolUse' \
       && printf '%s' "$muse_ev" | grep -q 'PostToolUse' \
       && printf '%s' "$muse_ev" | grep -q 'Stop'; then
       fm_pass hosts-muse-install muse_settings_registra \
-        "5 entradas 23.3 SessionStart..Stop" "entradas=$muse_n eventos=[$muse_ev ]"
+        "5 entradas 23.3 SessionStart..Stop" "entradas=$muse_n eventos=[$muse_ev ] por-evento=[$muse_por_evento ]"
     else
       fm_fail hosts-muse-install muse_settings_registra \
-        "5 entradas 23.3 SessionStart..Stop" "rc=$muse_rc entradas=$muse_n eventos=[$muse_ev ]"
+        "5 entradas 23.3 SessionStart..Stop" "rc=$muse_rc entradas=$muse_n eventos=[$muse_ev ] por-evento=[$muse_por_evento ]"
     fi
     # assert:muse_settings_registra_end
     # assert:muse_perfiles
@@ -888,7 +898,7 @@ if fm_only hosts-quitar-muse-dry; then
     # assert:quitar_muse_dry_reporta_end
     # assert:quitar_muse_dry_clasifica
     if printf '%s' "$muse_q_out" \
-      | grep -Eq 'quitaria [1-9][0-9]* entrada\(s\) saikit-harness-id 23[.]3'; then
+      | grep -Eq 'quitaria 5 entrada\(s\) saikit-harness-id 23[.]3'; then
       fm_pass hosts-quitar-muse-dry quitar_muse_dry_clasifica \
         "quitaria N entrada(s) 23.3" "linea de settings 23.3 clasificada"
     else
@@ -942,7 +952,7 @@ if fm_only hosts-quitar-muse-dry; then
       fi
     done
     # assert:quitar_muse_dry_preserva
-    if [ "$muse_ent_despues" != "?" ] && [ "$muse_ent_despues" -gt 0 ] \
+    if [ "$muse_ent_despues" = "5" ] \
       && printf '%s' "$muse_ag_despues" | grep -q implementer \
       && printf '%s' "$muse_ag_despues" | grep -q verifier \
       && printf '%s' "$muse_ag_despues" | grep -q reviewer \

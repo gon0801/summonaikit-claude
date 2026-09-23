@@ -597,6 +597,27 @@ mut_omit_hosts omit_quitar_muse_clasifica quitar_muse_dry_clasifica_agente \
 mut_inyecta_hosts dry_muse_escribe quitar_muse_dry_snapshot_igual \
   's@fm_action hosts-quitar-muse-dry act-quitar-muse-dry@printf x >> "$muse_settings"; &@'
 
+# Muda el hook 23.3 de Stop a SessionStart tras instalar muse: el total sigue
+# en 5 y los cinco nombres de evento siguen presentes, pero el registro por
+# evento debe ponerse rojo (medido: PASS contra el driver pre-fix).
+mut_inyecta_hosts mueve_stop_a_sessionstart muse_settings_registra \
+  's@fm_action hosts-muse-install act-muse@python3 -c "import json,sys;p=sys.argv[1];s=json.load(open(p));h=s.get('\''hooks'\'',{});mov=[];[(mov.extend([x for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' in x.get('\''command'\'','\'''\'')]),m.__setitem__('\''hooks'\'',[x for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' not in x.get('\''command'\'','\'''\'')])) for m in h.get('\''Stop'\'',[])];(h.get('\''SessionStart'\'') or [{}])[0].setdefault('\''hooks'\'',[]).extend(mov);json.dump(s,open(p,'\''w'\''),indent=2)" "$muse_settings"; &@'
+
+# La retirada que parte de UNA sola entrada 23.3 debe ponerse roja en
+# clasifica y preserva (medido: PASS contra el driver pre-fix, que aceptaba
+# N>=1 y preserva >0 aunque la ficha exige las cinco).
+caso "mutante recorta_muse_a_una_entrada: se pone rojo"
+reset_art
+mut="$SANDBOX/hosts-recorta-muse.sh"
+control_sano_hosts
+if sed_must_change "$SANDBOX/hosts.src.sh" "$mut" \
+  's@muse_ins_out="$(run_muse --host muse --dest "$VERIFY_DEST" 2>&1)"@&; python3 -c "import json,sys;p=sys.argv[1];s=json.load(open(p));h=s.get('\''hooks'\'',{});t=[(m,x) for ev in h.values() for m in ev for x in m.get('\''hooks'\'',[]) if '\''saikit-harness-id 23.3'\'' in x.get('\''command'\'','\'''\'')];[m['\''hooks'\''].remove(x) for (m,x) in t[1:]];json.dump(s,open(p,'\''w'\''),indent=2)" "$muse_settings"@' \
+  "recorta_muse"
+then
+  out="$(ctrl_drv "$mut" drive install-hosts 2>&1)" && rc=0 || rc=$?
+  assert_missing_or_fail install-hosts quitar_muse_dry_preserva quitar_muse_dry_preserva "$rc"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2
   exit 1
