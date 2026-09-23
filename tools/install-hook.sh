@@ -2801,7 +2801,10 @@ PROC_RAMA=''; PROC_SHA=''; PROC_SUCIO='no'; PROC_SIN_SEG=0
 PROC_COINCIDE='sin-ref'; PROC_MOTIVO=''
 if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
   PROC_MOTIVO='git-no-disponible'
-elif ! "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+# saikit-23.11d-sin-git-heredado: GIT_DIR/GIT_WORK_TREE heredados harian que
+# este chequeo contestara por OTRO repo y el checkout declarara procedencia
+# ajena; el chequeo los ignora.
+elif ! env -u GIT_DIR -u GIT_WORK_TREE "$GIT_BIN" -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
   PROC_MOTIVO='no-es-repo-git'
 else
   _st="$("$GIT_BIN" -C "$repo" status --porcelain=v1 -b 2>/dev/null)" || _st=''

@@ -653,8 +653,16 @@ reportar_matcher() {
     reportar "              se registra, aunque haya corrido. Se arregla en settings.json:"
     reportar "              agregar 'Agent' al matcher de PostToolUse."
   elif [ "$matcher_estado" = "unknown" ]; then
+    # saikit-23.11c-unknown-nombra-herramienta: el mensaje nombra la
+    # herramienta real segun el host; en muse la delegacion es
+    # subagent_spawn/subagent_wait, no Agent.
+    case "$MODO" in
+      muse) _herr_matcher="'subagent_spawn' y 'subagent_wait'" ;;
+      grok) _herr_matcher="'spawn_subagent' (ni su alias 'Task')" ;;
+      *) _herr_matcher="'Agent'" ;;
+    esac
     reportar "[summonaikit] REGISTRO DEL HOOK: unknown — no se pudo determinar si el matcher"
-    reportar "              de PostToolUse cubre 'Agent' (algun matcher no compila como regex o"
+    reportar "              de PostToolUse cubre $_herr_matcher (algun matcher no compila como regex o"
     reportar "              algun settings esta ilegible). No se afirma ausencia."
   fi
 }
