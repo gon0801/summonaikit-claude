@@ -3040,6 +3040,25 @@ if [ "$CHECK" -eq 1 ]; then
       esac
     fi
   fi
+  # 23.5: probe del contrato de Muse como paso del --check sin host.
+  # Decidido: paso del --check (no hay comando doctor en tools/).
+  # Fail-open: sin binario o sin medicion (unknown, exit 4) no mueve el
+  # veredicto; con el contrato roto (exit 1) el check falla: el binario se
+  # autoactualiza al arrancar y el gate podria dejar de correr sin que nadie
+  # lo decida. Mismo gate que la fila de registro de arriba (solo con config
+  # de Muse). Todo lo del probe corre aislado (caja mktemp, cinco variables):
+  # jamas toca el perfil real.
+  if [ -z "$HOST" ] && [ -d "$_mdir" ]; then
+    _probe_out=''
+    _probe_rc=0
+    _probe_out="$(bash "$here/probe-muse-contract.sh" 2>&1)" || _probe_rc=$?
+    printf '%s\n' "$_probe_out" | while IFS= read -r _pl; do decir "[summonaikit] check: host=muse probe: ${_pl#probe-muse: }"; done
+    case "$_probe_rc" in
+      0) ;;
+      4) decir "[summonaikit] check: host=muse probe=unknown (no mueve el veredicto)" ;;
+      *) _fallo=1; _causas="$_causas probe-muse-contrato-roto" ;;
+    esac
+  fi
   if [ "$PROC_CONOCIDA" -eq 0 ]; then
     _fallo=1; _causas="$_causas procedencia-desconocida"
   elif [ "$_master_juicio" = 'difiere' ]; then
