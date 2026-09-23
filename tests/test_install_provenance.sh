@@ -222,6 +222,10 @@ esac
 case "$out" in
   *"sha=$sha_ajeno"*) malo "con GIT_DIR ajeno reporto el sha AJENO: [$out]" ;;
 esac
+case "$out" in
+  *"coincide_origin_master=si"*) ;;
+  *) malo "con GIT_DIR ajeno no comparo contra el origin/master propio: [$out]" ;;
+esac
 
 # P6: sin git disponible => desconocida, y el exit NO se mueve (reportar no
 # bloquea: desinstalar/reparar andan igual con git roto).
