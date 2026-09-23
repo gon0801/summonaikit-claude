@@ -3,9 +3,10 @@
 # copia, SAIKIT_INSTALL_TOOL=<mutante>, el driver test_install_provenance.sh
 # debe ir rojo.
 set -u
-# Sin git heredado: GIT_DIR/GIT_WORK_TREE del llamador redirigirian los
+# Sin git heredado: GIT_DIR/GIT_WORK_TREE (y las locales GIT_COMMON_DIR,
+# GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY) del llamador redirigirian los
 # fixtures a OTRO repo; se limpian antes de crear fixtures o leer shas.
-unset GIT_DIR GIT_WORK_TREE
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 . "$here/lib/sandbox.sh"
