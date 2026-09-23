@@ -13,6 +13,12 @@
 #   no-ctx      el export no trae el contexto inyectado
 #   no-continue el Stop bloquea pero no hay segunda pasada
 #   no-catalog  el export omite un perfil (frontmatter rechazado en silencio)
+#   ctx-fuera-de-campo la marca del contexto sale cruda sin entrar al
+#      additionalContext (P2 en campo ajeno; vuelta 1 de revision)
+#   block-ignorado el turno hace dos pasadas pero ignora decision:block
+#      (P3 sin bloqueo efectivo; vuelta 1 de revision)
+#   perfil-fuera-de-catalogo un perfil falta del catalogo y su nombre sale
+#      en una nota (P4 en campo ajeno; vuelta 1 de revision)
 set -u
 
 mode="${SAIKIT_STUB_MODE:-normal}"
@@ -88,31 +94,75 @@ case "$cmd" in
     [ -n "$out" ] || { printf 'muse-probe-stub: export requiere --out\n' >&2; exit 2; }
     mkdir -p "$evdir"
     ctx=""
-    if [ "$mode" != "no-ctx" ] && [ -f "$evdir/ups-out.txt" ]; then
+    if [ "$mode" != "no-ctx" ] && [ "$mode" != "ctx-fuera-de-campo" ] && [ -f "$evdir/ups-out.txt" ]; then
       ctx="$(grep -o 'SAIKIT-PROBE-CTX-[A-Za-z0-9-]*' "$evdir/ups-out.txt" | head -1 || true)"
+    fi
+    decoy_ctx=""
+    if [ "$mode" = "ctx-fuera-de-campo" ] && [ -f "$evdir/ups-out.txt" ]; then
+      decoy_ctx="$(grep -o 'SAIKIT-PROBE-CTX-[A-Za-z0-9-]*' "$evdir/ups-out.txt" | head -1 || true)"
     fi
     blk=""
     runs="0"
     [ -f "$evdir/stop-runs.txt" ] && runs="$(cat "$evdir/stop-runs.txt")"
-    if [ -f "$evdir/stop-out.txt" ]; then
+    [ "$mode" = "no-hooks" ] && runs="0"
+    if [ "$mode" != "block-ignorado" ] && [ -f "$evdir/stop-out.txt" ]; then
       blk="$(grep -o 'SAIKIT-PROBE-BLOCK-[A-Za-z0-9-]*' "$evdir/stop-out.txt" | head -1 || true)"
+    fi
+    decoy_blk=""
+    if [ "$mode" = "block-ignorado" ] && [ -f "$evdir/stop-out.txt" ]; then
+      decoy_blk="$(grep -o 'SAIKIT-PROBE-BLOCK-[A-Za-z0-9-]*' "$evdir/stop-out.txt" | head -1 || true)"
     fi
     ids=""
     if [ -d "$xdg/muse/agents" ]; then
       ids="$(cd "$xdg/muse/agents" && ls *.md 2>/dev/null | sed 's/\.md$//' | sort | tr '\n' ',' | sed 's/,$//;s/,/, /g')"
     fi
-    if [ "$mode" = "no-catalog" ]; then
+    if [ "$mode" = "no-catalog" ] || [ "$mode" = "perfil-fuera-de-catalogo" ]; then
       ids="$(printf '%s' "$ids" | sed 's/, *reviewer//;s/reviewer, *//;s/reviewer//')"
     fi
-    activa="false"
-    [ "$runs" -ge 2 ] 2>/dev/null && activa="true"
-    jq -n --arg ctx "$ctx" --arg blk "$blk" --argjson runs "${runs:-0}" \
-      --argjson sha "$activa" --arg ids "$ids" --arg mode "$mode" \
-      '{export_schema_version: 1,
-        probe_stub_mode: $mode,
-        context_block_updated: (if $ctx == "" then [] else [{source: "runtime_hook", text: $ctx}] end),
-        stop_evidence: {reason: $blk, passes: $runs, stop_hook_active: $sha},
-        catalog: ("Use an exact listed id: " + $ids)}' > "$out"
+    lista="$(printf '%s' "$ids" | sed 's/, */\n- /g; s/^/- /')"
+    decoy_nota=""
+    if [ "$mode" = "perfil-fuera-de-catalogo" ]; then
+      decoy_nota="nota del turno: reviewer pendiente de alta en el catalogo"
+    fi
+    bloquea="false"
+    if [ "$mode" != "no-continue" ] && [ "$mode" != "block-ignorado" ] && [ "$mode" != "no-hooks" ] \
+      && [ "${runs:-0}" -ge 1 ] 2>/dev/null; then
+      bloquea="true"
+    fi
+    jq -n --arg ctx "$ctx" --arg decoy_ctx "$decoy_ctx" --arg blk "$blk" \
+      --arg decoy_blk "$decoy_blk" --argjson runs "${runs:-0}" --arg bloquea "$bloquea" \
+      --arg lista "$lista" --arg decoy_nota "$decoy_nota" --arg mode "$mode" \
+      --arg lista "$lista" --arg decoy_nota "$decoy_nota" --arg mode "$mode" \
+      '(if $ctx != "" then [{envelope: {payload: {event: {
+  kind: "context_block_updated", id: "hook:user_prompt_submit:prompt:0",
+  role: "developer", source: "runtime_hook",
+  lifecycle: "user_prompt_submit", text: $ctx,
+  reason: "hook:user_prompt_submit"}}}}] else [] end) as $e_ctx
+| (if $decoy_ctx != "" then [{envelope: {payload: {event: {
+  kind: "context_block_diagnostic",
+  message: ("salida cruda del hook sin aplicar: " + $decoy_ctx)}}}}] else [] end) as $e_dctx
+| ([range(0; $runs) as $i
+  | {envelope: {payload: {event: (
+    {kind: "hook_run_terminal", event: "Stop",
+     status: (if $i == 0 and $bloquea == "true" then "blocked" else "completed" end)}
+    + (if $i == 0 and $bloquea == "true" then {effects: ["blocked"]} else {} end))}}}]
+) as $e_stops
+| (if $blk != "" then [{envelope: {payload: {event: {
+  kind: "context_block_updated", id: "hook:stop:stop:0",
+  role: "developer", source: "runtime_hook", lifecycle: "stop",
+  text: $blk, reason: "hook:stop"}}}}] else [] end) as $e_blk
+| (if $decoy_blk != "" then [{envelope: {payload: {event: {
+  kind: "context_block_diagnostic",
+  message: ("diagnostico del turno: " + $decoy_blk
+    + " (resultado completed, bloqueo no aplicado)")}}}}] else [] end) as $e_dblk
+| [{envelope: {payload: {event: {
+  kind: "model_request_configured",
+  text: ("Reviewed Agent Definition catalog for this run. "
+    + "Use an exact listed id:\n" + $lista)}}}}] as $e_cat
+| (if $decoy_nota != "" then [{envelope: {payload: {event: {
+  kind: "context_block_diagnostic", message: $decoy_nota}}}}] else [] end) as $e_nota
+| {export_schema_version: 1, probe_stub_mode: $mode,
+   events: ($e_ctx + $e_dctx + $e_stops + $e_blk + $e_dblk + $e_cat + $e_nota)}' > "$out"
     printf '%s\n' "$out"
     exit 0
     ;;

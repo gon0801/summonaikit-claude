@@ -57,6 +57,23 @@ correr no-catalog rojo-p4
 [ "$RC" -eq 1 ] || malo "rojo P4: exit $RC (esperaba 1)"
 grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4: P4 no esta en fail"
 
+caso "rojo P2b (ctx-fuera-de-campo): la marca fuera del additionalContext da fail"
+correr ctx-fuera-de-campo rojo-p2b
+[ "$RC" -eq 1 ] || malo "rojo P2b: exit $RC (esperaba 1)"
+grep -q 'punto=P2 veredicto=fail' "$OF" || malo "rojo P2b: P2 no esta en fail"
+grep -q 'punto=P1 veredicto=pass' "$OF" || malo "rojo P2b: P1 debio seguir en pass"
+
+caso "rojo P3b (block-ignorado): dos pasadas sin bloqueo efectivo dan fail"
+correr block-ignorado rojo-p3b
+[ "$RC" -eq 1 ] || malo "rojo P3b: exit $RC (esperaba 1)"
+grep -q 'punto=P3 veredicto=fail' "$OF" || malo "rojo P3b: P3 no esta en fail"
+grep -q 'punto=P1 veredicto=pass' "$OF" || malo "rojo P3b: P1 debio seguir en pass"
+
+caso "rojo P4b (perfil-fuera-de-catalogo): nombre fuera del catalogo da fail"
+correr perfil-fuera-de-catalogo rojo-p4b
+[ "$RC" -eq 1 ] || malo "rojo P4b: exit $RC (esperaba 1)"
+grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4b: P4 no esta en fail"
+
 caso "unknown sin binario: exit 4, sin fail"
 correr SIN-BINARIO unk-1
 [ "$RC" -eq 4 ] || malo "unknown: exit $RC (esperaba 4)"

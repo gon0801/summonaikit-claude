@@ -160,28 +160,54 @@ else
   v P1 fail "faltan marcas: ss=$([ -f "$marks/ss" ] && echo si || echo no) ups=$([ -f "$marks/ups" ] && echo si || echo no) stop=$([ -f "$marks/stop" ] && echo si || echo no)"
 fi
 
-if grep -q "$ctx_marca" "$exp" 2>/dev/null; then
-  v P2 pass "additionalContext aparece en el export"
+# P2: la marca solo vale dentro del additionalContext que inyecto el hook
+# (context_block_updated de source runtime_hook). Buscarla en todo el
+# documento aceptaria un contrato roto (vuelta 1 de revision).
+if jq -e --arg m "$ctx_marca"   'any(.events[]?;
+    (.envelope.payload.event.kind == "context_block_updated")
+    and (.envelope.payload.event.source == "runtime_hook")
+    and ((.envelope.payload.event.text // "") | contains($m)))'   "$exp" >/dev/null 2>&1; then
+  v P2 pass "additionalContext del hook aparece en el export (context_block_updated de runtime_hook)"
 else
-  v P2 fail "el export no trae $ctx_marca"
+  v P2 fail "ningun context_block_updated de runtime_hook trae $ctx_marca"
 fi
 
+# P3: bloqueo efectivo + motivo en su campo + segunda pasada. Contar dos
+# invocaciones y buscar la razon en todo el documento aceptaria un host que
+# ignora decision:block (vuelta 1 de revision).
 stops=0
 [ -f "$marks/stop-blocked" ] && stops="$(ls "$marks"/stop-*.json 2>/dev/null | wc -l | tr -d ' ')"
-if [ "$stops" -ge 2 ] 2>/dev/null && grep -q "$blk_marca" "$exp" 2>/dev/null; then
-  v P3 pass "el Stop bloquea (decision:block) y el turno continua ($stops pasadas, stop_hook_active en la segunda)"
+stop_terms="$(jq '[.events[]?
+  | select(.envelope.payload.event.kind == "hook_run_terminal"
+    and .envelope.payload.event.event == "Stop")] | length'   "$exp" 2>/dev/null || echo 0)"
+bloqueo=0
+jq -e '.events[]?
+  | select(.envelope.payload.event.kind == "hook_run_terminal"
+    and .envelope.payload.event.event == "Stop"
+    and .envelope.payload.event.status == "blocked")'   "$exp" >/dev/null 2>&1 && bloqueo=1
+motivo=0
+jq -e --arg b "$blk_marca"   'any(.events[]?;
+    (.envelope.payload.event.kind == "context_block_updated")
+    and (.envelope.payload.event.source == "runtime_hook")
+    and ((.envelope.payload.event.text // "") | contains($b)))'   "$exp" >/dev/null 2>&1 && motivo=1
+if [ "$bloqueo" -eq 1 ] && [ "$motivo" -eq 1 ] && [ "${stop_terms:-0}" -ge 2 ] 2>/dev/null; then
+  v P3 pass "el Stop bloquea (terminal blocked) y el turno continua ($stop_terms pasadas de Stop)"
 else
-  v P3 fail "pasadas de Stop=$stops (se esperan >=2), razon en export=$([ -f "$exp" ] && grep -c "$blk_marca" "$exp" || echo 0)"
+  v P3 fail "bloqueo=$bloqueo motivo=$motivo pasadas=${stop_terms:-0} (se espera 1/1/>=2)"
 fi
 
+# P4: cada perfil como item "- <rol>" del mensaje del catalogo ("Use an
+# exact listed id"). Buscar el nombre en todo el documento aceptaria un
+# perfil ausente del catalogo con su nombre en un campo ajeno (vuelta 1).
+catalogo="$(jq -r '[.. | strings | select(contains("Use an exact listed id"))] | first // empty' "$exp" 2>/dev/null)"
 roles_ok=1
 for r in implementer verifier reviewer adversary; do
-  grep -q "$r" "$exp" 2>/dev/null || { roles_ok=0; break; }
+  printf '%s\n' "$catalogo" | grep -q -- "- $r$" || { roles_ok=0; break; }
 done
 if [ "$roles_ok" -eq 1 ]; then
   v P4 pass "los cuatro perfiles entran al catalogo del turno"
 else
-  v P4 fail "el catalogo del export no trae los cuatro perfiles"
+  v P4 fail "el catalogo del export no lista los cuatro perfiles"
 fi
 
 decir "punto=despacho veredicto=unknown detalle=la aceptacion del despacho con modelo real la mide el lead (echo no detecta unknown_tool)"
