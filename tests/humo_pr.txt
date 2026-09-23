@@ -1,0 +1,28 @@
+# tests/humo_pr.txt — lista base del humo del PR (dieta CI 2026-09).
+#
+# QUE ES. El job `suite-pr` de quality.yml corre SOLO estos archivos
+# (`SAIKIT_SOLO` en tests/run.sh): lo rapido que agarra errores, en ~5 min y
+# pocas maquinas. El workflow le SUMA por filtro de archivos:
+# `test_guia_usuario` si el PR toca la guia, `test_feature_map_*` si toca el
+# mapa. La bateria COMPLETA corre al unir a main (`suite` en push) y las
+# mutaciones + los meta-tests corren de noche (`suite-lentos` y `meta`).
+#
+# REGLAS (las canda tests/test_runner_guards.sh):
+#   - solo archivos rapidos y de alta senal; nada que tarde minutos solo;
+#   - NUNCA el lento (`test_gate_mutations`: de noche), los meta-tests
+#     (`test_runner_guards`, `test_gate_mutations_guards`: de noche), la guia
+#     ni el mapa (entran por filtro, no por base);
+#   - un nombre por linea, sin `.sh`; el borrado de un archivo sin sacarlo de
+#     aca rompe el humo en exit 2 (fantasma), no en verde silencioso.
+test_check_syntax
+test_gate_behavior
+test_hook_source
+test_trail_gate
+test_pretool_merge
+test_check_secrets
+test_golden_harness
+test_golden_baseline
+test_golden_provenance
+test_instruction_policy
+test_probe_muse_contract
+test_quality_kit_skip

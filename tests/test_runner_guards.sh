@@ -30,6 +30,10 @@ unset SAIKIT_PARTICION
 # 20.29: misma leccion para el shard por archivo — el job `suite` lo pasa por
 # entorno; heredarlo aca convertiria cada corrida "completa" en un shard.
 unset SAIKIT_SHARD
+# Dieta CI 2026-09: misma leccion para el subconjunto del PR — el job
+# `suite-pr` lo pasa por entorno; heredarlo aca convertiria cada corrida
+# "completa" en el humo.
+unset SAIKIT_SOLO
 
 # ------------------------------------------------- 1) repo vacio de logica
 caso "repo sin hook y sin tests => exit 0"
@@ -439,6 +443,69 @@ out="$(bash "$run_sh" "$SANDBOX/sin-skip" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || malo "corrida limpia debe cerrar 0, dio $rc: $out"
 printf '%s' "$out" | grep -q 'SKIP declarado' && malo "sin skips no hay resumen de skips: $out"
 printf '%s' "$out" | grep -q 'PASS: test_liso' || malo "sin skips la linea sigue siendo PASS liso: $out"
+
+# ---------------- dieta CI 2026-09: subconjunto explicito del PR (SAIKIT_SOLO)
+# El job `suite-pr` no corre la particion entera: corre la lista base de
+# `tests/humo_pr.txt` (+ guia/mapa por filtro de archivos, en el workflow).
+# Lo que estos casos candan: el filtro incluye solo lo nombrado, un fantasma
+# corta en exit 2 sin correr nada, y compone con particion y shard. La union
+# COMPLETA la sigue candando el job `suite` en push (casos de arriba).
+mkdir -p "$SANDBOX/solo/tests"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/solo/tests/test_solo_a.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/solo/tests/test_solo_b.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/solo/tests/test_solo_c.sh"
+
+caso "SAIKIT_SOLO corre SOLO los nombrados"
+out="$(SAIKIT_SOLO='test_solo_b' bash "$run_sh" "$SANDBOX/solo" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "esperaba exit 0, dio $rc: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_b' || malo "no corrio el nombrado: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_a' && malo "corrio un no nombrado: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_c' && malo "corrio un no nombrado: $out"
+
+caso "SAIKIT_SOLO con un fantasma => exit 2 y NO corre nada"
+out="$(SAIKIT_SOLO='test_solo_a test_fantasma' bash "$run_sh" "$SANDBOX/solo" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "un fantasma no puede cerrar en verde, dio $rc: $out"
+printf '%s' "$out" | grep -q "SAIKIT_SOLO nombra 'test_fantasma'" || malo "no nombra el fantasma: $out"
+printf '%s' "$out" | grep -q 'PASS: test_' && malo "corrio tests con un fantasma en la lista: $out"
+
+caso "SAIKIT_SOLO compone con la particion: lo nombrado fuera de ella es fantasma"
+out="$(SAIKIT_PARTICION=lentos SAIKIT_SOLO='test_solo_a' bash "$run_sh" "$SANDBOX/solo" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] || malo "solo fuera de la particion debe cortar en exit 2, dio $rc: $out"
+printf '%s' "$out" | grep -q "SAIKIT_SOLO nombra 'test_solo_a'" || malo "no nombra el fantasma: $out"
+
+caso "SAIKIT_SOLO vacia es bateria entera, como sin la variable"
+out="$(SAIKIT_SOLO='' bash "$run_sh" "$SANDBOX/solo" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "solo vacia debe correr todo, dio $rc: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_a' || malo "solo vacia no corrio test_solo_a: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_b' || malo "solo vacia no corrio test_solo_b: $out"
+printf '%s' "$out" | grep -q 'PASS: test_solo_c' || malo "solo vacia no corrio test_solo_c: $out"
+
+caso "SAIKIT_SOLO compone con el shard: la union de 1..2 es el humo, sin repetidos"
+entero_humo="$(nombres_con_repes "$(SAIKIT_SOLO='test_solo_a test_solo_b test_solo_c' bash "$run_sh" "$SANDBOX/solo" 2>&1)")"
+reparto_humo="$(nombres_con_repes "$( for i in 1 2; do
+  SAIKIT_SOLO='test_solo_a test_solo_b test_solo_c' SAIKIT_SHARD="$i/2" bash "$run_sh" "$SANDBOX/solo" 2>&1
+done )")"
+[ "$entero_humo" = "$reparto_humo" ] || malo "solo+shard no reparte exacto: humo=[$entero_humo] shards=[$reparto_humo]"
+
+caso "tests/humo_pr.txt: base rapida y existente — sin lentos, meta, guia ni mapa"
+humo="$here/humo_pr.txt"
+if [ ! -r "$humo" ]; then
+  malo "falta tests/humo_pr.txt: el job suite-pr no tiene lista base"
+else
+  while IFS= read -r linea; do
+    case "$linea" in ''|\#*) continue ;; esac
+    [ -f "$here/${linea}.sh" ] || malo "humo_pr.txt nombra '$linea' y tests/${linea}.sh no existe"
+    case "$linea" in
+      test_gate_mutations|test_runner_guards|test_gate_mutations_guards|test_guia_usuario)
+        malo "humo_pr.txt trae '$linea': el lento y los meta-tests van de noche; la guia entra por filtro, no por base" ;;
+    esac
+    case "$linea" in
+      test_feature_map_*) malo "humo_pr.txt trae '$linea': el mapa entra por filtro, no por base" ;;
+    esac
+  done < "$humo"
+  repes="$(grep -v '^#' "$humo" | grep -v '^$' | sort | uniq -d)"
+  [ -z "$repes" ] || malo "humo_pr.txt trae repetidos: $repes"
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "test_runner_guards: FAIL" >&2

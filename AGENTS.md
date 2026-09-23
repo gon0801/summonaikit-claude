@@ -7,7 +7,7 @@ Para ver que candados tiene realmente: `pre-commit run --all-files` (o mira `.pr
 Reglas de hierro:
 1. Si un candado falla, se arregla el problema real -- JAMAS se usa `--no-verify` ni se saltea un candado.
 2. Cada bug arreglado incluye, en el mismo cambio, una prueba que lo habria atrapado.
-8. CI: la bateria completa corre en jobs paralelos cuya union es la bateria (con candado); si un job pasa de ~10 min se shardea, nunca se recorta ni se saltea por tipo de cambio.
+8. CI (dieta 2026-09): cada evento corre lo suyo — PR: humo rapido (+ guia/mapa por filtro); push a main/master: bateria rapida completa; noche: mutaciones + meta-tests. Nada deja de correr, solo cambia cuando; si un job pasa de ~10 min se shardea, nunca se recorta.
    Checks de docs/ledger en un job propio de segundos. Carril: docs/chore/cierre = fast; codigo = gate; medicion/release = +cross-review. Cierres de ledger de un bloque = un PR.
 
 Flujo de verificacion:
@@ -46,11 +46,22 @@ es el fork de MSYS, no la logica del hook.
    sin divergencia y se pierde cobertura sin enterarse. Si algun dia se usa WSL, es
    por caso especifico POSIX-only con la salvedad declarada, no como atajo general.
 
-## Gate final: CI Linux, no la suite local (politica 2026-08-15)
+## Gate final: CI Linux, no la suite local (politica 2026-08-15; dieta 2026-09)
 
-La bateria completa corre en ubuntu en cada PR y push a main/master, repartida en jobs
-PARALELOS (2026-08-29). Nada se saltea: son particiones cuya union es la
-bateria entera, y cada nivel tiene su candado.
+La bateria corre en ubuntu repartida en jobs PARALELOS (2026-08-29). Nada deja
+de correr: cada evento corre lo suyo (dieta 2026-09, pedido del dueno) y cada
+nivel tiene su candado.
+
+- PR: `quick` (checks rapidos fusionados) + `secrets` + `suite-pr` — el humo
+  (`tests/humo_pr.txt` via `SAIKIT_SOLO`, + guia/mapa por filtro de archivos),
+  2 shards. Lo rapido que agarra errores, ~5 min en 4 maquinas.
+- Push a main/master: `quick` + `secrets` + `suite` — la bateria rapida
+  COMPLETA (particion `rapidos`, 8 shards). Lo que protege la rama.
+- Noche (`schedule` 07:00 UTC): `suite-lentos` (mutaciones, 10 shards) +
+  `meta` (los dos meta-tests por `SAIKIT_SOLO`). Lo caro y lo meta, fuera del
+  camino del PR.
+- `gate`: el unico status que hay que mirar — exige success a los jobs del
+  evento y skipped a los que no tocan en ese evento.
 
 - `suite` — la mitad rapida (`SAIKIT_PARTICION=rapidos`), repartida por ARCHIVO
   en 8 shards (`SAIKIT_SHARD=i/8`, round-robin en orden LC_ALL=C; 20.29).
@@ -67,31 +78,37 @@ bateria entera, y cada nivel tiene su candado.
   no se conserva aquí otro número de shards o mutaciones. Candado:
   `tests/test_gate_mutations_guards.sh` (la union de los shards son TODAS; un
   shard vacio, invalido o fuera de rango corta con exit 2).
+- `meta` — los meta-tests (`test_runner_guards`, que canda particion, shards,
+  humo del PR y matrix del workflow; y `test_gate_mutations_guards`, que canda
+  el reparto de mutaciones), por `SAIKIT_SOLO` para no arrastrar la particion
+  entera. Candado: el propio contenido (corren contra repos sinteticos) + el
+  caso del humo en `test_runner_guards.sh`."
 
-El reloj del PR es ~7 min con el shard (2026-09-09; era ~2.7 en 2026-08-29 y
-llego a 22-26 antes de 20.29). Correr ademas la suite completa en local (~20
-min por el fork de MSYS; 28 min en macOS con los rojos de 20.28) es pagar dos
-veces lo mismo — medido 2026-08-15: dos sesiones paralelas gastaron ~2 h de
-pared en suites locales serializadas por el candado.
+El reloj del PR es ~5 min con el humo (dieta 2026-09; era ~7 min con el shard
+2026-09-09, ~2.7 en 2026-08-29 y 22-26 antes de 20.29). Correr ademas la suite
+completa en local (~20 min por el fork de MSYS; 28 min en macOS con los rojos
+de 20.28) es pagar dos veces lo mismo — medido 2026-08-15: dos sesiones
+paralelas gastaron ~2 h de pared en suites locales serializadas por el candado.
 
-**Un PR "solo docs" TAMBIEN paga la bateria** (decision 2026-09-09, medida): 8
-tests leen `Plans.md` — uno el ledger REAL (`test_adversary_artifact_contract`,
-rojo por un archivado legitimo en PR #95) —, 5 el deploy-log, 10 las fichas
-`.md`, 7 `.saikit/decisiones` y `findings`; el job `gate` solo agrega. Saltarse
-`suite` por tipo de cambio esconderia justo esos rojos. Mover esos checks a
-`gate` y saltar `suite` con candado se evaluo (propuesta 20.30) y quedo
-DESCARTADO por ahora: con el shard el PR de docs cuesta ~7 min. Lo que si es
-gratis: **los cierres de ledger de un bloque van en UN solo PR**, no uno por
-fila.
+**Un PR "solo docs" paga el humo, no la bateria** (dieta 2026-09; cambia la
+decision 2026-09-09, que pagaba ~7 min por PR de docs): del humo,
+`test_instruction_policy` lee los docs activos (AGENTS/Plans/spec/recetas/
+reviewer); los checks de ledger, deploy-log, fichas y decisiones
+(`plans_ledger`, `audita_ledger`, `deploy_log`, `adversary_artifact_contract`
+y el resto) corren al unir a main (`suite` en push). Residual declarado: un
+docs-only que rompa uno de esos se ve en el push, no en el PR — el `gate` del
+push lo bloquea igual, y la propuesta 20.30 (mover esos checks a `gate`)
+sigue descartada. Lo que sigue gratis: **los cierres de ledger de un bloque
+van en UN solo PR**, no uno por fila.
 
 1. **Local, por cambio: SOLO lo acotado.** Rojo/verde con el driver suelto
    (regla 1 de arriba) + la bateria de mutaciones ACOTADA a las lineas tocadas
    (`SAIKIT_MUTACIONES='...' bash tests/test_gate_mutations.sh`). ~1-3 min.
 2. **El gate final de una task/PR es el job `gate` del CI en verde** — es la
-   compuerta agregada que exige success en los cinco (`quality`,
-   `node-adapter`, `suite`, `suite-lentos`, `secrets`), asi que mirar SOLO las
-   dos mitades de la bateria dejaria pasar un rojo de cualquiera de los otros
-   tres. El
+   compuerta agregada que exige success a los jobs del evento (PR: `quick`,
+   `suite-pr`, `secrets`; push: `quick`, `suite`, `secrets`; noche:
+   `suite-lentos`, `meta`) y skipped al resto, asi que mirar SOLO la bateria
+   dejaria pasar un rojo de cualquiera de los otros. El
    cierre en Plans.md cita ese run de Actions donde antes citaba la corrida
    local. La suite completa local queda como opcion (medir la forma Windows
    entera), no como requisito.
