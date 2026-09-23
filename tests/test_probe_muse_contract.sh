@@ -80,6 +80,12 @@ correr catalogo-imitado rojo-p4c
 grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4c: P4 no esta en fail"
 grep -q 'punto=P1 veredicto=pass' "$OF" || malo "rojo P4c: P1 debio seguir en pass"
 
+caso "rojo P4d (campo-auxiliar-catalogo): imita la lista fuera del text da fail"
+correr campo-auxiliar-catalogo rojo-p4d
+[ "$RC" -eq 1 ] || malo "rojo P4d: exit $RC (esperaba 1)"
+grep -q 'punto=P4 veredicto=fail' "$OF" || malo "rojo P4d: P4 no esta en fail"
+grep -q 'punto=P1 veredicto=pass' "$OF" || malo "rojo P4d: P1 debio seguir en pass"
+
 caso "unknown sin binario: exit 4, sin fail"
 correr SIN-BINARIO unk-1
 [ "$RC" -eq 4 ] || malo "unknown: exit $RC (esperaba 4)"

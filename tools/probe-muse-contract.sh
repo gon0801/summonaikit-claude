@@ -204,7 +204,8 @@ fi
 # lista (vuelta 2 de revision).
 catalogo="$(jq -r '[.events[]? | .envelope.payload.event
   | select(.kind == "model_request_configured")
-  | .. | strings | select(contains("Use an exact listed id"))] | first // empty' \
+  | .run_context_messages[]? | .text // empty
+  | select(contains("Use an exact listed id"))] | first // empty' \
   "$exp" 2>/dev/null)"
 roles_ok=1
 for r in implementer verifier reviewer adversary; do

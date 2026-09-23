@@ -21,6 +21,8 @@
 #      en una nota (P4 en campo ajeno; vuelta 1 de revision)
 #   catalogo-imitado el catalogo real omite un perfil y una nota anterior
 #      imita la lista completa (P4 fuera del evento; vuelta 2 de revision)
+#   campo-auxiliar-catalogo el text del evento omite un perfil y un campo
+#      auxiliar del mismo evento imita la lista (P4 fuera del text; vuelta 3)
 set -u
 
 mode="${SAIKIT_STUB_MODE:-normal}"
@@ -118,13 +120,21 @@ case "$cmd" in
     if [ -d "$xdg/muse/agents" ]; then
       ids="$(cd "$xdg/muse/agents" && ls *.md 2>/dev/null | sed 's/\.md$//' | sort | tr '\n' ',' | sed 's/,$//;s/,/, /g')"
     fi
-    if [ "$mode" = "no-catalog" ] || [ "$mode" = "perfil-fuera-de-catalogo" ] || [ "$mode" = "catalogo-imitado" ]; then
+    if [ "$mode" = "no-catalog" ] || [ "$mode" = "perfil-fuera-de-catalogo" ] || [ "$mode" = "catalogo-imitado" ] || [ "$mode" = "campo-auxiliar-catalogo" ]; then
       ids="$(printf '%s' "$ids" | sed 's/, *reviewer//;s/reviewer, *//;s/reviewer//')"
     fi
     lista="$(printf '%s' "$ids" | sed 's/, */\n- /g; s/^/- /')"
     decoy_nota=""
     if [ "$mode" = "perfil-fuera-de-catalogo" ]; then
       decoy_nota="nota del turno: reviewer pendiente de alta en el catalogo"
+    fi
+    decoy_aux=""
+    if [ "$mode" = "campo-auxiliar-catalogo" ]; then
+      decoy_aux="campo auxiliar: Use an exact listed id:
+- adversary
+- implementer
+- reviewer
+- verifier"
     fi
     decoy_cat=""
     if [ "$mode" = "catalogo-imitado" ]; then
@@ -141,7 +151,7 @@ case "$cmd" in
     fi
     jq -n --arg ctx "$ctx" --arg decoy_ctx "$decoy_ctx" --arg blk "$blk" \
       --arg decoy_blk "$decoy_blk" --argjson runs "${runs:-0}" --arg bloquea "$bloquea" \
-      --arg lista "$lista" --arg decoy_nota "$decoy_nota" --arg decoy_cat "$decoy_cat" --arg mode "$mode" \
+      --arg lista "$lista" --arg decoy_nota "$decoy_nota" --arg decoy_cat "$decoy_cat" --arg decoy_aux "$decoy_aux" --arg mode "$mode" \
       '(if $ctx != "" then [{envelope: {payload: {event: {
   kind: "context_block_updated", id: "hook:user_prompt_submit:prompt:0",
   role: "developer", source: "runtime_hook",
@@ -166,10 +176,11 @@ case "$cmd" in
     + " (resultado completed, bloqueo no aplicado)")}}}}] else [] end) as $e_dblk
 | (if $decoy_cat != "" then [{envelope: {payload: {event: {
   kind: "context_block_diagnostic", message: $decoy_cat}}}}] else [] end) as $e_dcat
-| [{envelope: {payload: {event: {
-  kind: "model_request_configured",
-  text: ("Reviewed Agent Definition catalog for this run. "
-    + "Use an exact listed id:\n" + $lista)}}}}] as $e_cat
+| [{envelope: {payload: {event: (
+  {kind: "model_request_configured"}
+  + (if $decoy_aux != "" then {nota: $decoy_aux} else {} end)
+  + {run_context_messages: [{text: ("Reviewed Agent Definition catalog for this run. "
+     + "Use an exact listed id:\n" + $lista)}]})}}}] as $e_cat
 | (if $decoy_nota != "" then [{envelope: {payload: {event: {
   kind: "context_block_diagnostic", message: $decoy_nota}}}}] else [] end) as $e_nota
 | {export_schema_version: 1, probe_stub_mode: $mode,
