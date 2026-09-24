@@ -1,0 +1,68 @@
+Task 23.17 — reintento del turno vivo en Claude con modelo haiku, 2026-09-22 16:48-16:57 PDT.
+Nodo: Mac del operador (Darwin arm64). Repo: ~/dev/summonaikit-claude,
+rama fase23/cierre (35c7c06; origin/master 86c5988 = #355 ya mergeado).
+Hook verificado con `bash tools/install-hook.sh --check`: 5 copias al dia,
+fuente = bytes de origin/master, veredicto=ok. Modelo: claude-haiku-4-5
+via `claude -p --model haiku`. Workspace descartable /tmp/f23-2317-claude
+(README + tests/run.sh en bucle sobre test_*.py). Sin ANTHROPIC_API_KEY en
+el entorno: el credito es de la suscripcion (el 429 de la manana ya no sale).
+Gasto total del reintento: ~USD 0.31 en 7 invocaciones haiku. Sin llaves en
+esta evidencia. Transcripts: ~/.claude/projects/-private-tmp-f23-2317-claude/
+(sesiones A1=8d5393b7, A2=617b90e2, C=83ff3cc0). JSON de cada turno en
+/tmp/f23-2317-{A,A2,B,C1,C2,C3}.json.
+
+0. Sonda minima `responde solo con la palabra ok` -> "ok", is_error=false,
+   terminal completed, costo 0.036. El 429 semanal ya no frena a haiku.
+
+1. Sesion A1 (resta.py, prompt canonico con -saikit):
+   - Turno 1 (con token): restate + pregunta, turns=1, EXIT=0. Paso 1 del
+     ciclo: OK. Estado: dir de proyecto 2985956823 (= cksum("/tmp/f23-2317-claude"))
+     creado, pero SIN harness-state.env (sin sub-sesion).
+   - Turno 2 resume SIN token ("Si, el plan esta bien. Procede..."): el modelo
+     verifico inline los archivos (los habia creado la sesion A2 en el medio),
+     turns=8, escribio Verificacion/Revision/Cierre en prosa, EXIT=0.
+     Delegaciones Task: 0. Estado: sigue sin harness-state.env.
+
+2. Sesion A2 (resta.py, prompt + "actua de inmediato sin preguntar"):
+   Atajo consciente para ver si cerraba a la primera: creo los 2 archivos
+   inline, turns=5, `bash tests/run.sh` OK, EXIT=0. Delegaciones Task: 0,
+   sin estado. Leccion: ese directivo salta la ceremonia; no sirve para el vivo.
+
+3. Sesion C (multiplica.py, prompt canonico con -saikit; resta.* borrados antes):
+   - Turno 1 (con token): restate + pregunta, turns=1, EXIT=0. Sin estado.
+   - Turno 2 resume SIN token ("Si, es correcto. Ve adelante."): creo
+     multiplica.py + test_multiplica.py inline, turns=4, bateria OK, EXIT=0.
+     Delegaciones Task: 0. Sin harness-state.env.
+   - Turno 3 SIN token tras el cierre ("Gracias, eso es todo."): "De nada.
+     Listo!", turns=1, sin armar nada. Libre: OK (vacuoso: no habia estado).
+
+4. Causa raiz de la ceremonia incompleta (medida, no adivinada):
+   - El UserPromptSubmit emite el contrato (harness_context) de 16978 bytes;
+     el CLI lo trunca: "Output too large (16.5KB). Full output saved to:
+     .../tool-results/hook-*-additionalContext.txt. Preview (first 2KB)".
+   - Haiku trabajo solo con el preview (restate+preguntar, que es lo que el
+     preview instruye) y jamas leyo el archivo completo (0 Read al archivo en
+     3 sesiones, 18 tool uses, 0 Task). Nunca vio el orden de delegacion
+     (implementer->verifier->reviewer), ni las lineas exactas PAUSED/DELEGATED,
+     ni la forma del recibo.
+   - Sin delegacion no hay harness-state.env: nunca existio tarea armada, asi
+     que el Stop no tuvo nada que exigir y los turnos cerraron RC=0. Los
+     resume sin token "no desarmaron" solo en sentido vacuo (nada que desarmar;
+     con el codigo viejo habria pasado lo mismo).
+   - Conclusion: el keep-alive de la 23.17 (mensaje sin token CON tarea armada
+     a media tarea) NO quedo ejercitado en Claude-haiku. No es regress del
+     hook: es integracion host-modelo (contrato > limite de salida del hook en
+     este CLI; el repo ya minimiza para muse, ancla 23.8-muse-tope).
+
+5. Limite declarado: forzar la ceremonia con un nudge de usuario habria
+   despachado subagentes sonnet (pins `model: claude-sonnet-5` en
+   ~/.claude/agents/*.md, que rigen fuera del repo): gasto no autorizado por
+   el dueno para este reintento, no intentado. Con topes de modelo haiku para
+   los roles, o con el contrato en dieta para haiku, el vivo podria cerrarse;
+   eso es fila nueva, no este reintento.
+
+Estado 23.17 tras el reintento: VIVO CLAUDE-HAIKU PARCIAL — 429 superado y
+siguiente-libre observado, pero sin ceremonia (0/3 subagentes) y sin probar el
+keep-alive. La fila sigue pendiente del turno vivo en Claude (Muse: DONE en
+cierre). No se toco 23.5, 23.12, 23.14 ni PR 350. Estado del hook en el nodo:
+limpio (dir 2985956823 vacio, sin harness-state.env; el hook lo gestiona).
