@@ -85,6 +85,23 @@ case "$particion" in
     exit 2 ;;
 esac
 
+# --------------------------------- dieta CI 2026-09: subconjunto del PR
+# SAIKIT_SOLO='nombre1 nombre2' corre SOLO esos archivos (nombres sin .sh).
+# Es un subconjunto EXPLICITO para el job rapido del PR (`suite-pr` en
+# quality.yml): lo rapido que agarra errores, mas guia/mapa cuando el PR toca
+# sus archivos. La lista base vive en `tests/humo_pr.txt` (una por linea, con
+# su candado en `tests/test_runner_guards.sh`); el workflow le suma guia/mapa
+# por filtro de archivos. La bateria COMPLETA la sigue corriendo el job
+# `suite` en push a main/master (misma union exacta, mismo candado) y las
+# mutaciones + los meta-tests corren de noche (`suite-lentos` y `meta`).
+#
+# Va DESPUES del filtro de particion y ANTES del shard: compone con los dos.
+# Un nombre que no existe en la particion que se corre => exit 2 nombrando el
+# fantasma. Un humo que no corre nada no es verde: misma disciplina que la
+# lista huerfana y el shard vacio. Sin la variable, la bateria corre entera
+# como siempre.
+solo="${SAIKIT_SOLO:-}"
+
 # ------------------------------------ 20.29: shard por ARCHIVO de la particion
 # Medido 2026-09-09 (runs 34310637856 y 34311050392): `suite` = 60 archivos en
 # serie = 22-26 min, contra los ~2.7 con que se diseno la particion de arriba.
@@ -157,6 +174,27 @@ shopt -s nullglob
 # que leyera stdin se comeria la lista) y para quedarse en ESTE shell: los
 # contadores tienen que verse al salir.
 lista_tests="$(for t in "$repo_root"/tests/test_*.sh; do printf '%s\n' "$t"; done | LC_ALL=C sort)"
+
+# Dieta CI: pre-validacion del humo. Un nombre que no es ningun test de la
+# particion que se corre es un fantasma (pej un test borrado sin sacarlo de
+# `tests/humo_pr.txt`) => exit 2 SIN correr nada, como el shard invalido: un
+# humo que pide algo que no existe no es verde.
+if [ -n "$solo" ]; then
+  for s in $solo; do
+    fantasma=1
+    while IFS= read -r -u 9 t; do
+      [ -n "$t" ] || continue
+      nomb="$(basename "$t" .sh)"
+      if [ "$particion" = lentos ] && ! es_lento "$nomb"; then continue; fi
+      if [ "$particion" = rapidos ] && es_lento "$nomb"; then continue; fi
+      if [ "$nomb" = "$s" ]; then fantasma=0; break; fi
+    done 9<<< "$lista_tests"
+    if [ "$fantasma" -ne 0 ]; then
+      echo "tests/run.sh: SAIKIT_SOLO nombra '$s', que no es ningun test de la particion '${particion:-entera}'" >&2
+      exit 2
+    fi
+  done
+fi
 pos_particion=0
 asignados=0
 while IFS= read -r -u 9 t; do
@@ -168,6 +206,15 @@ while IFS= read -r -u 9 t; do
   # con listado ahi, y no aparece como skip fantasma en la mitad lenta.
   if [ "$particion" = lentos ] && ! es_lento "$nombre"; then continue; fi
   if [ "$particion" = rapidos ] && es_lento "$nombre"; then continue; fi
+
+  # Dieta CI: subconjunto explicito del PR — despues de particion, antes de shard.
+  # Los nombres ya vienen pre-validados (fantasma => exit 2 sin correr nada).
+  if [ -n "$solo" ]; then
+    case " $solo " in
+      *" $nombre "*) ;;
+      *) continue ;;
+    esac
+  fi
 
   # 20.29: reparto del shard, DESPUES del filtro de particion y ANTES del skip
   # sin ejecutor: la posicion cuenta archivos de la particion, no del arbol, y

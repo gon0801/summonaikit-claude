@@ -1,8 +1,8 @@
 # CI de summonaikit-claude. Corre los mismos candados que ya corren en la
-# maquina (pre-commit) mas las pruebas, en la nube, en cada push y en cada pull
-# request -- asi el repo queda protegido aunque alguien (el operador, otra IA,
-# un colaborador) haga un commit sin pasar por los candados locales, o desde una
-# maquina que no los tiene instalados.
+# maquina (pre-commit) mas las pruebas, en la nube — asi el repo queda
+# protegido aunque alguien (el operador, otra IA, un colaborador) haga un
+# commit sin pasar por los candados locales, o desde una maquina que no los
+# tiene instalados.
 #
 # ESTE ARCHIVO ES DE ESTE REPO, ya no de la plantilla del quality-kit. Nacio de
 # su `init-repo.ps1`, pero el reparto en jobs paralelos de mas abajo (particion
@@ -20,15 +20,37 @@
 # este archivo (`install-ci-linux.ps1` escribe otro, `suite-linux.yml`, con su
 # propia marca). Si algun dia el reparto se generaliza, el lugar es la plantilla
 # del kit — no volver a marcar este archivo.
+#
+# DIETA CI 2026-09 (pedido del dueno: adelgaza). Antes, cada PR corria la
+# bateria ENTERA en 21 maquinas (quality + node-adapter + suite x8 +
+# suite-lentos x10 + secrets). Ahora cada evento corre solo lo suyo y NADA se
+# deja de correr — solo cambia CUANDO:
+#   - pull_request: `quick` + `secrets` + `suite-pr` (el humo: lo rapido que
+#     agarra errores, ~5 min en 4 maquinas; guia/mapa solo si el PR toca sus
+#     archivos). Es lo que mira el autor antes de pedir revision.
+#   - push a main/master: `quick` + `secrets` + `suite` (la bateria rapida
+#     COMPLETA, 8 shards). Es lo que protege la rama.
+#   - schedule (de noche, 07:00 UTC): `suite-lentos` (mutaciones, 10 shards) +
+#     `meta` (los meta-tests). Lo caro y lo meta, fuera del camino del PR.
+# El `gate` agregado sigue siendo el unico status que hay que mirar: exige
+# success a los jobs del evento y skipped a los que no tocan en ese evento.
 name: Quality
 
 on:
   push:
     branches: [main, master]
   pull_request:
+  schedule:
+    # Dieta CI: mutaciones + meta-tests de noche, no en cada PR.
+    - cron: '0 7 * * *'
 
 jobs:
-  quality:
+  # Dieta CI: `quality` y `node-adapter` eran los 2 chicos del mismo tema
+  # (checks rapidos: pre-commit + tests Python/Node + adaptador dsh). Ahora es
+  # UN solo job: un checkout, un setup-node, y el adaptador corre como pasos
+  # extra del mismo runner en vez de una maquina aparte.
+  quick:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -40,7 +62,6 @@ jobs:
           python-version: '3.x'
 
       - name: Set up Node
-        if: hashFiles('package.json') != ''
         uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -66,20 +87,12 @@ jobs:
         if: hashFiles('package.json') != ''
         run: npm test --if-present
 
-  # Phase 15 (Task 15.3) — banco del adaptador @summonaikit/dsh-gate. index.js
-  # importa @deepseek-ai/schemastery (para Config) y el test del plugin lo usa;
-  # se instalan las peer deps (ya son las del propio dsh, no deps nuevas) para
-  # que `node --test` resuelva el import.
-  node-adapter:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
+      # Phase 15 (Task 15.3) — banco del adaptador @summonaikit/dsh-gate.
+      # index.js importa @deepseek-ai/schemastery (para Config) y el test del
+      # plugin lo usa; se instalan las peer deps (ya son las del propio dsh, no
+      # deps nuevas) para que `node --test` resuelva el import. Vivia en el job
+      # `node-adapter`; la dieta lo trae aca (mismo tema: checks rapidos) y esa
+      # maquina desaparece.
       - name: Install adapter peer deps (schemastery/cordis)
         working-directory: hosts/dsh
         run: npm install --no-save @deepseek-ai/schemastery@3.18.1 @deepseek-ai/cordis@^4.0.1
@@ -87,6 +100,74 @@ jobs:
       - name: Run adapter tests
         working-directory: hosts/dsh
         run: node --test test/
+
+  # Dieta CI (job NUEVO, solo PR): el humo. Corre lo rapido que agarra errores
+  # (la lista base de `tests/humo_pr.txt` via `SAIKIT_SOLO` en tests/run.sh),
+  # mas la guia si el PR toca la guia y el mapa si toca el mapa. ~5 min en
+  # 2 maquinas en el caso comun; con mapa, lo que el mapa tarde (esos tests
+  # son los que cubren ese cambio, no se recortan).
+  #
+  # Filtros por archivos (dieta CI): el diff del PR contra su base decide los
+  # extras. GUIA = docs/guia-usuario.html o su test; MAPA = tests/test_feature_map_*,
+  # docs/spec/feature-map.md, el plan del mapa o el skill que los drives usan
+  # (.cursor/skills/verify-summonaikit) + verify/ y skills/saikit-verificar-app.
+  # A PROPOSITO, estrechos: un cambio en hooks/ o tools/ ya lo agarra el nucleo
+  # del humo (gate_behavior corre G1-G9 contra el hook cambiado) y el resto lo
+  # cubre `suite` al unir a main. Si el diff no se puede calcular, entran guia
+  # Y mapa (fail-closed: mas lento, nunca menos cobertura).
+  suite-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false   # un shard rojo no debe ocultar el resultado del otro
+      matrix:
+        shard: ['1/2', '2/2']
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # el filtro guia/mapa difiere el PR contra su base
+
+      # 19.12: test_check_secrets.sh corre en el humo. El detector fuerte tiene
+      # que estar AQUI, con el mismo tarball/hash que el job `secrets`. Tenerlo
+      # solo en el otro job no lo hace disponible en suite-pr.
+      - name: Provision pinned gitleaks 8.30.1 (same pin as secrets)
+        run: |
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf gitleaks.tar.gz -C "$HOME/.local/bin" gitleaks
+          chmod +x "$HOME/.local/bin/gitleaks"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/gitleaks" version
+
+      - name: Run the PR smoke — fast half subset, shard ${{ matrix.shard }} (tests/run.sh)
+        env:
+          SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
+          SAIKIT_PARTICION: rapidos
+          SAIKIT_SHARD: ${{ matrix.shard }}
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          humo="$(grep -v '^#' tests/humo_pr.txt | grep -v '^$' | tr '\n' ' ')"
+          [ -n "$humo" ] || { echo "suite-pr: tests/humo_pr.txt vacia o ilegible" >&2; exit 1; }
+          cambiados="$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null)" || cambiados="TODO_FALLA_DIFF"
+          if [ "$cambiados" = "TODO_FALLA_DIFF" ]; then
+            echo "suite-pr: el diff contra $BASE_REF fallo; entran guia Y mapa (fail-closed)"
+            humo="$humo test_guia_usuario $(ls tests/test_feature_map_*.sh | xargs -n1 basename | sed 's/\.sh$//' | tr '\n' ' ')"
+          else
+            case "$cambiados" in
+              *docs/guia-usuario.html*|*tests/test_guia_usuario.sh*)
+                echo "suite-pr: el PR toca la guia; entra test_guia_usuario"
+                humo="$humo test_guia_usuario" ;;
+            esac
+            case "$cambiados" in
+              *tests/test_feature_map*|*docs/spec/feature-map.md*|*phase-19-feature-map-plan.md*|*.cursor/skills/verify-summonaikit*|*verify/*|*skills/saikit-verificar-app*)
+                echo "suite-pr: el PR toca el mapa; entran los test_feature_map_*"
+                humo="$humo $(ls tests/test_feature_map_*.sh | xargs -n1 basename | sed 's/\.sh$//' | tr '\n' ' ')" ;;
+            esac
+          fi
+          echo "suite-pr: SAIKIT_SOLO=[$humo]"
+          SAIKIT_SOLO="$humo" bash tests/run.sh
 
   # Task 10.5 — la suite completa en Linux. En Git Bash/MSYS2 la misma corrida
   # tarda ~18 min porque cada fork del hook cuesta ~28 ms (documentado en
@@ -131,7 +212,11 @@ jobs:
   # 13m32s. Se sube a N=8: los pesados caen en shards distintos (7 y 4) y la
   # union sigue siendo la particion entera (mismo candado). Duracion nueva:
   # la mide el CI de este PR.
+  # Dieta CI 2026-09: este job YA NO corre en cada PR — corre al unir a
+  # main/master (push) y es la bateria rapida COMPLETA. En el PR, el humo
+  # (`suite-pr`) es lo que agarra los errores; esto es lo que protege la rama.
   suite:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -168,7 +253,12 @@ jobs:
   # la duracion de cada mutacion sacada de los logs y el mismo round-robin por
   # posicion: N=8 da 11.2 min el peor, N=10 da 7.8. Por eso 10. Si el reloj
   # vuelve a pasar de ~10 min, re-medir y re-elegir N, no recortar mutaciones.
+  # Dieta CI 2026-09: las mutaciones YA NO corren en cada PR — corren de noche
+  # (schedule). Un PR que rompa una mutacion lo dice el `suite` del push a
+  # main en el peor caso; el `suite-pr` del PR cubre la semantica en verde
+  # (gate_behavior) y la noche cubre el poder discriminante.
   suite-lentos:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -185,6 +275,24 @@ jobs:
           SAIKIT_MUT_SHARD: ${{ matrix.shard }}
         run: bash tests/run.sh
 
+  # Dieta CI (job NUEVO, solo de noche): los meta-tests — `test_runner_guards`
+  # (canda particion, shards y el humo del PR) y `test_gate_mutations_guards`
+  # (canda el reparto de mutaciones). Van por `SAIKIT_SOLO` para no arrastrar
+  # la particion entera; la union completa la canda `suite` en push.
+  meta:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the meta-tests (guards) via SAIKIT_SOLO (tests/run.sh)
+        env:
+          SAIKIT_HOOK_VIVO: ${{ github.workspace }}/hooks/summonaikit-harness.sh
+          SAIKIT_PARTICION: rapidos
+          SAIKIT_SOLO: test_runner_guards test_gate_mutations_guards
+        run: bash tests/run.sh
+
   # Compuerta agregada (Greptile, PR #101). El reparto multiplico los checks, y
   # cualquier consumidor que mire UN solo status — una proteccion de rama, el
   # `saikit-merge.sh` de la Phase 18, un humano apurado — veria el `suite` de
@@ -195,27 +303,53 @@ jobs:
   # secas, un job que falla deja a este SALTEADO, y un check salteado no bloquea
   # nada — seria el mismo verde vacio con otra forma. Los nombres con guion van
   # en corchetes (`needs['node-adapter']`), que es la sintaxis que GitHub acepta.
+  #
+  # Dieta CI 2026-09: cada evento exige success SOLO a sus jobs y skipped a los
+  # demas. Un skipped SIN el evento que lo autoriza (o un failure/cancelled en
+  # cualquier lado) rompe el gate — un verde con un job que no corrio sin
+  # motivo es el mismo verde vacio de arriba con otra forma.
   gate:
     runs-on: ubuntu-latest
     if: always()
-    needs: [quality, node-adapter, suite, suite-lentos, secrets]
+    needs: [quick, suite-pr, suite, suite-lentos, meta, secrets]
     steps:
       - name: Todos los jobs de calidad en verde
         env:
-          R_QUALITY: ${{ needs.quality.result }}
-          R_NODE: ${{ needs['node-adapter'].result }}
+          EVENTO: ${{ github.event_name }}
+          R_QUICK: ${{ needs.quick.result }}
+          R_PR: ${{ needs['suite-pr'].result }}
           R_SUITE: ${{ needs.suite.result }}
           R_LENTOS: ${{ needs['suite-lentos'].result }}
+          R_META: ${{ needs.meta.result }}
           R_SECRETS: ${{ needs.secrets.result }}
         run: |
           rc=0
-          for par in "quality=$R_QUALITY" "node-adapter=$R_NODE" "suite=$R_SUITE" \
-                     "suite-lentos=$R_LENTOS" "secrets=$R_SECRETS"; do
-            printf '%s\n' "$par"
-            case "$par" in *=success) ;; *) rc=1 ;; esac
-          done
-          [ "$rc" -eq 0 ] || { echo "gate: algun job de calidad NO quedo en success" >&2; exit 1; }
-          echo "gate: OK — todos en success"
+          exige_ok() {  # $1=nombre $2=resultado — tiene que estar en success
+            printf '%s=%s\n' "$1" "$2"
+            case "$2" in success) ;; *) echo "gate: $1 debia quedar en success en evento $EVENTO (dio $2)" >&2; rc=1 ;; esac
+          }
+          exige_fuera() {  # $1=nombre $2=resultado — NO corre en este evento
+            printf '%s=%s\n' "$1" "$2"
+            case "$2" in
+              skipped) ;;
+              success) echo "gate: $1 corrio en evento $EVENTO cuando no debia (dio success)" >&2; rc=1 ;;
+              *) echo "gate: $1 no quedo ni success ni skipped en evento $EVENTO (dio $2)" >&2; rc=1 ;;
+            esac
+          }
+          case "$EVENTO" in
+            pull_request)
+              exige_ok quick "$R_QUICK"; exige_ok suite-pr "$R_PR"; exige_ok secrets "$R_SECRETS"
+              exige_fuera suite "$R_SUITE"; exige_fuera suite-lentos "$R_LENTOS"; exige_fuera meta "$R_META" ;;
+            push)
+              exige_ok quick "$R_QUICK"; exige_ok suite "$R_SUITE"; exige_ok secrets "$R_SECRETS"
+              exige_fuera suite-pr "$R_PR"; exige_fuera suite-lentos "$R_LENTOS"; exige_fuera meta "$R_META" ;;
+            schedule)
+              exige_ok suite-lentos "$R_LENTOS"; exige_ok meta "$R_META"
+              exige_fuera quick "$R_QUICK"; exige_fuera suite-pr "$R_PR"; exige_fuera suite "$R_SUITE"; exige_fuera secrets "$R_SECRETS" ;;
+            *) echo "gate: evento desconocido [$EVENTO]" >&2; rc=1 ;;
+          esac
+          [ "$rc" -eq 0 ] || { echo "gate: calidad NO en verde para evento $EVENTO" >&2; exit 1; }
+          echo "gate: OK — $EVENTO en verde"
 
   # Item "Recommended" de Plans.md ("CI + pre-commit con deteccion de
   # secretos en este repo"): el hook de este repo corre en CADA turno y nada
@@ -229,7 +363,11 @@ jobs:
   # los tests de redaccion (Task 3.5) no matchean sus reglas — y atrapa
   # trampas reales (ghp_/AKIA/sk-proj). La capa local (pre-commit) vive en
   # tools/check-secrets.sh.
+  #
+  # Dieta CI 2026-09: corre en PR y en push (es 1 maquina y minutos); de noche
+  # no, que ya lo cubrio el push que cerro el dia.
   secrets:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
