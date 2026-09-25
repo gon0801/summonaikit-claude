@@ -196,7 +196,7 @@ Lo mismo vale para las afirmaciones del PR: lo que no se pudo medir se declara
 ### Limites que no se cruzan
 
 - **`Plans.md`: PROHIBIDO.** Las filas las cierra el lider tras mergear.
-- **No mergees.** La entrega termina en **PR abierto con CI verde**.
+- Tras la revisión y el CI en verde, puedes mergear y desplegar el PR dentro del alcance autorizado, sin pedir otro permiso por PR.
 - **Prohibido tocar el perfil de produccion del operador** (`~/.claude`,
   `~/.zcode`, `~/.grok`, `~/.codex`). Toda medicion va con HOME aislado. Si una
   medicion SOLO se puede hacer contra el perfil real, **para y decilo: esa
