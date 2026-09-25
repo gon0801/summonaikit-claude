@@ -604,7 +604,7 @@ ci_chequear "$CI_WORKFLOW"
 # verde; el recibo anterior acredita la adjudicacion de sus comentarios.
 CR_LIB_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$HERE/lib/coderabbit_gate.py" 2>/dev/null)" \
   || no_merge "no se pudo verificar la libreria CodeRabbit del kit"
-[ "$CR_LIB_HASH" = 0dfcb0073c200c061b65388a54a23cbcd9244a7a8522fb27a43f0d884760faa1 ] \
+[ "$CR_LIB_HASH" = 29a030579f91a2493e119bcf9dd56c8c240f70a721bf0d8609c4afc5e81705b7 ] \
   || no_merge "la libreria CodeRabbit del kit no coincide con el hash fijado"
 CR_MOTIVO="$(python3 "$HERE/lib/coderabbit_gate.py" "$REPO_GH" "$PR" "$SHA" "$RECIBO_FECHA" 2>&1)" \
   || no_merge "$CR_MOTIVO"

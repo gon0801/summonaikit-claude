@@ -151,7 +151,7 @@ case "$1 $2" in
   "repo view") forma=repo ;;
   "api user")  forma=user ;;
   "api repos/"*"/reviews"*) forma=reviews ;;
-  "api repos/"*"/status") forma=status ;;
+  "api repos/"*"/statuses"*) forma=status ;;
   "api repos/"*) forma=comments ;;
   "run list")  forma=runs ;;
   "pr view")
@@ -265,7 +265,7 @@ case "$1 $2" in
   "repo view") emitir "$fix/repo.json"; exit 0 ;;
   "api user")  emitir "$fix/user.json"; exit 0 ;;
   "api repos/"*"/reviews"*) emitir "$fix/reviews.json"; exit 0 ;;
-  "api repos/"*"/status") emitir "$fix/status.json"; exit 0 ;;
+  "api repos/"*"/statuses"*) emitir "$fix/status.json"; exit 0 ;;
   "api repos/"*) emitir "$fix/comments.json"; exit 0 ;;
   "run list")  emitir "$fix/runs.json"; exit 0 ;;
   "pr view")
@@ -336,7 +336,7 @@ refix() {
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' > "$SB/ghfix/pr-merge.json"
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
   printf '[[{"id":5,"user":{"login":"coderabbitai[bot]"},"commit_id":"%s","state":"COMMENTED","submitted_at":"2026-09-24T01:00:00Z"}]]' "$SHA" > "$SB/ghfix/reviews.json"
-  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"}]}' > "$SB/ghfix/status.json"
+  printf '[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z","creator":{"login":"coderabbitai[bot]"}}]' > "$SB/ghfix/status.json"
 
   sembrar_recibo
 }
@@ -417,7 +417,7 @@ caso "auto_merguea_con_coderabbit_vigente_sin_permiso_por_pr"
   [ "$RC" -eq 0 ] || _mal "auto debio mergear: $OUT"
   _contiene "merge autonomo" "$OUT" "MERGE-OK:"
   _contiene "revision consultada" "$(cat "$SAIKIT_GH_LOG")" "/reviews?per_page=100"
-  _contiene "estado consultado" "$(cat "$SAIKIT_GH_LOG")" "/status"
+  _contiene "estado consultado" "$(cat "$SAIKIT_GH_LOG")" "/statuses"
 }
 fin_caso "auto_merguea_con_coderabbit_vigente_sin_permiso_por_pr"
 
@@ -433,7 +433,7 @@ fin_caso "auto_rechaza_revision_de_otro_sha"
 
 caso "auto_rechaza_estado_fallido_mas_nuevo"
 {
-  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"},{"id":9,"context":"CodeRabbit","state":"failure","created_at":"2026-09-24T01:00:02Z"}]}' > "$SB/ghfix/status.json"
+  printf '[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z","creator":{"login":"coderabbitai[bot]"}},{"id":9,"context":"CodeRabbit","state":"failure","created_at":"2026-09-24T01:00:02Z","creator":{"login":"coderabbitai[bot]"}}]' > "$SB/ghfix/status.json"
   correr --auto
   _contiene "ultimo estado rojo" "$OUT" "NO-MERGE: CodeRabbit: el estado vigente"
   if merge_disparado; then _mal "mergeo con ultimo estado rojo"; fi
@@ -447,7 +447,7 @@ import json, sys
 path = sys.argv[1]
 with open(path, encoding="utf-8") as fh:
     status = json.load(fh)
-status["statuses"].insert(0, {"id": 99, "context": "CodeRabbit", "state": "success", "created_at": "2026-09-24T01:00:03Z", "creator": {"login": "attacker"}})
+status.insert(0, {"id": 99, "context": "CodeRabbit", "state": "success", "created_at": "2026-09-24T01:00:03Z", "creator": {"login": "attacker"}})
 with open(path, "w", encoding="utf-8") as fh:
     json.dump(status, fh)
 PY

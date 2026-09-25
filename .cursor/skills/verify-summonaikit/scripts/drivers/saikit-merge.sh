@@ -41,7 +41,7 @@ case "$1 $2" in
   "repo view") cat "$fix/repo.json"; exit 0 ;;
   "api user")  cat "$fix/user.json"; exit 0 ;;
   "api repos/"*"/reviews"*) cat "$fix/reviews.json"; exit 0 ;;
-  "api repos/"*"/status") cat "$fix/status.json"; exit 0 ;;
+  "api repos/"*"/statuses"*) cat "$fix/status.json"; exit 0 ;;
   "api repos/"*) cat "$fix/comments.json"; exit 0 ;;
   "run list")  cat "$fix/runs.json"; exit 0 ;;
   "pr view")
@@ -107,7 +107,7 @@ refix() {
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' \
     "$SHA" > "$SB/ghfix/runs.json"
   printf '[[{"id":5,"user":{"login":"coderabbitai[bot]"},"commit_id":"%s","state":"COMMENTED","submitted_at":"2026-09-24T01:00:00Z"}]]' "$SHA" > "$SB/ghfix/reviews.json"
-  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"}]}' > "$SB/ghfix/status.json"
+  printf '[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z","creator":{"login":"coderabbitai[bot]"}}]' > "$SB/ghfix/status.json"
 
   sembrar_recibo
 }

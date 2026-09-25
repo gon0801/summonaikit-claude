@@ -38,17 +38,17 @@ def check(repo, pr, sha, receipt_date):
     if not latest_review.get("submitted_at"):
         raise ValueError("la revision de CodeRabbit no trae fecha de envio")
 
-    combined = gh_json(f"repos/{repo}/commits/{sha}/status")
-    statuses = combined.get("statuses") if isinstance(combined, dict) else None
+    statuses = gh_json(f"repos/{repo}/commits/{sha}/statuses?per_page=100")
     if not isinstance(statuses, list):
         raise TypeError("estados de CodeRabbit con formato invalido")
     rabbit = [status for status in statuses if isinstance(status, dict) and status.get("context") == "CodeRabbit"]
     if not rabbit:
         raise ValueError("falta el estado CodeRabbit del head actual")
     latest_status = max(rabbit, key=lambda item: (item.get("created_at") or "", item.get("id") or 0))
-    # El estado real de la GitHub App viene con creator=null. Un usuario con
-    # permiso de escritura puede publicar el mismo contexto con su cuenta.
-    if latest_status.get("creator") is not None:
+    # /status (combined) omite creator; /statuses lo incluye. Una cuenta con
+    # permiso de escritura puede publicar el mismo contexto con otro autor.
+    creator = latest_status.get("creator")
+    if not isinstance(creator, dict) or creator.get("login") != "coderabbitai[bot]":
         raise ValueError("el estado vigente de CodeRabbit fue creado por otra cuenta")
     if latest_status.get("state") != "success":
         raise ValueError("el estado vigente de CodeRabbit no es success")
