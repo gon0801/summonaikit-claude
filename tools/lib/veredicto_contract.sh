@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# MARCA DE PROPIEDAD: `: <<'...'` es un no-op (no ejecuta, no cuesta fork).
+# El instalador mide la propiedad con el PRIMER bloque `---` del archivo
+# (zcode_agente_tiene_marca): sin ella, esta lib publicada globalmente
+# (~/.claude/saikit-tools/lib) se clasificaba DESCONOCIDO en la segunda
+# corrida y el instalador dejaba de tocarla para siempre.
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
 # tools/lib/veredicto_contract.sh — parser JSON compartido (sin jq).
 #
 # El esquema sellado quedo RETIRADO (Bloque A: la entrega se valida con el

@@ -3594,12 +3594,21 @@ recetas_publicar_dir() {  # $1=dir_destino  $2..=fuentes → 0 ok / 5 nada tocad
 # enseña agents/verifier.md). El dest es del perfil Claude a proposito: grok y
 # claude publican el mismo verifier plantilla con esa ruta. Sin este plant, un
 # --host grok enseña el comando y el archivo no existe (hallazgo adversary 18.12).
+# Los comandos operativos del kit (merge/postmerge/setup-autopilot/ci-minimo/
+# bump-ci-pins) resuelven sus dependencias con `HERE="$(dirname
+# "${BASH_SOURCE[0]}")"` y `. "$HERE/lib/..."` o `$HERE/<hermano>.sh`: fuera de
+# la copia del kit esos HERE no existen, asi que sin publicarlos aca el
+# skill saikit-setup-autopilot (instalado globalmente) enseña comandos que
+# fallan en cualquier otro repo. La lista es la CLAUSURA medida (grep de
+# `source`/`. "$HERE`/`$HERE/`): saikit-ci-minimo.sh y bump-ci-pins.sh no
+# tienen mas dependencias que su propio HERE; setup-autopilot y postmerge
+# solo tocan lib/veredicto_contract.sh (+ redactar.sh en postmerge); merge
+# suma lib/entrega_contract.sh. redactar.sh ya se publicaba por Task 18.12.
 publicar_saikit_tools() {
   local f rel tools_estado tools_cambios=0 tools_dest tools_nuevo tools_publicar tools_old
-  for f in "$repo/tools/saikit-decision.sh" \
-           "$repo/tools/saikit-blast.sh" \
-           "$repo/tools/lib/redactar.sh"; do
-    [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
+  local tools_rels="saikit-decision.sh saikit-blast.sh saikit-merge.sh saikit-postmerge.sh saikit-setup-autopilot.sh saikit-ci-minimo.sh bump-ci-pins.sh lib/redactar.sh lib/veredicto_contract.sh lib/entrega_contract.sh"
+  for rel in $tools_rels; do
+    [ -r "$repo/tools/$rel" ] || { decir "[summonaikit] instalador: fuente no observable: $repo/tools/$rel"; return 5; }
   done
   for f in "$HOME/.claude/saikit-tools" "$HOME/.claude/saikit-tools/lib"; do
     if [ -L "$f" ]; then
@@ -3609,8 +3618,8 @@ publicar_saikit_tools() {
   done
   # Estos comandos son requeridos, no recetas opcionales: conservar uno
   # ajeno/enlazado y salir 0 dejaria el contrato apuntando a un tool inutil.
-  # Clasificar los TRES antes de publicar; cualquier conflicto queda intacto.
-  for rel in saikit-decision.sh saikit-blast.sh lib/redactar.sh; do
+  # Clasificar TODOS antes de publicar; cualquier conflicto queda intacto.
+  for rel in $tools_rels; do
     f="$HOME/.claude/saikit-tools/$rel"
     tools_estado="$(recetas_clasificar "$f" "$repo/tools/$rel")"
     case "$tools_estado" in
@@ -3624,11 +3633,15 @@ publicar_saikit_tools() {
   [ "$tools_cambios" -eq 1 ] || return 0
   tools_dest="$HOME/.claude/saikit-tools"
   if [ "$DRY_RUN" -eq 1 ]; then
-    recetas_publicar_dir "$tools_dest" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" || return $?
-    recetas_publicar_dir "$tools_dest/lib" "$repo/tools/lib/redactar.sh"
+    recetas_publicar_dir "$tools_dest" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" \
+      "$repo/tools/saikit-merge.sh" "$repo/tools/saikit-postmerge.sh" \
+      "$repo/tools/saikit-setup-autopilot.sh" "$repo/tools/saikit-ci-minimo.sh" \
+      "$repo/tools/bump-ci-pins.sh" || return $?
+    recetas_publicar_dir "$tools_dest/lib" "$repo/tools/lib/redactar.sh" \
+      "$repo/tools/lib/veredicto_contract.sh" "$repo/tools/lib/entrega_contract.sh"
     return $?
   fi
-  # Los comandos y su dependencia se preparan JUNTOS fuera del destino.
+  # Los comandos y sus dependencias se preparan JUNTOS fuera del destino.
   # Un fallo de lib no puede dejar comandos nuevos con una lib vieja/ausente.
   mkdir -p "$HOME/.claude" || return 5
   tools_nuevo="$(mktemp -d "$HOME/.claude/.saikit-tools-XXXXXX")" || return 5
@@ -3637,7 +3650,11 @@ publicar_saikit_tools() {
   fi
   tools_publicar="$tools_nuevo"
   if ! recetas_publicar_dir "$tools_publicar" "$repo/tools/saikit-decision.sh" "$repo/tools/saikit-blast.sh" \
-    || ! recetas_publicar_dir "$tools_publicar/lib" "$repo/tools/lib/redactar.sh"; then
+      "$repo/tools/saikit-merge.sh" "$repo/tools/saikit-postmerge.sh" \
+      "$repo/tools/saikit-setup-autopilot.sh" "$repo/tools/saikit-ci-minimo.sh" \
+      "$repo/tools/bump-ci-pins.sh" \
+    || ! recetas_publicar_dir "$tools_publicar/lib" "$repo/tools/lib/redactar.sh" \
+      "$repo/tools/lib/veredicto_contract.sh" "$repo/tools/lib/entrega_contract.sh"; then
     rm -rf "$tools_nuevo"
     decir "[summonaikit] saikit-tools: no se publico; paquete anterior intacto"
     return 5
@@ -3663,7 +3680,14 @@ instalar_recetas_claude() {  # $1=hookdir  $2=skills_dir
            "$repo/skills/saikit-setup-autopilot/SKILL.md" \
            "$repo/tools/saikit-decision.sh" \
            "$repo/tools/saikit-blast.sh" \
-           "$repo/tools/lib/redactar.sh"; do
+           "$repo/tools/saikit-merge.sh" \
+           "$repo/tools/saikit-postmerge.sh" \
+           "$repo/tools/saikit-setup-autopilot.sh" \
+           "$repo/tools/saikit-ci-minimo.sh" \
+           "$repo/tools/bump-ci-pins.sh" \
+           "$repo/tools/lib/redactar.sh" \
+           "$repo/tools/lib/veredicto_contract.sh" \
+           "$repo/tools/lib/entrega_contract.sh"; do
     [ -r "$f" ] || { decir "[summonaikit] instalador: fuente no observable: $f"; return 5; }
   done
   # cross-review grok r4 #1: los DOS destinos se miran antes de publicar
@@ -3885,7 +3909,10 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
   fi
 
   if [ "$tools_enlace" -eq 0 ]; then
-    for f in "$HOME/.claude/saikit-tools/saikit-decision.sh" "$HOME/.claude/saikit-tools/saikit-blast.sh"; do
+    for f in "$HOME/.claude/saikit-tools/saikit-decision.sh" "$HOME/.claude/saikit-tools/saikit-blast.sh" \
+             "$HOME/.claude/saikit-tools/saikit-merge.sh" "$HOME/.claude/saikit-tools/saikit-postmerge.sh" \
+             "$HOME/.claude/saikit-tools/saikit-setup-autopilot.sh" "$HOME/.claude/saikit-tools/saikit-ci-minimo.sh" \
+             "$HOME/.claude/saikit-tools/bump-ci-pins.sh"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
       if zcode_agente_tiene_marca "$f"; then
@@ -3901,7 +3928,9 @@ quitar_recetas_claude() {  # $1=hookdir  $2=skills_dir — borra SOLO lo nuestro
     done
   fi
   if [ "$tools_enlace" -eq 0 ] && [ "$lib_enlace" -eq 0 ]; then
-    for f in "$HOME/.claude/saikit-tools/lib/redactar.sh"; do
+    for f in "$HOME/.claude/saikit-tools/lib/redactar.sh" \
+             "$HOME/.claude/saikit-tools/lib/veredicto_contract.sh" \
+             "$HOME/.claude/saikit-tools/lib/entrega_contract.sh"; do
       [ -L "$f" ] && { decir "[summonaikit] recetario: enlace, intacto: $f"; continue; }
       [ -f "$f" ] || continue
       if zcode_agente_tiene_marca "$f"; then

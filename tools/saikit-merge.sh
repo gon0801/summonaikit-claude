@@ -104,6 +104,18 @@ set -u
 export NO_COLOR=1 CLICOLOR=0
 unset CLICOLOR_FORCE
 
+# MARCA DE PROPIEDAD: `: <<'...'` es un no-op (no ejecuta, no cuesta fork).
+# El instalador mide la propiedad con el PRIMER bloque `---` del archivo
+# (zcode_agente_tiene_marca): sin ella, este tool publicado globalmente
+# (~/.claude/saikit-tools) se clasificaba DESCONOCIDO en la segunda corrida
+# y el instalador dejaba de tocarlo para siempre. No altera el rango
+# `sed -n '8,33p'` que `uso()` usa para imprimir el encabezado (va despues).
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/veredicto_contract.sh"   # parser JSON compartido (sin jq)
 . "$HERE/lib/entrega_contract.sh"     # recibo saikit-entrega.v1 + lectura del PR
