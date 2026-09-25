@@ -103,8 +103,8 @@ if [ -f "$DRV" ]; then
   bash -n "$DRV" || malo "bash -n fallo en autopilot-contract.sh"
 fi
 
-# The drive must not edit the golden baseline while it runs.
-baseline_before="$(sha256sum "$repo/tests/golden/baseline.txt" | cut -d' ' -f1)"
+# The drive must not edit the hook or golden baseline while it runs.
+baseline_before="$(sha256sum "$repo/tests/golden/baseline.txt" "$repo/hooks/summonaikit-harness.sh" | cut -d' ' -f1)"
 
 # ---------------------------------------------------------------------------
 # Launch + drive
@@ -121,8 +121,8 @@ caso "drive autopilot-contract: sentinel, estado, parrafo, persistencia"
 reset_art
 out="$(ctrl drive autopilot-contract 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "drive autopilot-contract rc=$rc: $out"
-baseline_after="$(sha256sum "$repo/tests/golden/baseline.txt" | cut -d' ' -f1)"
-[ "$baseline_before" = "$baseline_after" ] || malo "el drive modifico la baseline golden"
+baseline_after="$(sha256sum "$repo/tests/golden/baseline.txt" "$repo/hooks/summonaikit-harness.sh" | cut -d' ' -f1)"
+[ "$baseline_before" = "$baseline_after" ] || malo "el drive modifico hook o baseline golden"
 sum="$(latest_summary autopilot-contract)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "autopilot-contract sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
