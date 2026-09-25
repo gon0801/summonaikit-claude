@@ -7,16 +7,11 @@
 # USO:
 #   tools/saikit-merge.sh                 # corre TODAS las comprobaciones y,
 #                                         # con todas en verde, NO mergea:
-#                                         # reporta LISTO y termina (decision
-#                                         # del operador 2026-08-30: el merge
-#                                         # lo autoriza el operador).
-#   tools/saikit-merge.sh --confirmado    # el SI del operador. Confirma la
-#                                         # INTENCION, no las condiciones:
-#                                         # esta invocacion REPITE el gate
-#                                         # completo (mismo sha, base al dia,
-#                                         # CI verde, recibo del PR) y si
-#                                         # algo cambio vuelve a NO-MERGE y
-#                                         # avisa EN VEZ DE MERGEAR.
+#                                         # reporta LISTO y termina.
+#   tools/saikit-merge.sh --auto          # cualquier agente: revalida SHA,
+#                                         # base, CI, CodeRabbit y recibo bajo
+#                                         # el lock y mergea sin permiso por PR.
+#   tools/saikit-merge.sh --confirmado    # alias historico de --auto.
 #   tools/saikit-merge.sh --dry-run       # dice que haria, sin hacerlo.
 #   tools/saikit-merge.sh --revert-de <merge_commit> [--confirmado] [--dry-run]
 #                                         # modo D19: merge del PR de revert.
@@ -73,7 +68,7 @@
 # El delay del reintento de mergeable UNKNOWN es SAIKIT_MERGE_RETRY_SEG
 # (default 3; los tests lo ponen en 0).
 #
-# LOCK DE INTEGRACION (20.5). Con --confirmado (modo normal o --revert-de) se
+# LOCK DE INTEGRACION (20.5). Con --auto o --confirmado se
 # toma un lock en $(git rev-parse --git-common-dir)/saikit-merge.lock — el
 # MISMO archivo para todos los worktrees del clone. Mismo diseño que el lock
 # D20 del setup: mkdir atomico, el dir guarda pid/host/inicio/modo, el trap
@@ -109,6 +104,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/entrega_contract.sh"     # recibo saikit-entrega.v1 + lectura del PR
 
 CONFIRMADO=0
+AUTO=0
 DRY_RUN=0
 REVERT_DE=""
 LIBERAR_LOCK=0
@@ -118,6 +114,7 @@ uso() { sed -n '8,33p' "$0"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --confirmado) CONFIRMADO=1; shift ;;
+    --auto)       AUTO=1; CONFIRMADO=1; shift ;;
     --dry-run)    DRY_RUN=1; shift ;;
     --revert-de)
       [ $# -ge 2 ] || { printf 'saikit-merge: --revert-de exige un merge_commit\n' >&2; exit 2; }
@@ -127,6 +124,11 @@ while [ $# -gt 0 ]; do
     *)            printf 'saikit-merge: opcion desconocida: %s\n' "$1" >&2; uso >&2; exit 2 ;;
   esac
 done
+
+if [ "$AUTO" = 1 ] && [ -n "$REVERT_DE" ]; then
+  printf 'saikit-merge: --auto no aplica a --revert-de\n' >&2
+  exit 2
+fi
 
 no_merge() {  # rechaza y NOMBRA la razon; todo fallo del gate pasa por aca
   printf 'NO-MERGE: %s\n' "$1"
@@ -178,7 +180,7 @@ if [ "$LIBERAR_LOCK" = 1 ]; then
 fi
 
 # Adquisicion SOLO para la invocacion que puede producir el efecto (la que
-# trae --confirmado, en cualquiera de los dos modos): LISTO y --dry-run no
+# trae --auto o --confirmado, en cualquiera de los dos modos): LISTO y --dry-run no
 # integran nada y no toman el lock. mkdir es atomico: si ya existe, otro
 # saikit-merge del mismo clone lo tiene (o lo dejo). Se REPORTA y se BLOQUEA
 # con exit 3 (distinguible del NO-MERGE del gate). La caida del tenedor
@@ -399,8 +401,8 @@ ORIGEN="origin/$RAMA"
 # head del PR == sha local (el PR es de ESTA punta).
 [ "$PR_HEAD" = "$SHA" ] || no_merge "el PR apunta a otro head ($PR_HEAD != $SHA local)"
 
-# autor del PR = cuenta de gh (el PR lo abrio el propio flujo).
-[ "$PR_AUTOR" = "$LOGIN" ] || no_merge "autor del PR distinto de la cuenta (PR de $PR_AUTOR, cuenta $LOGIN)"
+# El agente que cierra puede usar otra cuenta: el recibo lo firma el autor
+# del PR, no la cuenta que ejecuta el merge.
 
 # ------------------------------------------------------------- CI del head
 # "sin checks" NO es verde: se mira `gh run list --commit` (gh pr checks
@@ -481,13 +483,13 @@ merge_final() {
     exit 0
   fi
   if [ "$CONFIRMADO" != 1 ]; then
-    printf 'LISTO: todas las condiciones del gate estan en verde para %s (PR %s). El merge lo autoriza el operador:\n' "$SHA" "$PR"
+    printf 'LISTO: todas las condiciones del gate estan en verde para %s (PR %s). Merge autonomo disponible:\n' "$SHA" "$PR"
     # Con "bash " adelante (20.2): un checkout sin bit de ejecucion (copia
     # extraida, zip, algunos filesystems) no puede correr la forma pelada.
-    printf 'LISTO:   bash tools/saikit-merge.sh --confirmado\n'
+    printf 'LISTO:   bash tools/saikit-merge.sh --auto\n'
     exit 0
   fi
-  # Con --confirmado el gate completo ACABA de correr otra vez en esta
+# Con --auto (o el alias --confirmado) el gate completo ACABA de correr en esta
   # invocacion (arriba); si algo hubiera cambiado, ya habria salido por
   # NO-MERGE en vez de llegar aca.
   gh pr merge "$PR" --squash --match-head-commit "$SHA" --body "Saikit-Merge: $SHA" \
@@ -566,7 +568,7 @@ N_COMMITS="$(git rev-list --count "$ORIGEN..HEAD")"
 while IFS=' ' read -r csha email; do
   [ -n "$csha" ] || continue
   case "$email" in
-    "$EMAIL_LOCAL"|"$LOGIN@users.noreply.github.com"|*"+$LOGIN@users.noreply.github.com") continue ;;
+    "$EMAIL_LOCAL"|"$PR_AUTOR@users.noreply.github.com"|*"+$PR_AUTOR@users.noreply.github.com") continue ;;
     *) no_merge "commit de otro email: $csha es de $email" ;;
   esac
 done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
@@ -577,7 +579,7 @@ done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
 # evidence log. Los motivos ya vienen con el prefijo "recibo:" de la lib.
 recibo_tmp="$(mktemp "${TMPDIR:-/tmp}/saikit-recibo-XXXXXX")" \
   || no_merge "no se pudo crear el temporal del recibo"
-if ! motivo="$(entrega_recibo_del_pr "$REPO_GH" "$PR" "$SHA" "$LOGIN" 2>&1 >"$recibo_tmp")"; then
+if ! motivo="$(entrega_recibo_del_pr "$REPO_GH" "$PR" "$SHA" "$PR_AUTOR" 2>&1 >"$recibo_tmp")"; then
   rm -f "$recibo_tmp"
   no_merge "$motivo"
 fi
@@ -597,6 +599,16 @@ CI_WORKFLOW="$(entrega_flat_hoja "$recibo_flat" "ci.workflow")" \
 rm -f "$recibo_tmp"
 
 ci_chequear "$CI_WORKFLOW"
+
+# El permiso permanente de la base (merge=true) permite cerrar el PR sin una
+# nueva orden humana. CodeRabbit debe haber revisado ESTE head y terminado en
+# verde; el recibo anterior acredita la adjudicacion de sus comentarios.
+CR_LIB_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$HERE/lib/coderabbit_gate.py" 2>/dev/null)" \
+  || no_merge "no se pudo verificar la libreria CodeRabbit del kit"
+[ "$CR_LIB_HASH" = 85934cb4ef8c583697405143ae2dd1dda218bdf97bbbedf115f090398132f00b ] \
+  || no_merge "la libreria CodeRabbit del kit no coincide con el hash fijado"
+CR_MOTIVO="$(python3 "$HERE/lib/coderabbit_gate.py" "$REPO_GH" "$PR" "$SHA" "$PR_AUTOR" 2>&1)" \
+  || no_merge "$CR_MOTIVO"
 
 # A5: el head puede moverse mientras corre el gate (push durante la
 # comprobacion): se re-lee el PR justo antes del efecto y se exige el MISMO

@@ -174,22 +174,21 @@ marca.
 
 ### Autopilot (Phase 18)
 
-El autopilot **prepara y para** (decisión del operador del 2026-08-30, que
-manda sobre el diseño original): `-saikit:autopilot` arma el carril full con
-el flag en el estado, el contrato pide preparar todo — código, verificación,
-revisión, PR — y **parar a preguntar antes de publicar**. No hay permiso
-permanente: el sentinel es por turno y cada merge exige el sí explícito.
+El autopilot prepara código, verificación, revisión y PR. Para los repos con
+`.saikit/autopilot.json` en la rama base y `merge: true`, cualquier agente
+puede fusionar con `--auto` sin pedir un sí por PR. El gate exige CI del SHA,
+CodeRabbit completado y verde, recibo posterior a su revisión y base vigente.
 
 ```bash
 bash tools/saikit-setup-autopilot.sh        # 5 preguntas => .saikit/autopilot.json (se commitea a origin/<rama>)
 bash tools/saikit-merge.sh                  # gate completo; en verde reporta LISTO y termina, NO mergea
-bash tools/saikit-merge.sh --confirmado     # el sí: repite el gate y recién entonces mergea
+bash tools/saikit-merge.sh --auto           # cualquier agente: revalida CI, CodeRabbit, recibo y SHA; mergea sin permiso por PR
 bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>   # VERDE/ROJO/UNKNOWN; ROJO trae PARA REVERTIR
 bash tools/saikit-merge.sh --revert-de <sha> --confirmado           # merge del PR de revert (modo sin estado)
 ```
 
-Qué NUNCA hace: mergear sin el sí, sin el workflow de CI que acredita el
-recibo para el head exacto, sin recibo `saikit-entrega.v1` válido en el PR, ni
+Qué NUNCA hace: mergear sin el workflow de CI que acredita el
+recibo para el head exacto, sin revisión vigente de CodeRabbit, sin recibo `saikit-entrega.v1` válido en el PR, ni
 leyendo la config de otro lado que `origin/<rama>`; revertir solo (el
 postmerge avisa con el comando listo y no ejecuta nada); `--admin`, force, ni
 `--delete-branch` (el borrado remoto es paso aparte).

@@ -150,6 +150,9 @@ forma=""
 case "$1 $2" in
   "repo view") forma=repo ;;
   "api user")  forma=user ;;
+  "api repos/"*"/reviews"*) forma=reviews ;;
+  "api repos/"*"/status") forma=status ;;
+  "api repos/"*"/issues/"*"/comments?per_page=100"*) forma=comments_pages ;;
   "api repos/"*) forma=comments ;;
   "run list")  forma=runs ;;
   "pr view")
@@ -262,6 +265,9 @@ coloriza() {
 case "$1 $2" in
   "repo view") emitir "$fix/repo.json"; exit 0 ;;
   "api user")  emitir "$fix/user.json"; exit 0 ;;
+  "api repos/"*"/reviews"*) emitir "$fix/reviews.json"; exit 0 ;;
+  "api repos/"*"/status") emitir "$fix/status.json"; exit 0 ;;
+  "api repos/"*"/issues/"*"/comments?per_page=100"*) emitir "$fix/comments-pages.json"; exit 0 ;;
   "api repos/"*) emitir "$fix/comments.json"; exit 0 ;;
   "run list")  emitir "$fix/runs.json"; exit 0 ;;
   "pr view")
@@ -322,6 +328,7 @@ cuerpo_aprobacion() {
 # ni evidence log — el feliz corre sin ninguno.
 sembrar_recibo() {
   printf '[{"user":{"login":"op"},"body":"%s"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
+  printf '[[{"user":{"login":"op"},"body":"APPROVE lead %s\\n","created_at":"2026-09-24T01:00:02Z"}]]' "$SHA" > "$SB/ghfix/comments-pages.json"
 }
 
 refix() {
@@ -331,6 +338,8 @@ refix() {
   printf '{"number":7,"baseRefName":"%s","headRefOid":"%s","author":{"login":"op"},"mergeable":"MERGEABLE"}' "$BASE_RAMA" "$SHA" > "$SB/ghfix/pr.json"
   printf '{"mergeCommit":{"oid":"f000000000000000000000000000000000000000"}}' > "$SB/ghfix/pr-merge.json"
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' "$SHA" > "$SB/ghfix/runs.json"
+  printf '[[{"id":5,"user":{"login":"coderabbitai[bot]"},"commit_id":"%s","state":"COMMENTED","submitted_at":"2026-09-24T01:00:00Z"}]]' "$SHA" > "$SB/ghfix/reviews.json"
+  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"}]}' > "$SB/ghfix/status.json"
 
   sembrar_recibo
 }
@@ -354,7 +363,7 @@ c_listo_emision() {
   correr
   [ "$RC" -eq 0 ] || _mal "rc esperaba 0, dio $RC"
   _contiene "reporta LISTO" "$OUT" "LISTO:"
-  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-merge.sh --confirmado' | head -1 | sed 's/^LISTO:[[:space:]]*//')"
+  cmd="$(printf '%s\n' "$OUT" | grep -F 'tools/saikit-merge.sh --auto' | head -1 | sed 's/^LISTO:[[:space:]]*//')"
   [ -n "$cmd" ] || _mal "no se pudo extraer el comando de LISTO"
   : > "$SAIKIT_GH_LOG"
   OUT2="$(eval "$cmd" 2>&1)"; RC2=$?
@@ -404,6 +413,69 @@ caso "feliz_confirmado_merguea_con_trailer_y_match_head"
   _contiene "registra merge_commit" "$(cat ".saikit/veredictos/$SHA.merge" 2>/dev/null)" "f000000000000000000000000000000000000000"
 }
 fin_caso "feliz_confirmado_merguea_con_trailer_y_match_head"
+
+caso "auto_merguea_con_coderabbit_vigente_sin_permiso_por_pr"
+{
+  correr --auto
+  [ "$RC" -eq 0 ] || _mal "auto debio mergear: $OUT"
+  _contiene "merge autonomo" "$OUT" "MERGE-OK:"
+  _contiene "revision consultada" "$(cat "$SAIKIT_GH_LOG")" "/reviews?per_page=100"
+  _contiene "estado consultado" "$(cat "$SAIKIT_GH_LOG")" "/status"
+}
+fin_caso "auto_merguea_con_coderabbit_vigente_sin_permiso_por_pr"
+
+caso "auto_rechaza_revision_de_otro_sha"
+{
+  sed "s/$SHA/0000000000000000000000000000000000000000/" "$SB/ghfix/reviews.json" > "$SB/ghfix/reviews.tmp"
+  mv "$SB/ghfix/reviews.tmp" "$SB/ghfix/reviews.json"
+  correr --auto
+  _contiene "revision stale" "$OUT" "NO-MERGE: CodeRabbit: la ultima revision"
+  if merge_disparado; then _mal "mergeo con revision de otro sha"; fi
+}
+fin_caso "auto_rechaza_revision_de_otro_sha"
+
+caso "auto_rechaza_estado_fallido_mas_nuevo"
+{
+  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"},{"id":9,"context":"CodeRabbit","state":"failure","created_at":"2026-09-24T01:00:02Z"}]}' > "$SB/ghfix/status.json"
+  correr --auto
+  _contiene "ultimo estado rojo" "$OUT" "NO-MERGE: CodeRabbit: el estado vigente"
+  if merge_disparado; then _mal "mergeo con ultimo estado rojo"; fi
+}
+fin_caso "auto_rechaza_estado_fallido_mas_nuevo"
+
+caso "auto_rechaza_bot_falso"
+{
+  sed 's/coderabbitai\[bot\]/another-bot/' "$SB/ghfix/reviews.json" > "$SB/ghfix/reviews.tmp"
+  mv "$SB/ghfix/reviews.tmp" "$SB/ghfix/reviews.json"
+  correr --auto
+  _contiene "bot falso" "$OUT" "NO-MERGE: CodeRabbit: CodeRabbit no reviso"
+  if merge_disparado; then _mal "mergeo con bot falso"; fi
+}
+fin_caso "auto_rechaza_bot_falso"
+
+caso "auto_rechaza_recibo_anterior_a_coderabbit"
+{
+  sed 's/2026-09-24T01:00:02Z/2026-09-24T00:59:59Z/' "$SB/ghfix/comments-pages.json" > "$SB/ghfix/comments-pages.tmp"
+  mv "$SB/ghfix/comments-pages.tmp" "$SB/ghfix/comments-pages.json"
+  correr --auto
+  _contiene "recibo previo" "$OUT" "NO-MERGE: CodeRabbit: el recibo del lead"
+  if merge_disparado; then _mal "mergeo con recibo previo a CodeRabbit"; fi
+}
+fin_caso "auto_rechaza_recibo_anterior_a_coderabbit"
+
+caso "auto_rechaza_libreria_coderabbit_modificada"
+{
+  mkdir -p tools/lib
+  cp "$repo/tools/lib/coderabbit_gate.py" tools/lib/coderabbit_gate.py
+  printf '\n# cambio local\n' >> tools/lib/coderabbit_gate.py
+  cp "$repo/tools/saikit-merge.sh" tools/saikit-merge.sh
+  cp "$repo/tools/lib/veredicto_contract.sh" tools/lib/veredicto_contract.sh
+  cp "$repo/tools/lib/entrega_contract.sh" tools/lib/entrega_contract.sh
+  OUT="$(bash tools/saikit-merge.sh --auto 2>&1)"; RC=$?
+  _contiene "helper alterado" "$OUT" "NO-MERGE: la libreria CodeRabbit"
+  if merge_disparado; then _mal "mergeo con helper alterado"; fi
+}
+fin_caso "auto_rechaza_libreria_coderabbit_modificada"
 
 caso "feliz_rama_main_funciona_igual"
 {
@@ -834,15 +906,17 @@ caso "repo_distinto_no_merguea"
 }
 fin_caso "repo_distinto_no_merguea"
 
-caso "autor_distinto_de_la_cuenta_no_merguea"
+caso "agente_distinto_del_autor_puede_mergear"
 {
   sed -i.bak 's/"author":{"login":"op"}/"author":{"login":"otro"}/' "$SB/ghfix/pr.json"
   rm -f "$SB/ghfix/pr.json.bak"
-  correr --confirmado
-  _contiene "razon autor" "$OUT" "NO-MERGE: autor del PR distinto de la cuenta"
-  if merge_disparado; then _mal "mergeo un PR de otro autor"; fi
+  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json" "$SB/ghfix/comments-pages.json"
+  rm -f "$SB/ghfix/comments.json.bak" "$SB/ghfix/comments-pages.json.bak"
+  correr --auto
+  [ "$RC" -eq 0 ] || _mal "otro agente debio poder cerrar PR ajeno con recibo del autor: $OUT"
+  _contiene "merge ajeno" "$OUT" "MERGE-OK:"
 }
-fin_caso "autor_distinto_de_la_cuenta_no_merguea"
+fin_caso "agente_distinto_del_autor_puede_mergear"
 
 caso "commit_de_otro_email_no_merguea"
 {
@@ -1670,9 +1744,11 @@ c_autor() {
   CASO_ROJO=0; sb_reset master
   sed -i.bak 's/"author":{"login":"op"}/"author":{"login":"otro"}/' "$SB/ghfix/pr.json"
   rm -f "$SB/ghfix/pr.json.bak"
-  correr --confirmado
-  _contiene "razon autor" "$OUT" "NO-MERGE: autor del PR distinto de la cuenta"
-  if merge_disparado; then _mal "mergeo un PR de otro autor"; fi
+  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json" "$SB/ghfix/comments-pages.json"
+  rm -f "$SB/ghfix/comments.json.bak" "$SB/ghfix/comments-pages.json.bak"
+  correr --auto
+  [ "$RC" -eq 0 ] || _mal "otro agente debio poder cerrar PR ajeno: $OUT"
+  _contiene "merge ajeno" "$OUT" "MERGE-OK:"
 }
 
 c_ansi() {
@@ -1748,14 +1824,14 @@ base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avan
 rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
 email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
-autor_flojo	s|\[ "\$PR_AUTOR" = "\$LOGIN" \]|true|	c_autor
+autor_forzado_a_cuenta	s|entrega_recibo_del_pr "\$REPO_GH" "\$PR" "\$SHA" "\$PR_AUTOR"|entrega_recibo_del_pr "\$REPO_GH" "\$PR" "\$SHA" "\$LOGIN"|	c_autor
 revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer
 revert_arbol_por_patchid	s|\[ "\$T_REVERT" = "\$T_PREVIO" \]|true|	c_revert_arbol
 revert_punta_floja	s|\[ "\$PUNTA" = "\$REVERT_DE" \]|true|	c_revert_punta
 registro_sin_mkdir	s|mkdir -p "\$VERDICTOS" 2>/dev/null|true|	c_revert_registro
 sin_neutralizar_gh	s/^export NO_COLOR=1 CLICOLOR=0$/true/	c_ansi
 sin_unset_color_force	s/^unset CLICOLOR_FORCE$/true/	c_ansi_force
-emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --confirmado|LISTO:   tools/saikit-merge.sh --confirmado|	c_listo_emision
+emision_listo_sin_bash	s|LISTO:   bash tools/saikit-merge.sh --auto|LISTO:   tools/saikit-merge.sh --auto|	c_listo_emision
 lock_sin_guard	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if true; then|	c_lock_exclusion
 lock_mkdir_no_atomico	s|^  if mkdir "\$LOCK_DIR" 2>/dev/null; then$|  if mkdir -p "\$LOCK_DIR" 2>/dev/null; then|	c_lock_exclusion
 recuperacion_sin_arbitro	s|if mv "$LOCK_DIR" "$tumba" 2>/dev/null|if cp -R "$LOCK_DIR" "$tumba" 2>/dev/null|	c_lock_dos_recuperadores
