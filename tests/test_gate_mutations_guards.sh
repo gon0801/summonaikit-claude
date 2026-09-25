@@ -83,7 +83,7 @@ printf '%s' "$salida" | grep -q 'no parsea' || malo "no nombra el motivo (sintax
 # quedan todos en verde, y el driver tiene que llamarlo lo que es: ese gate no
 # esta atado.
 caso "mutacion real que ningun caso del gate detecta => rompe la corrida"
-salida="$(correr_driver 'G1|presupuesto_infinito|mutacion real atribuida a un gate que no la cubre')"; rc=$?
+salida="$(correr_driver 'G7|presupuesto_infinito|mutacion real atribuida a un gate que no la cubre')"; rc=$?
 [ "$rc" -ne 0 ] || malo "esperaba exit != 0, salio 0: el driver no sabe ponerse en rojo"
 printf '%s' "$salida" | grep -q 'ningun caso detecto' || malo "no nombra el motivo (gate sin atar)"
 

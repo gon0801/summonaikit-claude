@@ -21,7 +21,7 @@
     },
     {
       "id": "autopilot-paragraph",
-      "required_assertions": ["paragraph_present", "asks_confirm", "no_unattended"]
+      "required_assertions": ["paragraph_present", "merge_after_review", "no_extra_permission"]
     },
     {
       "id": "autopilot-persist",
