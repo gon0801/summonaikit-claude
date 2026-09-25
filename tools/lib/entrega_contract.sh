@@ -300,13 +300,13 @@ entrega_body_trae_revoke() {
   printf '%s' "$1" | grep -Fq "REVOKE"
 }
 
-# entrega_recibo_del_pr <repo> <pr> <sha> [lead]
+# entrega_recibo_del_pr <repo> <pr> <sha> [lead] [fecha_path]
 entrega_recibo_del_pr() {
-  if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
-    printf 'recibo: uso: entrega_recibo_del_pr <repo> <pr> <sha> [lead]\n' >&2
+  if [ "$#" -lt 3 ] || [ "$#" -gt 5 ]; then
+    printf 'recibo: uso: entrega_recibo_del_pr <repo> <pr> <sha> [lead] [fecha_path]\n' >&2
     return 3
   fi
-  local repo="$1" pr="$2" sha="$3" lead="${4:-}"
+  local repo="$1" pr="$2" sha="$3" lead="${4:-}" fecha_path="${5:-}"
   # A.R9(c): con sha vacio, grep -Fq "" matchea cualquier cuerpo y un
   # "APPROVE lead " sin sha podria aprobar cualquier comentario.
   [ -n "$repo" ] && [ -n "$pr" ] && [ -n "$sha" ] \
@@ -325,7 +325,7 @@ entrega_recibo_del_pr() {
   esac
   # --paginate concatena una pagina JSON por linea (compacto, una linea por
   # pagina con el color neutralizado). Cada pagina se juzga aparte, en orden.
-  local candidato="" autor_candidato="" revocado=0
+  local candidato="" autor_candidato="" fecha_candidato="" revocado=0
   local pagina flat n i login body bloque nb schema
   while IFS= read -r pagina || [ -n "$pagina" ]; do
     case "$pagina" in *[![:space:]]*) ;; *) continue ;; esac
@@ -379,6 +379,7 @@ entrega_recibo_del_pr() {
              && schema="$(saikit_json_get "$bloque" "schema" 2>/dev/null)" \
              && [ "$schema" = "$ENTREGA_SCHEMA" ]; then
             candidato="$bloque"; autor_candidato="$login"; revocado=0
+            fecha_candidato="$(entrega_flat_hoja "$flat" "[$i].created_at" 2>/dev/null)" || fecha_candidato=""
             break
           fi
           nb=$((nb + 1))
@@ -396,6 +397,10 @@ PAGINAS
   if [ "$revocado" = 1 ]; then
     printf 'recibo: revocado: el recibo de %s quedo anulado por un REVOKE posterior del mismo autor\n' "$sha" >&2
     return 1
+  fi
+  if [ -n "$fecha_path" ]; then
+    printf '%s\n' "$fecha_candidato" > "$fecha_path" \
+      || { printf 'recibo: no se pudo guardar la fecha del comentario seleccionado\n' >&2; return 3; }
   fi
   printf '%s' "$candidato"
   return 0

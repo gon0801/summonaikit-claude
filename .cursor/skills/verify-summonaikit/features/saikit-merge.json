@@ -7,7 +7,7 @@
     "path": "scripts/drivers/saikit-merge.sh"
   },
   "execution_mode": "simulated",
-  "surfaces": ["tools/saikit-merge.sh"],
+  "surfaces": ["tools/saikit-merge.sh", "tools/lib/coderabbit_gate.py"],
   "requirements": ["gh:simulated"],
   "cases": [
     {

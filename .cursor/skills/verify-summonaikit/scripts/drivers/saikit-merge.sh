@@ -40,6 +40,8 @@ fix="${SAIKIT_GH_FIX:?}"
 case "$1 $2" in
   "repo view") cat "$fix/repo.json"; exit 0 ;;
   "api user")  cat "$fix/user.json"; exit 0 ;;
+  "api repos/"*"/reviews"*) cat "$fix/reviews.json"; exit 0 ;;
+  "api repos/"*"/status") cat "$fix/status.json"; exit 0 ;;
   "api repos/"*) cat "$fix/comments.json"; exit 0 ;;
   "run list")  cat "$fix/runs.json"; exit 0 ;;
   "pr view")
@@ -89,7 +91,7 @@ cuerpo_aprobacion() {
 # completo en el fixture de comments. Sin estado del hook ni sellos: el feliz
 # corre sin ninguno (Bloque A).
 sembrar_recibo() {
-  printf '[{"user":{"login":"op"},"body":"%s"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
+  printf '[{"user":{"login":"op"},"body":"%s","created_at":"2026-09-24T01:00:02Z"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
 }
 
 refix() {
@@ -104,6 +106,8 @@ refix() {
     > "$SB/ghfix/pr-merge.json"
   printf '[{"event":"pull_request","status":"completed","conclusion":"success","workflowName":"ci","number":42,"headSha":"%s"}]' \
     "$SHA" > "$SB/ghfix/runs.json"
+  printf '[[{"id":5,"user":{"login":"coderabbitai[bot]"},"commit_id":"%s","state":"COMMENTED","submitted_at":"2026-09-24T01:00:00Z"}]]' "$SHA" > "$SB/ghfix/reviews.json"
+  printf '{"statuses":[{"id":8,"context":"CodeRabbit","state":"success","created_at":"2026-09-24T01:00:01Z"}]}' > "$SB/ghfix/status.json"
 
   sembrar_recibo
 }

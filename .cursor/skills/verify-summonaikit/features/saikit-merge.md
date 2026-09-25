@@ -5,7 +5,7 @@ against a disposable Git repo and a strict fake `gh` that only answers the
 forms the tool uses and records argv. The mode is always `simulated`: no live
 GitHub. Delivery authority is the PR receipt (`APPROVE lead <sha>` with a
 `saikit-entrega.v1` block, read via `gh api repos/.../comments`) plus current
-CI — no session state, no sealed verdict. The receipt names the workflow that
+CI and CodeRabbit review/status for the same head — no session state, no sealed verdict. The receipt names the workflow that
 represents the full battery, and the gate requires that exact workflow for the
 current SHA. Fast editorial, ledger, and progress changes use author plus lead
 instead of inventing verifier and reviewer roles.
@@ -37,9 +37,9 @@ instead of inventing verifier and reviewer roles.
 - From a task branch whose PR carries the delivery receipt, run
   `bash tools/saikit-merge.sh`. When every check is green it prints `LISTO:`
   and stops.
-- The operator authorizes the merge with `bash tools/saikit-merge.sh --confirmado`.
-  That run repeats the whole gate (SHA, CI, receipt). If anything moved, it
-  prints `NO-MERGE:` and does not merge.
+- Any agent runs `bash tools/saikit-merge.sh --auto` under the standing base-branch
+  `merge: true` policy. That run repeats the whole gate (SHA, CI, CodeRabbit,
+  receipt). If anything moved, it prints `NO-MERGE:` and does not merge.
 - `bash tools/saikit-merge.sh --revert-de <merge_commit>` only reverts the
   tip of the configured base when that commit has a `Saikit-Merge:` trailer.
 
@@ -76,7 +76,7 @@ Preconditions:
 
 - This drive never uses `--admin` or `--delete-branch`. The fake `gh` rejects
   unexpected forms and records argv.
-- `--confirmado` confirms intent, not yesterday's conditions. A moved base,
+- `--auto` revalidates current conditions. A moved base,
   red CI, a receipt for another SHA or a revoked receipt must not merge.
 - `--revert-de` does not authorize other branches: only the current tip of
   the configured base, and only with the `Saikit-Merge:` trailer.

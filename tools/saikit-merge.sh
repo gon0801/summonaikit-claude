@@ -559,19 +559,10 @@ if printf '%s\n' "$ARCHIVOS_PR" | grep -Fxq '.saikit/autopilot.json'; then
   no_merge "el PR toca .saikit/autopilot.json: la config no se autoreescribe via merge"
 fi
 
-# commits del rango: no vacio y solo del user.email local o de la cuenta de gh
-# (asi se observa "solo commits de la task"; hallazgo de grok: "autor ajeno"
-# sin definir bloqueaba al propio usuario).
-EMAIL_LOCAL="$(git config user.email)"
+# El rango no puede estar vacío. La cuenta del cerrador y los emails de los
+# commits no conceden autoridad; la concede el recibo del autor del PR.
 N_COMMITS="$(git rev-list --count "$ORIGEN..HEAD")"
 [ "$N_COMMITS" -gt 0 ] || no_merge "no hay commits en el rango origin/$RAMA..HEAD"
-while IFS=' ' read -r csha email; do
-  [ -n "$csha" ] || continue
-  case "$email" in
-    "$EMAIL_LOCAL"|"$PR_AUTOR@users.noreply.github.com"|*"+$PR_AUTOR@users.noreply.github.com") continue ;;
-    *) no_merge "commit de otro email: $csha es de $email" ;;
-  esac
-done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
 
 # ------------------------------------------------- recibo de entrega (A2/A3)
 # La autoridad es el PR: ultimo APPROVE lead <sha> aplicable + validacion de
@@ -579,24 +570,32 @@ done <<< "$(git log --format='%H %ae' "$ORIGEN..HEAD")"
 # evidence log. Los motivos ya vienen con el prefijo "recibo:" de la lib.
 recibo_tmp="$(mktemp "${TMPDIR:-/tmp}/saikit-recibo-XXXXXX")" \
   || no_merge "no se pudo crear el temporal del recibo"
-if ! motivo="$(entrega_recibo_del_pr "$REPO_GH" "$PR" "$SHA" "$PR_AUTOR" 2>&1 >"$recibo_tmp")"; then
+recibo_fecha_tmp="$(mktemp "${TMPDIR:-/tmp}/saikit-recibo-fecha-XXXXXX")" \
+  || { rm -f "$recibo_tmp"; no_merge "no se pudo crear el temporal de fecha del recibo"; }
+if ! motivo="$(entrega_recibo_del_pr "$REPO_GH" "$PR" "$SHA" "$PR_AUTOR" "$recibo_fecha_tmp" 2>&1 >"$recibo_tmp")"; then
   rm -f "$recibo_tmp"
+  rm -f "$recibo_fecha_tmp"
   no_merge "$motivo"
 fi
 if [ ! -s "$recibo_tmp" ]; then
   rm -f "$recibo_tmp"
+  rm -f "$recibo_fecha_tmp"
   no_merge "recibo vacio del PR $REPO_GH#$PR para $SHA"
 fi
 if ! motivo="$(entrega_validar "$recibo_tmp" "$REPO_GH" "$PR" "$SHA" 2>&1)"; then
   rm -f "$recibo_tmp"
+  rm -f "$recibo_fecha_tmp"
   no_merge "$motivo"
 fi
 recibo_txt="$(cat "$recibo_tmp")" \
-  || { rm -f "$recibo_tmp"; no_merge "no se pudo releer el recibo validado"; }
+  || { rm -f "$recibo_tmp" "$recibo_fecha_tmp"; no_merge "no se pudo releer el recibo validado"; }
 recibo_flat="$(saikit_json_flat "$recibo_txt")"
 CI_WORKFLOW="$(entrega_flat_hoja "$recibo_flat" "ci.workflow")" \
-  || { rm -f "$recibo_tmp"; no_merge "recibo: falta ci.workflow"; }
+  || { rm -f "$recibo_tmp" "$recibo_fecha_tmp"; no_merge "recibo: falta ci.workflow"; }
+RECIBO_FECHA="$(cat "$recibo_fecha_tmp")" \
+  || { rm -f "$recibo_tmp" "$recibo_fecha_tmp"; no_merge "recibo: no se pudo leer la fecha"; }
 rm -f "$recibo_tmp"
+rm -f "$recibo_fecha_tmp"
 
 ci_chequear "$CI_WORKFLOW"
 
@@ -605,9 +604,9 @@ ci_chequear "$CI_WORKFLOW"
 # verde; el recibo anterior acredita la adjudicacion de sus comentarios.
 CR_LIB_HASH="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$HERE/lib/coderabbit_gate.py" 2>/dev/null)" \
   || no_merge "no se pudo verificar la libreria CodeRabbit del kit"
-[ "$CR_LIB_HASH" = 85934cb4ef8c583697405143ae2dd1dda218bdf97bbbedf115f090398132f00b ] \
+[ "$CR_LIB_HASH" = 0dfcb0073c200c061b65388a54a23cbcd9244a7a8522fb27a43f0d884760faa1 ] \
   || no_merge "la libreria CodeRabbit del kit no coincide con el hash fijado"
-CR_MOTIVO="$(python3 "$HERE/lib/coderabbit_gate.py" "$REPO_GH" "$PR" "$SHA" "$PR_AUTOR" 2>&1)" \
+CR_MOTIVO="$(python3 "$HERE/lib/coderabbit_gate.py" "$REPO_GH" "$PR" "$SHA" "$RECIBO_FECHA" 2>&1)" \
   || no_merge "$CR_MOTIVO"
 
 # A5: el head puede moverse mientras corre el gate (push durante la

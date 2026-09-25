@@ -152,7 +152,6 @@ case "$1 $2" in
   "api user")  forma=user ;;
   "api repos/"*"/reviews"*) forma=reviews ;;
   "api repos/"*"/status") forma=status ;;
-  "api repos/"*"/issues/"*"/comments?per_page=100"*) forma=comments_pages ;;
   "api repos/"*) forma=comments ;;
   "run list")  forma=runs ;;
   "pr view")
@@ -267,7 +266,6 @@ case "$1 $2" in
   "api user")  emitir "$fix/user.json"; exit 0 ;;
   "api repos/"*"/reviews"*) emitir "$fix/reviews.json"; exit 0 ;;
   "api repos/"*"/status") emitir "$fix/status.json"; exit 0 ;;
-  "api repos/"*"/issues/"*"/comments?per_page=100"*) emitir "$fix/comments-pages.json"; exit 0 ;;
   "api repos/"*) emitir "$fix/comments.json"; exit 0 ;;
   "run list")  emitir "$fix/runs.json"; exit 0 ;;
   "pr view")
@@ -327,8 +325,7 @@ cuerpo_aprobacion() {
 # completo en el fixture de comments. A3: NADA de estado del hook, veredicto
 # ni evidence log — el feliz corre sin ninguno.
 sembrar_recibo() {
-  printf '[{"user":{"login":"op"},"body":"%s"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
-  printf '[[{"user":{"login":"op"},"body":"APPROVE lead %s\\n","created_at":"2026-09-24T01:00:02Z"}]]' "$SHA" > "$SB/ghfix/comments-pages.json"
+  printf '[{"user":{"login":"op"},"body":"%s","created_at":"2026-09-24T01:00:02Z"}]' "$(cuerpo_aprobacion "$SHA" op worker-a worker-b worker-c PASS APPROVE "")" > "$SB/ghfix/comments.json"
 }
 
 refix() {
@@ -443,6 +440,23 @@ caso "auto_rechaza_estado_fallido_mas_nuevo"
 }
 fin_caso "auto_rechaza_estado_fallido_mas_nuevo"
 
+caso "auto_rechaza_estado_coderabbit_falso_de_cuenta"
+{
+  python3 - "$SB/ghfix/status.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    status = json.load(fh)
+status["statuses"].insert(0, {"id": 99, "context": "CodeRabbit", "state": "success", "created_at": "2026-09-24T01:00:03Z", "creator": {"login": "attacker"}})
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(status, fh)
+PY
+  correr --auto
+  _contiene "estado falso" "$OUT" "NO-MERGE: CodeRabbit: el estado vigente de CodeRabbit fue creado por otra cuenta"
+  if merge_disparado; then _mal "mergeo con estado CodeRabbit falsificado"; fi
+}
+fin_caso "auto_rechaza_estado_coderabbit_falso_de_cuenta"
+
 caso "auto_rechaza_bot_falso"
 {
   sed 's/coderabbitai\[bot\]/another-bot/' "$SB/ghfix/reviews.json" > "$SB/ghfix/reviews.tmp"
@@ -455,13 +469,31 @@ fin_caso "auto_rechaza_bot_falso"
 
 caso "auto_rechaza_recibo_anterior_a_coderabbit"
 {
-  sed 's/2026-09-24T01:00:02Z/2026-09-24T00:59:59Z/' "$SB/ghfix/comments-pages.json" > "$SB/ghfix/comments-pages.tmp"
-  mv "$SB/ghfix/comments-pages.tmp" "$SB/ghfix/comments-pages.json"
+  sed 's/2026-09-24T01:00:02Z/2026-09-24T00:59:59Z/' "$SB/ghfix/comments.json" > "$SB/ghfix/comments.tmp"
+  mv "$SB/ghfix/comments.tmp" "$SB/ghfix/comments.json"
   correr --auto
   _contiene "recibo previo" "$OUT" "NO-MERGE: CodeRabbit: el recibo del lead"
   if merge_disparado; then _mal "mergeo con recibo previo a CodeRabbit"; fi
 }
 fin_caso "auto_rechaza_recibo_anterior_a_coderabbit"
+
+caso "auto_rechaza_aprobacion_vacia_posterior_al_recibo_viejo"
+{
+  python3 - "$SB/ghfix/comments.json" "$SHA" <<'PY'
+import json, sys
+path, sha = sys.argv[1:]
+with open(path, encoding="utf-8") as fh:
+    comments = json.load(fh)
+comments[0]["created_at"] = "2026-09-24T00:59:59Z"
+comments.append({"user": {"login": "op"}, "body": f"APPROVE lead {sha}\n", "created_at": "2026-09-24T01:00:02Z"})
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(comments, fh)
+PY
+  correr --auto
+  _contiene "recibo seleccionado viejo" "$OUT" "NO-MERGE: CodeRabbit: el recibo del lead"
+  if merge_disparado; then _mal "mergeo usando aprobacion vacia para refrescar recibo viejo"; fi
+}
+fin_caso "auto_rechaza_aprobacion_vacia_posterior_al_recibo_viejo"
 
 caso "auto_rechaza_libreria_coderabbit_modificada"
 {
@@ -910,24 +942,25 @@ caso "agente_distinto_del_autor_puede_mergear"
 {
   sed -i.bak 's/"author":{"login":"op"}/"author":{"login":"otro"}/' "$SB/ghfix/pr.json"
   rm -f "$SB/ghfix/pr.json.bak"
-  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json" "$SB/ghfix/comments-pages.json"
-  rm -f "$SB/ghfix/comments.json.bak" "$SB/ghfix/comments-pages.json.bak"
+  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json"
+  rm -f "$SB/ghfix/comments.json.bak"
   correr --auto
   [ "$RC" -eq 0 ] || _mal "otro agente debio poder cerrar PR ajeno con recibo del autor: $OUT"
   _contiene "merge ajeno" "$OUT" "MERGE-OK:"
 }
 fin_caso "agente_distinto_del_autor_puede_mergear"
 
-caso "commit_de_otro_email_no_merguea"
+caso "otro_clon_y_otro_email_pueden_cerrar_pr_revisado"
 {
+  git config user.email closer@example.com
   git -c user.email=ajeno@example.com commit -qam "feat: commit ajeno" --allow-empty
   git push -q origin feat/task
   refix
-  correr --confirmado
-  _contiene "razon email ajeno" "$OUT" "NO-MERGE: commit de otro email"
-  if merge_disparado; then _mal "mergeo con un commit de otro email"; fi
+  correr --auto
+  [ "$RC" -eq 0 ] || _mal "un agente con email local diferente debio cerrar: $OUT"
+  _contiene "merge con email distinto" "$OUT" "MERGE-OK:"
 }
-fin_caso "commit_de_otro_email_no_merguea"
+fin_caso "otro_clon_y_otro_email_pueden_cerrar_pr_revisado"
 
 caso "merge_ok_borrado_remoto_falla_reporta_sin_reintentar"
 {
@@ -1716,19 +1749,6 @@ c_rama_base() {
   if merge_disparado; then _mal "mergeo un PR de otra rama base"; fi
 }
 
-c_email() {
-  CASO_ROJO=0; sb_reset master
-  git -c user.email=ajeno@example.com commit -qam "feat: commit ajeno" --allow-empty
-  git push -q origin feat/task
-  refix
-  correr --confirmado
-  _contiene "razon email ajeno" "$OUT" "NO-MERGE: commit de otro email"
-  if merge_disparado; then _mal "mergeo con un commit de otro email"; fi
-}
-
-
-
-
 c_borrado() {
   CASO_ROJO=0; sb_reset master
   printf '#!/bin/sh\necho delete >> "%s/orden.log"\nexit 1\n' "$SB" > "$SB/origin.git/hooks/pre-receive"
@@ -1744,8 +1764,8 @@ c_autor() {
   CASO_ROJO=0; sb_reset master
   sed -i.bak 's/"author":{"login":"op"}/"author":{"login":"otro"}/' "$SB/ghfix/pr.json"
   rm -f "$SB/ghfix/pr.json.bak"
-  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json" "$SB/ghfix/comments-pages.json"
-  rm -f "$SB/ghfix/comments.json.bak" "$SB/ghfix/comments-pages.json.bak"
+  sed -i.bak 's/"user":{"login":"op"}/"user":{"login":"otro"}/' "$SB/ghfix/comments.json"
+  rm -f "$SB/ghfix/comments.json.bak"
   correr --auto
   [ "$RC" -eq 0 ] || _mal "otro agente debio poder cerrar PR ajeno: $OUT"
   _contiene "merge ajeno" "$OUT" "MERGE-OK:"
@@ -1822,7 +1842,6 @@ skipped_es_verde	s/\[ "\$conc" != success \]/[ "$conc" != success ] \&\& [ "$con
 solo_push_exige_pr	s/\[ "\$n" -gt 0 \] || no_merge "sin checks/[ "$hay_pr" = 0 ] \&\& no_merge "exige pull_request"; [ "$n" -gt 0 ] || no_merge "sin checks/	c_solo_push
 base_vieja_pasa	s/git merge-base --is-ancestor "\$ORIGEN" HEAD/true/	c_base_avanzada
 rama_base_floja	s|\[ "\$CFG_RAMA" != "\$PR_BASE" \]|false|	c_rama_base
-email_ajeno_pasa	s|no_merge "commit de otro email: \$csha es de \$email"|continue|	c_email
 borrado_reintenta	s|^  borrado_remoto$|  borrado_remoto; borrado_remoto|	c_borrado
 autor_forzado_a_cuenta	s|entrega_recibo_del_pr "\$REPO_GH" "\$PR" "\$SHA" "\$PR_AUTOR"|entrega_recibo_del_pr "\$REPO_GH" "\$PR" "\$SHA" "\$LOGIN"|	c_autor
 revert_trailer_opcional	s|grep -Fq 'Saikit-Merge:'|true|	c_revert_trailer

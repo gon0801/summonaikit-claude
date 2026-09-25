@@ -88,6 +88,7 @@
     "tools/audita-ledger.sh": {"feature": "audit-ledger"},
     "tools/check-deploy-log.sh": {"feature": "check-deploy-log"},
     "tools/saikit-merge.sh": {"feature": "saikit-merge"},
+    "tools/lib/coderabbit_gate.py": {"feature": "saikit-merge"},
     "tools/saikit-postmerge.sh": {"feature": "saikit-postmerge"},
     "tools/saikit-setup-autopilot.sh": {"feature": "setup-autopilot"},
     "tools/saikit-ci-minimo.sh": {"feature": "ci-minimo"},

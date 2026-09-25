@@ -17,7 +17,7 @@ def gh_json(path, *flags):
         raise ValueError(f"gh api {path} no devolvio JSON valido") from exc
 
 
-def check(repo, pr, sha, login):
+def check(repo, pr, sha, receipt_date):
     pages = gh_json(f"repos/{repo}/pulls/{pr}/reviews?per_page=100", "--paginate", "--slurp")
     if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
         raise ValueError("revisiones de CodeRabbit con formato invalido")
@@ -46,6 +46,10 @@ def check(repo, pr, sha, login):
     if not rabbit:
         raise ValueError("falta el estado CodeRabbit del head actual")
     latest_status = max(rabbit, key=lambda item: (item.get("created_at") or "", item.get("id") or 0))
+    # El estado real de la GitHub App viene con creator=null. Un usuario con
+    # permiso de escritura puede publicar el mismo contexto con su cuenta.
+    if latest_status.get("creator") is not None:
+        raise ValueError("el estado vigente de CodeRabbit fue creado por otra cuenta")
     if latest_status.get("state") != "success":
         raise ValueError("el estado vigente de CodeRabbit no es success")
     if not latest_status.get("created_at"):
@@ -53,17 +57,7 @@ def check(repo, pr, sha, login):
     if (latest_status.get("created_at") or "") < (latest_review.get("submitted_at") or ""):
         raise ValueError("el estado de CodeRabbit precede su ultima revision")
 
-    comments = gh_json(f"repos/{repo}/issues/{pr}/comments?per_page=100", "--paginate", "--slurp")
-    if not isinstance(comments, list) or any(not isinstance(page, list) for page in comments):
-        raise ValueError("comentarios del PR con formato invalido")
-    approvals = [
-        comment for page in comments for comment in page
-        if isinstance(comment, dict)
-        and isinstance(comment.get("user"), dict)
-        and comment["user"].get("login") == login
-        and (comment.get("body") or "").startswith(f"APPROVE lead {sha}\n")
-    ]
-    if not approvals or max(comment.get("created_at") or "" for comment in approvals) < latest_review.get("submitted_at"):
+    if not receipt_date or receipt_date < latest_review.get("submitted_at"):
         raise ValueError("el recibo del lead debe adjudicar la ultima revision de CodeRabbit")
 
 
