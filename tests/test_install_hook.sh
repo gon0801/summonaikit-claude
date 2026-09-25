@@ -102,6 +102,17 @@ mtime_de() {
   return 1
 }
 
+# Igual que mtime_de pero para los bits de permiso (GNU y BSD/macOS): usado
+# para confirmar que la publicacion global preserva el exec bit del fuente.
+modo_de() {
+  local m=''
+  m="$(stat -c '%a' "$1" 2>/dev/null)" || m=''
+  [ -n "$m" ] || m="$(stat -f '%p' "$1" 2>/dev/null | tail -c 4)" || m=''
+  if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
+  echo "modo_de: medicion VACIA de [$1] (¿archivo ausente?)" >&2
+  return 1
+}
+
 # Task 18.16: el caso que canda la exigencia de medicion no vacia. El fix
 # ingenuo (un `stat -f` portable sin verificar la salida) pasa igual si el
 # archivo no existe: este caso lo pone rojo exigiendo grito y exit != 0.
@@ -3015,6 +3026,106 @@ out_h="$(HOME="$home_gk" bash "$blast" --help 2>&1)"; rc_h=$?
 [ "$rc_h" -eq 0 ] || malo "blast plantado por grok --help dio $rc_h: $out_h"
 printf '%s' "$out_h" | grep -Fq -- '--write' \
   || malo "blast plantado por grok --help no nombra --write"
+
+# ============================================================================
+# saikit-tools global: el instalador tambien publica los comandos operativos
+# (merge/postmerge/setup-autopilot/ci-minimo/bump-ci-pins) y sus libs, para que
+# la skill saikit-setup-autopilot (instalada globalmente) funcione desde
+# CUALQUIER repo, no solo dentro del checkout del kit. Closure medida con grep
+# de `source`/`. "$HERE`/`$HERE/`.
+# ============================================================================
+tools_globales="saikit-merge.sh saikit-postmerge.sh saikit-setup-autopilot.sh saikit-ci-minimo.sh bump-ci-pins.sh"
+libs_globales="lib/veredicto_contract.sh lib/entrega_contract.sh"
+
+caso "global: limpio => planta los 5 comandos + 2 libs nuevas, byte a byte y modo iguales al fuente"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "install limpio deberia salir 0, dio $rc: $out"
+for rel in $tools_globales $libs_globales; do
+  dst="$casa_recetas/.claude/saikit-tools/$rel"
+  [ -f "$dst" ] || malo "no planto saikit-tools/$rel"
+  cmp -s "$dst" "$repo/tools/$rel" || malo "saikit-tools/$rel instalado difiere del fuente"
+  [ "$(modo_de "$dst")" = "$(modo_de "$repo/tools/$rel")" ] \
+    || malo "saikit-tools/$rel no preservo el modo del fuente (exec bit)"
+done
+
+caso "global: --dry-run reporta los 5 comandos nuevos y no escribe nada"
+nuevo_destino; nuevo_casa_recetas
+out="$(host_claude_recetas --dry-run 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || malo "dry-run deberia salir 0, dio $rc: $out"
+for rel in $tools_globales; do
+  printf '%s' "$out" | grep -Fq "$rel" \
+    || malo "dry-run no menciono $rel: $out"
+  [ ! -e "$casa_recetas/.claude/saikit-tools/$rel" ] \
+    || malo "--dry-run creo saikit-tools/$rel"
+done
+
+caso "global: re-instalar es idempotente (segunda corrida no cambia nada)"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+mt_antes="$(mtime_de "$casa_recetas/.claude/saikit-tools/saikit-merge.sh")"
+sleep 1
+out2="$(host_claude_recetas 2>&1)"; rc2=$?
+[ "$rc2" -eq 0 ] || malo "segunda corrida deberia salir 0, dio $rc2: $out2"
+mt_despues="$(mtime_de "$casa_recetas/.claude/saikit-tools/saikit-merge.sh")"
+[ "$mt_antes" = "$mt_despues" ] \
+  || malo "la segunda corrida reescribio saikit-merge.sh sin cambios de fuente"
+for rel in $tools_globales $libs_globales; do
+  cmp -s "$casa_recetas/.claude/saikit-tools/$rel" "$repo/tools/$rel" \
+    || malo "tras la segunda corrida saikit-tools/$rel difiere del fuente"
+done
+
+caso "global: --quitar-recetas quita los 5 comandos y las 2 libs nuevas"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+for rel in $tools_globales $libs_globales; do
+  [ -f "$casa_recetas/.claude/saikit-tools/$rel" ] \
+    || malo "precondicion: $rel no se instalo; el quitar no mide nada"
+done
+host_claude_recetas --quitar-recetas >/dev/null 2>&1
+for rel in $tools_globales $libs_globales; do
+  [ ! -f "$casa_recetas/.claude/saikit-tools/$rel" ] \
+    || malo "--quitar-recetas no quito saikit-tools/$rel"
+done
+
+# Los 5 comandos resuelven `HERE="$(dirname "${BASH_SOURCE[0]}")"` y sourcean
+# libs / invocan hermanos por esa ruta: publicados SOLOS (sin el repo del kit
+# alrededor) tienen que seguir resolviendo. Se invocan con --help (sourcea
+# ANTES del parseo de flags en los tres que usan lib) desde un repo git de
+# PRUEBA que NO es el kit, con HOME aislado al perfil recien instalado.
+caso "global: los 5 comandos publicados corren solos (hermano/lib resuelven fuera del kit)"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+repo_ajeno="$tmp/repo-ajeno-global"
+rm -rf "$repo_ajeno"
+mkdir -p "$repo_ajeno"
+( cd "$repo_ajeno" && git init -q ) >/dev/null 2>&1
+for rel in $tools_globales; do
+  dst="$casa_recetas/.claude/saikit-tools/$rel"
+  out_h="$(cd "$repo_ajeno" && HOME="$casa_recetas" USERPROFILE="$casa_recetas" bash "$dst" --help 2>&1)"; rc_h=$?
+  [ "$rc_h" -eq 0 ] || malo "$rel --help (publicado, fuera del kit) dio $rc_h: $out_h"
+  printf '%s' "$out_h" | grep -qi 'no such file or directory\|no se encontro' \
+    && malo "$rel --help no pudo resolver una dependencia hermana/lib: $out_h"
+done
+
+caso "global: bump-ci-pins.sh publicado resuelve el hermano saikit-ci-minimo.sh por defecto"
+nuevo_destino; nuevo_casa_recetas
+host_claude_recetas >/dev/null 2>&1
+fixture_vacia="$tmp/pins-fixture-vacia.txt"
+printf '# fixture sin entradas: fuerza a comparar contra la fuente\n' > "$fixture_vacia"
+bump="$casa_recetas/.claude/saikit-tools/bump-ci-pins.sh"
+out_b="$(cd "$repo_ajeno" && HOME="$casa_recetas" bash "$bump" --check --fuente "$fixture_vacia" 2>&1)"; rc_b=$?
+[ "$rc_b" -eq 2 ] || malo "bump-ci-pins --check con fixture vacia deberia salir 2, dio $rc_b: $out_b"
+printf '%s' "$out_b" | grep -q 'no encuentro el generador' \
+  && malo "bump-ci-pins publicado NO resolvio su hermano saikit-ci-minimo.sh: $out_b"
+printf '%s' "$out_b" | grep -q 'no conoce' \
+  || malo "bump-ci-pins publicado no llego a comparar contra la fuente (el hermano no resolvio?): $out_b"
+
+# Mutacion (verificada a mano durante la implementacion, no queda en el
+# archivo): quitar una entrada de publicar_saikit_tools() en install-hook.sh
+# y volver a correr esta seccion pone en rojo el caso "limpio" (el archivo no
+# se planta) y el caso "corren solos" (el --help falla por lib/hermano
+# ausente) para ese tool.
 
 if [ "$fail" -ne 0 ]; then
   echo "test_install_hook: FAIL" >&2

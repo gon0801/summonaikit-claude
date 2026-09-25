@@ -9,7 +9,7 @@ saikit_owned: summonaikit-claude
 Corre el asistente en el repo del usuario y compromete su respuesta:
 
 ```
-bash tools/saikit-setup-autopilot.sh
+bash "$HOME/.claude/saikit-tools/saikit-setup-autopilot.sh"
 ```
 
 Hace 5 preguntas en español, una por una, y escribe `.saikit/autopilot.json`
@@ -36,8 +36,8 @@ El workflow mínimo usa actions pineadas por SHA de commit (el tag vive al
 lado, en `PIN_*_TAG`, solo como referencia). Mantenimiento:
 
 ```
-bash tools/bump-ci-pins.sh --check            # 0 = al día, 1 = obsoleto, 2 = no pudo consultar
-bash tools/bump-ci-pins.sh --proponer actions/checkout v4.3.0
+bash "$HOME/.claude/saikit-tools/bump-ci-pins.sh" --check            # 0 = al día, 1 = obsoleto, 2 = no pudo consultar
+bash "$HOME/.claude/saikit-tools/bump-ci-pins.sh" --proponer actions/checkout v4.3.0
 ```
 
 `--check` compara cada pin contra GitHub (o contra un fixture local con

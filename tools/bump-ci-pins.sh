@@ -38,6 +38,19 @@
 #       1 obsoleto (solo --check); 2 uso / no se pudo consultar / ilegible.
 set -u
 
+# MARCA DE PROPIEDAD: `: <<'...'` es un no-op (no ejecuta, no cuesta fork).
+# El instalador mide la propiedad con el PRIMER bloque `---` del archivo
+# (zcode_agente_tiene_marca): sin ella, este tool publicado globalmente
+# (~/.claude/saikit-tools) se clasificaba DESCONOCIDO en la segunda corrida
+# y el instalador dejaba de tocarlo para siempre. Va DESPUES de `set -u` y
+# antes de `HERE=` a proposito: no altera el rango `sed -n '2,38p'` que
+# `uso()` usa para imprimir este mismo encabezado.
+: <<'SAIKIT_MARCA'
+---
+saikit_owned: summonaikit-claude
+---
+SAIKIT_MARCA
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 uso() { sed -n '2,38p' "$0"; }
