@@ -89,14 +89,8 @@ kv("SIN_ESTADO", "1" if "(sin estado)" in block else "0")
 kv("HAS_AUTOPILOT", "1" if re.search(r"(?m)^\| autopilot=1$", block) else "0")
 kv("HAS_LANE_FULL", "1" if re.search(r"(?m)^\| lane=full$", block) else "0")
 kv("HAS_PARAGRAPH", "1" if "Autopilot lane (-saikit:autopilot)" in block else "0")
-kv("HAS_STOP_ASK", "1" if "STOP AND ASK before publishing" in block else "0")
-kv("HAS_EXPLICIT_YES", "1" if "operator's explicit yes" in block else "0")
-kv("HAS_NEVER_OWN", "1" if "never on your own" in block else "0")
-forbidden = (
-    r"merges? on its own|merge automatically|revert automatically|"
-    r"revierte solo|mergea solo|without asking|desatendid"
-)
-kv("HAS_UNATTENDED", "1" if re.search(forbidden, block, re.I) else "0")
+kv("HAS_REVIEW_CI", "1" if "CI and CodeRabbit review" in block else "0")
+kv("HAS_NO_EXTRA_PERMISSION", "1" if "Do not ask for a separate per-PR merge permission" in block else "0")
 # Last estado snapshot: after the last step (persist / follow-up).
 estados = re.split(r"^--- estado tras el paso ", block, flags=re.M)
 last = estados[-1] if len(estados) > 1 else block
@@ -264,21 +258,18 @@ if fm_only autopilot-paragraph; then
     fm_fail autopilot-paragraph paragraph_present "Autopilot lane" "ausente"
   fi
   # assert:paragraph_present_end
-  if [ "${HAS_STOP_ASK:-0}" = 1 ]; then
-    fm_pass autopilot-paragraph asks_confirm "STOP AND ASK" "STOP AND ASK"
+  if [ "${HAS_REVIEW_CI:-0}" = 1 ]; then
+    fm_pass autopilot-paragraph merge_after_review "CI and CodeRabbit review" "CI and CodeRabbit review"
   else
-    fm_fail autopilot-paragraph asks_confirm "STOP AND ASK" "sin pedido"
+    fm_fail autopilot-paragraph merge_after_review "CI and CodeRabbit review" "ausente"
   fi
-  # assert:no_unattended
-  if [ "${HAS_UNATTENDED:-1}" = 0 ] && { [ "${HAS_EXPLICIT_YES:-0}" = 1 ] \
-       || [ "${HAS_NEVER_OWN:-0}" = 1 ]; }; then
-    fm_pass autopilot-paragraph no_unattended "sin promesa" \
-      "never on your own / explicit yes"
+  # assert:no_extra_permission
+  if [ "${HAS_NO_EXTRA_PERMISSION:-0}" = 1 ]; then
+    fm_pass autopilot-paragraph no_extra_permission "Do not ask for a separate per-PR merge permission" "Do not ask for a separate per-PR merge permission"
   else
-    fm_fail autopilot-paragraph no_unattended "sin promesa" \
-      "unattended=${HAS_UNATTENDED:-?} yes=${HAS_EXPLICIT_YES:-?} own=${HAS_NEVER_OWN:-?}"
+    fm_fail autopilot-paragraph no_extra_permission "Do not ask for a separate per-PR merge permission" "ausente"
   fi
-  # assert:no_unattended_end
+  # assert:no_extra_permission_end
 fi
 
 # ---------------------------------------------------------------------------

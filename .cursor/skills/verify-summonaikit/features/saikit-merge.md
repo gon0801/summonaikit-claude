@@ -37,7 +37,7 @@ instead of inventing verifier and reviewer roles.
 - From a task branch whose PR carries the delivery receipt, run
   `bash tools/saikit-merge.sh`. When every check is green it prints `LISTO:`
   and stops.
-- The operator authorizes the merge with `bash tools/saikit-merge.sh --confirmado`.
+- In this optional tool, `bash tools/saikit-merge.sh --confirmado` executes the merge.
   That run repeats the whole gate (SHA, CI, receipt). If anything moved, it
   prints `NO-MERGE:` and does not merge.
 - `bash tools/saikit-merge.sh --revert-de <merge_commit>` only reverts the

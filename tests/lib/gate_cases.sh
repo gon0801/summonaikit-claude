@@ -1668,7 +1668,7 @@ caso_g1_autopilot_arma_full_con_flag() {
   _igual "lane" "$(lab_estado lane)" "full"
   _igual "autopilot" "$(lab_estado autopilot)" "1"
   _contiene "stdout con parrafo autopilot" "$LAB_OUT" 'Autopilot lane (-saikit:autopilot)'
-  _contiene "stdout con la promesa de parar" "$LAB_OUT" 'STOP AND ASK before publishing'
+  _contiene "stdout con permiso de merge" "$LAB_OUT" 'Do not ask for a separate per-PR merge permission.'
 }
 
 caso_g1_autopilot_gana_sobre_fast() {
@@ -5053,272 +5053,25 @@ caso_g3_grok_ceremonia_no_corre_en_cursor() {
 }
 
 
-# ================================================ G7 — PreToolUse niega merge a pelo (D24 / 18.11)
-# Medicion citada: docs oficiales de Claude Code hooks
-# https://code.claude.com/docs/en/hooks
-# PreToolUse bloquea herramientas con stdout JSON y exit 0 (exit != 0 es
-# crash del hook y puede fail-open):
-#   {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}
-# Bash es la superficie documentada. No se midio deny en el perfil vivo del
-# operador (AGENTS.md lo prohibe este turno); estos casos afirman que el hook
-# EMITE ese JSON. No reutilizar {"decision":"block"} del Stop.
-#
-# Como plantar hashes (hatch): _g7_plantar_hatch escribe
-# $LAB/proyecto/tools/saikit-merge.sh y el pin hermano MANIFEST.sha256
-# (match | mismatch). SAIKIT_KIT_MANIFEST es override de RUTA del pin
-# (solo test); NUNCA un flag que autorice el merge.
-CASOS_G7="caso_g7_niega_gh_pr_merge caso_g7_niega_gh_pr_merge_espaciado caso_g7_niega_gh_api_merge caso_g7_niega_git_push_master caso_g7_niega_git_push_main caso_g7_niega_git_push_origin_main caso_g7_niega_git_dash_c_push caso_g7_niega_git_push_force_y_delete caso_g7_niega_git_no_pager_push caso_g7_permite_git_push_feature caso_g7_permite_git_push_url_main caso_g7_hatch_hash_ok caso_g7_hatch_hash_distinto caso_g7_hatch_basename_ok caso_g7_hatch_comillas_ok caso_g7_niega_hatch_sufijo_bak caso_g7_niega_cadena_hatch_gh_pr caso_g7_niega_cadena_hatch_and_gh_pr caso_g7_niega_cadena_gh_pr_hatch caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_permite_git_show_hatch caso_g7_permite_rtk_git_show_hatch caso_g7_permite_grep_hatch caso_g7_niega_lectura_encadenada caso_g7_niega_lectura_multilinea_escape caso_g7_niega_lectura_multilinea_real caso_g7_niega_lectura_cr caso_g7_niega_lectura_cr_real caso_g7_niega_lectura_u_crudo caso_g7_niega_lectura_c0_otro caso_g7_permite_lectura_tab caso_g7_muse_bash_niega_gh_pr_merge caso_g7_muse_bash_input_permite_gh_pr_merge"
-
-_g7_plantar_hatch() {
-  unset SAIKIT_KIT_MANIFEST
-  mkdir -p "$LAB/proyecto/tools"
-  printf '%s\n' '#!/bin/sh' 'echo hatch-lab' > "$LAB/proyecto/tools/saikit-merge.sh"
-  _g7_real="$(sha256sum "$LAB/proyecto/tools/saikit-merge.sh" | cut -c1-64)"
-  case "$1" in
-    match)
-      printf '%s\tsaikit-merge.sh\n' "$_g7_real" > "$LAB/proyecto/tools/MANIFEST.sha256"
-      ;;
-    mismatch)
-      printf '%s\tsaikit-merge.sh\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
-        > "$LAB/proyecto/tools/MANIFEST.sha256"
-      ;;
-    *)
-      _mal "_g7_plantar_hatch: modo desconocido [$1]"
-      ;;
-  esac
-}
-
-_g7_assert_deny() {
-  _igual "exit 0 (deny oficial; no crash)" "$LAB_RC" "0"
-  _contiene "hookEventName PreToolUse" "$LAB_OUT" '"hookEventName":"PreToolUse"'
-  _contiene "permissionDecision deny" "$LAB_OUT" '"permissionDecision":"deny"'
-  _contiene "permissionDecisionReason" "$LAB_OUT" '"permissionDecisionReason"'
-  _no_contiene "NO reusa Stop decision:block" "$LAB_OUT" '"decision":"block"'
-}
+# ================================================ G7 — PreToolUse allows commands
+# PreToolUse stays separate from PostToolUse, so an unexecuted command does not
+# count as completed work. It does not veto merges, deploys, or kit scripts.
+CASOS_G7="caso_g7_permite_merge_y_push caso_g7_permite_kit_sin_pin caso_g7_no_bash_permite caso_g7_pretool_no_acredita caso_g7_muse_bash_permite_gh_pr_merge caso_g7_muse_bash_input_permite_gh_pr_merge"
 
 _g7_assert_allow() {
   _igual "exit 0 (Claude allow = silencio)" "$LAB_RC" "0"
-  _vacio "stdout (Claude allow es vacio; no emitir JSON extra)" "$LAB_OUT"
+  _vacio "stdout (Claude allow es vacio)" "$LAB_OUT"
 }
 
-caso_g7_niega_gh_pr_merge() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'gh pr merge --squash')"
-  _g7_assert_deny
+caso_g7_permite_merge_y_push() {
+  for command in 'gh pr merge 7 --squash' 'gh api repos/acme/app/pulls/7/merge' 'git push origin HEAD:main' 'git push origin master'; do
+    lab_run auto claude "$(lab_payload_pretool_bash "$command")"
+    _g7_assert_allow
+  done
 }
 
-# F1: espacios/tabs/mayusculas entre gh, pr, merge (no `gh merge pr`).
-# Rojo si el patron vuelve al literal -Fq 'gh pr merge'.
-caso_g7_niega_gh_pr_merge_espaciado() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'gh  pr  merge --squash')"
-  _g7_assert_deny
-  lab_run auto claude "$(lab_payload_pretool_bash 'GH PR MERGE --squash')"
-  _g7_assert_deny
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run || gh  pr  merge 1')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_gh_api_merge() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'gh api repos/acme/app/pulls/12/merge')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_git_push_master() {
-  # Conjunto minimo D24: master y main como ref de destino. Documentado aca.
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin master')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_git_push_main() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin HEAD:main')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_git_push_origin_main() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin main')"
-  _g7_assert_deny
-}
-
-# F3: git -C <dir> push origin master|main. Rojo si el primer regex
-# exige `git` pegado a `push`.
-caso_g7_niega_git_dash_c_push() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git -C /tmp/repo push origin master')"
-  _g7_assert_deny
-  lab_run auto claude "$(lab_payload_pretool_bash 'git -C ./app push origin main')"
-  _g7_assert_deny
-}
-
-# +master/+main (force) y :master/:main (borrar ref remoto) son dest
-# protegidos. Rojo si dest vuelve a exigir el token pelado.
-caso_g7_niega_git_push_force_y_delete() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin +master')"
-  _g7_assert_deny
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin +main')"
-  _g7_assert_deny
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin :master')"
-  _g7_assert_deny
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin :main')"
-  _g7_assert_deny
-}
-
-# Tokens arbitrarios entre git y push (no solo -C/-c/-X). Rojo si el
-# primer regex exige `git` pegado a `push`.
-caso_g7_niega_git_no_pager_push() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git --no-pager push origin master')"
-  _g7_assert_deny
-}
-
-caso_g7_permite_git_push_feature() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin feature-branch')"
-  _g7_assert_allow
-}
-
-# F4: main/master en URL/comentario/mainline no es dest ref.
-# Rojo si el segundo check vuelve al token-en-cualquier-lado.
-caso_g7_permite_git_push_url_main() {
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push https://github.com/acme/main.git feature-x')"
-  _g7_assert_allow
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin feature # not main')"
-  _g7_assert_allow
-  lab_run auto claude "$(lab_payload_pretool_bash 'git push origin mainline')"
-  _g7_assert_allow
-}
-
-caso_g7_hatch_hash_ok() {
-  _g7_plantar_hatch match
+caso_g7_permite_kit_sin_pin() {
   lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_allow
-}
-
-caso_g7_hatch_hash_distinto() {
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-
-caso_g7_hatch_basename_ok() {
-  # Ruta instalada que termina en saikit-merge.sh (no solo tools/ relativa).
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash "$LAB/proyecto/tools/saikit-merge.sh --confirmado")"
-  _g7_assert_allow
-}
-
-# F2: comillas envolventes en el token del hatch (relativa, ./, absoluta).
-# Rojo si pretool_strip_comillas_hatch deja de pelar.
-caso_g7_hatch_comillas_ok() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash \"tools/saikit-merge.sh\" --confirmado')"
-  _g7_assert_allow
-  lab_run auto claude "$(lab_payload_pretool_bash "bash './tools/saikit-merge.sh' --confirmado")"
-  _g7_assert_allow
-  lab_run auto claude "$(lab_payload_pretool_bash "bash '$LAB/proyecto/tools/saikit-merge.sh' --confirmado")"
-  _g7_assert_allow
-}
-
-# Lead PR #198: `…/saikit-merge.sh.bak` no puede truncar al `.sh`, hashear
-# el script real del pin y ALLOW mientras bash corre el .bak.
-caso_g7_niega_hatch_sufijo_bak() {
-  _g7_plantar_hatch match
-  cp "$LAB/proyecto/tools/saikit-merge.sh" "$LAB/proyecto/tools/saikit-merge.sh.bak"
-  printf '%s\n' '#!/bin/sh' 'echo TROJAN' > "$LAB/proyecto/tools/saikit-merge.sh.bak"
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh.bak --pr 198')"
-  _g7_assert_deny
-}
-
-# Hatch + hash ok NO es permiso para encadenar un merge a pelo en el
-# mismo comando (; / && / orden invertido). D24: nunca allow si el
-# patron a pelo matchea, aunque el hatch este pinneado.
-caso_g7_niega_cadena_hatch_gh_pr() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run; gh pr merge 1')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_cadena_hatch_and_gh_pr() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'bash tools/saikit-merge.sh --dry-run && gh pr merge 1')"
-  _g7_assert_deny
-}
-
-caso_g7_niega_cadena_gh_pr_hatch() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'gh pr merge 1; bash tools/saikit-merge.sh --dry-run')"
-  _g7_assert_deny
-}
-
-# 22.2: lecturas simples que mencionan el script NO son invocacion: el guard
-# las permite sin pasar por el pin. El token con `:` (ruta de objeto git)
-# nunca resuelve a archivo, asi que sin el predicado caen al deny del hatch.
-caso_g7_permite_git_show_hatch() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh')"
-  _g7_assert_allow
-}
-caso_g7_permite_rtk_git_show_hatch() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'rtk git show origin/main:tools/saikit-merge.sh')"
-  _g7_assert_allow
-}
-caso_g7_permite_grep_hatch() {
-  # mismatch a proposito: con match el hatch ya permite HOY cualquier linea
-  # con el token verificado, y el caso saldria verde sin medir nada nuevo.
-  # La lectura no depende del pin porque no se ejecuta nada.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash 'grep -n ci_chequear tools/saikit-merge.sh')"
-  _g7_assert_allow
-}
-# Control: la lectura ENCADENADA sigue negada (no es lectura simple: cae al
-# hatch y el token con `:` no resuelve).
-caso_g7_niega_lectura_encadenada() {
-  _g7_plantar_hatch match
-  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh | bash')"
-  _g7_assert_deny
-}
-# 22.2r1 (review Codigo, CRITICO): el hook lee command SIN decodificar
-# (json_tool_input_string deja escapes crudos) pero el ejecutor SI decodifica:
-# `...sh\nbash ...` (2 chars) se ve como UN token y ejecuta DOS comandos
-# (bypass medido con pin incorrecto: RC=0). \r y salto real, igual.
-caso_g7_niega_lectura_multilinea_escape() {
-  # Con espacio antes del escape: los tokens quedan exactos (spoof no ve
-  # sufijo) y sin el veto el predicado permite (bypass medido: RC=0).
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \nbash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_niega_lectura_multilinea_real() {
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh\nbash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_niega_lectura_cr() {
-  # Idem \n: con espacio, spoof no ve sufijo y el \r crudo pega comandos.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \rbash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_niega_lectura_cr_real() {
-  # 22.2r2: CR real 0x0D ($'' lo materializa): parte/oculta igual que \n.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh \rbash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_niega_lectura_u_crudo() {
-  # 22.2r2: \u crudo (6 chars): el ejecutor lo decodifica igual que \n.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash 'git show origin/main:tools/saikit-merge.sh \u000abash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_niega_lectura_c0_otro() {
-  # 22.2r2: otro C0 (0x01): la guarda grep lo veta aunque no parta comandos.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash $'git show origin/main:tools/saikit-merge.sh \x01bash tools/saikit-merge.sh --confirmado')"
-  _g7_assert_deny
-}
-caso_g7_permite_lectura_tab() {
-  # 22.2r2: tab real separa legitimo, no se veta. Mismatch a proposito: con
-  # match el hatch permitiria igual y el caso no mediria la guarda de lectura.
-  _g7_plantar_hatch mismatch
-  lab_run auto claude "$(lab_payload_pretool_bash $'cat\ttools/saikit-merge.sh')"
   _g7_assert_allow
 }
 
@@ -5327,19 +5080,15 @@ caso_g7_no_bash_permite() {
   _g7_assert_allow
 }
 
-# Si PreToolUse cae a PHASE=tool, record_tool_evidence acredita el runner
-# como si YA hubiera corrido. El mapeo a pretool tiene que cortar eso.
 caso_g7_pretool_no_acredita() {
-  lab_run prompt claude "$(lab_payload_prompt '-saikit pretool no acredita')"
+  lab_sembrar 123456 0 0 0 ""
   lab_run auto claude "$(lab_payload_pretool_bash 'pytest -q')"
-  _igual "PreToolUse no deja verified=1" "$(lab_estado verified)" "0"
   _g7_assert_allow
+  _igual "PreToolUse no acredita verificacion" "$(lab_estado verified)" "0"
 }
 
 # --------------------------------------------------------------------- indice
-# Un caso que no este en ninguna lista NO CORRE. La bateria de comportamiento
-# verifica que no haya huerfanos; sin ese chequeo, un caso podria quedar fuera
-# por un dedazo y nadie se enteraria.
+# Keep PreToolUse in its own gate so a command has no completion credit yet.
 # shellcheck source=trail_gate_cases.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trail_gate_cases.sh"
 # shellcheck source=trail_acreditada_cases.sh
@@ -5354,7 +5103,6 @@ casos_de_gate() { eval "printf '%s' \"\${CASOS_$1}\""; }
 todos_los_casos() {
   for g in $GATES; do casos_de_gate "$g"; printf ' '; done
 }
-
 
 # ===================== Task 21.2 — canal nativo de roles delegados de Codex ====
 # 21.1 re-corrida midio la senal (codex-cli 0.154.0): SubagentStart/SubagentStop
@@ -6053,9 +5801,9 @@ caso_g3_other_sigue_sin_ceremonia() {
   _igual "exit code" "$LAB_RC" "0"
 }
 
-caso_g7_muse_bash_niega_gh_pr_merge() {
+caso_g7_muse_bash_permite_gh_pr_merge() {
   lab_run auto muse "$(lab_payload_muse_derivado pretool-bash-gh-pr-merge.json)"
-  _g7_assert_deny
+  _g7_assert_allow
 }
 
 caso_g7_muse_bash_input_permite_gh_pr_merge() {

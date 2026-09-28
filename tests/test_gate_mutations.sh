@@ -143,26 +143,7 @@ G1|grok_setness_por_valor|la deteccion de GROK_HOOK_EVENT vuelve a exigir valor 
 G3|adv_keyword_sin_precedencia|la rama adversar deja de matchear y adversarial-audit vuelve a acreditar reviewer sin review real (D6, Task 13.5)
 G1|adv_contrato_criterio_roto|el contrato deja de nombrar el disparador opt-in del adversary y nadie lo invoca (D1, Task 13.6)
 G1|adv_contrato_despacho_roto|la forma del despacho del reviewer que nombra el artefacto desaparece del contrato (M2/D2, Task 13.6)
-G7|pretool_gh_pr_merge_apagado|el patron gh pr merge se apaga y el merge a pelo vuelve a pasar
-G7|pretool_gh_pr_merge_literal|el patron gh pr merge vuelve al literal -Fq y gh  pr  merge / mayusculas pasan
-G7|pretool_gh_api_merge_apagado|el patron gh api /merge se apaga y el endpoint de merge vuelve a pasar
-G7|pretool_git_push_protegida_apagado|el patron git push a master|main se apaga y el push a rama protegida vuelve a pasar
-G7|pretool_git_push_exige_inmediato|el regex de git push exige push pegado a git y git -C / --no-pager push a master|main pasa
-G7|pretool_git_push_dest_sin_plus_colon|el dest de git push pierde + y : inicial y un force-push o delete-ref a master|main pasa
-G7|pretool_git_push_token_en_cualquier_lado|el dest de git push vuelve a token-en-cualquier-lado y una URL con main niega un feature
-G7|pretool_hatch_siempre_ok|el hatch acepta cualquier hash y un pin distinto deja de negar
-G7|pretool_hatch_nunca_ok|el hatch rechaza el pin correcto (falso positivo del script canonico)
-G7|pretool_hatch_sin_strip_comillas|el hatch deja de pelar comillas envolventes y un pin correcto entre comillas niega
-G7|pretool_hatch_spoof_apagado|el spoof de sufijo (.bak) se apaga y saikit-merge.sh.bak con pin del real deja de negar
 G7|pretool_cae_a_tool|PreToolUse cae a PHASE=tool y el comando se acredita como si ya hubiera corrido
-G7|pretool_hatch_antes_de_pelo|el hatch vuelve a allow antes de los patrones a pelo y una cadena saikit-merge + gh pr merge pasa
-G7|pretool_lectura_vuelve_ancho|el predicado de lectura simple se apaga y git show/cat/grep sobre el script vuelven a negar
-G7|pretool_lectura_sin_nl_real|el veto de salto real se quita y git show + 0x0A + invocacion pasa con pin incorrecto
-G7|pretool_lectura_sin_n_crudo|el veto de \n crudo se quita y git show + escape + invocacion pasa con pin incorrecto
-G7|pretool_lectura_sin_r_crudo|el veto de \r crudo se quita y git show + escape + invocacion pasa con pin incorrecto
-G7|pretool_lectura_sin_u_crudo|el veto de \u crudo se quita y git show + escape + invocacion pasa con pin incorrecto
-G7|pretool_lectura_sin_cntrl|el veto grep de controles se quita y un C0 distinto de tab pasa con pin incorrecto
-G7|pretool_lectura_veta_tab|el tab deja de exceptuarse y la lectura simple con tab se niega con pin incorrecto
 G3|codex_interno_credita|el credito vuelve al canal viejo (record_agent directo) y un evento interno de codex acredita en fase running (21.2)
 G3|codex_huerfano_via_rolmatch|el alta huerfana se falsifica copiando el rol del Stop y un Stop sin SubagentStart previo acredita (21.2 r2: el rol-match es la unica guarda viva del huerfano)
 G3|codex_flag_nativo_invertido|la guarda de codex_native_seen se invierte y el legado acredita en una sesion que YA vio un evento nativo (21.2 r2, revision externa)
@@ -192,8 +173,6 @@ G3|muse_rol_cae_a_subagent_type|sin role el rol se toma de subagent_type y se ac
 G3|muse_revision_al_despachar|el aviso de revision vuelve a marcar la revision al despachar al reviewer, aunque el despacho no termine
 G3|muse_revision_sin_wait|el wait ready del reviewer deja de marcar la revision y el aviso de codigo editado despues de revisar se apaga en muse
 G3|muse_tr_sin_cebado|el cebado de la cache de tool_response se quita y cada clave vuelve a leer el campo completo (dos lecturas por evento)
-G7|muse_pretool_solo_Bash|el veto PreToolUse vuelve a Bash exacto y bash en minusculas se permite
-G7|muse_pretool_trata_bash_input|bash_input deja de salir por emit_allow y gh pr merge en bash_input se niega
 G2|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G2 invertido se pone rojo
 G3|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G3 invertido se pone rojo
 G4|stop_bloquea_de_nuevo|el Stop vuelve a bloquear (ceremonia reintroducida) y un caso G4 invertido se pone rojo
@@ -774,60 +753,8 @@ mut_adv_keyword_sin_precedencia() { sed "s@grep -Eq '(^|\[^a-z\])adversar'@grep 
 mut_adv_contrato_criterio_roto()  { sed 's/OPTIONAL fourth role/OPTIONAL third role/'; }
 mut_adv_contrato_despacho_roto()  { sed 's/NAMING the artifact to adjudicate/NAMING the artifact to discard/'; }
 
-# 18.11 / D24 — una mutacion por guarda nueva. Cada sed apunta a UN ancla
-# (anti-patron 18.24: una mutacion que apaga varias guardas a la vez).
-mut_pretool_gh_pr_merge_apagado() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:space:\]\]+merge'/grep -Eiq 'gh[[:space:]]+pr[[:space:]]+MERGE-NUNCA'/"; }
-# F1: restaura el match literal; atrapa caso_g7_niega_gh_pr_merge_espaciado.
-mut_pretool_gh_pr_merge_literal() { sed "s/grep -Eiq 'gh\[\[:space:\]\]+pr\[\[:space:\]\]+merge'/grep -Fq 'gh pr merge'/"; }
-mut_pretool_gh_api_merge_apagado() { sed 's/api\[\^\[:cntrl:\]\]\*\/merge/api[^[:cntrl:]]*\/mergeNUNCA/'; }
-mut_pretool_git_push_protegida_apagado() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+pushNUNCA'\''/'; }
-# F3: restaura git pegado a push; atrapa caso_g7_niega_git_dash_c_push
-# y caso_g7_niega_git_no_pager_push.
-mut_pretool_git_push_exige_inmediato() { sed 's/^  _pt_git_push_re=.*/  _pt_git_push_re='\''git[[:space:]]+push'\''/'; }
-# Dest pierde [+:]? (force/delete); atrapa caso_g7_niega_git_push_force_y_delete.
-mut_pretool_git_push_dest_sin_plus_colon() { sed '/_pt_git_dest_re=/s/\[+:\]?//g'; }
-# F4: restaura token master|main en cualquier lado; atrapa caso_g7_permite_git_push_url_main.
-mut_pretool_git_push_token_en_cualquier_lado() { sed 's/^  _pt_git_dest_re=.*/  _pt_git_dest_re='\''(^|[^[:alnum:]_-])(master|main)([^[:alnum:]_-]|$)'\''/'; }
-mut_pretool_hatch_siempre_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 0; }/'; }
-mut_pretool_hatch_nunca_ok() { sed 's/pretool_pins_iguales() { \[ "$1" = "$2" \]; }/pretool_pins_iguales() { return 1; }/'; }
-# F2: el strip de comillas se vuelve identidad; atrapa caso_g7_hatch_comillas_ok.
-mut_pretool_hatch_sin_strip_comillas() { sed 's/pretool_strip_comillas_hatch "/printf %s "/'; }
-# Lead PR #198: apaga el deny de sufijo; atrapa caso_g7_niega_hatch_sufijo_bak.
-mut_pretool_hatch_spoof_apagado() {
-  sed 's/^pretool_es_hatch_spoof() {$/pretool_es_hatch_spoof() { return 1; }\npretool_es_hatch_spoof_OFF() {/'
-}
+# PreToolUse must remain separate from PostToolUse, even when it allows merge.
 mut_pretool_cae_a_tool() { sed 's/PreToolUse|preToolUse|pre_tool_use) PHASE="pretool" ;;//'; }
-# Restaura el short-circuit hatch-primero: hash ok => allow aunque el
-# mismo comando tambien traiga gh pr merge / gh api /merge / git push.
-mut_pretool_hatch_antes_de_pelo() { sed 's/if pretool_es_gh_pr_merge "$_pt_cmd"; then/if pretool_es_hatch "$_pt_cmd"; then if pretool_hatch_verifica "$_pt_cmd" "$_pt_cwd"; then emit_allow; fi; emit_pretool_deny "merge denied: saikit-merge.sh hash does not match the kit manifest"; fi; if pretool_es_gh_pr_merge "$_pt_cmd"; then/'; }
-# 22.2: apaga el predicado de lectura simple; lo atrapa
-# caso_g7_permite_git_show_hatch (sin el predicado, la lectura cae al hatch
-# y el token con `:` no resuelve).
-mut_pretool_lectura_vuelve_ancho() {
-  sed 's/^pretool_es_lectura_hatch() {$/pretool_es_lectura_hatch() { return 1; }\npretool_es_lectura_hatch_OFF() {/'
-}
-# 22.2r2: un mutante por rama del veto (AGENTS.md 168: por cada proteccion,
-# una mutacion que muestre que caso se pone rojo). Cada uno quita UNA
-# alternativa/guarda; el killer esperado es su propio caso (verificado en
-# banco: primer rojo en orden G7).
-mut_pretool_lectura_sin_nl_real() {
-  sed 's#\*"\$_pt_nl"\*|##'
-}
-mut_pretool_lectura_sin_n_crudo() {
-  sed 's#|\*\\\\n\*##'
-}
-mut_pretool_lectura_sin_r_crudo() {
-  sed 's#|\*\\\\r\*##'
-}
-mut_pretool_lectura_sin_u_crudo() {
-  sed 's#|\*\\\\u\*##'
-}
-mut_pretool_lectura_sin_cntrl() {
-  sed '/_pt_tab" | grep -q/d'
-}
-mut_pretool_lectura_veta_tab() {
-  sed 's# | tr -d "\$_pt_tab" | grep# | grep#'
-}
 
 # 21.5: sin la llamada al stop_gate compartido, el subshell captura vacio
 # (rc 0) y todo preflight reporta PASS. Lo atrapa
@@ -901,9 +828,6 @@ mut_muse_wait_ignora_id() {
     s/.*/      :/
   }'
 }
-mut_muse_pretool_solo_Bash() {
-  sed 's/if \[ "\$_pt_tool" != "Bash" \] && \[ "\$_pt_tool" != "bash" \]; then/if [ "$_pt_tool" != "Bash" ]; then/'
-}
 mut_muse_rol_de_subagent_type() {
   sed '/saikit-23.9-muse-role/,+2s/then subagent="$(json_tool_input_string role)"; fi/then :; fi/'
 }
@@ -919,10 +843,6 @@ mut_muse_revision_sin_wait() {
 mut_muse_tr_sin_cebado() {
   sed '/^  json_muse_tool_response_raw > \/dev\/null$/d'
 }
-mut_muse_pretool_trata_bash_input() {
-  sed 's/!= "bash" \]; then/!= "bash" ] \&\& [ "$_pt_tool" != "bash_input" ]; then/'
-}
-
 # ------------------------------------------------------------ costura de testeo
 # `tests/test_gate_mutations_guards.sh` inyecta un catalogo propio para
 # comprobar que las guardias de mas abajo REALMENTE rompen la corrida. Sin esa

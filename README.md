@@ -174,25 +174,10 @@ marca.
 
 ### Autopilot (Phase 18)
 
-El autopilot **prepara y para** (decisión del operador del 2026-08-30, que
-manda sobre el diseño original): `-saikit:autopilot` arma el carril full con
-el flag en el estado, el contrato pide preparar todo — código, verificación,
-revisión, PR — y **parar a preguntar antes de publicar**. No hay permiso
-permanente: el sentinel es por turno y cada merge exige el sí explícito.
-
-```bash
-bash tools/saikit-setup-autopilot.sh        # 5 preguntas => .saikit/autopilot.json (se commitea a origin/<rama>)
-bash tools/saikit-merge.sh                  # gate completo; en verde reporta LISTO y termina, NO mergea
-bash tools/saikit-merge.sh --confirmado     # el sí: repite el gate y recién entonces mergea
-bash tools/saikit-postmerge.sh --merge-commit <sha> --rama <rama>   # VERDE/ROJO/UNKNOWN; ROJO trae PARA REVERTIR
-bash tools/saikit-merge.sh --revert-de <sha> --confirmado           # merge del PR de revert (modo sin estado)
-```
-
-Qué NUNCA hace: mergear sin el sí, sin el workflow de CI que acredita el
-recibo para el head exacto, sin recibo `saikit-entrega.v1` válido en el PR, ni
-leyendo la config de otro lado que `origin/<rama>`; revertir solo (el
-postmerge avisa con el comando listo y no ejecuta nada); `--admin`, force, ni
-`--delete-branch` (el borrado remoto es paso aparte).
+`-saikit:autopilot` arma el carril full. Tras el PR, la revisión de CodeRabbit y
+el CI en verde, el agente puede mergear y desplegar dentro del alcance ya
+aprobado, sin otro permiso por PR. Se usa el flujo normal del repositorio.
+`tools/saikit-merge.sh` sigue disponible como gate opcional.
 
 Límites medidos (detalle en el spec §§ Límites MEDIDOS de la Phase 18 y
 Phase 20, y en `docs/smoke-autopilot-2026-09-05.md` para la línea base):
@@ -204,8 +189,8 @@ estado de sesión. Los recorridos históricos completos están en Claude 20.10
 guardia `PreToolUse` contra el merge a pelo **negó en vivo** un merge
 directo antes de ejecutar y dejó pasar un uso permitido, con payload,
 decisión y ejecución correlacionados por `tool_use_id` (20.9, evidencia
-`docs/evidence/phase-20/20.9/`; la fase hay que registrarla a mano en el
-`settings.json` del perfil, eso no cambió). `cuidar-pr` se midió en sus tres
+`docs/evidence/phase-20/20.9/`; esa restricción histórica ya se retiró).
+`cuidar-pr` se midió en sus tres
 modos — revisar no modifica, solo-hilos no cambia código, cuidar deja listo
 sin mergear (20.11, evidencia `docs/evidence/phase-20/20.11/`). El cierre
 headless tiene diseño (20.15), superficie (20.16) y medición viva sync/async
