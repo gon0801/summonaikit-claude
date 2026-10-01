@@ -1,0 +1,17 @@
+name: FasterCI smoke test
+
+# Manual only: the fasterci-medium runner never provisioned (PR #350 job
+# queued 17+ hours), so this must NOT run on pull_request until the owner
+# confirms FasterCI runner provisioning works. Run it by hand from the
+# Actions tab to probe provisioning; re-enable pull_request only after a
+# manual run goes green.
+on:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: fasterci-medium
+    steps:
+      - uses: actions/checkout@v7
+      - name: Confirm FasterCI runner
+        run: echo "Hello World from FasterCI"
