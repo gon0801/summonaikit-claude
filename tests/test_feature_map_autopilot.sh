@@ -2,12 +2,12 @@
 # tests/test_feature_map_autopilot.sh — 19.10: contrato autopilot via golden.
 #
 # DoD: sentinel exacto arma full + autopilot=1; sin el exacto no se hereda;
-# parrafo pide confirmacion y no promete merge/revert solo; cada observacion
+# parrafo permite merge tras CI y revision sin permiso adicional; cada observacion
 # tiene mutante rojo. El driver no cambia hook/golden para fabricar verde.
 #
 # Mutaciones (copia del driver en sandbox; SAIKIT_FM_DRIVER):
 #   omit_sentinel omit_estado omit_parrafo omit_persistencia
-#   accept_typo accept_merge_solo
+#   accept_typo omit_merge_permission
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -103,14 +103,8 @@ if [ -f "$DRV" ]; then
   bash -n "$DRV" || malo "bash -n fallo en autopilot-contract.sh"
 fi
 
-# El driver no toca hook/golden para fabricar verde.
-caso "el cambio no toca hook ni golden"
-if git -C "$repo" diff --quiet HEAD -- hooks/summonaikit-harness.sh \
-     tests/golden/baseline.txt 2>/dev/null; then
-  :
-else
-  malo "19.10 no debe cambiar hook/golden para fabricar conformidad"
-fi
+# The drive must not edit the hook or golden baseline while it runs.
+baseline_before="$(sha256sum "$repo/tests/golden/baseline.txt" "$repo/hooks/summonaikit-harness.sh" | cut -d' ' -f1)"
 
 # ---------------------------------------------------------------------------
 # Launch + drive
@@ -127,6 +121,8 @@ caso "drive autopilot-contract: sentinel, estado, parrafo, persistencia"
 reset_art
 out="$(ctrl drive autopilot-contract 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || malo "drive autopilot-contract rc=$rc: $out"
+baseline_after="$(sha256sum "$repo/tests/golden/baseline.txt" "$repo/hooks/summonaikit-harness.sh" | cut -d' ' -f1)"
+[ "$baseline_before" = "$baseline_after" ] || malo "el drive modifico hook o baseline golden"
 sum="$(latest_summary autopilot-contract)"
 [ -n "$sum" ] && [ -f "$sum" ] || malo "autopilot-contract sin summary"
 if [ -n "$sum" ] && [ -f "$sum" ]; then
@@ -149,8 +145,8 @@ assert_obs autopilot-contract plain_no_flag 'sin flag|ausente|no.inherit|no flag
 assert_obs autopilot-contract typo_no_flag 'sin flag|ausente|no.inherit|no flag'
 assert_obs autopilot-contract followup_continua 'continua|conserva|autopilot=1'
 assert_obs autopilot-contract paragraph_present 'Autopilot lane'
-assert_obs autopilot-contract asks_confirm 'STOP AND ASK'
-assert_obs autopilot-contract no_unattended 'sin promesa|never on your own|explicit yes'
+assert_obs autopilot-contract merge_after_review 'CI and CodeRabbit review'
+assert_obs autopilot-contract no_extra_permission 'Do not ask for a separate per-PR merge permission'
 assert_obs autopilot-contract flag_after_tool 'autopilot=1'
 
 # ---------------------------------------------------------------------------
@@ -191,9 +187,9 @@ run_mut accept_typo \
   '/assert:typo_no_flag/,/assert:typo_no_flag_end/d' \
   typo_no_flag 'sin flag|ausente|no.inherit|no flag'
 
-run_mut accept_merge_solo \
-  '/assert:no_unattended/,/assert:no_unattended_end/d' \
-  no_unattended 'sin promesa|never on your own|explicit yes'
+run_mut omit_merge_permission \
+  '/assert:no_extra_permission/,/assert:no_extra_permission_end/d' \
+  no_extra_permission 'Do not ask for a separate per-PR merge permission'
 
 if [ "$fail" -ne 0 ]; then
   echo "FAIL: $fail aserciones" >&2

@@ -190,7 +190,7 @@ others. Per-feature limits live on the cards. Reconciled 2026-09-13 (20.23):
 the Phase 18 limits that Phase 20 measured are overcome — seal channel
 (20.12), linked consume (20.13) and the full Grok flow (20.14); headless
 design, surface and live measurement (20.15–20.17); the complete green path
-in Claude (20.10); the `PreToolUse` deny (20.9); all three `cuidar-pr` modes
+in Claude (20.10); the historical `PreToolUse` deny (20.9, now retired); all three `cuidar-pr` modes
 (20.11). What stays: `merge-happy-path` remains `blocked` (live scope per
 attempt, never simulated credit); dsh scenario2 remains `unknown`
 (20.18/20.19 open with a written decision, never PASS).

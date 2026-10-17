@@ -245,6 +245,16 @@ else
   malo "no se puede leer recetas/cuidar-pr.md"
 fi
 
+caso "cuidar-pr permite merge tras CI y CodeRabbit dentro del alcance"
+if [ -r "$cp_receta" ]; then
+  grep -Fq 'con CI verde y revisión efectiva de CodeRabbit' "$cp_receta" || malo "cuidar-pr no exige CI y revisión"
+  grep -Fq 'dentro del alcance autorizado' "$cp_receta" || malo "cuidar-pr no acota el merge"
+  grep -Fq 'No pidas otro permiso por PR' "$cp_receta" || malo "cuidar-pr pide permiso adicional"
+  if grep -Eiq 'nunca mergea|merge es del operador|solo por `tools/saikit-merge.sh`' "$cp_receta"; then
+    malo "cuidar-pr conserva el veto anterior"
+  fi
+fi
+
 caso "el manifiesto esta al dia (gen --check)"
 bash "$repo/tools/gen-recetas-manifest.sh" --check >/dev/null || malo "MANIFEST.sha256 desactualizado: corre tools/gen-recetas-manifest.sh"
 
