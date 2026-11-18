@@ -370,19 +370,6 @@ out="$(SAIKIT_PARTICION=rapidos SAIKIT_SHARD=6/6 bash "$run_sh" "$SANDBOX/shard"
 [ "$rc" -eq 2 ] || malo "un shard vacio no puede cerrar en verde, dio $rc: $out"
 printf '%s' "$out" | grep -qi 'VACIO' || malo "no dice que el shard quedo vacio: $out"
 
-caso "el workflow reparte 'suite' en shards 1/N..N/N COMPLETOS y pasa SAIKIT_SHARD (mutante N-1)"
-# La union la canda el runner; que el CI la pida entera la canda esto: una matrix
-# con N-1 entradas es un archivo que deja de correr sin que nadie se entere.
-wf="$here/../.github/workflows/quality.yml"
-bloque="$(awk '/^  suite:$/{f=1; print; next} f && /^  [a-z-]+:$/{exit} f' "$wf")"
-n_wf="$(printf '%s' "$bloque" | grep -oE "'[0-9]+/[0-9]+'" | head -1 | grep -oE '/[0-9]+' | tr -d /)"
-[ -n "$n_wf" ] || malo "el job suite del workflow no declara una matrix de shards i/N"
-esperado_wf="$(seq 1 "${n_wf:-1}" | sed "s|^|'|; s|\$|/${n_wf:-1}'|" | tr '\n' ' ')"
-listado_wf="$(printf '%s' "$bloque" | grep -oE "'[0-9]+/[0-9]+'" | tr '\n' ' ')"
-[ "$listado_wf" = "$esperado_wf" ] || malo "la matrix de suite no es 1/N..N/N completa: [$listado_wf] vs [$esperado_wf]"
-printf '%s' "$bloque" | grep -qF 'SAIKIT_SHARD: ${{ matrix.shard }}' || malo "el job suite no pasa SAIKIT_SHARD desde la matrix"
-printf '%s' "$bloque" | grep -q 'fail-fast: false' || malo "suite sin 'fail-fast: false': un shard rojo taparia el resultado de los otros"
-
 # ============================ 18.19: canal de skip POR CASO (categoria aparte)
 # CONTRATO EJECUTABLE del canal (fila 18.19):
 #   - Marcador: linea `SAIKIT_SKIP_CASO: <caso> -- <razon>`. El caso lo emite

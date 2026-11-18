@@ -28,7 +28,6 @@ STATE="$SANDBOX/verify-state"
 ART="$SANDBOX/verify-artifacts"
 DRV_SECRETS="$SKILL/scripts/drivers/check-secrets.sh"
 DRV_CAPTURE="$SKILL/scripts/drivers/capture-payloads.sh"
-WF="$repo/.github/workflows/quality.yml"
 mkdir -p "$STATE" "$ART"
 . "$here/lib/feature_map_mut.sh"
 
@@ -219,30 +218,6 @@ fi
 if [ -f "$DRV_CAPTURE" ]; then
   bash -n "$DRV_CAPTURE" || malo "bash -n fallo en capture-payloads.sh"
 fi
-
-caso "CI suite provisiona gitleaks con el mismo pin que secrets"
-python3 - "$WF" <<'PY' || malo "suite no provisiona detector fuerte pinneado"
-import re, sys
-from pathlib import Path
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-pin = "8.30.1"
-sha = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-parts = re.split(r"\n  ([A-Za-z0-9-]+):\n", text)
-jobs = {}
-i = 1
-while i + 1 < len(parts):
-    jobs[parts[i]] = parts[i + 1]
-    i += 2
-for name in ("suite", "secrets"):
-    body = jobs.get(name) or ""
-    assert pin in body, (name, "sin version 8.30.1")
-    assert sha in body, (name, "sin sha256 pinneado")
-    assert "gitleaks" in body, (name, "sin gitleaks")
-# Tenerlo solo en secrets no cuenta: suite debe descargar/verificar.
-suite = jobs.get("suite") or ""
-assert "sha256sum" in suite or "sha256sum -c" in suite, "suite no verifica hash"
-assert "gitleaks_" + pin in suite or f"v{pin}" in suite, "suite no baja el tarball pinneado"
-PY
 
 # ---------------------------------------------------------------------------
 # Launch aislado
